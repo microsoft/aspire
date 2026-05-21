@@ -95,6 +95,30 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("TracesDescription", resourceCulture);
             }
         }
+
+        internal static string SummaryDescription {
+            get {
+                return ResourceManager.GetString("SummaryDescription", resourceCulture);
+            }
+        }
+
+        internal static string SlowTracesDescription {
+            get {
+                return ResourceManager.GetString("SlowTracesDescription", resourceCulture);
+            }
+        }
+
+        internal static string WallTimeDescription {
+            get {
+                return ResourceManager.GetString("WallTimeDescription", resourceCulture);
+            }
+        }
+
+        internal static string SpanStatsDescription {
+            get {
+                return ResourceManager.GetString("SpanStatsDescription", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Filter by resource name..
@@ -176,6 +200,24 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SearchOptionDescription", resourceCulture);
             }
         }
+
+        internal static string TelemetryArchiveOptionDescription {
+            get {
+                return ResourceManager.GetString("TelemetryArchiveOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string TopOptionDescription {
+            get {
+                return ResourceManager.GetString("TopOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string GroupByOptionDescription {
+            get {
+                return ResourceManager.GetString("GroupByOptionDescription", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to The --limit value must be a positive number..
@@ -183,6 +225,36 @@ namespace Aspire.Cli.Resources {
         internal static string LimitMustBePositive {
             get {
                 return ResourceManager.GetString("LimitMustBePositive", resourceCulture);
+            }
+        }
+
+        internal static string TopMustBePositive {
+            get {
+                return ResourceManager.GetString("TopMustBePositive", resourceCulture);
+            }
+        }
+
+        internal static string FileAndLiveOptionsExclusive {
+            get {
+                return ResourceManager.GetString("FileAndLiveOptionsExclusive", resourceCulture);
+            }
+        }
+
+        internal static string TelemetryArchiveNotFound {
+            get {
+                return ResourceManager.GetString("TelemetryArchiveNotFound", resourceCulture);
+            }
+        }
+
+        internal static string FailedToReadTelemetryArchive {
+            get {
+                return ResourceManager.GetString("FailedToReadTelemetryArchive", resourceCulture);
+            }
+        }
+
+        internal static string ResourceNotFound {
+            get {
+                return ResourceManager.GetString("ResourceNotFound", resourceCulture);
             }
         }
         
@@ -255,6 +327,168 @@ namespace Aspire.Cli.Resources {
         internal static string HeaderStatus {
             get {
                 return ResourceManager.GetString("HeaderStatus", resourceCulture);
+            }
+        }
+
+        internal static string HeaderMetric {
+            get {
+                return ResourceManager.GetString("HeaderMetric", resourceCulture);
+            }
+        }
+
+        internal static string HeaderValue {
+            get {
+                return ResourceManager.GetString("HeaderValue", resourceCulture);
+            }
+        }
+
+        internal static string HeaderTraceId {
+            get {
+                return ResourceManager.GetString("HeaderTraceId", resourceCulture);
+            }
+        }
+
+        internal static string HeaderResource {
+            get {
+                return ResourceManager.GetString("HeaderResource", resourceCulture);
+            }
+        }
+
+        internal static string HeaderGroup {
+            get {
+                return ResourceManager.GetString("HeaderGroup", resourceCulture);
+            }
+        }
+
+        internal static string HeaderCount {
+            get {
+                return ResourceManager.GetString("HeaderCount", resourceCulture);
+            }
+        }
+
+        internal static string HeaderErrors {
+            get {
+                return ResourceManager.GetString("HeaderErrors", resourceCulture);
+            }
+        }
+
+        internal static string HeaderAverage {
+            get {
+                return ResourceManager.GetString("HeaderAverage", resourceCulture);
+            }
+        }
+
+        internal static string HeaderP95 {
+            get {
+                return ResourceManager.GetString("HeaderP95", resourceCulture);
+            }
+        }
+
+        internal static string HeaderMax {
+            get {
+                return ResourceManager.GetString("HeaderMax", resourceCulture);
+            }
+        }
+
+        internal static string HeaderTotal {
+            get {
+                return ResourceManager.GetString("HeaderTotal", resourceCulture);
+            }
+        }
+
+        internal static string HeaderWallClock {
+            get {
+                return ResourceManager.GetString("HeaderWallClock", resourceCulture);
+            }
+        }
+
+        internal static string HeaderSpanSum {
+            get {
+                return ResourceManager.GetString("HeaderSpanSum", resourceCulture);
+            }
+        }
+
+        internal static string HeaderCovered {
+            get {
+                return ResourceManager.GetString("HeaderCovered", resourceCulture);
+            }
+        }
+
+        internal static string HeaderGap {
+            get {
+                return ResourceManager.GetString("HeaderGap", resourceCulture);
+            }
+        }
+
+        internal static string HeaderOverlap {
+            get {
+                return ResourceManager.GetString("HeaderOverlap", resourceCulture);
+            }
+        }
+
+        internal static string HeaderRatio {
+            get {
+                return ResourceManager.GetString("HeaderRatio", resourceCulture);
+            }
+        }
+
+        internal static string MetricResources {
+            get {
+                return ResourceManager.GetString("MetricResources", resourceCulture);
+            }
+        }
+
+        internal static string MetricTraces {
+            get {
+                return ResourceManager.GetString("MetricTraces", resourceCulture);
+            }
+        }
+
+        internal static string MetricSpans {
+            get {
+                return ResourceManager.GetString("MetricSpans", resourceCulture);
+            }
+        }
+
+        internal static string MetricErrorTraces {
+            get {
+                return ResourceManager.GetString("MetricErrorTraces", resourceCulture);
+            }
+        }
+
+        internal static string MetricErrorSpans {
+            get {
+                return ResourceManager.GetString("MetricErrorSpans", resourceCulture);
+            }
+        }
+
+        internal static string MetricAverageDuration {
+            get {
+                return ResourceManager.GetString("MetricAverageDuration", resourceCulture);
+            }
+        }
+
+        internal static string MetricP50Duration {
+            get {
+                return ResourceManager.GetString("MetricP50Duration", resourceCulture);
+            }
+        }
+
+        internal static string MetricP95Duration {
+            get {
+                return ResourceManager.GetString("MetricP95Duration", resourceCulture);
+            }
+        }
+
+        internal static string MetricP99Duration {
+            get {
+                return ResourceManager.GetString("MetricP99Duration", resourceCulture);
+            }
+        }
+
+        internal static string MetricMaxDuration {
+            get {
+                return ResourceManager.GetString("MetricMaxDuration", resourceCulture);
             }
         }
 

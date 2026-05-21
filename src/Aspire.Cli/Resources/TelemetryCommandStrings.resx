@@ -129,6 +129,18 @@
   <data name="TracesDescription" xml:space="preserve">
     <value>View traces from the Dashboard telemetry API</value>
   </data>
+  <data name="SummaryDescription" xml:space="preserve">
+    <value>Summarize trace latency, span counts, and errors</value>
+  </data>
+  <data name="SlowTracesDescription" xml:space="preserve">
+    <value>Show top traces by wall-clock duration</value>
+  </data>
+  <data name="WallTimeDescription" xml:space="preserve">
+    <value>Analyze trace wall-clock time, span coverage, gaps, and overlap</value>
+  </data>
+  <data name="SpanStatsDescription" xml:space="preserve">
+    <value>Aggregate span duration statistics</value>
+  </data>
   <data name="ResourceArgumentDescription" xml:space="preserve">
     <value>Filter by resource name</value>
   </data>
@@ -156,8 +168,32 @@
   <data name="SearchOptionDescription" xml:space="preserve">
     <value>Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</value>
   </data>
+  <data name="TelemetryArchiveOptionDescription" xml:space="preserve">
+    <value>Read telemetry from an Aspire export or profile archive instead of a running dashboard</value>
+  </data>
+  <data name="TopOptionDescription" xml:space="preserve">
+    <value>Maximum number of rows to display</value>
+  </data>
+  <data name="GroupByOptionDescription" xml:space="preserve">
+    <value>Group span statistics by Name or Resource</value>
+  </data>
   <data name="LimitMustBePositive" xml:space="preserve">
     <value>The --limit value must be a positive number.</value>
+  </data>
+  <data name="TopMustBePositive" xml:space="preserve">
+    <value>The --top value must be a positive number.</value>
+  </data>
+  <data name="FileAndLiveOptionsExclusive" xml:space="preserve">
+    <value>The --file option cannot be used with --dashboard-url, --api-key, or --apphost. Specify either an archive file or a live dashboard source.</value>
+  </data>
+  <data name="TelemetryArchiveNotFound" xml:space="preserve">
+    <value>Telemetry archive file '{0}' was not found.</value>
+  </data>
+  <data name="FailedToReadTelemetryArchive" xml:space="preserve">
+    <value>Failed to read telemetry archive '{0}': {1}</value>
+  </data>
+  <data name="ResourceNotFound" xml:space="preserve">
+    <value>Resource '{0}' not found.</value>
   </data>
   <data name="DashboardNotAvailable" xml:space="preserve">
     <value>Could not fetch telemetry data from the dashboard. The dashboard is not available.</value>
@@ -191,6 +227,87 @@
   </data>
   <data name="HeaderStatus" xml:space="preserve">
     <value>Status</value>
+  </data>
+  <data name="HeaderMetric" xml:space="preserve">
+    <value>Metric</value>
+  </data>
+  <data name="HeaderValue" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="HeaderTraceId" xml:space="preserve">
+    <value>Trace ID</value>
+  </data>
+  <data name="HeaderResource" xml:space="preserve">
+    <value>Resource</value>
+  </data>
+  <data name="HeaderGroup" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="HeaderCount" xml:space="preserve">
+    <value>Count</value>
+  </data>
+  <data name="HeaderErrors" xml:space="preserve">
+    <value>Errors</value>
+  </data>
+  <data name="HeaderAverage" xml:space="preserve">
+    <value>Avg</value>
+  </data>
+  <data name="HeaderP95" xml:space="preserve">
+    <value>P95</value>
+  </data>
+  <data name="HeaderMax" xml:space="preserve">
+    <value>Max</value>
+  </data>
+  <data name="HeaderTotal" xml:space="preserve">
+    <value>Total</value>
+  </data>
+  <data name="HeaderWallClock" xml:space="preserve">
+    <value>Wall</value>
+  </data>
+  <data name="HeaderSpanSum" xml:space="preserve">
+    <value>Span sum</value>
+  </data>
+  <data name="HeaderCovered" xml:space="preserve">
+    <value>Covered</value>
+  </data>
+  <data name="HeaderGap" xml:space="preserve">
+    <value>Gap</value>
+  </data>
+  <data name="HeaderOverlap" xml:space="preserve">
+    <value>Overlap</value>
+  </data>
+  <data name="HeaderRatio" xml:space="preserve">
+    <value>Ratio</value>
+  </data>
+  <data name="MetricResources" xml:space="preserve">
+    <value>Resources</value>
+  </data>
+  <data name="MetricTraces" xml:space="preserve">
+    <value>Traces</value>
+  </data>
+  <data name="MetricSpans" xml:space="preserve">
+    <value>Spans</value>
+  </data>
+  <data name="MetricErrorTraces" xml:space="preserve">
+    <value>Error traces</value>
+  </data>
+  <data name="MetricErrorSpans" xml:space="preserve">
+    <value>Error spans</value>
+  </data>
+  <data name="MetricAverageDuration" xml:space="preserve">
+    <value>Average duration</value>
+  </data>
+  <data name="MetricP50Duration" xml:space="preserve">
+    <value>P50 duration</value>
+  </data>
+  <data name="MetricP95Duration" xml:space="preserve">
+    <value>P95 duration</value>
+  </data>
+  <data name="MetricP99Duration" xml:space="preserve">
+    <value>P99 duration</value>
+  </data>
+  <data name="MetricMaxDuration" xml:space="preserve">
+    <value>Max duration</value>
   </data>
   <data name="DashboardUrlOptionDescription" xml:space="preserve">
     <value>Base URL of a standalone Aspire Dashboard (e.g. http://localhost:18888). Login URLs are also accepted and automatically normalized.</value>

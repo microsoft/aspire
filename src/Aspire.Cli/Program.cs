@@ -412,6 +412,7 @@ public class Program
         builder.Services.AddSingleton<IBundlePayloadProvider, EmbeddedBundlePayloadProvider>();
         builder.Services.AddSingleton<IBundleService, BundleService>();
         builder.Services.AddSingleton<ProfileCaptureService>();
+        builder.Services.AddTransient<TelemetryAnalysisDataSource>();
         builder.Services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         builder.Services.AddSingleton<ICliDownloader, CliDownloader>();
         builder.Services.AddSingleton<IFirstTimeUseNoticeSentinel>(_ => new FirstTimeUseNoticeSentinel(GetUsersAspirePath()));
@@ -538,6 +539,10 @@ public class Program
         builder.Services.AddTransient<TelemetryLogsCommand>();
         builder.Services.AddTransient<TelemetrySpansCommand>();
         builder.Services.AddTransient<TelemetryTracesCommand>();
+        builder.Services.AddTransient<TelemetrySummaryCommand>();
+        builder.Services.AddTransient<TelemetrySlowTracesCommand>();
+        builder.Services.AddTransient<TelemetryWallTimeCommand>();
+        builder.Services.AddTransient<TelemetrySpanStatsCommand>();
         builder.Services.AddTransient<ExportCommand>();
         builder.Services.AddTransient<ApiCommand>();
         builder.Services.AddTransient<ApiListCommand>();
