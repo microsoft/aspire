@@ -185,36 +185,6 @@ public static class BlazorGatewayExtensions
     /// transformed (AssetFile prefixed, runtime tree wrapped under prefix), then injected
     /// into the Gateway as environment variables.
     /// </summary>
-    /// <param name="gateway">The gateway resource builder.</param>
-    /// <param name="wasmApp">The Blazor WebAssembly app to serve behind the gateway.</param>
-    /// <param name="pathPrefix">The URL path prefix under which the app is served.</param>
-    /// <param name="serviceNames">Optional service names to expose to the client through the gateway proxy.</param>
-    /// <param name="apiPrefix">The URL path prefix for API proxy routes. Defaults to <c>"_api"</c>.</param>
-    /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
-    /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
-    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
-    public static IResourceBuilder<ProjectResource> WithBlazorApp(
-        this IResourceBuilder<ProjectResource> gateway,
-        IResourceBuilder<BlazorWasmAppResource> wasmApp,
-        string pathPrefix,
-        string[]? serviceNames = null,
-        string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
-        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
-        bool proxyTelemetry = true)
-    {
-        var services = serviceNames is null
-            ? []
-            : Array.ConvertAll(serviceNames, name => new GatewayAppService(name));
-
-        return gateway.WithBlazorApp(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
-    }
-
-    /// <summary>
-    /// Attaches a Blazor WebAssembly app to a Gateway project resource at the given path prefix.
-    /// At orchestration time, each app is built, its manifests are discovered via MSBuild properties,
-    /// transformed (AssetFile prefixed, runtime tree wrapped under prefix), then injected
-    /// into the Gateway as environment variables.
-    /// </summary>
     [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
     internal static IResourceBuilder<ProjectResource> WithBlazorApp(
         this IResourceBuilder<ProjectResource> gateway,

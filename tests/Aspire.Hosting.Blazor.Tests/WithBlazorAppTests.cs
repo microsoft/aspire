@@ -19,7 +19,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        gateway.WithBlazorApp(wasmApp, "store");
+        gateway.WithBlazorApp(wasmApp, "store", []);
 
         var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
@@ -40,32 +40,14 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         var adminApp = builder.AddBlazorWasmApp("admin", "Admin/Admin.csproj");
 
         gateway
-            .WithBlazorApp(storeApp, "store")
-            .WithBlazorApp(adminApp, "admin");
+            .WithBlazorApp(storeApp, "store", [])
+            .WithBlazorApp(adminApp, "admin", []);
 
         var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.Equal(2, annotation.Apps.Count);
         Assert.Equal("store", annotation.Apps[0].PathPrefix);
         Assert.Equal("admin", annotation.Apps[1].PathPrefix);
-    }
-
-    [Fact]
-    public void WithBlazorApp_ServiceNames_AreStored()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-
-        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
-            .WithHttpEndpoint()
-            .WithHttpsEndpoint();
-
-        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
-
-        gateway.WithBlazorApp(wasmApp, "store", ["weatherapi", "catalogapi"]);
-
-        var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().SingleOrDefault();
-        Assert.NotNull(annotation);
-        Assert.Equal(new[] { "weatherapi", "catalogapi" }, annotation.Apps[0].GetServiceNames());
     }
 
     [Fact]
@@ -81,8 +63,8 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         var adminApp = builder.AddBlazorWasmApp("admin", "Admin/Admin.csproj");
 
         gateway
-            .WithBlazorApp(storeApp, "store")
-            .WithBlazorApp(adminApp, "admin");
+            .WithBlazorApp(storeApp, "store", [])
+            .WithBlazorApp(adminApp, "admin", []);
 
         // Should only have one GatewayAppsAnnotation
         var annotations = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().ToList();
