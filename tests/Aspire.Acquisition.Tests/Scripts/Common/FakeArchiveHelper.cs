@@ -85,10 +85,15 @@ public static class FakeArchiveHelper
     /// <param name="includeStraySidecar">When true, adds a <c>.aspire-install.json</c>
     /// at the archive root so the verifier's sidecar-rejection contract can be
     /// asserted; see <c>docs/specs/install-routes.md</c>.</param>
+    /// <param name="nestAspireUnderSubdir">When true, places the <c>aspire</c> binary
+    /// under a single subdirectory inside the archive rather than at the root. This
+    /// exercises <c>Get-ArchiveRoot</c>'s single-subdirectory branch and confirms the
+    /// sidecar scan still inspects the true archive root.</param>
     public static async Task<FakeArchive> CreateFakeVerifyArchiveAsync(
         string outputDir,
         string platform = "linux-x64",
-        bool includeStraySidecar = false)
+        bool includeStraySidecar = false,
+        bool nestAspireUnderSubdir = false)
     {
         Directory.CreateDirectory(outputDir);
 
@@ -101,7 +106,14 @@ public static class FakeArchiveHelper
 
         try
         {
-            var binaryPath = Path.Combine(contentDir, "aspire");
+            // When nesting, the binary lives at <contentDir>/payload/aspire, mirroring
+            // archives whose producer wraps everything in a top-level directory.
+            var binaryDir = nestAspireUnderSubdir
+                ? Path.Combine(contentDir, "payload")
+                : contentDir;
+            Directory.CreateDirectory(binaryDir);
+
+            var binaryPath = Path.Combine(binaryDir, "aspire");
             await File.WriteAllTextAsync(binaryPath, FakeVerifyAspireScript);
             FileHelper.MakeExecutable(binaryPath);
 

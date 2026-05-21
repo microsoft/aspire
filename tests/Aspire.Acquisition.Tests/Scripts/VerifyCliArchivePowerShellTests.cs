@@ -56,4 +56,30 @@ public class VerifyCliArchivePowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains(".aspire-install.json", result.Output);
         Assert.Contains("per-RID archives are shared across install routes", result.Output);
     }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "The synthetic linux archive uses a bash executable stub.")]
+    public async Task VerifyCliArchive_RejectsStraySidecarWhenBinaryIsNestedUnderSubdirectory()
+    {
+        // Regression guard: Get-ArchiveRoot returns a single subdirectory when the
+        // binary is nested, and the sidecar scan must inspect the true archive root
+        // (the extraction directory), not whichever subdirectory holds the binary.
+        // Without this guard the verifier would silently accept a per-RID archive
+        // that ships .aspire-install.json alongside a nested payload directory.
+        using var env = new TestEnvironment();
+
+        var archive = await FakeArchiveHelper.CreateFakeVerifyArchiveAsync(
+            env.TempDirectory,
+            includeStraySidecar: true,
+            nestAspireUnderSubdir: true);
+
+        using var cmd = new ScriptToolCommand(ScriptPaths.VerifyCliArchivePowerShell, env, _testOutput);
+        cmd.WithTimeout(TimeSpan.FromSeconds(60));
+
+        var result = await cmd.ExecuteAsync("-ArchivePath", archive.ArchivePath);
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains(".aspire-install.json", result.Output);
+        Assert.Contains("per-RID archives are shared across install routes", result.Output);
+    }
 }

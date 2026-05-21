@@ -220,8 +220,11 @@ try {
 
     # Assert the source sidecar matches the archive's RID family before mutating the
     # extracted shape. After Copy-Item moves the binary out, the archive layout is
-    # no longer observable.
-    Test-ArchiveSidecar -ExtractDir $archiveRoot -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
+    # no longer observable. Scan the full extraction directory, not $archiveRoot:
+    # the sidecar contract is about the archive itself, and Get-ArchiveRoot may
+    # return a single sub-directory (when the archive nests its binary), which
+    # would let a stray sidecar at the true archive root slip past.
+    Test-ArchiveSidecar -ExtractDir $extractDir -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
 
     # Install to ~/.aspire/bin so self-extraction works correctly
     Write-Step "Installing CLI to ~/.aspire/bin..."
