@@ -26,6 +26,13 @@ namespace Aspire.Dashboard.Otlp.Storage;
 
 public sealed partial class TelemetryRepository : IDisposable
 {
+    internal const int MaxResourceViewCount = 10_000;
+    internal const int MaxInstrumentCount = 10_000;
+    internal const int MaxScopeCount = 10_000;
+    internal const int MaxDimensionCount = 10_000;
+    internal const int MaxKnownAttributeValueCount = 10_000;
+    internal const int MaxKnownAttributeValuesPerKey = 10_000;
+
     private readonly PauseManager _pauseManager;
     private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
     private readonly ILogger _logger;
@@ -46,15 +53,21 @@ public sealed partial class TelemetryRepository : IDisposable
     private readonly ConcurrentDictionary<ResourceKey, OtlpResource> _resources = new();
 
     private readonly ReaderWriterLockSlim _logsLock = new();
+    // Bounded by MaxScopeCount. Cleared when all logs are cleared.
     private readonly Dictionary<string, OtlpScope> _logScopes = new();
     private readonly CircularBuffer<OtlpLogEntry> _logs;
+    // Bounded by _resources count * MaxAttributeCount. Cleared per-resource or when all logs are cleared.
     private readonly HashSet<(OtlpResource Resource, string PropertyKey)> _logPropertyKeys = new();
+    // Bounded by _resources count * MaxAttributeCount. Cleared per-resource or when all traces are cleared.
     private readonly HashSet<(OtlpResource Resource, string PropertyKey)> _tracePropertyKeys = new();
     private readonly Dictionary<ResourceKey, int> _resourceUnviewedErrorLogs = new();
 
     private readonly ReaderWriterLockSlim _tracesLock = new();
+    // Bounded by MaxScopeCount. Cleared when all traces are cleared.
     private readonly Dictionary<string, OtlpScope> _traceScopes = new();
     private readonly CircularBuffer<OtlpTrace> _traces;
+    // Not explicitly capped per add — bounded only by the sum of span links across in-buffer traces.
+    // Cleaned up on trace eviction and clear, so growth is limited by the circular buffer capacity.
     private readonly List<OtlpSpanLink> _spanLinks = new();
     private readonly List<IDisposable> _peerResolverSubscriptions = new();
     internal readonly OtlpContext _otlpContext;
@@ -237,6 +250,14 @@ public sealed partial class TelemetryRepository : IDisposable
             return (Resource: resource, IsNew: false);
         }
 
+        // Check resource limit before adding a new resource.
+        // Note: This is a soft cap. Concurrent callers may both pass this check and slightly exceed the limit
+        // because _resources is a ConcurrentDictionary and the count check + GetOrAdd are not atomic.
+        if (_resources.Count >= _otlpContext.Options.MaxResourceCount)
+        {
+            throw new InvalidOperationException($"Resource limit of {_otlpContext.Options.MaxResourceCount} reached. Resource '{key}' will not be added.");
+        }
+
         // Slower get or add path.
         // This GetOrAdd allocates a closure, so we avoid it if possible.
         var newResource = false;
@@ -323,7 +344,7 @@ public sealed partial class TelemetryRepository : IDisposable
             }
             catch (Exception ex)
             {
-                context.FailureCount += rl.ScopeLogs.Count;
+                context.FailureCount += rl.ScopeLogs.Sum(s => s.LogRecords.Count);
                 _otlpContext.Logger.LogInformation(ex, "Error adding resource.");
                 continue;
             }
@@ -792,22 +813,41 @@ public sealed partial class TelemetryRepository : IDisposable
             {
                 // Nothing selected, clear everything.
                 _traces.Clear();
+                _traceScopes.Clear();
+                _tracePropertyKeys.Clear();
+                _spanLinks.Clear();
+
+                foreach (var resource in _resources.Values)
+                {
+                    SetResourceHasTraces(resource, false);
+                }
             }
             else
             {
                 for (var i = _traces.Count - 1; i >= 0; i--)
                 {
+                    var trace = _traces[i];
                     // Remove trace if any span matches one of the resources. This matches filter behavior.
-                    if (MatchResources(_traces[i], resources))
+                    if (MatchResources(trace, resources))
                     {
+                        // Remove span links for the removed trace.
+                        foreach (var span in trace.Spans)
+                        {
+                            foreach (var link in span.Links)
+                            {
+                                _spanLinks.Remove(link);
+                            }
+                        }
+
                         _traces.RemoveAt(i);
                         continue;
                     }
                 }
 
-                // Update HasTraces flag for cleared resources
+                // Remove property keys for cleared resources.
                 foreach (var resource in resources)
                 {
+                    _tracePropertyKeys.RemoveWhere(k => k.Resource.ResourceKey == resource.ResourceKey);
                     SetResourceHasTraces(resource, false);
                 }
             }
@@ -836,6 +876,15 @@ public sealed partial class TelemetryRepository : IDisposable
             {
                 // Nothing selected, clear everything.
                 _logs.Clear();
+                _logScopes.Clear();
+                _logPropertyKeys.Clear();
+
+                foreach (var resource in _resources.Values)
+                {
+                    SetResourceHasLogs(resource, false);
+                }
+
+                _resourceUnviewedErrorLogs.Clear();
             }
             else
             {
@@ -848,9 +897,10 @@ public sealed partial class TelemetryRepository : IDisposable
                     }
                 }
 
-                // Update HasLogs flag for cleared resources
+                // Update HasLogs flag and remove property keys for cleared resources.
                 foreach (var resource in resources)
                 {
+                    _logPropertyKeys.RemoveWhere(k => k.Resource.ResourceKey == resource.ResourceKey);
                     SetResourceHasLogs(resource, false);
                     _resourceUnviewedErrorLogs.Remove(resource.ResourceKey);
                 }
@@ -897,36 +947,14 @@ public sealed partial class TelemetryRepository : IDisposable
     {
         _tracesLock.EnterReadLock();
 
-        var attributesValues = new Dictionary<string, int>(StringComparers.OtlpAttribute);
-
         try
         {
-            foreach (var trace in _traces)
-            {
-                foreach (var span in trace.Spans)
-                {
-                    var values = OtlpSpan.GetFieldValue(span, attributeName);
-                    if (values.Value1 != null)
-                    {
-                        ref var count = ref CollectionsMarshal.GetValueRefOrAddDefault(attributesValues, values.Value1, out _);
-                        // Adds to dictionary if not present.
-                        count++;
-                    }
-                    if (values.Value2 != null)
-                    {
-                        ref var count = ref CollectionsMarshal.GetValueRefOrAddDefault(attributesValues, values.Value2, out _);
-                        // Adds to dictionary if not present.
-                        count++;
-                    }
-                }
-            }
+            return OtlpSpan.GetFieldValuesFromTraces(_traces, attributeName);
         }
         finally
         {
             _tracesLock.ExitReadLock();
         }
-
-        return attributesValues;
     }
 
     public Dictionary<string, int> GetLogsFieldValues(string attributeName)
@@ -1066,7 +1094,7 @@ public sealed partial class TelemetryRepository : IDisposable
             }
             catch (Exception ex)
             {
-                context.FailureCount += rm.ScopeMetrics.Sum(s => s.Metrics.Count);
+                context.FailureCount += rm.ScopeMetrics.Sum(sm => sm.Metrics.Sum(OtlpResource.GetMetricDataPointCount));
                 _otlpContext.Logger.LogInformation(ex, "Error adding resource.");
                 continue;
             }
@@ -1316,9 +1344,17 @@ public sealed partial class TelemetryRepository : IDisposable
             return null;
         }
 
-        var resourceKey = ResourceKey.Create(name: peer.DisplayName, instanceId: peer.Name);
-        var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
-        return resource;
+        try
+        {
+            var resourceKey = ResourceKey.Create(name: peer.DisplayName, instanceId: peer.Name);
+            var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
+            return resource;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogInformation(ex, "Error adding peer resource.");
+            return null;
+        }
     }
 
     private void CalculateTraceUninstrumentedPeers(OtlpTrace trace)
@@ -1338,9 +1374,16 @@ public sealed partial class TelemetryRepository : IDisposable
                     continue;
                 }
 
-                var resourceKey = ResourceKey.Create(name: uninstrumentedPeer.DisplayName, instanceId: uninstrumentedPeer.Name);
-                var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
-                trace.SetSpanUninstrumentedPeer(span, resource);
+                try
+                {
+                    var resourceKey = ResourceKey.Create(name: uninstrumentedPeer.DisplayName, instanceId: uninstrumentedPeer.Name);
+                    var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
+                    trace.SetSpanUninstrumentedPeer(span, resource);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogInformation(ex, "Error adding uninstrumented peer resource.");
+                }
             }
             else
             {
@@ -1566,7 +1609,14 @@ public sealed partial class TelemetryRepository : IDisposable
             // When peers change then we need to recalculate the uninstrumented peers of spans.
             foreach (var trace in _traces)
             {
-                CalculateTraceUninstrumentedPeers(trace);
+                try
+                {
+                    CalculateTraceUninstrumentedPeers(trace);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogInformation(ex, "Error recalculating uninstrumented peers.");
+                }
             }
         }
         finally

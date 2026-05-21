@@ -56,7 +56,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.Integration.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
                 continue
                 ;;
             esac
@@ -70,7 +70,7 @@ jobs:
 
               dir=$(dirname "$dir")
             done
-          done < <(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' || true)
+          done < <(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' || true)
 
           sort -u "$PROJECTS_FILE" > "$SORTED_PROJECTS_FILE"
 
@@ -111,7 +111,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.Integration.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
                 continue
                 ;;
             esac
@@ -125,7 +125,7 @@ jobs:
 
               dir=$(dirname "$dir")
             done
-          done < <(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' || true)
+          done < <(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' || true)
 
           sort -u "$PROJECTS_FILE" > "$SORTED_PROJECTS_FILE"
 

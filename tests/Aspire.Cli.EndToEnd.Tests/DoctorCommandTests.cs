@@ -91,12 +91,6 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilAsync(s =>
         {
-            // Wait for doctor to complete
-            if (!s.ContainsText("dev-certs"))
-            {
-                return false;
-            }
-
             // Fail if we see partial trust when SSL_CERT_DIR is configured
             if (s.ContainsText("partially trusted"))
             {

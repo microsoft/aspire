@@ -5,11 +5,13 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
 using System.Globalization;
 using System.Reflection;
+using System.Security;
 
 namespace Aspire.Cli.Packaging;
 
@@ -47,6 +49,7 @@ internal class PackagingService : IPackagingService
     private readonly IFeatures _features;
     private readonly IConfiguration _configuration;
     private readonly ILogger<PackagingService> _logger;
+    private readonly Func<string?> _processPathProvider;
 
     // Cached result of the staging-channel availability check. The inputs (CLI identity,
     // overrideStagingFeed, StagingChannelEnabled feature) are effectively static for the
@@ -55,13 +58,20 @@ internal class PackagingService : IPackagingService
     // UpdateCommand, IntegrationPackageSearchService, NuGetPackagePrefetcher, etc.).
     private readonly Lazy<string?> _stagingUnavailableReasonCache;
 
-    public PackagingService(CliExecutionContext executionContext, INuGetPackageCache nuGetPackageCache, IFeatures features, IConfiguration configuration, ILogger<PackagingService> logger)
+    public PackagingService(
+        CliExecutionContext executionContext,
+        INuGetPackageCache nuGetPackageCache,
+        IFeatures features,
+        IConfiguration configuration,
+        ILogger<PackagingService> logger,
+        Func<string?>? processPathProvider = null)
     {
         _executionContext = executionContext;
         _nuGetPackageCache = nuGetPackageCache;
         _features = features;
         _configuration = configuration;
         _logger = logger;
+        _processPathProvider = processPathProvider ?? (() => Environment.ProcessPath);
         _stagingUnavailableReasonCache = new Lazy<string?>(ComputeStagingChannelUnavailableReason);
     }
 
@@ -75,18 +85,18 @@ internal class PackagingService : IPackagingService
 
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null)
     {
-        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _logger);
+        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _features, _logger);
         
         var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
         {
-            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-        }, _nuGetPackageCache, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: _logger);
+            new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: _logger);
 
         var dailyChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, new[]
         {
             new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"),
-            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-        }, _nuGetPackageCache, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", logger: _logger);
+            new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", logger: _logger);
 
         var prPackageChannels = new List<PackageChannel>();
 
@@ -99,20 +109,16 @@ internal class PackagingService : IPackagingService
             var prHives = _executionContext.HivesDirectory.GetDirectories();
             foreach (var prHive in prHives)
             {
-                // The packages subdirectory contains the actual .nupkg files
-                var packagesDirectory = new DirectoryInfo(Path.Combine(prHive.FullName, "packages"));
-                var pinnedVersion = GetLocalHivePinnedVersion(packagesDirectory);
-
-                // Use forward slashes for cross-platform NuGet config compatibility
-                var packagesPath = packagesDirectory.FullName.Replace('\\', '/');
-                var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Both, new[]
-                {
-                    new PackageMapping("Aspire*", packagesPath),
-                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, _nuGetPackageCache, pinnedVersion: pinnedVersion, logger: _logger);
-
-                prPackageChannels.Add(prChannel);
+                prPackageChannels.Add(CreateLocalHiveChannel(prHive.Name, new DirectoryInfo(Path.Combine(prHive.FullName, "packages"))));
             }
+        }
+
+        if (TryResolvePrInstallPackagesDirectory(TryGetProcessPathForPrInstallDiscovery(), _executionContext.IdentityChannel) is { } prInstallPackagesDirectory)
+        {
+            // The install-prefix hive belongs to the running PR CLI. Prefer it over a same-named
+            // default hive so a stale ~/.aspire/hives/pr-<N> cannot mask the co-installed packages.
+            prPackageChannels.RemoveAll(c => string.Equals(c.Name, _executionContext.IdentityChannel, StringComparisons.ChannelName));
+            prPackageChannels.Add(CreateLocalHiveChannel(_executionContext.IdentityChannel, prInstallPackagesDirectory));
         }
 
         var channels = new List<PackageChannel>([defaultChannel, stableChannel]);
@@ -140,6 +146,74 @@ internal class PackagingService : IPackagingService
         channels.AddRange(prPackageChannels);
 
         return Task.FromResult<IEnumerable<PackageChannel>>(channels);
+    }
+
+    private string? TryGetProcessPathForPrInstallDiscovery()
+    {
+        try
+        {
+            return _processPathProvider();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get process path while discovering PR package hive.");
+            return null;
+        }
+    }
+
+    private PackageChannel CreateLocalHiveChannel(string name, DirectoryInfo packagesDirectory)
+    {
+        var pinnedVersion = GetLocalHivePinnedVersion(packagesDirectory);
+
+        // Use forward slashes for cross-platform NuGet config compatibility
+        var packagesPath = PathNormalizer.NormalizePathForStorage(packagesDirectory.FullName);
+        return PackageChannel.CreateExplicitChannel(name, PackageChannelQuality.Both, new[]
+        {
+            new PackageMapping("Aspire*", packagesPath),
+            new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+        }, _nuGetPackageCache, _features, pinnedVersion: pinnedVersion, logger: _logger);
+    }
+
+    internal static DirectoryInfo? TryResolvePrInstallPackagesDirectory(string? processPath, string identityChannel)
+    {
+        if (!identityChannel.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrEmpty(processPath))
+        {
+            return null;
+        }
+
+        DirectoryInfo binaryDirectory;
+        try
+        {
+            var binaryDirectoryPath = Path.GetDirectoryName(Path.GetFullPath(processPath));
+            if (string.IsNullOrEmpty(binaryDirectoryPath))
+            {
+                return null;
+            }
+
+            binaryDirectory = new DirectoryInfo(binaryDirectoryPath);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException or SecurityException)
+        {
+            return null;
+        }
+
+        // Archive installs from get-aspire-cli-pr place the binary at:
+        //   <prefix>/dogfood/pr-<N>/bin/aspire
+        // and the matching packages at:
+        //   <prefix>/hives/pr-<N>/packages
+        if (!string.Equals(binaryDirectory.Name, "bin", StringComparison.OrdinalIgnoreCase) ||
+            binaryDirectory.Parent is not { } prDirectory ||
+            !string.Equals(prDirectory.Name, identityChannel, StringComparisons.ChannelName) ||
+            prDirectory.Parent is not { } dogfoodDirectory ||
+            !string.Equals(dogfoodDirectory.Name, "dogfood", StringComparison.OrdinalIgnoreCase) ||
+            dogfoodDirectory.Parent is not { } installPrefix)
+        {
+            return null;
+        }
+
+        var packagesDirectory = new DirectoryInfo(Path.Combine(installPrefix.FullName, "hives", identityChannel, "packages"));
+        return packagesDirectory.Exists ? packagesDirectory : null;
     }
 
     private PackageChannel? CreateStagingChannel(PackageChannelQuality defaultQuality)
@@ -181,8 +255,8 @@ internal class PackagingService : IPackagingService
         var stagingChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, stagingQuality, new[]
         {
             new PackageMapping("Aspire*", stagingFeedUrl),
-            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-        }, _nuGetPackageCache, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: _logger);
+            new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
+        }, _nuGetPackageCache, _features, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: _logger);
 
         // Surface the resolved staging routing so users can see what `--channel staging` actually
         // picked (the "show what was resolved" suggestion from the issue RCA). Pinned version is

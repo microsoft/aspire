@@ -318,8 +318,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
                     
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache);
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
                     
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
                 };
@@ -396,7 +396,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
                     };
                     
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache);
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
                 };
                 
@@ -473,7 +473,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
                     };
 
-                    var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache);
+                    var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([prChannel]);
                 };
 
@@ -718,9 +718,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Contains(packageSources.Elements("clear"), _ => true);
         Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == PackageSourceOverrideMappings.NuGetOrgSource);
+        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == PackageSources.NuGetOrg);
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
-        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, PackageSourceOverrideMappings.NuGetOrgSource));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, PackageSources.NuGetOrg));
     }
 
     private static string[] GetPackagePatternsForSource(XDocument doc, string source)
@@ -1183,7 +1183,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("typescript", null, "apphost.ts")]
+    [InlineData("typescript", null, "apphost.mts")]
     [InlineData("java", "experimentalPolyglot:java", "AppHost.java")]
     [InlineData("python", "experimentalPolyglot:python", "apphost.py")]
     [InlineData("go", "experimentalPolyglot:go", "apphost.go")]
@@ -1303,7 +1303,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             ScaffoldAsyncCallback = (context, _) =>
             {
-                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.mts"), "// test apphost");
                 return Task.FromResult(true);
             }
         });
@@ -1585,7 +1585,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
 
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache);
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
                 };
 
@@ -1782,7 +1782,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         }
                     };
 
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -1857,7 +1857,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                         }
                     };
 
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -1908,7 +1908,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                         }
                     };
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -2004,7 +2004,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                         }
                     };
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
                 }
             };
@@ -2823,7 +2823,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
                         throw new NuGetPackageCacheException("Package search failed: simulated network failure")
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])

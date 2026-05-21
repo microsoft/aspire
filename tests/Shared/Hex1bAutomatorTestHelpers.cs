@@ -514,7 +514,8 @@ internal static class Hex1bAutomatorTestHelpers
         string projectName,
         SequenceCounter counter,
         AspireTemplate template = AspireTemplate.Starter,
-        bool useRedisCache = true)
+        bool useRedisCache = true,
+        bool useDevLocalhost = false)
     {
         var templateTimeout = TimeSpan.FromSeconds(60);
 
@@ -625,7 +626,14 @@ internal static class Hex1bAutomatorTestHelpers
             s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
             timeout: templateTimeout,
             description: "URLs prompt");
-        await auto.EnterAsync(); // Accept default "No"
+        if (useDevLocalhost)
+        {
+            await auto.TypeAsync("y");
+        }
+        else
+        {
+            await auto.EnterAsync(); // Accept default "No"
+        }
 
         // Step 6: Redis prompt (only Starter, JsReact, PythonReact)
         if (template is AspireTemplate.Starter or AspireTemplate.JsReact or AspireTemplate.PythonReact)

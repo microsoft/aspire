@@ -6,7 +6,6 @@ using System.Formats.Tar;
 using System.IO.Compression;
 using System.IO.Hashing;
 using System.Text;
-using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
@@ -70,36 +69,9 @@ internal sealed class BundleService(
     /// <inheritdoc/>
     public async Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
     {
-        if (!IsBundle)
-        {
-            logger.LogDebug("No embedded bundle payload, skipping extraction.");
-            return;
-        }
-
-        var processPath = ProcessPathOverride ?? Environment.ProcessPath;
-        if (string.IsNullOrEmpty(processPath))
-        {
-            logger.LogDebug("ProcessPath is null or empty, skipping bundle extraction.");
-            return;
-        }
-
-        // The winget portable installer has no post-install hook, so the CLI
-        // self-stamps the install-route sidecar on first run. No-op on
-        // non-Windows and once the sidecar already exists.
-        if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
-        {
-            var realBinaryPath = ResolveSymlinks(processPath, logger);
-            var binaryDir = Path.GetDirectoryName(realBinaryPath);
-            if (!string.IsNullOrEmpty(binaryDir))
-            {
-                wingetFirstRunProbe.Run(binaryDir);
-            }
-        }
-
-        var extractDir = GetDefaultExtractDir(processPath);
+        var extractDir = GetBundleExtractDirForCurrentProcess();
         if (string.IsNullOrEmpty(extractDir))
         {
-            logger.LogDebug("Could not determine extraction directory from {ProcessPath}, skipping.", processPath);
             return;
         }
 
@@ -114,10 +86,50 @@ internal sealed class BundleService(
     }
 
     /// <inheritdoc/>
-    public async Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
+    public async Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
     {
-        await EnsureExtractedAsync(cancellationToken).ConfigureAwait(false);
-        return layoutDiscovery.DiscoverLayout();
+        var extractDir = GetBundleExtractDirForCurrentProcess();
+        if (string.IsNullOrEmpty(extractDir))
+        {
+            var fallbackLayout = layoutDiscovery.DiscoverLayout();
+            return fallbackLayout is null
+                ? null
+                : new BundleLayoutLease(fallbackLayout, lease: null);
+        }
+
+        var lockPath = Path.Combine(extractDir, ".aspire-bundle-lock");
+        using var fileLock = await FileLock.AcquireAsync(lockPath, cancellationToken).ConfigureAwait(false);
+
+        // Extraction cleanup and lease acquisition must share the same critical section;
+        // otherwise a concurrent upgrade can delete the just-resolved active version
+        // before this process protects it with a lease.
+        var result = await ExtractAsyncCore(extractDir, force: false, cancellationToken).ConfigureAwait(false);
+        if (result is BundleExtractResult.ExtractionFailed)
+        {
+            throw new InvalidOperationException(
+                "Bundle extraction failed. Run 'aspire setup --force' to retry, or reinstall the Aspire CLI.");
+        }
+
+        var activeVersion = ResolveActiveVersionDirectory(extractDir);
+        if (activeVersion is null)
+        {
+            logger.LogDebug("Could not resolve an active bundle version under {ExtractDir}.", extractDir);
+            return null;
+        }
+
+        BundleVersionLease? lease = null;
+        try
+        {
+            lease = BundleVersionLease.Acquire(activeVersion.Value.VersionDirectory, holderKind, commandName);
+            return new BundleLayoutLease(
+                CreateVersionRootedLayout(activeVersion.Value.VersionDirectory),
+                lease);
+        }
+        catch
+        {
+            lease?.Dispose();
+            throw;
+        }
     }
 
     /// <inheritdoc/>
@@ -135,6 +147,11 @@ internal sealed class BundleService(
         using var fileLock = await FileLock.AcquireAsync(lockPath, cancellationToken).ConfigureAwait(false);
         logger.LogDebug("Bundle extraction lock acquired.");
 
+        return await ExtractAsyncCore(destinationPath, force, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<BundleExtractResult> ExtractAsyncCore(string destinationPath, bool force, CancellationToken cancellationToken)
+    {
         try
         {
             // Re-check after acquiring lock — another process may have already extracted
@@ -158,6 +175,44 @@ internal sealed class BundleService(
             logger.LogError(ex, "Failed to extract bundle to {Path}", destinationPath);
             return BundleExtractResult.ExtractionFailed;
         }
+    }
+
+    private string? GetBundleExtractDirForCurrentProcess()
+    {
+        if (!IsBundle)
+        {
+            logger.LogDebug("No embedded bundle payload, skipping extraction.");
+            return null;
+        }
+
+        var processPath = ProcessPathOverride ?? Environment.ProcessPath;
+        if (string.IsNullOrEmpty(processPath))
+        {
+            logger.LogDebug("ProcessPath is null or empty, skipping bundle extraction.");
+            return null;
+        }
+
+        // The winget portable installer has no post-install hook, so the CLI
+        // self-stamps the install-route sidecar on first run. No-op on
+        // non-Windows and once the sidecar already exists.
+        if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
+        {
+            var realBinaryPath = CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, logger);
+            var binaryDir = Path.GetDirectoryName(realBinaryPath);
+            if (!string.IsNullOrEmpty(binaryDir))
+            {
+                wingetFirstRunProbe.Run(binaryDir);
+            }
+        }
+
+        var extractDir = GetDefaultExtractDir(processPath);
+        if (string.IsNullOrEmpty(extractDir))
+        {
+            logger.LogDebug("Could not determine extraction directory from {ProcessPath}, skipping.", processPath);
+            return null;
+        }
+
+        return extractDir;
     }
 
     private async Task<BundleExtractResult> ExtractCoreAsync(string destinationPath, CancellationToken cancellationToken)
@@ -329,7 +384,10 @@ internal sealed class BundleService(
     /// Computes the bundle extract directory from the sidecar source value.
     /// See <c>docs/specs/install-routes.md</c> for the contract.
     /// </summary>
-    internal static string? ComputeDefaultExtractDir(string processPath, ILogger? logger = null)
+    internal static string? ComputeDefaultExtractDir(string processPath)
+        => ComputeDefaultExtractDir(processPath, logger: null);
+
+    private static string? ComputeDefaultExtractDir(string processPath, ILogger? logger)
     {
         logger ??= NullLogger.Instance;
 
@@ -338,70 +396,30 @@ internal sealed class BundleService(
             return null;
         }
 
-        var realBinaryPath = ResolveSymlinks(processPath, logger);
+        var realBinaryPath = CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, logger);
         var binaryDir = Path.GetDirectoryName(realBinaryPath);
         if (string.IsNullOrEmpty(binaryDir))
         {
             return null;
         }
 
-        var sidecarPath = Path.Combine(binaryDir, SidecarFileName);
-        var source = ReadSidecarSource(sidecarPath, logger);
+        // Sidecar parsing is shared with InstallSidecarReader; the layout
+        // mapping below intentionally uses the raw wire string so the
+        // mapping remains a static, dependency-free function callable from
+        // any context (including code paths that run before DI is wired).
+        var sidecarPath = Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName);
+        var source = InstallSidecarReader.ReadSourceField(sidecarPath);
 
         return source switch
         {
-            "winget" or "brew" or "dotnet-tool" => binaryDir,
-            "script" or "pr" => Path.GetDirectoryName(binaryDir) ?? binaryDir,
+            InstallSourceExtensions.WingetWire
+                or InstallSourceExtensions.BrewWire
+                or InstallSourceExtensions.DotnetToolWire => binaryDir,
+            InstallSourceExtensions.ScriptWire
+                or InstallSourceExtensions.PrWire
+                or InstallSourceExtensions.LocalHiveWire => Path.GetDirectoryName(binaryDir) ?? binaryDir,
             _ => Path.GetDirectoryName(binaryDir) ?? binaryDir,
         };
-    }
-
-    private const string SidecarFileName = ".aspire-install.json";
-
-    private static string? ReadSidecarSource(string sidecarPath, ILogger logger)
-    {
-        if (!File.Exists(sidecarPath))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var stream = File.OpenRead(sidecarPath);
-            using var doc = JsonDocument.Parse(stream);
-            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
-                doc.RootElement.TryGetProperty("source", out var sourceElement) &&
-                sourceElement.ValueKind == JsonValueKind.String)
-            {
-                return sourceElement.GetString();
-            }
-        }
-        catch (Exception ex)
-        {
-            // Best-effort sidecar read: any failure (I/O, malformed JSON, permissions,
-            // etc.) falls through to the parent-of-binary heuristic. Log so an
-            // unexpectedly-missing sidecar is diagnosable.
-            logger.LogDebug(ex, "Failed to read install-route sidecar at {Path}; treating as missing.", sidecarPath);
-        }
-
-        return null;
-    }
-
-    private static string ResolveSymlinks(string path, ILogger logger)
-    {
-        try
-        {
-            var resolved = File.ResolveLinkTarget(path, returnFinalTarget: true);
-            return resolved is null ? path : resolved.FullName;
-        }
-        catch (Exception ex)
-        {
-            // Best-effort symlink resolution: any failure falls back to the raw
-            // path. Sidecar discovery using the raw path is still valid in the
-            // non-link case.
-            logger.LogDebug(ex, "Failed to resolve link target for {Path}; using raw path.", path);
-            return path;
-        }
     }
 
     /// <summary>
@@ -545,8 +563,8 @@ internal sealed class BundleService(
 
     /// <summary>
     /// Best-effort sweep of the <c>versions/</c> directory, removing anything other
-    /// than the active version plus any <c>.tmp.*</c>, <c>.bad.*</c>, <c>.old.*</c>
-    /// leftovers. Locked items are softly renamed so they can be reaped next run.
+    /// than the active version. Directories with active leases are left untouched
+    /// and retried by a later extraction.
     /// </summary>
     internal static void TryCleanupStaleVersions(string versionsRoot, string activeVersionId)
     {
@@ -565,22 +583,80 @@ internal sealed class BundleService(
                 continue;
             }
 
+            if (BundleVersionLease.HasActiveLease(entry))
+            {
+                continue;
+            }
+
             try
             {
                 Directory.Delete(entry, recursive: true);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // Still in use — rename so it is out of the way and will be reaped next run.
-                try
-                {
-                    Directory.Move(entry, $"{entry}.old.{Environment.TickCount64}");
-                }
-                catch
-                {
-                }
+                // If deletion fails after lease probing, leave the directory untouched.
+                // A later setup/update can retry without invalidating a potential reader.
             }
         }
+    }
+
+    private static (string VersionId, string VersionDirectory)? ResolveActiveVersionDirectory(string extractDir)
+    {
+        var bundlePath = Path.Combine(extractDir, BundleDiscovery.BundleDirectoryName);
+        if (ResolveReparsePointTarget(bundlePath, extractDir) is { } linkTarget &&
+            IsVersionedLayoutValid(linkTarget))
+        {
+            return (GetDirectoryName(linkTarget), linkTarget);
+        }
+
+        var existingVersion = ReadVersionMarker(extractDir);
+        if (!string.IsNullOrEmpty(existingVersion))
+        {
+            var versionId = ComputeVersionId(existingVersion);
+            var markerVersionDir = Path.Combine(extractDir, VersionsDirectoryName, versionId);
+            if (IsVersionedLayoutValid(markerVersionDir))
+            {
+                return (versionId, markerVersionDir);
+            }
+        }
+
+        return null;
+    }
+
+    private static string? ResolveReparsePointTarget(string linkPath, string layoutPath)
+    {
+        if (!ReparsePoint.IsReparsePoint(linkPath))
+        {
+            return null;
+        }
+
+        var target = ReparsePoint.GetTarget(linkPath);
+        if (string.IsNullOrEmpty(target))
+        {
+            return null;
+        }
+
+        return Path.GetFullPath(Path.IsPathRooted(target)
+            ? target
+            : Path.Combine(layoutPath, target));
+    }
+
+    private static string GetDirectoryName(string path)
+    {
+        return Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+    }
+
+    private static LayoutConfiguration CreateVersionRootedLayout(string versionDirectory)
+    {
+        return new LayoutConfiguration
+        {
+            LayoutPath = versionDirectory,
+            Components = new LayoutComponents
+            {
+                Dcp = BundleDiscovery.DcpDirectoryName,
+                Managed = BundleDiscovery.ManagedDirectoryName,
+            }
+        };
     }
 
     /// <summary>

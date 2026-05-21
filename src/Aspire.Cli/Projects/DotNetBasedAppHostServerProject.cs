@@ -146,6 +146,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                     <RepoRoot>{_repoRoot}</RepoRoot>
                     <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
                     <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+                    <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
                     <AspireHostingSDKVersion>42.42.42</AspireHostingSDKVersion>
                     <!-- DCP and Dashboard paths for local development -->
                     <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)')){dcpPackageName}/{dcpVersion}/tools/</DcpDir>

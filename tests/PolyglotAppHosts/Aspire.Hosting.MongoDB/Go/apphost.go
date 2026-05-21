@@ -40,7 +40,7 @@ func main() {
 	builder.AddMongoDB("mongo-custom-pass", &aspire.AddMongoDBOptions{Password: &customPassword})
 
 	mongoChained := builder.AddMongoDB("mongo-chained")
-	mongoChained.WithLifetime(aspire.ContainerLifetimePersistent)
+	mongoChained.WithPersistentLifetime()
 	mongoChained.WithDataVolume(&aspire.WithDataVolumeOptions{Name: aspire.StringPtr("mongo-chained-data")})
 
 	mongoChained.AddDatabase("app-db")

@@ -270,4 +270,39 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(testInteractionService.DisplayedMessages,
             m => m.ConsoleOverride == ConsoleOutput.Error);
     }
+
+    [Fact]
+    public async Task BaseCommand_OnUnexpectedException_ReturnsInvalidCommandExitCode_AndDisplaysError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var backchannelMonitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new InvalidOperationException("Something went wrong")
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => backchannelMonitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+
+        // Verify error message was displayed
+        var expectedErrorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, "Something went wrong");
+        Assert.Contains(expectedErrorMessage, testInteractionService.DisplayedErrors);
+
+        // Verify log file path was displayed on stderr
+        var executionContext = provider.GetRequiredService<CliExecutionContext>();
+        var expectedLogMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, executionContext.LogFilePath);
+        var logMessage = Assert.Single(testInteractionService.DisplayedMessages, m => m.Message == expectedLogMessage);
+        Assert.Equal(ConsoleOutput.Error, logMessage.ConsoleOverride);
+    }
 }

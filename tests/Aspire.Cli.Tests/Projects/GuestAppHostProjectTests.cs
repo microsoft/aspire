@@ -595,7 +595,7 @@ public class GuestAppHostProjectTests : IDisposable
                 ])
         };
 
-        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
 
         var interactionService = new TestInteractionService
         {
@@ -694,7 +694,8 @@ public class GuestAppHostProjectTests : IDisposable
             PackageChannelNames.Stable,
             PackageChannelQuality.Both,
             [new PackageMapping("Aspire.*", "stable")],
-            stableCache);
+            stableCache,
+            features: new TestFeatures());
 
         var interactionService = new TestInteractionService
         {
@@ -748,7 +749,8 @@ public class GuestAppHostProjectTests : IDisposable
             PackageChannelNames.Staging,
             PackageChannelQuality.Both,
             [new PackageMapping("Aspire*", "staging")],
-            stagingCache);
+            stagingCache,
+            features: new TestFeatures());
 
         var interactionService = new TestInteractionService
         {
@@ -803,7 +805,8 @@ public class GuestAppHostProjectTests : IDisposable
             PackageChannelNames.Stable,
             PackageChannelQuality.Both,
             [new PackageMapping("Aspire.*", "stable")],
-            stableCache);
+            stableCache,
+            features: new TestFeatures());
 
         var project = CreateGuestAppHostProject();
 

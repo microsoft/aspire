@@ -15,15 +15,16 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 {
-    public static TheoryData<string> AlternativeToolchains => new()
+    public static TheoryData<string> SupportedToolchains => new()
     {
+        "npm",
         "bun",
         "yarn",
         "pnpm"
     };
 
     [Theory]
-    [MemberData(nameof(AlternativeToolchains))]
+    [MemberData(nameof(SupportedToolchains))]
     [CaptureWorkspaceOnFailure]
     public async Task RestoreGeneratesSdkFiles_WithConfiguredToolchain(string toolchain)
     {
@@ -77,6 +78,19 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
+
+        var lockFilePath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            TypeScriptAppHostToolchainTestHelpers.GetLockFileName(toolchain));
+        if (!File.Exists(lockFilePath))
+        {
+            throw new InvalidOperationException(
+                $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(toolchain)} restore to create '{lockFilePath}'.");
+        }
+
+        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(toolchain, "tsconfig.apphost.json"));
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 4: Verify generated SDK files exist.
         var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");

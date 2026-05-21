@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Layout;
-
 namespace Aspire.Cli.Bundles;
 
 /// <summary>
@@ -32,13 +30,17 @@ internal interface IBundleService
     Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Ensures the bundle is extracted and returns the discovered layout.
-    /// Combines <see cref="EnsureExtractedAsync"/> and layout discovery into a single call
-    /// so callers cannot forget to extract before discovering the layout.
+    /// Ensures the bundle is extracted and returns a version-rooted layout with a lease that prevents cleanup.
+    /// Extraction, active-version resolution, and lease acquisition happen under the same bundle lock
+    /// so cleanup cannot delete the selected version before the lease protects it.
+    /// Callers that start bundle-owned processes should use this method and keep the returned lease alive
+    /// until the child process has exited or acquired its own lease.
     /// </summary>
+    /// <param name="holderKind">Diagnostic category for the lease holder.</param>
+    /// <param name="commandName">Optional command name for diagnostics.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The discovered layout, or <see langword="null"/> if no layout is found.</returns>
-    Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default);
+    /// <returns>The leased layout, or <see langword="null"/> if no layout is found.</returns>
+    Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Determines the default extraction directory for the supplied CLI binary path

@@ -1779,12 +1779,21 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
                 runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
 
-                // Return UserSecretsId when GetProjectItemsAndPropertiesAsync is called
+                // After issue #17197 the AppHost MSBuild inspection is fetched once and cached,
+                // so the IsAspireHost shape and UserSecretsId both come back in the same response.
                 runner.GetProjectItemsAndPropertiesAsyncCallback = (projectFile, items, properties, options, ct) =>
                 {
-                    var json = $$$"""{"Properties": {"UserSecretsId": "{{{originalUserSecretsId}}}"}}""";
-                    var doc = JsonDocument.Parse(json);
-                    return (0, doc);
+                    var json = $$$"""
+                        {
+                          "Properties": {
+                            "IsAspireHost": "true",
+                            "AspireHostingSDKVersion": "{{{VersionHelper.GetDefaultTemplateVersion()}}}",
+                            "UserSecretsId": "{{{originalUserSecretsId}}}"
+                          },
+                          "Items": {}
+                        }
+                        """;
+                    return (0, JsonDocument.Parse(json));
                 };
 
                 runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>

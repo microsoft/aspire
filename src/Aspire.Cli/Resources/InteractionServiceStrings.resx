@@ -207,10 +207,10 @@
     <value>The specified project file is not an Aspire AppHost project.</value>
   </data>
   <data name="ErrorConnectingToAppHost" xml:space="preserve">
-    <value>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</value>
+    <value>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</value>
   </data>
   <data name="AppHostConnectionLost" xml:space="preserve">
-    <value>The connection to the AppHost was lost: {0}.</value>
+    <value>The connection to the AppHost was lost: {0}</value>
   </data>
   <data name="AppHostConnectionLostGeneric" xml:space="preserve">
     <value>The connection to the application was lost.</value>

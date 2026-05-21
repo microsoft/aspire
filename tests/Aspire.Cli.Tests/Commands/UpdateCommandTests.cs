@@ -280,6 +280,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         PackageChannelQuality.Stable,
                         new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
                         null!,
+                        features: new TestFeatures(),
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
@@ -521,6 +522,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         PackageChannelQuality.Stable,
                         new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
                         null!,
+                        features: new TestFeatures(),
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
@@ -596,6 +598,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         PackageChannelQuality.Stable,
                         new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
                         null!,
+                        features: new TestFeatures(),
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
@@ -759,6 +762,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         PackageChannelQuality.Prerelease,
                         new[] { new PackageMapping("Aspire*", "/path/to/pr/hive") },
                         null!,
+                        features: new TestFeatures(),
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: null); // No CLI download URL for PR channels
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { prChannel });
@@ -1042,8 +1046,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1107,8 +1111,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1161,8 +1165,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1228,8 +1232,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1289,7 +1293,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
                 }
             };
@@ -1351,7 +1355,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     var fakeCache = new FakeNuGetPackageCache();
-                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel });
                 }
             };
@@ -1506,7 +1510,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                     var fakeCache = new FakeNuGetPackageCache();
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[]
                     {
-                        PackageChannel.CreateImplicitChannel(fakeCache),
+                        PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures()),
                     });
                 }
             };
@@ -1564,8 +1568,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                     var fakeCache = new FakeNuGetPackageCache();
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[]
                     {
-                        PackageChannel.CreateImplicitChannel(fakeCache),
-                        PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache),
+                        PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures()),
+                        PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures()),
                     });
                 },
                 GetStagingChannelUnavailableReasonCallback = () => unavailableReason
@@ -1792,10 +1796,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     var fakeCache = new FakeNuGetPackageCache();
-                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, mappings: null, fakeCache);
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache);
-                    var hiveChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, mappings: null, fakeCache);
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, mappings: null, fakeCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures());
+                    var hiveChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, stableChannel, dailyChannel, hiveChannel });
                 }
             };
@@ -2193,9 +2197,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     var fakeCache = new FakeNuGetPackageCache();
-                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
-                    var stagingChannel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings: null, fakeCache);
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache);
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                    var stagingChannel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings: null, fakeCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures());
                     var channels = new List<PackageChannel> { implicitChannel, stagingChannel, dailyChannel };
 
                     // Optional pr-* and local channels for identity-channel tests. Production
@@ -2208,14 +2212,14 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         {
                             if (hive.Name.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
                             {
-                                channels.Add(PackageChannel.CreateExplicitChannel(hive.Name, PackageChannelQuality.Both, mappings: null, fakeCache));
+                                channels.Add(PackageChannel.CreateExplicitChannel(hive.Name, PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures()));
                             }
                         }
                     }
 
                     if (includeLocalInChannels)
                     {
-                        channels.Add(PackageChannel.CreateExplicitChannel(PackageChannelNames.Local, PackageChannelQuality.Both, mappings: null, fakeCache));
+                        channels.Add(PackageChannel.CreateExplicitChannel(PackageChannelNames.Local, PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures()));
                     }
 
                     return Task.FromResult<IEnumerable<PackageChannel>>(channels);
@@ -2485,8 +2489,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
                 }
             };
@@ -2606,6 +2610,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             PackageChannelQuality.Stable,
             [new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json")],
             fakeCache,
+            features: new TestFeatures(),
             configureGlobalPackagesFolder: false,
             cliDownloadBaseUrl: cliDownloadBaseUrl);
     }
@@ -2632,6 +2637,7 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
     }
 
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => _innerService.ShowStatusAsync(statusText, action, emoji, allowMarkup);
+    public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => _innerService.ShowDynamicStatusAsync(initialStatusText, action, emoji);
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => _innerService.ShowStatus(statusText, action, emoji, allowMarkup);
     public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) 
         => _innerService.PromptForStringAsync(promptText, validator, isSecret, required, binding, cancellationToken);

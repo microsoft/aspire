@@ -49,13 +49,13 @@ public class EnvironmentCallbackContext(DistributedApplicationExecutionContext e
     /// <summary>
     /// Gets the editor used to set environment variables in polyglot callbacks.
     /// </summary>
-    [AspireExport(Description = "Gets the environment variable editor")]
+    [AspireExport]
     internal EnvironmentEditor Environment => new(EnvironmentVariables);
 
     /// <summary>
     /// Gets the logger facade used by polyglot callbacks.
     /// </summary>
-    [AspireExport(Description = "Gets the callback logger facade")]
+    [AspireExport]
     internal LogFacade Log => new(() => Logger);
 
     /// <summary>
@@ -65,12 +65,12 @@ public class EnvironmentCallbackContext(DistributedApplicationExecutionContext e
     /// This will be set to the resource in all cases where Aspire invokes the callback.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when the EnvironmentCallbackContext was created without a specified resource.</exception>
-    [AspireExport(Description = "Gets the resource associated with this callback")]
+    [AspireExport]
     public IResource Resource => _resource ?? throw new InvalidOperationException($"{nameof(Resource)} is not set. This callback context is not associated with a resource.");
 
     /// <summary>
     /// Gets the execution context associated with this invocation of the AppHost.
     /// </summary>
-    [AspireExport(Description = "Gets the execution context for this callback invocation")]
+    [AspireExport]
     public DistributedApplicationExecutionContext ExecutionContext { get; } = executionContext ?? throw new ArgumentNullException(nameof(executionContext));
 }

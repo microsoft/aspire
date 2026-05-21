@@ -259,4 +259,54 @@ public class InputViewModelTests
 
         Assert.Equal(initialVersion, viewModel.ChoiceVersion);
     }
+
+    [Fact]
+    public void SetInput_DisabledInputUsesIncomingValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Location",
+            InputType = InputType.Choice,
+            Placeholder = "Select a location",
+            Disabled = true
+        };
+        var viewModel = new InputViewModel(input);
+
+        var updatedInput = new InteractionInput
+        {
+            Label = "Location",
+            InputType = InputType.Choice,
+            Placeholder = "Select a location",
+            Disabled = true,
+            Value = "westus"
+        };
+        updatedInput.Options.Add("westus", "West US");
+
+        viewModel.SetInput(updatedInput);
+
+        Assert.Equal("westus", viewModel.Value);
+    }
+
+    [Fact]
+    public void SetInput_EnabledInputPreservesLocalValue()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Name",
+            InputType = InputType.Text,
+            Value = "local"
+        };
+        var viewModel = new InputViewModel(input);
+
+        var updatedInput = new InteractionInput
+        {
+            Label = "Name",
+            InputType = InputType.Text,
+            Value = "server"
+        };
+
+        viewModel.SetInput(updatedInput);
+
+        Assert.Equal("local", viewModel.Value);
+    }
 }

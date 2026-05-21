@@ -81,6 +81,30 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
     }
 
+    public async Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
+    {
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(initialStatusText.RemoveSpectreFormatting(), _cancellationToken));
+        Debug.Assert(result);
+
+        try
+        {
+            return await _consoleInteractionService.ShowDynamicStatusAsync(
+                initialStatusText,
+                updateStatus => action(statusText =>
+                {
+                    var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(statusText.RemoveSpectreFormatting(), _cancellationToken));
+                    Debug.Assert(result);
+                    updateStatus(statusText);
+                }),
+                emoji).ConfigureAwait(false);
+        }
+        finally
+        {
+            result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(null, _cancellationToken));
+            Debug.Assert(result);
+        }
+    }
+
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(statusText.RemoveSpectreFormatting(), _cancellationToken));
