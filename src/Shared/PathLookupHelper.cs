@@ -139,9 +139,9 @@ internal static class PathLookupHelper
                 foreach (var extension in pathExtensions)
                 {
                     if (TryCombine(directory, command + extension, out var fullPathWithExt) &&
-                        FileExistsSafe(fileExists, fullPathWithExt))
+                        TryResolveExistingPath(fileExists, fullPathWithExt, out var existingPathWithExt))
                     {
-                        yield return fullPathWithExt;
+                        yield return existingPathWithExt;
                         foundExtensionMatch = true;
                         break;
                     }
@@ -155,9 +155,9 @@ internal static class PathLookupHelper
 
             // Try exact match (for non-Windows, or as fallback on Windows if no extension match found in this directory).
             if (TryCombine(directory, command, out var fullPath) &&
-                FileExistsSafe(fileExists, fullPath))
+                TryResolveExistingPath(fileExists, fullPath, out var existingPath))
             {
-                yield return fullPath;
+                yield return existingPath;
             }
         }
     }
@@ -190,6 +190,55 @@ internal static class PathLookupHelper
         {
             return false;
         }
+    }
+
+    private static bool TryResolveExistingPath(Func<string, bool> fileExists, string path, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? existingPath)
+    {
+        existingPath = null;
+        if (!FileExistsSafe(fileExists, path))
+        {
+            return false;
+        }
+
+        // Windows PATH probing appends PATHEXT entries such as ".EXE" even when
+        // the file is named "aspire.exe"; return the filesystem spelling so
+        // user-facing output doesn't inherit PATHEXT casing.
+        existingPath = TryGetActualPathCasing(path, out var actualPath) ? actualPath : path;
+        return true;
+    }
+
+    private static bool TryGetActualPathCasing(string path, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? actualPath)
+    {
+        actualPath = null;
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        var directory = Path.GetDirectoryName(path);
+        var fileName = Path.GetFileName(path);
+        if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(fileName))
+        {
+            return false;
+        }
+
+        try
+        {
+            foreach (var entry in Directory.EnumerateFileSystemEntries(directory, fileName))
+            {
+                if (string.Equals(Path.GetFileName(entry), fileName, StringComparison.OrdinalIgnoreCase))
+                {
+                    actualPath = entry;
+                    return true;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or IOException or NotSupportedException or PathTooLongException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return false;
+        }
+
+        return false;
     }
 
     private static bool IsExplicitExecutablePath(string executablePath)

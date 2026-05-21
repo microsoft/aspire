@@ -73,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ColumnRoute">
-        <source>Route</source>
-        <target state="new">Route</target>
+        <source>Source</source>
+        <target state="new">Source</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnVersion">

@@ -95,7 +95,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
             CanonicalPath = canonicalPath,
             Version = VersionHelper.GetDefaultTemplateVersion(),
             Channel = TryReadChannel(),
-            Route = route,
+            Source = route,
             PathStatus = pathStatus,
             Status = InstallationInfoStatus.Ok,
         };
@@ -229,7 +229,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
                     // version string (<x.y.z>-pr.<N>.<hash>) baked at
                     // build time, so we surface it even when the peer
                     // didn't report it.
-                    var route = ok.Info.Route ?? GetRouteFromSidecar(sidecar);
+                    var route = ok.Info.Source ?? GetRouteFromSidecar(sidecar);
                     var channel = ok.Info.Channel;
                     if (string.IsNullOrEmpty(channel) && sidecar.Source == InstallSource.Pr)
                     {
@@ -252,7 +252,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
                     {
                         Path = candidate.BinaryPath,
                         CanonicalPath = canonical,
-                        Route = route,
+                        Source = route,
                         Channel = channel,
                         PathStatus = pathStatus,
                     });
@@ -265,7 +265,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
                     {
                         Path = candidate.BinaryPath,
                         CanonicalPath = canonical,
-                        Route = GetRouteFromSidecar(sidecar),
+                        Source = GetRouteFromSidecar(sidecar),
                         PathStatus = pathStatus,
                         Status = InstallationInfoStatus.Failed,
                         StatusReason = failed.Reason,

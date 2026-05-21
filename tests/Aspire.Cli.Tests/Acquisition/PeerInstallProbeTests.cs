@@ -90,7 +90,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
                           "path": "/peer/aspire",
                           "version": "12.5.0",
                           "channel": "stable",
-                          "route": "script",
+                          "source": "script",
                           "pathStatus": "shadowed",
                           "status": "ok"
                         }
@@ -105,8 +105,32 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
         var ok = AssertProbeOk(result);
         Assert.Equal("12.5.0", ok.Info.Version);
         Assert.Equal("stable", ok.Info.Channel);
-        Assert.Equal("script", ok.Info.Route);
+        Assert.Equal("script", ok.Info.Source);
         Assert.Equal(InstallationPathStatus.Shadowed, ok.Info.PathStatus);
+    }
+
+    [Fact]
+    public async Task ProbeAsync_PeerEmitsLegacyRoute_ReturnsSource()
+    {
+        using var fakePeer = FakePeerScript.Build(
+            outputHelper,
+            stdout: """
+                    [
+                      {
+                        "path": "/peer/aspire",
+                        "version": "12.5.0",
+                        "route": "script",
+                        "status": "ok"
+                      }
+                    ]
+                    """,
+            exitCode: 0);
+
+        var probe = new PeerInstallProbe(ProbeLogger);
+        var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
+
+        var ok = AssertProbeOk(result);
+        Assert.Equal("script", ok.Info.Source);
     }
 
     [Fact]

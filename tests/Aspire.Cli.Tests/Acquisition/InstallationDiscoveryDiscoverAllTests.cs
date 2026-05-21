@@ -137,7 +137,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
                 Path = "/peer-says/aspire",
                 Version = "12.5.0",
                 Channel = "stable",
-                Route = "script",
+                Source = "script",
                 Status = InstallationInfoStatus.Ok,
             }),
         });
@@ -237,7 +237,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var row = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal(InstallationInfoStatus.Ok, row.Status);
-        Assert.Equal("apt", row.Route);
+        Assert.Equal("apt", row.Source);
         Assert.Equal("13.1.0", row.Version);
         Assert.Equal("daily", row.Channel);
     }
@@ -262,7 +262,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var row = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal(InstallationInfoStatus.Failed, row.Status);
-        Assert.Equal("apt", row.Route);
+        Assert.Equal("apt", row.Source);
         Assert.Equal("simulated probe failure", row.StatusReason);
     }
 
@@ -289,7 +289,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var row = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal(InstallationInfoStatus.Failed, row.Status);
-        Assert.Equal("pr", row.Route);
+        Assert.Equal("pr", row.Source);
         Assert.Contains("simulated peer hang", row.StatusReason!);
     }
 
@@ -345,7 +345,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         if (hasInstallMetadata)
         {
             Assert.Contains(probe.ProbedPaths, p => string.Equals(p, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
-            Assert.Equal("script", row.Route);
+            Assert.Equal("script", row.Source);
             Assert.Contains("peer returned malformed JSON", row.StatusReason!);
         }
         else
@@ -385,7 +385,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var prRow = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal("pr-12345", prRow.Channel);
-        Assert.Equal("pr", prRow.Route);
+        Assert.Equal("pr", prRow.Source);
         Assert.Equal("13.4.0-pr.12345.gabcdef", prRow.Version);
     }
 
@@ -456,7 +456,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var brewRow = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal("pr-17115", brewRow.Channel);
-        Assert.Equal("brew", brewRow.Route);
+        Assert.Equal("brew", brewRow.Source);
         Assert.Equal("13.4.0-pr.17115.gcd700928", brewRow.Version);
     }
 
@@ -490,7 +490,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var brewRow = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Null(brewRow.Channel);
-        Assert.Equal("brew", brewRow.Route);
+        Assert.Equal("brew", brewRow.Source);
     }
 
     [Theory]
@@ -763,7 +763,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
                 Path = binary,
                 Version = "13.4.0",
                 Channel = "stable",
-                Route = "script",
+                Source = "script",
                 Status = InstallationInfoStatus.Ok,
             }),
         });
@@ -793,7 +793,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
                 Path = binary,
                 Version = "13.4.0",
                 Channel = "local",
-                Route = "localhive",
+                Source = "localhive",
                 Status = InstallationInfoStatus.Ok,
             }),
         });
@@ -861,7 +861,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
                 CanonicalPath = binary,
                 Version = "test-version",
                 Channel = "pr-99999",
-                Route = "pr",
+                Source = "pr",
                 Status = InstallationInfoStatus.Ok,
             }),
         });

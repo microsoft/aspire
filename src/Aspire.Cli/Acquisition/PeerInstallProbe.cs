@@ -128,7 +128,7 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
             return new PeerProbeResult.Failed(DescribePrimaryFailure(primary, alsoTriedVersion: true));
         }
 
-        // Partial install details: version only. Route is overlaid by InstallationDiscovery
+        // Partial install details: version only. Source is overlaid by InstallationDiscovery
         // from the locally-readable sidecar. Channel intentionally null — we can't
         // read assembly metadata
         // from outside an AOT binary, and the older peer has no surface that

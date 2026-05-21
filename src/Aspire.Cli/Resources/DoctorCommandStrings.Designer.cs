@@ -438,7 +438,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Route.
+        ///   Looks up a localized string similar to Source.
         /// </summary>
         public static string ColumnRoute {
             get {

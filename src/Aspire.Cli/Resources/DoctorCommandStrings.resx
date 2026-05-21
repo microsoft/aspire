@@ -194,7 +194,7 @@
     <value>Channel</value>
   </data>
   <data name="ColumnRoute" xml:space="preserve">
-    <value>Route</value>
+    <value>Source</value>
   </data>
   <data name="ColumnPathStatus" xml:space="preserve">
     <value>PATH status</value>
