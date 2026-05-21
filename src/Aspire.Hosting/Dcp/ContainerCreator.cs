@@ -112,7 +112,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         if (!containerResources.Any()) { return; }
 
         var network = ContainerNetwork.Create(KnownNetworkIdentifiers.DefaultAspireContainerNetwork.Value);
-        if (containerResources.Any(cr => cr.GetContainerLifetimeType() == ContainerLifetime.Persistent))
+        if (containerResources.Any(cr => cr.GetLifetimeType() == Lifetime.Persistent))
         {
             network.Spec.Persistent = true;
             network.Spec.NetworkName = $"{DcpExecutor.DefaultAspirePersistentNetworkName}-{_nameGenerator.GetProjectHashSuffix()}";
@@ -152,9 +152,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
             ctr.Spec.ContainerName = containerObjectInstance.Name;
 
-            if (container.GetContainerLifetimeType() == ContainerLifetime.Persistent)
+            if (container.GetLifetimeType() == Lifetime.Persistent)
             {
                 ctr.Spec.Persistent = true;
+                ApplyMonitorProcess(container, ctr.Spec);
             }
 
             if (container.TryGetContainerImagePullPolicy(out var pullPolicy))
@@ -171,7 +172,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
             ctr.Annotate(CustomResource.ResourceNameAnnotation, container.Name);
             ctr.Annotate(CustomResource.OtelServiceNameAnnotation, container.Name);
-            ctr.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, containerObjectInstance.Suffix);
+            ctr.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, container.GetOtelServiceInstanceId(containerObjectInstance));
             DcpExecutor.SetInitialResourceState(container, ctr);
 
             var aanns = container.Annotations.OfType<ContainerNetworkAliasAnnotation>().ToImmutableArray();
@@ -204,6 +205,15 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
 
         return result;
+    }
+
+    private static void ApplyMonitorProcess(IResource resource, ContainerSpec spec)
+    {
+        if (resource.TryGetParentProcessLifetime(out var parentProcessId, out var parentProcessTimestamp))
+        {
+            spec.MonitorPid = parentProcessId;
+            spec.MonitorTimestamp = parentProcessTimestamp;
+        }
     }
 
     private void ValidateContainerTunnelContainerNameConflicts(IEnumerable<IResource> modelContainerResources)
@@ -278,7 +288,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 workingDirectory: containerExecutable.WorkingDirectory);
 
             containerExec.Annotate(CustomResource.OtelServiceNameAnnotation, containerExecutable.Name);
-            containerExec.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, exeInstance.Suffix);
+            containerExec.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, containerExecutable.GetOtelServiceInstanceId(exeInstance));
             containerExec.Annotate(CustomResource.ResourceNameAnnotation, containerExecutable.Name);
             DcpExecutor.SetInitialResourceState(containerExecutable, containerExec);
 
@@ -941,9 +951,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 ContainerPort = ea.TargetPort,
             };
 
-            if (!ea.IsProxied && ea.Port is int)
+            if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
             {
-                portSpec.HostPort = ea.Port;
+                portSpec.HostPort = hostPort;
             }
 
             switch (sp.EndpointAnnotation.Protocol)

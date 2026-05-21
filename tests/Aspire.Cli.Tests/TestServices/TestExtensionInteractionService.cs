@@ -21,7 +21,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     public Action? LaunchAppHostCallback { get; set; }
     public Action? NotifyAppHostStartupCompletedCallback { get; set; }
     public Action<DashboardUrlsState>? DisplayDashboardUrlsCallback { get; set; }
-    public Action<string, string?, bool>? StartDebugSessionCallback { get; set; }
+    public Action<string, string?, bool, DebugSessionOptions?>? StartDebugSessionCallback { get; set; }
     public Action<string, bool>? ConsoleDisplaySubtleMessageCallback { get; set; }
 
     public IExtensionBackchannel Backchannel { get; } = serviceProvider.GetRequiredService<IExtensionBackchannel>();
@@ -29,6 +29,11 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         return action();
+    }
+
+    public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
+    {
+        return action(_ => { });
     }
 
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
@@ -106,7 +111,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public Task StartDebugSessionAsync(string workingDirectory, string? projectFile, bool debug, DebugSessionOptions? options = null)
     {
-        StartDebugSessionCallback?.Invoke(workingDirectory, projectFile, debug);
+        StartDebugSessionCallback?.Invoke(workingDirectory, projectFile, debug, options);
         return Task.CompletedTask;
     }
 

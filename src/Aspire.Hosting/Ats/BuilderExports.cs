@@ -48,7 +48,7 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <returns>The configuration handle.</returns>
-    [AspireExport(Description = "Gets the application configuration")]
+    [AspireExport]
     public static IConfiguration GetConfiguration(this IDistributedApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -62,7 +62,7 @@ internal static class BuilderExports
     /// <param name="configuration">The configuration handle.</param>
     /// <param name="key">The configuration key (e.g., "ConnectionStrings:Default").</param>
     /// <returns>The configuration value, or null if not found.</returns>
-    [AspireExport(Description = "Gets a configuration value by key")]
+    [AspireExport]
     public static string? GetConfigValue(this IConfiguration configuration, string key)
     {
         return configuration[key];
@@ -74,7 +74,7 @@ internal static class BuilderExports
     /// <param name="configuration">The configuration handle.</param>
     /// <param name="name">The connection string name.</param>
     /// <returns>The connection string value, or null if not found.</returns>
-    [AspireExport(Description = "Gets a connection string by name")]
+    [AspireExport]
     public static string? GetConnectionString(this IConfiguration configuration, string name)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -89,7 +89,7 @@ internal static class BuilderExports
     /// <param name="configuration">The configuration handle.</param>
     /// <param name="key">The configuration key.</param>
     /// <returns>The configuration section handle.</returns>
-    [AspireExport(Description = "Gets a configuration section by key")]
+    [AspireExport]
     public static IConfigurationSection GetSection(this IConfiguration configuration, string key)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -103,7 +103,7 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="configuration">The configuration handle.</param>
     /// <returns>The child sections.</returns>
-    [AspireExport(Description = "Gets child configuration sections")]
+    [AspireExport]
     public static IConfigurationSection[] GetChildren(this IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -117,7 +117,7 @@ internal static class BuilderExports
     /// <param name="configuration">The configuration handle.</param>
     /// <param name="key">The configuration key.</param>
     /// <returns><see langword="true"/> when the section exists; otherwise, <see langword="false"/>.</returns>
-    [AspireExport(Description = "Checks whether a configuration section exists")]
+    [AspireExport]
     public static bool Exists(this IConfiguration configuration, string key)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -135,7 +135,7 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="environment">The host environment handle.</param>
     /// <returns>True if running in Development environment.</returns>
-    [AspireExport(Description = "Checks if running in Development environment")]
+    [AspireExport]
     public static bool IsDevelopment(this IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(environment);
@@ -148,7 +148,7 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="environment">The host environment handle.</param>
     /// <returns>True if running in Production environment.</returns>
-    [AspireExport(Description = "Checks if running in Production environment")]
+    [AspireExport]
     public static bool IsProduction(this IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(environment);
@@ -161,7 +161,7 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="environment">The host environment handle.</param>
     /// <returns>True if running in Staging environment.</returns>
-    [AspireExport(Description = "Checks if running in Staging environment")]
+    [AspireExport]
     public static bool IsStaging(this IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(environment);
@@ -175,7 +175,7 @@ internal static class BuilderExports
     /// <param name="environment">The host environment handle.</param>
     /// <param name="environmentName">The environment name to compare against.</param>
     /// <returns>True if the environment matches the specified name.</returns>
-    [AspireExport(Description = "Checks if the environment matches the specified name")]
+    [AspireExport]
     public static bool IsEnvironment(this IHostEnvironment environment, string environmentName)
     {
         ArgumentNullException.ThrowIfNull(environment);
@@ -198,7 +198,7 @@ internal static class BuilderExports
     /// <param name="builder">The builder handle.</param>
     /// <param name="callback">A callback that receives the exported event when the event fires.</param>
     /// <returns>A subscription handle that can be used to unsubscribe.</returns>
-    [AspireExport(Description = "Subscribes to the BeforeStart event")]
+    [AspireExport]
     public static DistributedApplicationEventSubscription SubscribeBeforeStart(
         this IDistributedApplicationBuilder builder,
         Func<BeforeStartEvent, Task> callback)
@@ -222,7 +222,7 @@ internal static class BuilderExports
     /// <param name="builder">The builder handle.</param>
     /// <param name="callback">A callback that receives the exported event when the event fires.</param>
     /// <returns>A subscription handle that can be used to unsubscribe.</returns>
-    [AspireExport(Description = "Subscribes to the BeforePublish event")]
+    [AspireExport]
     public static DistributedApplicationEventSubscription SubscribeBeforePublish(
         this IDistributedApplicationBuilder builder,
         Func<BeforePublishEvent, Task> callback)
@@ -246,7 +246,7 @@ internal static class BuilderExports
     /// <param name="builder">The builder handle.</param>
     /// <param name="callback">A callback that receives the exported event when the event fires.</param>
     /// <returns>A subscription handle that can be used to unsubscribe.</returns>
-    [AspireExport(Description = "Subscribes to the AfterPublish event")]
+    [AspireExport]
     public static DistributedApplicationEventSubscription SubscribeAfterPublish(
         this IDistributedApplicationBuilder builder,
         Func<AfterPublishEvent, Task> callback)
@@ -270,7 +270,7 @@ internal static class BuilderExports
     /// <param name="builder">The builder handle.</param>
     /// <param name="callback">A callback that receives the exported event when the event fires.</param>
     /// <returns>A subscription handle that can be used to unsubscribe.</returns>
-    [AspireExport(Description = "Subscribes to the AfterResourcesCreated event")]
+    [AspireExport]
     public static DistributedApplicationEventSubscription SubscribeAfterResourcesCreated(
         this IDistributedApplicationBuilder builder,
         Func<AfterResourcesCreatedEvent, Task> callback)

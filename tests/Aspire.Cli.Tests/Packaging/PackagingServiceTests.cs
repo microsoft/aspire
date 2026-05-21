@@ -313,7 +313,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.NotEmpty(stableChannel.Mappings!);
         Assert.Contains(stableChannel.Mappings!, m =>
             m.PackageFilter == PackageMapping.AllPackages &&
-            m.Source == "https://api.nuget.org/v3/index.json");
+            m.Source == PackageSources.NuGetOrg);
     }
 
     [Fact]
@@ -356,7 +356,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         
         var nugetMapping = stagingChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "*");
         Assert.NotNull(nugetMapping);
-        Assert.Equal("https://api.nuget.org/v3/index.json", nugetMapping.Source);
+        Assert.Equal(PackageSources.NuGetOrg, nugetMapping.Source);
     }
 
     [Fact]
@@ -989,12 +989,270 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetChannelsAsync_WhenPrIdentityRunsFromDogfoodInstallPrefix_AddsMatchingPrHiveChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        const string prChannelName = "pr-17225";
+        const string prVersion = "13.4.0-pr.17225.g1234567";
+        var installPrefix = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "custom-aspire-prefix"));
+        var processPath = Path.Combine(installPrefix.FullName, "dogfood", prChannelName, "bin", "aspire");
+        Directory.CreateDirectory(Path.GetDirectoryName(processPath)!);
+        File.WriteAllText(processPath, string.Empty);
+
+        var packagesDirectory = Directory.CreateDirectory(Path.Combine(installPrefix.FullName, "hives", prChannelName, "packages"));
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{prVersion}.nupkg"), string.Empty);
+
+        // Deliberately point the execution context at the default Aspire home, not the custom
+        // PR install prefix. This is the dogfood acquisition shape that previously made a
+        // PR-acquired CLI fall back to normal channels unless the user passed --source.
+        var defaultHivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            hivesDirectory: defaultHivesDir,
+            identityChannel: prChannelName);
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            processPathProvider: () => processPath);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var prChannel = Assert.Single(channels, c => string.Equals(c.Name, prChannelName, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(prVersion, prChannel.PinnedVersion);
+        Assert.Contains(prChannel.Mappings!, mapping =>
+            mapping.PackageFilter == "Aspire*" &&
+            mapping.Source == packagesDirectory.FullName.Replace('\\', '/'));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenPrIdentityExistsInDefaultHiveAndDogfoodInstallPrefix_UsesDogfoodHiveChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        const string prChannelName = "pr-17225";
+        const string defaultHiveVersion = "13.4.0-pr.17225.g1111111";
+        const string dogfoodHiveVersion = "13.4.0-pr.17225.g2222222";
+
+        var defaultHivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var defaultPackagesDirectory = Directory.CreateDirectory(Path.Combine(defaultHivesDir.FullName, prChannelName, "packages"));
+        File.WriteAllText(Path.Combine(defaultPackagesDirectory.FullName, $"Aspire.ProjectTemplates.{defaultHiveVersion}.nupkg"), string.Empty);
+
+        var installPrefix = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "custom-aspire-prefix"));
+        var processPath = Path.Combine(installPrefix.FullName, "dogfood", prChannelName, "bin", "aspire");
+        Directory.CreateDirectory(Path.GetDirectoryName(processPath)!);
+        File.WriteAllText(processPath, string.Empty);
+
+        var dogfoodPackagesDirectory = Directory.CreateDirectory(Path.Combine(installPrefix.FullName, "hives", prChannelName, "packages"));
+        File.WriteAllText(Path.Combine(dogfoodPackagesDirectory.FullName, $"Aspire.ProjectTemplates.{dogfoodHiveVersion}.nupkg"), string.Empty);
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            hivesDirectory: defaultHivesDir,
+            identityChannel: prChannelName);
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            processPathProvider: () => processPath);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var prChannel = Assert.Single(channels, c => string.Equals(c.Name, prChannelName, StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(dogfoodHiveVersion, prChannel.PinnedVersion);
+        Assert.Contains(prChannel.Mappings!, mapping =>
+            mapping.PackageFilter == "Aspire*" &&
+            mapping.Source == dogfoodPackagesDirectory.FullName.Replace('\\', '/'));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenPrDogfoodHiveHasOnlyMalformedPackageNames_AddsChannelWithoutPinnedVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        const string prChannelName = "pr-17225";
+        var installPrefix = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "custom-aspire-prefix"));
+        var processPath = Path.Combine(installPrefix.FullName, "dogfood", prChannelName, "bin", "aspire");
+        Directory.CreateDirectory(Path.GetDirectoryName(processPath)!);
+        File.WriteAllText(processPath, string.Empty);
+
+        var packagesDirectory = Directory.CreateDirectory(Path.Combine(installPrefix.FullName, "hives", prChannelName, "packages"));
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.ProjectTemplates.not-a-semver.nupkg"), string.Empty);
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            hivesDirectory: new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives")),
+            identityChannel: prChannelName);
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            processPathProvider: () => processPath);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var prChannel = Assert.Single(channels, c => string.Equals(c.Name, prChannelName, StringComparison.OrdinalIgnoreCase));
+        Assert.Null(prChannel.PinnedVersion);
+        Assert.Contains(prChannel.Mappings!, mapping =>
+            mapping.PackageFilter == "Aspire*" &&
+            mapping.Source == packagesDirectory.FullName.Replace('\\', '/'));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenPrIdentityDogfoodPackagesDirectoryIsMissing_DoesNotAddPrHiveChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        const string prChannelName = "pr-17225";
+        var installPrefix = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "custom-aspire-prefix"));
+        var processPath = Path.Combine(installPrefix.FullName, "dogfood", prChannelName, "bin", "aspire");
+        Directory.CreateDirectory(Path.GetDirectoryName(processPath)!);
+        File.WriteAllText(processPath, string.Empty);
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            hivesDirectory: new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives")),
+            identityChannel: prChannelName);
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            processPathProvider: () => processPath);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(channels, c => string.Equals(c.Name, prChannelName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenPrIdentityDoesNotMatchDogfoodDirectory_DoesNotAddPrHiveChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        const string installedPrChannelName = "pr-11111";
+        const string identityPrChannelName = "pr-22222";
+        var installPrefix = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "custom-aspire-prefix"));
+        var processPath = Path.Combine(installPrefix.FullName, "dogfood", installedPrChannelName, "bin", "aspire");
+        Directory.CreateDirectory(Path.GetDirectoryName(processPath)!);
+        File.WriteAllText(processPath, string.Empty);
+        Directory.CreateDirectory(Path.Combine(installPrefix.FullName, "hives", identityPrChannelName, "packages"));
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            hivesDirectory: new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives")),
+            identityChannel: identityPrChannelName);
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            processPathProvider: () => processPath);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(channels, c => string.Equals(c.Name, identityPrChannelName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenProcessPathProviderThrows_DoesNotAddPrHiveChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        const string prChannelName = "pr-17225";
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            hivesDirectory: new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives")),
+            identityChannel: prChannelName);
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            processPathProvider: () => throw new IOException("Process path unavailable."));
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(channels, c => string.Equals(c.Name, prChannelName, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(channels, c => c.Name == PackageChannelNames.Stable);
+        Assert.Contains(channels, c => c.Name == PackageChannelNames.Daily);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenNonPrIdentityRunsFromDogfoodInstallPrefix_DoesNotAddPrHiveChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        const string prChannelName = "pr-17225";
+        var installPrefix = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "custom-aspire-prefix"));
+        var processPath = Path.Combine(installPrefix.FullName, "dogfood", prChannelName, "bin", "aspire");
+        Directory.CreateDirectory(Path.GetDirectoryName(processPath)!);
+        File.WriteAllText(processPath, string.Empty);
+        Directory.CreateDirectory(Path.Combine(installPrefix.FullName, "hives", prChannelName, "packages"));
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            hivesDirectory: new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives")),
+            identityChannel: PackageChannelNames.Daily);
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            processPathProvider: () => processPath);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(channels, c => string.Equals(c.Name, prChannelName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void TryResolvePrInstallPackagesDirectory_WithMalformedProcessPath_ReturnsNull()
+    {
+        Assert.Null(PackagingService.TryResolvePrInstallPackagesDirectory("bad\0path", "pr-17225"));
+    }
+
+    [Fact]
+    public void TryResolvePrInstallPackagesDirectory_WithWrongInstallLayout_ReturnsNull()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+
+        const string prChannelName = "pr-17225";
+        var installPrefix = Directory.CreateDirectory(Path.Combine(tempDir.FullName, "custom-aspire-prefix"));
+        var processPath = Path.Combine(installPrefix.FullName, "bin", "aspire");
+        Directory.CreateDirectory(Path.GetDirectoryName(processPath)!);
+        File.WriteAllText(processPath, string.Empty);
+        Directory.CreateDirectory(Path.Combine(installPrefix.FullName, "hives", prChannelName, "packages"));
+
+        Assert.Null(PackagingService.TryResolvePrInstallPackagesDirectory(processPath, prChannelName));
+    }
+
+    [Fact]
     public async Task LocalHiveChannel_WithPinnedVersion_ReturnsSyntheticTemplatePackage()
     {
         // Arrange - simulate package search returning a mismatched stable version
         var fakeCache = new FakeNuGetPackageCacheWithPackages(
         [
-            new() { Id = "Aspire.ProjectTemplates", Version = "13.2.2", Source = "https://api.nuget.org/v3/index.json" },
+            new() { Id = "Aspire.ProjectTemplates", Version = "13.2.2", Source = PackageSources.NuGetOrg },
         ]);
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1248,7 +1506,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
     /// <summary>
     /// Verifies that for a local hive channel with a pinned version, GetIntegrationPackagesAsync
-    /// enumerates .nupkg files directly from the local folder and returns all Aspire.Hosting.*
+    /// enumerates .nupkg files directly from the local folder and returns Aspire.Hosting.* integration
     /// packages without calling dotnet package search (which does not support local folder sources).
     /// </summary>
     [Fact]
@@ -1264,8 +1522,9 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         localPackagesDir.Create();
 
         const string localVersion = "13.4.0-pr.16820.g1a99aa46";
-        // Hosting integration packages that should be returned
+        // Root hosting package that should not appear in integration search
         File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.{localVersion}.nupkg"), string.Empty);
+        // Hosting integration packages that should be returned
         File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.Redis.{localVersion}.nupkg"), string.Empty);
         File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.JavaScript.{localVersion}.nupkg"), string.Empty);
         // Non-hosting packages that should NOT be returned by GetIntegrationPackagesAsync
@@ -1281,12 +1540,12 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         // Assert
         var packageList = integrationPackages.ToList();
-        Assert.Equal(3, packageList.Count);
+        Assert.Equal(2, packageList.Count);
         Assert.All(packageList, p => Assert.Equal(localVersion, p.Version));
-        Assert.Contains(packageList, p => p.Id == "Aspire.Hosting");
         Assert.Contains(packageList, p => p.Id == "Aspire.Hosting.Redis");
         Assert.Contains(packageList, p => p.Id == "Aspire.Hosting.JavaScript");
         // Non-hosting packages must not appear
+        Assert.DoesNotContain(packageList, p => p.Id == "Aspire.Hosting");
         Assert.DoesNotContain(packageList, p => p.Id == "Aspire.ProjectTemplates");
         Assert.DoesNotContain(packageList, p => p.Id == "Aspire.AppHost.Sdk");
     }
@@ -1317,7 +1576,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         var fallbackMapping = localChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == PackageMapping.AllPackages);
         Assert.NotNull(fallbackMapping);
-        Assert.Equal("https://api.nuget.org/v3/index.json", fallbackMapping.Source);
+        Assert.Equal(PackageSources.NuGetOrg, fallbackMapping.Source);
     }
 
     [Fact]

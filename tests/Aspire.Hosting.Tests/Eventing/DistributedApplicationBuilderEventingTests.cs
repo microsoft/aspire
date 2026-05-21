@@ -7,6 +7,8 @@ using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests.Eventing;
 
@@ -259,11 +261,36 @@ public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOu
         await app.StartAsync();
 
         var allFired = ManualResetEvent.WaitAll(
-            [beforeStartEventFired.WaitHandle, afterEndpointsAllocatedEventFired.WaitHandle, afterResourcesCreatedEventFired.WaitHandle],
+            [beforeStartEventFired.WaitHandle, afterResourcesCreatedEventFired.WaitHandle],
             TimeSpan.FromSeconds(10)
             );
 
         Assert.True(allFired);
+        Assert.False(afterEndpointsAllocatedEventFired.IsSet);
+        await app.StopAsync();
+    }
+
+    [Fact]
+    public async Task ObsoleteAfterEndpointsAllocatedEventSubscriptionLogsWarning()
+    {
+        var testSink = new TestSink();
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+#pragma warning disable CS0618 // Type or member is obsolete
+        builder.Eventing.Subscribe<AfterEndpointsAllocatedEvent>((e, ct) => Task.CompletedTask);
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        Assert.Contains(testSink.Writes, w =>
+            w.LogLevel == LogLevel.Warning &&
+            w.Message?.Contains(nameof(AfterEndpointsAllocatedEvent), StringComparison.Ordinal) == true &&
+            w.Message?.Contains(nameof(ResourceEndpointsAllocatedEvent), StringComparison.Ordinal) == true);
+#pragma warning restore CS0618 // Type or member is obsolete
+
         await app.StopAsync();
     }
 

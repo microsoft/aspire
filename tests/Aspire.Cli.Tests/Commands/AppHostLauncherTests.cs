@@ -645,6 +645,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var fileLoggerProvider = new FileLoggerProvider(executionContext.LogFilePath, new TestStartupErrorWriter());
             var processShutdownService = new ProcessShutdownService(
                 new FixedLayoutDiscovery(),
+                new NullBundleService(),
                 new LayoutProcessRunner(new TestProcessExecutionFactory()),
                 executionContext,
                 NullLogger<ProcessShutdownService>.Instance,
@@ -767,7 +768,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             => Mode switch
             {
                 ChildProcessMode.StayAlive => ("cmd.exe", "/c ping -n 60 127.0.0.1 >NUL"),
-                ChildProcessMode.ExitWithFailure => ("cmd.exe", "/c ping -n 2 127.0.0.1 >NUL & exit /b 6"),
+                ChildProcessMode.ExitWithFailure => ("cmd.exe", "/c ping -n 1 127.0.0.1 >NUL & exit /b 6"),
                 _ => throw new InvalidOperationException($"Unexpected child process mode: {Mode}")
             };
 

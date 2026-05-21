@@ -10,19 +10,50 @@ namespace Aspire.Hosting
 {
     public static partial class AzureFunctionsProjectResourceExtensions
     {
-        [AspireExport("addAzureFunctionsProject", Description = "Adds an Azure Functions project to the distributed application")]
+        [AspireExport(Description = "Adds an Azure Functions project to the distributed application")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> AddAzureFunctionsProject(this IDistributedApplicationBuilder builder, string name, string projectPath) { throw null; }
 
         [AspireExportIgnore(Reason = "TProject : IProjectMetadata is a .NET-specific generic constraint not compatible with ATS. Use the project path overload instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> AddAzureFunctionsProject<TProject>(this IDistributedApplicationBuilder builder, string name)
             where TProject : IProjectMetadata, new() { throw null; }
 
-        [AspireExport("withHostStorage", Description = "Configures the Azure Functions project to use specified Azure Storage as host storage")]
+        [AspireExport(Description = "Configures the Azure Functions project to use specified Azure Storage as host storage")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> WithHostStorage(this ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> storage) { throw null; }
 
         [AspireExportIgnore(Reason = "IResourceWithAzureFunctionsConfig is an internal interface constraint not compatible with ATS.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> WithReference<TSource>(this ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> destination, ApplicationModel.IResourceBuilder<TSource> source, string? connectionName = null)
             where TSource : ApplicationModel.IResourceWithConnectionString, Azure.IResourceWithAzureFunctionsConfig { throw null; }
+    }
+
+    public static partial class DurableTaskResourceExtensions
+    {
+        [AspireExport(Description = "Adds a Durable Task scheduler resource to the distributed application.")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> AddDurableTaskScheduler(this IDistributedApplicationBuilder builder, string name) { throw null; }
+
+        [AspireExport(Description = "Adds a Durable Task hub resource associated with the scheduler.")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskHubResource> AddTaskHub(this ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> builder, string name) { throw null; }
+
+        [AspireExport(Description = "Configures the Durable Task scheduler to run using the local emulator.", RunSyncOnBackgroundThread = true)]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerEmulatorResource>>? configureContainer = null) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot export is via RunAsExistingCore which accepts both string and parameter resource inputs.")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> RunAsExisting(this ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> connectionString) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot export is via RunAsExistingCore which accepts both string and parameter resource inputs.")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> RunAsExisting(this ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> builder, string connectionString) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot export is via WithTaskHubNameCore which accepts both string and parameter resource inputs.")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskHubResource> WithTaskHubName(this ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskHubResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> taskHubName) { throw null; }
+
+        [AspireExportIgnore(Reason = "Polyglot export is via WithTaskHubNameCore which accepts both string and parameter resource inputs.")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskHubResource> WithTaskHubName(this ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskHubResource> builder, string taskHubName) { throw null; }
     }
 }
 
@@ -33,5 +64,41 @@ namespace Aspire.Hosting.Azure
         public AzureFunctionsProjectResource(string name) : base(default!) { }
 
         static ApplicationModel.IResourceBuilder<TDestination>? ApplicationModel.IResourceWithCustomWithReference<AzureFunctionsProjectResource>.TryWithReference<TDestination>(ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> source, string? connectionName, bool optional, string? name) { throw null; }
+    }
+}
+
+namespace Aspire.Hosting.Azure.DurableTask
+{
+    [AspireExport(ExposeProperties = true)]
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class DurableTaskHubResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<DurableTaskSchedulerResource>, ApplicationModel.IResourceWithParent, IResourceWithAzureFunctionsConfig
+    {
+        public DurableTaskHubResource(string name, DurableTaskSchedulerResource scheduler) : base(default!) { }
+
+        public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
+
+        public DurableTaskSchedulerResource Parent { get { throw null; } }
+
+        public ApplicationModel.ReferenceExpression TaskHubName { get { throw null; } }
+
+        void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class DurableTaskSchedulerEmulatorResource : ApplicationModel.ContainerResource
+    {
+        public DurableTaskSchedulerEmulatorResource(DurableTaskSchedulerResource scheduler) : base(default!, default) { }
+
+        public override ApplicationModel.ResourceAnnotationCollection Annotations { get { throw null; } }
+    }
+
+    [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public sealed partial class DurableTaskSchedulerResource : ApplicationModel.Resource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
+    {
+        public DurableTaskSchedulerResource(string name) : base(default!) { }
+
+        public ApplicationModel.ReferenceExpression ConnectionStringExpression { get { throw null; } }
+
+        public bool IsEmulator { get { throw null; } }
     }
 }

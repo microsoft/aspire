@@ -166,7 +166,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var context = CreateContextFromTestAssembly();
 
         var addTestRedis = context.Capabilities.First(c => c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestRedis");
-        Assert.Equal("Adds a test Redis resource", addTestRedis.Description);
+        Assert.Equal("Adds a test Redis resource from ATS documentation.", addTestRedis.Description);
         Assert.Equal("Adds a test Redis resource from ATS documentation.", addTestRedis.Documentation?.Summary);
         Assert.Null(addTestRedis.Documentation?.Remarks);
         Assert.Equal("The ATS test Redis resource builder.", addTestRedis.Documentation?.Returns);
@@ -1560,6 +1560,8 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // TestNestedDto should generate an interface with nested types
         Assert.Contains("interface TestNestedDto", code);
+        Assert.Contains("tags?: string[];", code);
+        Assert.Contains("counts?: Record<string, number>;", code);
     }
 
     [Fact]

@@ -97,6 +97,11 @@
         <target state="needs-review-translation">A origem do NuGet a ser usada para os modelos de projeto.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SourceWithCredentialsCannotBePersisted">
+        <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
+        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
         <source>(use pre-release templates)</source>
         <target state="translated">(usar modelos de pré-lançamento)</target>

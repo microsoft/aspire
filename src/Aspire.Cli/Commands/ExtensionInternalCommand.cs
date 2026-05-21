@@ -60,6 +60,8 @@ internal sealed class ExtensionInternalCommand : BaseCommand
     }
 }
 
+// `aspire extension get-apphosts` is a hidden tooling output; keep
+// docs/specs/cli-output-formats.md in sync when changing this shape.
 internal class AppHostProjectSearchResultPoco
 {
     [JsonPropertyName("selected_project_file")]

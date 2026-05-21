@@ -68,6 +68,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceArgumentDescription", resourceCulture);
             }
         }
+
+        public static string SourceWithCredentialsCannotBePersisted {
+            get {
+                return ResourceManager.GetString("SourceWithCredentialsCannotBePersisted", resourceCulture);
+            }
+        }
         
         public static string VersionArgumentDescription {
             get {

@@ -46,6 +46,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private AIContext? _aiContext;
     private IList<GridColumn> _gridColumns = null!;
     private string _filter = string.Empty;
+    private readonly List<FieldTelemetryFilter> _filters = [];
     private readonly List<MenuButtonItem> _traceActionsMenuItems = [];
     private AspirePageContentLayout? _layout;
     private List<SelectViewModel<SpanType>> _spanTypes = default!;
@@ -196,7 +197,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
                 continue;
             }
 
-            if (viewModel.MatchesFilter(_filter, _selectedSpanType.Id?.Filter, GetResourceName, out var matchedDescendents))
+            if (viewModel.MatchesFilter(_filter, _selectedSpanType.Id?.Filter, _filters, GetResourceName, out var matchedDescendents))
             {
                 visibleViewModels.Add(viewModel);
                 foreach (var descendent in matchedDescendents.Where(d => !d.IsHidden))
@@ -569,6 +570,98 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
                 return Task.CompletedTask;
             });
+    }
+
+    private async Task OpenFilterAsync(FieldTelemetryFilter? entry)
+    {
+        if (_layout is not null)
+        {
+            await _layout.CloseMobileToolbarAsync();
+        }
+
+        await FilterHelpers.OpenFilterAsync(
+            entry,
+            DialogService,
+            DialogService.CreateDialogCallback(this, HandleFilterDialog),
+            propertyKeys: GetTraceSpanPropertyKeys(),
+            knownKeys: KnownTraceFields.AllFields,
+            getFieldValues: GetTraceSpanFieldValues,
+            FilterLoc);
+    }
+
+    private async Task HandleFilterDialog(DialogResult result)
+    {
+        if (result.Data is FilterDialogResult filterResult && filterResult.Filter is FieldTelemetryFilter filter)
+        {
+            if (filterResult.Delete)
+            {
+                _filters.Remove(filter);
+            }
+            else if (filterResult.Add)
+            {
+                _filters.Add(filter);
+            }
+            else if (filterResult.Enable)
+            {
+                filter.Enabled = true;
+            }
+            else if (filterResult.Disable)
+            {
+                filter.Enabled = false;
+            }
+        }
+
+        await RefreshAfterFilterChangeAsync();
+    }
+
+    private async Task RefreshAfterFilterChangeAsync()
+    {
+        SelectedData = null;
+        await InvokeAsync(StateHasChanged);
+        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
+    // Computed fresh on each dialog open. A single trace typically has a small number of spans,
+    // so caching is unnecessary and avoids stale data if the trace is updated while the page is open.
+    private List<string> GetTraceSpanPropertyKeys()
+    {
+        if (_trace is null)
+        {
+            return [];
+        }
+
+        var keys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var span in _trace.Spans)
+        {
+            foreach (var attribute in span.Attributes)
+            {
+                keys.Add(attribute.Key);
+            }
+        }
+
+        return keys.OrderBy(k => k).ToList();
+    }
+
+    // Computed fresh on each dialog open for the same reason as GetTraceSpanPropertyKeys.
+    private Dictionary<string, int> GetTraceSpanFieldValues(string attributeName)
+    {
+        if (_trace is null)
+        {
+            return new Dictionary<string, int>(StringComparers.OtlpAttribute);
+        }
+
+        return OtlpSpan.GetFieldValuesFromTraces([_trace], attributeName);
+    }
+
+    private List<MenuButtonItem> GetFilterMenuItems()
+    {
+        return FilterHelpers.GetFilterMenuItems(
+            _filters,
+            clearFilters: _filters.Clear,
+            openFilterAsync: OpenFilterAsync,
+            afterChangeAsync: RefreshAfterFilterChangeAsync,
+            filterLoc: FilterLoc,
+            dialogsLoc: DialogsLoc);
     }
 
     public void Dispose()

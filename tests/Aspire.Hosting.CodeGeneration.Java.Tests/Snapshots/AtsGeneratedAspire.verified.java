@@ -1312,7 +1312,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addTestRedis(name, null);
     }
 
-    /** Adds a test Redis resource */
+    /** Adds a test Redis resource from ATS documentation. */
     public TestRedisResource addTestRedis(String name, Double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1602,7 +1602,7 @@ public class TestCallbackContext extends HandleWrapperBase {
         return (TestCallbackContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setValue", reqArgs);
     }
 
-    /** Gets the CancellationToken property */
+    /** CancellationToken is supported by ATS. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -1635,7 +1635,7 @@ public class TestCollectionContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Items property */
+    /** List property - should generate AspireList getter like Dictionary properties. */
     private AspireList<String> itemsField;
     public AspireList<String> items() {
         if (itemsField == null) {
@@ -1644,7 +1644,7 @@ public class TestCollectionContext extends HandleWrapperBase {
         return itemsField;
     }
 
-    /** Gets the Metadata property */
+    /** Dictionary property - already works with AspireDict getter. */
     private AspireDict<String, String> metadataField;
     public AspireDict<String, String> metadata() {
         if (metadataField == null) {
@@ -2091,13 +2091,13 @@ import java.util.function.*;
 
 /** TestDeeplyNestedDto DTO. */
 public class TestDeeplyNestedDto implements JsonSerializable {
-    private AspireDict<String, AspireList<TestConfigDto>> nestedData;
-    private AspireDict<String, String>[] metadataArray;
+    private Map<String, List<TestConfigDto>> nestedData;
+    private Map<String, String>[] metadataArray;
 
-    public AspireDict<String, AspireList<TestConfigDto>> getNestedData() { return nestedData; }
-    public void setNestedData(AspireDict<String, AspireList<TestConfigDto>> value) { this.nestedData = value; }
-    public AspireDict<String, String>[] getMetadataArray() { return metadataArray; }
-    public void setMetadataArray(AspireDict<String, String>[] value) { this.metadataArray = value; }
+    public Map<String, List<TestConfigDto>> getNestedData() { return nestedData; }
+    public void setNestedData(Map<String, List<TestConfigDto>> value) { this.nestedData = value; }
+    public Map<String, String>[] getMetadataArray() { return metadataArray; }
+    public void setMetadataArray(Map<String, String>[] value) { this.metadataArray = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -2230,17 +2230,17 @@ import java.util.function.*;
 public class TestNestedDto implements JsonSerializable {
     private String id;
     private TestConfigDto config;
-    private AspireList<String> tags;
-    private AspireDict<String, Double> counts;
+    private List<String> tags;
+    private Map<String, Double> counts;
 
     public String getId() { return id; }
     public void setId(String value) { this.id = value; }
     public TestConfigDto getConfig() { return config; }
     public void setConfig(TestConfigDto value) { this.config = value; }
-    public AspireList<String> getTags() { return tags; }
-    public void setTags(AspireList<String> value) { this.tags = value; }
-    public AspireDict<String, Double> getCounts() { return counts; }
-    public void setCounts(AspireDict<String, Double> value) { this.counts = value; }
+    public List<String> getTags() { return tags; }
+    public void setTags(List<String> value) { this.tags = value; }
+    public Map<String, Double> getCounts() { return counts; }
+    public void setCounts(Map<String, Double> value) { this.counts = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -2824,14 +2824,14 @@ public class TestResourceContext extends HandleWrapperBase {
         return (TestResourceContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setValue", reqArgs);
     }
 
-    /** Invokes the GetValueAsync method */
+    /** Instance method that should be exposed as async method. */
     public String getValueAsync() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.getValueAsync", reqArgs);
     }
 
-    /** Invokes the SetValueAsync method */
+    /** Instance method with parameter. */
     public void setValueAsync(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -2839,7 +2839,7 @@ public class TestResourceContext extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setValueAsync", reqArgs);
     }
 
-    /** Invokes the ValidateAsync method */
+    /** Instance method with return type. */
     public boolean validateAsync() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));

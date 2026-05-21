@@ -12,6 +12,16 @@ internal interface IInteractionService
 {
     Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false);
     void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false);
+
+    /// <summary>
+    /// Shows a status indicator with a spinner and text that can be updated by the action while it runs.
+    /// The callback receives an updater that callers may invoke to change the displayed status text.
+    /// </summary>
+    /// <remarks>
+    /// Use this instead of <see cref="ShowStatusAsync{T}(string, Func{Task{T}}, KnownEmoji?, bool)"/> when the
+    /// status message must change while the action is running (for example, to report incremental progress).
+    /// </remarks>
+    Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null);
     Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default);
     Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default);
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default);

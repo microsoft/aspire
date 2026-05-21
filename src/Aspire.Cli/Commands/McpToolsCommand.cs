@@ -79,6 +79,8 @@ internal sealed class McpToolsCommand : BaseCommand
 
         if (format == OutputFormat.Json)
         {
+            // `aspire mcp tools --format json` writes this shape directly because MCP schemas
+            // are already JsonNode instances; keep docs/specs/cli-output-formats.md in sync when changing it.
             using var stream = new MemoryStream();
             using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
             {

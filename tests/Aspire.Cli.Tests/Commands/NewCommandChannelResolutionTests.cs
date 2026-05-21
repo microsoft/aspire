@@ -76,7 +76,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                         Task.FromResult<IEnumerable<NuGetPackage>>(
                             [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "13.3.0" }])
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
@@ -290,7 +290,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                 Task.FromResult<IEnumerable<NuGetPackage>>(
                     [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "13.3.0" }])
         };
-        var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache);
+        var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures());
 
         // Always register a stable channel — matches what PackagingService advertises in
         // production. Its version (13.5.0) is distinct from Implicit (13.3.0) so a test
@@ -305,7 +305,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             PackageChannelNames.Stable,
             PackageChannelQuality.Stable,
             [new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")],
-            stableCache);
+            stableCache,
+            features: new TestFeatures());
 
         var channels = new List<PackageChannel> { implicitChannel, stableChannel };
 
@@ -330,7 +331,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                     new PackageMapping("Aspire*", "https://example.invalid/feed/v3/index.json"),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
                 ],
-                explicitCache));
+                explicitCache,
+                features: new TestFeatures()));
         }
 
         // PR hives are an additional explicit channel shape (PackageChannelQuality.Both
@@ -352,7 +354,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                     new PackageMapping("Aspire*", "/fake/pr-hive/packages"),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
                 ],
-                prCache));
+                prCache,
+                features: new TestFeatures()));
         }
 
         return new TestPackagingService

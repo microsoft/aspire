@@ -1,4 +1,4 @@
-import { createBuilder, ContainerLifetime } from './.modules/aspire.js';
+import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -8,7 +8,7 @@ await rabbitmq.withManagementPlugin();
 
 const rabbitmq2 = await builder
     .addRabbitMQ("messaging2")
-    .withLifetime(ContainerLifetime.Persistent)
+    .withPersistentLifetime()
     .withDataVolume()
     .withManagementPlugin({ port: 15673 });
 

@@ -381,7 +381,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var projectFile = new FileInfo(Path.Combine(Path.GetTempPath(), "test.csproj"));
         var workingDirectory = new DirectoryInfo(Path.GetTempPath());
 
-        var (isCompatible, _, returnedVersion) = await AppHostHelper.CheckAppHostCompatibilityAsync(
+        var (isCompatible, returnedVersion) = await AppHostHelper.CheckAppHostCompatibilityAsync(
             runner, interactionService, projectFile, telemetry, workingDirectory, "test.log", CancellationToken.None);
 
         Assert.Equal(expectedCompatible, isCompatible);

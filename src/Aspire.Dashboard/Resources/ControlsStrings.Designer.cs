@@ -979,11 +979,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Duration &lt;strong&gt;{0}&lt;/strong&gt;.
+        ///   Looks up a localized string similar to Duration.
         /// </summary>
-        public static string SpanDetailsDuration {
+        public static string SpanDetailsDurationLabel {
             get {
-                return ResourceManager.GetString("SpanDetailsDuration", resourceCulture);
+                return ResourceManager.GetString("SpanDetailsDurationLabel", resourceCulture);
             }
         }
         
@@ -1006,11 +1006,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Resource &lt;strong&gt;{0}&lt;/strong&gt;.
+        ///   Looks up a localized string similar to Resource.
         /// </summary>
-        public static string SpanDetailsResource {
+        public static string SpanDetailsResourceLabel {
             get {
-                return ResourceManager.GetString("SpanDetailsResource", resourceCulture);
+                return ResourceManager.GetString("SpanDetailsResourceLabel", resourceCulture);
             }
         }
         
@@ -1051,11 +1051,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Start time &lt;strong&gt;{0}&lt;/strong&gt;.
+        ///   Looks up a localized string similar to Start time.
         /// </summary>
-        public static string SpanDetailsStartTime {
+        public static string SpanDetailsStartTimeLabel {
             get {
-                return ResourceManager.GetString("SpanDetailsStartTime", resourceCulture);
+                return ResourceManager.GetString("SpanDetailsStartTimeLabel", resourceCulture);
             }
         }
         
@@ -1150,11 +1150,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Resource &lt;strong&gt;{0}&lt;/strong&gt;.
+        ///   Looks up a localized string similar to Resource.
         /// </summary>
-        public static string StructuredLogsDetailsResource {
+        public static string StructuredLogsDetailsResourceLabel {
             get {
-                return ResourceManager.GetString("StructuredLogsDetailsResource", resourceCulture);
+                return ResourceManager.GetString("StructuredLogsDetailsResourceLabel", resourceCulture);
             }
         }
         
@@ -1168,11 +1168,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Timestamp &lt;strong&gt;{0}&lt;/strong&gt;.
+        ///   Looks up a localized string similar to Timestamp.
         /// </summary>
-        public static string StructuredLogsDetailsTimestamp {
+        public static string StructuredLogsDetailsTimestampLabel {
             get {
-                return ResourceManager.GetString("StructuredLogsDetailsTimestamp", resourceCulture);
+                return ResourceManager.GetString("StructuredLogsDetailsTimestampLabel", resourceCulture);
             }
         }
         

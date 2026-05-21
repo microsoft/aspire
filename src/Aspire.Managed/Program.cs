@@ -3,7 +3,21 @@
 
 using Aspire.Dashboard;
 using Aspire.Managed.NuGet.Commands;
+using Aspire.Shared;
 using System.CommandLine;
+
+BundleVersionLease? acquiredBundleLease;
+try
+{
+    acquiredBundleLease = BundleVersionLease.TryAcquireFromEnvironment("aspire-managed", args.FirstOrDefault());
+}
+catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException or ArgumentException or NotSupportedException)
+{
+    Console.Error.WriteLine($"Failed to acquire Aspire bundle lease: {ex.Message}");
+    return 1;
+}
+
+using var bundleLease = acquiredBundleLease;
 
 return args switch
 {

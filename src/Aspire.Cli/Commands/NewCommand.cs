@@ -412,6 +412,13 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
+        var source = parseResult.GetValue(s_sourceOption);
+        if (!string.IsNullOrWhiteSpace(source) && PackageSourceOverrideMappings.HasCredentialMaterial(source))
+        {
+            InteractionService.DisplayError(NewCommandStrings.SourceWithCredentialsCannotBePersisted);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
+        }
+
         // Resolve which templates are actually available at runtime (performs
         // async checks like SDK availability). This may be a subset of the
         // templates registered as subcommands.
@@ -448,7 +455,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         {
             Name = parseResult.GetValue(s_nameOption),
             Output = parseResult.GetValue(s_outputOption),
-            Source = parseResult.GetValue(s_sourceOption),
+            Source = source,
             Version = version,
             Channel = parseResult.GetValue(_channelOption) ?? resolvedChannelName,
             Language = selectedLanguageId

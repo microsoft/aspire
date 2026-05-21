@@ -40,6 +40,7 @@ public static class GoHostingExtensions
     /// <param name="gcFlags">Optional compiler flags passed via <c>-gcflags</c> (e.g. <c>"all=-N -l"</c> to disable optimisations for Delve).</param>
     /// <param name="raceDetector">When <see langword="true"/>, enables the Go race detector by passing <c>-race</c> to <c>go run</c>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method executes the Go application using <c>go run .</c>. The Go toolchain resolves the
@@ -67,7 +68,7 @@ public static class GoHostingExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Go application resource")]
+    [AspireExport]
     public static IResourceBuilder<GoAppResource> AddGoApp(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -334,7 +335,8 @@ public static class GoHostingExtensions
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <param name="args">The program arguments (e.g., <c>"serve"</c>, <c>"--config"</c>, <c>"prod.yaml"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Passes extra arguments to the Go program at runtime (after go run . in normal mode, or after -- in Delve mode)")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithAppArgs<T>(this IResourceBuilder<T> builder, params object[] args)
         where T : GoAppResource
     {
@@ -350,7 +352,8 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go mod tidy before starting the application to ensure go.sum is up to date")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithModTidy<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -400,7 +403,8 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go mod vendor before starting the application to cache module dependencies locally")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithModVendor<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -445,7 +449,8 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go mod download before starting the application to pre-fetch module dependencies into the local cache")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithModDownload<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -492,7 +497,8 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go vet ./... before starting the application to catch static analysis issues")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithVetTool<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -541,6 +547,7 @@ public static class GoHostingExtensions
     /// Pass it at build time with <c>--secret id=gittoken,src=/path/to/token</c>.
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// Only affects the generated Dockerfile — has no effect in run mode, where the local
@@ -563,7 +570,7 @@ public static class GoHostingExtensions
     /// docker build --build-arg GIT_USER=myuser --secret id=gittoken,src=~/.git-token .
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures private Go module authentication for publish-time Dockerfile generation")]
+    [AspireExport]
     public static IResourceBuilder<T> WithGoPrivate<T>(
         this IResourceBuilder<T> builder,
         string[] privatePatterns,
@@ -599,6 +606,7 @@ public static class GoHostingExtensions
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <param name="port">The TCP port Delve listens on. Defaults to <c>2345</c>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// Delve is the only Go debugger; both GoLand and VS Code use it under the hood, just in
@@ -629,7 +637,7 @@ public static class GoHostingExtensions
     ///        .WithDelveServer(port: 2345);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Starts a headless Delve server for remote debugging (GoLand, VS Code attach, any DAP client)")]
+    [AspireExport]
     public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder, int port = 2345)
         where T : GoAppResource
     {

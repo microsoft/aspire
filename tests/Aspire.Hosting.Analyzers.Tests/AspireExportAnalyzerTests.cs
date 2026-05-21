@@ -19,7 +19,7 @@ public class AspireExportAnalyzerTests
 
             public static class TestExports
             {
-                [AspireExport(Description = "Test method")]
+                [AspireExport]
                 public static string TestMethod() => "test";
             }
             """, []);
@@ -37,7 +37,7 @@ public class AspireExportAnalyzerTests
 
             public static class TestExports
             {
-                [AspireExport(Description = "Add Redis")]
+                [AspireExport]
                 public static string AddRedis() => "test";
             }
             """, []);
@@ -55,10 +55,52 @@ public class AspireExportAnalyzerTests
 
             public static class TestExports
             {
-                [AspireExport("Dictionary.set", Description = "Dictionary set")]
+                [AspireExport("Dictionary.set")]
                 public static void DictionarySet() { }
             }
             """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportWithDescription_ReportsASPIREEXPORT015()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_descriptionShouldUseXmlDocs;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport(Description = "Use XML docs instead.")]
+                public static string TestMethod() => "test";
+            }
+            """,
+            [CompilerError(diagnostic.Id).WithLocation(7, 6).WithMessage("AspireExport Description is compatibility metadata. Use XML documentation with ATS tags such as <ats-summary> for generated polyglot SDK documentation.")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportedPropertyWithDescription_ReportsASPIREEXPORT015()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_descriptionShouldUseXmlDocs;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public class TestExports
+            {
+                [AspireExport(Description = "Use XML docs instead.")]
+                public string TestProperty { get; set; } = "";
+            }
+            """,
+            [CompilerError(diagnostic.Id).WithLocation(7, 6).WithMessage("AspireExport Description is compatibility metadata. Use XML documentation with ATS tags such as <ats-summary> for generated polyglot SDK documentation.")]);
 
         await test.RunAsync();
     }
@@ -981,6 +1023,72 @@ public class AspireExportAnalyzerTests
             {
                 [AspireExport]
                 public static void DtoUnion([AspireUnion(typeof(string), typeof(MyDtoType))] object value) { }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task DtoWithGetOnlyMutableCollectionProperties_ReportsASPIREEXPORT015()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_dtoMutableCollectionPropertyMustBeInitSettable;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireDto]
+            public class MyDtoType
+            {
+                public List<string> Items { get; } = new();
+                public Dictionary<string, string> Metadata { get; } = new();
+            }
+            """,
+            [
+                new DiagnosticResult(diagnostic).WithSpan(9, 25, 9, 30).WithArguments("MyDtoType.Items"),
+                new DiagnosticResult(diagnostic).WithSpan(10, 39, 10, 47).WithArguments("MyDtoType.Metadata")
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task DtoWithInitMutableCollectionProperties_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireDto]
+            public class MyDtoType
+            {
+                public List<string> Items { get; init; } = new();
+                public Dictionary<string, string> Metadata { get; init; } = new();
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task DtoWithIgnoredGetOnlyMutableCollectionProperties_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireDto]
+            public class MyDtoType
+            {
+                [AspireExportIgnore(Reason = "Not part of the ATS surface.")]
+                public List<string> Items { get; } = new();
             }
             """, []);
 

@@ -46,4 +46,15 @@ public sealed class JavaScriptPackageManagerAnnotation(string executableName, st
     /// </summary>
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public Action<DockerfileStage>? InitializeDockerBuildStage { get; init; }
+
+    /// <summary>
+    /// Gets or sets a callback to initialize the Docker runtime stage before configuring the entrypoint.
+    /// </summary>
+    [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    internal Action<DockerfileStage>? InitializeDockerRuntimeStage { get; init; }
+
+    /// <summary>
+    /// Gets or sets a callback to resolve the default <c>PublishAsNpmScript</c> runtime image from the build image.
+    /// </summary>
+    internal Func<string, string>? ResolveNpmScriptRuntimeImage { get; init; }
 }

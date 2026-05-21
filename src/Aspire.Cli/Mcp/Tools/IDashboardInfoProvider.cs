@@ -49,6 +49,9 @@ internal sealed class StaticDashboardInfoProvider(string dashboardUrl, string? a
     {
         // For unsecured dashboards, apiToken is empty string (no X-API-Key header will be sent)
         var apiToken = apiKey ?? string.Empty;
-        return Task.FromResult((apiToken, dashboardUrl, (string?)dashboardUrl));
+        // Normalize the API base URL (e.g., rewrite *.localhost to localhost) for HTTP requests,
+        // but preserve the original URL as the dashboard display URL.
+        var apiBaseUrl = McpToolHelpers.NormalizeDashboardUrl(dashboardUrl);
+        return Task.FromResult((apiToken, apiBaseUrl, (string?)dashboardUrl));
     }
 }

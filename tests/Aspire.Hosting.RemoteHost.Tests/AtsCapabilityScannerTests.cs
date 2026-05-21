@@ -368,6 +368,33 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_ExposeProperties_DoesNotGenerateSettersForInitOnlyProperties()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+        var capabilityPrefix = "Aspire.Hosting.RemoteHost.Tests/InitOnlyExportedProperties.";
+
+        var nameGetter = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "name");
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, nameGetter.CapabilityKind);
+        Assert.Equal(AtsConstants.String, nameGetter.ReturnType.TypeId);
+
+        var descriptionGetter = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "description");
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, descriptionGetter.CapabilityKind);
+        Assert.Equal(AtsConstants.String, descriptionGetter.ReturnType.TypeId);
+        Assert.True(descriptionGetter.ReturnType.IsNullable);
+
+        var mutableSetter = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "setMutableLabel");
+        Assert.Equal(AtsCapabilityKind.PropertySetter, mutableSetter.CapabilityKind);
+
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "setName");
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "setDescription");
+    }
+
+    [Fact]
     public void ScanAssembly_DtoNullableScalarProperties_SetTypeRefNullability()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
@@ -528,6 +555,34 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_GetOnlyMutableCollectionDtoProperties_EmitWarnings()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("Add an init accessor", StringComparison.Ordinal)
+            && diagnostic.Location == $"{typeof(GetOnlyCollectionDto).FullName}.{nameof(GetOnlyCollectionDto.Items)}");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("Add an init accessor", StringComparison.Ordinal)
+            && diagnostic.Location == $"{typeof(GetOnlyCollectionDto).FullName}.{nameof(GetOnlyCollectionDto.Metadata)}");
+    }
+
+    [Fact]
+    public void ScanAssembly_InitDtoProperties_AreOptionalUnlessRequired()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+        var dto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(InitPropertiesDto)));
+
+        Assert.True(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.DisplayName)).IsOptional);
+        Assert.True(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.Items)).IsOptional);
+        Assert.True(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.Metadata)).IsOptional);
+        Assert.False(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.RequiredDisplayName)).IsOptional);
+        Assert.False(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.RequiredItems)).IsOptional);
+    }
+
+    [Fact]
     public void ScanAssembly_ExportedDtoValueWithIgnoredMutableProperty_IsIncluded()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
@@ -591,6 +646,19 @@ public class AtsCapabilityScannerTests
             && diagnostic.Location == "ConflictingValues.PrefixConflictingExportedValues.Node.Child");
     }
 
+    [Fact]
+    public void ScanAssembly_DescriptionFallback_PopulatesDocumentationSummaryWhenXmlDocsArePartial()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/descriptionFallback", StringComparison.Ordinal));
+
+        Assert.Equal("Uses the description as fallback documentation.", capability.Description);
+        Assert.Equal("Uses the description as fallback documentation.", capability.Documentation?.Summary);
+        Assert.Equal("The fallback value.", Assert.Single(capability.Parameters).Documentation?.Summary);
+    }
+
     #endregion
 
     #region Test Types
@@ -630,6 +698,16 @@ public class AtsCapabilityScannerTests
         public string Framework { get; } = "";
     }
 
+    [AspireExport(ExposeProperties = true)]
+    private sealed class InitOnlyExportedProperties
+    {
+        public required string Name { get; init; }
+
+        public string? Description { get; init; }
+
+        public string MutableLabel { get; set; } = "";
+    }
+
     public sealed class AssemblyLevelExportedTestType
     {
     }
@@ -657,6 +735,14 @@ public class AtsCapabilityScannerTests
         {
             _ = callback;
             return builder;
+        }
+
+        /// <param name="value">The fallback value.</param>
+        [AspireExport("descriptionFallback", Description = "Uses the description as fallback documentation.")]
+        public static void DescriptionFallback(IDistributedApplicationBuilder builder, string value)
+        {
+            _ = builder;
+            _ = value;
         }
 
         [AspireExport("shadowedExporter")]
@@ -692,6 +778,28 @@ public class AtsCapabilityScannerTests
     private sealed class InvalidExportedDto
     {
         public List<string> Items { get; set; } = [];
+    }
+
+    [AspireDto]
+    private sealed class GetOnlyCollectionDto
+    {
+        public List<string> Items { get; } = [];
+
+        public Dictionary<string, string> Metadata { get; } = [];
+    }
+
+    [AspireDto]
+    private sealed class InitPropertiesDto
+    {
+        public string DisplayName { get; init; } = "";
+
+        public List<string> Items { get; init; } = [];
+
+        public Dictionary<string, string> Metadata { get; init; } = [];
+
+        public required string RequiredDisplayName { get; init; }
+
+        public required List<string> RequiredItems { get; init; }
     }
 
     private static class IgnoredPropertyExportedValues

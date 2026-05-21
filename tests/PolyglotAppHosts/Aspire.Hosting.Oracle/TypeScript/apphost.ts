@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost - Oracle Integration Validation
 // Validates all [AspireExport] methods for Aspire.Hosting.Oracle
 
-import { createBuilder, ContainerLifetime } from './.modules/aspire.js';
+import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -46,7 +46,7 @@ await oracle.withReference(otherOracle);
 
 // ---- Fluent chaining: multiple methods chained ----
 const oracle3 = await builder.addOracle("oracledb3")
-    .withLifetime(ContainerLifetime.Persistent)
+    .withPersistentLifetime()
     .withDataVolume({ name: "oracle3-data" });
 
 await oracle3.addDatabase("chaineddb");

@@ -2,6 +2,8 @@ using Aspire.Hosting.Yarp.Transforms;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 var catalogDb = builder.AddPostgres("postgres")
@@ -74,7 +76,7 @@ var catalogService = builder.AddProject<Projects.CatalogService>("catalogservice
 
 var messaging = builder.AddRabbitMQ("messaging")
                        .WithDataVolume()
-                       .WithLifetime(ContainerLifetime.Persistent)
+                       .WithPersistentLifetime()
                        .WithManagementPlugin()
                        .PublishAsContainer();
 

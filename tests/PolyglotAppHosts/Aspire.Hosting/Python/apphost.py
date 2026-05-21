@@ -111,6 +111,18 @@ with create_builder() as builder:
     # addParameterFromConfiguration
     config_param = builder.add_parameter_from_config("parameter", "Config:Key")
     secret_param = builder.add_parameter_from_config("parameter", "Config:Key")
+    custom_input_param = builder.add_parameter("custom-input")
+    custom_input_param.with_custom_input(
+        {
+            "InputType": "Number",
+            "Label": "Worker Count",
+            "Placeholder": "Enter number (1-10)",
+            "Options": {
+                "one": "One",
+                "two": "Two",
+            },
+        }
+    )
     # withDockerfileBaseImage
     container.with_dockerfile_base_image()
     # withImageRegistry
@@ -166,6 +178,9 @@ with create_builder() as builder:
         tagged_steps = list(config_pipeline.steps_by_tag(WellKnownPipelineTags.BuildCompute))
         _step_name = all_steps[0].name
         _description = all_steps[0].description
+        _depends_on_steps = all_steps[0].depends_on_steps
+        _required_by_steps = tagged_steps[0].required_by_steps
+        _tags = tagged_steps[0].tags
         all_steps[0].add_tag("validated")
         all_steps[0].depends_on("restore")
         tagged_steps[0].required_by(WellKnownPipelineSteps.Publish)

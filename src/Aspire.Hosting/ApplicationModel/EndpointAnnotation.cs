@@ -23,6 +23,8 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     private int? _targetPort;
     private bool _targetPortSetToNull;
     private bool? _tlsEnabled;
+    private bool _isProxied = true;
+    private bool? _isExplicitlyProxied;
     private readonly NetworkIdentifier _networkID;
 
     /// <summary>
@@ -35,7 +37,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// <param name="port">Desired port for the service.</param>
     /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
     /// <param name="isExternal">Indicates that this endpoint should be exposed externally at publish time.</param>
-    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
+    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to <see langword="null"/>.</param>
     public EndpointAnnotation(
         ProtocolType protocol,
         string? uriScheme = null,
@@ -44,7 +46,40 @@ public sealed class EndpointAnnotation : IResourceAnnotation
         int? port = null,
         int? targetPort = null,
         bool? isExternal = null,
-        bool isProxied = true
+        bool? isProxied = null
+    ) : this(
+        protocol,
+        null,
+        uriScheme,
+        transport,
+        name,
+        port,
+        targetPort,
+        isExternal,
+        isProxied
+    )
+    { }
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="EndpointAnnotation"/>.
+    /// </summary>
+    /// <param name="protocol">Network protocol: TCP or UDP are supported today, others possibly in future.</param>
+    /// <param name="uriScheme">If a service is URI-addressable, this is the URI scheme to use for constructing service URI.</param>
+    /// <param name="transport">Transport that is being used (e.g. http, http2, http3 etc).</param>
+    /// <param name="name">Name of the service.</param>
+    /// <param name="port">Desired port for the service.</param>
+    /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
+    /// <param name="isExternal">Indicates that this endpoint should be exposed externally at publish time.</param>
+    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP.</param>
+    public EndpointAnnotation(
+        ProtocolType protocol,
+        string? uriScheme,
+        string? transport,
+        [EndpointName] string? name,
+        int? port,
+        int? targetPort,
+        bool? isExternal,
+        bool isProxied
     ) : this(
         protocol,
         null,
@@ -63,14 +98,14 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// </summary>
     /// <param name="protocol">Network protocol: TCP or UDP are supported today, others possibly in future.</param>
     /// <param name="networkID">The ID of the network that is the "default" network for the Endpoint.
+    /// Clients connected to the same network can reach the endpoint without any routing or network address translation.</param>
     /// <param name="uriScheme">If a service is URI-addressable, this is the URI scheme to use for constructing service URI.</param>
     /// <param name="transport">Transport that is being used (e.g. http, http2, http3 etc).</param>
     /// <param name="name">Name of the service.</param>
     /// <param name="port">Desired port for the service.</param>
     /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
     /// <param name="isExternal">Indicates that this endpoint should be exposed externally at publish time.</param>
-    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
-    /// Clients connected to the same network can reach the endpoint without any routing or network address translation.</param>
+    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to <see langword="null"/>.</param>
     public EndpointAnnotation(
         ProtocolType protocol,
         NetworkIdentifier? networkID,
@@ -80,7 +115,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
         int? port = null,
         int? targetPort = null,
         bool? isExternal = null,
-        bool isProxied = true
+        bool? isProxied = null
     )
     {
         // If the URI scheme is null, we'll adopt either udp:// or tcp:// based on the
@@ -100,12 +135,48 @@ public sealed class EndpointAnnotation : IResourceAnnotation
         _port = port;
         _targetPort = targetPort;
         IsExternal = isExternal ?? false;
-        IsProxied = isProxied;
+        IsExplicitlyProxied = isProxied;
         _networkID = networkID ?? KnownNetworkIdentifiers.LocalhostNetwork;
 #pragma warning disable CS0618 // Type or member is obsolete
         AllAllocatedEndpoints.TryAdd(_networkID, AllocatedEndpointSnapshot);
 #pragma warning restore CS0618 // Type or member is obsolete
     }
+
+    /// <summary>
+    /// Initializes a new instance of <see cref="EndpointAnnotation"/>.
+    /// </summary>
+    /// <param name="protocol">Network protocol: TCP or UDP are supported today, others possibly in future.</param>
+    /// <param name="networkID">The ID of the network that is the "default" network for the Endpoint.
+    /// Clients connected to the same network can reach the endpoint without any routing or network address translation.</param>
+    /// <param name="uriScheme">If a service is URI-addressable, this is the URI scheme to use for constructing service URI.</param>
+    /// <param name="transport">Transport that is being used (e.g. http, http2, http3 etc).</param>
+    /// <param name="name">Name of the service.</param>
+    /// <param name="port">Desired port for the service.</param>
+    /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
+    /// <param name="isExternal">Indicates that this endpoint should be exposed externally at publish time.</param>
+    /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP.</param>
+    public EndpointAnnotation(
+        ProtocolType protocol,
+        NetworkIdentifier? networkID,
+        string? uriScheme,
+        string? transport,
+        [EndpointName] string? name,
+        int? port,
+        int? targetPort,
+        bool? isExternal,
+        bool isProxied
+    ) : this(
+        protocol,
+        networkID,
+        uriScheme,
+        transport,
+        name,
+        port,
+        targetPort,
+        isExternal,
+        (bool?)isProxied
+    )
+    { }
 
     /// <summary>
     ///  Name of the service
@@ -136,6 +207,8 @@ public sealed class EndpointAnnotation : IResourceAnnotation
             _portSetToNull = value == null;
         }
     }
+
+    internal int? SpecifiedPort => _port;
 
     /// <summary>
     /// This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.
@@ -180,10 +253,43 @@ public sealed class EndpointAnnotation : IResourceAnnotation
 
     /// <summary>
     /// Indicates that this endpoint should be managed by DCP. This means it can be replicated and use a different port internally than the one publicly exposed.
-    /// Setting to false means the endpoint will be handled and exposed by the resource.
+    /// Setting to <see langword="false"/> means the endpoint will be handled and exposed by the resource.
     /// </summary>
-    /// <remarks>Defaults to <c>true</c>.</remarks>
-    public bool IsProxied { get; set; } = true;
+    /// <remarks>
+    /// Defaults to <see langword="true"/> until DCP resolves the effective value from <see cref="IsExplicitlyProxied"/>
+    /// and the resource that owns the endpoint. Read this value after endpoint allocation or another late lifecycle
+    /// callback when code needs the resolved value.
+    /// </remarks>
+    public bool IsProxied
+    {
+        get => _isProxied;
+        set
+        {
+            _isProxied = value;
+            _isExplicitlyProxied = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this endpoint was explicitly configured to be proxied.
+    /// </summary>
+    /// <remarks>
+    /// A <see langword="null"/> value means the effective proxy mode is resolved from the resource that owns the endpoint.
+    /// </remarks>
+    public bool? IsExplicitlyProxied
+    {
+        get => _isExplicitlyProxied;
+        set
+        {
+            _isExplicitlyProxied = value;
+            _isProxied = value ?? true;
+        }
+    }
+
+    internal void SetResolvedIsProxied(bool isProxied)
+    {
+        _isProxied = isProxied;
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether this endpoint is excluded from the default set when referencing the resource's endpoints

@@ -362,7 +362,7 @@ public static class AtsCapabilityScanner
             // Check for [AspireDto] attribute - scan DTO types for code generation
             if (HasAspireDtoAttribute(type))
             {
-                var dtoInfo = CreateDtoTypeInfo(type, assemblyExportedTypeCache);
+                var dtoInfo = CreateDtoTypeInfo(type, assemblyExportedTypeCache, diagnostics);
                 if (dtoInfo != null)
                 {
                     dtoTypes.Add(dtoInfo);
@@ -1058,7 +1058,8 @@ public static class AtsCapabilityScanner
     /// </summary>
     private static AtsDtoTypeInfo? CreateDtoTypeInfo(
         Type type,
-        AssemblyExportedTypeCache assemblyExportedTypeCache)
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        List<AtsDiagnostic> diagnostics)
     {
         var typeId = AtsTypeMapping.DeriveTypeId(type);
         var typeName = type.Name;
@@ -1093,6 +1094,13 @@ public static class AtsCapabilityScanner
             }
             propTypeRef = WithNullability(propTypeRef, prop.PropertyType, nullabilityContext.Create(prop).ReadState);
 
+            if (!prop.CanWrite && IsMutableCollectionType(prop.PropertyType))
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"DTO property '{type.FullName}.{prop.Name}' is a get-only mutable collection. Add an init accessor so System.Text.Json replaces the collection during DTO deserialization; otherwise collection values can be merged with initializer defaults.",
+                    $"{type.FullName}.{prop.Name}"));
+            }
+
             IReadOnlyList<AtsCallbackParameterInfo>? callbackParameters = null;
             AtsTypeRef? callbackReturnType = null;
             if (isCallback)
@@ -1102,7 +1110,7 @@ public static class AtsCapabilityScanner
 
             var propDocumentation = GetXmlDocumentation(prop);
             var propDescription = propDocumentation?.Summary;
-            var isOptional = !prop.CanWrite || Nullable.GetUnderlyingType(prop.PropertyType) is not null;
+            var isOptional = IsOptionalDtoProperty(prop);
 
             properties.Add(new AtsDtoPropertyInfo
             {
@@ -1126,6 +1134,32 @@ public static class AtsCapabilityScanner
             Documentation = typeDocumentation,
             Properties = properties
         };
+    }
+
+    private static bool IsMutableCollectionType(Type type)
+    {
+        if (!type.IsGenericType)
+        {
+            return false;
+        }
+
+        var genericTypeDefinition = type.GetGenericTypeDefinition();
+        return genericTypeDefinition == typeof(List<>) ||
+            genericTypeDefinition == typeof(IList<>) ||
+            genericTypeDefinition == typeof(Dictionary<,>) ||
+            genericTypeDefinition == typeof(IDictionary<,>);
+    }
+
+    private static bool IsOptionalDtoProperty(PropertyInfo property)
+    {
+        if (property.GetCustomAttribute<RequiredMemberAttribute>() is not null)
+        {
+            return false;
+        }
+
+        return !property.CanWrite ||
+            Nullable.GetUnderlyingType(property.PropertyType) is not null ||
+            !CanWriteAfterInitialization(property);
     }
 
     private static void ScanStaticExportedValues(
@@ -1624,8 +1658,8 @@ public static class AtsCapabilityScanner
                 // Get custom method name from attribute if specified
                 var customMethodName = memberExportAttr?.Id;
                 var methodNameOverride = memberExportAttr?.MethodName;
-                var propertyDescription = memberExportAttr?.Description ?? $"Gets the {property.Name} property";
-                var propertyDocumentation = GetXmlDocumentation(property);
+                var propertyDocumentation = GetXmlDocumentation(property, memberExportAttr?.Description);
+                var propertyDescription = memberExportAttr?.Description ?? propertyDocumentation?.Summary ?? $"Gets the {property.Name} property";
 
                 // Generate getter capability if property is readable
                 // Naming: {TypeName}.{propertyName} (camelCase, no "get" prefix)
@@ -1821,8 +1855,8 @@ public static class AtsCapabilityScanner
 
                 // The method documentation contains all <param> entries, so load it once and
                 // project each parameter's documentation from the shared parsed member element.
-                var description = memberExportAttr?.Description ?? $"Invokes the {method.Name} method";
-                var methodDocumentation = GetXmlDocumentation(method, description);
+                var methodDocumentation = GetXmlDocumentation(method, memberExportAttr?.Description);
+                var description = memberExportAttr?.Description ?? methodDocumentation?.Summary ?? $"Invokes the {method.Name} method";
                 var paramIndex = 0;
                 var hasUnmappedRequiredParam = false;
                 foreach (var param in method.GetParameters())
@@ -1958,7 +1992,6 @@ public static class AtsCapabilityScanner
         }
 
         // Get named arguments
-        var description = exportAttr.Description;
         var methodNameOverride = exportAttr.MethodName;
         var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
@@ -1999,7 +2032,8 @@ public static class AtsCapabilityScanner
         var skipFirst = extendsTypeId != null;
         var paramList = skipFirst ? parameters.Skip(1) : parameters;
 
-        var methodDocumentation = GetXmlDocumentation(method, description);
+        var methodDocumentation = GetXmlDocumentation(method, exportAttr.Description);
+        var description = exportAttr.Description ?? methodDocumentation?.Summary;
         var paramIndex = 0;
         foreach (var param in paramList)
         {
@@ -3608,6 +3642,11 @@ public static class AtsCapabilityScanner
 
     private static bool TryParseAtsDocumentationReference(string value, out string kind, out string target)
     {
+        if (value.StartsWith("!:", StringComparison.Ordinal))
+        {
+            value = value[2..];
+        }
+
         var separatorIndex = value.IndexOf(':', StringComparison.Ordinal);
         if (separatorIndex < 1 || separatorIndex == value.Length - 1)
         {
