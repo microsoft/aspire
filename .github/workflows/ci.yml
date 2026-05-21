@@ -88,8 +88,8 @@ jobs:
   #   2. Runs the subset of Aspire.Cli.Tests classes that exercise version/channel/template
   #      version pinning logic against the stably-built CLI assemblies. These are the code
   #      paths most likely to behave differently when the CLI's own version label is stable.
-  #   3. Runs a small init+restore smoke script that exercises the full
-  #      `aspire init` -> `aspire restore` flow against the locally-built stable feed,
+  #   3. Runs a small `aspire new aspire-empty` + `aspire restore` smoke script that
+  #      exercises the user-visible CLI flow against the locally-built stable feed,
   #      which is the scenario that has historically broken on stabilization branches.
   #
   # The job is gated to PRs only. Push CI (including push to release branches with

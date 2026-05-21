@@ -86,27 +86,34 @@ if [ ! -d "$LOCAL_FEED" ]; then
     exit 1
 fi
 
-# Confirm the feed actually contains stabilized Aspire packages — i.e. e.g. Aspire.Hosting.13.4.0.nupkg
-# with no -dev/-preview/-rc/-alpha/-beta suffix. Without this guard a local-repro run that forgot
-# to pass StabilizePackageVersion=true to the pack would sail past, and the smoke would silently
-# be validating a prerelease build instead of a stable one. (CI is safe regardless because the
-# prior pack step always passes the flag, but local-repro paths through this script need the check.)
-# bash globs treat `[0-9]*` as "one digit then any chars", so the glob alone would match
-# 13.4.0-dev.nupkg too. The grep -v filter is what enforces "no prerelease suffix."
-if ! ls "$LOCAL_FEED"/Aspire.Hosting.[0-9]*.[0-9]*.[0-9]*.nupkg 2>/dev/null \
-        | grep -vE -- '-(dev|preview|rc|alpha|beta|ci|pr)\.' \
+# Confirm the feed actually contains a stabilized Aspire.Hosting nupkg — i.e. the version is
+# exactly MAJOR.MINOR.PATCH with no prerelease suffix at all. Without this guard a local-repro
+# run that forgot to pass StabilizePackageVersion=true to the pack would sail past, and the
+# smoke would silently be validating a prerelease build instead of a stable one. (CI is safe
+# regardless because the prior pack step always passes the flag, but local-repro paths through
+# this script need the check.)
+# The grep enforces "no `-` between the version and `.nupkg`" — that catches every SemVer
+# prerelease shape (-dev.<n>, -preview.X.Y, -rc1, -rc.1, -alpha, etc.) without having to
+# enumerate suffix labels.
+if ! ls "$LOCAL_FEED"/Aspire.Hosting.*.nupkg 2>/dev/null \
+        | grep -E '/Aspire\.Hosting\.[0-9]+\.[0-9]+\.[0-9]+\.nupkg$' \
         | grep -q .; then
-    echo "❌ No stable (no -dev/-preview/-rc/-alpha/-beta) Aspire.Hosting.*.nupkg in $LOCAL_FEED."
+    echo "❌ No stable Aspire.Hosting.MAJOR.MINOR.PATCH.nupkg in $LOCAL_FEED."
     echo "   Did pack run with StabilizePackageVersion=true?"
     echo "   Aspire.Hosting nupkgs found:"
     ls "$LOCAL_FEED"/Aspire.Hosting.*.nupkg 2>/dev/null | head -5 || true
     exit 1
 fi
 
-# Same expectation for the templates package — `aspire new` needs it installable from the feed.
-if ! ls "$LOCAL_FEED"/Aspire.ProjectTemplates.[0-9]*.[0-9]*.[0-9]*.nupkg > /dev/null 2>&1; then
-    echo "❌ No stable Aspire.ProjectTemplates.*.nupkg in $LOCAL_FEED."
+# Same expectation for the templates package — `aspire new` needs a stable templates nupkg
+# installable from the feed. Use the same prerelease-exclusion logic.
+if ! ls "$LOCAL_FEED"/Aspire.ProjectTemplates.*.nupkg 2>/dev/null \
+        | grep -E '/Aspire\.ProjectTemplates\.[0-9]+\.[0-9]+\.[0-9]+\.nupkg$' \
+        | grep -q .; then
+    echo "❌ No stable Aspire.ProjectTemplates.MAJOR.MINOR.PATCH.nupkg in $LOCAL_FEED."
     echo "   Did pack run with StabilizePackageVersion=true (and without -p:SkipProjectTemplates)?"
+    echo "   Aspire.ProjectTemplates nupkgs found:"
+    ls "$LOCAL_FEED"/Aspire.ProjectTemplates.*.nupkg 2>/dev/null | head -5 || true
     exit 1
 fi
 
