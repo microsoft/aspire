@@ -27,6 +27,11 @@
         <target state="translated">Protokolle noch nicht verfügbar</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNoLogsFound">
+        <source>No logs found</source>
+        <target state="new">No logs found</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">
         <source>No resource selected</source>
         <target state="translated">Keine Ressource ausgewählt</target>

@@ -17,10 +17,13 @@ namespace Aspire.Dashboard.Components;
 /// </summary>
 public sealed partial class LogViewer
 {
+    private static readonly TimeSpan s_emptyLogsMessageDelay = TimeSpan.FromSeconds(2);
     private static readonly MarkupString s_spaceMarkup = new MarkupString("&#32;");
 
     private LogEntries? _logEntries;
     private bool _logsChanged;
+    private bool _showEmptyLogsMessage;
+    private CancellationTokenSource? _emptyLogsMessageDelayCts;
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -69,6 +72,7 @@ public sealed partial class LogViewer
         }
 
         await VirtualizeRef.RefreshDataAsync();
+        UpdateEmptyLogsMessageState();
         StateHasChanged();
     }
 
@@ -80,8 +84,10 @@ public sealed partial class LogViewer
 
             _logsChanged = true;
             _logEntries = LogEntries;
+            ResetEmptyLogsMessage();
         }
 
+        UpdateEmptyLogsMessageState();
         base.OnParametersSet();
     }
 
@@ -94,6 +100,67 @@ public sealed partial class LogViewer
         }
 
         return ValueTask.FromResult(new ItemsProviderResult<LogEntry>(entries.Skip(r.StartIndex).Take(r.Count), entries.Count));
+    }
+
+    private bool IsLogEntriesEmpty() => _logEntries?.EntriesCount == 0;
+
+    private void UpdateEmptyLogsMessageState()
+    {
+        if (IsLogEntriesEmpty())
+        {
+            StartEmptyLogsMessageDelay();
+        }
+        else
+        {
+            ResetEmptyLogsMessage();
+        }
+    }
+
+    private void StartEmptyLogsMessageDelay()
+    {
+        if (_showEmptyLogsMessage || _emptyLogsMessageDelayCts is not null)
+        {
+            return;
+        }
+
+        _emptyLogsMessageDelayCts = new CancellationTokenSource();
+        _ = ShowEmptyLogsMessageAfterDelayAsync(_emptyLogsMessageDelayCts);
+    }
+
+    private async Task ShowEmptyLogsMessageAfterDelayAsync(CancellationTokenSource delayCts)
+    {
+        try
+        {
+            await Task.Delay(s_emptyLogsMessageDelay, delayCts.Token);
+
+            await InvokeAsync(() =>
+            {
+                if (_emptyLogsMessageDelayCts == delayCts && IsLogEntriesEmpty())
+                {
+                    _showEmptyLogsMessage = true;
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            if (_emptyLogsMessageDelayCts == delayCts)
+            {
+                _emptyLogsMessageDelayCts = null;
+            }
+
+            delayCts.Dispose();
+        }
+    }
+
+    private void ResetEmptyLogsMessage()
+    {
+        _showEmptyLogsMessage = false;
+        _emptyLogsMessageDelayCts?.Cancel();
+        _emptyLogsMessageDelayCts = null;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -137,6 +204,7 @@ public sealed partial class LogViewer
     {
         Logger.LogDebug("Disposing log viewer.");
 
+        ResetEmptyLogsMessage();
         DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
         return ValueTask.CompletedTask;
     }

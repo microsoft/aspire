@@ -147,3 +147,13 @@
     font-variation-settings: var(--type-ramp-minus-1-font-variations);
     user-select: none;
 }
+
+.empty-log-message {
+    align-items: center;
+    color: var(--console-font-color);
+    column-gap: 8px;
+    display: flex;
+    justify-content: center;
+    min-height: 160px;
+    opacity: 0.72;
+}

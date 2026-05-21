@@ -27,6 +27,11 @@
         <target state="translated">Los registros aún no están disponibles</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNoLogsFound">
+        <source>No logs found</source>
+        <target state="new">No logs found</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">
         <source>No resource selected</source>
         <target state="translated">No hay ningún recurso seleccionado</target>

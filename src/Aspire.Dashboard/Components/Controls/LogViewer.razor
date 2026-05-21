@@ -92,6 +92,14 @@
                     </div>
                 }
             </Virtualize>
+
+            @if (_showEmptyLogsMessage && IsLogEntriesEmpty())
+            {
+                <div class="empty-log-message" role="status" aria-live="polite">
+                    <FluentIcon Value="@(new Icons.Regular.Size24.SlideText())" />
+                    <span>@Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsFound)]</span>
+                </div>
+            }
         }
     </div>
 </div>
