@@ -547,9 +547,10 @@ internal sealed class RunCommand : BaseCommand
         }
         finally
         {
+            logCaptureCancellationSource.Cancel();
+
             if (pendingLogCapture is not null)
             {
-                logCaptureCancellationSource.Cancel();
                 await ObserveAppHostLogCaptureShutdownAsync(pendingLogCapture).ConfigureAwait(false);
             }
 
