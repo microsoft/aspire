@@ -685,30 +685,22 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             await Task.Delay(s_noLogsMessageDelay, cancellationToken);
 
-            if (cancellationToken.IsCancellationRequested)
-            {
-                return;
-            }
-
             await InvokeAsync(() =>
             {
-                var hasNoLogEntries = false;
-                lock (_updateLogsLock)
+                if (!cancellationToken.IsCancellationRequested)
                 {
-                    hasNoLogEntries = _logEntries.EntriesCount == 0;
-                }
+                    var hasNoLogEntries = false;
+                    lock (_updateLogsLock)
+                    {
+                        hasNoLogEntries = _logEntries.EntriesCount == 0;
+                    }
 
-                if (!cancellationToken.IsCancellationRequested && hasNoLogEntries)
-                {
-                    _showNoLogsMessage = true;
+                    _showNoLogsMessage = hasNoLogEntries;
                     StateHasChanged();
                 }
             });
         }
         catch (OperationCanceledException)
-        {
-        }
-        catch (Exception) when (cancellationToken.IsCancellationRequested)
         {
         }
         catch (Exception ex)
