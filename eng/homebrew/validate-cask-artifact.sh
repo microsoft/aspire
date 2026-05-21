@@ -96,8 +96,19 @@ detect_upstream_cask_is_new() {
   local target_path="Casks/$first_letter/$cask_name.rb"
   local api_url="https://api.github.com/repos/Homebrew/homebrew-cask/contents/$target_path"
   local status_code
+  local curl_args=(-sS -o /dev/null -w "%{http_code}")
 
-  status_code="$(curl -sS -o /dev/null -w "%{http_code}" "$api_url")"
+  # Authenticate when a token is available. Unauthenticated GitHub API requests
+  # are throttled to 60/hour shared across the runner IP pool, which routinely
+  # produces 403s on hosted CI; an installation/PAT/Actions token raises that
+  # to 1000/hour or more. GH_TOKEN is the convention used by the `gh` CLI and
+  # by most repo scripts; GITHUB_TOKEN is the default exposed by GitHub Actions.
+  local token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+  if [[ -n "$token" ]]; then
+    curl_args+=(-H "Authorization: Bearer $token" -H "X-GitHub-Api-Version: 2022-11-28")
+  fi
+
+  status_code="$(curl "${curl_args[@]}" "$api_url")"
   case "$status_code" in
     200) echo "false" ;;
     404) echo "true" ;;
