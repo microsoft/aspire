@@ -550,34 +550,38 @@ internal static partial class PolyglotCapabilityErrorFormatter
     // hosts never go through PolyglotCapabilityErrorFormatter, so their messages are
     // unchanged.
     //
-    // The Kestrel HTTPS dev-cert message has been stable across .NET versions and
-    // reads exactly:
-    //   "Unable to configure HTTPS endpoint. No server certificate was specified, and
-    //    the default developer certificate could not be found or is out of date. To
-    //    generate a developer certificate run 'dotnet dev-certs https'. To trust the
-    //    certificate (Windows and macOS only) run 'dotnet dev-certs https --trust'.
-    //    For more information on configuring HTTPS see
-    //    https://go.microsoft.com/fwlink/?linkid=848054."
-    // The advice to invoke `dotnet dev-certs` assumes a .NET SDK is on the PATH, which
-    // is not guaranteed for TypeScript / Node.js / Python app host users. Aspire ships
-    // `aspire certs trust`, which creates the dev cert when missing and trusts it in a
-    // single step, so we rewrite both sentences into one. See
-    // https://github.com/microsoft/aspire/issues/17273.
+    // ASP.NET Core Kestrel surfaces the missing/untrusted HTTPS dev-cert state by
+    // throwing a plain InvalidOperationException with no HResult and no specific
+    // exception type, so the message is the only signal available. The text is
+    // sourced from the resx entry `NoCertSpecifiedNoDevelopmentCertificateFound` and
+    // is thrown unconditionally from `TlsConfigurationLoader.UseHttpsWithDefaults`:
+    //   https://github.com/dotnet/aspnetcore/blob/main/src/Servers/Kestrel/Core/src/CoreStrings.resx
+    //   https://github.com/dotnet/aspnetcore/blob/main/src/Servers/Kestrel/Core/src/TlsConfigurationLoader.cs
+    //
+    // The fwlink identifier `848054` has been the unique sentinel for this exact
+    // error since .NET Core 2.1 (it was added when the dev-cert tooling shipped) and
+    // does not appear in any other Kestrel error, so we anchor detection on it. The
+    // regex tolerates whitespace/line-ending variation between the two guidance
+    // sentences and the fwlink and rewrites the whole block in one shot.
+    //
+    // If a future framework release reworks the message such that the fwlink is no
+    // longer present, the rewrite degrades gracefully: the regex misses, the original
+    // (less friendly) text propagates unchanged, and no incorrect substitution occurs.
+    //
+    // See https://github.com/microsoft/aspire/issues/17273.
     private static string RewritePolyglotUnfriendlyGuidance(string message)
     {
-        const string KestrelDevCertGuidance =
-            "To generate a developer certificate run 'dotnet dev-certs https'. " +
-            "To trust the certificate (Windows and macOS only) run 'dotnet dev-certs https --trust'.";
-        const string AspireDevCertGuidance =
-            "To generate and trust a developer certificate run 'aspire certs trust'.";
-        const string KestrelHttpsFwlink = "https://go.microsoft.com/fwlink/?linkid=848054";
-        const string AspireHttpsDocs = "https://aspire.dev/docs/";
-
-        message = message.Replace(KestrelDevCertGuidance, AspireDevCertGuidance, StringComparison.Ordinal);
-        message = message.Replace(KestrelHttpsFwlink, AspireHttpsDocs, StringComparison.Ordinal);
-
-        return message;
+        return KestrelDevCertGuidanceRegex().Replace(
+            message,
+            "To generate and trust a developer certificate run 'aspire certs trust'. " +
+            "For more information on configuring HTTPS see https://aspire.dev/docs/.");
     }
+
+    [GeneratedRegex(
+        @"To generate a developer certificate run 'dotnet dev-certs https'\.\s+" +
+        @"To trust the certificate \(Windows and macOS only\) run 'dotnet dev-certs https --trust'\.\s+" +
+        @"For more information on configuring HTTPS see https://go\.microsoft\.com/fwlink/\?linkid=848054\.")]
+    private static partial Regex KestrelDevCertGuidanceRegex();
 
     [GeneratedRegex(@"\s{2,}")]
     private static partial Regex DoubleWhitespaceRegex();
