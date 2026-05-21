@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Internal refactoring moving error catch blocks from Program.Main into BaseCommand - no user-visible changes or new APIs",
+  "mergedAt": "2026-05-20T23:50:52Z",
+  "number": 17310,
+  "runDate": "2026-05-21T00:39:58Z",
+  "status": "excluded",
+  "title": "Move error handling from Program.cs to BaseCommand SetAction delegate"
+}

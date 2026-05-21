@@ -1,0 +1,17 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed `aspire add` and `aspire integration list`/`search` returning zero results when using dogfood or locally-built CLI builds. The root cause was that `dotnet package search` does not support local folder sources; internal framework packages (AppHost, Sdk, Orchestration, Testing) and deprecated packages no longer leak into the integration picker either.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-05-21T00:15:30Z",
+  "lastMergedAt": "2026-05-21T00:15:30Z",
+  "name": "Fix aspire add integration search on dogfood and local-hive CLIs",
+  "owner": "radical",
+  "prs": [17105]
+}

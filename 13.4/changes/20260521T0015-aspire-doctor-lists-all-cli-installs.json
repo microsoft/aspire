@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Running `aspire doctor` now displays a table of every Aspire CLI installation discovered on the machine, including the active binary, peer installs, shadowed binaries, and dotnet tool store installs. Each row shows the path, version, channel, install route, and path status. The `--format json` option includes the same data as an `installations` array for tooling consumption.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-05-21T00:15:30Z",
+  "lastMergedAt": "2026-05-21T00:15:30Z",
+  "name": "aspire doctor shows all Aspire CLI installations",
+  "owner": "radical",
+  "prs": [
+    17105
+  ]
+}

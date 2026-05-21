@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Two notable changes: aspire doctor now lists all CLI installs (new feature), and fixes aspire add returning zero results on dogfood/local-hive CLIs",
+  "mergedAt": "2026-05-21T00:15:30Z",
+  "number": 17105,
+  "runDate": "2026-05-21T00:39:58Z",
+  "status": "included",
+  "title": "feat(cli): `aspire doctor` lists every Aspire CLI install on the machine"
+}

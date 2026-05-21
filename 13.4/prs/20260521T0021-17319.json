@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Test-only changes: adds deployment E2E tests and README updates for TypeScript coverage gaps",
+  "mergedAt": "2026-05-21T00:21:45Z",
+  "number": 17319,
+  "runDate": "2026-05-21T00:39:58Z",
+  "status": "excluded",
+  "title": "Add TypeScript deployment coverage gaps"
+}
