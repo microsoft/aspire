@@ -18,7 +18,8 @@ const proxy = await builder.addYarp("proxy")
     .withImageSHA256("abc123def456")
     .withContainerNetworkAlias("myalias")
     .publishAsContainer()
-    .withStaticFiles();
+    .withStaticFiles()
+    .withStaticFiles({ sourcePath: "." });
 
 await proxy.withVolume("/data", { name: "proxy-data" });
 await proxy.withBuildArg("BUILD_VERSION", buildVersion);

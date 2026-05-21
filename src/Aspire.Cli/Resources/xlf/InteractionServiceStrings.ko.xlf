@@ -1,9 +1,9 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ko" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the AppHost was lost: {0}.</source>
+        <source>The connection to the AppHost was lost: {0}</source>
         <target state="needs-review-translation">앱 호스트에 대한 연결이 끊어졌습니다. {0}.</target>
         <note />
       </trans-unit>
@@ -73,7 +73,7 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
         <target state="needs-review-translation">앱 호스트에 연결하는 동안 오류가 발생했습니다. 앱 호스트가 사용 가능하기 전에 충돌했을 수 있음: {0}.</target>
         <note />
       </trans-unit>
@@ -88,9 +88,9 @@
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
-        <source>[dim]For more information, see: [link]{0}[/][/]</source>
-        <target state="translated">[dim]자세한 내용은 [link]{0}[/][/]을(를) 참조하세요.</target>
-        <note>Do not translate [dim] and [link]. Also leave [/] as-is. {0} is a URL</note>
+        <source>[dim]For more information, see: {0}[/]</source>
+        <target state="needs-review-translation">[dim]자세한 내용은 [link]{0}[/][/]을(를) 참조하세요.</target>
+        <note>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</note>
       </trans-unit>
       <trans-unit id="NewCliVersionAvailable">
         <source>[yellow]A new version of Aspire is available: {0}[/]</source>
@@ -128,13 +128,13 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeBuilt">
-        <source>The project could not be built. See logs at {0}</source>
-        <target state="translated">프로젝트를 빌드할 수 없습니다. {0}에서 로그 보기</target>
+        <source>The project could not be built.</source>
+        <target state="new">The project could not be built.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeCreated">
-        <source>The app could not be created. See logs at {0}</source>
-        <target state="new">The app could not be created. See logs at {0}</target>
+        <source>The app could not be created.</source>
+        <target state="new">The app could not be created.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
@@ -171,6 +171,11 @@
         <source>Searching...</source>
         <target state="translated">검색 중...</target>
         <note />
+      </trans-unit>
+      <trans-unit id="SeeAppHostLogsAt">
+        <source>See AppHost logs at {0}</source>
+        <target state="new">See AppHost logs at {0}</target>
+        <note>{0} is the log file path of the CLI process managing the AppHost</note>
       </trans-unit>
       <trans-unit id="SeeLogsAt">
         <source>See logs at {0}</source>

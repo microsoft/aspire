@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -21,9 +21,11 @@ func main() {
 	if err = container.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
+	genericOtlpProtocol := aspire.OtlpProtocolHttpJson
+	container.WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &genericOtlpProtocol})
 	taggedContainer := builder.AddContainer("mytaggedcontainer", &aspire.AddContainerOptions{
 		Image: "nginx",
-		Tag:   "stable-alpine",
+		Tag:   aspire.StringPtr("stable-alpine"),
 	})
 	if err = taggedContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
@@ -95,6 +97,17 @@ func main() {
 			Secret:  aspire.BoolPtr(true),
 			Persist: aspire.BoolPtr(true),
 		})
+	customInputType := aspire.InputTypeNumber
+	customInputParam := builder.AddParameter("custom-input")
+	customInputParam.WithCustomInput(&aspire.ParameterCustomInputOptions{
+		InputType:   &customInputType,
+		Label:       "Worker Count",
+		Placeholder: "Enter number (1-10)",
+		Options: map[string]string{
+			"one": "One",
+			"two": "Two",
+		},
+	})
 
 	// ===================================================================
 	// Container-specific methods on ContainerResource
@@ -335,6 +348,7 @@ func main() {
 	builderExecutionContext := builder.ExecutionContext()
 	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
 	_ = executionContextServiceProvider.GetDistributedApplicationModel()
+	resourceCommandService := executionContextServiceProvider.GetResourceCommandService()
 
 	// Subscriptions (typed callbacks)
 	beforeStartSub := builder.SubscribeBeforeStart(func(e aspire.BeforeStartEvent) {
@@ -375,6 +389,26 @@ func main() {
 		_ = beforeStartServices.GetDistributedApplicationModel()
 	})
 
+	beforePublishSub := builder.SubscribeBeforePublish(func(e aspire.BeforePublishEvent) {
+		beforePublishModel := e.Model()
+		_, _ = beforePublishModel.GetResources()
+		_ = beforePublishModel.FindResourceByName("mycontainer")
+		beforePublishServices := e.Services()
+		beforePublishLoggerFactory := beforePublishServices.GetLoggerFactory()
+		beforePublishLogger := beforePublishLoggerFactory.CreateLogger("ValidationAppHost.BeforePublish")
+		_ = beforePublishLogger.LogInformation("BeforePublish")
+	})
+
+	afterPublishSub := builder.SubscribeAfterPublish(func(e aspire.AfterPublishEvent) {
+		afterPublishModel := e.Model()
+		_, _ = afterPublishModel.GetResources()
+		_ = afterPublishModel.FindResourceByName("mycontainer")
+		afterPublishServices := e.Services()
+		afterPublishLoggerFactory := afterPublishServices.GetLoggerFactory()
+		afterPublishLogger := afterPublishLoggerFactory.CreateLogger("ValidationAppHost.AfterPublish")
+		_ = afterPublishLogger.LogInformation("AfterPublish")
+	})
+
 	afterResourcesSub := builder.SubscribeAfterResourcesCreated(func(e aspire.AfterResourcesCreatedEvent) {
 		afterResourcesModel := e.Model()
 		_, _ = afterResourcesModel.GetResources()
@@ -388,6 +422,8 @@ func main() {
 	builderEventing := builder.Eventing()
 	_ = builderEventing.Unsubscribe(beforeStartSub)
 	_ = builderEventing.Unsubscribe(afterResourcesSub)
+	_ = builderEventing.Unsubscribe(beforePublishSub)
+	_ = builderEventing.Unsubscribe(afterPublishSub)
 
 	// Resource events — typed callbacks
 	_ = container.OnBeforeResourceStarted(func(e aspire.BeforeResourceStartedEvent) {
@@ -452,16 +488,48 @@ func main() {
 	_ = container.WithUrl(expr)
 	_ = container.WithHttpHealthCheck()
 	_ = container.WithHttpHealthCheck()
+	updateCommandState := func(args ...any) any {
+		if len(args) == 0 {
+			return aspire.ResourceCommandStateDisabled
+		}
+		ctx, ok := args[0].(aspire.UpdateCommandStateContext)
+		if !ok {
+			return aspire.ResourceCommandStateDisabled
+		}
+		snapshot, err := ctx.ResourceSnapshot()
+		if err != nil || snapshot.HealthStatus == nil {
+			return aspire.ResourceCommandStateDisabled
+		}
+		if *snapshot.HealthStatus == aspire.HealthStatusHealthy {
+			return aspire.ResourceCommandStateEnabled
+		}
+		return aspire.ResourceCommandStateDisabled
+	}
+	_ = container.WithCommand("noop", "Noop", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		return &aspire.ExecuteCommandResult{Success: true}
+	}, &aspire.WithCommandOptions{
+		CommandOptions: &aspire.CommandOptions{
+			UpdateState: updateCommandState,
+		},
+	})
 	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		_ = ctx
-		return &aspire.ExecuteCommandResult{}
+		cancellationToken, err := ctx.CancellationToken()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		result, err := resourceCommandService.ExecuteCommandAsync("mycontainer", "noop", &aspire.ExecuteCommandAsyncOptions{CancellationToken: cancellationToken})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		return result
 	})
 
 	app, err := builder.Build()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

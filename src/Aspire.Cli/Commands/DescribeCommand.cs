@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
@@ -23,6 +24,7 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// Output format for resources command (array wrapper).
 /// </summary>
+// `aspire describe --format json` uses this wrapper; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class ResourcesOutput
 {
     public required ResourceJson[] Resources { get; init; }
@@ -32,10 +34,13 @@ internal sealed class ResourcesOutput
 [JsonSerializable(typeof(ResourceJson))]
 [JsonSerializable(typeof(ResourceUrlJson))]
 [JsonSerializable(typeof(ResourceVolumeJson))]
+[JsonSerializable(typeof(JsonNode))]
+[JsonSerializable(typeof(Dictionary<string, JsonNode?>))]
 [JsonSerializable(typeof(Dictionary<string, string?>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(ResourceRelationshipJson))]
 [JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]
+[JsonSerializable(typeof(ResourceCommandArgumentJson[]))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
@@ -119,7 +124,7 @@ internal sealed class DescribeCommand : BaseCommand
         Options.Add(s_includeHiddenOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -138,7 +143,7 @@ internal sealed class DescribeCommand : BaseCommand
 
         if (!result.Success)
         {
-            return AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService);
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService));
         }
 
         var connection = result.Connection!;
@@ -162,17 +167,17 @@ internal sealed class DescribeCommand : BaseCommand
         {
             try
             {
-                return await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, cancellationToken);
+                return CommandResult.FromExitCode(await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, cancellationToken));
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
             {
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
             catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    return ExitCodeConstants.Success;
+                    return CommandResult.Success();
                 }
 
                 // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
@@ -181,12 +186,12 @@ internal sealed class DescribeCommand : BaseCommand
                 // message on stderr so JSON output on stdout remains parseable.
                 AppHostFollowDisconnectHelpers.WriteStatusMessage(_interactionService, connection);
 
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
         }
         else
         {
-            return ExecuteSnapshot(resourceWatcher.GetResources().ToList(), dashboardBaseUrl, resourceName, format);
+            return CommandResult.FromExitCode(ExecuteSnapshot(resourceWatcher.GetResources().ToList(), dashboardBaseUrl, resourceName, format));
         }
     }
 
@@ -202,7 +207,7 @@ internal sealed class DescribeCommand : BaseCommand
         if (resourceName is not null && snapshots.Count == 0)
         {
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DescribeCommandStrings.ResourceNotFound, resourceName));
-            return ExitCodeConstants.FailedToFindProject;
+            return CliExitCodes.FailedToFindProject;
         }
 
         var resourceList = ResourceSnapshotMapper.MapToResourceJsonList(snapshots, dashboardBaseUrl);
@@ -219,7 +224,7 @@ internal sealed class DescribeCommand : BaseCommand
             DisplayResourcesTable(snapshots, dashboardBaseUrl);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> ExecuteWatchAsync(IAppHostAuxiliaryBackchannel connection, ResourceSnapshotWatcher resourceWatcher, string? dashboardBaseUrl, string? resourceName, OutputFormat format, CancellationToken cancellationToken)
@@ -281,7 +286,7 @@ internal sealed class DescribeCommand : BaseCommand
             }
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
     private void DisplayResourcesTable(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl)
     {
@@ -314,14 +319,18 @@ internal sealed class DescribeCommand : BaseCommand
             var stateText = ColorState(snapshot.State);
             var healthText = ColorHealth(snapshot.HealthStatus?.EscapeMarkup() ?? "-");
 
-            var nameMarkup = ColorResourceName(displayName, displayName.EscapeMarkup());
+            string nameMarkup;
             if (!string.IsNullOrEmpty(dashboardBaseUrl))
             {
                 var resourceUrl = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.ResourcesUrl(resource: snapshot.Name));
-                nameMarkup = $"[link={resourceUrl}]{nameMarkup}[/]";
+                nameMarkup = MarkupHelpers.SafeLink(_interactionService, resourceUrl, displayName);
+            }
+            else
+            {
+                nameMarkup = displayName.EscapeMarkup();
             }
 
-            table.AddRow(nameMarkup, type, stateText, healthText, endpoints);
+            table.AddRow(ColorResourceName(displayName, nameMarkup), type, stateText, healthText, endpoints);
         }
 
         _interactionService.DisplayRenderable(table);
@@ -375,13 +384,12 @@ internal sealed class DescribeCommand : BaseCommand
             .ThenByDescending(e => e.Url.StartsWith("https", StringComparison.OrdinalIgnoreCase))
             .ThenBy(e => e.Name, StringComparer.OrdinalIgnoreCase);
 
-    private static string FormatEndpointUrl(string url, string? displayName = null)
+    private string FormatEndpointUrl(string url, string? displayName = null)
     {
-        var escaped = url.EscapeMarkup();
-        var text = !string.IsNullOrEmpty(displayName) ? displayName.EscapeMarkup() : escaped;
+        var text = !string.IsNullOrEmpty(displayName) ? displayName : url;
         return KnownUnsupportedUrlSchemes.IsLinkableUrl(url)
-            ? $"[link={escaped}]{text}[/]"
-            : text;
+            ? MarkupHelpers.SafeLink(_interactionService, url, text)
+            : text.EscapeMarkup();
     }
 
     private static string ColorHealth(string health) => health.ToUpperInvariant() switch

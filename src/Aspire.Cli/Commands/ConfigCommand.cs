@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.CommandLine.Help;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Configuration;
@@ -44,12 +43,11 @@ internal sealed class ConfigCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (_configuration[KnownConfigNames.ExtensionPromptEnabled] is not "true")
         {
-            new HelpAction().Invoke(parseResult);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.DisplayHelp();
         }
 
         // Prompt for the action that the user wants to perform
@@ -63,7 +61,7 @@ internal sealed class ConfigCommand : BaseCommand
             },
             cancellationToken: cancellationToken);
 
-        return await subcommand.InteractiveExecuteAsync(cancellationToken);
+        return CommandResult.FromExitCode(await subcommand.InteractiveExecuteAsync(cancellationToken));
     }
 
     private sealed class GetCommand : BaseConfigSubCommand
@@ -81,16 +79,15 @@ internal sealed class ConfigCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var key = parseResult.GetValue(s_keyArgument);
             if (key is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationKeyRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
-            return ExecuteAsync(key, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(key, cancellationToken));
         }
 
         public override async Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -106,12 +103,12 @@ internal sealed class ConfigCommand : BaseCommand
             if (value is not null)
             {
                 InteractionService.DisplayPlainText(value);
-                return ExitCodeConstants.Success;
+                return CliExitCodes.Success;
             }
             else
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationKeyNotFound, key));
-                return ExitCodeConstants.ConfigNotFound;
+                return CliExitCodes.ConfigNotFound;
             }
         }
     }
@@ -141,7 +138,7 @@ internal sealed class ConfigCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var key = parseResult.GetValue(s_keyArgument);
             var value = parseResult.GetValue(s_valueArgument);
@@ -149,17 +146,15 @@ internal sealed class ConfigCommand : BaseCommand
 
             if (key is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationKeyRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
             if (value is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationValueRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationValueRequired);
             }
 
-            return ExecuteAsync(key, value, isGlobal, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(key, value, isGlobal, cancellationToken));
         }
 
         public override async Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -180,13 +175,13 @@ internal sealed class ConfigCommand : BaseCommand
             if (AppHostPathConfigurationPolicy.IsLegacyAppHostPathKey(key))
             {
                 InteractionService.DisplayError(ErrorStrings.LegacyAppHostPathCannotBeSetWithConfigCommand);
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
 
             if (isGlobal && !AppHostPathConfigurationPolicy.IsGloballySettableKey(key))
             {
                 InteractionService.DisplayError(ErrorStrings.GlobalAppHostPathCannotBeSetWithConfigCommand);
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
 
             try
@@ -198,14 +193,14 @@ internal sealed class ConfigCommand : BaseCommand
                     : string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationKeySetLocally, key,
                         value));
 
-                return ExitCodeConstants.Success;
+                return CliExitCodes.Success;
             }
             catch (Exception ex)
             {
                 var errorMessage = string.Format(CultureInfo.CurrentCulture, ErrorStrings.ErrorSettingConfiguration, ex.Message);
                 Telemetry.RecordError(errorMessage, ex);
                 InteractionService.DisplayError(errorMessage);
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
         }
     }
@@ -225,10 +220,10 @@ internal sealed class ConfigCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var showAll = parseResult.GetValue(s_allOption);
-            return ExecuteAsync(showAll, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(showAll, cancellationToken));
         }
 
         public override Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -244,7 +239,7 @@ internal sealed class ConfigCommand : BaseCommand
                 if (Path.Exists(settingsFilePath))
                 {
                     extensionInteractionService.OpenEditor(settingsFilePath);
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 }
             }
 
@@ -262,7 +257,7 @@ internal sealed class ConfigCommand : BaseCommand
                 {
                     // Show hint about --all flag when there's no config and user didn't pass --all
                     InteractionService.DisplayMarkupLine($"  [dim]{ConfigCommandStrings.ListCommand_AllFeaturesHint.EscapeMarkup()}[/]");
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 }
 
                 // showAll=true: fall through to show available features below
@@ -324,7 +319,7 @@ internal sealed class ConfigCommand : BaseCommand
                 }
             }
 
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
 
             static int MaxWidth(string header, IEnumerable<string> localValues, IEnumerable<string> globalValues)
             {
@@ -383,18 +378,17 @@ internal sealed class ConfigCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var key = parseResult.GetValue(s_keyArgument);
             var isGlobal = parseResult.GetValue(s_globalOption);
 
             if (key is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationKeyRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
-            return ExecuteAsync(key, isGlobal, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(key, isGlobal, cancellationToken));
         }
 
         public override async Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -405,7 +399,7 @@ internal sealed class ConfigCommand : BaseCommand
             if (value is null)
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationKeyNotFound, key));
-                return ExitCodeConstants.ConfigNotFound;
+                return CliExitCodes.ConfigNotFound;
             }
 
             var isGlobal = await InteractionService.PromptForSelectionAsync(
@@ -434,12 +428,12 @@ internal sealed class ConfigCommand : BaseCommand
                         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationKeyDeletedLocally, key));
                     }
 
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 }
                 else
                 {
                     InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationKeyNotFound, key));
-                    return ExitCodeConstants.InvalidCommand;
+                    return CliExitCodes.InvalidCommand;
                 }
             }
             catch (Exception ex)
@@ -447,7 +441,7 @@ internal sealed class ConfigCommand : BaseCommand
                 var errorMessage = string.Format(CultureInfo.CurrentCulture, ErrorStrings.ErrorDeletingConfiguration, ex.Message);
                 Telemetry.RecordError(errorMessage, ex);
                 InteractionService.DisplayError(errorMessage);
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
         }
     }
@@ -469,10 +463,10 @@ internal sealed class ConfigCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var useJson = parseResult.GetValue<bool>("--json");
-            return ExecuteAsync(useJson);
+            return CommandResult.FromExitCode(await ExecuteAsync(useJson));
         }
 
         public override Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -528,7 +522,7 @@ internal sealed class ConfigCommand : BaseCommand
                 }
             }
 
-            return Task.FromResult(ExitCodeConstants.Success);
+            return Task.FromResult(CliExitCodes.Success);
         }
     }
 }

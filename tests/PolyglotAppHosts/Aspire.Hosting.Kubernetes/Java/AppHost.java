@@ -4,23 +4,23 @@ void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var helmNamespace = builder.addParameter("helm-namespace");
         var helmReleaseName = builder.addParameter("helm-release-name");
+        var helmChartName = builder.addParameter("helm-chart-name");
         var helmChartVersion = builder.addParameter("helm-chart-version");
+        var helmChartDescription = builder.addParameter("helm-chart-description");
         var kubernetes = builder.addKubernetesEnvironment("kube");
         kubernetes.withHelm((helm) -> {
             helm.withNamespace("validation-namespace");
             helm.withReleaseName("validation-release");
+            helm.withChartName("validation-kubernetes");
             helm.withChartVersion("1.2.3");
+            helm.withChartDescription("Validation Helm Chart");
             helm.withNamespace(helmNamespace);
             helm.withReleaseName(helmReleaseName);
+            helm.withChartName(helmChartName);
             helm.withChartVersion(helmChartVersion);
+            helm.withChartDescription(helmChartDescription);
         });
         kubernetes.withProperties((environment) -> {
-            environment.setHelmChartName("validation-kubernetes");
-            var _configuredHelmChartName = environment.helmChartName();
-            environment.setHelmChartVersion("1.2.3");
-            var _configuredHelmChartVersion = environment.helmChartVersion();
-            environment.setHelmChartDescription("Validation Helm Chart");
-            var _configuredHelmChartDescription = environment.helmChartDescription();
             environment.setDefaultStorageType("pvc");
             var _configuredDefaultStorageType = environment.defaultStorageType();
             environment.setDefaultStorageClassName("fast-storage");
@@ -34,7 +34,6 @@ void main() throws Exception {
             environment.setDefaultServiceType("LoadBalancer");
             var _configuredDefaultServiceType = environment.defaultServiceType();
         });
-        var _resolvedHelmChartName = kubernetes.helmChartName();
         var _resolvedDefaultStorageClassName = kubernetes.defaultStorageClassName();
         var _resolvedDefaultServiceType = kubernetes.defaultServiceType();
         var gateway = kubernetes.addGateway("public-gateway");
@@ -44,10 +43,17 @@ void main() throws Exception {
         ingress.withHostname("ingress.example.com");
         ingress.withTls("ingress-tls");
         var serviceContainer = builder.addContainer("kube-service", "redis:alpine");
+        serviceContainer.withComputeEnvironment(kubernetes);
         serviceContainer.publishAsKubernetesService((service) -> {
             var _serviceName = service.name();
-            var serviceParent = service.parent();
-            var _serviceParentChartName = serviceParent.helmChartName();
+            var _serviceParent = service.parent();
+            service.addManifest("keda.sh/v1alpha1", "ScaledObject", "kube-service-scaler", (manifest) -> {
+                manifest.withLabel("example.com/custom", "true");
+                manifest.withAnnotation("example.com/source", "java");
+                manifest.withField("spec.scaleTargetRef.kind", "Deployment");
+                manifest.withField("spec.scaleTargetRef.name", "kube-service");
+                manifest.withField("spec.maxReplicaCount", 3);
+            });
         });
         builder.build().run();
     }

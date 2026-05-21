@@ -74,18 +74,33 @@ Use the shell that matches the host:
 
 #### Local mode
 
-Create a temporary working directory, point `HOME` at it, and run the bash dogfood command unchanged:
+##### macOS/Linux/WSL
+
+Create a temporary working directory and use `--install-path` and `--skip-path` to keep the install isolated. **Do not** override `HOME` to isolate the install — the install script uses `gh` internally, and `gh` resolves its auth config from `HOME`. Overriding `HOME` to an empty directory makes `gh` appear unauthenticated:
 
 ```bash
 testDir="$(mktemp -d -t aspire-pr-test-XXXXXX)"
-homeDir="$testDir/home"
-mkdir -p "$homeDir"
 
-HOME="$homeDir" bash -lc 'curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- '"$prNumber"
+curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- "$prNumber" --install-path "$testDir" --skip-path --skip-extension
 
-cliPath="$homeDir/.aspire/bin/aspire"
-hivePath="$homeDir/.aspire/hives/pr-$prNumber/packages"
+cliPath="$testDir/bin/aspire"
+hivePath="$testDir/hives/pr-$prNumber/packages"
 cliVersion="$("$cliPath" --version)"
+```
+
+##### Windows PowerShell
+
+On Windows, **do not** override `HOME`, `USERPROFILE`, or `APPDATA` to isolate the install. Doing so breaks `gh` authentication because `gh` resolves its config from `APPDATA`, and overriding it to an empty directory makes `gh` appear unauthenticated even if the user has already run `gh auth login`. Instead, use the `-InstallPath`, `-SkipPath`, and `-SkipExtension` flags to keep the install isolated without touching environment variables that other tools depend on:
+
+```powershell
+$testDir = Join-Path $env:TEMP "aspire-pr-test-$([guid]::NewGuid().ToString('N'))"
+New-Item -ItemType Directory -Path $testDir -Force | Out-Null
+
+iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } $prNumber -InstallPath $testDir -SkipExtension -SkipPath"
+
+$cliPath = "$testDir\dogfood\pr-$prNumber\bin\aspire.exe"
+$hivePath = "$testDir\hives\pr-$prNumber\packages"
+$cliVersion = & $cliPath --version
 ```
 
 #### Container mode
@@ -151,9 +166,13 @@ When creating new projects from the PR build:
 - Prefer the downloaded PR hive explicitly instead of relying on channel resolution alone.
 - In non-interactive runs, pass both `--name` and `--output`.
 - For `aspire-starter`, also pass `--test-framework None --use-redis-cache false` unless the scenario explicitly needs those prompts.
-- In TTY-attached runs, `aspire new` may ask `Would you like to configure AI agent environments for this project?`; answer explicitly (usually `n`) unless agent-init is part of the scenario.
+- Always pass `--localhost-tld false` to suppress the `Use *.dev.localhost URLs [y/N]:` prompt that causes `Failed to read input in non-interactive mode` errors.
+- Always pass `--suppress-agent-init` to suppress the post-create `Would you like to configure AI agent environments for this project?` prompt.
+- The `--output` directory must not already exist. `aspire new` refuses to write into a non-empty directory. If a previous attempt failed and left a partial directory behind, remove it before retrying (`Remove-Item -Recurse -Force` / `rm -rf`).
+- In TTY-attached runs where `--suppress-agent-init` is not passed, `aspire new` may ask `Would you like to configure AI agent environments for this project?`; answer explicitly (usually `n`) unless agent-init is part of the scenario.
+- Run `aspire new <template> --help` to discover all available flags for a template when you encounter unexpected prompts. New flags may be added between releases.
 
-Example starter-app automation:
+Example starter-app automation (bash):
 
 ```bash
 projectName="PrSmoke"
@@ -165,7 +184,26 @@ appRoot="$testDir/$projectName"
   --source "$hivePath" \
   --version "$cliVersion" \
   --test-framework None \
-  --use-redis-cache false
+  --use-redis-cache false \
+  --localhost-tld false \
+  --suppress-agent-init
+```
+
+Example starter-app automation (PowerShell):
+
+```powershell
+$projectName = "PrSmoke"
+$appRoot = "$testDir\$projectName"
+
+& $cliPath new aspire-starter `
+  --name $projectName `
+  --output $appRoot `
+  --source $hivePath `
+  --version $cliVersion `
+  --test-framework None `
+  --use-redis-cache false `
+  --localhost-tld false `
+  --suppress-agent-init
 ```
 
 ### 4. Verify CLI Version Matches PR Commit
@@ -241,7 +279,7 @@ Based on the PR changes, generate appropriate test scenarios. Always use new pro
 
 ### 7. Present Scenarios and Get User Input
 
-**Before executing any test scenarios**, present a summary of the proposed scenarios to the user and ask for confirmation or additional input using the `ask_user` tool.
+**Before executing any test scenarios**, present a summary of the proposed scenarios to the user and ask for confirmation. Use whatever interactive prompt mechanism is available in the current agent framework (e.g., a question/form tool, a chat message asking for confirmation, etc.).
 
 **Summary format:**
 
@@ -264,15 +302,12 @@ Based on analyzing the PR changes, I've identified the following test scenarios:
 3. ...
 ```
 
-**Then use `ask_user` to get confirmation and execution target:**
+**Then ask the user to confirm the plan and choose an execution target.** Collect the following:
+- Whether to proceed, add more scenarios, skip some, or cancel testing
+- Whether to run in the repo container runner or locally in a temp directory
+- Any additional scenarios to include or scenarios to skip
 
-Call the `ask_user` tool with a form that includes:
-- **decision**: enum `["Proceed with these scenarios", "Add more scenarios", "Skip some scenarios", "Cancel testing"]`
-- **executionTarget**: enum `["Run in the repo container runner", "Run locally in a temp directory"]`
-- **additionalScenarios**: optional string for extra scenarios
-- **scenariosToSkip**: optional string listing scenarios to skip
-
-Default `executionTarget` based on the goal: choose **Run locally in a temp directory** when the user is likely to continue working with the generated app on the host, and choose **Run in the repo container runner** when isolation or Linux/container reproduction is the priority. If the user declines the form, use the same heuristic.
+Default execution target based on the goal: choose **Run locally in a temp directory** when the user is likely to continue working with the generated app on the host, and choose **Run in the repo container runner** when isolation or Linux/container reproduction is the priority. If the user doesn't specify, use the same heuristic.
 
 **Handle user responses:**
 - **Proceed**: Continue to step 8 using the selected execution target
@@ -471,11 +506,15 @@ If a fresh PR install fails with messages like `Bundle extraction failed` or `Bu
 3. Only reach for deeper recovery or debugging steps if the user explicitly asks you to investigate the install or bundle failure itself.
 
 ### Unexpected prompt during automation
-If `aspire new` fails with `Failed to read input in non-interactive mode` or `Cannot show selection prompt since the current terminal isn't interactive`:
+If `aspire new` fails with `Failed to read input in non-interactive mode` or `Cannot show selection prompt since the current terminal isn't interactive`, review the non-interactive flags listed in the "Important template note" section above (Step 3) and ensure they are all present. When encountering an unknown prompt, run `aspire new <template> --help` to discover all available flags. New template options may be added between releases and each one can introduce a new interactive prompt.
 
-1. Ensure the command includes both `--name` and `--output`.
-2. For `aspire-starter`, add `--test-framework None --use-redis-cache false` unless the scenario is explicitly testing those options.
-3. If the command is running in a TTY-attached session, answer the post-create agent-init prompt explicitly.
+### gh CLI authentication failures during local mode
+If the install script fails with `Failed to get HEAD SHA for PR` or `To get started with GitHub CLI, please run: gh auth login` even though `gh` is authenticated:
+
+1. **Do not override `HOME`, `USERPROFILE`, or `APPDATA`** in the same shell session where you run the install script. The `gh` CLI resolves its auth config from `APPDATA` (Windows) or `HOME` (Unix), and overriding these to an isolated directory makes `gh` appear unauthenticated.
+2. On Windows, use `-InstallPath`, `-SkipPath`, and `-SkipExtension` flags instead of environment variable overrides to isolate the install.
+3. On Unix, use `--install-path`, `--skip-path`, and `--skip-extension` flags instead of overriding `HOME`.
+4. Verify with `gh auth status` in the same terminal before running the install script.
 
 ### AppHost selection prompt / no running AppHosts found
 If `wait`, `describe`, `resource`, or `stop` prompts to select an AppHost or reports that no running AppHosts were found in the current directory, pass `--apphost <path>` explicitly to those follow-up commands.
@@ -506,12 +545,9 @@ Document failures with full context:
 
 ### 11. Offer Container Inspection
 
-If testing ran in the repo container runner, use the `ask_user` tool before cleanup to ask whether the user wants to keep the mounted workspace around for inspection.
+If testing ran in the repo container runner, ask the user before cleanup whether they want to keep the mounted workspace around for inspection. Use whatever interactive prompt mechanism is available in the current agent framework.
 
-Use a form with:
-- **inspectionDecision**: enum `["Keep the container workspace for inspection", "Clean up the container workspace"]`
-
-Default to **Clean up the container workspace**.
+Default to cleaning up the container workspace.
 
 If the user chooses to keep it:
 - Do **not** delete `testDir`.
@@ -544,6 +580,8 @@ If the user chooses cleanup:
 
 After testing completes, clean up temporary directories unless the user explicitly chose to keep the container workspace for inspection:
 
+**PowerShell:**
+
 ```powershell
 # Return to original directory
 Set-Location $env:USERPROFILE
@@ -552,16 +590,23 @@ Set-Location $env:USERPROFILE
 Remove-Item -Path $testDir -Recurse -Force
 ```
 
+**bash:**
+
+```bash
+cd ~
+rm -rf "$testDir"
+```
+
 ## Platform Considerations
 
 ### Windows
 - Use PowerShell for commands
-- CLI installation: `irm https://aka.ms/install-aspire-cli.ps1 | iex`
+- PR CLI installation: use `get-aspire-cli-pr.ps1` as shown in the dogfood comment (see Step 3)
 - Path separator: `\`
 
 ### Linux/macOS
 - Use bash for commands
-- CLI installation: `curl -sSL https://aka.ms/install-aspire-cli.sh | bash`
+- PR CLI installation: use `get-aspire-cli-pr.sh` as shown in the dogfood comment (see Step 3)
 - Path separator: `/`
 - Source profile after installation: `source ~/.bashrc` or `source ~/.zshrc`
 
@@ -601,7 +646,6 @@ Dashboard correctly displays the new Redis resource type.
 - **Container mode** - Prefer the repo-local `./eng/scripts/aspire-pr-container` scripts and a fresh temp workspace when Docker is available
 - **Ask before container cleanup** - At the end of a container-mode run, ask whether to keep the mounted workspace around for inspection
 - **Bundle failures** - If template-based commands fail with bundle extraction or layout validation errors after install, capture and report the failure instead of adding non-standard repair steps
-- **Non-interactive project creation** - Pass both `--name` and `--output`; for `aspire-starter`, also pass `--test-framework None --use-redis-cache false` unless intentionally testing those prompts
-- **TTY project creation** - In TTY-attached runs, `aspire new` may ask about configuring AI agent environments; answer explicitly or keep stdin non-interactive
+- **Non-interactive project creation** - Follow the flags listed in the "Important template note" section (Step 3)
 - **Explicit AppHost path** - Prefer `--apphost <path>` for scripted `wait`, `describe`, `resource`, and `stop` commands
 - **PR hive for templates** - Prefer `--source <pr-hive>` and `--version <installed-version>` when creating projects from the PR build

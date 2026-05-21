@@ -21,8 +21,11 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 
 ARG SKIP_SOURCE_BUILD=false
+ARG UBUNTU_APT_MIRROR=
 
 # Install native AOT build toolchain.
+COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
 RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
       apt-get update -qq && \
       apt-get install -y --no-install-recommends clang zlib1g-dev && \
@@ -46,9 +49,13 @@ RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
 # ============================================================
 # Stage 2: Polyglot test runtime environment (no .NET SDK)
 # ============================================================
-FROM ubuntu:24.04 AS runtime
+FROM mcr.microsoft.com/mirror/docker/library/ubuntu:24.04 AS runtime
+
+ARG UBUNTU_APT_MIRROR=
 
 # Install base tools and Docker CLI.
+COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
 RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends \
       ca-certificates curl gpg docker.io git libicu-dev unzip && \
@@ -66,7 +73,9 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 # Install Node.js plus supported TypeScript AppHost toolchains.
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
     apt-get install -y --no-install-recommends nodejs && \
-    npm install -g yarn@1.22.22 pnpm@10 && \
+    corepack enable yarn && \
+    corepack prepare yarn@4.14.1 --activate && \
+    npm install -g pnpm@10 && \
     curl -fsSL https://bun.sh/install | bash && \
     ln -s /root/.bun/bin/bun /usr/local/bin/bun && \
     ln -s /root/.bun/bin/bunx /usr/local/bin/bunx && \

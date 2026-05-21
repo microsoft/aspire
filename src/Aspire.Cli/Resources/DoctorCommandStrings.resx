@@ -67,6 +67,12 @@
   <data name="EnvironmentCheckHeader" xml:space="preserve">
     <value>Aspire Environment Check</value>
   </data>
+  <data name="AspireCategoryHeader" xml:space="preserve">
+    <value>Aspire</value>
+  </data>
+  <data name="AppHostCategoryHeader" xml:space="preserve">
+    <value>AppHost</value>
+  </data>
   <data name="SdkCategoryHeader" xml:space="preserve">
     <value>.NET SDK</value>
   </data>
@@ -85,6 +91,39 @@
   </data>
   <data name="CheckingPrerequisites" xml:space="preserve">
     <value>Checking Aspire environment...</value>
+  </data>
+  <data name="VersionUnknown" xml:space="preserve">
+    <value>unknown</value>
+  </data>
+  <data name="CliVersionMessageFormat" xml:space="preserve">
+    <value>Aspire CLI version {0}</value>
+    <comment>{0} is the current Aspire CLI version.</comment>
+  </data>
+  <data name="CliVersionOutOfDateMessageFormat" xml:space="preserve">
+    <value>Aspire CLI version {0} is out of date. Latest version is {1}</value>
+    <comment>{0} is the current Aspire CLI version. {1} is the latest available Aspire CLI version.</comment>
+  </data>
+  <data name="CliVersionOutOfDateFixFormat" xml:space="preserve">
+    <value>Run '{0}' to update Aspire CLI.</value>
+    <comment>{0} is the command to update Aspire CLI.</comment>
+  </data>
+  <data name="CliVersionUpdateCheckFailedMessage" xml:space="preserve">
+    <value>Could not check for Aspire CLI updates</value>
+  </data>
+  <data name="ChannelSuffixFormat" xml:space="preserve">
+    <value> (channel: {0})</value>
+    <comment>{0} is the Aspire channel name (e.g., "stable", "staging", "daily", "local", "pr-1234"). Appended to CLI / AppHost version messages.</comment>
+  </data>
+  <data name="AppHostVersionMessageFormat" xml:space="preserve">
+    <value>AppHost version {0} ({1})</value>
+    <comment>{0} is the AppHost Aspire.Hosting version. {1} is the AppHost project path.</comment>
+  </data>
+  <data name="AppHostVersionUnknownMessageFormat" xml:space="preserve">
+    <value>Could not determine AppHost version ({0})</value>
+    <comment>{0} is the AppHost project path.</comment>
+  </data>
+  <data name="AppHostVersionCheckFailedMessage" xml:space="preserve">
+    <value>Could not determine AppHost version</value>
   </data>
   <data name="DevCertsNoCertificateMessage" xml:space="preserve">
     <value>No HTTPS development certificate found</value>
@@ -141,5 +180,54 @@
   </data>
   <data name="DevCertsTrustLabelPartial" xml:space="preserve">
     <value>[partial]</value>
+  </data>
+  <data name="HeaderInstallations" xml:space="preserve">
+    <value>Aspire CLI Installations</value>
+  </data>
+  <data name="ColumnPath" xml:space="preserve">
+    <value>Path</value>
+  </data>
+  <data name="ColumnVersion" xml:space="preserve">
+    <value>Version</value>
+  </data>
+  <data name="ColumnChannel" xml:space="preserve">
+    <value>Channel</value>
+  </data>
+  <data name="ColumnRoute" xml:space="preserve">
+    <value>Route</value>
+  </data>
+  <data name="ColumnPathStatus" xml:space="preserve">
+    <value>PATH status</value>
+  </data>
+  <data name="ValueCurrentMarker" xml:space="preserve">
+    <value>(current)</value>
+    <comment>Suffix appended to the running CLI's path so the user can identify which install is themselves.</comment>
+  </data>
+  <data name="ValueUnknown" xml:space="preserve">
+    <value>(unknown)</value>
+    <comment>Placeholder shown in the table when a field could not be determined for a discovered install.</comment>
+  </data>
+  <data name="ValueNotProbed" xml:space="preserve">
+    <value>(not probed)</value>
+    <comment>Placeholder shown in the table when an install was found but not asked to self-describe (e.g., trust gate).</comment>
+  </data>
+  <data name="ValueProbeFailed" xml:space="preserve">
+    <value>(probe failed)</value>
+    <comment>Placeholder shown in the table when an install was probed but did not return usable data.</comment>
+  </data>
+  <data name="ValuePathActive" xml:space="preserve">
+    <value>active</value>
+    <comment>Shown when an install is the first Aspire CLI resolved from PATH.</comment>
+  </data>
+  <data name="ValuePathShadowed" xml:space="preserve">
+    <value>shadowed</value>
+    <comment>Shown when an install is on PATH but an earlier Aspire CLI entry shadows it.</comment>
+  </data>
+  <data name="ValuePathNotOnPath" xml:space="preserve">
+    <value>not on PATH</value>
+    <comment>Shown when an install was not discovered from PATH.</comment>
+  </data>
+  <data name="InstallationDiscoveryFailedReason" xml:space="preserve">
+    <value>Install discovery failed. See the Aspire CLI logs for details.</value>
   </data>
 </root>

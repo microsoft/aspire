@@ -46,6 +46,8 @@ Aspire-Core.slnf
 .github/workflows/markdownlint*.yml
 .github/workflows/pr-review-needed.yml
 .github/workflows/refresh-manifests.yml
+.github/workflows/release-github-tasks.yml
+.github/workflows/release-notes-generate.*
 .github/workflows/reproduce-flaky-tests.yml
 .github/workflows/specialized-test-runner.yml
 .github/workflows/tests-outerloop.yml

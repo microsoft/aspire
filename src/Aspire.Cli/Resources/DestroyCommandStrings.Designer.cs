@@ -70,11 +70,20 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Destroy a previously deployed AppHost environment (Preview).
+        ///   Looks up a localized string similar to Destroy a previously deployed AppHost environment.
         /// </summary>
         public static string Description {
             get {
                 return ResourceManager.GetString("Description", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The destroy command requires --yes when the --non-interactive option is specified..
+        /// </summary>
+        public static string NonInteractiveRequiresYes {
+            get {
+                return ResourceManager.GetString("NonInteractiveRequiresYes", resourceCulture);
             }
         }
         

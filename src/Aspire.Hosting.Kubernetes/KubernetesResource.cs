@@ -75,7 +75,30 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     /// <summary>
     /// Additional resources that are part of this Kubernetes service.
     /// </summary>
+    [AspireExportIgnore(Reason = "Kubernetes manifest resource types are C#-only customization objects and are not part of the polyglot SDK surface.")]
     public List<BaseKubernetesResource> AdditionalResources { get; } = [];
+
+    /// <summary>
+    /// Adds an arbitrary Kubernetes manifest to this service's generated Helm chart for polyglot callers.
+    /// </summary>
+    /// <param name="apiVersion">The Kubernetes API version for the manifest.</param>
+    /// <param name="kind">The Kubernetes resource kind for the manifest.</param>
+    /// <param name="name">The Kubernetes metadata name for the manifest.</param>
+    /// <param name="configure">A callback that configures the manifest fields.</param>
+    /// <returns>The added Kubernetes manifest resource.</returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    internal KubernetesManifestResource AddManifest(string apiVersion, string kind, string name, Action<KubernetesManifestResource>? configure = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(apiVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var manifest = new KubernetesManifestResource(apiVersion, kind, name);
+        configure?.Invoke(manifest);
+        AdditionalResources.Add(manifest);
+
+        return manifest;
+    }
 
     /// <summary>
     /// Gets the resource that is the target of this Kubernetes service.
@@ -136,7 +159,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     {
         Labels = new()
         {
-            ["app.kubernetes.io/name"] = Parent.HelmChartName,
+            ["app.kubernetes.io/name"] = ".Chart.Name".ToHelmExpression(),
             ["app.kubernetes.io/component"] = resource.Name,
             ["app.kubernetes.io/instance"] = ".Release.Name".ToHelmExpression(),
         };
@@ -447,6 +470,18 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             if (value is string s)
             {
                 return s;
+            }
+
+            // Handle scalar/primitive types (bool, numerics, DateTimeOffset, TimeSpan, Uri, etc.)
+            // These can appear when third-party integrations set environment variables to non-string values.
+            if (value is bool boolValue)
+            {
+                return boolValue ? "true" : "false";
+            }
+
+            if (value is IFormattable formattable)
+            {
+                return formattable.ToString(null, CultureInfo.InvariantCulture);
             }
 
             if (value is EndpointReference ep)

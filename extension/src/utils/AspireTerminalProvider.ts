@@ -19,6 +19,40 @@ export interface AspireTerminal {
     dispose: () => void;
 }
 
+export interface SendAspireCommandOptions {
+    redactAdditionalArgs?: boolean;
+}
+
+/**
+ * Quotes a single argument for safe interpolation into a shell command line.
+ *
+ * Windows: The output targets PowerShell (powershell.exe / pwsh.exe), which is
+ * VS Code's default integrated terminal on Windows. The argument is wrapped in
+ * double quotes and the interpolation-significant characters (backtick, double
+ * quote, dollar sign) are backtick-escaped. This form is NOT safe for cmd.exe;
+ * users who have configured cmd.exe as their default terminal may see
+ * unexpected behavior. End-to-end coverage through a real child process is
+ * out of scope for this helper.
+ *
+ * Unix: The output uses POSIX single-quote quoting, which is interpreted the
+ * same way by bash, zsh, dash, sh, and fish. Embedded single quotes are split
+ * out and rejoined with a double-quoted single quote.
+ *
+ * @param arg The raw argument value to quote.
+ * @param platform Override for the target platform. Defaults to
+ * `process.platform`, but tests pass an explicit value to validate both
+ * branches regardless of the host OS.
+ */
+export function quoteShellArg(arg: string, platform: NodeJS.Platform = process.platform): string {
+    if (platform === 'win32') {
+        // Order matters: escape backticks first so that the backticks we
+        // introduce when escaping " and $ are not themselves re-escaped.
+        return `"${arg.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')}"`;
+    }
+
+    return `'${arg.replace(/'/g, "'\"'\"'")}'`;
+}
+
 export class AspireTerminalProvider implements vscode.Disposable {
     private _terminalByDebugSessionId: Map<string | null, AspireTerminal> = new Map();
     private _rpcServerConnectionInfo?: RpcServerConnectionInfo;
@@ -59,7 +93,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         this._dcpServerConnectionInfo = value;
     }
 
-    async sendAspireCommandToAspireTerminal(subcommand: string, showTerminal: boolean = true, additionalArgs?: string[]) {
+    async sendAspireCommandToAspireTerminal(subcommand: string, showTerminal: boolean = true, additionalArgs?: string[], options?: SendAspireCommandOptions) {
         const cliPath = await this.getAspireCliExecutablePath();
 
         // On Windows, use & to execute paths, especially those with special characters
@@ -73,45 +107,49 @@ export class AspireTerminalProvider implements vscode.Disposable {
             const quotedPath = /[\s"'`$!*?()&|<>;]/.test(cliPath) ? `'${cliPath.replace(/'/g, `'\"'\"'`)}'` : cliPath;
             command = `${quotedPath} ${subcommand}`;
         }
+        const baseCommand = command;
 
-        if (additionalArgs && additionalArgs.length > 0) {
-            const quotedArgs = additionalArgs.map(arg => {
-                if (process.platform === 'win32') {
-                    // On Windows PowerShell, wrap in double quotes and escape inner double quotes
-                    return `"${arg.replace(/"/g, '`"')}"`;
-                } else {
-                    // On Unix, wrap in single quotes and escape inner single quotes
-                    return `'${arg.replace(/'/g, "'\"'\"'")}'`;
-                }
-            });
-            command += ' ' + quotedArgs.join(' ');
-        }
-
+        const extensionArgs: string[] = [];
         if (this.isCliDebugLoggingEnabled()) {
-            command += ' --debug';
+            extensionArgs.push('--debug');
         }
 
         if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            command += ' --cli-wait-for-debugger';
+            extensionArgs.push('--cli-wait-for-debugger');
+        }
+
+        const cliArgs = additionalArgs && additionalArgs.length > 0
+            ? [...extensionArgs, ...additionalArgs]
+            : extensionArgs;
+
+        if (cliArgs.length > 0) {
+            const quotedArgs = cliArgs.map(arg => quoteShellArg(arg));
+            command += ' ' + quotedArgs.join(' ');
         }
 
         const aspireTerminal = this.getAspireTerminal();
-        extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${command}`);
+        let logCommand = command;
+        if (options?.redactAdditionalArgs && additionalArgs && additionalArgs.length > 0) {
+            const logArgs = extensionArgs.map(arg => quoteShellArg(arg));
+            logArgs.push('[redacted command arguments]');
+            logCommand = `${baseCommand} ${logArgs.join(' ')}`;
+        }
+        extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${logCommand}`);
 
-        // Send Ctrl+C (\x03 / ETX) before the new command. This serves two purposes:
-        //  1. If a previous Aspire command (e.g. `aspire logs ... --follow`) is still
-        //     running in the foreground of the terminal, the new command would otherwise
-        //     be delivered to that process's stdin instead of the shell. Ctrl+C sends
-        //     SIGINT to interrupt it so the shell prompt comes back.
-        //  2. At an idle shell prompt, Ctrl+C cancels any pre-existing typed text on the
-        //     current line (bash/zsh as SIGINT-on-empty-line cancels input; PSReadLine
-        //     treats it as a cancel) — preserving the previous "clear input buffer" intent.
-        aspireTerminal.terminal.sendText('\x03', false);
-
-        aspireTerminal.terminal.sendText(command);
         if (showTerminal) {
             aspireTerminal.terminal.show();
         }
+
+        if (aspireTerminal.terminal.shellIntegration) {
+            aspireTerminal.terminal.shellIntegration.executeCommand(command);
+        }
+        else {
+            // Without shell integration, VS Code can't tell whether the terminal is idle or
+            // a foreground process is running, so keep the previous safe interruption behavior.
+            aspireTerminal.terminal.sendText('\x03', false);
+            aspireTerminal.terminal.sendText(command);
+        }
+
     }
 
     getAspireTerminal(forceCreate?: boolean): AspireTerminal {

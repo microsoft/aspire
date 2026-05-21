@@ -6,6 +6,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Templating;
+using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.TestServices;
@@ -16,6 +17,7 @@ internal sealed class TestNewCommandPrompter(IInteractionService interactionServ
     public Func<ITemplate[], ITemplate>? PromptForTemplateCallback { get; set; }
     public Func<string, string>? PromptForProjectNameCallback { get; set; }
     public Func<string, string>? PromptForOutputPathCallback { get; set; }
+    public Func<string, Func<string, ValidationResult>?, string>? PromptForOutputPathWithValidatorCallback { get; set; }
 
     public override Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken)
     {
@@ -35,13 +37,25 @@ internal sealed class TestNewCommandPrompter(IInteractionService interactionServ
         };
     }
 
-    public override Task<string> PromptForOutputPath(string path, ParseResult parseResult, CancellationToken cancellationToken)
+    public override Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
     {
-        return PromptForOutputPathCallback switch
+        var resolvedValidator = validator;
+        if (validator is not null && outputPathResolver is not null)
         {
-            { } callback => Task.FromResult(callback(path)),
-            _ => Task.FromResult(path) // If no callback is provided just accept the default.
+            resolvedValidator = candidatePath => validator(outputPathResolver(candidatePath));
+        }
+
+        var outputPath = PromptForOutputPathWithValidatorCallback switch
+        {
+            { } callback => callback(path, resolvedValidator),
+            _ => PromptForOutputPathCallback switch
+            {
+                { } callback => callback(path),
+                _ => path // If no callback is provided just accept the default.
+            }
         };
+
+        return Task.FromResult(outputPathResolver?.Invoke(outputPath) ?? outputPath);
     }
 
     public override Task<(NuGetPackage Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(NuGetPackage Package, PackageChannel Channel)> candidatePackages, CancellationToken cancellationToken)

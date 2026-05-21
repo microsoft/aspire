@@ -20,7 +20,7 @@ public static class AzureProvisionerExtensions
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <returns>The distributed application builder.</returns>
-    [AspireExport(Description = "Adds Azure provisioning services to the distributed application builder")]
+    [AspireExport]
     public static IDistributedApplicationBuilder AddAzureProvisioning(this IDistributedApplicationBuilder builder)
     {
         // Always add the Azure environment, even if the user doesn't explicitly add it.

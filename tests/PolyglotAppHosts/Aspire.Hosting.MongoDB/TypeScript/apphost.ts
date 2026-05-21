@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost
 // For more information, see: https://aspire.dev
 
-import { createBuilder, ContainerLifetime } from './.modules/aspire.js';
+import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -40,7 +40,7 @@ await builder.addMongoDB("mongo-custom-pass", { password: customPassword });
 
 // Test 9: Chained configuration - multiple With* methods
 const mongoChained = await builder.addMongoDB("mongo-chained")
-    .withLifetime(ContainerLifetime.Persistent)
+    .withPersistentLifetime()
     .withDataVolume({ name: "mongo-chained-data" });
 
 // Test 10: Add multiple databases to same server

@@ -4,6 +4,7 @@
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,7 +77,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("config");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -774,7 +775,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         var json = await File.ReadAllTextAsync(configPath);
@@ -804,7 +805,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         var json = await File.ReadAllTextAsync(configPath);
@@ -836,7 +837,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Equal(GetErrorString(expectedErrorResourceName), Assert.Single(testInteractionService.DisplayedErrors));
 
         var settingsPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true);
@@ -845,6 +846,38 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
             var json = await File.ReadAllTextAsync(settingsPath);
             Assert.DoesNotContain("AppHost.csproj", json);
         }
+    }
+
+    [Fact]
+    public async Task ConfigSetCommand_GlobalOverrideStagingFeed_IsReadByPackagingService()
+    {
+        const string stagingFeed = "https://example.com/staging/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using (var provider = services.BuildServiceProvider())
+        {
+            var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+            var result = command.Parse($"config set -g overrideStagingFeed {stagingFeed}");
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+
+            var settingsPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true);
+            var json = await File.ReadAllTextAsync(settingsPath);
+            Assert.Contains(stagingFeed, json);
+        }
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        var packagingService = reloadedProvider.GetRequiredService<IPackagingService>();
+
+        var channels = await packagingService.GetChannelsAsync(requestedChannelName: PackageChannelNames.Staging).DefaultTimeout();
+
+        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+        Assert.Contains(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*" && m.Source == stagingFeed);
     }
 
     private static string GetErrorString(string resourceName)
@@ -869,7 +902,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
 
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         Assert.False(File.Exists(configPath));
@@ -887,7 +920,7 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var settingsPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: false);
         var json = await File.ReadAllTextAsync(settingsPath);
@@ -932,6 +965,11 @@ public class TestConfigurationService : IConfigurationService
     public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
     {
         return Task.FromResult<string?>(key);
+    }
+
+    public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
+    {
+        return GetConfigurationAsync(key, cancellationToken);
     }
 
     public string GetSettingsFilePath(bool isGlobal)

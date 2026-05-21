@@ -4,7 +4,7 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 #pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
-#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -284,6 +284,26 @@ public class AddViteAppTests
 
         var nodeApp = builder.AddViteApp("nuxt", appDir)
             .WithPnpm(install: true)
+            .PublishAsNpmScript("start");
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "nuxt.Dockerfile");
+        await Verify(File.ReadAllText(dockerfilePath));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileWhenNpmScriptUsesBun()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "nuxt");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "bun.lock"), "");
+
+        var nodeApp = builder.AddViteApp("nuxt", appDir)
+            .WithBun(install: true)
             .PublishAsNpmScript("start");
 
         await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);

@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text;
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -11,6 +13,8 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -34,7 +38,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(DashboardCommandStrings.BundleLayoutNotFound, errorMessage);
     }
@@ -51,7 +55,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -143,7 +147,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.DoesNotContain(capturedArgs, arg => arg.Contains("ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS"));
     }
@@ -163,7 +167,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Collection(capturedArgs,
             arg => Assert.Equal("dashboard", arg),
@@ -193,7 +197,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Contains(expectedArg, capturedArgs);
     }
@@ -213,7 +217,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedEnv);
         Assert.True(capturedEnv.ContainsKey("DASHBOARD__FRONTEND__BROWSERTOKEN"));
         Assert.False(string.IsNullOrEmpty(capturedEnv["DASHBOARD__FRONTEND__BROWSERTOKEN"]));
@@ -237,7 +241,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Collection(capturedArgs,
             arg => Assert.Equal("dashboard", arg),
@@ -263,7 +267,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Collection(capturedArgs,
             arg => Assert.Equal("dashboard", arg),
@@ -290,7 +294,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
     }
 
     [Fact]
@@ -304,7 +308,13 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         // Make CreateExecution return an execution whose Start() returns false,
         // which causes LayoutProcessRunner.Start to throw InvalidOperationException.
         executionFactory.CreateExecutionCallback = (_, _, _, _) =>
-            new TestProcessExecution("fake", [], null, new ProcessInvocationOptions(), (_, _) => (0, null), () => 0)
+            new TestProcessExecution(
+                "fake",
+                [],
+                null,
+                new ProcessInvocationOptions(),
+                (_, _, _) => Task.FromResult((0, (string?)null)),
+                () => 0)
             {
                 StartReturnValue = false
             };
@@ -315,10 +325,46 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         var expectedMessage = string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, $"Failed to start process: {managedPath}");
         Assert.Equal(expectedMessage, errorMessage);
+    }
+
+    [Fact]
+    public async Task DashboardRunCommand_WhenCancelled_DisplaysCancellationMessageAndReturnsSuccess()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+        var readyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (services, _, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
+        executionFactory.CreateExecutionCallback = (_, _, _, options) =>
+            new TestProcessExecution("fake", [], null, options, (_, _, _) => Task.FromResult((0, (string?)null)), () => 0)
+            {
+                WaitForExitAsyncCallback = async (processOptions, cancellationToken) =>
+                {
+                    processOptions.StandardOutputCallback?.Invoke("Now listening on: http://localhost:18888");
+                    readyTcs.TrySetResult();
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    return 0;
+                }
+            };
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+
+        await readyTcs.Task.DefaultTimeout();
+        await cts.CancelAsync();
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Single(testInteractionService.DisplayedCancellations);
     }
 
     [Theory]
@@ -423,6 +469,43 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("http://localhost:18888/login?t=abc123", info.DashboardUrl);
     }
 
+    [Fact]
+    public void RenderDashboardSummary_RendersLogsPathAsClickableFileLink()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = int.MaxValue;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [dashboard].log");
+        var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
+
+        var interactionService = new ConsoleInteractionService(
+            new ConsoleEnvironment(console, console),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLoggerFactory.Instance);
+
+        var dashboardInfo = new DashboardRunCommand.DashboardInfo(
+            DashboardUrl: "http://localhost:18888",
+            OtlpGrpcUrl: "http://localhost:4317",
+            OtlpHttpUrl: "http://localhost:4318");
+
+        DashboardRunCommand.RenderDashboardSummary(interactionService, dashboardInfo, logFilePath);
+
+        var outputString = output.ToString();
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri;
+
+        Assert.Contains("Logs", outputString);
+        TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
+    }
+
     private (IServiceCollection Services, string ManagedPath, TestProcessExecutionFactory ExecutionFactory) CreateServicesWithLayout(
         TemporaryWorkspace workspace,
         TestInteractionService? interactionService = null)
@@ -460,12 +543,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
     private static CliExecutionContext CreateExecutionContext(TemporaryWorkspace workspace, Dictionary<string, string?> envVars)
     {
-        var dir = workspace.WorkspaceRoot;
-        var hivesDir = new DirectoryInfo(Path.Combine(dir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(dir.FullName, ".aspire", "cache"));
-        var logsDir = new DirectoryInfo(Path.Combine(dir.FullName, ".aspire", "logs"));
-        var logFile = Path.Combine(logsDir.FullName, "test.log");
-        return new CliExecutionContext(dir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDir, logFile, environmentVariables: envVars);
+        return workspace.CreateExecutionContext(environmentVariables: envVars);
     }
 
     private sealed class FakeLayoutDiscovery(LayoutConfiguration layout) : ILayoutDiscovery

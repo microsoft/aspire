@@ -14,6 +14,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.JavaScript;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -29,6 +30,7 @@ public static class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
+    private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
 
     // This is the order of config files that Vite will look for by default
@@ -96,6 +98,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="appDirectory">The path to the directory containing the node application.</param>
     /// <param name="scriptPath">The path to the script relative to the app directory to run.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method executes a Node script directly using <c>node script.js</c>. If you want to use a package manager
     /// you can add one and configure the install and run scripts using the provided extension methods.
@@ -114,7 +117,7 @@ public static class JavaScriptHostingExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Node.js application resource")]
+    [AspireExport]
     public static IResourceBuilder<NodeAppResource> AddNodeApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string scriptPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -328,8 +331,8 @@ public static class JavaScriptHostingExtensions
     /// automatically when publishing. The method configures the resource with Node.js defaults and sets up npm
     /// integration.
     /// </remarks>
-    [AspireExport(Description = "Adds a JavaScript application resource")]
-    public static IResourceBuilder<JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
+    [AspireExport]
+    public static IResourceBuilder<JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = DefaultJavaScriptRunScriptName)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -355,7 +358,7 @@ public static class JavaScriptHostingExtensions
     /// To add an API reverse-proxy, use the overload that accepts an <c>apiPath</c> and <c>apiTarget</c>.
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the polyglot-compatible overload instead.")]
     public static IResourceBuilder<TResource> PublishAsStaticWebsite<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -390,7 +393,7 @@ public static class JavaScriptHostingExtensions
     /// work correctly across all deployment targets (Docker Compose, Azure App Service, etc.).
     /// </para>
     /// </remarks>
-    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Use the polyglot-compatible overload instead.")]
     public static IResourceBuilder<TResource> PublishAsStaticWebsite<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -405,12 +408,12 @@ public static class JavaScriptHostingExtensions
         return PublishAsStaticWebsiteCore(builder, apiPath, apiTarget, options);
     }
 
-    /// <summary>
-    /// Polyglot-compatible overload. All parameters are optional so the TS codegen wraps them
-    /// in a single options object rather than positional args.
-    /// </summary>
 #pragma warning disable ASPIREEXPORT009 // Polyglot entry point — collision is intentional
-    [AspireExport("publishAsStaticWebsite", Description = "Publishes the JavaScript application as a standalone static website using YARP.")]
+    /// <summary>
+    /// Publishes the JavaScript application as a standalone static website using YARP.
+    /// </summary>
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("publishAsStaticWebsite")]
     internal static IResourceBuilder<TResource> PublishAsStaticWebsitePolyglot<TResource>(
 #pragma warning restore ASPIREEXPORT009
         this IResourceBuilder<TResource> builder,
@@ -430,6 +433,7 @@ public static class JavaScriptHostingExtensions
         return PublishAsStaticWebsiteCore(builder, apiPath, apiTarget, options);
     }
 
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     private static IResourceBuilder<TResource> PublishAsStaticWebsiteCore<TResource>(
         IResourceBuilder<TResource> builder,
         string? apiPath,
@@ -542,7 +546,8 @@ public static class JavaScriptHostingExtensions
     /// the built output directory is copied into the runtime container, not the full application source.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Publishes the JavaScript application as a standalone Node.js server that runs a built artifact directly.")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
     public static IResourceBuilder<TResource> PublishAsNodeServer<TResource>(this IResourceBuilder<TResource> builder, string entryPoint, string outputPath = ".")
         where TResource : JavaScriptAppResource
     {
@@ -605,7 +610,8 @@ public static class JavaScriptHostingExtensions
     /// use <see cref="PublishAsNodeServer{TResource}"/> instead for a smaller runtime image.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Publishes the JavaScript application as a Node.js server that uses a package manager script at runtime.")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
     public static IResourceBuilder<TResource> PublishAsNpmScript<TResource>(this IResourceBuilder<TResource> builder, string startScriptName = "start", string? runScriptArguments = null)
         where TResource : JavaScriptAppResource
     {
@@ -649,6 +655,22 @@ public static class JavaScriptHostingExtensions
         {
             builderStage.Run(installCmd);
         }
+    }
+
+    private static string GetNpmScriptRuntimeImage(
+        string appDirectory,
+        IServiceProvider services,
+        DockerfileBaseImageAnnotation? baseImageAnnotation,
+        JavaScriptPackageManagerAnnotation packageManager,
+        string buildImage)
+    {
+        if (!string.IsNullOrEmpty(baseImageAnnotation?.RuntimeImage))
+        {
+            return baseImageAnnotation.RuntimeImage;
+        }
+
+        return packageManager.ResolveNpmScriptRuntimeImage?.Invoke(buildImage)
+            ?? GetDefaultBaseImage(appDirectory, "alpine", services);
     }
 
     private static IResourceBuilder<TResource> CreateDefaultJavaScriptAppBuilder<TResource>(
@@ -777,7 +799,7 @@ public static class JavaScriptHostingExtensions
                             }
                             case JavaScriptPublishMode.NpmScript:
                             {
-                                var runtimeImage = baseImageAnnotation?.RuntimeImage ?? GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services);
+                                var runtimeImage = GetNpmScriptRuntimeImage(appDirectory, dockerfileContext.Services, baseImageAnnotation, packageManager, baseImage);
 
                                 // Production dependencies stage for optimized image
                                 var prodDepsStage = dockerfileContext.Builder
@@ -822,11 +844,15 @@ public static class JavaScriptHostingExtensions
                                     ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.StartScriptName}"
                                     : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.StartScriptName} {publishMode.RunScriptArguments}";
 
-                                dockerfileContext.Builder
+                                var runtimeStage = dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
                                     .WorkDir("/app")
                                     .CopyFrom("build", "/app", "/app")
-                                    .CopyFrom("prod-deps", "/app/node_modules", "./node_modules")
+                                    .CopyFrom("prod-deps", "/app/node_modules", "./node_modules");
+
+                                packageManager.InitializeDockerRuntimeStage?.Invoke(runtimeStage);
+
+                                runtimeStage
                                     .Env("NODE_ENV", "production")
                                     .Entrypoint(["sh", "-c", $"exec {runCommand}"]);
                                 break;
@@ -869,6 +895,33 @@ public static class JavaScriptHostingExtensions
             .WithBuildScript("build")
             .WithRunScript(runScriptName);
 
+        if (builder.ExecutionContext.IsPublishMode &&
+            builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
+        {
+            var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
+
+            Task WriteValidatedContainerAsync(ManifestPublishingContext context)
+            {
+                ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
+                return context.WriteContainerAsync(containerBuilder.Resource);
+            }
+
+            resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
+            containerBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
+            containerBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
+            {
+                Name = validationStepName,
+                Description = $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
+                RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
+                Resource = containerBuilder.Resource,
+                Action = _ =>
+                {
+                    ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
+                    return Task.CompletedTask;
+                }
+            }));
+        }
+
         resourceBuilder.WithVSCodeDebugging();
 
         // ensure the package manager command is set before starting the resource
@@ -888,6 +941,45 @@ public static class JavaScriptHostingExtensions
         return resourceBuilder;
     }
 
+    private static void ValidateExistingDockerfileRunScript(JavaScriptAppResource resource, ContainerResource containerResource)
+    {
+        if (containerResource.Entrypoint is not null ||
+            !containerResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) ||
+            dockerfileBuildAnnotation.DockerfileFactory is not null ||
+            !containerResource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runScript))
+        {
+            return;
+        }
+
+        // The user's effective run-script intent is captured by the last annotation: AddJavaScriptApp
+        // always adds one with the supplied runScriptName, and any subsequent WithRunScript call
+        // appends another. Comparing the last annotation against the default avoids false positives
+        // when the user re-states the default explicitly (e.g. .WithRunScript("dev")).
+        var hasExplicitRunScript =
+            !string.Equals(runScript.ScriptName, DefaultJavaScriptRunScriptName, StringComparison.Ordinal) ||
+            runScript.Args is { Length: > 0 };
+
+        if (!hasExplicitRunScript)
+        {
+            return;
+        }
+
+        // Include the args in the message when they are the trigger, so the user can see why
+        // a default-named script (e.g. "dev") still produced a conflict.
+        var argsClause = runScript.Args is { Length: > 0 }
+            ? $" with args [{string.Join(", ", runScript.Args)}]"
+            : string.Empty;
+
+        // Existing Dockerfiles are user-authored, so Aspire cannot safely assume that replacing
+        // their entrypoint with a package-manager script will work for the image shape.
+        // If the user provides an explicit container entrypoint above, honor it; otherwise fail
+        // instead of silently publishing an image that ignores the requested run script.
+        throw new DistributedApplicationException(
+            $"JavaScript app resource '{resource.Name}' is configured to run script '{runScript.ScriptName}'{argsClause}, but publish is using the existing Dockerfile '{dockerfileBuildAnnotation.DockerfilePath}'. " +
+            "An existing Dockerfile entrypoint cannot be changed automatically from runScriptName or WithRunScript. " +
+            "Remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.");
+    }
+
     /// <summary>
     /// Adds a Vite app to the distributed application builder.
     /// </summary>
@@ -896,6 +988,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="appDirectory">The path to the directory containing the Vite app.</param>
     /// <param name="runScriptName">The name of the script that runs the Vite app. Defaults to "dev".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// The following example creates a Vite app using npm as the package manager.
@@ -908,7 +1001,7 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a Vite application resource")]
+    [AspireExport]
     public static IResourceBuilder<ViteAppResource> AddViteApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1061,6 +1154,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="appDirectory">The path to the directory containing the Next.js app.</param>
     /// <param name="runScriptName">The name of the script that runs the Next.js dev server. Defaults to "dev".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method configures the Next.js application for both local development and publishing.
@@ -1084,7 +1178,8 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a Next.js application resource")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
     public static IResourceBuilder<NextJsAppResource> AddNextJsApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1170,7 +1265,8 @@ public static class JavaScriptHostingExtensions
     /// to suppress those checks when the configuration is set dynamically or via an external
     /// mechanism that cannot be detected by static file inspection.
     /// </remarks>
-    [AspireExport(Description = "Disables deploy-time build validation checks for the Next.js application.")]
+    [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport]
     public static IResourceBuilder<NextJsAppResource> DisableBuildValidation(this IResourceBuilder<NextJsAppResource> builder)
     {
         return builder.WithAnnotation<SuppressPublishValidationAnnotation>(new());
@@ -1193,7 +1289,7 @@ public static class JavaScriptHostingExtensions
     ///     .WithViteConfig("./vite.production.config.js");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures a custom Vite configuration file")]
+    [AspireExport]
     public static IResourceBuilder<ViteAppResource> WithViteConfig(this IResourceBuilder<ViteAppResource> builder, string configPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1212,7 +1308,8 @@ public static class JavaScriptHostingExtensions
     /// <param name="installCommand">The install command itself passed to npm to install dependencies.</param>
     /// <param name="installArgs">The command-line arguments passed to npm to install dependencies.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures npm as the package manager")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<TResource> WithNpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string? installCommand = null, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -1241,12 +1338,15 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">Additional command-line arguments passed to "bun install". When null, defaults are applied based on publish mode and lockfile presence.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Bun forwards script arguments without requiring the <c>--</c> command separator, so this method configures the resource to omit it.
     /// When publishing and a bun lockfile (<c>bun.lock</c> or <c>bun.lockb</c>) is present, <c>--frozen-lockfile</c> is used by default.
     /// Publishing to a container requires Bun to be present in the build image. This method configures a Bun build image when one is not already specified.
+    /// <see cref="PublishAsNpmScript{TResource}"/> also uses the Bun image for the runtime stage unless a custom runtime image is configured.
     /// To use a specific Bun version, configure a custom build image (for example, <c>oven/bun:&lt;tag&gt;</c>) using <see cref="ContainerResourceBuilderExtensions.WithDockerfileBaseImage{T}(IResourceBuilder{T}, string?, string?)"/>.
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// Run a Vite app using Bun as the package manager:
     /// <code lang="csharp">
@@ -1259,7 +1359,7 @@ public static class JavaScriptHostingExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures Bun as the package manager")]
+    [AspireExport]
     public static IResourceBuilder<TResource> WithBun<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -1286,6 +1386,7 @@ public static class JavaScriptHostingExtensions
                 PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
                 // bun supports passing script flags without the `--` separator.
                 CommandSeparator = null,
+                ResolveNpmScriptRuntimeImage = buildImage => buildImage,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
@@ -1326,7 +1427,8 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "yarn install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures yarn as the package manager")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<TResource> WithYarn<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -1404,13 +1506,15 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "pnpm install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures pnpm as the package manager")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<TResource> WithPnpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
         ArgumentNullException.ThrowIfNull(resource);
 
         var workingDirectory = resource.Resource.WorkingDirectory;
         var hasPnpmLock = File.Exists(Path.Combine(workingDirectory, "pnpm-lock.yaml"));
+        var hasPnpmWorkspace = File.Exists(Path.Combine(workingDirectory, "pnpm-workspace.yaml"));
 
         installArgs ??= GetDefaultPnpmInstallArgs(resource, hasPnpmLock);
 
@@ -1418,6 +1522,11 @@ public static class JavaScriptHostingExtensions
         if (hasPnpmLock)
         {
             packageFilesSourcePattern += " pnpm-lock.yaml";
+        }
+
+        if (hasPnpmWorkspace)
+        {
+            packageFilesSourcePattern += " pnpm-workspace.yaml";
         }
 
         resource
@@ -1428,6 +1537,12 @@ public static class JavaScriptHostingExtensions
                 CommandSeparator = null,
                 // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
                 InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
+                InitializeDockerRuntimeStage = stage =>
+                {
+                    // Corepack's shim is not enough by itself: without invoking pnpm during the image build,
+                    // the first container start can try to download pnpm before running the app.
+                    stage.Run("corepack enable pnpm && pnpm --version");
+                },
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
@@ -1456,7 +1571,7 @@ public static class JavaScriptHostingExtensions
     /// Use this method to specify custom build scripts for JavaScript application resources during
     /// deployment.
     /// </remarks>
-    [AspireExport(Description = "Specifies an npm script to run before starting the application")]
+    [AspireExport]
     public static IResourceBuilder<TResource> WithBuildScript<TResource>(this IResourceBuilder<TResource> resource, string scriptName, string[]? args = null) where TResource : JavaScriptAppResource
     {
         return resource.WithAnnotation(new JavaScriptBuildScriptAnnotation(scriptName, args));
@@ -1475,7 +1590,7 @@ public static class JavaScriptHostingExtensions
     /// Use this method to specify a custom script and its arguments that should be executed when the resource is executed
     /// in RunMode.
     /// </remarks>
-    [AspireExport(Description = "Specifies an npm script to run during development")]
+    [AspireExport]
     public static IResourceBuilder<TResource> WithRunScript<TResource>(this IResourceBuilder<TResource> resource, string scriptName, string[]? args = null) where TResource : JavaScriptAppResource
     {
         return resource.WithAnnotation(new JavaScriptRunScriptAnnotation(scriptName, args));
@@ -1548,6 +1663,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="builder">The resource builder for the JavaScript application.</param>
     /// <param name="browser">The browser to use for debugging. Defaults to <c>"msedge"</c>. Supported values include <c>"msedge"</c> and <c>"chrome"</c>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a child <see cref="BrowserDebuggerResource"/> that waits for the parent JavaScript
     /// application to start, then launches a browser debug session targeting the parent's HTTP or HTTPS endpoint.
@@ -1566,7 +1682,7 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Configures a browser debugger for the JavaScript application")]
+    [AspireExport]
     public static IResourceBuilder<T> WithBrowserDebugger<T>(
         this IResourceBuilder<T> builder,
         string browser = "msedge")

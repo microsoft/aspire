@@ -61,8 +61,9 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
         const appHosts = this._treeProvider.appHosts;
         const workspaceResources = this._treeProvider.workspaceResources;
+        const workspaceAppHost = this._treeProvider.workspaceAppHost;
         const workspaceAppHostPath = this._treeProvider.workspaceAppHostPath ?? '';
-        const hasRunningData = appHosts.length > 0 || workspaceResources.length > 0;
+        const hasRunningData = appHosts.length > 0 || workspaceResources.length > 0 || workspaceAppHost !== undefined;
         const findWorkspace = findWorkspaceResourceState(workspaceResources, workspaceAppHostPath);
 
         const lenses: vscode.CodeLens[] = [];
@@ -78,14 +79,25 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
         for (const resource of resources) {
             // For pipeline steps the whole statement maps to a single Add*(...) call, so
-            // anchoring at the top of the chain reads naturally. For resources, however,
-            // a single fluent chain can declare several (e.g.
-            // `builder.AddPostgres("pg").AddDatabase("db")`) and collapsing them all to
-            // the chain's start line would stack two state/action lenses on the same
-            // line — the user can't tell which "Stopped" / which "Stop" belongs to which
-            // resource. Anchor each resource lens at its own call line instead.
-            const lensLine = resource.kind === 'pipelineStep'
-                ? (resource.statementStartLine ?? resource.range.start.line)
+            // anchoring at the top of the chain reads naturally.
+            //
+            // For resources, a single fluent chain can declare several (e.g.
+            // `builder.AddPostgres("pg").AddDatabase("db")`). If we collapsed all of those
+            // to the chain's start line their state/action lenses would stack on the same
+            // line and the user couldn't tell which "Stopped" / which "Stop" belongs to
+            // which resource. So when more than one resource shares a statement we anchor
+            // each at its own call line; when a chain declares just one resource we use
+            // the statement-start line so the lens sits above the whole declaration
+            // (e.g. above `const nodePlayer = await builder` rather than between that
+            // line and the `.addNodeApp(...)` call).
+            const statementStart = resource.statementStartLine ?? resource.range.start.line;
+            const sharedWithOthers = resource.kind === 'resource'
+                && resources.some(other =>
+                    other !== resource
+                    && other.kind === 'resource'
+                    && (other.statementStartLine ?? other.range.start.line) === statementStart);
+            const lensLine = (resource.kind === 'pipelineStep' || !sharedWithOthers)
+                ? statementStart
                 : resource.range.start.line;
             const lineRange = new vscode.Range(lensLine, 0, lensLine, 0);
 
@@ -162,8 +174,8 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
      * Resolution order:
      *  1. Exact path or same-directory match against {@link AppHostDataRepository.appHosts}
      *     (covers global mode and any workspace AppHosts that surface there).
-     *  2. The repository's `workspaceAppHostPath` when workspace describe data is live
-     *     and the document lives in the same directory as that AppHost.
+     *  2. The repository's `workspaceAppHostPath` when workspace live data identifies
+     *     a running AppHost and the document lives in the same directory as that AppHost.
      *
      * The document path itself is intentionally not used as a fallback — for C#
      * AppHosts the CLI requires a `.csproj`, not a `.cs` file.
@@ -185,8 +197,9 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         if (match) {
             return match.appHostPath;
         }
-        if (workspaceAppHostPath && workspaceResources.length > 0) {
-            if (workspaceAppHostPath === docPath || path.dirname(workspaceAppHostPath) === docDir) {
+        if (workspaceAppHostPath && (workspaceResources.length > 0 || this._dataRepository.workspaceAppHost !== undefined)) {
+            const workspaceAppHostDir = path.dirname(workspaceAppHostPath);
+            if (workspaceAppHostPath === docPath || workspaceAppHostDir === docDir) {
                 return workspaceAppHostPath;
             }
         }
@@ -276,12 +289,14 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         if (resource.commands) {
             for (const [cmdName, cmd] of Object.entries(resource.commands) as [string, ResourceCommandJson][]) {
                 if (!standardCommands.has(cmdName)) {
-                    const label = codeLensCommand(cmd.description ?? cmdName);
+                    const displayName = getNormalizedCommandText(cmd.displayName);
+                    const description = getNormalizedCommandText(cmd.description);
+                    const label = codeLensCommand(displayName ?? cmdName);
                     lenses.push(new vscode.CodeLens(range, {
                         title: label,
                         command: 'aspire-vscode.codeLensResourceAction',
-                        tooltip: cmd.description ?? cmdName,
-                        arguments: [resource.name, cmdName, appHost.appHostPath],
+                        tooltip: description ?? displayName ?? cmdName,
+                        arguments: [resource.name, cmdName, appHost.appHostPath, cmd],
                     }));
                 }
             }
@@ -327,4 +342,9 @@ export function getCodeLensStateLabel(state: string, stateStyle: string, exitCod
         default:
             return state || codeLensResourceStopped;
     }
+}
+
+function getNormalizedCommandText(value: string | null | undefined): string | undefined {
+    const normalized = value?.trim();
+    return normalized ? normalized : undefined;
 }

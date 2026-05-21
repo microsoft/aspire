@@ -81,9 +81,75 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string IncludeHiddenOptionDescription {
+            get {
+                return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
+            }
+        }
+
         internal static string FormatOptionDescription {
             get {
                 return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string LsCommandDescription {
+            get {
+                return ResourceManager.GetString("LsCommandDescription", resourceCulture);
+            }
+        }
+
+        internal static string LsFormatOptionDescription {
+            get {
+                return ResourceManager.GetString("LsFormatOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string LsAllOptionDescription {
+            get {
+                return ResourceManager.GetString("LsAllOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string LsStreamOptionDescription {
+            get {
+                return ResourceManager.GetString("LsStreamOptionDescription", resourceCulture);
+            }
+        }
+
+        internal static string LsStreamRequiresJson {
+            get {
+                return ResourceManager.GetString("LsStreamRequiresJson", resourceCulture);
+            }
+        }
+
+        internal static string LsNoCandidateAppHostsFound {
+            get {
+                return ResourceManager.GetString("LsNoCandidateAppHostsFound", resourceCulture);
+            }
+        }
+
+        internal static string LsSearchingForAppHostsStatus {
+            get {
+                return ResourceManager.GetString("LsSearchingForAppHostsStatus", resourceCulture);
+            }
+        }
+
+        internal static string HeaderPath {
+            get {
+                return ResourceManager.GetString("HeaderPath", resourceCulture);
+            }
+        }
+
+        internal static string HeaderLanguage {
+            get {
+                return ResourceManager.GetString("HeaderLanguage", resourceCulture);
+            }
+        }
+
+        internal static string HeaderStatus {
+            get {
+                return ResourceManager.GetString("HeaderStatus", resourceCulture);
             }
         }
 
@@ -144,6 +210,12 @@ namespace Aspire.Cli.Resources {
         internal static string PipelineStepsSummaryTitle {
             get {
                 return ResourceManager.GetString("PipelineStepsSummaryTitle", resourceCulture);
+            }
+        }
+
+        internal static string NonInteractiveRequiresYesFormat {
+            get {
+                return ResourceManager.GetString("NonInteractiveRequiresYesFormat", resourceCulture);
             }
         }
     }

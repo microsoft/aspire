@@ -76,6 +76,7 @@ public static class BrowserLogsBuilderExtensions
     /// <c>Aspire:Hosting:BrowserLogs</c> and otherwise defaults to <see cref="BrowserUserDataMode.Shared"/>.
     /// </param>
     /// <returns>A reference to the original <see cref="IResourceBuilder{T}"/> for further chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method adds a child browser logs resource beneath the parent resource represented by <paramref name="builder"/>.
@@ -111,7 +112,7 @@ public static class BrowserLogsBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREBROWSERLOGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.")]
+    [AspireExport]
     public static IResourceBuilder<T> WithBrowserLogs<T>(
         this IResourceBuilder<T> builder,
         string? browser = null,
@@ -203,7 +204,7 @@ public static class BrowserLogsBuilderExtensions
                     try
                     {
                         var configurationManager = context.ServiceProvider.GetRequiredService<BrowserLogsConfigurationManager>();
-                        return await configurationManager.ConfigureAsync(browserLogsResource, context.CancellationToken).ConfigureAwait(false);
+                        return await configurationManager.ConfigureAsync(browserLogsResource, context.Arguments, context.CancellationToken).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
@@ -215,6 +216,12 @@ public static class BrowserLogsBuilderExtensions
                     Description = BrowserCommandStrings.ConfigureTrackedBrowserDescription,
                     IconName = "Settings",
                     IconVariant = IconVariant.Regular,
+                    Arguments = BrowserLogsConfigurationManager.CreateArgumentDefinitions(browserLogsResource, builder.ApplicationBuilder.UserSecretsManager.IsAvailable),
+                    ValidateArguments = context =>
+                    {
+                        var configurationManager = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
+                        return configurationManager.ValidateInputsAsync(browserLogsResource, context);
+                    },
                     UpdateState = context =>
                     {
                         var interactionService = context.ServiceProvider.GetRequiredService<IInteractionService>();

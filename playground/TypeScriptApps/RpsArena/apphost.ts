@@ -1,7 +1,7 @@
 // Rock Paper Scissors Arena — Aspire TypeScript AppHost
 // A polyglot game: C# Game Master, Python & Node.js players, React frontend, PostgreSQL
 
-import { createBuilder, ContainerLifetime, type ExecuteCommandContext, type ExecuteCommandResult } from './.modules/aspire.js';
+import { createBuilder, type ExecuteCommandContext, type ExecuteCommandResult } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -10,7 +10,7 @@ const builder = await createBuilder();
 // Persistent lifetime so data survives restarts during development.
 const postgres = await builder
     .addPostgres("postgres")
-    .withLifetime(ContainerLifetime.Persistent)
+    .withPersistentLifetime()
     .withPgAdmin()
     .withDataVolume();
 

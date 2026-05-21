@@ -267,6 +267,69 @@ public class BrowserPageSessionTests
         await session.DisposeAsync();
     }
 
+    [Fact]
+    public async Task MonitorAsync_CompletesWithConnectionLostWhenReconnectTimesOut()
+    {
+        var host = new TestBrowserHost();
+        var firstConnection = new FakeBrowserLogsCdpConnection
+        {
+            CreatedTargetId = "target-1",
+            AttachSessionId = "target-session-1"
+        };
+        var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 4, 26, 0, 0, 0, TimeSpan.Zero));
+
+        // All reconnect attempts after the first connection will fail.
+        var reconnectAttempts = 0;
+        BrowserLogsCdpConnectionFactory connectionFactory = (eventHandler, logger, cancellationToken) =>
+        {
+            if (reconnectAttempts == 0)
+            {
+                reconnectAttempts++;
+                firstConnection.SetEventHandler(eventHandler);
+                return Task.FromResult<IBrowserLogsCdpConnection>(firstConnection);
+            }
+
+            reconnectAttempts++;
+            throw new InvalidOperationException("Simulated connection failure.");
+        };
+
+        var session = await BrowserPageSession.StartAsync(
+            host,
+            "session-0001",
+            new Uri("https://localhost:5001/"),
+            new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
+            connectionFactory,
+            static _ => ValueTask.CompletedTask,
+            NullLogger<BrowserLogsSessionManager>.Instance,
+            timeProvider,
+            reuseInitialBlankTarget: false,
+            CancellationToken.None);
+
+        Assert.Equal("target-1", session.TargetId);
+
+        // Trigger connection loss to start the reconnect loop.
+        firstConnection.FailCompletion(new InvalidOperationException("Socket reset."));
+
+        // Advance time in a concurrent task so that each Task.Delay timer in the reconnect loop fires,
+        // allowing the loop to iterate and eventually exceed the 5-second recovery deadline.
+        _ = Task.Run(async () =>
+        {
+            while (!session.Completion.IsCompleted)
+            {
+                await Task.Delay(10);
+                timeProvider.Advance(TimeSpan.FromSeconds(1));
+            }
+        });
+
+        var result = await session.Completion.DefaultTimeout();
+        Assert.Equal(BrowserPageSessionCompletionKind.ConnectionLost, result.CompletionKind);
+        Assert.NotNull(result.Error);
+        Assert.True(firstConnection.Disposed);
+        Assert.True(reconnectAttempts > 1, $"Expected multiple reconnect attempts but got {reconnectAttempts}.");
+
+        await session.DisposeAsync();
+    }
+
     private static BrowserLogsCdpConnectionFactory CreateConnectionFactory(params FakeBrowserLogsCdpConnection[] connections)
     {
         var nextConnectionIndex = 0;

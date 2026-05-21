@@ -10,9 +10,26 @@ using OpenTelemetry.Trace;
 
 namespace Aspire.Cli.Telemetry;
 
+// This file is the CLI's OpenTelemetry wiring point. It decides which ActivitySources
+// are listened to and where they are exported; the activity creation APIs live in
+// AspireCliTelemetry and ProfilingTelemetry.
+//
+// Keep reported telemetry, profiling telemetry, and debug diagnostics on separate providers.
+// Reported telemetry is allowed to leave the machine through Azure Monitor, while
+// profiling and diagnostic telemetry are intentionally local and opt-in because they can
+// include high-cardinality process, path, and startup timing details.
+//
+// Enablement is intentionally separate:
+// - Reported telemetry is on by default and is disabled with ASPIRE_CLI_TELEMETRY_OPTOUT=true.
+// - Profiling telemetry requires ASPIRE_PROFILING_ENABLED=true plus OTEL_EXPORTER_OTLP_ENDPOINT
+//   (and typically OTEL_EXPORTER_OTLP_PROTOCOL=grpc). ASPIRE_STARTUP_PROFILING_ENABLED is the
+//   legacy alias that remains supported for existing scripts.
+// - DEBUG-only diagnostics use ASPIRE_CLI_CONSOLE_EXPORTER_LEVEL=Diagnostic, or OTLP export when
+//   OTEL_EXPORTER_OTLP_ENDPOINT is set without profiling enabled.
+
 /// <summary>
 /// Manages OpenTelemetry TracerProvider instances for the CLI.
-/// Maintains separate providers for Azure Monitor (production telemetry) and debug exporters (OTLP/console).
+/// Maintains separate providers for reported telemetry, profiling telemetry, and debug diagnostics.
 /// </summary>
 internal sealed class TelemetryManager : IDisposable
 {
@@ -26,11 +43,11 @@ internal sealed class TelemetryManager : IDisposable
     // Chosen to provide time to send remaining telemetry without noticeably delaying exit.
     private const int ShutDownTimeoutMilliseconds = 200;
 #endif
+    private const int ProfilingForceFlushTimeoutMilliseconds = 5000;
 
     private readonly TracerProvider? _azureMonitorProvider;
-#if DEBUG
-    private readonly TracerProvider? _diagnosticProvider;
-#endif
+    private readonly TracerProvider? _profilingProvider;
+    private readonly TracerProvider? _debugDiagnosticProvider;
 
     private bool _shuttingDown;
 
@@ -45,16 +62,26 @@ internal sealed class TelemetryManager : IDisposable
         var hasOptOutArg = args?.Any(a => CommonOptionNames.InformationalOptionNames.Contains(a)) ?? false;
         var telemetryOptOut = hasOptOutArg || configuration.GetBool(AspireCliTelemetry.TelemetryOptOutConfigKey, defaultValue: false);
 
+        var profilingEnabled =
+            configuration.GetBool(Aspire.Hosting.KnownConfigNames.ProfilingEnabled) ??
+            configuration.GetBool(Aspire.Hosting.KnownConfigNames.Legacy.StartupProfilingEnabled, defaultValue: false);
+        var requestedOtlpExporter = !string.IsNullOrEmpty(configuration[AspireCliTelemetry.OtlpExporterEndpointConfigKey]);
+        var useProfilingProvider = profilingEnabled && requestedOtlpExporter;
+
 #if DEBUG
-        var useOtlpExporter = !string.IsNullOrEmpty(configuration[AspireCliTelemetry.OtlpExporterEndpointConfigKey]);
         var consoleExporterLevel = configuration.GetEnum<ConsoleExporterLevel>(AspireCliTelemetry.ConsoleExporterLevelConfigKey, defaultValue: null);
+        // Preserve the DEBUG-only diagnostic OTLP path for non-profiling diagnostics. When
+        // profiling is enabled, the same OTLP endpoint is reserved for the profiling provider
+        // so reported/diagnostic sources do not get mixed into startup profiling exports.
+        var useDebugDiagnosticOtlpExporter = requestedOtlpExporter && !profilingEnabled;
 #else
-        var useOtlpExporter = false;
         ConsoleExporterLevel? consoleExporterLevel = null;
+        var useDebugDiagnosticOtlpExporter = false;
 #endif
+        var useDebugDiagnosticProvider = useDebugDiagnosticOtlpExporter || consoleExporterLevel == ConsoleExporterLevel.Diagnostic;
 
         // Don't create any providers if nothing is enabled
-        if (telemetryOptOut && !useOtlpExporter && consoleExporterLevel is null)
+        if (telemetryOptOut && !useProfilingProvider && !useDebugDiagnosticProvider)
         {
             return;
         }
@@ -87,14 +114,19 @@ internal sealed class TelemetryManager : IDisposable
             _azureMonitorProvider = azureMonitorBuilder.Build();
         }
 
-#if DEBUG
-        // Create diagnostic provider if any diagnostic exporter is enabled.
-        // The diagnostic provider exports diagnostic telemetry.
-        if (useOtlpExporter || consoleExporterLevel == ConsoleExporterLevel.Diagnostic)
+        if (useProfilingProvider)
+        {
+            _profilingProvider = Sdk.CreateTracerProviderBuilder()
+                .AddSource(ProfilingTelemetry.ActivitySourceName)
+                .SetResourceBuilder(resource)
+                .AddOtlpExporter()
+                .Build();
+        }
+
+        if (useDebugDiagnosticProvider)
         {
             var diagnosticBuilder = Sdk.CreateTracerProviderBuilder()
                 .AddSource(AspireCliTelemetry.DiagnosticsActivitySourceName)
-                .AddSource(AspireCliTelemetry.ReportedActivitySourceName)
                 .SetResourceBuilder(resource);
 
             if (consoleExporterLevel == ConsoleExporterLevel.Diagnostic)
@@ -102,14 +134,13 @@ internal sealed class TelemetryManager : IDisposable
                 diagnosticBuilder.AddConsoleExporter();
             }
 
-            if (useOtlpExporter)
+            if (useDebugDiagnosticOtlpExporter)
             {
                 diagnosticBuilder.AddOtlpExporter();
             }
 
-            _diagnosticProvider = diagnosticBuilder.Build();
+            _debugDiagnosticProvider = diagnosticBuilder.Build();
         }
-#endif
     }
 
     /// <summary>
@@ -117,12 +148,33 @@ internal sealed class TelemetryManager : IDisposable
     /// </summary>
     public bool HasAzureMonitor => _azureMonitorProvider is not null;
 
-#if DEBUG
     /// <summary>
-    /// Gets whether any diagnostic exporter is enabled.
+    /// Gets whether profiling telemetry export is enabled.
     /// </summary>
-    public bool HasDiagnosticProvider => _diagnosticProvider is not null;
-#endif
+    public bool HasProfilingProvider => _profilingProvider is not null;
+
+    /// <summary>
+    /// Gets whether DEBUG-only diagnostic telemetry export is enabled.
+    /// </summary>
+    public bool HasDiagnosticProvider => _debugDiagnosticProvider is not null;
+
+    /// <summary>
+    /// Flushes profiling telemetry without shutting down other telemetry providers.
+    /// </summary>
+    public Task ForceFlushProfilingAsync()
+    {
+        // OpenTelemetry's TracerProvider flush API is the synchronous
+        // ForceFlush(int timeoutMilliseconds) extension method. It can block until the batch
+        // exporter drains or the timeout expires, so keep the CLI profile export path async by
+        // running that bounded wait on the thread pool; callers still await this so export does not
+        // race ahead of pending spans. Adding cancellation here would either skip the flush before
+        // it starts or stop waiting while the synchronous flush keeps running; the provider timeout
+        // is the actual bound for this best-effort drain.
+        return Task.Run(() =>
+        {
+            _profilingProvider?.ForceFlush(ProfilingForceFlushTimeoutMilliseconds);
+        });
+    }
 
     /// <summary>
     /// Shuts down the telemetry providers, flushing any pending telemetry.
@@ -134,9 +186,8 @@ internal sealed class TelemetryManager : IDisposable
         return Task.Run(() =>
         {
             _azureMonitorProvider?.Shutdown(ShutDownTimeoutMilliseconds);
-#if DEBUG
-            _diagnosticProvider?.Shutdown(ShutDownTimeoutMilliseconds);
-#endif
+            _profilingProvider?.Shutdown(ShutDownTimeoutMilliseconds);
+            _debugDiagnosticProvider?.Shutdown(ShutDownTimeoutMilliseconds);
         });
     }
 
@@ -154,9 +205,8 @@ internal sealed class TelemetryManager : IDisposable
             // The shutdown timeout is zero so not to wait for telemetry to be flushed. Don't want to delay tests.
             // Dispose isn't used here because it always flushes telemetry and waits for completion.
             _azureMonitorProvider?.Shutdown(0);
-#if DEBUG
-            _diagnosticProvider?.Shutdown(0);
-#endif
+            _profilingProvider?.Shutdown(0);
+            _debugDiagnosticProvider?.Shutdown(0);
         }
     }
 }

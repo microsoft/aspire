@@ -29,6 +29,8 @@ internal sealed class DestroyCommand : PipelineCommandBase
             Description = DestroyCommandStrings.YesOptionDescription
         };
         Options.Add(_yesOption);
+
+        AddNonInteractiveRequiresYesValidator(this, _yesOption);
     }
 
     protected override string OperationCompletedPrefix => DestroyCommandStrings.OperationCompletedPrefix;
@@ -50,7 +52,7 @@ internal sealed class DestroyCommand : PipelineCommandBase
             baseArgs.AddRange(["--yes", "true"]);
         }
 
-        var logLevel = parseResult.GetValue(s_logLevelOption);
+        var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
         if (!string.IsNullOrEmpty(logLevel))
         {
             baseArgs.AddRange(["--log-level", logLevel!]);

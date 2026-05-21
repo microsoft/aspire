@@ -46,6 +46,11 @@ public static partial class AzureAppServiceEnvironmentExtensions
                 name: AppServicePipelineStepMarker.StepName,
                 action: ctx =>
                 {
+                    if (!ctx.ExecutionContext.IsPublishMode)
+                    {
+                        return Task.CompletedTask;
+                    }
+
                     if (!ctx.Model.Resources.OfType<AzureAppServiceEnvironmentResource>().Any())
                     {
                         foreach (var r in ctx.Model.GetComputeResources())
@@ -76,7 +81,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport(Description = "Adds an Azure App Service environment resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> AddAzureAppServiceEnvironment(this IDistributedApplicationBuilder builder, string name)
     {
         builder.AddAzureAppServiceInfrastructureCore();
@@ -269,6 +275,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
     /// <param name="upgrade">Whether to upgrade HTTP endpoints to HTTPS. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// When disabled (<c>false</c>), HTTP endpoints will use HTTP scheme and port 80 in Azure App Service.
     /// Note that Azure App Service forces HTTP to HTTPS redirects at the platform level,
@@ -281,7 +288,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     ///     .WithHttpsUpgrade(false);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures whether HTTP endpoints are automatically upgraded to HTTPS in Azure App Service")]
+    [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool upgrade = true)
     {
         builder.Resource.PreserveHttpEndpoints = !upgrade;
@@ -294,7 +301,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
     /// <param name="enable">Whether to include the Aspire dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
-    [AspireExport(Description = "Configures whether the Aspire dashboard is included in the Azure App Service environment")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDashboard(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool enable = true)
     {
         builder.Resource.EnableDashboard = enable;
@@ -314,7 +322,10 @@ public static partial class AzureAppServiceEnvironmentExtensions
         return builder;
     }
 
-    [AspireExport("withAzureApplicationInsights", Description = "Enables Azure Application Insights for the Azure App Service environment")]
+    /// <summary>
+    /// Enables Azure Application Insights for the Azure App Service environment
+    /// </summary>
+    [AspireExport("withAzureApplicationInsights")]
     internal static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsightsForPolyglot(
         this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>), typeof(IResourceBuilder<AzureApplicationInsightsResource>))] object? applicationInsights = null)
@@ -391,7 +402,10 @@ public static partial class AzureAppServiceEnvironmentExtensions
         return builder;
     }
 
-    [AspireExport("withDeploymentSlot", Description = "Configures the deployment slot for all Azure App Services in the environment")]
+    /// <summary>
+    /// Configures the deployment slot for all Azure App Services in the environment
+    /// </summary>
+    [AspireExport("withDeploymentSlot")]
     internal static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlotForPolyglot(
         this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object deploymentSlot)

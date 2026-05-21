@@ -121,10 +121,14 @@ runs:
           exit 1
         fi
 
-        # Get list of changed files for pull requests
+        # Get list of changed files for pull requests.
+        # Use a three-dot (merge-base) diff so we only see files the PR itself changed,
+        # not files that diverged on the base branch since the PR was opened. This matches
+        # what `gh pr view --json files` and the GitHub PR Files tab show. A two-dot diff
+        # would also include unrelated base-branch changes when the PR is behind its base.
         BASE_REF="${{ github.event.pull_request.base.sha }}"
         HEAD_REF="${{ github.event.pull_request.head.sha }}"
-        if ! CHANGED_FILES=$(git diff --name-only "$BASE_REF".."$HEAD_REF" 2>/dev/null); then
+        if ! CHANGED_FILES=$(git diff --name-only "$BASE_REF"..."$HEAD_REF" 2>/dev/null); then
           echo "Error: Failed to get changed files. Base ref: $BASE_REF HEAD ref: $HEAD_REF"
           exit 1
         fi

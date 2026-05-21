@@ -69,7 +69,7 @@ internal sealed class ApiSearchCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -85,14 +85,14 @@ internal sealed class ApiSearchCommand : BaseCommand
         if (items.Count is 0)
         {
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ApiCommandStrings.NoResultsFound, query));
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         if (format is OutputFormat.Json)
         {
             var json = JsonSerializer.Serialize([.. items], JsonSourceGenerationContext.RelaxedEscaping.ApiSearchResultArray);
             InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, ApiCommandStrings.FoundSearchResults, items.Count, query));
@@ -115,6 +115,6 @@ internal sealed class ApiSearchCommand : BaseCommand
         }
 
         InteractionService.DisplayRenderable(table);
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

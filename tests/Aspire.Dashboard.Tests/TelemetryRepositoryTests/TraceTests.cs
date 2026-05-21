@@ -1302,6 +1302,51 @@ public class TraceTests
     }
 
     [Fact]
+    public void GetTraces_NotEqualFilter_NonMatchingValue_ReturnsTrace()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "resource1", instanceId: "123"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10), attributes: [KeyValuePair.Create("key1", "value1")]) }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+
+        // Act - filter for key1 != "other_value" should return the trace since key1 is "value1"
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = new ResourceKey("resource1", InstanceId: null),
+            FilterText = string.Empty,
+            StartIndex = 0,
+            Count = 10,
+            Filters = [
+                new FieldTelemetryFilter { Field = "key1", Condition = FilterCondition.NotEqual, Value = "other_value" }
+            ]
+        });
+
+        // Assert
+        Assert.Collection(traces.PagedResult.Items,
+            trace =>
+            {
+                AssertId("1", trace.TraceId);
+            });
+    }
+
+    [Fact]
     public void AddTraces_OutOfOrder_FullName()
     {
         // Arrange

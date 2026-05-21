@@ -21,6 +21,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// with auto-inferred listeners and one or more <c>HTTPRoute</c> resources in the Helm chart output.
 /// </para>
 /// </remarks>
+/// <ats-remarks />
 /// <example>
 /// <code>
 /// var k8s = builder.AddKubernetesEnvironment("k8s");
@@ -93,8 +94,10 @@ internal sealed record GatewayRouteConfig(
 
 /// <summary>
 /// Stores TLS configuration for a <see cref="KubernetesGatewayResource"/>.
-/// Configures an HTTPS listener on the Gateway with TLS termination.
+/// Configures an HTTPS listener on the Gateway with TLS termination. The set of hostnames
+/// the listener applies to is resolved from the gateway's <see cref="KubernetesGatewayResource.Hostnames"/>
+/// at manifest-emit time, so callers can register hostnames before or after WithTls without
+/// affecting the generated listener.
 /// </summary>
 internal sealed record GatewayTlsConfig(
-    ReferenceExpression SecretName,
-    List<ReferenceExpression> Hosts);
+    ReferenceExpression SecretName);

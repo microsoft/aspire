@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Xml.Linq;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -77,6 +79,11 @@ internal static class CliE2EAutomatorHelpers
         }
     }
 
+    internal static Task WaitUntilAppHostStoppedSuccessfullyAsync(this Hex1bTerminalAutomator auto, TimeSpan timeout)
+    {
+        return auto.WaitUntilTextAsync(GetAppHostStoppedSuccessfullySuffix(), timeout: timeout);
+    }
+
     /// <summary>
     /// Installs the Aspire CLI inside a Docker container using the given install strategy.
     /// Handles all modes: LocalHive, PullRequest, and InstallScript.
@@ -135,6 +142,21 @@ internal static class CliE2EAutomatorHelpers
         }
 
         await auto.VerifyAspireCliVersionAsync(strategy, counter);
+    }
+
+    private static string GetAppHostStoppedSuccessfullySuffix()
+    {
+        const string appHostMarker = "__AspireAppHost__";
+
+        var formattedMessage = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostMarker);
+        var markerIndex = formattedMessage.IndexOf(appHostMarker, StringComparison.Ordinal);
+        var suffixStart = markerIndex + appHostMarker.Length;
+        if (markerIndex < 0 || suffixStart == formattedMessage.Length)
+        {
+            throw new InvalidOperationException($"Unable to derive a waitable suffix from {nameof(StopCommandStrings.AppHostStoppedSuccessfully)}.");
+        }
+
+        return formattedMessage[suffixStart..];
     }
 
     /// <summary>
@@ -757,7 +779,7 @@ internal static class CliE2EAutomatorHelpers
 
         await auto.TypeAsync(
             $"DASHBOARD_URL=$(sed -n " +
-            "'s/.*\"dashboardUrl\"[[:space:]]*:[[:space:]]*\"\\(https\\?:\\/\\/localhost:[0-9]*\\).*/\\1/p' " +
+            "'s/.*\"dashboardUrl\"[[:space:]]*:[[:space:]]*\"\\(https\\?:\\/\\/[a-z.]*localhost:[0-9]*\\).*/\\1/p' " +
             $"\"{jsonFile}\" | head -1)");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
@@ -1000,6 +1022,59 @@ internal static class CliE2EAutomatorHelpers
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Sends a JSON-RPC initialize/initialized/tools-call sequence to <c>aspire agent mcp</c> and verifies the response.
+    /// </summary>
+    /// <param name="auto">The terminal automator.</param>
+    /// <param name="counter">The prompt sequence counter.</param>
+    /// <param name="toolName">The MCP tool name to invoke (e.g. <c>list_structured_logs</c>).</param>
+    /// <param name="expectedMarker">A string expected in the tool call output (e.g. <c>STRUCTURED LOGS DATA</c>).</param>
+    /// <param name="mcpArgs">Additional arguments to pass to <c>aspire agent mcp</c> (e.g. <c>--dashboard-url "..."</c>).</param>
+    internal static async Task CallAgentMcpToolAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string toolName,
+        string expectedMarker,
+        string? mcpArgs = null)
+    {
+        var argsFragment = mcpArgs is not null ? $" {mcpArgs}" : string.Empty;
+
+        // Send JSON-RPC messages to the MCP server via a compound command.
+        // The sleeps ensure proper protocol timing between initialize, initialized notification, and tool call.
+        await auto.TypeAsync(
+            "{ " +
+            "echo '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"e2e-test\",\"version\":\"0.1.0\"}}}'; " +
+            "sleep 3; " +
+            "echo '{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}'; " +
+            "sleep 1; " +
+            $"echo '{{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{{\"name\":\"{toolName}\",\"arguments\":{{}}}}}}'; " +
+            "sleep 15; " +
+            $"}} | aspire agent mcp{argsFragment} > /tmp/mcp_out.txt 2>/tmp/mcp_err.txt || true");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+        // Dump output for debugging visibility in the recording
+        await auto.TypeAsync("cat /tmp/mcp_out.txt | head -50");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // Check that the response contains the expected data marker
+        await auto.TypeAsync(
+            $"if grep -q '{expectedMarker}' /tmp/mcp_out.txt; then echo 'MCP_DATA_PRESENT'; " +
+            $"elif grep -q '{toolName}' /tmp/mcp_out.txt; then echo 'MCP_TOOL_FOUND_BUT_NO_DATA'; " +
+            "else echo 'MCP_DATA_MISSING'; fi");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("MCP_DATA_PRESENT", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForAnyPromptAsync(counter);
+
+        // Verify the initialize response was received (confirms MCP handshake worked)
+        await auto.TypeAsync(
+            "grep -q 'aspire-mcp-server' /tmp/mcp_out.txt && echo 'MCP_INIT_OK' || echo 'MCP_INIT_MISSING'");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("MCP_INIT_OK", timeout: TimeSpan.FromSeconds(10));
+        await auto.WaitForAnyPromptAsync(counter);
     }
 
     private static bool ShouldPreserveLocalWorkspace()

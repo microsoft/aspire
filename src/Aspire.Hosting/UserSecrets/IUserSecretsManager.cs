@@ -33,7 +33,7 @@ public interface IUserSecretsManager
     /// <param name="name">The name of the secret.</param>
     /// <param name="value">The value of the secret.</param>
     /// <returns>True if the secret was set successfully; otherwise, false.</returns>
-    [AspireExport(Description = "Attempts to set a user secret value")]
+    [AspireExport]
     bool TrySetSecret(string name, string value);
 
     /// <summary>
@@ -44,7 +44,7 @@ public interface IUserSecretsManager
     /// <remarks>
     /// The default implementation returns <see langword="false"/> so existing implementations remain compatible.
     /// </remarks>
-    [AspireExport(Description = "Attempts to delete a user secret value")]
+    [AspireExport]
     bool TryDeleteSecret(string name)
     {
         return false;

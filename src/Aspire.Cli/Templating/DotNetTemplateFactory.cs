@@ -9,14 +9,12 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using NuGetPackage = Aspire.Shared.NuGetPackageCli;
-using Semver;
-using Spectre.Console;
 
 namespace Aspire.Cli.Templating;
 
@@ -24,13 +22,10 @@ internal class DotNetTemplateFactory(
     IInteractionService interactionService,
     IDotNetCliRunner runner,
     ICertificateService certificateService,
-    IPackagingService packagingService,
     INewCommandPrompter prompter,
-    ITemplateVersionPrompter templateVersionPrompter,
     CliExecutionContext executionContext,
     IDotNetSdkInstaller sdkInstaller,
     IFeatures features,
-    IConfigurationService configurationService,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
     TemplateNuGetConfigService templateNuGetConfigService)
@@ -137,7 +132,7 @@ internal class DotNetTemplateFactory(
         yield return new CallbackTemplate(
             "aspire-starter",
             TemplatingStrings.AspireStarter_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyExtraAspireStarterOptions,
             (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireStarterOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
@@ -146,7 +141,7 @@ internal class DotNetTemplateFactory(
         yield return new CallbackTemplate(
             "aspire-ts-cs-starter",
             TemplatingStrings.AspireJsFrontendStarter_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyExtraAspireJsFrontendStarterOptions,
             (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireJsFrontendStarterOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
@@ -157,7 +152,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 KnownTemplateId.DotNetEmptyAppHost,
                 TemplatingStrings.AspireEmptyDotNetTemplate_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 ApplyDevLocalhostTldOption,
                 ApplyTemplateWithNoExtraArgsAsync,
                 languageId: KnownLanguageId.CSharp,
@@ -167,7 +162,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 "aspire-apphost",
                 TemplatingStrings.AspireAppHost_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 ApplyDevLocalhostTldOption,
                 ApplyTemplateWithNoExtraArgsAsync,
                 languageId: KnownLanguageId.CSharp
@@ -176,7 +171,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 "aspire-servicedefaults",
                 TemplatingStrings.AspireServiceDefaults_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 _ => { },
                 ApplyTemplateWithNoExtraArgsAsync,
                 languageId: KnownLanguageId.CSharp
@@ -187,7 +182,7 @@ internal class DotNetTemplateFactory(
         var msTestTemplate = new CallbackTemplate(
             "aspire-mstest",
             TemplatingStrings.AspireMSTest_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
             ApplyTemplateWithNoExtraArgsAsync,
             languageId: KnownLanguageId.CSharp
@@ -197,7 +192,7 @@ internal class DotNetTemplateFactory(
         var nunitTemplate = new CallbackTemplate(
             "aspire-nunit",
             TemplatingStrings.AspireNUnit_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
             ApplyTemplateWithNoExtraArgsAsync,
             languageId: KnownLanguageId.CSharp
@@ -207,7 +202,7 @@ internal class DotNetTemplateFactory(
         var xunitTemplate = new CallbackTemplate(
             "aspire-xunit",
             TemplatingStrings.AspireXUnit_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             _ => { },
             (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireXUnitOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp
@@ -220,7 +215,7 @@ internal class DotNetTemplateFactory(
             yield return new CallbackTemplate(
                 "aspire-test",
                 TemplatingStrings.IntegrationTestsTemplate_Description,
-                projectName => $"./{projectName}",
+                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 _ => { },
                 async (template, inputs, parseResult, ct) =>
                 {
@@ -241,7 +236,7 @@ internal class DotNetTemplateFactory(
         return new CallbackTemplate(
             "aspire-apphost-singlefile",
             TemplatingStrings.AspireAppHostSingleFile_Description,
-            projectName => $"./{projectName}",
+            (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyDevLocalhostTldOption,
             (template, inputs, parseResult, ct) => ApplySingleFileTemplate(template, inputs, parseResult, PromptForExtraAspireSingleFileOptionsAsync, ct),
             languageId: KnownLanguageId.CSharp,
@@ -442,13 +437,18 @@ internal class DotNetTemplateFactory(
 
     private async Task<TemplateResult> ApplyTemplateAsync(CallbackTemplate template, TemplateInputs inputs, ParseResult parseResult, Func<ParseResult, CancellationToken, Task<string[]>> extraArgsCallback, CancellationToken cancellationToken)
     {
-        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken))
+        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken: cancellationToken))
         {
-            return new TemplateResult(ExitCodeConstants.SdkNotInstalled);
+            return new TemplateResult(CliExitCodes.SdkNotInstalled);
         }
 
-        var name = await GetProjectNameAsync(inputs, parseResult, cancellationToken);
+        var name = await GetProjectNameAsync(inputs, template.Name, parseResult, cancellationToken);
         var outputPath = await GetOutputPathAsync(inputs, template.PathDeriver, name, parseResult, cancellationToken);
+
+        if (outputPath is null)
+        {
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
 
         return await ApplyTemplateAsync(template, inputs, name, outputPath, parseResult, extraArgsCallback, cancellationToken);
     }
@@ -457,50 +457,36 @@ internal class DotNetTemplateFactory(
     {
         try
         {
-            var source = inputs.Source;
-            var selectedTemplateDetails = await GetProjectTemplatesVersionAsync(inputs, cancellationToken: cancellationToken);
+            // Resolve the template package first, matching the pre-extraction order in
+            // release/13.3. Surfacing channel/version errors before prompting for extra args
+            // avoids discarding answers the user just gave.
+            var query = new TemplatePackageQuery(
+                RequestedChannel: inputs.Channel,
+                VersionOverride: inputs.Version,
+                SourceOverride: inputs.Source,
+                IncludePrHives: true);
+
+            var selectedTemplateDetails = await templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
 
             // Some templates have additional arguments that need to be applied to the `dotnet new` command
             // when it is executed. This callback will get those arguments and potentially prompt for them.
             var extraArgs = await extraArgsCallback(parseResult, cancellationToken);
-            using var temporaryConfig = selectedTemplateDetails.Channel.Type == PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(selectedTemplateDetails.Channel.Mappings!) : null;
 
-            var templateInstallCollector = new OutputCollector();
-            var templateInstallResult = await interactionService.ShowStatusAsync<(int ExitCode, string? TemplateVersion)>(
+            var installOutcome = await templateNuGetConfigService.InstallTemplatePackageAsync(
+                selectedTemplateDetails,
+                runner,
                 TemplatingStrings.GettingTemplates,
-                async () =>
-                {
-                    var options = new ProcessInvocationOptions()
-                    {
-                        StandardOutputCallback = templateInstallCollector.AppendOutput,
-                        StandardErrorCallback = templateInstallCollector.AppendOutput,
-                    };
+                statusEmoji: KnownEmojis.Ice,
+                cancellationToken);
 
-                    // Whilst we install the templates - if we are using an explicit channel we need to
-                    // generate a temporary NuGet.config file to make sure we install the right package
-                    // from the right feed. If we are using an implicit channel then we just use the
-                    // ambient configuration (although we should still specify the source) because
-                    // the user would have selected it.
-
-                    var result = await runner.InstallTemplateAsync(
-                        packageName: "Aspire.ProjectTemplates",
-                        version: selectedTemplateDetails.Package.Version,
-                        nugetConfigFile: temporaryConfig?.ConfigFile,
-                        nugetSource: selectedTemplateDetails.Package.Source,
-                        force: true,
-                        options: options,
-                        cancellationToken: cancellationToken);
-                    return result;
-                }, emoji: KnownEmojis.Ice);
-
-            if (templateInstallResult.ExitCode != 0)
+            if (installOutcome.ExitCode != 0)
             {
-                interactionService.DisplayLines(templateInstallCollector.GetLines());
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, templateInstallResult.ExitCode, executionContext.LogFilePath));
-                return new TemplateResult(ExitCodeConstants.FailedToInstallTemplates);
+                interactionService.DisplayLines(installOutcome.OutputLines);
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
+                return new TemplateResult(CliExitCodes.FailedToInstallTemplates);
             }
 
-            interactionService.DisplayMessage(KnownEmojis.Package, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.UsingProjectTemplatesVersion, templateInstallResult.TemplateVersion));
+            interactionService.DisplayMessage(KnownEmojis.Package, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.UsingProjectTemplatesVersion, installOutcome.TemplateVersion));
 
             var newProjectCollector = new OutputCollector();
             var newProjectExitCode = await interactionService.ShowStatusAsync(
@@ -531,185 +517,105 @@ internal class DotNetTemplateFactory(
                 if (newProjectExitCode == 73)
                 {
                     interactionService.DisplayError(TemplatingStrings.ProjectAlreadyExists);
-                    return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                    return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
                 }
 
                 interactionService.DisplayLines(newProjectCollector.GetLines());
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode, executionContext.LogFilePath));
-                return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode));
+                return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
             }
 
             // Trust certificates (result not used since we're not launching an AppHost)
             _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
 
+            // Persist the resolved channel into the scaffolded project's aspire.config.json
+            // for Explicit channels (pr-<N>, daily, staging, local). Without this pin, `aspire
+            // update` on the new project skips the local-config step in its channel-resolution
+            // precedence and falls through to either an interactive prompt (when hives exist)
+            // or the Implicit/nuget.org channel — silently moving a project scaffolded by a
+            // PR or daily CLI onto stable/nuget.org. Implicit channels (stable/nuget.org) are
+            // not persisted so `aspire add`/`aspire restore` continue to use the ambient
+            // NuGet config without a per-project pin. Mirrors the TypeScript starter behavior
+            // in CliTemplateFactory.TypeScriptStarterTemplate.
+            if (selectedTemplateDetails.Channel.Type is PackageChannelType.Explicit)
+            {
+                var config = AspireConfigFile.LoadOrCreate(outputPath);
+                config.Channel = selectedTemplateDetails.Channel.Name;
+                config.Save(outputPath);
+            }
+
             // For explicit channels, optionally create or update a NuGet.config. If none exists in the current
             // working directory, create one in the newly created project's output directory.
-            await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
+            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selectedTemplateDetails.Channel, outputPath, cancellationToken))
+            {
+                await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
+            }
 
             interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
 
-            return new TemplateResult(ExitCodeConstants.Success, outputPath);
+            return new TemplateResult(CliExitCodes.Success, outputPath);
         }
         catch (OperationCanceledException)
         {
-            interactionService.DisplayCancellationMessage();
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.Cancelled);
         }
         catch (CertificateServiceException ex)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message));
-            return new TemplateResult(ExitCodeConstants.FailedToTrustCertificates);
+            return new TemplateResult(CliExitCodes.FailedToTrustCertificates);
         }
         catch (Exceptions.ChannelNotFoundException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
         catch (EmptyChoicesException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (NuGetPackageCacheException ex)
+        {
+            // Surface NuGet feed search failures (offline, inaccessible feed, etc.) with a friendly error
+            // instead of letting them bubble up to the top-level "unexpected error" handler. The pre-extraction
+            // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
+            // restores parity with the prior init failure mode for these scenarios.
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
     }
 
-    private async Task<string> GetProjectNameAsync(TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<string> GetProjectNameAsync(TemplateInputs inputs, string templateName, ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (inputs.Name is not { } name || !ProjectNameValidator.IsProjectNameValid(name))
         {
-            var defaultName = executionContext.WorkingDirectory.Name;
+            var defaultName = templateName;
             name = await prompter.PromptForProjectNameAsync(defaultName, parseResult, cancellationToken);
         }
 
         return name;
     }
 
-    private async Task<string> GetOutputPathAsync(TemplateInputs inputs, Func<string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
+    private async Task<string?> GetOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
     {
-        if (inputs.Output is not { } outputPath)
-        {
-            var defaultPath = pathDeriver(projectName);
-            outputPath = await prompter.PromptForOutputPath(defaultPath, parseResult, cancellationToken);
-        }
+        var isExtensionHost = ExtensionHelper.IsExtensionHost(interactionService, out _, out _);
+        var createProjectNameSubdirectory = await OutputPathHelper.PromptExtensionCreateProjectNameSubdirectoryAsync(
+            interactionService,
+            isExtensionHost,
+            inputs.Output is not null,
+            projectName,
+            cancellationToken);
 
-        outputPath = Path.GetFullPath(outputPath);
-
-        // When running in extension mode (VS Code), the folder picker returns the parent
-        // directory the user selected. Append the project name as a subdirectory so the
-        // project gets its own clean folder, matching the git-clone convention.
-        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _)
-            && !projectName.Equals(".", StringComparison.Ordinal)
-            && !projectName.Equals("..", StringComparison.Ordinal))
-        {
-            var normalizedOutputPath = Path.TrimEndingDirectorySeparator(outputPath);
-
-            if (!string.Equals(Path.GetFileName(normalizedOutputPath), projectName, StringComparison.OrdinalIgnoreCase))
+        var outputPathResolver = OutputPathHelper.CreateProjectNameSubdirectoryOutputPathResolver(createProjectNameSubdirectory, projectName);
+        return await OutputPathHelper.ResolveOutputPathAsync(
+            inputs.Output,
+            executionContext.WorkingDirectory.FullName,
+            async () =>
             {
-                outputPath = Path.Combine(normalizedOutputPath, projectName);
-            }
-            else
-            {
-                outputPath = normalizedOutputPath;
-            }
-        }
-
-        return outputPath;
+                var defaultPath = pathDeriver(executionContext, projectName);
+                var validator = OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
+                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, cancellationToken, outputPathResolver);
+            },
+            interactionService);
     }
-
-    private async Task<(NuGetPackage Package, PackageChannel Channel)> GetProjectTemplatesVersionAsync(TemplateInputs inputs, CancellationToken cancellationToken)
-    {
-        var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
-
-        // Check if channel was provided via inputs (highest priority)
-        var channelName = inputs.Channel;
-
-        // If no channel in inputs, check for global channel setting
-        if (string.IsNullOrEmpty(channelName))
-        {
-            channelName = await configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
-
-        IEnumerable<PackageChannel> channels;
-        var hasPrHives = executionContext.GetPrHiveCount() > 0;
-        bool hasChannelSetting = !string.IsNullOrEmpty(channelName);
-
-        if (hasChannelSetting)
-        {
-            // If --channel option is provided or global channel setting exists, find the matching channel
-            // (--channel option takes precedence over global setting)
-            var matchingChannel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
-            if (matchingChannel is null)
-            {
-                throw new Exceptions.ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
-            }
-            channels = new[] { matchingChannel };
-        }
-        else
-        {
-            // If there are hives (PR build directories), include all channels.
-            // Otherwise, only use the implicit/default channel to avoid prompting.
-            channels = hasPrHives
-                ? allChannels
-                : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
-        }
-
-        var packagesFromChannels = await interactionService.ShowStatusAsync(TemplatingStrings.SearchingForAvailableTemplateVersions, async () =>
-        {
-            var results = new List<(NuGetPackage Package, PackageChannel Channel)>();
-            var packagesFromChannelsLock = new object();
-
-            await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
-            {
-                var templatePackages = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, ct);
-                lock (packagesFromChannelsLock)
-                {
-                    results.AddRange(templatePackages.Select(p => (p, channel)));
-                }
-            });
-
-            return results;
-        });
-
-        if (!packagesFromChannels.Any())
-        {
-            throw new EmptyChoicesException(TemplatingStrings.NoTemplateVersionsFound);
-        }
-
-        var orderedPackagesFromChannels = packagesFromChannels.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
-
-        if (inputs.Version is { } version)
-        {
-            var explicitPackageFromChannel = orderedPackagesFromChannels.FirstOrDefault(p => p.Package.Version == version);
-            if (explicitPackageFromChannel.Package is not null)
-            {
-                return explicitPackageFromChannel;
-            }
-        }
-
-        if (VersionHelper.TryGetCurrentCliVersionMatch(
-            orderedPackagesFromChannels,
-            p => p.Package.Version,
-            out var cliVersionPackageFromChannel,
-            channelName: channelName,
-            hasPrHives: hasPrHives))
-        {
-            return cliVersionPackageFromChannel;
-        }
-
-        // If channel was specified via --channel option or global setting (but no --version),
-        // automatically select the highest version from that channel without prompting
-        if (hasChannelSetting)
-        {
-            return orderedPackagesFromChannels.First();
-        }
-
-        // In non-interactive mode, automatically select the highest version
-        if (!hostEnvironment.SupportsInteractiveInput)
-        {
-            return orderedPackagesFromChannels.First();
-        }
-
-        var selectedPackageFromChannel = await templateVersionPrompter.PromptForTemplatesVersionAsync(orderedPackagesFromChannels, cancellationToken);
-        return selectedPackageFromChannel;
-    }
-
 }

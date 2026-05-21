@@ -14,7 +14,7 @@ public sealed class KeycloakResource(string name, ParameterResource? admin, Para
     : ContainerResource(name), IResourceWithServiceDiscovery
 {
     private const string DefaultAdmin = "admin";
-    internal const string PrimaryEndpointName = "tcp";
+    internal const string PrimaryEndpointName = "http";
 
     /// <summary>
     /// Features to enable for the keycloak resource

@@ -1,8 +1,11 @@
 import aspire.*;
+import java.util.Map;
+import java.util.function.Function;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var container = builder.addContainer("mycontainer", "nginx");
+        container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
         var configureDockerfileBuilder = (AspireAction1<DockerfileBuilderCallbackContext>) (dockerfileContext) -> {
             var _dockerfileResource = dockerfileContext.resource();
@@ -39,6 +42,13 @@ void main() throws Exception {
         var tool = builder.addDotnetTool("mytool", "dotnet-ef");
         var configParam = builder.addParameterFromConfiguration("myconfig", "MyConfig:Key");
         var secretParam = builder.addParameterFromConfiguration("mysecret", "MyConfig:Secret", true);
+        var customInputParam = builder.addParameter("custom-input");
+        var customInputOptions = new ParameterCustomInputOptions();
+        customInputOptions.setInputType(InputType.NUMBER);
+        customInputOptions.setLabel("Worker Count");
+        customInputOptions.setPlaceholder("Enter number (1-10)");
+        customInputOptions.setOptions(Map.of("one", "One", "two", "Two"));
+        customInputParam.withCustomInput(customInputOptions);
         container.withDockerfileBaseImage(new WithDockerfileBaseImageOptions().buildImage("mcr.microsoft.com/dotnet/sdk:8.0"));
         container.withImageRegistry("docker.io");
         dockerContainer.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
@@ -56,7 +66,7 @@ void main() throws Exception {
         container.withReference(endpoint);
         container.withReference("https://example.com/", new WithReferenceOptions().name("external-uri"));
         var vnet = builder.addAzureVirtualNetwork("vnet", "10.0.0.0/16");
-        var subnet = vnet.addSubnet("web", "10.0.1.0/24");
+        var subnet = vnet.addSubnet("web", "10.0.1.0/24", null);
         subnet.allowInbound(new AllowInboundOptions().port("443").from(AzureServiceTags.AzureLoadBalancer));
         subnet.denyInbound(new DenyInboundOptions().from(AzureServiceTags.Internet));
         var aks = builder.addAzureKubernetesEnvironment("aks");
@@ -102,7 +112,7 @@ void main() throws Exception {
         tool.withToolVersion("8.0.0");
         tool.publishAsDockerFile((_container) -> {});
         container.withPipelineStepFactory("custom-build-step", (stepContext) -> { var pipelineContext = stepContext.pipelineContext(); var pipelineModel = pipelineContext.model(); var _pipelineResources = pipelineModel.getResources(); var _pipelineContainer = pipelineModel.findResourceByName("mycontainer"); var pipelineServices = pipelineContext.services(); var pipelineLoggerFactory = pipelineServices.getLoggerFactory(); var pipelineFactoryLogger = pipelineLoggerFactory.createLogger("ValidationAppHost.PipelineContext"); pipelineFactoryLogger.logInformation("Pipeline factory context logger"); var pipelineLogger = pipelineContext.logger(); pipelineLogger.logDebug("Pipeline context logger"); var pipelineSummary = pipelineContext.summary(); pipelineSummary.add("PipelineContext", "Validated"); pipelineSummary.addMarkdown("PipelineMarkdown", "**Validated**"); var executionContext = stepContext.executionContext(); var _isPublishMode = executionContext.isPublishMode(); var stepServices = stepContext.services(); var stepLogger = stepContext.logger(); stepLogger.logInformation("Pipeline step context logger"); var stepSummary = stepContext.summary(); stepSummary.add("PipelineStepContext", "Validated"); var reportingStep = stepContext.reportingStep(); reportingStep.logStep("information", "Reporting step log"); reportingStep.logStepMarkdown("information", "**Reporting step markdown log**"); var reportingTask = reportingStep.createTask("Task created"); reportingTask.updateTask("Task updated"); reportingTask.updateTaskMarkdown("**Task markdown updated**"); reportingTask.completeTask(new CompleteTaskOptions().completionMessage("Task complete")); var markdownTask = reportingStep.createMarkdownTask("**Markdown task created**"); markdownTask.completeTaskMarkdown("**Markdown task complete**", new CompleteTaskMarkdownOptions().completionState("completed-with-warning")); reportingStep.completeStep("Reporting step complete"); reportingStep.completeStepMarkdown("**Reporting step markdown complete**", new CompleteStepMarkdownOptions().completionState("completed-with-warning")); var stepModel = stepContext.model(); var _stepResources = stepModel.getResources(); var _stepContainer = stepModel.findResourceByName("mycontainer"); var stepLoggerFactory = stepServices.getLoggerFactory(); var stepFactoryLogger = stepLoggerFactory.createLogger("ValidationAppHost.PipelineStepContext"); stepFactoryLogger.logDebug("Pipeline step factory logger"); var cancellationToken = stepContext.cancellationToken(); var cacheUriExpression = cache.uriExpression(); var _cacheUri = cacheUriExpression.getValue(cancellationToken); }, new WithPipelineStepFactoryOptions().dependsOn(new String[] { WellKnownPipelineSteps.Build }).requiredBy(new String[] { WellKnownPipelineSteps.Deploy }).tags(new String[] { WellKnownPipelineTags.BuildCompute }).description("Custom pipeline step"));
-        container.withPipelineConfiguration((configContext) -> { var configLog = configContext.log(); configLog.info("Pipeline configuration logger"); var configPipeline = configContext.pipeline(); var allSteps = configPipeline.steps(); var taggedSteps = configPipeline.stepsByTag(WellKnownPipelineTags.BuildCompute); var _stepName = allSteps[0].name(); var _description = allSteps[0].description(); allSteps[0].addTag("validated"); allSteps[0].dependsOn("restore"); taggedSteps[0].requiredBy(WellKnownPipelineSteps.Publish); allSteps[0].dependsOn(WellKnownPipelineSteps.Build); });
+        container.withPipelineConfiguration((configContext) -> { var configLog = configContext.log(); configLog.info("Pipeline configuration logger"); var configPipeline = configContext.pipeline(); var allSteps = configPipeline.steps(); var taggedSteps = configPipeline.stepsByTag(WellKnownPipelineTags.BuildCompute); var _stepName = allSteps[0].name(); var _description = allSteps[0].description(); var _dependsOnSteps = allSteps[0].dependsOnSteps(); var _requiredBySteps = taggedSteps[0].requiredBySteps(); var _tags = taggedSteps[0].tags(); allSteps[0].addTag("validated"); allSteps[0].dependsOn("restore"); taggedSteps[0].requiredBy(WellKnownPipelineSteps.Publish); allSteps[0].dependsOn(WellKnownPipelineSteps.Build); });
         container.withPipelineConfiguration((configContext) -> { var configPipeline = configContext.pipeline(); var _resourceSteps = configPipeline.steps(); var _taggedSteps = configPipeline.stepsByTag(WellKnownPipelineTags.BuildCompute); });
         var _appHostDirectory = builder.appHostDirectory();
         var hostEnvironment = builder.environment();
@@ -119,6 +129,7 @@ void main() throws Exception {
         var builderExecutionContext = builder.executionContext();
         var executionContextServiceProvider = builderExecutionContext.serviceProvider();
         var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
+        var resourceCommandService = executionContextServiceProvider.getResourceCommandService();
         builder.addEventingSubscriber((registrationContext) -> {
             var subscriberExecutionContext = registrationContext.executionContext();
             var _subscriberIsRunMode = subscriberExecutionContext.isRunMode();
@@ -127,6 +138,18 @@ void main() throws Exception {
                 var subscriberServices = beforeStartEvent.services();
                 var aspireStore = subscriberServices.getAspireStore();
                 var _contentBackedFilename = aspireStore.getFileNameWithContent("validation-apphost.java", "AppHost.java");
+            });
+            registrationContext.onBeforePublish((beforePublishEvent) -> {
+                var beforePublishServices = beforePublishEvent.services();
+                var beforePublishModel = beforePublishEvent.model();
+                var _beforePublishEventing = beforePublishServices.getEventing();
+                var _beforePublishResources = beforePublishModel.getResources();
+            });
+            registrationContext.onAfterPublish((afterPublishEvent) -> {
+                var afterPublishServices = afterPublishEvent.services();
+                var afterPublishModel = afterPublishEvent.model();
+                var _afterPublishEventing = afterPublishServices.getEventing();
+                var _afterPublishResources = afterPublishModel.getResources();
             });
             registrationContext.onAfterResourcesCreated((afterResourcesCreatedEvent) -> {
                 var afterResourcesCreatedServices = afterResourcesCreatedEvent.services();
@@ -163,9 +186,13 @@ void main() throws Exception {
         var _httpsCertificateData = executionConfiguration.getHttpsCertificateData();
         var beforeStartSubscription = builder.subscribeBeforeStart((beforeStartEvent) -> { var beforeStartServices = beforeStartEvent.services(); var beforeStartModel = beforeStartEvent.model(); var _beforeStartResources = beforeStartModel.getResources(); var _beforeStartContainer = beforeStartModel.findResourceByName("mycontainer"); var _beforeStartEventing = beforeStartServices.getEventing(); var beforeStartLoggerFactory = beforeStartServices.getLoggerFactory(); var beforeStartLogger = beforeStartLoggerFactory.createLogger("ValidationAppHost.BeforeStart"); beforeStartLogger.logInformation("BeforeStart information"); beforeStartLogger.logWarning("BeforeStart warning"); beforeStartLogger.logError("BeforeStart error"); beforeStartLogger.logDebug("BeforeStart debug"); beforeStartLogger.log("critical", "BeforeStart critical"); var beforeStartResourceLoggerService = beforeStartServices.getResourceLoggerService(); beforeStartResourceLoggerService.completeLog(container); beforeStartResourceLoggerService.completeLogByName("mycontainer"); var beforeStartNotificationService = beforeStartServices.getResourceNotificationService(); beforeStartNotificationService.waitForResourceState("mycontainer", "Running"); var _matchedResourceState = beforeStartNotificationService.waitForResourceStates("mycontainer", new String[] { "Running", "FailedToStart" }); var _healthyResourceEvent = beforeStartNotificationService.waitForResourceHealthy("mycontainer"); beforeStartNotificationService.waitForDependencies(container); var _currentResourceState = beforeStartNotificationService.tryGetResourceState("mycontainer"); beforeStartNotificationService.publishResourceUpdate(container, new PublishResourceUpdateOptions().state("Validated").stateStyle("info")); var userSecretsManager = beforeStartServices.getUserSecretsManager(); var _userSecretsAvailable = userSecretsManager.isAvailable(); var _userSecretsFilePath = userSecretsManager.filePath(); var _secretSet = userSecretsManager.trySetSecret("Validation:Key", "value"); userSecretsManager.getOrSetSecret(container, "Validation:GeneratedKey", "generated-value"); var _generatedSecretValue = builderConfiguration.getConfigValue("Validation:GeneratedKey"); userSecretsManager.saveStateJson("{\"Validation\":\"Value\"}"); var _modelFromServices = beforeStartServices.getDistributedApplicationModel(); });
         var afterResourcesCreatedSubscription = builder.subscribeAfterResourcesCreated((afterResourcesCreatedEvent) -> { var afterResourcesCreatedServices = afterResourcesCreatedEvent.services(); var afterResourcesCreatedModel = afterResourcesCreatedEvent.model(); var _afterResources = afterResourcesCreatedModel.getResources(); var _afterResourcesContainer = afterResourcesCreatedModel.findResourceByName("mycontainer"); var afterResourcesCreatedLoggerFactory = afterResourcesCreatedServices.getLoggerFactory(); var afterResourcesCreatedLogger = afterResourcesCreatedLoggerFactory.createLogger("ValidationAppHost.AfterResourcesCreated"); afterResourcesCreatedLogger.logInformation("AfterResourcesCreated"); });
+        var beforePublishSubscription = builder.subscribeBeforePublish((beforePublishEvent) -> { var beforePublishServices = beforePublishEvent.services(); var beforePublishModel = beforePublishEvent.model(); var _beforePublishResources = beforePublishModel.getResources(); var _beforePublishContainer = beforePublishModel.findResourceByName("mycontainer"); var beforePublishLoggerFactory = beforePublishServices.getLoggerFactory(); var beforePublishLogger = beforePublishLoggerFactory.createLogger("ValidationAppHost.BeforePublish"); beforePublishLogger.logInformation("BeforePublish"); });
+        var afterPublishSubscription = builder.subscribeAfterPublish((afterPublishEvent) -> { var afterPublishServices = afterPublishEvent.services(); var afterPublishModel = afterPublishEvent.model(); var _afterPublishResources = afterPublishModel.getResources(); var _afterPublishContainer = afterPublishModel.findResourceByName("mycontainer"); var afterPublishLoggerFactory = afterPublishServices.getLoggerFactory(); var afterPublishLogger = afterPublishLoggerFactory.createLogger("ValidationAppHost.AfterPublish"); afterPublishLogger.logInformation("AfterPublish"); });
         var builderEventing = builder.eventing();
         builderEventing.unsubscribe(beforeStartSubscription);
         builderEventing.unsubscribe(afterResourcesCreatedSubscription);
+        builderEventing.unsubscribe(beforePublishSubscription);
+        builderEventing.unsubscribe(afterPublishSubscription);
         container.onBeforeResourceStarted((beforeResourceStartedEvent) -> { var _resource = beforeResourceStartedEvent.resource(); var services = beforeResourceStartedEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.BeforeResourceStarted"); logger.logInformation("BeforeResourceStarted"); });
         container.onResourceStopped((resourceStoppedEvent) -> { var _resource = resourceStoppedEvent.resource(); var services = resourceStoppedEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.ResourceStopped"); logger.logWarning("ResourceStopped"); });
         cache.onConnectionStringAvailable((connectionStringAvailableEvent) -> { var _resource = connectionStringAvailableEvent.resource(); var services = connectionStringAvailableEvent.services(); var notifications = services.getResourceNotificationService(); var _connectionState = notifications.tryGetResourceState("cache"); });
@@ -193,10 +220,19 @@ void main() throws Exception {
         container.withUrl(ReferenceExpression.refExpr("http://%s", endpoint), null);
         container.withHttpHealthCheck();
         container.withHttpHealthCheck();
-        container.withCommand("restart", "Restart", (_ctx) -> {
+        var commandOptions = new CommandOptions();
+        commandOptions.setUpdateState((Function<UpdateCommandStateContext, ResourceCommandState>) (ctx) -> {
+            var snapshot = ctx.resourceSnapshot();
+            return snapshot.getHealthStatus() == HealthStatus.HEALTHY ? ResourceCommandState.ENABLED : ResourceCommandState.DISABLED;
+        });
+        container.withCommand("noop", "Noop", (_ctx) -> {
             var result = new ExecuteCommandResult();
             result.setSuccess(true);
             return result;
+        }, commandOptions);
+        container.withCommand("restart", "Restart", (_ctx) -> {
+            var cancellationToken = _ctx.cancellationToken();
+            return resourceCommandService.executeCommandAsync("mycontainer", "noop", cancellationToken);
         });
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();

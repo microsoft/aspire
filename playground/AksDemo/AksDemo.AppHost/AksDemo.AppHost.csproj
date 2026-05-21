@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsAspireHost>true</IsAspireHost>
+    <UserSecretsId>3f6d6bf5-9d5e-45b1-86b3-629372b14c0e</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Kubernetes" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Azure.Network" />
+
+    <ProjectReference Include="..\AksDemo.ApiService\AksDemo.ApiService.csproj" />
+  </ItemGroup>
+
+</Project>

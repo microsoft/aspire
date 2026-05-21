@@ -124,4 +124,60 @@ public class TemporaryNuGetConfigTests
         Assert.NotNull(globalPackagesFolder);
         Assert.Equal(".nugetpackages", globalPackagesFolder!.Attributes!["value"]!.Value);
     }
+
+    [Theory]
+    [InlineData("https://example.com/feed")]
+    [InlineData("/var/folders/X/hives/pr-17105/packages")]
+    [InlineData(@"C:\Users\X\.aspire\hives\pr-17105\packages")]
+    public async Task CreateAsync_PackageSourceAddKeyMatchesPackageSourceMappingKey(string source)
+    {
+        // Bug B defense: NuGet's packageSourceMapping lookup matches the
+        // <packageSource key="..."> attribute against the source name registered
+        // from <packageSources><add key="..." />. A future refactor that splits
+        // those keys (or canonicalizes one side and not the other) would silently
+        // drop the mapping. This invariant lives at the writer; pin it.
+        //
+        // Note that we ALSO need the source written here to be in the form NuGet
+        // will accept after its own internal canonicalization (e.g. on macOS the
+        // upstream caller must strip /private/var → /var before constructing the
+        // PackageMapping — see CliPathHelper.StripMacOSFirmlinkPrefix and the
+        // GetAspireHomeDirectory_OnMacOS_PrRouteWithFirmlinkedProcessPath test).
+        // This test only pins the writer's symmetry contract.
+        var mappings = new PackageMapping[]
+        {
+            new("Aspire*", source),
+            new(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
+        };
+
+        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(mappings);
+
+        var xmlDoc = new XmlDocument();
+        xmlDoc.LoadXml(await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName));
+
+        // Collect <packageSources><add key="X" value="Y" /> entries (filter out <clear/>).
+        var addNodes = xmlDoc.SelectNodes("//packageSources/add")!;
+        var addKeys = new List<string>();
+        foreach (XmlNode add in addNodes)
+        {
+            addKeys.Add(add.Attributes!["key"]!.Value);
+            Assert.Equal(add.Attributes!["key"]!.Value, add.Attributes!["value"]!.Value);
+        }
+
+        // Collect <packageSourceMapping><packageSource key="X"> entries.
+        var mappingNodes = xmlDoc.SelectNodes("//packageSourceMapping/packageSource")!;
+        var mappingKeys = new List<string>();
+        foreach (XmlNode m in mappingNodes)
+        {
+            mappingKeys.Add(m.Attributes!["key"]!.Value);
+        }
+
+        // Every mapping key must have a matching <add key>, byte-for-byte.
+        foreach (var mappingKey in mappingKeys)
+        {
+            Assert.Contains(mappingKey, addKeys);
+        }
+
+        // The mapping for our source must be present and exactly equal the input source.
+        Assert.Contains(source, mappingKeys);
+    }
 }

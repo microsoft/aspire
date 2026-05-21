@@ -2,12 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.TestServices;
 
-internal sealed class TestTypeScriptStarterProjectFactory(Func<DirectoryInfo, CancellationToken, Task<bool>> buildAndGenerateSdkAsync) : IAppHostProjectFactory
+internal sealed class TestTypeScriptStarterProjectFactory(Func<DirectoryInfo, CancellationToken, string?, Task<bool>> buildAndGenerateSdkAsync) : IAppHostProjectFactory
 {
     private readonly TestTypeScriptStarterProject _project = new(buildAndGenerateSdkAsync);
+
+    public TestTypeScriptStarterProject Project => _project;
 
     public IAppHostProject GetProject(LanguageInfo language)
     {
@@ -32,9 +35,11 @@ internal sealed class TestTypeScriptStarterProjectFactory(Func<DirectoryInfo, Ca
     }
 }
 
-internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, CancellationToken, Task<bool>> buildAndGenerateSdkAsync) : IAppHostProject, IGuestAppHostSdkGenerator
+internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, CancellationToken, string?, Task<bool>> buildAndGenerateSdkAsync) : IAppHostProject, IGuestAppHostSdkGenerator
 {
     public bool IsUnsupported { get; set; }
+
+    public string? LastPackageSourceOverride { get; private set; }
 
     public string LanguageId => KnownLanguageId.TypeScript;
 
@@ -72,6 +77,11 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
         return Task.FromResult(new AppHostValidationResult(IsValid: CanHandle(appHostFile)));
     }
 
+    public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<string?>(VersionHelper.GetDefaultTemplateVersion());
+    }
+
     public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
@@ -97,8 +107,9 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
         throw new NotImplementedException();
     }
 
-    public Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    public Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
-        return buildAndGenerateSdkAsync(directory, cancellationToken);
+        LastPackageSourceOverride = packageSourceOverride;
+        return buildAndGenerateSdkAsync(directory, cancellationToken, packageSourceOverride);
     }
 }

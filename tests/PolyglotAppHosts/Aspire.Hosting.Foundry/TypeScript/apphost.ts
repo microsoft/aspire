@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, FoundryModels, type FoundryModel, createBuilder } from './.modules/aspire.js';
+import { AzureContainerRegistryRole, FoundryModels, FoundryRole, type FoundryModel, createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -9,7 +9,7 @@ const chat = await foundry
     .withProperties(async (deployment) => {
         await deployment.deploymentName.set('chat-deployment');
         await deployment.skuCapacity.set(10);
-        const _capacity: number = await deployment.skuCapacity.get();
+        const _capacity: number | null = await deployment.skuCapacity.get();
     });
 
 const model: FoundryModel = FoundryModels.OpenAI.Gpt41Mini;
@@ -116,13 +116,16 @@ await hostedAgent.publishAsHostedAgent({
         await configuration.description.set('Validation hosted agent');
         await configuration.cpu.set(1);
         await configuration.memory.set(2);
-        await configuration.metadata.set('scenario', 'validation');
-        await configuration.environmentVariables.set('VALIDATION_MODE', 'true');
+        const metadata = await configuration.metadata();
+        await metadata.set('scenario', 'validation');
+        const environmentVariables = await configuration.environmentVariables();
+        await environmentVariables.set('VALIDATION_MODE', 'true');
     }
 });
 
 const api = await builder.addContainer('api', 'nginx');
-await foundry.withRoleAssignments(registry, [AzureContainerRegistryRole.AcrPull]);
+await foundry.withContainerRegistryRoleAssignments(registry, [AzureContainerRegistryRole.AcrPull]);
+await api.withFoundryRoleAssignments(foundry, [FoundryRole.CognitiveServicesOpenAIUser]);
 
 const _deploymentName = await chat.deploymentName.get();
 const _modelName = await chat.modelName.get();

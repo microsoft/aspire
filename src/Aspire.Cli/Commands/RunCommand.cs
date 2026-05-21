@@ -12,6 +12,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -28,6 +29,8 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// Represents information about a detached AppHost for JSON serialization.
 /// </summary>
+// `aspire start --format json` and `aspire run --detach --format json` use this shape;
+// keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed record DetachOutputInfo(
     string AppHostPath,
     int AppHostPid,
@@ -68,10 +71,16 @@ internal sealed class RunCommand : BaseCommand
     private readonly AppHostLauncher _appHostLauncher;
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly TimeProvider _timeProvider;
     private bool _isDetachMode;
 
     private static readonly TimeSpan s_appHostStartupCancellationTimeout = TimeSpan.FromSeconds(5);
+
+    // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
+    // afterward when the guest startup process hits a syntax or pre-execute error. Keep the
+    // detached parent waiting briefly so those early failures are reported instead of hidden.
+    private static readonly TimeSpan s_detachedStartupStabilityWindow = TimeSpan.FromSeconds(2);
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
 
@@ -83,7 +92,6 @@ internal sealed class RunCommand : BaseCommand
     {
         Description = RunCommandStrings.NoBuildArgumentDescription
     };
-    private readonly Option<bool>? _startDebugSessionOption;
 
     public RunCommand(
         IDotNetCliRunner runner,
@@ -101,6 +109,7 @@ internal sealed class RunCommand : BaseCommand
         AppHostLauncher appHostLauncher,
         FileLoggerProvider fileLoggerProvider,
         ICliHostEnvironment hostEnvironment,
+        ProfilingTelemetry profilingTelemetry,
         TimeProvider timeProvider)
         : base("run", RunCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
@@ -116,25 +125,17 @@ internal sealed class RunCommand : BaseCommand
         _appHostLauncher = appHostLauncher;
         _fileLoggerProvider = fileLoggerProvider;
         _hostEnvironment = hostEnvironment;
+        _profilingTelemetry = profilingTelemetry;
         _timeProvider = timeProvider;
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
         AppHostLauncher.AddLaunchOptions(this);
 
-        if (ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
-        {
-            _startDebugSessionOption = new Option<bool>("--start-debug-session")
-            {
-                Description = RunCommandStrings.StartDebugSessionArgumentDescription
-            };
-            Options.Add(_startDebugSessionOption);
-        }
-
         TreatUnmatchedTokensAsErrors = false;
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var detach = parseResult.GetValue(s_detachOption);
@@ -143,32 +144,37 @@ internal sealed class RunCommand : BaseCommand
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
         var isExtensionHost = ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
+        var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
+        var captureProfileDelay = TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption));
         var startDebugSession = false;
         if (isExtensionHost)
         {
-            Debug.Assert(_startDebugSessionOption is not null);
-            startDebugSession = parseResult.GetValue(_startDebugSessionOption);
+            startDebugSession = parseResult.GetValue(RootCommand.StartDebugSessionOption);
         }
 
         // Validate that --format is only used with --detach
         if (format == OutputFormat.Json && !detach)
         {
-            InteractionService.DisplayError(RunCommandStrings.FormatRequiresDetach);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.FormatRequiresDetach);
         }
 
-        // Validate that --no-build is not used when watch mode would be enabled
-        // Watch mode is enabled when DefaultWatchEnabled feature is true, or when running under extension host (not in debug session)
-        var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || (isExtensionHost && !startDebugSession);
+        // Validate that --no-build is not used when watch mode would be enabled.
+        // The extension terminal path enables watch mode by delegating to VS Code
+        // before an Aspire debug session exists. Once VS Code starts the session,
+        // the child CLI has ASPIRE_EXTENSION_DEBUG_SESSION_ID and can honor
+        // forwarded options from the original terminal command without recursing.
+        var extensionTerminalRunWithoutDebugSession = isExtensionHost
+            && !startDebugSession
+            && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]);
+        var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || extensionTerminalRunWithoutDebugSession;
         if (noBuild && watchModeEnabled)
         {
-            InteractionService.DisplayError(RunCommandStrings.NoBuildNotSupportedWithWatchMode);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
         }
 
         if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
         {
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         // Handle detached mode - spawn child process and exit
@@ -186,9 +192,9 @@ internal sealed class RunCommand : BaseCommand
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
-            extensionInteractionService.DisplayConsolePlainText(RunCommandStrings.StartingDebugSessionInExtension);
+            extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "run"));
             await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, startDebugSession, new DebugSessionOptions { Command = "run" });
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         AppHostProjectContext? context = null;
@@ -196,29 +202,33 @@ internal sealed class RunCommand : BaseCommand
 
         try
         {
-            using var activity = Telemetry.StartDiagnosticActivity(this.Name);
-
             // Start a reported telemetry activity for the app host run early so that
             // all failure paths (project not found, incompatible version, etc.) are captured.
             runActivity = Telemetry.StartReportedActivity(name: TelemetryConstants.Activities.RunAppHost);
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostDetached, _configuration.GetBool(KnownConfigNames.CliRunDetached) is true);
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostIsolated, isolated);
 
+            using var activity = _profilingTelemetry.StartRunCommand();
+
             var multipleAppHostBehavior = _hostEnvironment.SupportsInteractiveInput
                 ? MultipleAppHostProjectsFoundBehavior.Prompt
                 : MultipleAppHostProjectsFoundBehavior.Throw;
 
-            var searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(
-                passedAppHostProjectFile,
-                multipleAppHostBehavior,
-                createSettingsFile: true,
-                cancellationToken);
+            AppHostProjectSearchResult searchResult;
+            using (var findAppHostActivity = _profilingTelemetry.StartRunAppHostFindAppHost(passedAppHostProjectFile))
+            {
+                searchResult = await _projectLocator.UseOrFindAppHostProjectFileAsync(
+                    passedAppHostProjectFile,
+                    multipleAppHostBehavior,
+                    createSettingsFile: true,
+                    cancellationToken);
+            }
             var effectiveAppHostFile = searchResult.SelectedProjectFile;
 
             if (effectiveAppHostFile is null)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
             // Resolve the language for this file and get the appropriate handler
@@ -226,8 +236,7 @@ internal sealed class RunCommand : BaseCommand
             if (project is null)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
-                InteractionService.DisplayError("Unrecognized app host type.");
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
             }
 
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, project.LanguageId);
@@ -235,7 +244,12 @@ internal sealed class RunCommand : BaseCommand
             // Check for running instance — even if we fail to stop we won't
             // block the apphost starting to make sure we don't ever break flow.
             // It should mostly stop just fine though.
-            var runningInstanceResult = await project.FindAndStopRunningInstanceAsync(effectiveAppHostFile, ExecutionContext.HomeDirectory, cancellationToken);
+            RunningInstanceResult runningInstanceResult;
+            using (var stopRunningInstanceActivity = _profilingTelemetry.StartRunAppHostStopExistingInstance())
+            {
+                runningInstanceResult = await project.FindAndStopRunningInstanceAsync(effectiveAppHostFile, ExecutionContext.HomeDirectory, cancellationToken);
+                stopRunningInstanceActivity.SetAppHostRunningInstanceResult(runningInstanceResult);
+            }
 
             // If in isolated mode and a running instance was stopped, warn the user
             if (isolated && runningInstanceResult == RunningInstanceResult.InstanceStopped)
@@ -264,28 +278,39 @@ internal sealed class RunCommand : BaseCommand
                 BuildCompletionSource = buildCompletionSource,
                 BackchannelCompletionSource = backchannelCompletionSource,
             };
+            ProfilingTelemetry.AddCurrentContextToEnvironment(context.EnvironmentVariables);
+            if (captureProfile)
+            {
+                ProfileCaptureEnvironment.AddCurrentToEnvironment(context.EnvironmentVariables);
+            }
 
+            // Start the project run as a pending task - we'll handle UX while it runs
+            Task<int> pendingRun;
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
             var startupStartTimestamp = _timeProvider.GetTimestamp();
             using var runCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-            // Start the project run as a pending task - we'll handle UX while it runs
-            var pendingRun = project.RunAsync(context, runCancellationTokenSource.Token);
+            using (_profilingTelemetry.StartRunAppHostStartProject(project.LanguageId, noBuild, waitForDebugger))
+            {
+                pendingRun = project.RunAsync(context, runCancellationTokenSource.Token);
+            }
 
             // Wait for the build to complete first (project handles its own build status spinners)
             bool buildSuccess;
-            try
+            using (var waitForBuildActivity = _profilingTelemetry.StartRunAppHostWaitForBuild())
             {
-                buildSuccess = await buildCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken);
-            }
-            catch (TimeoutException)
-            {
-                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                DisplayStartupTimeout(timeoutSeconds);
-                await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun);
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
-            }
+                try
+                {
+                    buildSuccess = await buildCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken);
+                }
+                catch (TimeoutException)
+                {
+                    runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
+                    await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun).ConfigureAwait(false);
+                    return CreateStartupTimeoutResult(timeoutSeconds);
+                }
 
+                waitForBuildActivity.SetAppHostBuildSuccess(buildSuccess);
+            }
             if (!buildSuccess)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "build_failed");
@@ -294,8 +319,7 @@ internal sealed class RunCommand : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeBuilt, ExecutionContext.LogFilePath));
-                return await pendingRun;
+                return CommandResult.Failure(await pendingRun, InteractionServiceStrings.ProjectCouldNotBeBuilt);
             }
 
             // If --wait-for-debugger, display a message so the user knows the AppHost is paused.
@@ -306,34 +330,55 @@ internal sealed class RunCommand : BaseCommand
 
             // Now wait for the backchannel to be established
             IAppHostCliBackchannel backchannel;
-            try
+            using (var waitForBackchannelActivity = _profilingTelemetry.StartRunAppHostWaitForBackchannel())
             {
-                backchannel = await InteractionService.ShowStatusAsync(
-                    RunCommandStrings.ConnectingToAppHost,
-                    async () => await backchannelCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken));
-            }
-            catch (TimeoutException)
-            {
-                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                DisplayStartupTimeout(timeoutSeconds);
-                await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun);
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
+                try
+                {
+                    backchannel = await InteractionService.ShowStatusAsync(
+                        RunCommandStrings.ConnectingToAppHost,
+                        async () => await backchannelCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken));
+                }
+                catch (TimeoutException)
+                {
+                    runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
+                    await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun).ConfigureAwait(false);
+                    return CreateStartupTimeoutResult(timeoutSeconds);
+                }
+
+                waitForBackchannelActivity.SetAppHostBackchannelConnected(true);
             }
 
             // Set up log capture - writes to unified CLI log file
             var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, cancellationToken);
 
             // Get dashboard URLs
-            var dashboardUrls = await InteractionService.ShowStatusAsync(
-                RunCommandStrings.StartingDashboard,
-                async () => await backchannel.GetDashboardUrlsAsync(cancellationToken));
+            DashboardUrlsState dashboardUrls;
+            using (var getDashboardUrlsActivity = _profilingTelemetry.StartRunAppHostGetDashboardUrls())
+            {
+                dashboardUrls = await InteractionService.ShowStatusAsync(
+                    RunCommandStrings.StartingDashboard,
+                    async () => await backchannel.GetDashboardUrlsAsync(cancellationToken));
+                getDashboardUrlsActivity.SetAppHostDashboardHealthy(dashboardUrls.DashboardHealthy);
+            }
 
             if (dashboardUrls.DashboardHealthy is false)
             {
-                runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "dashboard_failed");
-                InteractionService.DisplayError(RunCommandStrings.DashboardFailedToStart);
-                return ExitCodeConstants.DashboardFailure;
+                InteractionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.DashboardFailedToStart);
             }
+
+            if (IsDetachedStartChild())
+            {
+                var observedExitCode = await ObserveEarlyDetachedStartupExitAsync(pendingRun, cancellationToken).ConfigureAwait(false);
+                if (observedExitCode is { } exitCode)
+                {
+                    return exitCode == CliExitCodes.Cancelled
+                        ? CommandResult.Cancelled(CliExitCodes.Success)
+                        : CommandResult.FromExitCode(exitCode);
+                }
+
+            }
+
+            await backchannel.NotifyAppHostReadyAsync(cancellationToken).ConfigureAwait(false);
 
             // Display the UX
             var appHostRelativePath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, effectiveAppHostFile.FullName);
@@ -352,7 +397,12 @@ internal sealed class RunCommand : BaseCommand
                               && _configuration["SSH_CONNECTION"] is not null;
             var isRemoteEnvironment = isCodespaces || isRemoteContainers || isSshRemote;
 
-            if (!isRemoteEnvironment)
+            var profileStopRequested = false;
+            if (captureProfile)
+            {
+                profileStopRequested = await RequestAppHostStopForProfileAsync(backchannel, pendingRun, captureProfileDelay, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
+            }
+            else if (!isRemoteEnvironment)
             {
                 AppendCtrlCMessage(longestLocalizedLengthWithColon);
             }
@@ -384,7 +434,7 @@ internal sealed class RunCommand : BaseCommand
                                 i == 0
                                     ? new Align(new Markup($"[bold green]{endpointsLocalizedString}[/]:"), HorizontalAlignment.Right)
                                     : Text.Empty,
-                                new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] [link={endpoint.EscapeMarkup()}]{endpoint.EscapeMarkup()}[/]")
+                                new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(_interactionService, endpoint)}")
                             );
                         }
 
@@ -422,18 +472,59 @@ internal sealed class RunCommand : BaseCommand
 
             if (ExtensionHelper.IsExtensionHost(InteractionService, out var extInteractionService, out _))
             {
-                extInteractionService.DisplayDashboardUrls(dashboardUrls);
+                if (dashboardUrls.DashboardHealthy is true)
+                {
+                    extInteractionService.DisplayDashboardUrls(dashboardUrls);
+                }
+
                 extInteractionService.NotifyAppHostStartupCompleted();
             }
 
-            await pendingLogCapture;
-            return await pendingRun;
+            using (var lifetimeActivity = _profilingTelemetry.StartRunAppHostLifetime())
+            {
+                runActivity?.Stop();
+
+                try
+                {
+                    await pendingLogCapture;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to capture logs from AppHost");
+                    InteractionService.DisplayMessage(KnownEmojis.Warning, "No longer receiving logs from AppHost.");
+                }
+
+                var exitCode = await pendingRun;
+                lifetimeActivity.SetProcessExitCode(exitCode);
+
+                // Capture mode intentionally turns a long-running AppHost startup into a finite command.
+                // Some AppHost implementations, including guest AppHosts, report the teardown exit code
+                // from a helper process that the CLI stops after the AppHost has already started; on
+                // Unix-like systems that surfaces as 128 + signal (e.g., 130 SIGINT, 137 SIGKILL, 143
+                // SIGTERM). These are AppHost process exit codes (not CLI exit codes), so use the raw
+                // signal-based literals here instead of CLI exit-code constants. Treat the known teardown
+                // codes as a successful capture, but propagate any other non-zero exit code so a
+                // genuine AppHost crash during shutdown is not masked.
+                if (profileStopRequested)
+                {
+                    return exitCode is 0 or 130 or 137 or 143
+                        ? CommandResult.Success()
+                        : CommandResult.FromExitCode(exitCode);
+                }
+
+                // Cancelled by user (e.g., Ctrl+C) - treat as successful exit since the user intentionally stopped the AppHost.
+                return exitCode == CliExitCodes.Cancelled
+                    ? CommandResult.Cancelled(CliExitCodes.Success)
+                    : CommandResult.FromExitCode(exitCode);
+            }
         }
         catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested || ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
-            InteractionService.DisplayCancellationMessage();
-            return ExitCodeConstants.Success;
+
+            // Command is designed to be cancellable by the user (e.g. Ctrl+C) at any time.
+            // Treat cancellation as a successful exit since the user intentionally stopped the AppHost.
+            return CommandResult.Cancelled(CliExitCodes.Success);
         }
         catch (ProjectLocatorException ex)
         {
@@ -444,46 +535,57 @@ internal sealed class RunCommand : BaseCommand
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "incompatible_version");
             Telemetry.RecordError(ex.Message, ex);
-            return InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability);
+            return CommandResult.FromExitCode(InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability));
         }
         catch (CertificateServiceException ex)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "certificate_trust_failed");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            InteractionService.DisplayError(errorMessage);
-            return ExitCodeConstants.FailedToTrustCertificates;
+            return CommandResult.Failure(CliExitCodes.FailedToTrustCertificates, errorMessage);
         }
         catch (FailedToConnectBackchannelConnection ex)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "backchannel_connection_failed");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            InteractionService.DisplayError(errorMessage);
-            // Don't display raw output - it's already in the log file
-            InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, errorMessage);
         }
         catch (ConnectionLostException) when (isExtensionHost)
         {
             // When the extension manages the AppHost lifecycle (e.g., VS Code debug session),
             // it terminates the process on stop/restart, causing the backchannel to drop.
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
         catch (Exception ex)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, ex.GetType().FullName);
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            InteractionService.DisplayError(errorMessage);
-            // Don't display raw output - it's already in the log file
-            InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, errorMessage);
         }
         finally
         {
             runActivity?.Dispose();
         }
+    }
+
+    private bool IsDetachedStartChild() => _configuration.GetBool(KnownConfigNames.CliRunDetached) is true;
+
+    private static async Task<int?> ObserveEarlyDetachedStartupExitAsync(Task<int> pendingRun, CancellationToken cancellationToken)
+    {
+        var completedTask = await Task.WhenAny(
+            pendingRun,
+            Task.Delay(s_detachedStartupStabilityWindow, cancellationToken)).ConfigureAwait(false);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (completedTask == pendingRun)
+        {
+            return await pendingRun.ConfigureAwait(false);
+        }
+
+        return null;
     }
 
     private static IRenderable BuildCtrlCRenderable(int longestLocalizedLengthWithColon)
@@ -506,6 +608,40 @@ internal sealed class RunCommand : BaseCommand
         }
 
         InteractionService.DisplayRenderable(BuildCtrlCRenderable(longestLocalizedLengthWithColon));
+    }
+
+    private static async Task<bool> RequestAppHostStopForProfileAsync(
+        IAppHostCliBackchannel backchannel,
+        Task<int> pendingRun,
+        TimeSpan delay,
+        ProfilingTelemetry profilingTelemetry,
+        CancellationToken cancellationToken)
+    {
+        // The AppHost exports profiling spans through the batched OTLP exporter. Keep the process
+        // alive briefly after startup so late server-side spans (for example dashboard readiness)
+        // have time to flush before the CLI requests shutdown and exports the capture archive.
+        if (delay > TimeSpan.Zero)
+        {
+            using (profilingTelemetry.StartProfileCaptureDelay(delay))
+            {
+                var delayTask = Task.Delay(delay, cancellationToken);
+                var completedTask = await Task.WhenAny(delayTask, pendingRun).ConfigureAwait(false);
+                if (completedTask == pendingRun)
+                {
+                    return false;
+                }
+
+                await delayTask.ConfigureAwait(false);
+            }
+        }
+
+        if (!pendingRun.IsCompleted)
+        {
+            await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -552,11 +688,22 @@ internal sealed class RunCommand : BaseCommand
 
         grid.Columns[0].Width = longestLabelLength;
 
+        // In the extension's debug console, right-aligned labels and the surrounding padding
+        // render as visible left indentation, and the empty separator rows show up as blank
+        // lines that just push real content further down. Use a flush, single-spaced layout
+        // for the extension and keep the spaced-out look only for direct terminal output.
+        IRenderable LabelMarkup(string label)
+        {
+            var markup = new Markup($"[bold green]{label}[/]:");
+            return isExtensionHost ? markup : new Align(markup, HorizontalAlignment.Right);
+        }
+
         // AppHost row
-        grid.AddRow(
-            new Align(new Markup($"[bold green]{appHostLabel}[/]:"), HorizontalAlignment.Right),
-            new Text(appHostRelativePath));
-        grid.AddRow(Text.Empty, Text.Empty);
+        grid.AddRow(LabelMarkup(appHostLabel), new Text(appHostRelativePath));
+        if (!isExtensionHost)
+        {
+            grid.AddRow(Text.Empty, Text.Empty);
+        }
 
         if (!isExtensionHost)
         {
@@ -564,40 +711,39 @@ internal sealed class RunCommand : BaseCommand
             if (!string.IsNullOrEmpty(dashboardUrl))
             {
                 grid.AddRow(
-                    new Align(new Markup($"[bold green]{dashboardLabel}[/]:"), HorizontalAlignment.Right),
-                    new Markup($"[link={dashboardUrl}]{dashboardUrl}[/]"));
+                    LabelMarkup(dashboardLabel),
+                    new Markup(MarkupHelpers.SafeLink(console, dashboardUrl)));
 
                 // Codespaces URL (if available)
                 if (!string.IsNullOrEmpty(codespacesUrl))
                 {
-                    grid.AddRow(Text.Empty, new Markup($"[link={codespacesUrl}]{codespacesUrl}[/]"));
+                    grid.AddRow(Text.Empty, new Markup(MarkupHelpers.SafeLink(console, codespacesUrl)));
                 }
             }
             else
             {
                 grid.AddRow(
-                    new Align(new Markup($"[bold green]{dashboardLabel}[/]:"), HorizontalAlignment.Right),
+                    LabelMarkup(dashboardLabel),
                     new Markup("[dim]N/A[/]"));
             }
             grid.AddRow(Text.Empty, Text.Empty);
         }
 
         // Logs row
-        grid.AddRow(
-            new Align(new Markup($"[bold green]{logsLabel}[/]:"), HorizontalAlignment.Right),
-            new Text(logFilePath));
+        grid.AddRow(LabelMarkup(logsLabel), new Markup(MarkupHelpers.SafeFileLink(console, logFilePath)));
 
         // PID row (if provided)
         if (pid.HasValue)
         {
-            grid.AddRow(Text.Empty, Text.Empty);
-            grid.AddRow(
-                new Align(new Markup($"[bold green]{pidLabel}[/]:"), HorizontalAlignment.Right),
-                new Text(pid.Value.ToString(CultureInfo.InvariantCulture)));
+            if (!isExtensionHost)
+            {
+                grid.AddRow(Text.Empty, Text.Empty);
+            }
+            grid.AddRow(LabelMarkup(pidLabel), new Text(pid.Value.ToString(CultureInfo.InvariantCulture)));
         }
 
-        var padder = new Padder(grid, new Padding(3, 0));
-        console.DisplayRenderable(padder);
+        IRenderable summary = isExtensionHost ? grid : new Padder(grid, new Padding(3, 0));
+        console.DisplayRenderable(summary);
 
         return longestLabelLength;
     }
@@ -677,20 +823,20 @@ internal sealed class RunCommand : BaseCommand
     /// <para><b>Failure Modes:</b></para>
     /// <list type="number">
     /// <item><b>Project not found</b>: No AppHost project found in the current directory or specified path.
-    /// Returns <see cref="ExitCodeConstants.FailedToFindProject"/>.</item>
+    /// Returns <see cref="CliExitCodes.FailedToFindProject"/>.</item>
     /// <item><b>Failed to spawn child process</b>: Process.Start fails (e.g., executable not found).
-    /// Returns <see cref="ExitCodeConstants.FailedToDotnetRunAppHost"/>.</item>
+    /// Returns <see cref="CliExitCodes.FailedToDotnetRunAppHost"/>.</item>
     /// <item><b>Child process exits early</b>: The child 'aspire run' process exits before the backchannel
     /// is established (e.g., build failure, configuration error). Detected via WaitForExitAsync racing
     /// with the poll delay. Shows exit code and log file path.
-    /// Returns <see cref="ExitCodeConstants.FailedToDotnetRunAppHost"/>.</item>
+    /// Returns <see cref="CliExitCodes.FailedToDotnetRunAppHost"/>.</item>
     /// <item><b>Timeout waiting for backchannel</b>: The auxiliary backchannel socket doesn't appear
-    /// within the configured timeout. The child process is killed. Shows timeout message and log file path.
-    /// Returns <see cref="ExitCodeConstants.FailedToDotnetRunAppHost"/>.</item>
+    /// within the configured startup timeout. The child process is killed. Shows timeout message and log file path.
+    /// Returns <see cref="CliExitCodes.FailedToDotnetRunAppHost"/>.</item>
     /// </list>
     /// <para>On any failure, the log file path is displayed so the user can investigate.</para>
     /// </remarks>
-    private Task<int> ExecuteDetachedAsync(ParseResult parseResult, FileInfo? passedAppHostProjectFile, bool isExtensionHost, int timeoutSeconds, CancellationToken cancellationToken)
+    private Task<CommandResult> ExecuteDetachedAsync(ParseResult parseResult, FileInfo? passedAppHostProjectFile, bool isExtensionHost, int timeoutSeconds, CancellationToken cancellationToken)
     {
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
@@ -698,6 +844,10 @@ internal sealed class RunCommand : BaseCommand
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
         var additionalArgs = parseResult.UnmatchedTokens.Where(t => t != "--detach").ToList();
+        var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
+        var stopAfterLaunchDelay = captureProfile
+            ? TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption))
+            : (TimeSpan?)null;
 
         if (noBuild)
         {
@@ -713,6 +863,7 @@ internal sealed class RunCommand : BaseCommand
             timeoutSeconds,
             globalArgs,
             additionalArgs,
+            stopAfterLaunchDelay,
             cancellationToken);
     }
 
@@ -756,10 +907,11 @@ internal sealed class RunCommand : BaseCommand
         }
     }
 
-    private void DisplayStartupTimeout(int timeoutSeconds)
+    private static CommandResult CreateStartupTimeoutResult(int timeoutSeconds)
     {
-        InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeout));
-        InteractionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
+        return CommandResult.Failure(
+            CliExitCodes.FailedToDotnetRunAppHost,
+            string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeout));
     }
 
 }

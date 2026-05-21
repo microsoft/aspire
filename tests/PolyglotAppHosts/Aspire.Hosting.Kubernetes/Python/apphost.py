@@ -7,20 +7,25 @@ from aspire_app import create_builder
 with create_builder() as builder:
     helm_namespace = builder.add_parameter("helm-namespace")
     helm_release_name = builder.add_parameter("helm-release-name")
+    helm_chart_name = builder.add_parameter("helm-chart-name")
     helm_chart_version = builder.add_parameter("helm-chart-version")
+    helm_chart_description = builder.add_parameter("helm-chart-description")
     kubernetes = builder.add_kubernetes_environment("resource")
 
     def configure_helm(helm):
         helm.with_namespace("validation-namespace")
         helm.with_release_name("validation-release")
+        helm.with_chart_name("validation-kubernetes")
         helm.with_chart_version("1.2.3")
+        helm.with_chart_description("Validation Helm Chart")
         helm.with_namespace(helm_namespace)
         helm.with_release_name(helm_release_name)
+        helm.with_chart_name(helm_chart_name)
         helm.with_chart_version(helm_chart_version)
+        helm.with_chart_description(helm_chart_description)
 
     kubernetes.with_helm(configure_helm)
     kubernetes.with_properties()
-    _resolved_helm_chart_name = kubernetes.helm_chart_name
     _resolved_default_storage_class_name = kubernetes.default_storage_class_name
     _resolved_default_service_type = kubernetes.default_service_type
     gateway = kubernetes.add_gateway("public-gateway")
@@ -30,5 +35,17 @@ with create_builder() as builder:
     ingress.with_hostname("ingress.example.com")
     ingress.with_tls("ingress-tls")
     service_container = builder.add_container("resource", "image")
-    service_container.publish_as_kubernetes_service()
+    service_container.with_compute_environment(kubernetes)
+
+    def configure_service(service):
+        def configure_manifest(manifest):
+            manifest.with_label("example.com/custom", "true")
+            manifest.with_annotation("example.com/source", "python")
+            manifest.with_field("spec.scaleTargetRef.kind", "Deployment")
+            manifest.with_field("spec.scaleTargetRef.name", "resource")
+            manifest.with_field("spec.maxReplicaCount", 3)
+
+        service.add_manifest("keda.sh/v1alpha1", "ScaledObject", "resource-scaler", configure_manifest)
+
+    service_container.publish_as_kubernetes_service(configure_service)
     builder.run()

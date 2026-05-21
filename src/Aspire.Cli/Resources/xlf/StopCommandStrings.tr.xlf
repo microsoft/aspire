@@ -7,9 +7,14 @@
         <target state="new">Stop all running AppHosts</target>
         <note />
       </trans-unit>
+      <trans-unit id="AppHostIdentifierWithProcessId">
+        <source>{0} (PID {1})</source>
+        <target state="new">{0} (PID {1})</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AppHostStoppedSuccessfully">
-        <source>AppHost stopped successfully.</source>
-        <target state="needs-review-translation">AppHost başarıyla durduruldu.</target>
+        <source>{0} stopped successfully.</source>
+        <target state="new">{0} stopped successfully.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
@@ -18,8 +23,13 @@
         <note />
       </trans-unit>
       <trans-unit id="FailedToStopAppHost">
-        <source>Failed to stop the AppHost.</source>
-        <target state="needs-review-translation">AppHost durdurulamadı.</target>
+        <source>Failed to stop {0}.</source>
+        <target state="new">Failed to stop {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FoundRunningAppHost">
+        <source>Found running AppHost: {0}</source>
+        <target state="new">Found running AppHost: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleAppHostsNonInteractive">
@@ -42,9 +52,14 @@
         <target state="translated">durdur</target>
         <note />
       </trans-unit>
+      <trans-unit id="SendingStopSignal">
+        <source>Sending stop signal to {0}...</source>
+        <target state="new">Sending stop signal to {0}...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="StoppingAppHost">
-        <source>Stopping Aspire AppHost...</source>
-        <target state="needs-review-translation">Aspire apphost durduruluyor...</target>
+        <source>Stopping {0}...</source>
+        <target state="new">Stopping {0}...</target>
         <note />
       </trans-unit>
       <trans-unit id="AllAndProjectMutuallyExclusive">

@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost — Milvus integration validation
 // Exercises every exported member of Aspire.Hosting.Milvus
 
-import { createBuilder, ContainerLifetime } from './.modules/aspire.js';
+import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -55,7 +55,7 @@ await builder.addMilvus("milvus-cfg")
 
 // ── 14. Fluent chaining: multiple With* methods ────────────────────────────
 await builder.addMilvus("milvus-chained")
-    .withLifetime(ContainerLifetime.Persistent)
+    .withPersistentLifetime()
     .withDataVolume({ name: "milvus-chained-data" })
     .withAttu();
 

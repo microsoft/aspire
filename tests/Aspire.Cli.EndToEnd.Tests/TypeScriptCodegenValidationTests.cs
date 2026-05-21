@@ -15,15 +15,16 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 {
-    public static TheoryData<string> AlternativeToolchains => new()
+    public static TheoryData<string> SupportedToolchains => new()
     {
+        "npm",
         "bun",
         "yarn",
         "pnpm"
     };
 
     [Theory]
-    [MemberData(nameof(AlternativeToolchains))]
+    [MemberData(nameof(SupportedToolchains))]
     [CaptureWorkspaceOnFailure]
     public async Task RestoreGeneratesSdkFiles_WithConfiguredToolchain(string toolchain)
     {
@@ -53,6 +54,11 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
+
+        // LocalHive strategy only: PrepareLocalChannel returned a real channel,
+        // so write the per-project aspire.config.json to point at the in-repo
+        // nupkg hive. Other strategies (script-installed CLI, pre-existing CLI)
+        // return null and rely on the CLI's baked channel + ambient NuGet feeds.
         if (localChannel is not null)
         {
             CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
@@ -72,6 +78,19 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
+
+        var lockFilePath = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            TypeScriptAppHostToolchainTestHelpers.GetLockFileName(toolchain));
+        if (!File.Exists(lockFilePath))
+        {
+            throw new InvalidOperationException(
+                $"Expected {TypeScriptAppHostToolchainTestHelpers.GetDisplayName(toolchain)} restore to create '{lockFilePath}'.");
+        }
+
+        await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(toolchain, "tsconfig.apphost.json"));
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 4: Verify generated SDK files exist.
         var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");

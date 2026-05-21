@@ -6,21 +6,26 @@ This document describes the release process for microsoft/aspire, including both
 
 The Aspire release process involves two main automation components:
 
-1. **Azure DevOps Pipeline** (`eng/pipelines/release-publish-nuget.yml`)
+1. **Azure DevOps Pipeline** ([`release-publish-nuget`](https://dev.azure.com/dnceng/internal/_build?definitionId=1600&_a=summary), source: `eng/pipelines/release-publish-nuget.yml`)
    - Publishes NuGet packages to NuGet.org
    - Promotes the build to the GA channel via darc
+   - Submits WinGet and Homebrew installer PRs
+   - Dispatches the GitHub Actions workflow below as the `aspire-repo-bot`
+     GitHub App and waits for it to complete
 
 2. **GitHub Actions Workflow** (`.github/workflows/release-github-tasks.yml`)
    - Creates Git tags
    - Creates GitHub Releases
    - Creates merge-back PRs
    - Creates baseline version update PRs
+   - Normally dispatched automatically by the AzDO pipeline above; can also
+     be run manually as a fallback for partial-failure re-runs
 
 ## Prerequisites
 
 Before starting a release:
 
-1. **Signed Build**: Have a successful signed build from the official `dotnet-aspire` pipeline
+1. **Signed Build**: Have a successful signed build from the official [`microsoft-aspire`](https://dev.azure.com/dnceng/internal/_build?definitionId=1602) pipeline
    - The build will be selected from a dropdown when running the release pipeline
    - The build should have a `BAR ID - NNNNNN` tag (auto-extracted by the pipeline)
 
@@ -28,38 +33,99 @@ Before starting a release:
 
 3. **Permissions**:
    - Access to run Azure DevOps pipelines with the publishing pool
-   - GitHub write access for creating tags/releases/PRs
+   - GitHub write access for creating tags/releases/PRs (only required for manual GH workflow runs)
+
+4. **AzDO secrets** (already configured for chained dispatch):
+   - `aspire-bot-app-id` — `aspire-repo-bot` GitHub App ID
+   - `aspire-bot-private-key` — `aspire-repo-bot` GitHub App PEM private key
+
+   Both live in the **`Aspire-Release-Secrets`** variable group (AzDO →
+   Pipelines → Library) and are marked as secret. To rotate the private key:
+   generate a new one from the App settings page
+   (github.com/organizations/dotnet/settings/apps/aspire-repo-bot →
+   "Private keys" → "Generate a private key"), paste the full PEM (including
+   the `-----BEGIN/END-----` lines) into the `aspire-bot-private-key`
+   variable, save, then revoke the old key from the same App settings page.
+   The App ID does not change on rotation.
 
 ## Step-by-Step Release Process
 
-### Step 1: Publish NuGet Packages (Azure DevOps)
+### Step 1: Run the AzDO release pipeline (one click for everything)
 
-1. Navigate to the Azure DevOps pipeline: `release-publish-nuget`
+1. Navigate to the Azure DevOps pipeline:
+   [release-publish-nuget](https://dev.azure.com/dnceng/internal/_build?definitionId=1600&_a=summary)
+   (definition `1600` in `dnceng/internal`)
 2. Click "Run pipeline"
-3. Under **Resources**, select the source build from the `aspire-build` dropdown
-   - This shows recent builds from the `dotnet-aspire` pipeline
-   - Select the specific signed build you want to release
-4. Fill in the parameters:
+3. Fill in the parameters. **Most should stay at their defaults** — the
+   ones flagged `[Advanced]` in the run-pipeline form are only for
+   re-running after a partial failure or for testing pipeline changes on a
+   topic branch.
+
+   **Common (you may set these every release):**
 
    | Parameter | Description | Example |
    |-----------|-------------|---------|
+   | `ReleaseVersion` | Override for the version label (used as `v<version>` tag). **Leave as `auto` to derive from the source build's `release-version - *` tag** — the normal case. Only set this when re-shipping under a corrected tag. | `auto` |
+   | `IsPrerelease` | `true` for preview releases | `false` |
+   | `DryRun` | Set `true` to test without publishing or tagging | `false` |
    | `GaChannelName` | Target GA channel | `Aspire 9.x GA` |
-   | `DryRun` | Set `true` to test without publishing | `false` |
+
+   **Advanced (leave defaults unless you know what you're doing):**
+
+   | Parameter | Description | Default |
+   |-----------|-------------|---------|
    | `SkipNuGetPublish` | Set `true` if re-running after NuGet success | `false` |
    | `SkipChannelPromotion` | Set `true` if re-running after darc success | `false` |
+   | `SkipWinGetPublish` | Set `true` if re-running after WinGet success | `false` |
+   | `SkipHomebrewPublish` | Set `true` if re-running after Homebrew success | `false` |
+   | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow | `false` |
+   | `SkipReleaseAssets` | Set `true` to skip uploading aspire-cli-* assets to the GitHub release | `false` |
+   | `GitHubTasksWorkflowRef` | Ref to load `release-github-tasks.yml` from when dispatching. Only affects the workflow source — the release branch/commit are passed via inputs. Override only when testing pipeline changes on a topic branch. | `main` |
+   
+4. Select the **Resources** button in the bottom right, then select the source build from the `aspire-build` dropdown
+   - The picker shows all recent builds from the `microsoft-aspire`
+     pipeline regardless of branch. Pick the build that corresponds to the
+     release branch and version you intend to ship.
+   - Each build's tags are shown alongside its number — verify the
+     `release-version - X.Y.Z` tag matches the version you intend to ship
+     **before** clicking Run. If the tag is missing, either re-run the
+     source build (after the tag-emitting change in `azure-pipelines.yml`
+     is on that release branch) or pass an explicit `ReleaseVersion`
+     override below.
+5. Click "Run" and monitor the pipeline. The final stage (`GitHubTasks`)
+   dispatches `release-github-tasks.yml`, waits for it to complete, and
+   then uploads the `aspire-cli-*` archives from the source build's
+   `BlobArtifacts` onto the newly-created GitHub release — the AzDO
+   pipeline only succeeds if both pieces succeed.
+6. Verify packages appear on NuGet.org and that the `aspire-cli-*`
+   archives are attached to the GitHub release.
 
-5. Click "Run" and monitor the pipeline
-6. Verify packages appear on NuGet.org
+`commit_sha` and `release_branch` for the GitHub workflow are derived
+automatically from the source build resource — no need to copy them by hand.
 
-### Step 2: GitHub Tasks (GitHub Actions)
+> **Tip**: Use `DryRun: true` to test end-to-end without publishing,
+> promoting, tagging, or creating PRs. The dry-run state is propagated to
+> the GitHub workflow as `dry_run: true`.
 
-1. Navigate to Actions → "Release GitHub Tasks"
-2. Click "Run workflow"
-3. Fill in the parameters:
+### Step 2 (fallback): Manually re-run the GitHub workflow
+
+The GitHub workflow is normally dispatched by the AzDO pipeline as the
+`aspire-repo-bot` GitHub App, with its `authorize` job bypassed for the
+bot. If a GitHub-side step fails partway through and you need to re-run
+only the GitHub work, you can:
+
+1. Re-run the AzDO pipeline with `SkipNuGetPublish`, `SkipChannelPromotion`,
+   `SkipWinGetPublish`, `SkipHomebrewPublish` all set to `true` (and the
+   appropriate other skips), keeping `SkipGitHubTasks: false`. The
+   `GitHubTasks` stage will dispatch the workflow again with the right
+   inputs, and the workflow's own `skip_*` idempotency makes the
+   completed steps no-ops.
+2. Or, navigate to Actions → "Release GitHub Tasks", click "Run workflow",
+   and fill in the parameters manually:
 
    | Parameter | Description | Example |
    |-----------|-------------|---------|
-   | `release_version` | The version being released | `13.2.0` |
+   | `release_version` | The version being released | `13.0.0` |
    | `commit_sha` | Full 40-char commit SHA from the build | `abc123...` |
    | `release_branch` | Release branch name | `release/9.2` |
    | `is_prerelease` | `true` for preview releases | `false` |
@@ -69,22 +135,21 @@ Before starting a release:
    | `skip_merge_pr` | Skip if PR already created | `false` |
    | `skip_baseline_pr` | Skip if PR already created | `false` |
 
-4. Click "Run workflow" and monitor progress
-
-> **Tip**: Use `dry_run: true` to test the workflow without creating any tags, releases, or PRs. This is useful for validating inputs and checking what actions would be taken.
+   Manual runs go through the normal `authorize` check (admin/maintain
+   permission required).
 
 ### Step 3: Post-Release Tasks (Manual)
 
 After automation completes:
 
-1. **Review and merge PRs**:
+1. **Review and merge automatically created PRs**:
    - Merge-back PR: `$RELEASE_BRANCH` → `main`
    - Baseline version PR: Updates `PackageValidationBaselineVersion`
 
 2. **Verify the release**:
    - Check the [GitHub Releases page](https://github.com/microsoft/aspire/releases)
-   - Verify packages on [NuGet.org](https://www.nuget.org/packages?q=owner%3Adotnet+aspire)
-   - Test installation: `dotnet new install Aspire.ProjectTemplates::VERSION`
+   - Verify packages on [NuGet.org](https://www.nuget.org/packages?q=owner%3Aaspire)
+   - Test installation: `dotnet new install Aspire.ProjectTemplates::VERSION` and `aspire update --self`
 
 3. **Communicate**:
    - Update any tracking issues
@@ -108,13 +173,25 @@ The pipeline runs as a single stage with all steps in sequence. If a step fails:
 
 ### GitHub Actions Failures
 
-| Job Failed | Resolution |
-|------------|------------|
-| validate | Fix the input parameters and re-run |
-| create-tag | If tag exists with wrong SHA, requires manual resolution |
-| create-release | Re-run with `skip_tagging: true` |
-| create-merge-pr | Re-run with `skip_tagging: true`, `skip_github_release: true` |
-| create-baseline-pr | Re-run with all prior skips set to `true` |
+The GitHub workflow runs as a single `release` job with all tasks as
+sequential steps. The previous design split these across six jobs and paid
+the runner-provisioning tax on each; consolidation cuts that to one. If a
+step fails, drill into the run UI to see exactly which step (tag, release,
+merge PR, baseline PR) hit the issue.
+
+Re-run with the corresponding `skip_*` input set to `true` to skip steps
+that have already succeeded. The skip inputs are still passed step-by-step
+so partial-failure re-runs behave the same way they did before
+consolidation.
+
+| Step Failed | Resolution |
+|-------------|------------|
+| Authorize | Caller lacks admin/maintain permission (or AzDO bot identity check failed) |
+| Validate Version Format / Commit SHA | Fix the input parameters and re-run |
+| Create Tag | If tag exists with wrong SHA, requires manual resolution |
+| Create GitHub Release | Re-run with `skip_tagging: true` |
+| Create Merge PR | Re-run with `skip_tagging: true`, `skip_github_release: true` |
+| Create Baseline PR | Re-run with all prior skips set to `true` |
 
 ## Configuration
 

@@ -233,6 +233,36 @@ public class AspireNatsClientExtensionsTests : IClassFixture<NatsContainerFixtur
         }, _connectionString).Dispose();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void RegistersINatsClient(bool useKeyed)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection([
+            new KeyValuePair<string, string?>("ConnectionStrings:nats", _connectionString)
+        ]);
+
+        if (useKeyed)
+        {
+            builder.AddKeyedNatsClient("nats");
+        }
+        else
+        {
+            builder.AddNatsClient("nats");
+        }
+
+        using var host = builder.Build();
+        var client = useKeyed ?
+            host.Services.GetRequiredKeyedService<INatsClient>("nats") :
+            host.Services.GetRequiredService<INatsClient>();
+        var connection = useKeyed ?
+            host.Services.GetRequiredKeyedService<INatsConnection>("nats") :
+            host.Services.GetRequiredService<INatsConnection>();
+
+        Assert.Same(connection, client);
+    }
+
     [Fact]
     public void CanAddMultipleKeyedServices()
     {

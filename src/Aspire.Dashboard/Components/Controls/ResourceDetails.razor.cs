@@ -212,7 +212,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                 {
                     Type = typeof(ResourceHealthStateValue),
                     Parameters = { ["Resource"] = _resource }
-                },
+                }
             };
 
             // For parameter resources whose value is unset, render the same "Value not set" affordance
@@ -225,7 +225,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
                     Parameters =
                     {
                         ["Resource"] = _resource,
-                        ["OnExecuteCommandAsync"] = (Func<ResourceViewModel, CommandViewModel, Task>)ExecuteParameterCommandAsync,
+                        ["OnExecuteCommandAsync"] = (Func<ResourceViewModel, CommandViewModel, Task>)ExecuteResourceCommandAsync,
                         ["IsCommandExecuting"] = IsCommandExecuting,
                     }
                 };
@@ -307,10 +307,11 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
             IsCommandExecuting,
             showViewDetails: false,
             showConsoleLogsItem: true,
-            showUrls: true);
+            showUrls: true,
+            showStartCommand: false);
     }
 
-    private async Task ExecuteParameterCommandAsync(ResourceViewModel resource, CommandViewModel command)
+    private async Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
     {
         await CommandSelected.InvokeAsync(command);
     }
@@ -375,7 +376,7 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private void AddStateDescriptionProperty(ResourceViewModel resource)
     {
         var stateViewModel = ResourceStateViewModel.GetStateViewModel(resource, ColumnsLoc);
-        var stateDescription = ResourceStateViewModel.GetResourceStateTooltip(resource, ColumnsLoc);
+        var stateDescription = ResourceStateViewModel.GetResourceStateTooltip(resource, ColumnsLoc, ResourceByName.Values);
 
         if (string.IsNullOrWhiteSpace(stateDescription) || string.Equals(stateDescription, stateViewModel.Text, StringComparison.Ordinal))
         {
@@ -396,7 +397,10 @@ public partial class ResourceDetails : IComponentWithTelemetry, IDisposable
     private IEnumerable<DisplayedResourcePropertyViewModel> GetResourceProperties(bool ordered)
     {
         var vms = _displayedResourcePropertyViewModels
-            .Where(vm => vm.Value is { HasNullValue: false } and not { KindCase: Value.KindOneofCase.ListValue, ListValue.Values.Count: 0 });
+            .Where(vm => vm.Value is { HasNullValue: false } and not { KindCase: Value.KindOneofCase.ListValue, ListValue.Values.Count: 0 }
+                // State has a custom component (ResourceStateValue) that renders "Unknown" when the value is null,
+                // so always include it in the property list.
+                || string.Equals(vm.KnownProperty?.Key, KnownProperties.Resource.State, StringComparisons.ResourcePropertyName));
 
         return ordered
             ? vms.OrderBy(vm => vm.Priority).ThenBy(vm => vm.DisplayName)

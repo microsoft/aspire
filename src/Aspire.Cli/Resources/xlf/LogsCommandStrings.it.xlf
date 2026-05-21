@@ -22,6 +22,11 @@
         <target state="needs-review-translation">Log di output in formato JSON (NDJSON).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoLogsFound">
+        <source>No logs found.</source>
+        <target state="new">No logs found.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoResourcesFound">
         <source>No resources found.</source>
         <target state="translated">Non sono state trovate risorse.</target>
@@ -40,6 +45,11 @@
       <trans-unit id="ResourceRequiredWithoutFollow">
         <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
         <target state="translated">Quando non si usa --follow, è necessario specificare un nome di risorsa. Usare --follow per trasmettere i log da tutte le risorse.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

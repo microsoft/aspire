@@ -120,6 +120,9 @@
   <data name="MinimumSdkVersionNotMet" xml:space="preserve">
     <value>C# AppHost requires .NET SDK version {0} or later. Detected: {1}.</value>
   </data>
+  <data name="DotNetSdkUnavailableAppHostDiscoveryWarning" xml:space="preserve">
+    <value>Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</value>
+  </data>
   <data name="InvalidLocaleProvided" xml:space="preserve">
     <value>Invalid locale {0} provided will not be used.</value>
   </data>
@@ -154,6 +157,9 @@
   <data name="FailedToSearchForPackages" xml:space="preserve">
     <value>Failed to search for packages. Exit code: {0}.</value>
     <comment>{0} is a number</comment>
+  </data>
+  <data name="FailedToParsePackageSearchResults" xml:space="preserve">
+    <value>Failed to parse package search results.</value>
   </data>
   <data name="AppHostWasSpecifiedButDoesntExist" xml:space="preserve">
     <value>AppHost file was specified in '{0}' but it does not exist at '{1}'.</value>

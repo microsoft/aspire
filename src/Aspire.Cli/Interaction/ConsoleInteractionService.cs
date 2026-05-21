@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
@@ -35,12 +36,26 @@ internal class ConsoleInteractionService : IInteractionService
     /// <summary>
     /// Console used for human-readable messages; routes to stderr when <see cref="Console"/> is set to <see cref="ConsoleOutput.Error"/>.
     /// </summary>
-    private IAnsiConsole MessageConsole => Console == ConsoleOutput.Error ? _errorConsole : _outConsole;
+    private IAnsiConsole MessageConsole => GetConsoleOutput(null);
 
     // Limit logging to prompts and messages. Don't log raw text output since it may contain sensitive information.
-    private ILogger MessageLogger => Console == ConsoleOutput.Error ? _stderrLogger : _stdoutLogger;
+    private ILogger MessageLogger => GetLogger(null);
+
+    private IAnsiConsole GetConsoleOutput(ConsoleOutput? consoleOverride) => (consoleOverride ?? Console) switch
+    {
+        ConsoleOutput.Error => _errorConsole,
+        _ => _outConsole
+    };
+
+    private ILogger GetLogger(ConsoleOutput? consoleOverride) => (consoleOverride ?? Console) switch
+    {
+        ConsoleOutput.Error => _stderrLogger,
+        _ => _stdoutLogger
+    };
 
     public ConsoleOutput Console { get; set; }
+
+    public bool SupportsLinks => MessageConsole.Profile.Capabilities.Links;
 
     public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, ILoggerFactory loggerFactory)
     {
@@ -52,8 +67,8 @@ internal class ConsoleInteractionService : IInteractionService
         _errorConsole = consoleEnvironment.Error;
         _executionContext = executionContext;
         _hostEnvironment = hostEnvironment;
-        _stdoutLogger = loggerFactory.CreateLogger("Aspire.Cli.Console.Stdout");
-        _stderrLogger = loggerFactory.CreateLogger("Aspire.Cli.Console.Stderr");
+        _stdoutLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stdout}");
+        _stderrLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stderr}");
     }
 
     public async Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
@@ -71,11 +86,15 @@ internal class ConsoleInteractionService : IInteractionService
         // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
         // Spectre.Console throws if multiple interactive operations run concurrently.
         // If already in a status, or in debug/non-interactive mode, fall back to subtle message.
-        // Also skip status display if statusText is empty (e.g., when outputting JSON)
-        if (Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0 ||
-            _executionContext.DebugMode ||
+        // Also skip status display if statusText is empty (e.g., when outputting JSON).
+        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation
+        // skips the swap when an earlier condition forces the fallback path. Otherwise the
+        // swap would set _inStatus to 1 but the try/finally that resets it would never run,
+        // permanently disabling interactive status for the lifetime of the service.
+        if (_executionContext.DebugMode ||
             !_hostEnvironment.SupportsInteractiveOutput ||
-            string.IsNullOrEmpty(statusText))
+            string.IsNullOrEmpty(statusText) ||
+            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
         {
             // Skip displaying if status text is empty (e.g., when outputting JSON)
             if (!string.IsNullOrEmpty(statusText))
@@ -102,6 +121,51 @@ internal class ConsoleInteractionService : IInteractionService
         }
     }
 
+    public async Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
+    {
+        var emojiPrefix = emoji is { } e ? ConsoleHelpers.FormatEmojiPrefix(e, MessageConsole) : string.Empty;
+        var initialDisplayText = emojiPrefix + initialStatusText.EscapeMarkup();
+
+        // Mirrors ShowStatusAsync: prevent nested Spectre.Console Status operations, skip when debug/non-interactive,
+        // and treat empty text as "no status UI". The fallback path still drives the action so progress logic runs;
+        // we just hand it an updater that emits subtle messages instead of mutating a live spinner.
+        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation skips the swap when
+        // an earlier condition forces the fallback path; otherwise _inStatus would be left set to 1.
+        if (_executionContext.DebugMode ||
+            !_hostEnvironment.SupportsInteractiveOutput ||
+            string.IsNullOrEmpty(initialStatusText) ||
+            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
+        {
+            if (!string.IsNullOrEmpty(initialStatusText))
+            {
+                DisplaySubtleMessage(initialDisplayText, allowMarkup: true);
+            }
+            else
+            {
+                MessageLogger.LogInformation("Status: {StatusText}", initialStatusText);
+            }
+
+            return await action(text =>
+            {
+                if (!string.IsNullOrEmpty(text))
+                {
+                    DisplaySubtleMessage(emojiPrefix + text.EscapeMarkup(), allowMarkup: true);
+                }
+            });
+        }
+
+        try
+        {
+            return await MessageConsole.Status()
+                .Spinner(Spinner.Known.Dots3)
+                .StartAsync(initialDisplayText, context => action(text => context.Status = emojiPrefix + text.EscapeMarkup()));
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _inStatus, 0);
+        }
+    }
+
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         MessageLogger.LogInformation("Status: {StatusText}", statusText);
@@ -119,11 +183,13 @@ internal class ConsoleInteractionService : IInteractionService
         // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
         // Spectre.Console throws if multiple interactive operations run concurrently.
         // If already in a status, or in debug/non-interactive mode, fall back to subtle message.
-        // Also skip status display if statusText is empty (e.g., when outputting JSON)
-        if (Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0 ||
-            _executionContext.DebugMode ||
+        // Also skip status display if statusText is empty (e.g., when outputting JSON).
+        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation skips the swap when
+        // an earlier condition forces the fallback path; otherwise _inStatus would be left set to 1.
+        if (_executionContext.DebugMode ||
             !_hostEnvironment.SupportsInteractiveOutput ||
-            string.IsNullOrEmpty(statusText))
+            string.IsNullOrEmpty(statusText) ||
+            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
         {
             if (!string.IsNullOrEmpty(statusText))
             {
@@ -210,7 +276,7 @@ internal class ConsoleInteractionService : IInteractionService
         return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
     }
 
-    public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
@@ -259,10 +325,18 @@ internal class ConsoleInteractionService : IInteractionService
 
         var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
         MessageLogger.LogInformation("Selection result: {Result}", choiceFormatter(result));
+
+        // The SelectionPrompt clears its display after the user selects.
+        // Echo the prompt text and selected value so the user can see what was chosen.
+        if (echoSelected)
+        {
+            MessageConsole.MarkupLine($"{promptText} {choiceFormatter(result)}");
+        }
+
         return result;
     }
 
-    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
@@ -319,6 +393,25 @@ internal class ConsoleInteractionService : IInteractionService
 
         var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
         MessageLogger.LogInformation("Selection results: {Results}", string.Join(", ", result.Select(choiceFormatter)));
+
+        // The MultiSelectionPrompt clears its display after the user selects.
+        // Echo the prompt text and selected values so the user can see what was chosen.
+        if (echoSelected)
+        {
+            if (result.Count == 0)
+            {
+                MessageConsole.MarkupLine($"{promptText} [dim](none)[/]");
+            }
+            else
+            {
+                MessageConsole.MarkupLine(promptText);
+                foreach (var item in result)
+                {
+                    MessageConsole.MarkupLine($"  - {choiceFormatter(item)}");
+                }
+            }
+        }
+
         return result;
     }
 
@@ -333,26 +426,47 @@ internal class ConsoleInteractionService : IInteractionService
         MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion.EscapeMarkup()}");
         MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability.EscapeMarkup()}");
         MessageConsole.WriteLine();
-        return ExitCodeConstants.AppHostIncompatible;
+        return CliExitCodes.AppHostIncompatible;
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
-        DisplayMessage(KnownEmojis.CrossMark, $"[red bold]{errorMessage.EscapeMarkup()}[/]", allowMarkup: true);
+        var formatted = allowMarkup ? errorMessage : errorMessage.EscapeMarkup();
+        // Always write errors to stderr so callers can capture them separately from stdout.
+        WriteEmojiMessage(_errorConsole, _stderrLogger, KnownEmojis.CrossMark, $"[red bold]{formatted}[/]", allowMarkup: true);
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
-        if (MessageLogger.IsEnabled(LogLevel.Information))
+        WriteEmojiMessage(GetConsoleOutput(consoleOverride), GetLogger(consoleOverride), emoji, message, allowMarkup);
+    }
+
+    private static void WriteEmojiMessage(IAnsiConsole target, ILogger logger, KnownEmoji emoji, string message, bool allowMarkup)
+    {
+        if (logger.IsEnabled(LogLevel.Information))
         {
             // Only attempt to parse/remove markup when the message is expected to contain it.
             // Plain text messages may contain characters like '[' that would be rejected by the markup parser.
             var logMessage = allowMarkup ? message.RemoveMarkup() : message;
-            MessageLogger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole, replaceEmoji: true) + logMessage);
+            logger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, target, replaceEmoji: true) + logMessage);
         }
 
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
-        MessageConsole.MarkupLine(ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole) + displayMessage);
+
+        // Use a grid to keep the icon in a fixed first column so long text wraps
+        // without pushing under the emoji prefix.
+        var grid = new Grid();
+        grid.AddColumn();
+        grid.AddColumn();
+        grid.Columns[0].NoWrap = true;
+        grid.Columns[0].Padding = new Padding(0);
+        grid.Columns[1].Padding = new Padding(0);
+
+        grid.AddRow(
+            new Markup(ConsoleHelpers.FormatEmojiPrefix(emoji, target)),
+            new Markup(displayMessage));
+
+        target.Write(grid);
     }
 
     public void DisplayPlainText(string message)
@@ -391,7 +505,12 @@ internal class ConsoleInteractionService : IInteractionService
         {
             var renderable = MarkdownToSpectreConverter.ConvertToRenderable(markdown);
             target.Write(renderable);
-            target.WriteLine();
+
+            // A row automatically includes a newline, so we don't need to call WriteLine after writing the renderable.
+            if (renderable is not Rows)
+            {
+                target.WriteLine();
+            }
         }
         finally
         {
@@ -479,10 +598,10 @@ internal class ConsoleInteractionService : IInteractionService
             });
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
-        MessageConsole.WriteLine();
-        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true);
+        GetConsoleOutput(consoleOverride).WriteLine();
+        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true, consoleOverride: consoleOverride);
     }
 
     public async Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
@@ -585,7 +704,7 @@ internal class ConsoleInteractionService : IInteractionService
             _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ToUpdateRunCommand, updateCommand.EscapeMarkup()));
         }
 
-        _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.MoreInfoNewCliVersion, UpdateUrl));
+        _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.MoreInfoNewCliVersion, MarkupHelpers.SafeLink(this, UpdateUrl)));
     }
 
     internal static T? MatchChoice<T>(string value, IEnumerable<T> choices, Func<T, string> choiceFormatter) where T : notnull

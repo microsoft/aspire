@@ -17,5 +17,8 @@ cask "aspire" do
 
   binary "aspire"
 
-  zap trash: "~/.aspire"
+  # Write the sidecar file
+  postflight do
+    File.write("#{staged_path}/.aspire-install.json", %({"source":"brew"}\n))
+  end
 end

@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting;
+using Aspire.Shared;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -101,6 +101,14 @@ internal sealed class AspireCliTelemetry : IHostedService
     }
 
     /// <summary>
+    /// Starts a new activity for reported telemetry with an explicit parent context.
+    /// </summary>
+    public Activity? StartReportedActivity(string name, ActivityKind kind, ActivityContext parentContext)
+    {
+        return StartActivityCore(_reportedActivitySource, name, kind, parentContext);
+    }
+
+    /// <summary>
     /// Starts a new activity for diagnostic telemetry used for internal diagnostics only.
     /// Uses the caller member name if no name is provided.
     /// </summary>
@@ -112,14 +120,29 @@ internal sealed class AspireCliTelemetry : IHostedService
         return StartActivityCore(_diagnosticsActivitySource, name, kind);
     }
 
+    /// <summary>
+    /// Starts a new activity for diagnostic telemetry with an explicit parent context.
+    /// </summary>
+    public Activity? StartDiagnosticActivity(string name, ActivityKind kind, ActivityContext parentContext)
+    {
+        return StartActivityCore(_diagnosticsActivitySource, name, kind, parentContext);
+    }
+
     private Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind)
+    {
+        return StartActivityCore(source, name, kind, parentContext: null);
+    }
+
+    private Activity? StartActivityCore(ActivitySource source, string name, ActivityKind kind, ActivityContext? parentContext)
     {
         CheckInitialization();
 
         // Activities must have a name.
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var activity = source.StartActivity(name, kind);
+        var activity = parentContext is { } context
+            ? source.StartActivity(name, kind, context)
+            : source.StartActivity(name, kind);
 
         if (activity is not null)
         {
@@ -299,7 +322,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <returns>The CLI version string, or an empty string if not available.</returns>
     internal static string GetCliVersion()
     {
-        return typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty;
+        return AssemblyVersionHelper.GetInformationalVersion(typeof(Program).Assembly);
     }
 
     /// <summary>
@@ -308,6 +331,6 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <returns>The CLI build ID string, or an empty string if not available.</returns>
     internal static string GetCliBuildId()
     {
-        return typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? string.Empty;
+        return AssemblyVersionHelper.GetFileVersion(typeof(Program).Assembly);
     }
 }

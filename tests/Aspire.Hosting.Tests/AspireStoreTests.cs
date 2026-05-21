@@ -54,6 +54,22 @@ public class AspireStoreTests
     }
 
     [Fact]
+    public void BasePath_ShouldFallbackToAppHostAspireDirectory_WhenIntermediateOutputMetadataIsUnavailable()
+    {
+        using var projectDirectory = new TestTempDirectory();
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(string).Assembly.GetName().Name,
+            ProjectDirectory = projectDirectory.Path
+        });
+
+        using var app = builder.Build();
+        var store = app.Services.GetRequiredService<IAspireStore>();
+
+        Assert.Equal(Path.Combine(projectDirectory.Path, ".aspire"), store.BasePath);
+    }
+
+    [Fact]
     public void GetOrCreateFileWithContent_ShouldCreateFile_WithStreamContent()
     {
         var builder = TestDistributedApplicationBuilder.Create();

@@ -3,6 +3,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using ModelContextProtocol.Protocol;
 
@@ -19,6 +20,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public bool IsInScope { get; set; } = true;
     public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;
     public bool SupportsV2 { get; set; } = true;
+    public bool SupportsV3 { get; set; }
 
     /// <summary>
     /// Gets or sets the resource snapshots to return from GetResourceSnapshotsAsync and WatchResourceSnapshotsAsync.
@@ -34,6 +36,9 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the AppHost info response to return from GetAppHostInfoV2Async.
     /// </summary>
     public GetAppHostInfoResponse? AppHostInfoResponse { get; set; }
+
+    public WaitForAppHostReadyResponse? WaitForAppHostReadyResponse { get; set; }
+    public Func<CancellationToken, Task<WaitForAppHostReadyResponse?>>? WaitForAppHostReadyHandler { get; set; }
 
     /// <summary>
     /// Gets or sets the log lines to return from GetResourceLogsAsync.
@@ -68,6 +73,18 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public Func<string?, bool, CancellationToken, IAsyncEnumerable<ResourceLogLine>>? GetResourceLogsHandler { get; set; }
 
+    /// <summary>
+    /// Gets or sets the function to call when GetConsoleLogsAsync is invoked.
+    /// If null, falls back to GetResourceLogsAsync.
+    /// </summary>
+    public Func<GetConsoleLogsRequest, CancellationToken, IAsyncEnumerable<ResourceLogLine>>? GetConsoleLogsHandler { get; set; }
+
+    /// <summary>
+    /// Gets or sets the function to call when GetConsoleLogBatchesAsync is invoked.
+    /// If null, falls back to GetConsoleLogsAsync or GetResourceLogsAsync.
+    /// </summary>
+    public Func<GetConsoleLogsRequest, CancellationToken, IAsyncEnumerable<ResourceLogBatch>>? GetConsoleLogBatchesHandler { get; set; }
+
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(DashboardUrlsState);
@@ -93,8 +110,24 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
             AspireHostVersion = "unknown",
             AppHostPath = AppHostInfo.AppHostPath,
             CliProcessId = AppHostInfo.CliProcessId,
-            StartedAt = AppHostInfo.StartedAt
+            StartedAt = AppHostInfo.StartedAt,
+            CliLogFilePath = AppHostInfo.CliLogFilePath
         });
+    }
+
+    public Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV3)
+        {
+            return Task.FromResult<WaitForAppHostReadyResponse?>(null);
+        }
+
+        if (WaitForAppHostReadyHandler is not null)
+        {
+            return WaitForAppHostReadyHandler(cancellationToken);
+        }
+
+        return Task.FromResult(WaitForAppHostReadyResponse);
     }
 
     public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
@@ -159,6 +192,60 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
         await Task.CompletedTask;
     }
 
+    public async IAsyncEnumerable<ResourceLogLine> GetConsoleLogsAsync(
+        GetConsoleLogsRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var logLines = SupportsV2 && GetConsoleLogsHandler is not null
+            ? GetConsoleLogsHandler(request, cancellationToken)
+            : GetResourceLogsAsync(request.ResourceName, request.Follow, cancellationToken);
+
+        await foreach (var line in logLines.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            yield return line;
+        }
+    }
+
+    public async IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesAsync(
+        GetConsoleLogsRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (SupportsV3 && GetConsoleLogBatchesHandler is not null)
+        {
+            await foreach (var batch in GetConsoleLogBatchesHandler(request, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                yield return batch;
+            }
+            yield break;
+        }
+
+        var logLines = request.ResourceName is null && !SupportsV3
+            ? GetResourceLogsAsync(resourceName: null, follow: request.Follow, cancellationToken)
+            : GetConsoleLogsAsync(request, cancellationToken);
+
+        var maxBatchSize = request.Follow ? 1 : 256;
+        var lines = new List<ResourceLogLine>(maxBatchSize);
+        await foreach (var line in logLines.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            lines.Add(line);
+
+            if (lines.Count == maxBatchSize)
+            {
+                yield return new ResourceLogBatch { Lines = lines.ToArray() };
+                lines.Clear();
+            }
+        }
+
+        if (lines.Count > 0)
+        {
+            yield return new ResourceLogBatch { Lines = lines.ToArray() };
+        }
+    }
+
     public Task<bool> StopAppHostAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(StopAppHostResult);
@@ -169,11 +256,21 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public ExecuteResourceCommandResponse ExecuteResourceCommandResult { get; set; } = new ExecuteResourceCommandResponse { Success = true };
 
+    public JsonNode? ExecuteResourceCommandArguments { get; private set; }
+
+    public ExecuteResourceCommandOptions? ExecuteResourceCommandOptions { get; private set; }
+
+    public int ExecuteResourceCommandCallCount { get; private set; }
+
     public Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
+        ExecuteResourceCommandOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        ExecuteResourceCommandCallCount++;
+        ExecuteResourceCommandOptions = options;
+        ExecuteResourceCommandArguments = options?.Arguments;
         return Task.FromResult(ExecuteResourceCommandResult);
     }
 

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.TestServices;
 
@@ -19,9 +20,30 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
     public Func<FileInfo, AppHostValidationResult>? ValidateAppHostCallback { get; set; }
 
     /// <summary>
+    /// Optional callback for tests that need this factory to handle non-.NET AppHost file names.
+    /// </summary>
+    public Func<FileInfo, bool>? CanHandleCallback { get; set; }
+
+    /// <summary>
+    /// Optional callback to control AppHost version resolution behavior.
+    /// </summary>
+    public Func<FileInfo, CancellationToken, Task<string?>>? GetAspireHostingVersionAsyncCallback { get; set; }
+
+    /// <summary>
     /// Optional async callback to control validation behavior.
     /// </summary>
     public Func<FileInfo, CancellationToken, Task<AppHostValidationResult>>? ValidateAppHostAsyncCallback { get; set; }
+
+    public Func<UpdatePackagesContext, CancellationToken, Task<UpdatePackagesResult>>? UpdatePackagesAsyncCallback { get; set; }
+
+    public string LanguageId { get; set; } = "csharp";
+
+    public string DisplayName { get; set; } = "C# (.NET)";
+
+    /// <summary>
+    /// Optional detection patterns to advertise from the test project.
+    /// </summary>
+    public string[]? DetectionPatterns { get; set; }
 
     public TestAppHostProjectFactory()
     {
@@ -41,6 +63,11 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
 
     public IAppHostProject? TryGetProject(FileInfo appHostFile)
     {
+        if (CanHandleCallback?.Invoke(appHostFile) == true)
+        {
+            return _testProject;
+        }
+
         // Handle .csproj, .fsproj, .vbproj files
         if (s_projectExtensions.Contains(appHostFile.Extension))
         {
@@ -62,7 +89,7 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
 
     public IAppHostProject? GetProjectByLanguageId(string languageId)
     {
-        if (languageId.Equals("csharp", StringComparison.OrdinalIgnoreCase))
+        if (languageId.Equals(LanguageId, StringComparison.OrdinalIgnoreCase))
         {
             return _testProject;
         }
@@ -119,8 +146,8 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
         }
 
         public bool IsUnsupported { get; set; }
-        public string LanguageId => "csharp";
-        public string DisplayName => "C# (.NET)";
+        public string LanguageId => _factory.LanguageId;
+        public string DisplayName => _factory.DisplayName;
         public string? AppHostFileName => "AppHost.csproj";
 
         public bool IsUsingProjectReferences(FileInfo appHostFile)
@@ -129,10 +156,15 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
         }
 
         public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken)
-            => Task.FromResult(s_detectionPatterns);
+            => Task.FromResult(_factory.DetectionPatterns ?? s_detectionPatterns);
 
         public bool CanHandle(FileInfo appHostFile)
         {
+            if (_factory.CanHandleCallback?.Invoke(appHostFile) == true)
+            {
+                return true;
+            }
+
             var extension = appHostFile.Extension.ToLowerInvariant();
             if (extension is ".csproj" or ".fsproj" or ".vbproj")
             {
@@ -183,11 +215,20 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
             return Task.FromResult(new AppHostValidationResult(IsValid: true));
         }
 
+        public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+        {
+            return _factory.GetAspireHostingVersionAsyncCallback is not null
+                ? _factory.GetAspireHostingVersionAsyncCallback(appHostFile, cancellationToken)
+                : Task.FromResult<string?>(VersionHelper.GetDefaultTemplateVersion());
+        }
+
         public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
-            => throw new NotImplementedException();
+            => _factory.UpdatePackagesAsyncCallback is not null
+                ? _factory.UpdatePackagesAsyncCallback(context, cancellationToken)
+                : throw new NotImplementedException();
 
         public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
             => Task.FromResult(RunningInstanceResult.NoRunningInstance);
