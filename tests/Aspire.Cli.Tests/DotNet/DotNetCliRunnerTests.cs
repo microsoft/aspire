@@ -78,11 +78,11 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunAppHostAssemblyAsyncUsesDotnetExecWithoutRunDelimiter()
+    public async Task RunAppHostCommandAsyncUsesNativeCommandWithoutRunDelimiter()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
-        var appHostAssembly = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "bin", "Debug", "net10.0", "AppHost.dll"));
+        var appHostCommand = Path.Combine(workspace.WorkspaceRoot.FullName, "bin", "Debug", "net10.0", "AppHost");
         var runWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "run-cwd"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
@@ -93,11 +93,10 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
             executionContext,
-            (args, env, workingDirectory, _) =>
+            (fileName, args, env, workingDirectory, _) =>
             {
+                Assert.Equal(appHostCommand, fileName);
                 Assert.Collection(args,
-                    arg => Assert.Equal("exec", arg),
-                    arg => Assert.Equal(appHostAssembly.FullName, arg),
                     arg => Assert.Equal("--operation", arg),
                     arg => Assert.Equal("inspect", arg));
                 Assert.DoesNotContain("--", args);
@@ -107,11 +106,52 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             },
             42);
 
-        var exitCode = await runner.RunAppHostAssemblyAsync(
+        var exitCode = await runner.RunAppHostCommandAsync(
             projectFile,
-            appHostAssembly,
+            appHostCommand,
             runWorkingDirectory,
             ["--operation", "inspect"],
+            new Dictionary<string, string>(),
+            null,
+            new ProcessInvocationOptions(),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(42, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAppHostCommandAsyncResolvesDotnetMuxerCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        var appHostAssembly = Path.Combine(workspace.WorkspaceRoot.FullName, "bin", "Debug", "net10.0", "AppHost.dll");
+        var runWorkingDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "run-cwd"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (fileName, args, _, workingDirectory, _) =>
+            {
+                Assert.Equal("dotnet", Path.GetFileNameWithoutExtension(fileName));
+                Assert.Collection(args,
+                    arg => Assert.Equal("exec", arg),
+                    arg => Assert.Equal(appHostAssembly, arg),
+                    arg => Assert.Equal("--operation", arg),
+                    arg => Assert.Equal("inspect", arg));
+                Assert.Equal(runWorkingDirectory.FullName, workingDirectory.FullName);
+            },
+            42);
+
+        var exitCode = await runner.RunAppHostCommandAsync(
+            projectFile,
+            "dotnet.exe",
+            runWorkingDirectory,
+            ["exec", appHostAssembly, "--operation", "inspect"],
             new Dictionary<string, string>(),
             null,
             new ProcessInvocationOptions(),

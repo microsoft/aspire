@@ -128,6 +128,15 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
                 return null;
             }
 
+            if (entry.ExitCode == 0 && entry.IsAspireHost && string.IsNullOrWhiteSpace(entry.RunCommand))
+            {
+                // v1 has not shipped yet, so we keep the schema marker stable. Local pre-merge cache
+                // entries created before RunCommand was added should be treated as misses so the direct
+                // launch path can refresh the SDK run command instead of permanently falling back.
+                _logger.LogTrace("AppHost info cache entry for {Project} is missing RunCommand", projectFile.FullName);
+                return null;
+            }
+
             _logger.LogTrace("AppHost info cache hit for {Project} (key {Key})", projectFile.FullName, key);
             return entry;
         }
@@ -345,6 +354,9 @@ internal sealed record AppHostInfoCacheEntry
 
     [JsonPropertyName("userSecretsId")]
     public string? UserSecretsId { get; init; }
+
+    [JsonPropertyName("runCommand")]
+    public string? RunCommand { get; init; }
 
     [JsonPropertyName("targetPath")]
     public string? TargetPath { get; init; }

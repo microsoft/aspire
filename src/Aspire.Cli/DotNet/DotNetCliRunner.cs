@@ -31,7 +31,7 @@ internal interface IDotNetCliRunner
     Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> RunAsync(FileInfo projectFile, bool watch, bool noBuild, bool noRestore, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken);
-    Task<int> RunAppHostAssemblyAsync(FileInfo projectFile, FileInfo appHostAssembly, DirectoryInfo workingDirectory, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    Task<int> RunAppHostCommandAsync(FileInfo projectFile, string command, DirectoryInfo workingDirectory, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, string? TemplateVersion)> InstallTemplateAsync(string packageName, string version, FileInfo? nugetConfigFile, string? nugetSource, bool force, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> NewProjectAsync(string templateName, string name, string outputPath, string[] extraArgs, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> RestoreAsync(FileInfo projectFilePath, ProcessInvocationOptions options, CancellationToken cancellationToken);
@@ -97,9 +97,12 @@ internal sealed class DotNetCliRunner(
         DirectoryInfo workingDirectory,
         TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource,
         ProcessInvocationOptions options,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? commandOverride = null)
     {
-        var dotnetCommand = args.Length > 0 ? args[0] : "execute";
+        var dotnetCommand = commandOverride is null
+            ? args.Length > 0 ? args[0] : "execute"
+            : Path.GetFileNameWithoutExtension(NormalizeCommand(commandOverride));
         var backchannelParentContext = Activity.Current?.Context ?? default;
         using var processActivity = profilingTelemetry.StartDotNetProcess(dotnetCommand, projectFile, workingDirectory, options);
 
@@ -108,11 +111,28 @@ internal sealed class DotNetCliRunner(
         ConfigureDotNetEnvironment(finalEnv);
         processActivity.AddContextToEnvironment(finalEnv);
 
-        // Resolve the dotnet executable path, preferring the private SDK installation if available.
-        var dotnetPath = ResolveDotNetPath(finalEnv);
-        var effectiveArgs = AddBinlogArgumentIfConfigured(args, dotnetCommand, projectFile, workingDirectory, processActivity);
+        var command = commandOverride is null ? null : NormalizeCommand(commandOverride);
+        string processFileName;
+        string[] effectiveArgs;
+
+        if (command is null || IsDotNetMuxerCommand(command))
+        {
+            // Resolve the dotnet executable path, preferring the private SDK installation if available.
+            processFileName = ResolveDotNetPath(finalEnv);
+            effectiveArgs = AddBinlogArgumentIfConfigured(args, dotnetCommand, projectFile, workingDirectory, processActivity);
+        }
+        else
+        {
+            // Native apphost executables still locate the shared framework via the dotnet host
+            // environment. Keep the same private-SDK DOTNET_ROOT/PATH setup that dotnet commands get,
+            // but launch the apphost executable itself to avoid the `dotnet run` command path.
+            _ = ResolveDotNetPath(finalEnv);
+            processFileName = command;
+            effectiveArgs = args;
+        }
+
         processActivity.SetDotNetResolvedExecutable(
-            dotnetPath,
+            processFileName,
             effectiveArgs,
             finalEnv.TryGetValue("DOTNET_CLI_USE_MSBUILD_SERVER", out var msBuildServerValue) ? msBuildServerValue : null);
         processActivity.SetDotNetArgsCount(effectiveArgs.Length);
@@ -124,11 +144,11 @@ internal sealed class DotNetCliRunner(
         // accesses execution.HasExited / ExitCode after this method returns. Disposing
         // the underlying Process while the backchannel task is still polling would
         // cause ObjectDisposedException. Let the GC handle cleanup instead.
-        var execution = executionFactory.CreateExecution(dotnetPath, effectiveArgs, finalEnv, workingDirectory, instrumentedOptions);
+        var execution = executionFactory.CreateExecution(processFileName, effectiveArgs, finalEnv, workingDirectory, instrumentedOptions);
 
         // Get socket path from env if present
         string? socketPath = null;
-        env?.TryGetValue(KnownConfigNames.UnixSocketPath, out socketPath);
+        finalEnv.TryGetValue(KnownConfigNames.UnixSocketPath, out socketPath);
 
         // Handle extension-based launch for app hosts with backchannel
         if (backchannelCompletionSource is not null)
@@ -168,6 +188,12 @@ internal sealed class DotNetCliRunner(
 
         return exitCode;
     }
+
+    private static string NormalizeCommand(string command)
+        => command.Trim().Trim('"');
+
+    private static bool IsDotNetMuxerCommand(string command)
+        => string.Equals(Path.GetFileNameWithoutExtension(command), "dotnet", StringComparison.OrdinalIgnoreCase);
 
     private string[] AddBinlogArgumentIfConfigured(
         string[] args,
@@ -710,9 +736,9 @@ internal sealed class DotNetCliRunner(
             cancellationToken: cancellationToken);
     }
 
-    public async Task<int> RunAppHostAssemblyAsync(
+    public async Task<int> RunAppHostCommandAsync(
         FileInfo projectFile,
-        FileInfo appHostAssembly,
+        string command,
         DirectoryInfo workingDirectory,
         string[] args,
         IDictionary<string, string>? env,
@@ -722,7 +748,6 @@ internal sealed class DotNetCliRunner(
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
-        string[] cliArgs = ["exec", appHostAssembly.FullName, .. args];
         var finalEnv = CreateRunEnvironment(
             env,
             watch: false,
@@ -730,13 +755,14 @@ internal sealed class DotNetCliRunner(
             backchannelCompletionSource);
 
         return await ExecuteAsync(
-            args: cliArgs,
+            args: args,
             env: finalEnv,
             projectFile: projectFile,
             workingDirectory: workingDirectory,
             backchannelCompletionSource: backchannelCompletionSource,
             options: options,
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken,
+            commandOverride: command);
     }
 
     private Dictionary<string, string> CreateRunEnvironment(

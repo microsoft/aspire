@@ -22,7 +22,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     public Func<string, string, FileInfo?, string?, bool, ProcessInvocationOptions, CancellationToken, (int ExitCode, string? TemplateVersion)>? InstallTemplateAsyncCallback { get; set; }
     public Func<string, string, string, ProcessInvocationOptions, CancellationToken, int>? NewProjectAsyncCallback { get; set; }
     public Func<FileInfo, bool, bool, bool, string[], IDictionary<string, string>?, TaskCompletionSource<IAppHostCliBackchannel>?, ProcessInvocationOptions, CancellationToken, Task<int>>? RunAsyncCallback { get; set; }
-    public Func<FileInfo, FileInfo, DirectoryInfo, string[], IDictionary<string, string>?, TaskCompletionSource<IAppHostCliBackchannel>?, ProcessInvocationOptions, CancellationToken, Task<int>>? RunAppHostAssemblyAsyncCallback { get; set; }
+    public Func<FileInfo, string, DirectoryInfo, string[], IDictionary<string, string>?, TaskCompletionSource<IAppHostCliBackchannel>?, ProcessInvocationOptions, CancellationToken, Task<int>>? RunAppHostCommandAsyncCallback { get; set; }
     public Func<DirectoryInfo, string, bool, bool, int, int, FileInfo?, bool, ProcessInvocationOptions, CancellationToken, (int ExitCode, NuGetPackage[]? Packages)>? SearchPackagesAsyncCallback { get; set; }
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, IReadOnlyList<FileInfo> Projects)>? GetSolutionProjectsAsyncCallback { get; set; }
     public Func<FileInfo, FileInfo, ProcessInvocationOptions, CancellationToken, int>? AddProjectReferenceAsyncCallback { get; set; }
@@ -148,11 +148,11 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
             : throw new NotImplementedException();
     }
 
-    public Task<int> RunAppHostAssemblyAsync(FileInfo projectFile, FileInfo appHostAssembly, DirectoryInfo workingDirectory, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public Task<int> RunAppHostCommandAsync(FileInfo projectFile, string command, DirectoryInfo workingDirectory, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
-        if (RunAppHostAssemblyAsyncCallback is not null)
+        if (RunAppHostCommandAsyncCallback is not null)
         {
-            return RunAppHostAssemblyAsyncCallback(projectFile, appHostAssembly, workingDirectory, args, env, backchannelCompletionSource, options, cancellationToken);
+            return RunAppHostCommandAsyncCallback(projectFile, command, workingDirectory, args, env, backchannelCompletionSource, options, cancellationToken);
         }
 
         return RunAsyncCallback is not null

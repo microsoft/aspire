@@ -23,6 +23,12 @@ internal sealed class AppHostLaunchProfile
     [JsonPropertyName("applicationUrl")]
     public string? ApplicationUrl { get; set; }
 
+    [JsonPropertyName("executablePath")]
+    public string? ExecutablePath { get; set; }
+
+    [JsonPropertyName("workingDirectory")]
+    public string? WorkingDirectory { get; set; }
+
     [JsonPropertyName("environmentVariables")]
     public Dictionary<string, string> EnvironmentVariables { get; set; } = [];
 }

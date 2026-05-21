@@ -247,11 +247,13 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task RunAsync_ProjectAppHostUsesDirectAssemblyLaunchAndAppliesLaunchSettings()
+    public async Task RunAsync_ProjectAppHostUsesDirectCommandLaunchAndAppliesLaunchSettings()
     {
         var appHostFile = CreateProjectAppHost();
         var targetPath = CreateBuiltAppHostAssembly("AppHost.dll");
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
         var runWorkingDirectory = Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, "run-cwd"));
+        var appHostCommandJson = JsonSerializer.Serialize(appHostCommand.FullName);
         var targetPathJson = JsonSerializer.Serialize(targetPath.FullName);
         var runWorkingDirectoryJson = JsonSerializer.Serialize(runWorkingDirectory.FullName);
         Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
@@ -290,6 +292,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                         "MSBuildVersion": "17.0.0",
                         "IsAspireHost": "true",
                         "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "RunCommand": {{appHostCommandJson}},
                         "TargetPath": {{targetPathJson}},
                         "RunWorkingDirectory": {{runWorkingDirectoryJson}},
                         "RunArguments": "--from-msbuild \"two words\"",
@@ -303,21 +306,81 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         };
         var project = CreateDotNetAppHostProject(runner);
 
-        runner.RunAppHostAssemblyAsyncCallback = (projectFile, appHostAssembly, workingDirectory, args, env, _, options, _) =>
+        runner.RunAppHostCommandAsyncCallback = (projectFile, command, workingDirectory, args, env, _, options, _) =>
         {
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
-            Assert.Equal(targetPath.FullName, appHostAssembly.FullName);
+            Assert.Equal(appHostCommand.FullName, command);
             Assert.Equal(runWorkingDirectory.FullName, workingDirectory.FullName);
             Assert.False(options.NoLaunchProfile);
             Assert.Equal(
-                ["--from-msbuild", "two words", "--from-profile", "profile value", "--explicit", "1"],
+                ["--from-msbuild", "two words", "--explicit", "1"],
                 args);
             Assert.NotNull(env);
             Assert.Equal("http", env["DOTNET_LAUNCH_PROFILE"]);
             Assert.Equal("http://localhost:15000", env["ASPNETCORE_URLS"]);
             Assert.Equal("Development", env["DOTNET_ENVIRONMENT"]);
-            Assert.Equal("custom-value", env["CUSTOM_ENV"]);
+            Assert.Equal("context-value", env["CUSTOM_ENV"]);
             return Task.FromResult(123);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            UnmatchedTokens = ["--explicit", "1"],
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                ["CUSTOM_ENV"] = "context-value"
+            }
+        }, CancellationToken.None);
+
+        Assert.Equal(123, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostDirectLaunchCanBeDisabledByConfig()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        var appHostCommandJson = JsonSerializer.Serialize(appHostCommand.FullName);
+        WriteAspireConfigJson(appHostFile.DirectoryName!, """
+            {
+              "dotnetAppHostDirectLaunchDisabled": "true"
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                return (0, JsonDocument.Parse($$"""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true",
+                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "RunCommand": {{appHostCommandJson}},
+                        "TargetFramework": "net10.0"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            },
+            RunAppHostCommandAsyncCallback = (_, _, _, _, _, _, _, _) => throw new InvalidOperationException("direct AppHost launch should not be used when disabled.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, _, _, _, _) =>
+        {
+            Assert.Equal(appHostFile.FullName, projectFile.FullName);
+            Assert.False(watch);
+            Assert.True(noBuild);
+            Assert.False(noRestore);
+            Assert.Equal(["--explicit", "1"], args);
+            return Task.FromResult(77);
         };
 
         var exitCode = await project.RunAsync(new AppHostProjectContext
@@ -330,7 +393,118 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             EnvironmentVariables = new Dictionary<string, string>()
         }, CancellationToken.None);
 
-        Assert.Equal(123, exitCode);
+        Assert.Equal(77, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostDirectLaunchUsesProfileArgsWhenRunCommandHasNoArgs()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        var appHostCommandJson = JsonSerializer.Serialize(appHostCommand.FullName);
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "http": {
+                  "commandName": "Project",
+                  "commandLineArgs": "--from-profile \"profile value\""
+                }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                return (0, JsonDocument.Parse($$"""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true",
+                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "RunCommand": {{appHostCommandJson}},
+                        "TargetFramework": "net10.0"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            },
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("dotnet run should not be used when the built target is known.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAppHostCommandAsyncCallback = (_, command, _, args, env, _, _, _) =>
+        {
+            Assert.Equal(appHostCommand.FullName, command);
+            Assert.Equal(["--from-profile", "profile value"], args);
+            Assert.NotNull(env);
+            Assert.Equal("http", env["DOTNET_LAUNCH_PROFILE"]);
+            return Task.FromResult(88);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(88, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostDirectLaunchPreservesDotnetExecRunArguments()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var targetPath = CreateBuiltAppHostAssembly("App Host.dll");
+        var escapedTargetPath = targetPath.FullName.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                return (0, JsonDocument.Parse($$"""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true",
+                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "RunCommand": "dotnet.exe",
+                        "RunArguments": "exec \"{{escapedTargetPath}}\" --from-msbuild",
+                        "TargetFramework": "net10.0"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            },
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("dotnet run should not be used when the built target is known.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAppHostCommandAsyncCallback = (_, command, _, args, _, _, _, _) =>
+        {
+            Assert.Equal("dotnet.exe", command);
+            Assert.Equal(["exec", targetPath.FullName, "--from-msbuild", "--explicit", "1"], args);
+            return Task.FromResult(99);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            UnmatchedTokens = ["--explicit", "1"],
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(99, exitCode);
     }
 
     [Fact]
@@ -772,6 +946,14 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         File.WriteAllText(targetPath, string.Empty);
         File.WriteAllText(Path.ChangeExtension(targetPath, ".runtimeconfig.json"), "{}");
         return new FileInfo(targetPath);
+    }
+
+    private FileInfo CreateBuiltAppHostCommand(string fileName)
+    {
+        var outputDirectory = Directory.CreateDirectory(Path.Combine(_workspace.WorkspaceRoot.FullName, "bin", Guid.NewGuid().ToString("N")));
+        var commandPath = Path.Combine(outputDirectory.FullName, fileName);
+        File.WriteAllText(commandPath, string.Empty);
+        return new FileInfo(commandPath);
     }
 
     private FileInfo CreateProjectAppHost()

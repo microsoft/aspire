@@ -30,6 +30,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
                 AspireHostingVersion = "9.5.0",
                 IsUsingCliBundle = true,
                 UserSecretsId = "secrets",
+                RunCommand = "/repo/bin/AppHost",
                 TargetPath = "/repo/bin/AppHost.dll",
                 RunWorkingDirectory = "/repo/src/AppHost",
                 RunArguments = "--from-msbuild",
@@ -45,6 +46,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
         Assert.Equal("9.5.0", info.AspireHostingVersion);
         Assert.True(info.IsUsingCliBundle);
         Assert.Equal("secrets", info.UserSecretsId);
+        Assert.Equal("/repo/bin/AppHost", info.RunCommand);
         Assert.Equal("/repo/bin/AppHost.dll", info.TargetPath);
         Assert.Equal("/repo/src/AppHost", info.RunWorkingDirectory);
         Assert.Equal("--from-msbuild", info.RunArguments);
@@ -182,6 +184,7 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
                 "AspireHostingSDKVersion": "9.5.0",
                 "AspireUseCliBundle": "true",
                 "UserSecretsId": "secrets",
+                "RunCommand": "/repo/bin/AppHost",
                 "TargetPath": "/repo/bin/AppHost.dll",
                 "RunWorkingDirectory": "/repo/src/AppHost",
                 "RunArguments": "--from-msbuild",
