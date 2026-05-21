@@ -25,6 +25,7 @@
   <ItemGroup>
     <ProjectReference Include="..\BlazorHosted.Server\BlazorHosted.csproj" />
     <ProjectReference Include="..\BlazorHosted.WeatherApi\BlazorHosted.WeatherApi.csproj" />
+    <ProjectReference Include="..\BlazorHosted.TimeApi\BlazorHosted.TimeApi.csproj" />
   </ItemGroup>
 
 </Project>

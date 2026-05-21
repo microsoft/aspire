@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BlazorStandalone.WeatherApi\BlazorStandalone.WeatherApi.csproj" />
+    <ProjectReference Include="..\BlazorStandalone.TimeApi\BlazorStandalone.TimeApi.csproj" />
     <!-- WASM project reference needed for IProjectMetadata discovery by AddBlazorWasmProject -->
     <ProjectReference Include="..\BlazorStandalone\BlazorStandalone.csproj" />
   </ItemGroup>

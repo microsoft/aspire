@@ -19,6 +19,12 @@ builder.Services.AddHttpClient("weatherapi", client =>
     client.BaseAddress = new Uri("https+http://weatherapi");
 });
 
+// Named HttpClient for the time API - uses service discovery to resolve "timeapi"
+builder.Services.AddHttpClient("timeapi", client =>
+{
+    client.BaseAddress = new Uri("https+http://timeapi");
+});
+
 var host = builder.Build();
 
 // WebAssembly does not support IHostedService, so TelemetryHostedService is never started.

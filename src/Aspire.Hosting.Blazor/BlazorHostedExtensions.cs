@@ -150,8 +150,24 @@ internal sealed class HostedClientAnnotation : IResourceAnnotation
 /// <summary>
 /// A service proxied from the hosted Blazor WebAssembly client through the host.
 /// </summary>
-internal readonly struct HostedClientService(string serviceName, string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix)
+internal readonly struct HostedClientService(string serviceName, string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix, string? endpointName = null)
 {
     public string ServiceName { get; } = serviceName;
     public string ApiPrefix { get; } = apiPrefix;
+
+    /// <summary>
+    /// The specific endpoint name to target on the service, or <see langword="null"/> to resolve by scheme.
+    /// When set, YARP uses the .NET service discovery named endpoint format
+    /// (<c>https+http://_endpointName.serviceName</c>) instead of scheme-based resolution.
+    /// </summary>
+    public string? EndpointName { get; } = endpointName;
+
+    /// <summary>
+    /// Gets the service discovery destination address for YARP.
+    /// Uses named endpoint format (<c>_endpointName.serviceName</c>) when a specific endpoint
+    /// is targeted; otherwise resolves by scheme.
+    /// </summary>
+    public string DestinationAddress => EndpointName is not null
+        ? $"https+http://_{EndpointName}.{ServiceName}"
+        : $"https+http://{ServiceName}";
 }

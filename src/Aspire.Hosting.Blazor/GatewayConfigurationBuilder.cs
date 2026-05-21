@@ -37,11 +37,24 @@ internal static class GatewayConfigurationBuilder
 
             // Per-app client config: use an IValueProvider that resolves the gateway URL
             // at startup and builds the final JSON response.
-            var services = new HostedClientService[reg.ServiceNames.Length];
-            for (var i = 0; i < reg.ServiceNames.Length; i++)
+            // Flatten services: one HostedClientService per named endpoint so each gets
+            // its own YARP cluster destination.
+            var servicesList = new List<HostedClientService>();
+            foreach (var svc in reg.Services)
             {
-                services[i] = new HostedClientService(reg.ServiceNames[i], reg.ApiPrefix);
+                if (svc.UseAllEndpoints)
+                {
+                    servicesList.Add(new HostedClientService(svc.Name, reg.ApiPrefix));
+                }
+                else
+                {
+                    foreach (var endpointName in svc.EndpointNames)
+                    {
+                        servicesList.Add(new HostedClientService(svc.Name, reg.ApiPrefix, endpointName));
+                    }
+                }
             }
+            var services = servicesList.ToArray();
 
             env[$"{envPrefix}__ConfigResponse"] = new ClientConfigValueProvider(
                 gatewayEndpoint,
@@ -136,9 +149,12 @@ internal static class GatewayConfigurationBuilder
             env[$"ReverseProxy__Routes__{routeId}__Match__Path"] = $"{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}/{{**catch-all}}";
             env[$"ReverseProxy__Routes__{routeId}__Transforms__0__PathRemovePrefix"] = $"{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}";
 
-            if (addedClusters == null || addedClusters.Add(clusterId))
+            // Use endpoint name as destination ID for named endpoints so multiple named
+            // endpoints on the same service each get their own destination in the cluster.
+            var destId = svc.EndpointName ?? "d1";
+            if (addedClusters == null || addedClusters.Add($"{clusterId}__{destId}"))
             {
-                env[$"ReverseProxy__Clusters__{clusterId}__Destinations__d1__Address"] = $"https+http://{svc.ServiceName}";
+                env[$"ReverseProxy__Clusters__{clusterId}__Destinations__{destId}__Address"] = svc.DestinationAddress;
             }
         }
 

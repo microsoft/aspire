@@ -4,5 +4,6 @@
   <Project Path="BlazorHosted.Client\BlazorHosted.Client.csproj" />
   <Project Path="BlazorHosted.ClientServiceDefaults\BlazorHosted.ClientServiceDefaults.csproj" />
   <Project Path="BlazorHosted.WeatherApi\BlazorHosted.WeatherApi.csproj" />
+  <Project Path="BlazorHosted.TimeApi\BlazorHosted.TimeApi.csproj" />
   <Project Path="..\Playground.ServiceDefaults\Playground.ServiceDefaults.csproj" />
 </Solution>

@@ -3,7 +3,6 @@
 
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
-using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Microsoft.Extensions.Configuration;
@@ -149,24 +148,22 @@ public static class BlazorGatewayExtensions
     {
         var pathPrefix = wasmApp.Resource.Name;
 
-        // Read service references from ResourceRelationshipAnnotation (added by WithReference).
-        // Filter to only resources that have endpoints (i.e., actual services like weatherapi,
+        // Read endpoint references from EndpointReferenceAnnotation (added by WithReference).
+        // Filter to only resources that support service discovery (i.e., actual services like weatherapi,
         // not parameters or connection strings).
         var referencedServices = GetServiceDiscoveryReferences(wasmApp.Resource);
 
-        var serviceNames = GetResourceNames(referencedServices);
-
         // Auto-forward service references to the gateway so YARP can resolve service endpoints
         // via Aspire's service discovery (services__{name}__{scheme}__{index} env vars).
-        // Skip if the gateway already references this service.
+        // Skip if the gateway already references this service. Preserve specific endpoint names
+        // from the original annotation so only the intended endpoints are forwarded.
         var existingGatewayRefs = GetReferencedResourceNames(gateway.Resource);
 
-        foreach (var svcAnnotation in referencedServices)
+        foreach (var endpointRef in referencedServices)
         {
-            if (!existingGatewayRefs.Contains(svcAnnotation.Resource.Name)
-                && svcAnnotation.Resource is IResourceWithServiceDiscovery svcResource)
+            if (!existingGatewayRefs.Contains(endpointRef.Resource.Name))
             {
-                gateway.WithReference(gateway.ApplicationBuilder.CreateResourceBuilder(svcResource));
+                ForwardEndpointReference(gateway, endpointRef);
             }
         }
 
@@ -174,7 +171,12 @@ public static class BlazorGatewayExtensions
         // state (Running, Stopped, etc.) from the gateway to this resource automatically.
         wasmApp.Resource.Parent = gateway.Resource;
 
-        return gateway.WithBlazorApp(wasmApp, pathPrefix, serviceNames, apiPrefix, otlpPrefix, proxyTelemetry);
+        // Build GatewayAppService instances from the endpoint reference annotations.
+        var services = BuildGatewayAppServices(referencedServices);
+
+        gateway.WithBlazorApp(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
+
+        return gateway;
     }
 
     /// <summary>
@@ -200,7 +202,30 @@ public static class BlazorGatewayExtensions
         string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
         bool proxyTelemetry = true)
     {
-        var registration = new GatewayAppRegistration(wasmApp, pathPrefix, serviceNames ?? [], apiPrefix, otlpPrefix, proxyTelemetry);
+        var services = serviceNames is null
+            ? []
+            : Array.ConvertAll(serviceNames, name => new GatewayAppService(name));
+
+        return gateway.WithBlazorApp(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
+    }
+
+    /// <summary>
+    /// Attaches a Blazor WebAssembly app to a Gateway project resource at the given path prefix.
+    /// At orchestration time, each app is built, its manifests are discovered via MSBuild properties,
+    /// transformed (AssetFile prefixed, runtime tree wrapped under prefix), then injected
+    /// into the Gateway as environment variables.
+    /// </summary>
+    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
+    internal static IResourceBuilder<ProjectResource> WithBlazorApp(
+        this IResourceBuilder<ProjectResource> gateway,
+        IResourceBuilder<BlazorWasmAppResource> wasmApp,
+        string pathPrefix,
+        GatewayAppService[] services,
+        string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
+        string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix,
+        bool proxyTelemetry = true)
+    {
+        var registration = new GatewayAppRegistration(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
 
         // Get or create the annotation on the gateway resource
         var annotation = GetOrAddGatewayAppsAnnotation(gateway.Resource);
@@ -471,34 +496,78 @@ public static class BlazorGatewayExtensions
         return scriptPath;
     }
 
-    private static List<ResourceRelationshipAnnotation> GetServiceDiscoveryReferences(IResource resource)
+    private static List<EndpointReferenceAnnotation> GetServiceDiscoveryReferences(IResource resource)
     {
-        // TODO: ResourceRelationshipAnnotation is public but reading it directly couples us
-        // to the annotation model. Consider whether a higher-level API (e.g. a method on
-        // IResource or an extension) should expose referenced resources instead.
+        // EndpointReferenceAnnotation is added by WithReference and tracks which endpoint
+        // resources are referenced and which specific endpoint names were requested.
         return resource.Annotations
-            .OfType<ResourceRelationshipAnnotation>()
-            .Where(rel => rel.Type == KnownRelationshipTypes.Reference && rel.Resource is IResourceWithServiceDiscovery)
+            .OfType<EndpointReferenceAnnotation>()
+            .Where(a => a.Resource is IResourceWithServiceDiscovery)
             .ToList();
     }
 
-    private static string[] GetResourceNames(List<ResourceRelationshipAnnotation> references)
+    /// <summary>
+    /// Builds <see cref="GatewayAppService"/> instances from endpoint reference annotations.
+    /// Each service carries its resource name and any specific endpoint names referenced.
+    /// </summary>
+    private static GatewayAppService[] BuildGatewayAppServices(List<EndpointReferenceAnnotation> references)
     {
-        var names = new string[references.Count];
+        var services = new GatewayAppService[references.Count];
+
         for (var i = 0; i < references.Count; i++)
         {
-            names[i] = references[i].Resource.Name;
+            var annotation = references[i];
+            var service = new GatewayAppService(annotation.Resource.Name);
+
+            if (!annotation.UseAllEndpoints)
+            {
+                foreach (var endpointName in annotation.EndpointNames)
+                {
+                    service.EndpointNames.Add(endpointName);
+                }
+            }
+
+            services[i] = service;
         }
-        return names;
+
+        return services;
     }
 
     private static HashSet<string> GetReferencedResourceNames(IResource resource)
     {
         return resource.Annotations
-            .OfType<ResourceRelationshipAnnotation>()
-            .Where(rel => rel.Type == KnownRelationshipTypes.Reference)
-            .Select(rel => rel.Resource.Name)
+            .OfType<EndpointReferenceAnnotation>()
+            .Select(a => a.Resource.Name)
             .ToHashSet(StringComparers.ResourceName);
+    }
+
+    /// <summary>
+    /// Forwards an endpoint reference to the gateway. When specific named endpoints are
+    /// referenced, each one is forwarded individually (YARP uses the named endpoint format
+    /// <c>https+http://_endpointName.serviceName</c>). When all endpoints are referenced,
+    /// all endpoints are forwarded so YARP can resolve by scheme.
+    /// </summary>
+    private static void ForwardEndpointReference(
+        IResourceBuilder<ProjectResource> gateway,
+        EndpointReferenceAnnotation endpointRef)
+    {
+        var svcResource = (IResourceWithServiceDiscovery)endpointRef.Resource;
+
+        if (!endpointRef.UseAllEndpoints)
+        {
+            // Forward each specific named endpoint. YARP will resolve via
+            // https+http://_endpointName.serviceName using these entries.
+            foreach (var endpointName in endpointRef.EndpointNames)
+            {
+                gateway.WithReference(svcResource.GetEndpoint(endpointName));
+            }
+        }
+        else
+        {
+            // Forward all endpoints so scheme-based resolution works.
+            var svcBuilder = gateway.ApplicationBuilder.CreateResourceBuilder(svcResource);
+            gateway.WithReference(svcBuilder);
+        }
     }
 
     private static EndpointReference? GetEndpointIfDefined(IResourceWithEndpoints resource, string endpointName)

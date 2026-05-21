@@ -18,7 +18,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi"]);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc("weatherapi"));
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
@@ -41,7 +41,82 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi"]);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc("weatherapi"));
+        var apps = new List<GatewayAppRegistration> { registration };
+        var env = new Dictionary<string, object>();
+        var gatewayEndpoint = gateway.GetEndpoint("https");
+
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint);
+
+        Assert.Equal("https+http://weatherapi", env["ReverseProxy__Clusters__cluster-weatherapi__Destinations__d1__Address"]);
+    }
+
+    [Fact]
+    public void EmitProxyConfiguration_EmitsNamedEndpointAddress_WhenEndpointNameSpecified()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        var svc = new GatewayAppService("weatherapi");
+        svc.EndpointNames.Add("api");
+        var registration = new GatewayAppRegistration(wasmApp, "store", [svc]);
+        var apps = new List<GatewayAppRegistration> { registration };
+        var env = new Dictionary<string, object>();
+        var gatewayEndpoint = gateway.GetEndpoint("https");
+
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint);
+
+        // Named endpoint should use service discovery's named endpoint format.
+        // The destination ID is the endpoint name (not "d1") so multiple named endpoints
+        // on the same service each get their own YARP destination.
+        Assert.Equal("https+http://_api.weatherapi", env["ReverseProxy__Clusters__cluster-weatherapi__Destinations__api__Address"]);
+    }
+
+    [Fact]
+    public void EmitProxyConfiguration_EmitsMultipleDestinations_WhenMultipleEndpointNamesSpecified()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        // Service with two named endpoints should produce two YARP destinations.
+        var svc = new GatewayAppService("weatherapi");
+        svc.EndpointNames.Add("public");
+        svc.EndpointNames.Add("admin");
+        var registration = new GatewayAppRegistration(wasmApp, "store", [svc]);
+        var apps = new List<GatewayAppRegistration> { registration };
+        var env = new Dictionary<string, object>();
+        var gatewayEndpoint = gateway.GetEndpoint("https");
+
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint);
+
+        // Each named endpoint gets its own destination in the same cluster.
+        Assert.Equal("https+http://_public.weatherapi", env["ReverseProxy__Clusters__cluster-weatherapi__Destinations__public__Address"]);
+        Assert.Equal("https+http://_admin.weatherapi", env["ReverseProxy__Clusters__cluster-weatherapi__Destinations__admin__Address"]);
+
+        // Only one route should exist for the service (not duplicated per endpoint).
+        Assert.Equal("cluster-weatherapi", env["ReverseProxy__Routes__route-store-weatherapi__ClusterId"]);
+    }
+
+    [Fact]
+    public void EmitProxyConfiguration_EmitsSchemeAddress_WhenNoEndpointNameSpecified()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        // Service with no endpoint names → UseAllEndpoints = true → scheme-based resolution.
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc("weatherapi"));
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
@@ -61,7 +136,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", []);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc());
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
@@ -86,8 +161,8 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var apps = new List<GatewayAppRegistration>
         {
-            new(storeApp, "store", ["weatherapi"]),
-            new(adminApp, "admin", ["weatherapi"])
+            new(storeApp, "store", Svc("weatherapi")),
+            new(adminApp, "admin", Svc("weatherapi"))
         };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
@@ -112,7 +187,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi", "catalogapi"]);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc("weatherapi", "catalogapi"));
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
@@ -135,7 +210,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", []);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc());
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>
         {
@@ -167,7 +242,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", []);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc());
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
@@ -188,7 +263,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi"]);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc("weatherapi"));
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
@@ -214,7 +289,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi"]);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc("weatherapi"));
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
 
@@ -238,7 +313,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", [], ProxyBlazorTelemetry: false);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc(), ProxyBlazorTelemetry: false);
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
 
@@ -261,7 +336,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi"]);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc("weatherapi"));
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
@@ -286,7 +361,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi"], ApiPrefix: "myapi", OtlpPrefix: "myotlp");
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc("weatherapi"), ApiPrefix: "myapi", OtlpPrefix: "myotlp");
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
@@ -316,8 +391,8 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var apps = new List<GatewayAppRegistration>
         {
-            new(storeApp, "store", ["weatherapi", "catalogapi"]),
-            new(adminApp, "admin", ["weatherapi", "usersapi"])
+            new(storeApp, "store", Svc("weatherapi", "catalogapi")),
+            new(adminApp, "admin", Svc("weatherapi", "usersapi"))
         };
         var env = new Dictionary<string, object>();
 
@@ -376,7 +451,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi"]);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc("weatherapi"));
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
 
@@ -405,7 +480,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", []);
+        var registration = new GatewayAppRegistration(wasmApp, "store", Svc());
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
@@ -469,4 +544,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         public LaunchSettings LaunchSettings { get; } = new();
     }
+
+    private static GatewayAppService[] Svc(params string[] names) =>
+        Array.ConvertAll(names, n => new GatewayAppService(n));
 }

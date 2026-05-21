@@ -183,8 +183,8 @@ public class EndpointsManifestTransformerTests : IDisposable
 
         var manifests = new List<AppManifestPaths>
         {
-            new(new GatewayAppRegistration(storeApp, "store", []), app1Path, app1Path),
-            new(new GatewayAppRegistration(adminApp, "admin", []), app2Path, app2Path)
+            new(new GatewayAppRegistration(storeApp, "store", Array.Empty<GatewayAppService>()), app1Path, app1Path),
+            new(new GatewayAppRegistration(adminApp, "admin", Array.Empty<GatewayAppService>()), app2Path, app2Path)
         };
 
         var outputPath = Path.Combine(_tempDir, "merged.json");
@@ -247,8 +247,8 @@ public class EndpointsManifestTransformerTests : IDisposable
 
         var manifests = new List<AppManifestPaths>
         {
-            new(new GatewayAppRegistration(storeApp, "store", []), app1Path, app1Path),
-            new(new GatewayAppRegistration(adminApp, "admin", []), app2Path, app2Path)
+            new(new GatewayAppRegistration(storeApp, "store", Array.Empty<GatewayAppService>()), app1Path, app1Path),
+            new(new GatewayAppRegistration(adminApp, "admin", Array.Empty<GatewayAppService>()), app2Path, app2Path)
         };
 
         var outputPath = Path.Combine(_tempDir, "merged.json");

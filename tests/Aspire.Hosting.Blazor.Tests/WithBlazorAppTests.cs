@@ -65,7 +65,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
 
         var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
-        Assert.Equal(new[] { "weatherapi", "catalogapi" }, annotation.Apps[0].ServiceNames);
+        Assert.Equal(new[] { "weatherapi", "catalogapi" }, annotation.Apps[0].GetServiceNames());
     }
 
     [Fact]
@@ -205,6 +205,116 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
         Assert.False(annotation.Apps[0].ProxyBlazorTelemetry);
+    }
+
+    [Fact]
+    public void WithClient_ForwardsAllEndpoints_WhenUseAllEndpoints()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        // WithReference(weatherApi) sets UseAllEndpoints = true on the WASM app's annotation.
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
+            .WithReference(weatherApi);
+
+        gateway.WithBlazorClientApp(wasmApp);
+
+        // The gateway should have an EndpointReferenceAnnotation for weatherapi with UseAllEndpoints = true.
+        var endpointRef = gateway.Resource.Annotations
+            .OfType<EndpointReferenceAnnotation>()
+            .SingleOrDefault(a => a.Resource.Name == "weatherapi");
+
+        Assert.NotNull(endpointRef);
+        Assert.True(endpointRef.UseAllEndpoints);
+    }
+
+    [Fact]
+    public void WithClient_ForwardsSpecificEndpoints_WhenNamedEndpointReferenced()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
+            .WithHttpEndpoint(name: "public")
+            .WithHttpsEndpoint(name: "internal");
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        // Reference only the "public" endpoint on the WASM app.
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
+            .WithReference(weatherApi.GetEndpoint("public"));
+
+        gateway.WithBlazorClientApp(wasmApp);
+
+        // The gateway should have only the "public" endpoint forwarded (not UseAllEndpoints)
+        // because a single named endpoint uses service discovery's named endpoint format.
+        var endpointRef = gateway.Resource.Annotations
+            .OfType<EndpointReferenceAnnotation>()
+            .SingleOrDefault(a => a.Resource.Name == "weatherapi");
+
+        Assert.NotNull(endpointRef);
+        Assert.False(endpointRef.UseAllEndpoints);
+        Assert.Collection(endpointRef.EndpointNames,
+            name => Assert.Equal("public", name));
+
+        // The registration should map weatherapi → "public" endpoint name so the YARP
+        // destination uses https+http://_public.weatherapi instead of scheme-based resolution.
+        var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().Single();
+        var registration = Assert.Single(annotation.Apps);
+        var service = Assert.Single(registration.Services);
+        Assert.Equal("weatherapi", service.Name);
+        Assert.Collection(service.EndpointNames,
+            name => Assert.Equal("public", name));
+    }
+
+    [Fact]
+    public void WithClient_ForwardsMultipleNamedEndpoints_Correctly()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
+            .WithHttpEndpoint(name: "public")
+            .WithHttpsEndpoint(name: "admin")
+            .WithHttpEndpoint(name: "health");
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        // Reference two specific endpoints on the WASM app.
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
+            .WithReference(weatherApi.GetEndpoint("public"))
+            .WithReference(weatherApi.GetEndpoint("admin"));
+
+        gateway.WithBlazorClientApp(wasmApp);
+
+        // The gateway should have only the specific named endpoints forwarded.
+        var endpointRef = gateway.Resource.Annotations
+            .OfType<EndpointReferenceAnnotation>()
+            .SingleOrDefault(a => a.Resource.Name == "weatherapi");
+
+        Assert.NotNull(endpointRef);
+        Assert.False(endpointRef.UseAllEndpoints);
+        Assert.Collection(endpointRef.EndpointNames.Order(),
+            name => Assert.Equal("admin", name),
+            name => Assert.Equal("public", name));
+
+        // The YARP destination uses the first endpoint name for named resolution.
+        var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().Single();
+        var registration = Assert.Single(annotation.Apps);
+        var service = Assert.Single(registration.Services);
+        Assert.Equal("weatherapi", service.Name);
+        Assert.Collection(service.EndpointNames.Order(),
+            name => Assert.Equal("admin", name),
+            name => Assert.Equal("public", name));
     }
 
     private sealed class TestProjectMetadata : IProjectMetadata

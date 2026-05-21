@@ -123,12 +123,14 @@
     <Project Path="playground/BlazorHosted/BlazorHosted.Server/BlazorHosted.csproj" />
     <Project Path="playground/BlazorHosted/BlazorHosted.Client/BlazorHosted.Client.csproj" />
     <Project Path="playground/BlazorHosted/BlazorHosted.ClientServiceDefaults/BlazorHosted.ClientServiceDefaults.csproj" />
+    <Project Path="playground/BlazorHosted/BlazorHosted.TimeApi/BlazorHosted.TimeApi.csproj" />
     <Project Path="playground/BlazorHosted/BlazorHosted.WeatherApi/BlazorHosted.WeatherApi.csproj" />
   </Folder>
   <Folder Name="/playground/BlazorStandalone/">
     <Project Path="playground/BlazorStandalone/BlazorStandalone.AppHost/BlazorStandalone.AppHost.csproj" />
     <Project Path="playground/BlazorStandalone/BlazorStandalone/BlazorStandalone.csproj" />
     <Project Path="playground/BlazorStandalone/BlazorStandalone.ClientServiceDefaults/BlazorStandalone.ClientServiceDefaults.csproj" />
+    <Project Path="playground/BlazorStandalone/BlazorStandalone.TimeApi/BlazorStandalone.TimeApi.csproj" />
     <Project Path="playground/BlazorStandalone/BlazorStandalone.WeatherApi/BlazorStandalone.WeatherApi.csproj" />
   </Folder>
   <Folder Name="/playground/AspireWithJavaScript/">
