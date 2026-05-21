@@ -240,6 +240,10 @@ public class ResourceNotificationService : IDisposable
 
         if (waitBehavior == WaitBehavior.StopOnResourceUnavailable)
         {
+            // GetService (not GetRequiredService) intentionally — the obsolete constructor supplies a
+            // NullServiceProvider that returns null for all services. When the model is unavailable we
+            // skip the check rather than throwing, which preserves backward compatibility for callers
+            // using that deprecated path.
             var appModel = _serviceProvider.GetService<DistributedApplicationModel>();
             if (appModel is not null && !appModel.Resources.Any(r => string.Equals(r.Name, resourceName, StringComparisons.ResourceName)))
             {
