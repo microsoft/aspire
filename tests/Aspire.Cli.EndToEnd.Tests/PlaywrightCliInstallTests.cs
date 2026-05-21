@@ -3,9 +3,8 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
-using Hex1b.Automation;
-using Hex1b.Input;
 using Aspire.TestUtilities;
+using Hex1b.Automation;
 using Xunit;
 
 namespace Aspire.Cli.EndToEnd.Tests;
@@ -56,29 +55,9 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 4: Run aspire agent init.
-        // First prompt: workspace path
-        await auto.TypeAsync("aspire agent init");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("workspace:", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitAsync(500);
-        await auto.EnterAsync(); // Accept default workspace path
-
-        // Second prompt: skill locations. Select Claude Code only.
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("skill files be installed"),
-            timeout: TimeSpan.FromSeconds(60), description: "skill location prompt");
-        await auto.TypeAsync(" "); // Toggle off default Standard location
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle on Claude Code location
-        await auto.EnterAsync();
-
-        // Third prompt: skills. Aspire is pre-selected; toggle on Playwright CLI too.
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("skills should be installed"),
-            timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle on Playwright CLI
+        // Step 4: Run aspire agent init for Playwright only. This test is about
+        // @playwright/cli acquisition, not the Aspire skills bundle.
+        await auto.TypeAsync("aspire agent init --workspace-root . --skill-locations claudecode --skills playwright-cli");
         await auto.EnterAsync();
 
         // Wait for installation to complete (this downloads from npm, can take a while)
@@ -138,34 +117,10 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter);
 
-        // Step 3: Run aspire agent init from the PARENT directory.
-        // When prompted for workspace root, provide the project subdirectory.
-        await auto.TypeAsync("aspire agent init");
-        await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("workspace:", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitAsync(500);
-
-        // Clear the default path and type the project subdirectory instead.
-        // The default will be the git root or CWD — we need to override it.
-        await auto.Ctrl().KeyAsync(Hex1bKey.U); // Clear the line
-        await auto.TypeAsync("TestProject");
-        await auto.EnterAsync();
-
-        // Select Claude Code as the only skill location.
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("skill files be installed"),
-            timeout: TimeSpan.FromSeconds(60), description: "skill location prompt");
-        await auto.TypeAsync(" "); // Toggle off default Standard location
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle on Claude Code location
-        await auto.EnterAsync();
-
-        // Select skills. Aspire is pre-selected; toggle on Playwright CLI too.
-        await auto.WaitUntilAsync(
-            s => s.ContainsText("skills should be installed"),
-            timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
-        await auto.DownAsync();
-        await auto.TypeAsync(" "); // Toggle on Playwright CLI
+        // Step 3: Run aspire agent init from the PARENT directory for Playwright
+        // only. When provided as options, the workspace root and skill selection
+        // are deterministic and do not depend on Aspire default skills.
+        await auto.TypeAsync("aspire agent init --workspace-root TestProject --skill-locations claudecode --skills playwright-cli");
         await auto.EnterAsync();
 
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));

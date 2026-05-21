@@ -119,11 +119,17 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         await auto.TypeAsync(" "); // Toggle on Claude Code location
         await auto.EnterAsync();
 
-        // Agent init: skill selection - toggle on Playwright CLI
+        // Agent init: skill selection - this test validates Playwright acquisition,
+        // so deselect the default Aspire bundle skills and select only Playwright CLI.
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30),
             description: "skill selection prompt");
+        await auto.TypeAsync(" "); // Toggle off Aspire
+        await auto.DownAsync();
+        await auto.TypeAsync(" "); // Toggle off aspireify
+        await auto.DownAsync();
+        await auto.TypeAsync(" "); // Toggle off aspire-deployment
         await auto.DownAsync();
         await auto.TypeAsync(" "); // Toggle on Playwright CLI
         await auto.EnterAsync();

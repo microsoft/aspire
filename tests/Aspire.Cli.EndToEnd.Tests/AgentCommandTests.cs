@@ -226,8 +226,8 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
-        // Playwright and dotnet-inspect are no longer pre-selected, so just accept
-        // the default built-in Aspire skills.
+        // Playwright and dotnet-inspect are not pre-selected, so just accept
+        // the default Aspire skills from the seeded bundle.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptFailFastAsync(counter);
@@ -304,6 +304,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             cat > "$cache/skill-manifest.json" <<JSON
             {
               "version": "0.0.1",
+              "supports": {
+                "aspireCli": ">=0.0.0 <999.0.0",
+                "aspireSdk": ">=0.0.0 <999.0.0"
+              },
               "skills": [
                 {
                   "name": "aspire",
