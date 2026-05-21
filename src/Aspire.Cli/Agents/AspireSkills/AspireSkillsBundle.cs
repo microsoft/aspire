@@ -71,7 +71,9 @@ internal sealed class AspireSkillsBundle
         }
 
         List<SkillAssetFile> files = [];
-        foreach (var manifestFile in manifestSkill.Files.OrderBy(f => f.RelativePath, StringComparer.Ordinal))
+        var manifestFiles = manifestSkill.Files
+            ?? throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' does not contain any files.", skill.Name));
+        foreach (var manifestFile in manifestFiles.OrderBy(f => f.RelativePath, StringComparer.Ordinal))
         {
             var relativePath = NormalizeRelativePath(manifestFile.RelativePath!);
             if (!skill.ShouldInstallFile(relativePath) || !ShouldInstallFile(manifestSkill, relativePath))
@@ -93,13 +95,14 @@ internal sealed class AspireSkillsBundle
             throw new InvalidOperationException("Aspire skills bundle manifest must specify a version.");
         }
 
-        if (manifest.Skills.Length == 0)
+        var skills = manifest.Skills;
+        if (skills is not { Length: > 0 })
         {
             throw new InvalidOperationException("Aspire skills bundle manifest must contain at least one skill.");
         }
 
         var skillNames = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var skill in manifest.Skills)
+        foreach (var skill in skills)
         {
             if (string.IsNullOrWhiteSpace(skill.Name))
             {
@@ -111,9 +114,14 @@ internal sealed class AspireSkillsBundle
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle manifest contains duplicate skill '{0}'.", skill.Name));
             }
 
-            if (skill.Files.Length == 0)
+            if (skill.Files is not { Length: > 0 })
             {
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' does not contain any files.", skill.Name));
+            }
+
+            foreach (var excludedPath in skill.InstallExcludedRelativePaths ?? [])
+            {
+                _ = NormalizeRelativePath(excludedPath);
             }
 
             foreach (var file in skill.Files)
@@ -148,7 +156,7 @@ internal sealed class AspireSkillsBundle
 
     private static bool ShouldInstallFile(SkillBundleSkill skill, string relativePath)
     {
-        foreach (var excludedPath in skill.InstallExcludedRelativePaths)
+        foreach (var excludedPath in skill.InstallExcludedRelativePaths ?? [])
         {
             var normalizedExcludedPath = NormalizeRelativePath(excludedPath);
             if (PathMatchesOrIsUnder(relativePath, normalizedExcludedPath))

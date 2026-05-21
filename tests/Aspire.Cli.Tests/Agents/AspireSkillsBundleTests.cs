@@ -103,6 +103,48 @@ public class AspireSkillsBundleTests
         }
     }
 
+    [Fact]
+    public async Task GetSkillFilesAsync_TreatsMissingOptionalPathArraysAsEmpty()
+    {
+        var bundleDirectory = CreateTempDirectory();
+        var skillDirectory = Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspireify.Name);
+        Directory.CreateDirectory(skillDirectory);
+        var skillPath = Path.Combine(skillDirectory, "SKILL.md");
+        await File.WriteAllTextAsync(skillPath, "# Aspireify");
+
+        try
+        {
+            var manifestJson =
+                $$"""
+                {
+                  "version": "{{AspireSkillsInstaller.Version}}",
+                  "skills": [
+                    {
+                      "name": "{{SkillDefinition.Aspireify.Name}}",
+                      "description": "{{SkillDefinition.Aspireify.Description}}",
+                      "isDefault": true,
+                      "files": [
+                        { "relativePath": "SKILL.md", "sha256": "{{ComputeSha256(skillPath)}}" }
+                      ]
+                    }
+                  ]
+                }
+                """;
+            await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
+
+            var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
+            var files = await bundle.GetSkillFilesAsync(SkillDefinition.Aspireify, CancellationToken.None);
+
+            var skillFile = Assert.Single(files);
+            Assert.Equal("SKILL.md", skillFile.RelativePath);
+            Assert.Equal("# Aspireify", skillFile.Content);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
     private static async Task CreateBundleAsync(string bundleDirectory, Dictionary<string, string> files, string? hashOverride = null)
     {
         var skillDirectory = Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name);
