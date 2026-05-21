@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
@@ -161,18 +162,8 @@ internal sealed class AddCommand : BaseCommand
                         .Distinct(StringComparer.OrdinalIgnoreCase);
 
                     var projectDir = effectiveAppHostProjectFile.Directory!;
-                    var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
-                    if (!File.Exists(nugetConfigPath))
+                    if (await EnsureNuGetConfigHasPackageSourcesAsync(projectDir, hiveSources, cancellationToken))
                     {
-                        projectDir.Create(); // ensure directory exists
-                        var configXml = new System.Xml.Linq.XDocument(
-                            new System.Xml.Linq.XElement("configuration",
-                                new System.Xml.Linq.XElement("packageSources",
-                                    hiveSources.Select(s =>
-                                        new System.Xml.Linq.XElement("add",
-                                            new System.Xml.Linq.XAttribute("key", s),
-                                            new System.Xml.Linq.XAttribute("value", s))))));
-                        configXml.Save(nugetConfigPath);
                         InteractionService.DisplayMessage(KnownEmojis.Package, Aspire.Cli.Resources.TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
                     }
                 }
@@ -304,6 +295,10 @@ internal sealed class AddCommand : BaseCommand
         // CLI/SDK version so template- and add-generated projects stay on the same build.
         var prChannelPackageVersions = packageVersions
             .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name))
+            .OrderByDescending(p => IntegrationPackageSearchService.IsConfiguredChannel(p.Channel, configuredChannel))
+            .ThenByDescending(p => string.Equals(p.Channel.Name, ExecutionContext.IdentityChannel, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(p => string.Equals(p.Channel.Name, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(p => p.Channel.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         if (VersionHelper.TryGetCurrentCliVersionMatch(
@@ -341,6 +336,82 @@ internal sealed class AddCommand : BaseCommand
         }
 
         return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, configuredChannel, cancellationToken);
+    }
+
+    private static async Task<bool> EnsureNuGetConfigHasPackageSourcesAsync(DirectoryInfo projectDir, IEnumerable<string> packageSources, CancellationToken cancellationToken)
+    {
+        var sources = packageSources
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (sources.Length == 0)
+        {
+            return false;
+        }
+
+        projectDir.Create();
+        var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
+        XDocument configXml;
+        if (File.Exists(nugetConfigPath))
+        {
+            await using var readStream = File.OpenRead(nugetConfigPath);
+            configXml = await XDocument.LoadAsync(readStream, LoadOptions.None, cancellationToken);
+        }
+        else
+        {
+            configXml = new XDocument(new XElement("configuration"));
+        }
+
+        var configuration = configXml.Root ?? new XElement("configuration");
+        if (configXml.Root is null)
+        {
+            configXml.Add(configuration);
+        }
+
+        var packageSourcesElement = configuration.Element("packageSources");
+        if (packageSourcesElement is null)
+        {
+            packageSourcesElement = new XElement("packageSources");
+            configuration.Add(packageSourcesElement);
+        }
+
+        var existingValues = new HashSet<string>(
+            packageSourcesElement.Elements("add").Select(e => (string?)e.Attribute("value") ?? string.Empty),
+            StringComparer.OrdinalIgnoreCase);
+        var existingKeys = new HashSet<string>(
+            packageSourcesElement.Elements("add").Select(e => (string?)e.Attribute("key") ?? string.Empty),
+            StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var source in sources)
+        {
+            if (existingValues.Contains(source))
+            {
+                continue;
+            }
+
+            var key = source;
+            for (var suffix = 2; existingKeys.Contains(key); suffix++)
+            {
+                key = $"{source} ({suffix})";
+            }
+
+            packageSourcesElement.Add(new XElement("add",
+                new XAttribute("key", key),
+                new XAttribute("value", source)));
+            existingKeys.Add(key);
+            existingValues.Add(source);
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return false;
+        }
+
+        await using var writeStream = File.Create(nugetConfigPath);
+        await configXml.SaveAsync(writeStream, SaveOptions.None, cancellationToken);
+        return true;
     }
 
 }
