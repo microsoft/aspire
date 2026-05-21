@@ -154,6 +154,124 @@ public class AzureContainerAppEnvironmentExtensionsTests
     }
 
     [Fact]
+    public async Task AsExisting_PublishGeneratesThinModuleReferencingExistingEnvironment()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/12977.
+        // When AsExisting is used on AddAzureContainerAppEnvironment, the published Bicep
+        // must reference the existing managed environment instead of generating a new one
+        // plus a new Log Analytics workspace and a new Aspire Dashboard component.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var environmentName = builder.AddParameter("environmentName");
+        var sharedResourceGroup = builder.AddParameter("sharedRg");
+
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .AsExisting(environmentName, sharedResourceGroup);
+
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(env.Resource);
+
+        await Verify(bicep, extension: "bicep")
+            .AppendContentAsFile(manifest.ToString(), "json");
+    }
+
+    [Fact]
+    public async Task AsExisting_WithExplicitContainerRegistry_PublishGeneratesThinModule()
+    {
+        // When AsExisting is combined with an explicit AsExisting ACR (a common deployment
+        // scenario where everything is pre-provisioned), the resulting Bicep should not
+        // create either a new managed environment or a new container registry.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var environmentName = builder.AddParameter("environmentName");
+        var registryName = builder.AddParameter("registryName");
+        var sharedResourceGroup = builder.AddParameter("sharedRg");
+
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .AsExisting(registryName, sharedResourceGroup);
+
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .AsExisting(environmentName, sharedResourceGroup)
+            .WithAzureContainerRegistry(acr);
+
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(env.Resource);
+
+        await Verify(bicep, extension: "bicep")
+            .AppendContentAsFile(manifest.ToString(), "json");
+    }
+
+    [Fact]
+    public async Task WithAcrPullIdentity_PublishGeneratesEnvWithSuppliedIdentity()
+    {
+        // Greenfield environment, but the user has BYO'd a managed identity. The generated
+        // Bicep should NOT declare an env_mi resource or an AcrPull role assignment - the
+        // identity id should flow into the env module via a parameter and be emitted as
+        // AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var mi = builder.AddAzureUserAssignedIdentity("shared-mi");
+
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .WithAcrPullIdentity(mi);
+
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(env.Resource);
+
+        await Verify(bicep, extension: "bicep")
+            .AppendContentAsFile(manifest.ToString(), "json");
+    }
+
+    [Fact]
+    public async Task WithAcrPullIdentity_AsExisting_PublishGeneratesThinModuleWithSuppliedIdentity()
+    {
+        // Full pre-provisioned scenario from https://github.com/microsoft/aspire/issues/12977:
+        // existing env + existing ACR + BYO identity that already has AcrPull on the ACR.
+        // The generated env module should reference existing resources only and contain
+        // neither a new identity nor a new role assignment.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var environmentName = builder.AddParameter("environmentName");
+        var registryName = builder.AddParameter("registryName");
+        var identityName = builder.AddParameter("identityName");
+        var sharedResourceGroup = builder.AddParameter("sharedRg");
+
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .AsExisting(registryName, sharedResourceGroup);
+
+        var mi = builder.AddAzureUserAssignedIdentity("shared-mi")
+            .AsExisting(identityName, sharedResourceGroup);
+
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .AsExisting(environmentName, sharedResourceGroup)
+            .WithAzureContainerRegistry(acr)
+            .WithAcrPullIdentity(mi);
+
+        var (manifest, bicep) = await AzureManifestUtils.GetManifestWithBicep(env.Resource);
+
+        await Verify(bicep, extension: "bicep")
+            .AppendContentAsFile(manifest.ToString(), "json");
+    }
+
+    [Fact]
+    public async Task AsExisting_ThrowsWhenCombinedWithDelegatedSubnet()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var environmentName = builder.AddParameter("environmentName");
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("aca-subnet", "10.0.0.0/23");
+
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .AsExisting(environmentName, (IResourceBuilder<ParameterResource>?)null)
+            .WithDelegatedSubnet(subnet);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.GetManifestWithBicep(env.Resource));
+
+        Assert.Contains("existing", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("WithDelegatedSubnet", ex.Message);
+    }
+
+    [Fact]
     public async Task WithAzureContainerRegistry_PublishSucceeds_WhenDefaultRegistryIsRedundant()
     {
         // Regression test for the publish-time error:
