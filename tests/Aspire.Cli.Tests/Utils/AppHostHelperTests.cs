@@ -20,7 +20,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
 
         var fileName = Path.GetFileName(socketPrefix);
         Assert.Matches("^[A-Za-z0-9_-]{11}$", fileName);
-        
+
         var dir = Path.GetDirectoryName(socketPrefix);
         Assert.NotNull(dir);
         Assert.Equal(Path.Combine(homeDirectory, ".aspire", "cli", "bch"), dir);
@@ -116,9 +116,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     public void ExtractHashFromSocketPath_ExtractsHashFromLegacyCurrentFormat()
     {
         var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890.a1b2c3d4e5f6.12345";
-        
+
         var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath);
-        
+
         Assert.Equal("abc123def4567890", hash);
     }
 
@@ -136,9 +136,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     public void ExtractHashFromSocketPath_ExtractsHashFromOldFormat()
     {
         var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890";
-        
+
         var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath);
-        
+
         Assert.Equal("abc123def4567890", hash);
     }
 
@@ -146,9 +146,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     public void ExtractHashFromSocketPath_ExtractsHashFromLegacyAuxFormat()
     {
         var socketPath = "/home/user/.aspire/cli/backchannels/aux.sock.abc123def4567890";
-        
+
         var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath);
-        
+
         Assert.Equal("abc123def4567890", hash);
     }
 
@@ -156,9 +156,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     public void ExtractHashFromSocketPath_ReturnsNullForUnrecognizedFormat()
     {
         var socketPath = "/home/user/.aspire/cli/backchannels/unknown.sock.abc123";
-        
+
         var hash = AppHostHelper.ExtractHashFromSocketPath(socketPath);
-        
+
         Assert.Null(hash);
     }
 
@@ -167,9 +167,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     {
         // Legacy current format: auxi.sock.{hash}.{instanceHash}.{pid}
         var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890.a1b2c3d4e5f6.12345";
-        
+
         var pid = AppHostHelper.ExtractPidFromSocketPath(socketPath);
-        
+
         Assert.Equal(12345, pid);
     }
 
@@ -189,9 +189,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     {
         // Old format: auxi.sock.{hash} - no PID
         var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890";
-        
+
         var pid = AppHostHelper.ExtractPidFromSocketPath(socketPath);
-        
+
         Assert.Null(pid);
     }
 
@@ -200,9 +200,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     {
         // Invalid PID (not a number)
         var socketPath = "/home/user/.aspire/cli/backchannels/auxi.sock.abc123def4567890.notapid";
-        
+
         var pid = AppHostHelper.ExtractPidFromSocketPath(socketPath);
-        
+
         Assert.Null(pid);
     }
 
@@ -210,9 +210,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     public void ProcessExists_ReturnsTrueForCurrentProcess()
     {
         var currentPid = Environment.ProcessId;
-        
+
         var exists = AppHostHelper.ProcessExists(currentPid);
-        
+
         Assert.True(exists);
     }
 
@@ -221,9 +221,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     {
         // Use a very high PID that's unlikely to exist
         var invalidPid = int.MaxValue - 1;
-        
+
         var exists = AppHostHelper.ProcessExists(invalidPid);
-        
+
         Assert.False(exists);
     }
 
@@ -232,9 +232,9 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     {
         var appHostPath = "/path/to/MyApp.AppHost.csproj";
         var homeDirectory = "/nonexistent/home/directory";
-        
+
         var sockets = AppHostHelper.FindMatchingSockets(appHostPath, homeDirectory);
-        
+
         Assert.Empty(sockets);
     }
 
@@ -246,20 +246,20 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(backchannelsDir);
 
         var appHostPath = "/path/to/MyApp.AppHost.csproj";
-        
+
         var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, workspace.WorkspaceRoot.FullName);
         var appHostId = Path.GetFileName(prefix);
-        
+
         var socket1 = Path.Combine(backchannelsDir, $"{appHostId}a1b2C3d4.12345");
         var socket2 = Path.Combine(backchannelsDir, $"{appHostId}Z9y8X7w6.67890");
         File.WriteAllText(socket1, "");
         File.WriteAllText(socket2, "");
-        
+
         var otherSocket = Path.Combine(backchannelsDir, "differentId1a1b2C3d4.99999");
         File.WriteAllText(otherSocket, "");
-        
+
         var sockets = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
-        
+
         Assert.Equal(2, sockets.Length);
         Assert.Contains(socket1, sockets);
         Assert.Contains(socket2, sockets);
@@ -274,17 +274,17 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(legacyBackchannelsDir);
 
         var appHostPath = "/path/to/MyApp.AppHost.csproj";
-        
+
         var hash = AppHostHelper.ComputeLegacyHashes(appHostPath)[0];
-        
+
         var oldFormatSocket = Path.Combine(legacyBackchannelsDir, $"auxi.sock.{hash}");
         File.WriteAllText(oldFormatSocket, "");
-        
+
         var legacyPidSocket = Path.Combine(legacyBackchannelsDir, $"auxi.sock.{hash}.12345");
         File.WriteAllText(legacyPidSocket, "");
-        
+
         var sockets = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
-        
+
         // Should find both old and new format
         Assert.Equal(2, sockets.Length);
         Assert.Contains(oldFormatSocket, sockets);
@@ -299,15 +299,20 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(backchannelsDir);
 
         var appHostPath = "/path/to/MyApp.AppHost.csproj";
-        
+
         var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, workspace.WorkspaceRoot.FullName);
         var appHostId = Path.GetFileName(prefix);
-        
-        var similarSocket = Path.Combine(backchannelsDir, $"{appHostId}xyz.12345");
-        File.WriteAllText(similarSocket, "");
-        
+
+        // 8 base64url chars but missing the '.' separator before PID
+        var badSeparator = Path.Combine(backchannelsDir, $"{appHostId}AbCdEfGhX12345");
+        File.WriteAllText(badSeparator, "");
+
+        // Correct structure but non-integer PID
+        var badPid = Path.Combine(backchannelsDir, $"{appHostId}AbCdEfGh.notapid");
+        File.WriteAllText(badPid, "");
+
         var sockets = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
-        
+
         // Should NOT match the similar hash
         Assert.Empty(sockets);
     }
@@ -320,13 +325,13 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(backchannelsDir);
 
         var appHostPath = "/path/to/MyApp.AppHost.csproj";
-        
+
         // Create sockets for a DIFFERENT app host
         var otherSocket = Path.Combine(backchannelsDir, "differentId1a1b2C3d4.99999");
         File.WriteAllText(otherSocket, "");
-        
+
         var sockets = AppHostHelper.FindMatchingSockets(appHostPath, workspace.WorkspaceRoot.FullName);
-        
+
         Assert.Empty(sockets);
     }
 
@@ -338,23 +343,23 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(backchannelsDir);
 
         var appHostPath = "/path/to/MyApp.AppHost.csproj";
-        
+
         var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPath, workspace.WorkspaceRoot.FullName);
         var appHostId = AppHostHelper.ExtractHashFromSocketPath(prefix)!;
-        
+
         var oldFormatSocket = Path.Combine(backchannelsDir, appHostId);
         File.WriteAllText(oldFormatSocket, "");
-        
+
         var deadPid = int.MaxValue - 1;
         var orphanedSocket = Path.Combine(backchannelsDir, $"{appHostId}a1b2C3d4.{deadPid}");
         File.WriteAllText(orphanedSocket, "");
-        
+
         var currentPid = Environment.ProcessId;
         var liveSocket = Path.Combine(backchannelsDir, $"{appHostId}Z9y8X7w6.{currentPid}");
         File.WriteAllText(liveSocket, "");
-        
+
         var deleted = AppHostHelper.CleanupOrphanedSockets(backchannelsDir, appHostId, currentPid);
-        
+
         // Should only delete the orphaned socket (dead PID)
         Assert.Equal(1, deleted);
         Assert.True(File.Exists(oldFormatSocket), "Old format socket should still exist (can't detect orphan)");
@@ -388,7 +393,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ComputeLegacyHash_WhenUppercaseDrivePathOnWindows_ReturnsLowercaseDriveLegacyHash()
+    public void ComputeLegacyHashes_IncludesDriveLetterOnlyHashSharedAcrossCasings()
     {
         Assert.SkipWhen(!OperatingSystem.IsWindows(),
             "Drive-letter legacy fallback behavior only applies on Windows.");
@@ -396,15 +401,19 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var upperDrivePath = @"C:\Path\To\MyApp.AppHost.csproj";
         var lowerDrivePath = @"c:\Path\To\MyApp.AppHost.csproj";
 
-        var upperLegacyHash = AppHostHelper.ComputeLegacyHash(upperDrivePath);
-        var lowerLegacyHash = AppHostHelper.ComputeLegacyHash(lowerDrivePath);
+        var upperHashes = AppHostHelper.ComputeLegacyHashes(upperDrivePath);
+        var lowerHashes = AppHostHelper.ComputeLegacyHashes(lowerDrivePath);
 
-        Assert.NotNull(upperLegacyHash);
-        Assert.NotNull(lowerLegacyHash);
-        Assert.Equal(lowerLegacyHash, upperLegacyHash);
+        // The drive-letter-only normalized hash (produced by AppHost versions that only
+        // upper-cased the drive letter) must appear in both arrays so sockets created by
+        // those AppHosts are still discoverable regardless of which drive-letter casing
+        // the current caller has.
+        var shared = upperHashes.Intersect(lowerHashes, StringComparer.Ordinal).ToArray();
+        Assert.NotEmpty(shared);
 
-        var currentHash = AppHostHelper.ComputeLegacyHashes(upperDrivePath)[0];
-        Assert.NotEqual(currentHash, upperLegacyHash);
+        // The current (full-uppercase on Windows) hash must also be shared because the
+        // entire path is now normalized.
+        Assert.Equal(upperHashes[0], lowerHashes[0]);
     }
 
     [Fact]
@@ -417,6 +426,41 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         var legacyHash = AppHostHelper.ComputeLegacyHash(appHostPath);
 
         Assert.Null(legacyHash);
+    }
+
+    [Fact]
+    public void ComputeHash_IsCaseInsensitiveAcrossFullPathOnWindows()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows(),
+            "Full-path normalization only applies on Windows.");
+
+        var upper = @"C:\Foo\Bar\App.AppHost.csproj";
+        var mixed = @"c:\foo\BAR\app.apphost.CSPROJ";
+
+        Assert.Equal(BackchannelConstants.ComputeHash(upper), BackchannelConstants.ComputeHash(mixed));
+        Assert.Equal(BackchannelConstants.ComputeAppHostId(upper), BackchannelConstants.ComputeAppHostId(mixed));
+    }
+
+    [Fact]
+    public void FindMatchingSockets_FindsCompactSocketAcrossPathCasing()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsWindows(),
+            "Full-path normalization only applies on Windows.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
+        Directory.CreateDirectory(backchannelsDir);
+
+        var upperPath = @"C:\Foo\Bar\App.AppHost.csproj";
+        var mixedPath = @"c:\foo\BAR\app.apphost.CSPROJ";
+
+        var appHostId = BackchannelConstants.ComputeAppHostId(upperPath);
+        var socket = Path.Combine(backchannelsDir, $"{appHostId}a1b2C3d4.12345");
+        File.WriteAllText(socket, "");
+
+        var found = AppHostHelper.FindMatchingSockets(mixedPath, workspace.WorkspaceRoot.FullName);
+        Assert.Single(found);
+        Assert.Contains(socket, found);
     }
 
     [Fact]

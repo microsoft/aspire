@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Text;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Hashing;
@@ -123,10 +124,11 @@ internal static class BackchannelConstants
     /// Computes the legacy hash portion of the socket name from an AppHost path.
     /// </summary>
     /// <remarks>
-    /// On Windows the drive letter is normalized to uppercase before hashing so that
-    /// "C:\App\MyApp.csproj" and "c:\App\MyApp.csproj" produce the same hash.
-    /// Without this, the CLI and AppHost can derive different drive-letter casings
-    /// (e.g. <c>FileInfo.FullName</c> vs MSBuild metadata) and fail to match sockets.
+    /// On Windows the entire path is upper-cased before hashing so that paths differing
+    /// only in casing (for example, <c>FileInfo.FullName</c> on the CLI side vs. MSBuild
+    /// metadata on the AppHost side) produce the same hash. On other platforms the path
+    /// is hashed as-is because case-sensitive APFS exists on macOS and Linux file systems
+    /// are case-sensitive.
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <returns>A 16-character lowercase hex string.</returns>
@@ -145,7 +147,6 @@ internal static class BackchannelConstants
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <returns>A 16-character lowercase hex string, or <c>null</c> if it matches the current hash.</returns>
-    // TODO: Remove legacy hash support once all supported AppHost versions use normalized hashing.
     public static string? ComputeLegacyHash(string appHostPath)
     {
         if (!OperatingSystem.IsWindows())
@@ -184,30 +185,43 @@ internal static class BackchannelConstants
     /// <summary>
     /// Computes all legacy hashes that should be searched for an AppHost path.
     /// </summary>
+    /// <remarks>
+    /// Returns, in order: the current normalized hash, the drive-letter-only normalized hash
+    /// (produced by AppHost versions that only upper-cased the drive letter before hashing),
+    /// and any raw-path fallback returned by <see cref="ComputeLegacyHash"/>. Duplicates are
+    /// removed.
+    /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
-    /// <returns>The normalized legacy hash plus any pre-normalization fallback hash.</returns>
+    /// <returns>All hash variants that should be searched.</returns>
     public static string[] ComputeLegacyHashes(string appHostPath)
     {
         var currentHash = ComputeHash(appHostPath);
-        var legacyHash = ComputeLegacyHash(appHostPath);
+        var rawLegacyHash = ComputeLegacyHash(appHostPath);
 
-        return legacyHash is null ? [currentHash] : [currentHash, legacyHash];
+        var results = new List<string>() { currentHash };
+        if (rawLegacyHash is not null && !results.Contains(rawLegacyHash, StringComparer.Ordinal))
+        {
+            results.Add(rawLegacyHash);
+        }
+
+        return results.ToArray();
     }
 
     /// <summary>
-    /// Normalizes the path for consistent hashing by uppercasing the Windows drive letter.
+    /// Normalizes the path for consistent hashing.
     /// </summary>
+    /// <remarks>
+    /// On Windows the entire path is upper-cased with <see cref="string.ToUpperInvariant"/>.
+    /// NTFS/ReFS treat paths as case-insensitive, but neither <c>FileInfo.FullName</c> (CLI side)
+    /// nor MSBuild metadata (AppHost side) canonicalizes casing against disk, so any segment
+    /// can differ between the two sides. <c>ToUpperInvariant</c> is deterministic across
+    /// machines and cultures, so both sides always agree on the same hash input.
+    /// On macOS and Linux the path is returned unchanged: case-sensitive APFS exists on macOS
+    /// and Linux file systems are case-sensitive by default.
+    /// </remarks>
     private static string NormalizePath(string path)
     {
-        // On Windows, the drive letter casing can differ between callers
-        // (e.g. FileInfo.FullName produces "C:\..." while MSBuild metadata may produce "c:\...").
-        // Uppercase only the drive letter so both sides hash identically.
-        if (OperatingSystem.IsWindows() && path.Length >= 2 && path[1] == ':')
-        {
-            return char.ToUpperInvariant(path[0]) + path[1..];
-        }
-
-        return path;
+        return OperatingSystem.IsWindows() ? path.ToUpperInvariant() : path;
     }
 
     /// <summary>
@@ -469,10 +483,8 @@ internal static class BackchannelConstants
     {
         ArgumentException.ThrowIfNullOrEmpty(value);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(length);
-        var xxHash = new XxHash3();
-        xxHash.Append(Encoding.UTF8.GetBytes(value));
-
-        return ToLowerHexIdentifier(xxHash.GetCurrentHash(), length);
+        var hashBytes = XxHash3.Hash(Encoding.UTF8.GetBytes(value));
+        return ToLowerHexIdentifier(hashBytes, length);
     }
 
     /// <summary>
