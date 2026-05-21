@@ -5853,11 +5853,11 @@ class ResourceCommandServiceImpl implements ResourceCommandService {
      * @returns The command execution result.
      */
     async executeCommandAsync(resource: string | CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult> {
-        const arguments = options?.arguments;
+        const argumentsValue = options?.arguments;
         const cancellationToken = options?.cancellationToken;
         resource = isPromiseLike(resource) ? await resource : resource;
         const rpcArgs: Record<string, unknown> = { resourceCommandService: this._handle, resource, commandName };
-        if (arguments !== undefined) rpcArgs.arguments = arguments;
+        if (argumentsValue !== undefined) rpcArgs.arguments = argumentsValue;
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<ExecuteCommandResult>(
             'Aspire.Hosting/executeResourceCommand',
