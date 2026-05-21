@@ -19,6 +19,13 @@ cask "aspire" do
 
   # Write the sidecar file
   postflight do
-    File.write("#{staged_path}/.aspire-install.json", %({"source":"brew"}\n))
+    File.write("#{staged_path}/.aspire-install.json", %Q({"source":"brew"}\n))
   end
+
+  # Intentionally empty: `brew uninstall --zap aspire` should not remove
+  # `~/.aspire` because that directory is shared with non-Homebrew Aspire
+  # state (PR hives, dev certs, telemetry, runtime sockets, manually
+  # installed CLIs). An explicit empty `zap` silences the `missing-zap`
+  # audit warning and the corresponding upstream homebrew/cask PR label.
+  zap trash: []
 end

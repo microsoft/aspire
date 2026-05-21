@@ -14,6 +14,8 @@ readonly BUILT_NUGETS_RID_ARTIFACT_NAME="built-nugets-for"
 readonly CLI_ARCHIVE_ARTIFACT_NAME_PREFIX="cli-native-archives"
 readonly ASPIRE_CLI_ARTIFACT_NAME_PREFIX="aspire-cli"
 readonly EXTENSION_ARTIFACT_NAME="aspire-extension"
+readonly WINGET_MANIFEST_ARTIFACT_NAME="winget-manifests-prerelease"
+readonly HOMEBREW_CASK_ARTIFACT_NAME="homebrew-cask-prerelease"
 
 # Repository: Allow override via ASPIRE_REPO env var (owner/name). Default: microsoft/aspire
 readonly REPO="${ASPIRE_REPO:-microsoft/aspire}"
@@ -85,9 +87,11 @@ USAGE:
                                 NuGet hive:      <install-path>/hives/pr-<PR_NUMBER>/packages (or run-<RUN_ID>)
     -m, --install-mode MODE     How to install the CLI: 'archive' (default) installs from
                                 cli-native-archives-<rid> artifact, 'tool' installs the Aspire.Cli
-                                dotnet tool from the PR's RID-specific NuGet artifact.
-    --force                     Tool mode only: run dotnet tool update instead of install to move an
-                                existing Aspire.Cli tool to the exact PR package version (allows downgrades).
+                                dotnet tool from the PR's RID-specific NuGet artifact, 'winget'
+                                installs from the generated WinGet manifest artifact, and
+                                'homebrew' installs from the generated Homebrew cask artifact.
+    --force                     Tool mode: update an existing Aspire.Cli tool to the exact PR package
+                                version. WinGet mode: allow replacing an existing Microsoft.Aspire install.
     --os OS                     Override OS detection (win, linux, linux-musl, osx)
     --arch ARCH                 Override architecture detection (x64, arm64)
     --hive-only                 For installs from archives only: only install NuGet packages to the hive, skip CLI download
@@ -113,6 +117,8 @@ EXAMPLES:
     ./get-aspire-cli-pr.sh 1234 --use-insiders
     ./get-aspire-cli-pr.sh 1234 -m tool
     ./get-aspire-cli-pr.sh 1234 --install-mode tool --force
+    ./get-aspire-cli-pr.sh 1234 --install-mode homebrew
+    ./get-aspire-cli-pr.sh 1234 --install-mode winget
     ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts --install-mode tool
     ./get-aspire-cli-pr.sh 1234 --skip-path
     ./get-aspire-cli-pr.sh 1234 --dry-run
@@ -122,6 +128,8 @@ EXAMPLES:
 REQUIREMENTS:
     - GitHub CLI (gh) must be installed and authenticated (not needed with --local-dir)
     - In tool mode (--install-mode tool), the .NET SDK 'dotnet' command must be available in PATH
+    - In Homebrew mode (--install-mode homebrew), Homebrew must be available on macOS
+    - In WinGet mode (--install-mode winget), PowerShell and WinGet must be available on Windows
     - Permissions to download artifacts from the target repository
     - VS Code extension installation requires VS Code CLI (code) to be available in PATH
 
@@ -221,11 +229,11 @@ parse_args() {
                     exit 1
                 fi
                 case "$2" in
-                    archive|tool)
+                    archive|tool|winget|homebrew)
                         INSTALL_MODE="$2"
                         ;;
                     *)
-                        say_error "Invalid value for --install-mode: '$2'. Allowed: archive, tool"
+                        say_error "Invalid value for --install-mode: '$2'. Allowed: archive, tool, winget, homebrew"
                         say_info "Use --help for usage information."
                         exit 1
                         ;;
@@ -1054,6 +1062,221 @@ download_aspire_cli() {
     return 0
 }
 
+is_installer_mode() {
+    [[ "$INSTALL_MODE" == "winget" || "$INSTALL_MODE" == "homebrew" ]]
+}
+
+script_manages_cli_path() {
+    [[ "$INSTALL_MODE" == "archive" || ("$INSTALL_MODE" == "tool" && "$INSTALL_PREFIX_EXPLICIT" == true) ]]
+}
+
+get_installer_artifact_name() {
+    case "$INSTALL_MODE" in
+        winget)
+            printf '%s' "$WINGET_MANIFEST_ARTIFACT_NAME"
+            ;;
+        homebrew)
+            printf '%s' "$HOMEBREW_CASK_ARTIFACT_NAME"
+            ;;
+        *)
+            say_error "Install mode '$INSTALL_MODE' does not use an installer artifact."
+            return 1
+            ;;
+    esac
+}
+
+get_installer_archive_rids() {
+    case "$INSTALL_MODE" in
+        winget)
+            printf '%s\n' "win-x64" "win-arm64"
+            ;;
+        homebrew)
+            printf '%s\n' "osx-arm64" "osx-x64"
+            ;;
+        *)
+            say_error "Install mode '$INSTALL_MODE' does not use native installer archives."
+            return 1
+            ;;
+    esac
+}
+
+download_artifact_by_name() {
+    local workflow_run_id="$1"
+    local artifact_name="$2"
+    local download_dir="$3"
+    local download_command=(gh run download "$workflow_run_id" -R "$REPO" --name "$artifact_name" -D "$download_dir")
+
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] Would download $artifact_name with: ${download_command[*]}"
+        return 0
+    fi
+
+    say_info "Downloading artifact - $artifact_name ..."
+    say_verbose "Downloading with: ${download_command[*]}"
+
+    if ! "${download_command[@]}"; then
+        say_verbose "gh run download command failed. Command: ${download_command[*]}"
+        say_error "Failed to download artifact '$artifact_name' from run: $workflow_run_id . If the workflow is still running then the artifact named '$artifact_name' may not be available yet. Check at https://github.com/${REPO}/actions/runs/$workflow_run_id#artifacts"
+        return 1
+    fi
+
+    return 0
+}
+
+download_installer_artifacts() {
+    local workflow_run_id="$1"
+    local temp_dir="$2"
+    local installer_artifact_name
+    installer_artifact_name="$(get_installer_artifact_name)"
+
+    INSTALLER_ARTIFACT_DIR="$temp_dir/installer-$INSTALL_MODE"
+    INSTALLER_ARCHIVE_ROOT="$temp_dir/installer-native-archives"
+
+    if ! download_artifact_by_name "$workflow_run_id" "$installer_artifact_name" "$INSTALLER_ARTIFACT_DIR"; then
+        return 1
+    fi
+
+    local rid
+    while IFS= read -r rid; do
+        if [[ -z "$rid" ]]; then
+            continue
+        fi
+
+        if ! download_artifact_by_name "$workflow_run_id" "$CLI_ARCHIVE_ARTIFACT_NAME_PREFIX-$rid" "$INSTALLER_ARCHIVE_ROOT"; then
+            return 1
+        fi
+    done < <(get_installer_archive_rids)
+
+    say_verbose "Downloaded installer artifact to: $INSTALLER_ARTIFACT_DIR"
+    say_verbose "Downloaded native installer archives to: $INSTALLER_ARCHIVE_ROOT"
+    return 0
+}
+
+find_installer_dogfood_script() {
+    local artifact_dir="$1"
+    local script_name
+    local companion_pattern
+
+    case "$INSTALL_MODE" in
+        winget)
+            script_name="dogfood.ps1"
+            companion_pattern="*.installer.yaml"
+            ;;
+        homebrew)
+            script_name="dogfood.sh"
+            companion_pattern="aspire.rb"
+            ;;
+        *)
+            say_error "Install mode '$INSTALL_MODE' does not use a dogfood script."
+            return 1
+            ;;
+    esac
+
+    local -a matches=()
+    local f
+    while IFS= read -r -d '' f; do
+        if find "$(dirname "$f")" -maxdepth 1 -type f -name "$companion_pattern" | grep -q .; then
+            matches+=("$f")
+        fi
+    done < <(find "$artifact_dir" -type f -name "$script_name" -print0 | sort -z)
+
+    if [[ "${#matches[@]}" -eq 0 ]]; then
+        say_error "Could not find $script_name co-located with $companion_pattern under: $artifact_dir"
+        return 1
+    fi
+
+    if [[ "${#matches[@]}" -gt 1 ]]; then
+        say_error "Found multiple $script_name files co-located with $companion_pattern under $artifact_dir:"
+        printf '  %s\n' "${matches[@]}" >&2
+        return 1
+    fi
+
+    printf '%s' "${matches[0]}"
+    return 0
+}
+
+install_with_installer_artifact() {
+    local artifact_dir="$1"
+    local archive_root="$2"
+    local dogfood_script
+
+    if [[ "$DRY_RUN" == true ]]; then
+        case "$INSTALL_MODE" in
+            winget)
+                dogfood_script="$artifact_dir/dogfood.ps1"
+                ;;
+            homebrew)
+                dogfood_script="$artifact_dir/dogfood.sh"
+                ;;
+        esac
+    else
+        if ! dogfood_script="$(find_installer_dogfood_script "$artifact_dir")"; then
+            return 1
+        fi
+    fi
+
+    case "$INSTALL_MODE" in
+        winget)
+            local winget_command=(pwsh -NoProfile -ExecutionPolicy Bypass -File "$dogfood_script" -ArchiveRoot "$archive_root")
+            if [[ "$FORCE" == true ]]; then
+                winget_command+=(-Force)
+            fi
+            if [[ "$DRY_RUN" == true ]]; then
+                say_info "[DRY RUN] Would install Aspire CLI with WinGet artifact: ${winget_command[*]}"
+                return 0
+            fi
+
+            "${winget_command[@]}"
+            ;;
+        homebrew)
+            local homebrew_command=(bash "$dogfood_script" --archive-root "$archive_root")
+            if [[ "$DRY_RUN" == true ]]; then
+                say_info "[DRY RUN] Would install Aspire CLI with Homebrew artifact: ${homebrew_command[*]}"
+                return 0
+            fi
+
+            "${homebrew_command[@]}"
+            ;;
+        *)
+            say_error "Unsupported installer mode: $INSTALL_MODE"
+            return 1
+            ;;
+    esac
+}
+
+validate_installer_mode_environment() {
+    if [[ "$DRY_RUN" == true ]]; then
+        return 0
+    fi
+
+    case "$INSTALL_MODE" in
+        winget)
+            if [[ "$HOST_OS" != "win" ]]; then
+                say_error "--install-mode winget can only be executed on Windows. Use --dry-run to preview downloads from another OS."
+                return 1
+            fi
+            if ! command -v pwsh >/dev/null 2>&1; then
+                say_error "--install-mode winget requires PowerShell (pwsh) to run the WinGet dogfood installer."
+                return 1
+            fi
+            if ! command -v winget >/dev/null 2>&1; then
+                say_error "--install-mode winget requires WinGet to install the generated manifest artifact."
+                return 1
+            fi
+            ;;
+        homebrew)
+            if [[ "$HOST_OS" != "osx" ]]; then
+                say_error "--install-mode homebrew can only be executed on macOS. Use --dry-run to preview downloads from another OS."
+                return 1
+            fi
+            if ! command -v brew >/dev/null 2>&1; then
+                say_error "--install-mode homebrew requires Homebrew (brew) to install the generated cask artifact."
+                return 1
+            fi
+            ;;
+    esac
+}
+
 # Function to check if VS Code CLI is available
 check_vscode_cli_dependency() {
     local vscode_cmd="code"
@@ -1321,11 +1544,15 @@ install_from_local_dir() {
     fi
     say_verbose "Computed RID: $rid"
 
-    # Find CLI archive in local directory, or auto-detect raw build output.
+    # Find CLI archive in local directory, use installer artifact, or auto-detect raw build output.
     if [[ "$HIVE_ONLY" == true ]]; then
         say_info "Skipping CLI installation due to --hive-only flag"
     elif [[ "$INSTALL_MODE" == "tool" ]]; then
         say_verbose "Skipping CLI archive lookup in local directory (install mode: tool)"
+    elif is_installer_mode; then
+        if ! install_with_installer_artifact "$local_dir" "$local_dir"; then
+            return 1
+        fi
     else
         local -a cli_files=()
         while IFS= read -r -d '' f; do
@@ -1469,8 +1696,12 @@ download_and_install_from_pr() {
         say_info "Skipping CLI download due to --hive-only flag"
     elif [[ "$INSTALL_MODE" == "tool" ]]; then
         say_verbose "Skipping CLI native archive download (install mode: tool)"
+    elif is_installer_mode; then
+        if ! download_installer_artifacts "$workflow_run_id" "$temp_dir"; then
+            return 1
+        fi
     else
-    if ! cli_archive_path=$(download_aspire_cli "$workflow_run_id" "$rid" "$temp_dir"); then
+        if ! cli_archive_path=$(download_aspire_cli "$workflow_run_id" "$rid" "$temp_dir"); then
             return 1
         fi
     fi
@@ -1511,6 +1742,10 @@ download_and_install_from_pr() {
         say_info "Skipping CLI installation due to --hive-only flag"
     elif [[ "$INSTALL_MODE" == "tool" ]]; then
         say_verbose "Skipping CLI archive installation (install mode: tool)"
+    elif is_installer_mode; then
+        if ! install_with_installer_artifact "$INSTALLER_ARTIFACT_DIR" "$INSTALLER_ARCHIVE_ROOT"; then
+            return 1
+        fi
     else
         if ! install_aspire_cli "$cli_archive_path" "$cli_install_dir"; then
             return 1
@@ -1581,15 +1816,15 @@ main() {
         fi
     fi
 
-    if [[ "$INSTALL_MODE" == "tool" && "$HIVE_ONLY" == true ]]; then
-        say_error "--hive-only cannot be combined with --install-mode tool: --hive-only skips the CLI install, but --install-mode tool installs Aspire.Cli as a .NET tool."
-        say_info "Drop one of the two flags. Both archive and tool modes populate the hive."
+    if [[ "$HIVE_ONLY" == true && "$INSTALL_MODE" != "archive" ]]; then
+        say_error "--hive-only cannot be combined with --install-mode $INSTALL_MODE: --hive-only skips the CLI install, but this install mode installs Aspire CLI through a package or tool manager."
+        say_info "Drop one of the two flags. All install modes populate the hive."
         exit 1
     fi
 
-    if [[ "$INSTALL_MODE" != "tool" && "$FORCE" == true ]]; then
-        say_error "--force can only be combined with --install-mode tool: archive mode installs from downloaded binaries and does not use dotnet tool update."
-        say_info "Use --install-mode tool with --force, or drop --force."
+    if [[ "$INSTALL_MODE" != "tool" && "$INSTALL_MODE" != "winget" && "$FORCE" == true ]]; then
+        say_error "--force can only be combined with --install-mode tool or --install-mode winget."
+        say_info "Use --install-mode tool/winget with --force, or drop --force."
         exit 1
     fi
 
@@ -1601,6 +1836,10 @@ main() {
         if ! check_dotnet_dependency; then
             exit 1
         fi
+    fi
+
+    if is_installer_mode && ! validate_installer_mode_environment; then
+        exit 1
     fi
 
     # Check gh dependency (not needed for --local-dir mode)
@@ -1652,14 +1891,14 @@ main() {
         fi
     fi
 
-    # Add to shell profile for persistent PATH. Default tool installs use 'dotnet tool install -g',
-    # which owns any global-tools PATH guidance; explicit tool-path installs use cli_install_dir.
+    # Add to shell profile for persistent PATH. Package-manager modes and default tool installs own
+    # their own PATH guidance; explicit tool-path installs use cli_install_dir.
     # PR installs deliberately skip the persistent profile write: a PR build is a per-session
     # dogfood activation. Touching ~/.zshrc / ~/.bashrc would silently demote a developer's
     # daily/stable install on every new terminal until they hunt down the stale `export PATH=`
     # line. The activation hint printed below shows how to opt in manually.
     if [[ "$HIVE_ONLY" != true ]]; then
-        if [[ "$INSTALL_MODE" != "tool" || "$INSTALL_PREFIX_EXPLICIT" == true ]]; then
+        if script_manages_cli_path; then
             if [[ "$SKIP_PATH" == true ]]; then
                 say_info "Skipping PATH configuration due to --skip-path flag"
             else
@@ -1689,7 +1928,7 @@ main() {
     # Print PATH activation hint for PR installs.
     # Goes to stdout (not stderr) so it's visible in normal install output and tests can grep it.
     # Printed in success path (after install completes) and also under --dry-run.
-    if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" && ("$INSTALL_MODE" == "archive" || "$INSTALL_PREFIX_EXPLICIT" == true) ]]; then
+    if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" ]] && script_manages_cli_path; then
         local profile_path_unexpanded="$INSTALL_PATH_UNEXPANDED"
         echo "Add to your shell profile: export PATH=\"$profile_path_unexpanded:\$PATH\""
     fi

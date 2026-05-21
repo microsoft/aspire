@@ -82,6 +82,33 @@ jobs:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
       targets: '[{"os": "macos-latest", "runner": "macos-latest", "rids": "osx-arm64"}]'
 
+  build_cli_archive_macos_x64:
+    name: Build native CLI archive (macOS x64)
+    uses: ./.github/workflows/build-cli-native-archives.yml
+    with:
+      versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      targets: '[{"os": "macos-15-intel", "runner": "macos-15-intel", "rids": "osx-x64"}]'
+
+  prepare_winget_installer_artifacts:
+    name: Prepare WinGet installer artifacts
+    uses: ./.github/workflows/prepare-installer-artifacts.yml
+    needs: [
+      build_cli_archive_windows,
+      build_cli_archive_windows_arm64,
+    ]
+    with:
+      installer: winget
+
+  prepare_homebrew_installer_artifacts:
+    name: Prepare Homebrew installer artifacts
+    uses: ./.github/workflows/prepare-installer-artifacts.yml
+    needs: [
+      build_cli_archive_macos,
+      build_cli_archive_macos_x64,
+    ]
+    with:
+      installer: homebrew
+
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
     uses: ./.github/workflows/build-cli-e2e-image.yml
@@ -332,6 +359,9 @@ jobs:
       build_cli_archive_windows,
       build_cli_archive_windows_arm64,
       build_cli_archive_macos,
+      build_cli_archive_macos_x64,
+      prepare_winget_installer_artifacts,
+      prepare_homebrew_installer_artifacts,
       build_cli_e2e_image,
       extension_tests_win,
       cli_starter_validation_windows,
@@ -348,6 +378,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Create test results directory
+        shell: bash
+        run: mkdir -p "${{ github.workspace }}/testresults"
 
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -421,6 +455,9 @@ jobs:
                  needs.cli_starter_validation_windows.result == 'skipped' ||
                  needs.typescript_sdk_tests.result == 'skipped' ||
                  needs.typescript_api_compat.result == 'skipped' ||
+                 needs.build_cli_archive_macos_x64.result == 'skipped' ||
+                 needs.prepare_winget_installer_artifacts.result == 'skipped' ||
+                 needs.prepare_homebrew_installer_artifacts.result == 'skipped' ||
                  needs.tests_no_nugets.result == 'skipped' ||
                  needs.tests_requires_nugets_linux.result == 'skipped' ||
                  needs.tests_requires_nugets_windows.result == 'skipped' ||
@@ -432,14 +469,17 @@ jobs:
                  needs.polyglot_validation.result == 'skipped')) ||
                (github.event_name != 'pull_request' &&
                 (needs.extension_tests_win.result == 'skipped' ||
-                  needs.typescript_sdk_tests.result == 'skipped' ||
-                  needs.tests_no_nugets.result == 'skipped' ||
-                  needs.tests_requires_nugets_linux.result == 'skipped' ||
-                  needs.tests_requires_nugets_windows.result == 'skipped' ||
-                  (github.ref == 'refs/heads/main' &&
-                   needs.polyglot_validation.result == 'skipped') ||
-                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                   needs.tests_requires_nugets_macos.result == 'skipped')))) }}
+                 needs.typescript_sdk_tests.result == 'skipped' ||
+                 needs.build_cli_archive_macos_x64.result == 'skipped' ||
+                 needs.prepare_winget_installer_artifacts.result == 'skipped' ||
+                 needs.prepare_homebrew_installer_artifacts.result == 'skipped' ||
+                 needs.tests_no_nugets.result == 'skipped' ||
+                 needs.tests_requires_nugets_linux.result == 'skipped' ||
+                 needs.tests_requires_nugets_windows.result == 'skipped' ||
+                 (github.ref == 'refs/heads/main' &&
+                  needs.polyglot_validation.result == 'skipped') ||
+                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
+                  needs.tests_requires_nugets_macos.result == 'skipped')))) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1
