@@ -23,17 +23,16 @@ internal sealed class IntegrationPackageSearchService(
 
     public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
-        var allChannels = await packagingService.GetChannelsAsync(cancellationToken, configuredChannel);
-
-        if (!string.IsNullOrEmpty(configuredChannel))
-        {
-            allChannels = allChannels.Where(c => string.Equals(c.Name, configuredChannel, StringComparison.OrdinalIgnoreCase));
-        }
+        var allChannels = (await packagingService.GetChannelsAsync(cancellationToken, configuredChannel)).ToArray();
 
         var hasHives = executionContext.GetHiveCount() > 0;
-        var channels = hasHives || !string.IsNullOrEmpty(configuredChannel)
-            ? allChannels
-            : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
+        var channels = !string.IsNullOrEmpty(configuredChannel)
+            ? allChannels.Any(c => IsConfiguredChannel(c, configuredChannel))
+                ? allChannels.Where(c => c.Type is PackageChannelType.Implicit || IsConfiguredChannel(c, configuredChannel))
+                : []
+            : hasHives
+                ? allChannels
+                : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
 
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
@@ -82,14 +81,6 @@ internal sealed class IntegrationPackageSearchService(
 
     public (string? ConfiguredChannel, int? ExitCode) GetConfiguredChannel(FileInfo appHostProjectFile, IAppHostProject project)
     {
-        // For non-.NET projects, read the channel from the local Aspire configuration if available.
-        // Unlike .NET projects which have a nuget.config, polyglot apphosts persist the channel
-        // in aspire.config.json (or the legacy settings.json during migration).
-        if (project.LanguageId == KnownLanguageId.CSharp)
-        {
-            return (ConfiguredChannel: null, ExitCode: null);
-        }
-
         var appHostDirectory = appHostProjectFile.Directory!.FullName;
         var isProjectReferenceMode = project.IsUsingProjectReferences(appHostProjectFile);
         if (isProjectReferenceMode)
@@ -128,12 +119,19 @@ internal sealed class IntegrationPackageSearchService(
             .ThenByDescending(p => p.FriendlyName, new CommunityToolkitFirstComparer());
     }
 
-    public static (string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore) SelectPreferredIntegrationPackage(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> packages)
+    public static (string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore) SelectPreferredIntegrationPackage(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel, double SearchScore)> packages, string? configuredChannel)
     {
         return packages
-            .OrderByDescending(p => p.Channel.Type is PackageChannelType.Implicit)
+            .OrderByDescending(p => IsConfiguredChannel(p.Channel, configuredChannel))
+            .ThenByDescending(p => string.IsNullOrEmpty(configuredChannel) && p.Channel.Type is PackageChannelType.Implicit)
             .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer)
             .First();
+    }
+
+    public static bool IsConfiguredChannel(PackageChannel channel, string? configuredChannel)
+    {
+        return !string.IsNullOrEmpty(configuredChannel) &&
+            string.Equals(channel.Name, configuredChannel, StringComparison.OrdinalIgnoreCase);
     }
 
     private static double GetIntegrationSearchScore(string searchTerm, (string FriendlyName, NuGetPackage Package, PackageChannel Channel) package)
