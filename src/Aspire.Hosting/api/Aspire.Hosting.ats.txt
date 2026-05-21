@@ -46,6 +46,7 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService
@@ -96,7 +97,7 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.CertificateTrustExecutionConfigur
   CertificateDirectoriesPath: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # The path(s) to the certificate directories in the resource context (e.g., container filesystem).
   IsContainer?: boolean # Is this request being generated for a container resource (i.e. does it require Linux style paths?).
   RootCertificatesPath: string # The root path certificates will be written to in the resource context (e.g., container filesystem).
-Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions # Optional configuration for resource commands added with `WithCommand``1`.
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions # Optional configuration for resource commands.
   Arguments: Aspire.Hosting/Aspire.Hosting.InteractionInput[] # Gets or sets the invocation arguments accepted by the command.
   ConfirmationMessage: string # When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog and the confirmation message before starting the command.
   Description: string # Optional description of the command, to be shown in the UI. Could be used as a tooltip. May be localized.
@@ -499,6 +500,7 @@ Aspire.Hosting/eventingSubscriberOnBeforePublish(callback: callback) -> Aspire.H
 Aspire.Hosting/eventingSubscriberOnBeforeStart(callback: callback) -> Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription
 Aspire.Hosting/excludeFromManifest() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/excludeFromMcp() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/executeResourceCommand(resource: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource, commandName: string, arguments?: Aspire.Hosting/Dict<string,string>, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandResult
 Aspire.Hosting/exists(key: string) -> boolean
 Aspire.Hosting/expose(port: number) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage
 Aspire.Hosting/findResourceByName(name: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
@@ -516,6 +518,7 @@ Aspire.Hosting/getFileNameWithContent(filenameTemplate: string, sourceFilename: 
 Aspire.Hosting/getHttpsCertificateData() -> Aspire.Hosting/Aspire.Hosting.Ats.HttpsCertificateExecutionConfigurationExportData
 Aspire.Hosting/getLoggerFactory() -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory
 Aspire.Hosting/getOrSetSecret(resourceBuilder: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource, name: string, value: string) -> void
+Aspire.Hosting/getResourceCommandService() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService
 Aspire.Hosting/getResourceLoggerService() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService
 Aspire.Hosting/getResourceName() -> string
 Aspire.Hosting/getResourceNotificationService() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService
@@ -630,6 +633,8 @@ Aspire.Hosting/withExplicitStart() -> Aspire.Hosting/Aspire.Hosting.ApplicationM
 Aspire.Hosting/withExternalHttpEndpoints() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withExternalServiceHttpHealthCheck(path?: string, statusCode?: number, endpointName?: string) -> Aspire.Hosting/Aspire.Hosting.ExternalServiceResource
 Aspire.Hosting/withHealthCheck(key: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withHidden() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withHiddenOnCompletion(exitCode?: number, exitCodes?: number[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withHttpCommand(path: string, displayName: string, options?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.HttpCommandExportOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withHttpEndpoint(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withHttpEndpointCallback(callback: callback, name?: string, createIfNotExists?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
