@@ -272,6 +272,39 @@ public class AzureContainerAppEnvironmentExtensionsTests
     }
 
     [Fact]
+    public async Task AsExisting_ThrowsWhenContainerAppDeclaresVolumeMount()
+    {
+        // When the env is marked as existing, Aspire cannot provision the storage
+        // account / file share that backs container app volume mounts (storage is
+        // attached to the managed env, which we don't own here). Asserts the
+        // configureInfrastructure callback throws a clear error in that case so the
+        // guard isn't silently dropped by future refactors.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var environmentName = builder.AddParameter("environmentName");
+
+        var env = builder.AddAzureContainerAppEnvironment("env")
+            .AsExisting(environmentName, (IResourceBuilder<ParameterResource>?)null);
+
+        builder.AddContainer("api", "myimage")
+               .WithVolume("data", "/var/data");
+
+        using var app = builder.Build();
+
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => AzureManifestUtils.GetManifestWithBicep(env.Resource, skipPreparer: true));
+
+        Assert.Equal(
+            "The Azure Container App Environment 'env' is marked as existing but one or more " +
+            "container apps targeted to it declare volume mounts. Volumes require provisioning storage on the " +
+            "managed environment, which Aspire cannot do for an existing environment. Remove the volume mounts " +
+            "or stop marking the environment as existing.",
+            ex.Message);
+    }
+
+    [Fact]
     public async Task WithAzureContainerRegistry_PublishSucceeds_WhenDefaultRegistryIsRedundant()
     {
         // Regression test for the publish-time error:
