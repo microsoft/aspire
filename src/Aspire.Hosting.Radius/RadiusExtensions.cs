@@ -28,7 +28,7 @@ public static partial class RadiusExtensions
     /// <c>AddKubernetesEnvironment</c> and <c>AddDockerComposeEnvironment</c>.
     /// All deployment-target wiring runs in Publish mode only.
     /// </remarks>
-    [AspireExport(Description = "Adds a Radius publishing environment")]
+    [AspireExport]
     public static IResourceBuilder<RadiusEnvironmentResource> AddRadiusEnvironment(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -59,7 +59,7 @@ public static partial class RadiusExtensions
     /// <param name="kubernetesNamespace">A valid RFC 1123 namespace name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{RadiusEnvironmentResource}"/>.</returns>
     /// <exception cref="ArgumentException">Thrown when the namespace is not a valid RFC 1123 label.</exception>
-    [AspireExport(Description = "Sets the Kubernetes namespace for the Radius environment")]
+    [AspireExport]
     public static IResourceBuilder<RadiusEnvironmentResource> WithNamespace(
         this IResourceBuilder<RadiusEnvironmentResource> builder,
         string kubernetesNamespace)
@@ -92,6 +92,7 @@ public static partial class RadiusExtensions
     /// environment. Use this fallback when the target install does not yet
     /// have a recipe registered for the <c>Radius.Compute/containers</c> UDT.
     /// </summary>
+    /// <ats-summary>Emits container workloads as legacy Applications.Core/containers instead of Radius.Compute/containers.</ats-summary>
     /// <param name="builder">The Radius environment resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{RadiusEnvironmentResource}"/>.</returns>
     /// <remarks>
@@ -101,7 +102,7 @@ public static partial class RadiusExtensions
     /// shipped Radius installs.
     /// </remarks>
     [Experimental("ASPIRERADIUS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Emits container workloads as legacy Applications.Core/containers instead of Radius.Compute/containers")]
+    [AspireExport]
     public static IResourceBuilder<RadiusEnvironmentResource> WithLegacyContainers(
         this IResourceBuilder<RadiusEnvironmentResource> builder)
     {
@@ -136,7 +137,7 @@ public static partial class RadiusExtensions
     /// <c>Registry</c>/<c>Image</c>/<c>Tag</c> assembly path applies uniformly.
     /// </remarks>
     [Experimental("ASPIRERADIUS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Attaches a pre-built container image reference to a project resource for Radius publishing")]
+    [AspireExport]
     public static IResourceBuilder<ProjectResource> WithContainerImage(
         this IResourceBuilder<ProjectResource> builder,
         string image)

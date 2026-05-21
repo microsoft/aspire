@@ -16,6 +16,7 @@ public static class RadiusPublishExtensions
     /// Configures how a resource is published as a Radius resource type instance.
     /// Stores a <see cref="RadiusResourceCustomization"/> annotation on the resource.
     /// </summary>
+    /// <ats-summary>Customizes how a resource is published as a Radius resource type.</ats-summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="configure">A callback to configure the <see cref="RadiusResourceCustomization"/>.</param>
@@ -24,7 +25,7 @@ public static class RadiusPublishExtensions
     // synchronously here. Polyglot AppHost runtimes (TypeScript, Python, ...) marshal sync
     // delegates over RPC and would deadlock if invoked on the dispatcher thread. The opt-in
     // tells the runtime to dispatch the callback on a worker thread instead. See ASPIREEXPORT010.
-    [AspireExport(Description = "Customizes how a resource is published as a Radius resource type", RunSyncOnBackgroundThread = true)]
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> PublishAsRadiusResource<T>(
         this IResourceBuilder<T> builder,
         Action<RadiusResourceCustomization> configure)
