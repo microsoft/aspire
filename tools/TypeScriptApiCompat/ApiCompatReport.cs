@@ -15,6 +15,8 @@ internal static class ApiCompatReport
         builder.AppendLine("# TypeScript API compatibility report");
         builder.AppendLine();
 
+        AppendExcludedPackages(builder, result);
+
         if (!result.HasFailures)
         {
             builder.AppendLine("No undeclared TypeScript API compatibility breaks were found.");
@@ -74,5 +76,25 @@ internal static class ApiCompatReport
         }
 
         return builder.ToString();
+    }
+
+    private static void AppendExcludedPackages(StringBuilder builder, ApiCompatResult result)
+    {
+        if (result.ExcludedPackages.Count == 0)
+        {
+            return;
+        }
+
+        builder.AppendLine("## Excluded packages");
+        builder.AppendLine();
+        builder.AppendLine("These packages set `DisablePackageBaselineValidation=true`, so TypeScript API compatibility is not enforced for them.");
+        builder.AppendLine();
+
+        foreach (var packageName in result.ExcludedPackages.Order(StringComparer.Ordinal))
+        {
+            builder.AppendLine(string.Format(CultureInfo.InvariantCulture, "- `{0}`", packageName));
+        }
+
+        builder.AppendLine();
     }
 }
