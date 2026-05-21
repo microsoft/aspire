@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -89,13 +90,12 @@ internal static class InstallationInfoOutput
         ansiConsole.WriteLine(new string('=', DoctorCommandStrings.HeaderInstallations.Length));
         ansiConsole.WriteLine();
 
-        var table = new Table()
-            .Border(TableBorder.Rounded)
-            .AddColumn(DoctorCommandStrings.ColumnPath)
-            .AddColumn(DoctorCommandStrings.ColumnVersion)
-            .AddColumn(DoctorCommandStrings.ColumnChannel)
-            .AddColumn(DoctorCommandStrings.ColumnRoute)
-            .AddColumn(DoctorCommandStrings.ColumnPathStatus);
+        var table = new Table();
+        table.AddBoldColumn(DoctorCommandStrings.ColumnPath);
+        table.AddBoldColumn(DoctorCommandStrings.ColumnVersion);
+        table.AddBoldColumn(DoctorCommandStrings.ColumnChannel);
+        table.AddBoldColumn(DoctorCommandStrings.ColumnRoute);
+        table.AddBoldColumn(DoctorCommandStrings.ColumnPathStatus);
 
         // The first row is, by contract, the running CLI (enforced by
         // InstallationDiscovery, not by ordering here). Tag installs[0]
@@ -133,10 +133,10 @@ internal static class InstallationInfoOutput
     {
         return pathStatus switch
         {
-            InstallationPathStatus.Active => DoctorCommandStrings.ValuePathActive,
-            InstallationPathStatus.Shadowed => DoctorCommandStrings.ValuePathShadowed,
-            InstallationPathStatus.NotOnPath => DoctorCommandStrings.ValuePathNotOnPath,
-            _ => pathStatus.EscapeMarkup(),
+            InstallationPathStatus.Active => $"[green]{DoctorCommandStrings.ValuePathActive.EscapeMarkup()}[/]",
+            InstallationPathStatus.Shadowed => $"[yellow]{DoctorCommandStrings.ValuePathShadowed.EscapeMarkup()}[/]",
+            InstallationPathStatus.NotOnPath => $"[yellow]{DoctorCommandStrings.ValuePathNotOnPath.EscapeMarkup()}[/]",
+            _ => $"[yellow]{pathStatus.EscapeMarkup()}[/]",
         };
     }
 

@@ -269,6 +269,30 @@ public class PathLookupHelperTests
     }
 
     [Fact]
+    public void FindFullPathFromPath_WithPathExtensions_PreservesFileSystemCasingOnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var tempDirectory = new TestTempDirectory();
+        var binPath = Path.Combine(tempDirectory.Path, "bin");
+        Directory.CreateDirectory(binPath);
+        var executablePath = Path.Combine(binPath, "aspire.exe");
+        File.WriteAllText(executablePath, string.Empty);
+
+        var result = PathLookupHelper.FindFullPathFromPath(
+            "aspire",
+            binPath,
+            Path.PathSeparator,
+            File.Exists,
+            [".EXE"]);
+
+        Assert.Equal(executablePath, result);
+    }
+
+    [Fact]
     public void FindFullPathFromPath_UsesCorrectPathSeparator()
     {
         // Arrange - use platform-agnostic paths for testing

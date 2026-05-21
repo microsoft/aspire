@@ -750,6 +750,63 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void DoctorCommand_HumanReadable_InstallationTable_UsesStandardFormatting()
+    {
+        var output = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.Standard,
+            Interactive = InteractionSupport.No,
+            Out = new AnsiConsoleOutput(output),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
+        });
+        console.Profile.Width = int.MaxValue;
+
+        Aspire.Cli.Commands.InstallationInfoOutput.OutputTable(console,
+        [
+            new InstallationInfo
+            {
+                Path = "/home/test/.aspire/bin/aspire",
+                CanonicalPath = "/home/test/.aspire/bin/aspire",
+                Version = "13.0.0",
+                Channel = "stable",
+                Route = "script",
+                PathStatus = InstallationPathStatus.Active,
+                Status = InstallationInfoStatus.Ok,
+            },
+            new InstallationInfo
+            {
+                Path = "/peer/aspire",
+                CanonicalPath = "/peer/aspire",
+                Version = "13.1.0-preview",
+                Channel = "pr-1234",
+                Route = "pr",
+                PathStatus = InstallationPathStatus.Shadowed,
+                Status = InstallationInfoStatus.Ok,
+            },
+            new InstallationInfo
+            {
+                Path = "/off-path/aspire",
+                CanonicalPath = "/off-path/aspire",
+                Version = "13.2.0-preview",
+                Channel = "daily",
+                Route = "script",
+                PathStatus = InstallationPathStatus.NotOnPath,
+                Status = InstallationInfoStatus.Ok,
+            },
+        ]);
+
+        var rendered = output.ToString();
+        Assert.Contains("\u001b[1mPath\u001b[0m", rendered, StringComparison.Ordinal);
+        Assert.Contains("\u001b[1mSource\u001b[0m", rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain("\u001b[1mRoute\u001b[0m", rendered, StringComparison.Ordinal);
+        Assert.Contains("\u001b[32mactive\u001b[0m", rendered, StringComparison.Ordinal);
+        Assert.Matches(@"\x1B\[[0-9;]*(?:33|93)mshadowed\x1B\[[0-9;]*(?:0|39)m", rendered);
+        Assert.Matches(@"\x1B\[[0-9;]*(?:33|93)mnot on PATH\x1B\[[0-9;]*(?:0|39)m", rendered);
+    }
+
+    [Fact]
     public async Task DoctorCommand_HumanReadable_EscapesUnknownPathStatus()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
