@@ -1026,7 +1026,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         _aiContext?.Dispose();
         ResetNoLogsMessage();
-        _showNoLogsMessageCts?.Dispose();
+        _showNoLogsMessageCts?.Cancel();
         await TaskHelpers.WaitIgnoreCancelAsync(_showNoLogsMessageDelayTask);
 
         _consoleLogsFiltersChangedSubscription?.Dispose();
