@@ -11,7 +11,7 @@ class JsTsAppHostParser implements AppHostResourceParser {
         return ['.ts', '.js'];
     }
 
-    isAppHostFile(document: vscode.TextDocument): boolean {
+    async isAppHostFile(document: vscode.TextDocument): Promise<boolean> {
         const sourceFile = createSourceFile(document);
         let isAppHost = false;
 
@@ -35,7 +35,7 @@ class JsTsAppHostParser implements AppHostResourceParser {
         return isAppHost;
     }
 
-    parseResources(document: vscode.TextDocument): ParsedResource[] {
+    async parseResources(document: vscode.TextDocument): Promise<ParsedResource[]> {
         const sourceFile = createSourceFile(document);
         const results: ParsedResourceWithStart[] = [];
 
@@ -76,7 +76,7 @@ class JsTsAppHostParser implements AppHostResourceParser {
             .map(({ matchStart: _, ...resource }) => resource);
     }
 
-    findBuilderStatementLine(document: vscode.TextDocument): number | undefined {
+    async findBuilderStatementLine(document: vscode.TextDocument): Promise<number | undefined> {
         const sourceFile = createSourceFile(document);
         let builderLine: number | undefined;
 

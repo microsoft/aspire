@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getParserForDocument, ParserResult } from './parsers/AppHostResourceParser';
+import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostResourceParser';
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
@@ -140,7 +140,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
     private async _addBuilderStatementLenses(
         lenses: vscode.CodeLens[],
         document: vscode.TextDocument,
-        parser: { findBuilderStatementLine?(document: vscode.TextDocument): ParserResult<number | undefined> },
+        parser: AppHostResourceParser,
         workspaceAppHostPath: string,
         workspaceResources: readonly ResourceJson[],
     ): Promise<void> {

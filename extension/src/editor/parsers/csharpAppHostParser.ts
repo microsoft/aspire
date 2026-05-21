@@ -57,7 +57,7 @@ class CSharpAppHostParser implements AppHostResourceParser {
                     methodName,
                     range: new vscode.Range(startPos, endPos),
                     kind: methodName === 'AddStep' ? 'pipelineStep' : 'resource',
-                    statementStartLine: findContainingStatementStartLine(node, document),
+                    statementStartLine: findContainingStatementStartLine(node),
                 });
             });
 
@@ -69,7 +69,7 @@ class CSharpAppHostParser implements AppHostResourceParser {
         const text = document.getText();
         return await withCSharpTree(text, tree => {
             const builderInvocation = findInvocation(tree.rootNode, isDistributedApplicationCreateBuilderCall);
-            return builderInvocation ? findContainingStatementStartLine(builderInvocation, document) : undefined;
+            return builderInvocation ? findContainingStatementStartLine(builderInvocation) : undefined;
         });
     }
 
@@ -260,18 +260,17 @@ function decodeEscapeSequence(text: string): string {
     }
 }
 
-function findContainingStatementStartLine(node: TreeSitterNode, document: vscode.TextDocument): number {
-    const nodeLine = document.positionAt(node.startIndex).line;
+function findContainingStatementStartLine(node: TreeSitterNode): number {
     let current: TreeSitterNode | null = node;
     while (current) {
         if (current.type.endsWith('_statement') && !hasErrorBeforeNode(current, node.startIndex)) {
-            return document.positionAt(current.startIndex).line;
+            return current.startPosition.row;
         }
 
         current = current.parent;
     }
 
-    return nodeLine;
+    return node.startPosition.row;
 }
 
 function hasErrorBeforeNode(node: TreeSitterNode, nodeStartIndex: number): boolean {

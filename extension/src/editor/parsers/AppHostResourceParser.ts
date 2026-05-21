@@ -1,7 +1,5 @@
 import * as vscode from 'vscode';
 
-export type ParserResult<T> = T | Promise<T>;
-
 /**
  * Represents a single resource definition found in an AppHost file.
  */
@@ -26,10 +24,10 @@ export interface AppHostResourceParser {
     getSupportedExtensions(): string[];
 
     /** Returns true if the given document is an AppHost file for this language. */
-    isAppHostFile(document: vscode.TextDocument): ParserResult<boolean>;
+    isAppHostFile(document: vscode.TextDocument): Promise<boolean>;
 
     /** Parse resource definitions from the document. */
-    parseResources(document: vscode.TextDocument): ParserResult<ParsedResource[]>;
+    parseResources(document: vscode.TextDocument): Promise<ParsedResource[]>;
 
     /**
      * Locates the line containing the builder construction statement
@@ -37,7 +35,7 @@ export interface AppHostResourceParser {
      * `const builder = createBuilder();` for TS/JS).
      * Returns the 0-based line of the start of the statement, or `undefined` if not found.
      */
-    findBuilderStatementLine?(document: vscode.TextDocument): ParserResult<number | undefined>;
+    findBuilderStatementLine?(document: vscode.TextDocument): Promise<number | undefined>;
 }
 
 const _parsers: AppHostResourceParser[] = [];
