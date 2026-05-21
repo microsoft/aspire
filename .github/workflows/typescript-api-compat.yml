@@ -94,6 +94,15 @@ jobs:
           done < "$SORTED_PROJECTS_FILE"
           popd
 
+          echo "::group::Overlay PR-updated ATS baselines"
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            mkdir -p "$BASELINE_DIR/$(dirname "$file")"
+            cp "$file" "$BASELINE_DIR/$file"
+            echo "$file"
+          done < <(git diff --name-only --diff-filter=ACMRT "origin/${BASE_BRANCH}...HEAD" -- 'src/**/api/*.ats.txt')
+          echo "::endgroup::"
+
           echo "BASELINE_DIR=$BASELINE_DIR" >> "$GITHUB_ENV"
           echo "BASE_SUPPRESSIONS_ROOT=$BASE_WORKTREE" >> "$GITHUB_ENV"
           echo "TYPESCRIPT_API_COMPAT_EXCLUDED_PACKAGES_FILE=$EXCLUDED_PACKAGES_FILE" >> "$GITHUB_ENV"
