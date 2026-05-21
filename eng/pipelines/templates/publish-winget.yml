@@ -132,6 +132,17 @@ steps:
       }
       Write-Host "All installer URLs are accessible."
     displayName: '🟣Validate installer URLs from manifest'
+    # Only run when we'd actually submit (matches the Submit step condition).
+    # On non-production branches the manifest URLs point to artifacts that aren't
+    # published at their canonical ci.dot.net paths, so reachability checks fail
+    # meaninglessly; in dry-run we're not submitting anything so URL probing is
+    # equally moot.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -167,6 +178,13 @@ steps:
 
       Write-Host "ReleaseNotesUrl is valid."
     displayName: '🟣Validate ReleaseNotesUrl'
+    # Same gate as the installer-URL validation above and the Submit step below.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
