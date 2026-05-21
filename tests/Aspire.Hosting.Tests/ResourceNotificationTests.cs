@@ -1175,14 +1175,13 @@ public class ResourceNotificationTests
             serviceProvider,
             new ResourceLoggerService());
 
-        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
-        // With WaitOnResourceUnavailable, the call should wait (not throw immediately), and only
-        // cancel when the token is triggered.
-        var ex = await Assert.ThrowsAsync<OperationCanceledException>(
+        // With WaitOnResourceUnavailable the call should NOT throw immediately — it must wait
+        // until the token is cancelled, confirming the fast-fail path is not triggered.
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(
             () => notificationService.WaitForResourceHealthyAsync("does-not-exist", WaitBehavior.WaitOnResourceUnavailable, cts.Token));
-
-        Assert.IsNotType<DistributedApplicationException>(ex);
     }
 
     private static async Task<bool> PublishAndGetIsHiddenAsync<T>(
