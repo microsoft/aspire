@@ -177,6 +177,11 @@ internal sealed class RadiusDeploymentPipelineStep
     /// </summary>
     internal static async Task<bool> DetectRadCliAsync(CancellationToken cancellationToken = default)
     {
+        // Honour a pre-cancelled token even when `rad` is missing from PATH. Without this,
+        // Process.Start() would throw Win32Exception first and the catch-all below would
+        // convert that into `return false`, swallowing the cancellation request.
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             using var process = new Process();
