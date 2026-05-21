@@ -646,6 +646,19 @@ public class AtsCapabilityScannerTests
             && diagnostic.Location == "ConflictingValues.PrefixConflictingExportedValues.Node.Child");
     }
 
+    [Fact]
+    public void ScanAssembly_DescriptionFallback_PopulatesDocumentationSummaryWhenXmlDocsArePartial()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/descriptionFallback", StringComparison.Ordinal));
+
+        Assert.Equal("Uses the description as fallback documentation.", capability.Description);
+        Assert.Equal("Uses the description as fallback documentation.", capability.Documentation?.Summary);
+        Assert.Equal("The fallback value.", Assert.Single(capability.Parameters).Documentation?.Summary);
+    }
+
     #endregion
 
     #region Test Types
@@ -722,6 +735,14 @@ public class AtsCapabilityScannerTests
         {
             _ = callback;
             return builder;
+        }
+
+        /// <param name="value">The fallback value.</param>
+        [AspireExport("descriptionFallback", Description = "Uses the description as fallback documentation.")]
+        public static void DescriptionFallback(IDistributedApplicationBuilder builder, string value)
+        {
+            _ = builder;
+            _ = value;
         }
 
         [AspireExport("shadowedExporter")]

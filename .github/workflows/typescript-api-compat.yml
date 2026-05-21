@@ -70,7 +70,7 @@ jobs:
 
               dir=$(dirname "$dir")
             done
-          done < <(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' || true)
+          done < <(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' || true)
 
           sort -u "$PROJECTS_FILE" > "$SORTED_PROJECTS_FILE"
 
@@ -125,7 +125,7 @@ jobs:
 
               dir=$(dirname "$dir")
             done
-          done < <(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' || true)
+          done < <(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' || true)
 
           sort -u "$PROJECTS_FILE" > "$SORTED_PROJECTS_FILE"
 

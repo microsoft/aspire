@@ -87,7 +87,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="endpoint">The endpoint target for this cluster.</param>
     /// <returns>The created cluster.</returns>
-    [AspireExport(Description = "Adds a YARP cluster for an endpoint reference.")]
+    [AspireExport]
     internal static YarpCluster AddClusterFromEndpoint(this IYarpConfigurationBuilder builder, EndpointReference endpoint)
     {
         return builder.AddCluster(endpoint);
@@ -99,7 +99,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="resource">The resource target for this cluster.</param>
     /// <returns>The created cluster.</returns>
-    [AspireExport(Description = "Adds a YARP cluster for a resource that supports service discovery.")]
+    [AspireExport]
     internal static YarpCluster AddClusterFromResource(this IYarpConfigurationBuilder builder, IResourceBuilder<IResourceWithServiceDiscovery> resource)
     {
         return builder.AddCluster(resource);
@@ -111,7 +111,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="externalService">The external service used by this cluster.</param>
     /// <returns>The created cluster.</returns>
-    [AspireExport(Description = "Adds a YARP cluster for an external service resource.")]
+    [AspireExport]
     internal static YarpCluster AddClusterFromExternalService(this IYarpConfigurationBuilder builder, IResourceBuilder<ExternalServiceResource> externalService)
     {
         return builder.AddCluster(externalService);
@@ -124,7 +124,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="clusterName">The name of the cluster.</param>
     /// <param name="destinations">The destinations used by this cluster.</param>
     /// <returns>The created cluster.</returns>
-    [AspireExport(Description = "Adds a YARP cluster with multiple destinations.")]
+    [AspireExport]
     internal static YarpCluster AddClusterWithDestinations(this IYarpConfigurationBuilder builder, string clusterName, object[] destinations)
     {
         return builder.AddCluster(clusterName, destinations);
@@ -137,7 +137,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="clusterName">The name of the cluster.</param>
     /// <param name="destination">The destination used by this cluster.</param>
     /// <returns>The created cluster.</returns>
-    [AspireExport(Description = "Adds a YARP cluster with a single destination.")]
+    [AspireExport]
     internal static YarpCluster AddClusterWithDestination(this IYarpConfigurationBuilder builder, string clusterName, object destination)
     {
         return builder.AddCluster(clusterName, destination);
@@ -161,7 +161,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="target">The target cluster, endpoint, resource, or string destination for this route.</param>
     /// <returns>The created route.</returns>
-    [AspireExport(Description = "Adds a YARP catch-all route for a cluster, endpoint, resource, or string destination target.")]
+    [AspireExport]
     internal static YarpRoute AddCatchAllRoute(
         this IYarpConfigurationBuilder builder,
         [AspireUnion(typeof(YarpCluster), typeof(EndpointReference), typeof(IResourceBuilder<IResourceWithServiceDiscovery>), typeof(IResourceBuilder<ExternalServiceResource>), typeof(string))] object target)
@@ -242,7 +242,7 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="path">The path to match for this route.</param>
     /// <param name="target">The target cluster, endpoint, resource, or string destination for this route.</param>
     /// <returns>The created route.</returns>
-    [AspireExport(Description = "Adds a YARP route for a cluster, endpoint, resource, or string destination target.")]
+    [AspireExport]
     internal static YarpRoute AddRoute(
         this IYarpConfigurationBuilder builder,
         string path,

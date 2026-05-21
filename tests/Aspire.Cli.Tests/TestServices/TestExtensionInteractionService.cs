@@ -31,6 +31,11 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         return action();
     }
 
+    public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
+    {
+        return action(_ => { });
+    }
+
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         action();

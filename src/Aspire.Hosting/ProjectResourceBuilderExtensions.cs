@@ -108,7 +108,10 @@ public static class ProjectResourceBuilderExtensions
         return builder.AddProject(name, projectPath, _ => { });
     }
 
-    [AspireExport("addProject", Description = "Adds a .NET project resource")]
+    /// <summary>
+    /// Adds a .NET project resource
+    /// </summary>
+    [AspireExport("addProject")]
     internal static IResourceBuilder<ProjectResource> AddProjectForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -357,8 +360,11 @@ public static class ProjectResourceBuilderExtensions
         return builder.AddCSharpApp(name, path, _ => { });
     }
 
+    /// <summary>
+    /// Adds a C# application resource
+    /// </summary>
     [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("addCSharpApp", Description = "Adds a C# application resource")]
+    [AspireExport("addCSharpApp")]
     internal static IResourceBuilder<CSharpAppResource> AddCSharpAppForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -769,6 +775,7 @@ public static class ProjectResourceBuilderExtensions
     /// <param name="builder">The project resource builder.</param>
     /// <param name="replicas">The number of replicas.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// When this method is applied to a project resource it will configure the app host to start multiple instances
@@ -790,7 +797,8 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Sets the number of replicas")]
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<ProjectResource> WithReplicas(this IResourceBuilder<ProjectResource> builder, int replicas)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -804,6 +812,7 @@ public static class ProjectResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">The project resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// By default Aspire assumes that .NET applications which expose endpoints should be configured to
@@ -825,7 +834,8 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Disables forwarded headers for the project")]
+    /// <ats-remarks />
+    [AspireExport]
     public static IResourceBuilder<ProjectResource> DisableForwardedHeaders(this IResourceBuilder<ProjectResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -859,6 +869,7 @@ public static class ProjectResourceBuilderExtensions
     /// The resulting container image is built, and when the optional <paramref name="configure"/> action is provided,
     /// it is used to configure the container resource.
     /// </summary>
+    /// <ats-summary>Publishes a project as a Docker file with optional container configuration</ats-summary>
     /// <remarks>
     /// When the executable resource is converted to a container resource, the arguments to the executable
     /// are not used. This is because arguments to the project often contain physical paths that are not valid
@@ -868,7 +879,8 @@ public static class ProjectResourceBuilderExtensions
     /// <param name="builder">Resource builder</param>
     /// <param name="configure">Optional action to configure the container resource</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("publishProjectAsDockerFileWithConfigure", MethodName = "publishAsDockerFile", Description = "Publishes a project as a Docker file with optional container configuration", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("publishProjectAsDockerFileWithConfigure", MethodName = "publishAsDockerFile", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<ContainerResource>>? configure = null)
         where T : ProjectResource
     {
@@ -971,12 +983,12 @@ public static class ProjectResourceBuilderExtensions
             .WithAnnotation(new ExplicitStartupAnnotation())
             .WithAnnotation(new ExcludeLifecycleCommandsAnnotation())
             .ExcludeFromManifest()
+            .WithHidden()
             .WithInitialState(new CustomResourceSnapshot
             {
                 ResourceType = "Executable",
                 State = KnownResourceStates.NotStarted,
                 Properties = [],
-                IsHidden = true,
             });
     }
 

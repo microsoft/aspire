@@ -31,7 +31,7 @@ public static class ExistingAzureResourceExtensions
     /// </summary>
     /// <param name="resource">The Azure resource to check.</param>
     /// <returns><see langword="true"/> if the resource is marked as existing; otherwise, <see langword="false"/>.</returns>
-    [AspireExport("isExisting", Description = "Determines whether a resource is marked as existing")]
+    [AspireExport("isExisting")]
     internal static bool IsExistingForPolyglot(this IAzureResource resource)
     {
         return ((IResource)resource).IsExisting();
@@ -79,7 +79,7 @@ public static class ExistingAzureResourceExtensions
     /// <param name="name">The name of the existing resource as a string or parameter resource.</param>
     /// <param name="resourceGroup">The name of the existing resource group as a string or parameter resource.</param>
     /// <returns>The resource builder with the existing resource annotation added.</returns>
-    [AspireExport("runAsExisting", Description = "Marks an Azure resource as existing in run mode")]
+    [AspireExport("runAsExisting")]
     internal static IResourceBuilder<T> RunAsExistingForPolyglot<T>(
         this IResourceBuilder<T> builder,
         [AspireUnion(typeof(string), typeof(ParameterResource))] object name,
@@ -134,7 +134,7 @@ public static class ExistingAzureResourceExtensions
     /// <param name="name">The name of the existing resource as a string or parameter resource.</param>
     /// <param name="resourceGroup">The name of the existing resource group as a string or parameter resource.</param>
     /// <returns>The resource builder with the existing resource annotation added.</returns>
-    [AspireExport("publishAsExisting", Description = "Marks an Azure resource as existing in publish mode")]
+    [AspireExport("publishAsExisting")]
     internal static IResourceBuilder<T> PublishAsExistingForPolyglot<T>(
         this IResourceBuilder<T> builder,
         [AspireUnion(typeof(string), typeof(ParameterResource))] object name,
@@ -172,7 +172,7 @@ public static class ExistingAzureResourceExtensions
     /// <param name="name">The name of the existing resource as a string or parameter resource.</param>
     /// <param name="resourceGroup">The name of the existing resource group as a string or parameter resource.</param>
     /// <returns>The resource builder with the existing resource annotation added.</returns>
-    [AspireExport("asExisting", Description = "Marks an Azure resource as existing in both run and publish modes")]
+    [AspireExport("asExisting")]
     internal static IResourceBuilder<T> AsExistingForPolyglot<T>(
         this IResourceBuilder<T> builder,
         [AspireUnion(typeof(string), typeof(ParameterResource))] object name,

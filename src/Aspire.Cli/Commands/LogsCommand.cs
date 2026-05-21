@@ -23,6 +23,8 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// JSON output format for a log line.
 /// </summary>
+// `aspire logs --format json` and `aspire logs --format json --follow` use this shape;
+// keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class LogLineJson
 {
     public required string ResourceName { get; init; }
@@ -34,6 +36,7 @@ internal sealed class LogLineJson
 /// <summary>
 /// Wrapper for logs snapshot output.
 /// </summary>
+// `aspire logs --format json` uses this wrapper; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class LogsOutput
 {
     public required LogLineJson[] Logs { get; init; }

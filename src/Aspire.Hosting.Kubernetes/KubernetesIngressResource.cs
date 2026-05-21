@@ -21,6 +21,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// in the Helm chart output with rules derived from the configured routes.
 /// </para>
 /// </remarks>
+/// <ats-remarks />
 /// <example>
 /// <code>
 /// var k8s = builder.AddKubernetesEnvironment("k8s");

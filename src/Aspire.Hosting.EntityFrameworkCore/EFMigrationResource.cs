@@ -19,6 +19,7 @@ namespace Aspire.Hosting.EntityFrameworkCore;
 /// <see cref="EFMigrationResourceBuilderExtensions.PublishAsMigrationBundle(IResourceBuilder{EFMigrationResource}, string?, bool, bool, string?)"/>
 /// is called with <c>publishContainer: true</c>.
 /// </remarks>
+/// <ats-remarks />
 [AspireExport(ExposeProperties = true)]
 public class EFMigrationResource(string name, ProjectResource projectResource, string? dbContextTypeName)
     : ContainerResource(name)

@@ -20,7 +20,6 @@ public class PipelineStep
     /// <summary>
     /// Gets or initializes the unique name of the step.
     /// </summary>
-    [AspireExport(Description = "Gets the unique name of the step")]
     public required string Name { get; init; }
 
     /// <summary>
@@ -30,7 +29,6 @@ public class PipelineStep
     /// The description provides human-readable context about what the step does,
     /// helping users and tools understand the purpose of the step.
     /// </remarks>
-    [AspireExport(Description = "Gets the human-readable description of the step")]
     public string? Description { get; init; }
 
     /// <summary>
@@ -41,20 +39,17 @@ public class PipelineStep
     /// <summary>
     /// Gets or initializes the list of step names that this step depends on.
     /// </summary>
-    [AspireExport(Description = "Gets the step names that this step depends on")]
     public List<string> DependsOnSteps { get; init; } = [];
 
     /// <summary>
     /// Gets or initializes the list of step names that require this step to complete before they can finish.
     /// This is used internally during pipeline construction and is converted to DependsOn relationships.
     /// </summary>
-    [AspireExport(Description = "Gets the step names that require this step to complete")]
     public List<string> RequiredBySteps { get; init; } = [];
 
     /// <summary>
     /// Gets or initializes the list of tags that categorize this step.
     /// </summary>
-    [AspireExport(Description = "Gets the tags that categorize this step")]
     public List<string> Tags { get; init; } = [];
 
     /// <summary>
@@ -67,7 +62,7 @@ public class PipelineStep
     /// Adds a dependency on another step.
     /// </summary>
     /// <param name="stepName">The name of the step to depend on.</param>
-    [AspireExport(Description = "Adds a dependency on another step by name")]
+    [AspireExport]
     public void DependsOn(string stepName)
     {
         DependsOnSteps.Add(stepName);
@@ -87,7 +82,7 @@ public class PipelineStep
     /// This creates the inverse relationship where the other step will depend on this step.
     /// </summary>
     /// <param name="stepName">The name of the step that requires this step.</param>
-    [AspireExport(Description = "Specifies that another step requires this step by name")]
+    [AspireExport]
     public void RequiredBy(string stepName)
     {
         RequiredBySteps.Add(stepName);
@@ -97,7 +92,7 @@ public class PipelineStep
     /// Adds a tag to the step.
     /// </summary>
     /// <param name="tag">The tag to add.</param>
-    [AspireExport(Description = "Adds a tag to the step")]
+    [AspireExport]
     internal void AddTag(string tag)
     {
         ArgumentNullException.ThrowIfNull(tag);

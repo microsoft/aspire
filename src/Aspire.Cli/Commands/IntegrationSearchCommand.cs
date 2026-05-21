@@ -198,6 +198,8 @@ internal sealed class IntegrationSearchCommand : IntegrationDiscoveryCommand
     protected override string? GetSearchTerm(ParseResult parseResult) => parseResult.GetValue(_queryArgument);
 }
 
+// `aspire integration list --format json` and `aspire integration search --format json`
+// use this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class IntegrationSearchResult
 {
     public required string Name { get; init; }

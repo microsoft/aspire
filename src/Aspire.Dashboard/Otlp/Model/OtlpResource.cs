@@ -4,7 +4,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.InteropServices;
 using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
@@ -45,6 +44,7 @@ public class OtlpResource : IOtlpResource
     public ResourceKey ResourceKey => new ResourceKey(ResourceName, InstanceId);
 
     private readonly ReaderWriterLockSlim _metricsLock = new();
+    // Bounded by TelemetryRepository.MaxScopeCount. Cleared when metrics are cleared.
     private readonly Dictionary<string, OtlpScope> _meters = new();
     private readonly Dictionary<OtlpInstrumentKey, OtlpInstrument> _instruments = new();
     private readonly ConcurrentDictionary<KeyValuePair<string, string>[], OtlpResourceView> _resourceViews = new(ResourceViewKeyComparer.Instance);
@@ -70,7 +70,7 @@ public class OtlpResource : IOtlpResource
             {
                 if (!OtlpHelpers.TryGetOrAddScope(_meters, sm.Scope, Context, TelemetryType.Metrics, out var scope))
                 {
-                    context.FailureCount += sm.Metrics.Count;
+                    context.FailureCount += sm.Metrics.Sum(m => GetMetricDataPointCount(m));
                     continue;
                 }
 
@@ -86,11 +86,13 @@ public class OtlpResource : IOtlpResource
                         }
 
                         var instrumentKey = new OtlpInstrumentKey(scope.Name, metric.Name);
-                        ref var instrumentRef = ref CollectionsMarshal.GetValueRefOrAddDefault(_instruments, instrumentKey, out _);
-                        if (instrumentRef == null)
+                        if (_instruments.TryGetValue(instrumentKey, out var existingInstrument))
                         {
-                            // Adds to dictionary if not present.
-                            instrumentRef = new OtlpInstrument
+                            instrument = existingInstrument;
+                        }
+                        else if (_instruments.Count < TelemetryRepository.MaxInstrumentCount)
+                        {
+                            var newInstrument = new OtlpInstrument
                             {
                                 Summary = new OtlpInstrumentSummary
                                 {
@@ -104,10 +106,15 @@ public class OtlpResource : IOtlpResource
                                 Context = Context
                             };
 
-                            Context.Logger.LogTrace("Added metric instrument '{InstrumentName}' for scope '{ScopeName}'.", instrumentRef.Summary.Name, scope.Name);
-                        }
+                            _instruments.Add(instrumentKey, newInstrument);
+                            instrument = newInstrument;
 
-                        instrument = instrumentRef;
+                            Context.Logger.LogTrace("Added metric instrument '{InstrumentName}' for scope '{ScopeName}'.", instrument.Summary.Name, scope.Name);
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException($"Instrument limit of {TelemetryRepository.MaxInstrumentCount} reached. Instrument '{metric.Name}' will not be added.");
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -127,7 +134,7 @@ public class OtlpResource : IOtlpResource
         }
     }
 
-    private static int GetMetricDataPointCount(Metric metric)
+    internal static int GetMetricDataPointCount(Metric metric)
     {
         return metric.DataCase switch
         {
@@ -207,6 +214,7 @@ public class OtlpResource : IOtlpResource
         try
         {
             _instruments.Clear();
+            _meters.Clear();
         }
         finally
         {
@@ -294,6 +302,11 @@ public class OtlpResource : IOtlpResource
         if (_resourceViews.TryGetValue(view.Properties, out var resourceView))
         {
             return resourceView;
+        }
+
+        if (_resourceViews.Count >= TelemetryRepository.MaxResourceViewCount)
+        {
+            throw new InvalidOperationException($"Resource view limit of {TelemetryRepository.MaxResourceViewCount} reached.");
         }
 
         return _resourceViews.GetOrAdd(view.Properties, view);

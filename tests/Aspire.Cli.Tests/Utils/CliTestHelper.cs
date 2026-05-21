@@ -101,7 +101,7 @@ internal static class CliTestHelper
 
         services.AddSingleton(options.ConsoleEnvironmentFactory);
         services.AddSingleton(sp => sp.GetRequiredService<ConsoleEnvironment>().Out);
-        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(options.TimeProvider);
         services.AddSingleton(options.TelemetryFactory);
         services.AddSingleton<ProfilingTelemetry>();
         services.AddSingleton(options.ProjectLocatorFactory);
@@ -151,6 +151,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.AppHostServerSessionFactory);
         services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
         services.AddSingleton(options.LanguageServiceFactory);
+        services.AddSingleton<TemplateNuGetConfigService>();
 
         // Bundle layout services - return null/no-op implementations to trigger SDK mode fallback
         // This ensures backward compatibility: no layout found = use legacy SDK mode
@@ -314,6 +315,7 @@ internal sealed class CliServiceCollectionTestOptions
     public TestOutputTextWriter? OutputTextWriter { get; set; }
     public StringWriter? ErrorTextWriter { get; set; }
     public bool DisableAnsi { get; set; }
+    public TimeProvider TimeProvider { get; set; } = TimeProvider.System;
 
     public Func<IServiceProvider, ConsoleEnvironment> ConsoleEnvironmentFactory => (IServiceProvider serviceProvider) =>
     {

@@ -10,25 +10,25 @@ namespace Aspire.Hosting
 {
     public static partial class KeycloakResourceBuilderExtensions
     {
-        [AspireExport("addKeycloak", Description = "Adds a Keycloak container resource")]
+        [AspireExport(Description = "Adds a Keycloak container resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> AddKeycloak(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? adminUsername = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? adminPassword = null) { throw null; }
 
-        [AspireExport("withDataBindMount", Description = "Adds a data bind mount for Keycloak")]
+        [AspireExport(Description = "Adds a data bind mount for Keycloak")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, string source) { throw null; }
 
-        [AspireExport("withDataVolume", Description = "Adds a data volume for Keycloak")]
+        [AspireExport(Description = "Adds a data volume for Keycloak")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, string? name = null) { throw null; }
 
-        [AspireExport("withDisabledFeatures", Description = "Disables Keycloak features")]
+        [AspireExport(Description = "Disables Keycloak features")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithDisabledFeatures(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, params string[] features) { throw null; }
 
-        [AspireExport("withEnabledFeatures", Description = "Enables Keycloak features")]
+        [AspireExport(Description = "Enables Keycloak features")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithEnabledFeatures(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, params string[] features) { throw null; }
 
-        [AspireExport("withOtlpExporterWithProtocol", Description = "Configures the OTLP exporter for Keycloak with a specific protocol")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithOtlpExporter(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, OtlpProtocol protocol) { throw null; }
 
-        [AspireExport("withOtlpExporter", Description = "Configures the OTLP exporter for Keycloak")]
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithOtlpExporter(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder) { throw null; }
 
         [System.Obsolete("Use WithRealmImport(string import) instead.")]
