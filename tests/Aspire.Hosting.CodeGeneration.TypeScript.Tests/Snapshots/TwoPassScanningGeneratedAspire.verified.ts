@@ -1,4 +1,4 @@
-﻿// aspire.ts - Capability-based Aspire SDK
+// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -263,6 +263,9 @@ type ReferenceExpressionHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Applicati
 
 /** A builder for creating {@link ReferenceExpression} instances. */
 type ReferenceExpressionBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder'>;
+
+/** A service to execute resource commands. */
+type ResourceCommandServiceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService'>;
 
 /**
  * This event is raised by orchestrators to signal to resources that their endpoints have been allocated.
@@ -1218,6 +1221,11 @@ export interface CreateMarkdownTaskOptions {
 }
 
 export interface CreateTaskOptions {
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface ExecuteCommandAsyncOptions {
+    /** The cancellation token. */
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
@@ -5790,6 +5798,85 @@ class ReferenceExpressionBuilderPromiseImpl implements ReferenceExpressionBuilde
 }
 
 // ============================================================================
+// ResourceCommandService
+// ============================================================================
+
+/** A service to execute resource commands. */
+export interface ResourceCommandService {
+    toJSON(): MarshalledHandle;
+    /**
+     * Executes a command for the specified resource.
+     * @param resourceId The resource id. This id can either exactly match the unique id of the resource or the displayed resource name if the resource name doesn't have duplicates.
+     * @param commandName The command name.
+     * @param options Additional options.
+     * @returns The command execution result.
+     */
+    executeCommandAsync(resourceId: string, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult>;
+}
+
+export interface ResourceCommandServicePromise extends PromiseLike<ResourceCommandService> {
+    /**
+     * Executes a command for the specified resource.
+     * @param resourceId The resource id. This id can either exactly match the unique id of the resource or the displayed resource name if the resource name doesn't have duplicates.
+     * @param commandName The command name.
+     * @param options Additional options.
+     * @returns The command execution result.
+     */
+    executeCommandAsync(resourceId: string, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult>;
+}
+
+// ============================================================================
+// ResourceCommandServiceImpl
+// ============================================================================
+
+/** A service to execute resource commands. */
+class ResourceCommandServiceImpl implements ResourceCommandService {
+    constructor(private _handle: ResourceCommandServiceHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /**
+     * Executes a command for the specified resource.
+     * @param resourceId The resource id. This id can either exactly match the unique id of the resource or the displayed resource name if the resource name doesn't have duplicates.
+     * @param commandName The command name.
+     * @param options Additional options.
+     * @returns The command execution result.
+     */
+    async executeCommandAsync(resourceId: string, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult> {
+        const cancellationToken = options?.cancellationToken;
+        const rpcArgs: Record<string, unknown> = { resourceCommandService: this._handle, resourceId, commandName };
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<ExecuteCommandResult>(
+            'Aspire.Hosting/executeResourceCommand',
+            rpcArgs
+        );
+    }
+
+}
+
+/**
+ * Thenable wrapper for ResourceCommandService that enables fluent chaining.
+ */
+class ResourceCommandServicePromiseImpl implements ResourceCommandServicePromise {
+    constructor(private _promise: Promise<ResourceCommandService>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ResourceCommandService, TResult2 = never>(
+        onfulfilled?: ((value: ResourceCommandService) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    executeCommandAsync(resourceId: string, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult> {
+        return this._promise.then(obj => obj.executeCommandAsync(resourceId, commandName, options));
+    }
+
+}
+
+// ============================================================================
 // ResourceEndpointsAllocatedEvent
 // ============================================================================
 
@@ -9884,6 +9971,11 @@ export interface ServiceProvider {
      */
     getResourceNotificationService(): ResourceNotificationServicePromise;
     /**
+     * Gets the resource command service from the service provider.
+     * @returns A resource command service handle.
+     */
+    getResourceCommandService(): ResourceCommandServicePromise;
+    /**
      * Gets the Aspire store from the service provider.
      * @returns The Aspire store.
      */
@@ -9921,6 +10013,11 @@ export interface ServiceProviderPromise extends PromiseLike<ServiceProvider> {
      * @returns A resource notification service handle.
      */
     getResourceNotificationService(): ResourceNotificationServicePromise;
+    /**
+     * Gets the resource command service from the service provider.
+     * @returns A resource command service handle.
+     */
+    getResourceCommandService(): ResourceCommandServicePromise;
     /**
      * Gets the Aspire store from the service provider.
      * @returns The Aspire store.
@@ -10035,6 +10132,24 @@ class ServiceProviderImpl implements ServiceProvider {
     }
 
     /** @internal */
+    async _getResourceCommandServiceInternal(): Promise<ResourceCommandService> {
+        const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
+        const result = await this._client.invokeCapability<ResourceCommandServiceHandle>(
+            'Aspire.Hosting/getResourceCommandService',
+            rpcArgs
+        );
+        return new ResourceCommandServiceImpl(result, this._client);
+    }
+
+    /**
+     * Gets the resource command service from the service provider.
+     * @returns A resource command service handle.
+     */
+    getResourceCommandService(): ResourceCommandServicePromise {
+        return new ResourceCommandServicePromiseImpl(this._getResourceCommandServiceInternal(), this._client);
+    }
+
+    /** @internal */
     async _getAspireStoreInternal(): Promise<AspireStore> {
         const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
         const result = await this._client.invokeCapability<IAspireStoreHandle>(
@@ -10105,6 +10220,10 @@ class ServiceProviderPromiseImpl implements ServiceProviderPromise {
 
     getResourceNotificationService(): ResourceNotificationServicePromise {
         return new ResourceNotificationServicePromiseImpl(this._promise.then(obj => obj.getResourceNotificationService()), this._client);
+    }
+
+    getResourceCommandService(): ResourceCommandServicePromise {
+        return new ResourceCommandServicePromiseImpl(this._promise.then(obj => obj.getResourceCommandService()), this._client);
     }
 
     getAspireStore(): AspireStorePromise {
@@ -50595,6 +50714,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFacto
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary', (handle, client) => new PipelineSummaryImpl(handle as PipelineSummaryHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions', (handle, client) => new ProjectResourceOptionsImpl(handle as ProjectResourceOptionsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder', (handle, client) => new ReferenceExpressionBuilderImpl(handle as ReferenceExpressionBuilderHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService', (handle, client) => new ResourceCommandServiceImpl(handle as ResourceCommandServiceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent', (handle, client) => new ResourceEndpointsAllocatedEventImpl(handle as ResourceEndpointsAllocatedEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService', (handle, client) => new ResourceLoggerServiceImpl(handle as ResourceLoggerServiceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService', (handle, client) => new ResourceNotificationServiceImpl(handle as ResourceNotificationServiceHandle, client));

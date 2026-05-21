@@ -19280,6 +19280,53 @@ func (s *reportingTask) UpdateTaskMarkdown(markdownString string, options ...*Up
 	return err
 }
 
+// ResourceCommandService is the public interface for handle type ResourceCommandService.
+type ResourceCommandService interface {
+	handleReference
+	ExecuteCommandAsync(resourceId string, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error)
+	Err() error
+}
+
+// resourceCommandService is the unexported impl of ResourceCommandService.
+type resourceCommandService struct {
+	*resourceBuilderBase
+}
+
+// newResourceCommandServiceFromHandle wraps an existing handle as ResourceCommandService.
+func newResourceCommandServiceFromHandle(h *handle, c *client) ResourceCommandService {
+	return &resourceCommandService{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// ExecuteCommandAsync executes a command for the specified resource.
+func (s *resourceCommandService) ExecuteCommandAsync(resourceId string, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error) {
+	if s.err != nil { var zero *ExecuteCommandResult; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"resourceCommandService": s.handle.ToJSON(),
+	}
+	reqArgs["resourceId"] = serializeValue(resourceId)
+	reqArgs["commandName"] = serializeValue(commandName)
+	if len(options) > 0 {
+		merged := &ExecuteCommandAsyncOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.CancellationToken != nil {
+			ctx = merged.CancellationToken.Context()
+			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
+				reqArgs["cancellationToken"] = id
+			}
+		}
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/executeResourceCommand", reqArgs)
+	if err != nil {
+		var zero *ExecuteCommandResult
+		return zero, err
+	}
+	return decodeAs[*ExecuteCommandResult](result)
+}
+
 // ResourceEndpointsAllocatedEvent is the public interface for handle type ResourceEndpointsAllocatedEvent.
 type ResourceEndpointsAllocatedEvent interface {
 	handleReference
@@ -19863,6 +19910,7 @@ type ServiceProvider interface {
 	GetDistributedApplicationModel() DistributedApplicationModel
 	GetEventing() DistributedApplicationEventing
 	GetLoggerFactory() LoggerFactory
+	GetResourceCommandService() ResourceCommandService
 	GetResourceLoggerService() ResourceLoggerService
 	GetResourceNotificationService() ResourceNotificationService
 	GetUserSecretsManager() UserSecretsManager
@@ -19953,6 +20001,25 @@ func (s *serviceProvider) GetLoggerFactory() LoggerFactory {
 		return &loggerFactory{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &loggerFactory{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// GetResourceCommandService gets the resource command service from the service provider.
+func (s *serviceProvider) GetResourceCommandService() ResourceCommandService {
+	if s.err != nil { return &resourceCommandService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"serviceProvider": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getResourceCommandService", reqArgs)
+	if err != nil {
+		return &resourceCommandService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/getResourceCommandService returned unexpected type %T", result)
+		return &resourceCommandService{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &resourceCommandService{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // GetResourceLoggerService gets the resource logger service from the service provider.
@@ -25375,6 +25442,17 @@ func (o *CompleteTaskMarkdownOptions) ToMap() map[string]any {
 	return m
 }
 
+// ExecuteCommandAsyncOptions carries optional parameters for ExecuteCommandAsync.
+type ExecuteCommandAsyncOptions struct {
+	CancellationToken *CancellationToken `json:"-"`
+}
+
+func (o *ExecuteCommandAsyncOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	return m
+}
+
 // SaveStateJsonOptions carries optional parameters for SaveStateJson.
 type SaveStateJsonOptions struct {
 	CancellationToken *CancellationToken `json:"-"`
@@ -25775,6 +25853,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingTask", func(h *handle, c *client) any {
 		return newReportingTaskFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", func(h *handle, c *client) any {
+		return newResourceCommandServiceFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent", func(h *handle, c *client) any {
 		return newResourceEndpointsAllocatedEventFromHandle(h, c)

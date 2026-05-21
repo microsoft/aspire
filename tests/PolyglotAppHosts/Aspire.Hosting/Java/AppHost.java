@@ -218,10 +218,16 @@ void main() throws Exception {
         container.withUrl(ReferenceExpression.refExpr("http://%s", endpoint), null);
         container.withHttpHealthCheck();
         container.withHttpHealthCheck();
-        container.withCommand("restart", "Restart", (_ctx) -> {
+        container.withCommand("noop", "Noop", (_ctx) -> {
             var result = new ExecuteCommandResult();
             result.setSuccess(true);
             return result;
+        });
+        container.withCommand("restart", "Restart", (ctx) -> {
+            var serviceProvider = ctx.serviceProvider();
+            var commandService = serviceProvider.getResourceCommandService();
+            var cancellationToken = ctx.cancellationToken();
+            return commandService.executeCommandAsync("mycontainer", "noop", cancellationToken);
         });
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();

@@ -687,8 +687,15 @@ await container.withUrl(refExpr`http://${endpoint}`);
 await container.withHealthCheck("http");
 
 // withCommand
-await container.withCommand("restart", "Restart", async (_ctx) => {
+await container.withCommand("noop", "Noop", async () => {
     return { success: true };
+});
+await container.withCommand("restart", "Restart", async (ctx) => {
+    const serviceProvider = await ctx.serviceProvider();
+    const commandService = await serviceProvider.getResourceCommandService();
+    const cancellationToken = await ctx.cancellationToken();
+
+    return await commandService.executeCommandAsync("mycontainer", "noop", { cancellationToken });
 });
 
 // withProcessCommand

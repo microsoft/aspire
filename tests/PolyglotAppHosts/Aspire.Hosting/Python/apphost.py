@@ -393,7 +393,14 @@ with create_builder() as builder:
     # withHttpHealthCheck
     container.with_http_health_check()
     # withCommand
-    container.with_command("command", "Command", lambda *_args, **_kwargs: {"success": True})
+    def restart_command(ctx):
+        service_provider = ctx.service_provider
+        command_service = service_provider.get_resource_command_service()
+
+        return command_service.execute_command("mycontainer", "noop")
+
+    container.with_command("noop", "Noop", lambda *_args, **_kwargs: {"success": True})
+    container.with_command("restart", "Restart", restart_command)
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})

@@ -1289,6 +1289,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("System.ComponentModel/System.IServiceProvider", (h, c) -> new IServiceProvider(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService", (h, c) -> new ResourceNotificationService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", (h, c) -> new ResourceLoggerService(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", (h, c) -> new ResourceCommandService(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", (h, c) -> new IConfiguration(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection", (h, c) -> new IConfigurationSection(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", (h, c) -> new IHostEnvironment(h, c));
@@ -13251,6 +13252,13 @@ public class IServiceProvider extends HandleWrapperBase {
         return (ResourceNotificationService) getClient().invokeCapability("Aspire.Hosting/getResourceNotificationService", reqArgs);
     }
 
+    /** Gets the resource command service from the service provider. */
+    public ResourceCommandService getResourceCommandService() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
+        return (ResourceCommandService) getClient().invokeCapability("Aspire.Hosting/getResourceCommandService", reqArgs);
+    }
+
     /** Gets the Aspire store from the service provider. */
     public IAspireStore getAspireStore() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -17008,6 +17016,38 @@ public class ResourceBuilderBase extends HandleWrapperBase {
     ResourceBuilderBase(Handle handle, AspireClient client) {
         super(handle, client);
     }
+}
+
+// ===== ResourceCommandService.java =====
+// ResourceCommandService.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService. */
+public class ResourceCommandService extends HandleWrapperBase {
+    ResourceCommandService(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    public ExecuteCommandResult executeCommandAsync(String resourceId, String commandName) {
+        return executeCommandAsync(resourceId, commandName, null);
+    }
+
+    /** Executes a command for the specified resource. */
+    public ExecuteCommandResult executeCommandAsync(String resourceId, String commandName, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resourceCommandService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceId", AspireClient.serializeValue(resourceId));
+        reqArgs.put("commandName", AspireClient.serializeValue(commandName));
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        return (ExecuteCommandResult) getClient().invokeCapability("Aspire.Hosting/executeResourceCommand", reqArgs);
+    }
+
 }
 
 // ===== ResourceCommandState.java =====
@@ -24355,6 +24395,7 @@ public final class WithVolumeOptions {
 .modules/ReferenceExpression.java
 .modules/ReferenceExpressionBuilder.java
 .modules/ResourceBuilderBase.java
+.modules/ResourceCommandService.java
 .modules/ResourceCommandState.java
 .modules/ResourceCommandVisibility.java
 .modules/ResourceEndpointsAllocatedEvent.java

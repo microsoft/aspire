@@ -487,9 +487,22 @@ func main() {
 	_ = container.WithUrl(expr)
 	_ = container.WithHttpHealthCheck()
 	_ = container.WithHttpHealthCheck()
+	_ = container.WithCommand("noop", "Noop", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		return &aspire.ExecuteCommandResult{Success: true}
+	})
 	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		_ = ctx
-		return &aspire.ExecuteCommandResult{}
+		serviceProvider := ctx.ServiceProvider()
+		commandService := serviceProvider.GetResourceCommandService()
+		cancellationToken, err := ctx.CancellationToken()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		result, err := commandService.ExecuteCommandAsync("mycontainer", "noop", &aspire.ExecuteCommandAsyncOptions{CancellationToken: cancellationToken})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		return result
 	})
 
 	app, err := builder.Build()

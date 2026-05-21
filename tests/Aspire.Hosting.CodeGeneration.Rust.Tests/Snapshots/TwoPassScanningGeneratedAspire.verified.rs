@@ -10918,6 +10918,15 @@ impl IServiceProvider {
         Ok(ResourceNotificationService::new(handle, self.client.clone()))
     }
 
+    /// Gets the resource command service from the service provider.
+    pub fn get_resource_command_service(&self) -> Result<ResourceCommandService, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("serviceProvider".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/getResourceCommandService", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ResourceCommandService::new(handle, self.client.clone()))
+    }
+
     /// Gets the Aspire store from the service provider.
     pub fn get_aspire_store(&self) -> Result<IAspireStore, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -13653,6 +13662,46 @@ impl ReferenceExpressionBuilder {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/build", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService
+pub struct ResourceCommandService {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ResourceCommandService {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ResourceCommandService {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Executes a command for the specified resource.
+    pub fn execute_command_async(&self, resource_id: &str, command_name: &str, cancellation_token: Option<&CancellationToken>) -> Result<ExecuteCommandResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("resourceCommandService".to_string(), self.handle.to_json());
+        args.insert("resourceId".to_string(), serde_json::to_value(&resource_id).unwrap_or(Value::Null));
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/executeResourceCommand", args)?;
         Ok(serde_json::from_value(result)?)
     }
 }

@@ -1277,6 +1277,9 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("getLoggerFactory", aspireTs);
         Assert.Contains("createLogger", aspireTs);
         Assert.Contains("getResourceLoggerService", aspireTs);
+        Assert.Contains("getResourceCommandService", aspireTs);
+        Assert.Contains("executeCommandAsync", aspireTs);
+        Assert.Contains("ExecuteCommandResult", aspireTs);
         Assert.Contains("getResourceNotificationService", aspireTs);
         Assert.Contains("getDistributedApplicationModel", aspireTs);
         Assert.Contains("subscribeBeforeStart", aspireTs);

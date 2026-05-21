@@ -3084,6 +3084,15 @@ class AbstractServiceProvider:
         )
         return typing.cast(ResourceNotificationService, result)
 
+    def get_resource_command_service(self) -> ResourceCommandService:
+        """Gets the resource command service from the service provider."""
+        rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getResourceCommandService',
+            rpc_args,
+        )
+        return typing.cast(ResourceCommandService, result)
+
     def get_aspire_store(self) -> AbstractAspireStore:
         """Gets the Aspire store from the service provider."""
         rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
@@ -5427,6 +5436,35 @@ class ReferenceExpressionBuilder:
             rpc_args,
         )
         return typing.cast(ReferenceExpression, result)
+
+
+class ResourceCommandService:
+    """Type class for ResourceCommandService."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ResourceCommandService(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def execute_command(self, resource_id: str, command_name: str, *, timeout: int | None = None) -> ExecuteCommandResult:
+        """Executes a command for the specified resource."""
+        rpc_args: dict[str, typing.Any] = {'resourceCommandService': self._handle}
+        rpc_args['resourceId'] = resource_id
+        rpc_args['commandName'] = command_name
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/executeResourceCommand',
+            rpc_args,
+        )
+        return typing.cast(ExecuteCommandResult, result)
 
 
 class ResourceEndpointsAllocatedEvent:
@@ -11326,6 +11364,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFa
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary", PipelineSummary)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions", ProjectResourceOptions)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", ReferenceExpressionBuilder)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", ResourceCommandService)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent", ResourceEndpointsAllocatedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", ResourceLoggerService)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService", ResourceNotificationService)
