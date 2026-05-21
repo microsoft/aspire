@@ -88,11 +88,11 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation # A URL tha
   Endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference # The endpoint associated with this URL. Can be null if this URL is not associated with an endpoint.
   Url: string # The URL. When rendered as a link this will be used as the link target.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateResourceSnapshot # Resource snapshot data exposed to polyglot command state callbacks.
-  ExitCode: number # The exit code of the resource.
-  HealthStatus: enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus # The current health status for the resource.
+  ExitCode?: number # The exit code of the resource.
+  HealthStatus?: enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus # The current health status for the resource.
   ResourceType: string # The type of the resource.
-  State: string # The current lifecycle state text for the resource.
-  StateStyle: string # The display style for the current lifecycle state.
+  State?: string # The current lifecycle state text for the resource.
+  StateStyle?: string # The display style for the current lifecycle state.
 Aspire.Hosting/Aspire.Hosting.Ats.CreateBuilderOptions # Options for creating a distributed application builder from polyglot apphosts.
   AllowUnsecuredTransport: boolean # Allows the use of HTTP urls for the AppHost resource endpoint.
   AppHostFilePath: string # The full path to the AppHost file (e.g., apphost.ts, apphost.py). Used for consistent socket path computation across CLI and AppHost.
