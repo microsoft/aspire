@@ -560,28 +560,33 @@ internal static partial class PolyglotCapabilityErrorFormatter
     //
     // The fwlink identifier `848054` has been the unique sentinel for this exact
     // error since .NET Core 2.1 (it was added when the dev-cert tooling shipped) and
-    // does not appear in any other Kestrel error, so we anchor detection on it. The
-    // regex tolerates whitespace/line-ending variation between the two guidance
-    // sentences and the fwlink and rewrites the whole block in one shot.
+    // does not appear in any other Kestrel error, so we use it as a single detection
+    // anchor and replace the entire message with our own polyglot-friendly text. This
+    // is more robust than search/replacing pieces of the original message because it
+    // doesn't depend on the exact wording of any sentence other than the fwlink itself.
     //
     // If a future framework release reworks the message such that the fwlink is no
-    // longer present, the rewrite degrades gracefully: the regex misses, the original
+    // longer present, the rewrite degrades gracefully: detection misses, the original
     // (less friendly) text propagates unchanged, and no incorrect substitution occurs.
     //
     // See https://github.com/microsoft/aspire/issues/17273.
+    private const string KestrelHttpsFwlinkSentinel = "https://go.microsoft.com/fwlink/?linkid=848054";
+
+    private const string AspirePolyglotDevCertMessage =
+        "Unable to configure HTTPS endpoint. No server certificate was specified, and the default " +
+        "developer certificate could not be found or is out of date. To generate and trust a developer " +
+        "certificate run 'aspire certs trust'. For more information on configuring HTTPS see " +
+        "https://aspire.dev/docs/.";
+
     private static string RewritePolyglotUnfriendlyGuidance(string message)
     {
-        return KestrelDevCertGuidanceRegex().Replace(
-            message,
-            "To generate and trust a developer certificate run 'aspire certs trust'. " +
-            "For more information on configuring HTTPS see https://aspire.dev/docs/.");
-    }
+        if (message.Contains(KestrelHttpsFwlinkSentinel, StringComparison.Ordinal))
+        {
+            return AspirePolyglotDevCertMessage;
+        }
 
-    [GeneratedRegex(
-        @"To generate a developer certificate run 'dotnet dev-certs https'\.\s+" +
-        @"To trust the certificate \(Windows and macOS only\) run 'dotnet dev-certs https --trust'\.\s+" +
-        @"For more information on configuring HTTPS see https://go\.microsoft\.com/fwlink/\?linkid=848054\.")]
-    private static partial Regex KestrelDevCertGuidanceRegex();
+        return message;
+    }
 
     [GeneratedRegex(@"\s{2,}")]
     private static partial Regex DoubleWhitespaceRegex();
