@@ -147,8 +147,13 @@ function Test-ExtractedBundleLayout {
 
     Write-Step "Extracted bundle layout contains AppHost server assets."
 
-    Write-Step "Running '$managedExecutablePath --help'..."
-    $managedOutput = & $managedExecutablePath --help 2>&1
+    # aspire-managed's top-level entry point is a hard dispatch on
+    # dashboard|server|nuget and returns 1 for anything else (including --help).
+    # Use a real subcommand whose System.CommandLine help path returns 0; this
+    # also exercises the NativeAOT-compiled CommandLine code path as part of
+    # the smoke check. See src/Aspire.Managed/Program.cs.
+    Write-Step "Running '$managedExecutablePath nuget --help'..."
+    $managedOutput = & $managedExecutablePath nuget --help 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "aspire-managed failed with exit code $LASTEXITCODE. Output: $managedOutput"
     }
