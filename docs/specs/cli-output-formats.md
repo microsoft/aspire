@@ -435,7 +435,7 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 
 ### `aspire doctor`
 
-`aspire doctor --format json` emits environment checks and a summary:
+`aspire doctor --format json` emits environment checks, a summary, and discovered CLI installations when more than one Aspire CLI install is found:
 
 ```json
 {
@@ -459,11 +459,46 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
     "passed": 1,
     "warnings": 1,
     "failed": 0
-  }
+  },
+  "installations": [
+    {
+      "path": "/home/user/.aspire/bin/aspire",
+      "canonicalPath": "/home/user/.aspire/bin/aspire",
+      "version": "13.0.0-preview.1.25366.3",
+      "channel": "daily",
+      "source": "script",
+      "pathStatus": "active",
+      "status": "ok"
+    },
+    {
+      "path": "/usr/local/bin/aspire",
+      "canonicalPath": "/usr/local/bin/aspire",
+      "version": "13.0.0-preview.1.25366.3",
+      "channel": "daily",
+      "source": "brew",
+      "pathStatus": "shadowed",
+      "status": "ok"
+    }
+  ]
 }
 ```
 
-`status` is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
+`status` on a check is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
+
+The `installations` property is omitted when no install-listing information is available or when only the running Aspire CLI install is found. The hidden peer-probing form, `aspire doctor --self --format json`, still emits the running install as a single-item `installations` array so newer CLIs can inspect peer installs.
+
+#### Doctor installation fields
+
+| Field | Description |
+| ----- | ----------- |
+| `path` | Absolute path of the discovered Aspire CLI binary. |
+| `canonicalPath` | Symlink-resolved absolute path used to deduplicate entries, when available. |
+| `version` | CLI version string, when the install could be probed. |
+| `channel` | CLI identity channel, such as `stable`, `staging`, `daily`, `local`, or `pr-<N>`, when available. |
+| `source` | Install source recorded by `.aspire-install.json`, such as `script`, `pr`, `winget`, `brew`, or `dotnet-tool`, when available. Current CLIs emit `source`; `route` was the legacy field name and is accepted only when parsing older peer responses. |
+| `pathStatus` | Relationship to `PATH`: `active`, `shadowed`, or `notOnPath`. |
+| `status` | Installation row status: `ok`, `notProbed`, or `failed`. |
+| `statusReason` | Free-form reason for a non-`ok` row, when available. |
 
 ### `aspire config info`
 
