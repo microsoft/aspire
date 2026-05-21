@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json.Serialization;
-
 namespace Aspire.Cli.Projects;
 
 /// <summary>
@@ -33,48 +31,41 @@ internal sealed class AppHostCodeGenerationDiagnostic
     /// Gets the CLR type name of the original exception thrown by the AppHost server
     /// (e.g. <c>System.TypeLoadException</c>).
     /// </summary>
-    [JsonPropertyName("originalExceptionType")]
     public string OriginalExceptionType { get; init; } = "";
 
     /// <summary>
     /// Gets the name of the type that failed to load, if known.
     /// </summary>
-    [JsonPropertyName("typeName")]
     public string? TypeName { get; init; }
 
     /// <summary>
     /// Gets the name of the missing member, if the failure was a missing-method or
     /// missing-field error.
     /// </summary>
-    [JsonPropertyName("memberName")]
     public string? MemberName { get; init; }
 
     /// <summary>
     /// Gets the informational version of the bundled <c>Aspire.Hosting</c> assembly on the
     /// server side, if it could be discovered.
     /// </summary>
-    [JsonPropertyName("runtimeAspireHostingVersion")]
     public string? RuntimeAspireHostingVersion { get; init; }
 
     /// <summary>
     /// Gets the on-disk location of the bundled <c>Aspire.Hosting</c> assembly, if it could be
     /// discovered.
     /// </summary>
-    [JsonPropertyName("runtimeAspireHostingPath")]
     public string? RuntimeAspireHostingPath { get; init; }
 
     /// <summary>
     /// Gets the loaded integration assemblies probed by the AppHost server at the time of the
     /// failure.
     /// </summary>
-    [JsonPropertyName("loadedAssemblies")]
     public List<AppHostLoadedAssemblyInfo> LoadedAssemblies { get; init; } = [];
 
     /// <summary>
     /// Gets a short, language-agnostic remediation hint suitable for surfacing to AppHost
     /// authors.
     /// </summary>
-    [JsonPropertyName("remediationHint")]
     public string? RemediationHint { get; init; }
 }
 
@@ -87,19 +78,16 @@ internal sealed class AppHostLoadedAssemblyInfo
     /// <summary>
     /// Gets the simple name of the assembly (e.g. <c>Aspire.Hosting.JavaScript</c>).
     /// </summary>
-    [JsonPropertyName("name")]
     public string Name { get; init; } = "";
 
     /// <summary>
     /// Gets the informational version of the assembly, when present, otherwise the assembly
     /// version.
     /// </summary>
-    [JsonPropertyName("informationalVersion")]
     public string? InformationalVersion { get; init; }
 
     /// <summary>
     /// Gets the on-disk location of the assembly when available.
     /// </summary>
-    [JsonPropertyName("location")]
     public string? Location { get; init; }
 }
