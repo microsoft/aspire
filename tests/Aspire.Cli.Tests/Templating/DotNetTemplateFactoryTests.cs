@@ -31,7 +31,7 @@ public class DotNetTemplateFactoryTests
     }
 
     private static PackageChannel CreateExplicitChannel(PackageMapping[] mappings) =>
-        PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+        PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
 
     private static async Task WriteNuGetConfigAsync(DirectoryInfo dir, string content)
     {
@@ -218,7 +218,7 @@ public class DotNetTemplateFactoryTests
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
-        var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache());
+        var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
 
         // Act
         await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();

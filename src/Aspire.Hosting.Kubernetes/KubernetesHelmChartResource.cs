@@ -26,6 +26,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// <see cref="KubernetesHelmChartExtensions.WithDestroy(IResourceBuilder{KubernetesHelmChartResource})"/>.
 /// </para>
 /// </remarks>
+/// <ats-remarks />
 /// <example>
 /// <code>
 /// var k8s = builder.AddKubernetesEnvironment("k8s");

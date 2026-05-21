@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Text.Json.Nodes;
 using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
@@ -604,22 +606,40 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
     public void AddAzureServiceBusWithEmulator_SetsSqlLifetime(bool isPersistent)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        var lifetime = isPersistent ? ContainerLifetime.Persistent : ContainerLifetime.Session;
+        var lifetime = isPersistent ? Lifetime.Persistent : Lifetime.Session;
 
         var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configureContainer: builder =>
         {
-            builder.WithLifetime(lifetime);
+            _ = lifetime switch
+            {
+                Lifetime.Session => builder.WithSessionLifetime(),
+                Lifetime.Persistent => builder.WithPersistentLifetime(),
+                _ => throw new InvalidOperationException($"Unknown resource lifetime '{Enum.GetName(typeof(Lifetime), lifetime)}'.")
+            };
         });
 
         var sql = builder.Resources.FirstOrDefault(x => x.Name == "sb-mssql");
 
         Assert.NotNull(sql);
 
-        serviceBus.Resource.TryGetLastAnnotation<ContainerLifetimeAnnotation>(out var sbLifetimeAnnotation);
-        sql.TryGetLastAnnotation<ContainerLifetimeAnnotation>(out var sqlLifetimeAnnotation);
+        var sourceResource = GetPersistenceReferenceSource(sql);
+        Assert.Same(serviceBus.Resource.Annotations, sourceResource.Annotations);
 
-        Assert.Equal(lifetime, sbLifetimeAnnotation?.Lifetime);
-        Assert.Equal(lifetime, sqlLifetimeAnnotation?.Lifetime);
+        var persistenceAnnotation = Assert.Single(serviceBus.Resource.Annotations.OfType<PersistenceAnnotation>());
+        Assert.Equal(ToPersistenceMode(lifetime), persistenceAnnotation.Mode);
+    }
+
+    [Fact]
+    public void AddAzureServiceBusWithEmulator_DoesNotSetSqlLifetimeWithoutContainerConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddAzureServiceBus("sb").RunAsEmulator();
+
+        var sql = builder.Resources.FirstOrDefault(x => x.Name == "sb-mssql");
+
+        Assert.NotNull(sql);
+        Assert.Empty(sql.Annotations.OfType<PersistenceAnnotation>());
     }
 
     [Fact]
@@ -630,6 +650,20 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
         Assert.Throws<InvalidOperationException>(() => serviceBus.RunAsEmulator());
     }
+
+    private static IResource GetPersistenceReferenceSource(IResource resource)
+    {
+        var annotation = Assert.Single(resource.Annotations.OfType<PersistenceAnnotation>());
+        return Assert.IsAssignableFrom<IResource>(annotation.SourceResource);
+    }
+
+    private static PersistenceMode ToPersistenceMode(Lifetime lifetime) =>
+        lifetime switch
+        {
+            Lifetime.Session => PersistenceMode.Session,
+            Lifetime.Persistent => PersistenceMode.Persistent,
+            _ => throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, null)
+        };
 
     [Fact]
     public void AzureServiceBusHasCorrectConnectionStrings()

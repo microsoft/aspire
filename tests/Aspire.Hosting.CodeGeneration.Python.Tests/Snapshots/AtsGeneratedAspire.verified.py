@@ -1,4 +1,4 @@
-#   -------------------------------------------------------------
+﻿#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -1603,7 +1603,7 @@ class DistributedApplicationBuilder:
         app.run(timeout=timeout)
 
     def add_test_redis(self, name: str, *, port: int | None = None, **kwargs: typing.Unpack["TestRedisResourceKwargs"]) -> TestRedisResource:  # type: ignore
-        """Adds a test Redis resource"""
+        """Adds a test Redis resource from ATS documentation."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         if port is not None:
@@ -1714,7 +1714,7 @@ class TestCollectionContext:
 
     @_cached_property
     def items(self) -> AspireList[str]:
-        """Gets the Items property"""
+        """List property - should generate AspireList getter like Dictionary properties."""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items',
             {'context': self._handle}
@@ -1723,7 +1723,7 @@ class TestCollectionContext:
 
     @_cached_property
     def metadata(self) -> AspireDict[str, str]:
-        """Gets the Metadata property"""
+        """Dictionary property - already works with AspireDict getter."""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata',
             {'context': self._handle}
@@ -1898,7 +1898,7 @@ class TestResourceContext:
         )
 
     def get_value(self) -> str:
-        """Invokes the GetValueAsync method"""
+        """Instance method that should be exposed as async method."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.getValueAsync',
@@ -1907,7 +1907,7 @@ class TestResourceContext:
         return result
 
     def set_value(self, value: str) -> None:
-        """Invokes the SetValueAsync method"""
+        """Instance method with parameter."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['value'] = value
         self._client.invoke_capability(
@@ -1916,7 +1916,7 @@ class TestResourceContext:
         )
 
     def validate(self) -> bool:
-        """Invokes the ValidateAsync method"""
+        """Instance method with return type."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.validateAsync',

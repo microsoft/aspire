@@ -25,7 +25,7 @@ func main() {
 		Name:       aspire.StringPtr("nats-data"),
 		IsReadOnly: aspire.BoolPtr(false),
 	})
-	nats2.WithLifetime(aspire.ContainerLifetimePersistent)
+	nats2.WithPersistentLifetime()
 	if err = nats2.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}

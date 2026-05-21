@@ -620,7 +620,7 @@ Aspire.Hosting/withDockerfileBaseImage(buildImage?: string, runtimeImage?: strin
 Aspire.Hosting/withDockerfileBuilder(contextPath: string, callback: callback, stage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withEndpoint(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: enum:System.Net.Sockets.ProtocolType) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withEndpointCallback(endpointName: string, callback: callback, createIfNotExists?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
-Aspire.Hosting/withEndpointProxySupport(proxyEnabled: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
+Aspire.Hosting/withEndpointProxySupport(proxyEnabled: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withEntrypoint(entrypoint: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withEnvironmentCallback(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
@@ -646,11 +646,14 @@ Aspire.Hosting/withImageRegistry(registry: string) -> Aspire.Hosting/Aspire.Host
 Aspire.Hosting/withImageSHA256(sha256: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withImageTag(tag: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withLifetime(lifetime: enum:Aspire.Hosting.ApplicationModel.ContainerLifetime) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
+Aspire.Hosting/withLifetimeOf(sourceBuilder: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withMcpServer(path?: string, endpointName?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withOtlpExporter(protocol?: enum:Aspire.Hosting.OtlpProtocol) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withoutHttpsCertificate() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withParameterBuildSecret(name: string, value: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withParameterHttpsDeveloperCertificate(password?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
+Aspire.Hosting/withParentProcessLifetime(parentProcessId: number) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withPersistentLifetime() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withPipelineConfiguration(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withPipelineStepFactory(stepName: string, callback: callback, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withProcessCommand(commandName: string, displayName: string, options: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProcessCommandExportOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
@@ -661,6 +664,7 @@ Aspire.Hosting/withRemoteImageName(remoteImageName: string) -> Aspire.Hosting/As
 Aspire.Hosting/withRemoteImageTag(remoteImageTag: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting/withReplicas(replicas: number) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
 Aspire.Hosting/withRequiredCommand(command: string, helpLink?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withSessionLifetime() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withToolIgnoreExistingFeeds() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolIgnoreFailedSources() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/withToolPackage(packageId: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource

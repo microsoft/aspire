@@ -19,7 +19,7 @@ public class AspireExportAnalyzerTests
 
             public static class TestExports
             {
-                [AspireExport(Description = "Test method")]
+                [AspireExport]
                 public static string TestMethod() => "test";
             }
             """, []);
@@ -37,7 +37,7 @@ public class AspireExportAnalyzerTests
 
             public static class TestExports
             {
-                [AspireExport(Description = "Add Redis")]
+                [AspireExport]
                 public static string AddRedis() => "test";
             }
             """, []);
@@ -55,10 +55,52 @@ public class AspireExportAnalyzerTests
 
             public static class TestExports
             {
-                [AspireExport("Dictionary.set", Description = "Dictionary set")]
+                [AspireExport("Dictionary.set")]
                 public static void DictionarySet() { }
             }
             """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportWithDescription_ReportsASPIREEXPORT015()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_descriptionShouldUseXmlDocs;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public static class TestExports
+            {
+                [AspireExport(Description = "Use XML docs instead.")]
+                public static string TestMethod() => "test";
+            }
+            """,
+            [CompilerError(diagnostic.Id).WithLocation(7, 6).WithMessage("AspireExport Description is compatibility metadata. Use XML documentation with ATS tags such as <ats-summary> for generated polyglot SDK documentation.")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportedPropertyWithDescription_ReportsASPIREEXPORT015()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_descriptionShouldUseXmlDocs;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public class TestExports
+            {
+                [AspireExport(Description = "Use XML docs instead.")]
+                public string TestProperty { get; set; } = "";
+            }
+            """,
+            [CompilerError(diagnostic.Id).WithLocation(7, 6).WithMessage("AspireExport Description is compatibility metadata. Use XML documentation with ATS tags such as <ats-summary> for generated polyglot SDK documentation.")]);
 
         await test.RunAsync();
     }

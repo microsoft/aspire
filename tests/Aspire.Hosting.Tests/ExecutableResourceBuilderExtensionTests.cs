@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 #pragma warning disable IDE0005 // Using directive is unnecessary.
 
 using Aspire.Hosting.Dcp.Model;
@@ -70,6 +71,17 @@ public class ExecutableResourceBuilderExtensionTests
 
         var annotation = executable.Resource.Annotations.OfType<ExecutableAnnotation>().Single();
         Assert.Equal(builder.AppHostDirectory, annotation.WorkingDirectory);
+    }
+
+    [Fact]
+    public void WithPersistentLifetimeAddsPersistenceAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var executable = builder.AddExecutable("myexe", "command", "workingdirectory")
+            .WithPersistentLifetime();
+
+        var annotation = executable.Resource.Annotations.OfType<PersistenceAnnotation>().Single();
+        Assert.Equal(PersistenceMode.Persistent, annotation.Mode);
     }
 
     [Fact]

@@ -40,9 +40,10 @@ jobs:
           # Discover Aspire.Hosting.* integration projects with [AspireExport] attributes
           # Find project directories by resolving matched files to their nearest .csproj
           # Exclude infrastructure projects that define/analyze the attribute rather than use it
-          PROJECTS=$(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' \
+          PROJECTS=$(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' \
                       | grep -v '/obj/' | grep -v '/bin/' \
                       | grep -v 'Aspire.Hosting.Analyzers' \
+                      | grep -v 'Aspire.Hosting.Integration.Analyzers' \
                       | grep -v 'Aspire.Hosting.CodeGeneration' \
                       | grep -v 'Aspire.Hosting.RemoteHost' \
                       | while read -r file; do
