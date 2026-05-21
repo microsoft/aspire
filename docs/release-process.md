@@ -56,17 +56,7 @@ Before starting a release:
    [release-publish-nuget](https://dev.azure.com/dnceng/internal/_build?definitionId=1600&_a=summary)
    (definition `1600` in `dnceng/internal`)
 2. Click "Run pipeline"
-3. Under **Resources**, select the source build from the `aspire-build` dropdown
-   - The picker shows all recent builds from the `microsoft-aspire`
-     pipeline regardless of branch. Pick the build that corresponds to the
-     release branch and version you intend to ship.
-   - Each build's tags are shown alongside its number — verify the
-     `release-version - X.Y.Z` tag matches the version you intend to ship
-     **before** clicking Run. If the tag is missing, either re-run the
-     source build (after the tag-emitting change in `azure-pipelines.yml`
-     is on that release branch) or pass an explicit `ReleaseVersion`
-     override below.
-4. Fill in the parameters. **Most should stay at their defaults** — the
+3. Fill in the parameters. **Most should stay at their defaults** — the
    ones flagged `[Advanced]` in the run-pipeline form are only for
    re-running after a partial failure or for testing pipeline changes on a
    topic branch.
@@ -91,7 +81,16 @@ Before starting a release:
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading aspire-cli-* assets to the GitHub release | `false` |
    | `GitHubTasksWorkflowRef` | Ref to load `release-github-tasks.yml` from when dispatching. Only affects the workflow source — the release branch/commit are passed via inputs. Override only when testing pipeline changes on a topic branch. | `main` |
-
+4. Select the **Resources** button in the bottom right, then select the source build from the `aspire-build` dropdown
+   - The picker shows all recent builds from the `microsoft-aspire`
+     pipeline regardless of branch. Pick the build that corresponds to the
+     release branch and version you intend to ship.
+   - Each build's tags are shown alongside its number — verify the
+     `release-version - X.Y.Z` tag matches the version you intend to ship
+     **before** clicking Run. If the tag is missing, either re-run the
+     source build (after the tag-emitting change in `azure-pipelines.yml`
+     is on that release branch) or pass an explicit `ReleaseVersion`
+     override below.
 5. Click "Run" and monitor the pipeline. The final stage (`GitHubTasks`)
    dispatches `release-github-tasks.yml`, waits for it to complete, and
    then uploads the `aspire-cli-*` archives from the source build's
@@ -142,7 +141,7 @@ only the GitHub work, you can:
 
 After automation completes:
 
-1. **Review and merge PRs**:
+1. **Review and merge automatically created PRs**:
    - Merge-back PR: `$RELEASE_BRANCH` → `main`
    - Baseline version PR: Updates `PackageValidationBaselineVersion`
 
