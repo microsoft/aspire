@@ -190,8 +190,26 @@ echo "  ✓ Source-mapped NuGet.config written (Aspire* -> local-stable; everyth
 PROJECT_NAME="MyAspireApp"
 # Absolute path so `--output` is unambiguous regardless of CWD.
 PROJECT_DIR="$WORK_DIR/$PROJECT_NAME"
+
+# Derive the exact Aspire.AppHost.Sdk version from the local feed. We pass this via
+# `aspire new --version` AND assert later that the generated apphost.cs references this
+# exact version (rather than whatever the CLI's own template-version resolution would
+# pick). This makes the smoke test the precise contract — "the AppHost SDK this stable
+# build packed is what the generated app restores from $LOCAL_FEED" — instead of
+# leaving room for the CLI to silently pick a different version that then fails restore
+# with a confusing "not found in local feed" message.
+APPHOST_SDK_NUPKG=$(ls "$LOCAL_FEED"/Aspire.AppHost.Sdk.[0-9]*.[0-9]*.[0-9]*.nupkg 2>/dev/null | head -1)
+if [ -z "$APPHOST_SDK_NUPKG" ]; then
+    echo "❌ No Aspire.AppHost.Sdk.*.nupkg in $LOCAL_FEED — can't pin the template SDK version."
+    exit 1
+fi
+# Strip the leading 'Aspire.AppHost.Sdk.' prefix and trailing '.nupkg' to get the version.
+APPHOST_SDK_VERSION=$(basename "$APPHOST_SDK_NUPKG" .nupkg)
+APPHOST_SDK_VERSION="${APPHOST_SDK_VERSION#Aspire.AppHost.Sdk.}"
+echo "  ✓ Pinned Aspire.AppHost.Sdk version: $APPHOST_SDK_VERSION (from $(basename "$APPHOST_SDK_NUPKG"))"
+
 echo ""
-echo "→ aspire new aspire-empty --name $PROJECT_NAME --output $PROJECT_DIR --language csharp --suppress-agent-init --localhost-tld false"
+echo "→ aspire new aspire-empty --name $PROJECT_NAME --output $PROJECT_DIR --version $APPHOST_SDK_VERSION --language csharp --suppress-agent-init --localhost-tld false"
 # Flags chosen to make the command fully non-interactive (in addition to --non-interactive
 # baked into run_aspire):
 #   --language csharp        suppresses the language prompt
@@ -199,6 +217,9 @@ echo "→ aspire new aspire-empty --name $PROJECT_NAME --output $PROJECT_DIR --l
 #   --localhost-tld false    suppresses the localhost-tld prompt
 # --source pins the templates-package fetch to our local-stable feed, so we test the templates
 # we just packed (not whatever's on nuget.org).
+# --version pins the Aspire.AppHost.Sdk version emitted into the generated AppHost; without
+# it, the CLI's own template-version resolution decides. We want this smoke to test the exact
+# version we just packed.
 # CWD is $WORK_DIR so the temp NuGet.config (with Aspire* source-mapped to local-stable) is
 # the one NuGet finds via its config walk.
 (
@@ -207,6 +228,7 @@ echo "→ aspire new aspire-empty --name $PROJECT_NAME --output $PROJECT_DIR --l
         --name "$PROJECT_NAME" \
         --output "$PROJECT_DIR" \
         --source "$LOCAL_FEED" \
+        --version "$APPHOST_SDK_VERSION" \
         --language csharp \
         --suppress-agent-init \
         --localhost-tld false \
@@ -221,16 +243,36 @@ if [ ! -d "$PROJECT_DIR" ]; then
     echo "❌ aspire new did not create the project directory $PROJECT_DIR"
     exit 1
 fi
+APPHOST_SDK_REF_FILE=""
 if [ -f "$PROJECT_DIR/apphost.cs" ] && [ -f "$PROJECT_DIR/aspire.config.json" ]; then
     echo "  ✓ Single-file AppHost detected (apphost.cs + aspire.config.json)"
+    # Single-file AppHosts reference the SDK as `#:sdk Aspire.AppHost.Sdk@<version>`.
+    APPHOST_SDK_REF_FILE="$PROJECT_DIR/apphost.cs"
+    EXPECTED_SDK_REF="#:sdk Aspire.AppHost.Sdk@$APPHOST_SDK_VERSION"
 elif [ -f "$PROJECT_DIR/$PROJECT_NAME.AppHost/$PROJECT_NAME.AppHost.csproj" ]; then
     echo "  ✓ Project-based AppHost detected ($PROJECT_NAME.AppHost.csproj)"
+    # Project-based AppHosts reference the SDK as `Sdk="Aspire.AppHost.Sdk/<version>"`.
+    APPHOST_SDK_REF_FILE="$PROJECT_DIR/$PROJECT_NAME.AppHost/$PROJECT_NAME.AppHost.csproj"
+    EXPECTED_SDK_REF="Aspire.AppHost.Sdk/$APPHOST_SDK_VERSION"
 else
     echo "❌ aspire new produced an unrecognized layout in $PROJECT_DIR"
     echo "   Contents (depth 3):"
     find "$PROJECT_DIR" -maxdepth 3 -type f 2>/dev/null || true
     exit 1
 fi
+
+# Assert the AppHost references the exact SDK version we pinned. Catches the failure mode
+# where `--version` is ignored / overridden by CLI template-version resolution. Without
+# this assertion, a mismatch would later surface as a confusing "package not found in
+# local-stable feed" restore error instead of a clear "wrong SDK version emitted."
+if ! grep -qF "$EXPECTED_SDK_REF" "$APPHOST_SDK_REF_FILE"; then
+    echo "❌ Expected AppHost SDK reference not found in $APPHOST_SDK_REF_FILE:"
+    echo "   Expected: $EXPECTED_SDK_REF"
+    echo "   Actual SDK references in file:"
+    grep -E '(#:sdk|Sdk=)' "$APPHOST_SDK_REF_FILE" || true
+    exit 1
+fi
+echo "  ✓ AppHost references the pinned SDK ($EXPECTED_SDK_REF)"
 
 echo ""
 echo "→ aspire restore (against local stable feed for Aspire packages, nuget.org for everything else)"
@@ -239,4 +281,4 @@ echo "→ aspire restore (against local stable feed for Aspire packages, nuget.o
 (cd "$PROJECT_DIR" && run_aspire restore < /dev/null)
 
 echo ""
-echo "✅ Stabilization smoke passed: aspire new aspire-empty + restore both succeeded against stable packages."
+echo "✅ Stabilization smoke passed: aspire new aspire-empty + restore both succeeded against stable packages, with Aspire.AppHost.Sdk pinned to $APPHOST_SDK_VERSION."
