@@ -115,6 +115,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("ps --format json", false)]
     [InlineData("ps", true)]
+    [InlineData("docs", false)]
     public async Task BaseCommand_UpdateNotification_RespectJsonFormat(string args, bool expectNotifyCalled)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
