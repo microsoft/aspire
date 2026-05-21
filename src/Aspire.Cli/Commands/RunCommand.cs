@@ -551,7 +551,10 @@ internal sealed class RunCommand : BaseCommand
 
     private static void DisplayRecentAppHostStartupOutput(IInteractionService interactionService, OutputCollector? outputCollector)
     {
-        var outputLines = outputCollector?.GetLines().TakeLast(MaxDisplayedAppHostStartupOutputLines).ToArray();
+        var outputLines = outputCollector?.GetLines()
+            .Where(static line => line.Stream == OutputLineStream.StdErr)
+            .TakeLast(MaxDisplayedAppHostStartupOutputLines)
+            .ToArray();
         if (outputLines is null || outputLines.Length == 0)
         {
             return;
