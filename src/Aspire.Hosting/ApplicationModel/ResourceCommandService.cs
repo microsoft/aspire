@@ -158,8 +158,12 @@ public class ResourceCommandService
                 cancellationToken));
         }
 
-        // Check for failures and cancellations.
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+        return CreateAggregateResult(names, results);
+    }
+
+    private static ExecuteCommandResult CreateAggregateResult(string[] names, ExecuteCommandResult[] results)
+    {
         var failures = new List<(string resourceId, ExecuteCommandResult result)>();
         var cancellations = new List<(string resourceId, ExecuteCommandResult result)>();
         for (var i = 0; i < results.Length; i++)
@@ -203,6 +207,16 @@ public class ResourceCommandService
                 Message = errorMessage
             };
         }
+    }
+
+    private static ResourceCommandExecutionOptions CreateNonInteractiveOptions(IReadOnlyDictionary<string, string?>? argumentValues)
+    {
+        return new ResourceCommandExecutionOptions
+        {
+            ArgumentValues = argumentValues,
+            ArgumentsProvided = argumentValues is not null,
+            NonInteractive = true
+        };
     }
 
     internal (InteractionInputCollection Arguments, string? ErrorMessage) CreateCommandArguments(string resourceId, string commandName, IReadOnlyDictionary<string, string?>? argumentValues)
@@ -286,6 +300,34 @@ public class ResourceCommandService
         ArgumentNullException.ThrowIfNull(options);
 
         return await ExecuteCommandCoreAsync(resourceId, commandName, options, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal async Task<ExecuteCommandResult> ExecuteCommandAsync(IResource resource, string commandName, IReadOnlyDictionary<string, string?>? argumentValues, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        var names = resource.GetResolvedResourceNames();
+        if (names.Length == 1)
+        {
+            return await ExecuteCommandCoreAsync(
+                names[0],
+                commandName,
+                CreateNonInteractiveOptions(argumentValues),
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        var tasks = new List<Task<ExecuteCommandResult>>();
+        foreach (var name in names)
+        {
+            tasks.Add(ExecuteCommandCoreAsync(
+                name,
+                commandName,
+                CreateNonInteractiveOptions(argumentValues),
+                cancellationToken));
+        }
+
+        var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+        return CreateAggregateResult(names, results);
     }
 
     internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection arguments, bool argumentsProvided, bool nonInteractive, CancellationToken cancellationToken)

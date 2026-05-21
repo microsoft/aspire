@@ -690,12 +690,30 @@ await container.withHealthCheck("http");
 await container.withCommand("noop", "Noop", async () => {
     return { success: true };
 });
+await container.withCommand("echo", "Echo", async (ctx) => {
+    const commandArguments = await (await ctx.arguments()).toArray();
+
+    return { success: commandArguments[0]?.value === "hello" };
+}, {
+    commandOptions: {
+        arguments: [
+            {
+                name: "message",
+                inputType: InputType.Text,
+                required: true
+            }
+        ]
+    }
+});
 await container.withCommand("restart", "Restart", async (ctx) => {
     const serviceProvider = await ctx.serviceProvider();
     const commandService = await serviceProvider.getResourceCommandService();
     const cancellationToken = await ctx.cancellationToken();
 
-    return await commandService.executeCommandAsync("mycontainer", "noop", { cancellationToken });
+    return await commandService.executeCommandAsync(container, "echo", {
+        arguments: { message: "hello" },
+        cancellationToken
+    });
 });
 
 // withProcessCommand

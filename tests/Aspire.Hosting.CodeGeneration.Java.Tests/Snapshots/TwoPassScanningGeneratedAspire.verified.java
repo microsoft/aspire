@@ -1,4 +1,4 @@
-﻿// ===== AddContainerOptions.java =====
+// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -10763,6 +10763,33 @@ public class ExecutableResource extends ResourceBuilderBase {
 
 }
 
+// ===== ExecuteCommandAsyncOptions.java =====
+// ExecuteCommandAsyncOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for ExecuteCommandAsync. */
+public final class ExecuteCommandAsyncOptions {
+    private Map<String, String> arguments;
+    private CancellationToken cancellationToken;
+
+    public Map<String, String> getArguments() { return arguments; }
+    public ExecuteCommandAsyncOptions arguments(Map<String, String> value) {
+        this.arguments = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public ExecuteCommandAsyncOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
 // ===== ExecuteCommandContext.java =====
 // ExecuteCommandContext.java - GENERATED CODE - DO NOT EDIT
 
@@ -17296,16 +17323,46 @@ public class ResourceCommandService extends HandleWrapperBase {
         super(handle, client);
     }
 
-    public ExecuteCommandResult executeCommandAsync(String resourceId, String commandName) {
-        return executeCommandAsync(resourceId, commandName, null);
+    public ExecuteCommandResult executeCommandAsync(String resource, String commandName, ExecuteCommandAsyncOptions options) {
+        return executeCommandAsync(AspireUnion.of(resource), commandName, options);
+    }
+
+    public ExecuteCommandResult executeCommandAsync(String resource, String commandName) {
+        return executeCommandAsync(AspireUnion.of(resource), commandName);
+    }
+
+    public ExecuteCommandResult executeCommandAsync(IResource resource, String commandName, ExecuteCommandAsyncOptions options) {
+        return executeCommandAsync(AspireUnion.of(resource), commandName, options);
+    }
+
+    public ExecuteCommandResult executeCommandAsync(ResourceBuilderBase resource, String commandName, ExecuteCommandAsyncOptions options) {
+        return executeCommandAsync(new IResource(resource.getHandle(), resource.getClient()), commandName, options);
+    }
+
+    public ExecuteCommandResult executeCommandAsync(IResource resource, String commandName) {
+        return executeCommandAsync(AspireUnion.of(resource), commandName);
     }
 
     /** Executes a command for the specified resource. */
-    public ExecuteCommandResult executeCommandAsync(String resourceId, String commandName, CancellationToken cancellationToken) {
+    public ExecuteCommandResult executeCommandAsync(AspireUnion resource, String commandName, ExecuteCommandAsyncOptions options) {
+        var arguments = options == null ? null : options.getArguments();
+        var cancellationToken = options == null ? null : options.getCancellationToken();
+        return executeCommandAsyncImpl(resource, commandName, arguments, cancellationToken);
+    }
+
+    public ExecuteCommandResult executeCommandAsync(AspireUnion resource, String commandName) {
+        return executeCommandAsync(resource, commandName, null);
+    }
+
+    /** Executes a command for the specified resource. */
+    private ExecuteCommandResult executeCommandAsyncImpl(AspireUnion resource, String commandName, Map<String, String> arguments, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resourceCommandService", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("resourceId", AspireClient.serializeValue(resourceId));
+        reqArgs.put("resource", AspireClient.serializeValue(resource));
         reqArgs.put("commandName", AspireClient.serializeValue(commandName));
+        if (arguments != null) {
+            reqArgs.put("arguments", AspireClient.serializeValue(arguments));
+        }
         if (cancellationToken != null) {
             reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
         }
@@ -24713,6 +24770,7 @@ public final class WithVolumeOptions {
 .modules/EnvironmentEditor.java
 .modules/EventingSubscriberRegistrationContext.java
 .modules/ExecutableResource.java
+.modules/ExecuteCommandAsyncOptions.java
 .modules/ExecuteCommandContext.java
 .modules/ExecuteCommandResult.java
 .modules/ExternalServiceResource.java

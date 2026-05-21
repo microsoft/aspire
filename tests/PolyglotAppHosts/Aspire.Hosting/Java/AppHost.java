@@ -223,11 +223,28 @@ void main() throws Exception {
             result.setSuccess(true);
             return result;
         });
+        var echoCommandOptions = new CommandOptions();
+        var messageArgument = new InteractionInput();
+        messageArgument.setName("message");
+        messageArgument.setInputType(InputType.TEXT);
+        messageArgument.setRequired(true);
+        echoCommandOptions.setArguments(new InteractionInput[] { messageArgument });
+        container.withCommand("echo", "Echo", (ctx) -> {
+            var commandArguments = ctx.arguments().toArray();
+            var result = new ExecuteCommandResult();
+            result.setSuccess("hello".equals(commandArguments[0].getValue()));
+            return result;
+        }, echoCommandOptions);
         container.withCommand("restart", "Restart", (ctx) -> {
             var serviceProvider = ctx.serviceProvider();
             var commandService = serviceProvider.getResourceCommandService();
             var cancellationToken = ctx.cancellationToken();
-            return commandService.executeCommandAsync("mycontainer", "noop", cancellationToken);
+            return commandService.executeCommandAsync(
+                container,
+                "echo",
+                new ExecuteCommandAsyncOptions()
+                    .arguments(Map.of("message", "hello"))
+                    .cancellationToken(cancellationToken));
         });
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();

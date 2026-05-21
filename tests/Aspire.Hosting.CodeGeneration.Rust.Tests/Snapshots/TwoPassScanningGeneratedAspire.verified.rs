@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -13884,11 +13884,14 @@ impl ResourceCommandService {
     }
 
     /// Executes a command for the specified resource.
-    pub fn execute_command_async(&self, resource_id: &str, command_name: &str, cancellation_token: Option<&CancellationToken>) -> Result<ExecuteCommandResult, Box<dyn std::error::Error>> {
+    pub fn execute_command_async(&self, resource: Value, command_name: &str, arguments: Option<HashMap<String, String>>, cancellation_token: Option<&CancellationToken>) -> Result<ExecuteCommandResult, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resourceCommandService".to_string(), self.handle.to_json());
-        args.insert("resourceId".to_string(), serde_json::to_value(&resource_id).unwrap_or(Value::Null));
+        args.insert("resource".to_string(), serde_json::to_value(&resource).unwrap_or(Value::Null));
         args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        if let Some(ref v) = arguments {
+            args.insert("arguments".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(token) = cancellation_token {
             let token_id = register_cancellation(token, self.client.clone());
             args.insert("cancellationToken".to_string(), Value::String(token_id));

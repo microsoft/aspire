@@ -1,4 +1,4 @@
-﻿// aspire.go - Capability-based Aspire SDK
+// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -19562,7 +19562,7 @@ func (s *reportingTask) UpdateTaskMarkdown(markdownString string, options ...*Up
 // ResourceCommandService is the public interface for handle type ResourceCommandService.
 type ResourceCommandService interface {
 	handleReference
-	ExecuteCommandAsync(resourceId string, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error)
+	ExecuteCommandAsync(resource any, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error)
 	Err() error
 }
 
@@ -19577,13 +19577,21 @@ func newResourceCommandServiceFromHandle(h *handle, c *client) ResourceCommandSe
 }
 
 // ExecuteCommandAsync executes a command for the specified resource.
-func (s *resourceCommandService) ExecuteCommandAsync(resourceId string, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error) {
+// Allowed types for parameter resource: string, Resource.
+func (s *resourceCommandService) ExecuteCommandAsync(resource any, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error) {
 	if s.err != nil { var zero *ExecuteCommandResult; return zero, s.err }
+	switch resource.(type) {
+	case string, Resource:
+	default:
+		err := fmt.Errorf("aspire: ExecuteCommandAsync: parameter %q must be one of [string, Resource], got %T", "resource", resource)
+		var zero *ExecuteCommandResult
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resourceCommandService": s.handle.ToJSON(),
 	}
-	reqArgs["resourceId"] = serializeValue(resourceId)
+	if resource != nil { reqArgs["resource"] = serializeValue(resource) }
 	reqArgs["commandName"] = serializeValue(commandName)
 	if len(options) > 0 {
 		merged := &ExecuteCommandAsyncOptions{}
@@ -25799,12 +25807,14 @@ func (o *CompleteTaskMarkdownOptions) ToMap() map[string]any {
 
 // ExecuteCommandAsyncOptions carries optional parameters for ExecuteCommandAsync.
 type ExecuteCommandAsyncOptions struct {
+	Arguments map[string]string `json:"arguments,omitempty"`
 	CancellationToken *CancellationToken `json:"-"`
 }
 
 func (o *ExecuteCommandAsyncOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
+	if o.Arguments != nil { m["arguments"] = serializeValue(o.Arguments) }
 	return m
 }
 
