@@ -567,7 +567,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DoctorCommand_Json_IncludesDiscoveredInstallations()
+    public async Task DoctorCommand_Json_IncludesDiscoveredInstallations_WhenMultipleInstallationsFound()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var doc = await RunDoctorJsonAsync(workspace,
@@ -617,6 +617,31 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("pr", peer.GetProperty("source").GetString());
         Assert.False(peer.TryGetProperty("route", out _));
         Assert.Equal(InstallationPathStatus.Shadowed, peer.GetProperty("pathStatus").GetString());
+    }
+
+    [Fact]
+    public async Task DoctorCommand_Json_OmitsDiscoveredInstallations_WhenOnlyOneInstallationFound()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var doc = await RunDoctorJsonAsync(workspace,
+            configureOptions: options =>
+            {
+                options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+            },
+            configureServices: services => UseFakeInstallationDiscovery(
+                services,
+                self: new InstallationInfo
+                {
+                    Path = "/home/test/.aspire/bin/aspire",
+                    CanonicalPath = "/home/test/.aspire/bin/aspire",
+                    Version = "13.0.0",
+                    Channel = "stable",
+                    Source = "script",
+                    PathStatus = InstallationPathStatus.Active,
+                    Status = InstallationInfoStatus.Ok,
+                }));
+
+        Assert.False(doc.RootElement.TryGetProperty("installations", out _));
     }
 
     [Fact]
@@ -844,7 +869,20 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 Source = "script",
                 PathStatus = "custom[red]status[/]",
                 Status = InstallationInfoStatus.Ok,
-            });
+            },
+            others:
+            [
+                new InstallationInfo
+                {
+                    Path = "/peer/aspire",
+                    CanonicalPath = "/peer/aspire",
+                    Version = "13.1.0-preview",
+                    Channel = "pr-1234",
+                    Source = "pr",
+                    PathStatus = InstallationPathStatus.Shadowed,
+                    Status = InstallationInfoStatus.Ok,
+                },
+            ]);
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
@@ -855,6 +893,40 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         var rendered = output.ToString();
         Assert.Contains("custom[red]status[/]", rendered, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DoctorCommand_HumanReadable_OmitsInstallationsTable_WhenOnlyOneInstallationFound()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Interactive = InteractionSupport.No,
+            Out = new AnsiConsoleOutput(output),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
+        });
+        console.Profile.Width = int.MaxValue;
+
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+        });
+        services.RemoveAll<IAnsiConsole>();
+        services.AddSingleton<IAnsiConsole>(console);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("doctor");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var rendered = output.ToString();
+        Assert.Contains("Summary:", rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain("Aspire CLI Installations", rendered, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -922,9 +994,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 discoverAllException: new IOException("PATH lookup failed")));
 
         Assert.NotEmpty(doc.RootElement.GetProperty("checks").EnumerateArray());
-        var row = Assert.Single(doc.RootElement.GetProperty("installations").EnumerateArray());
-        Assert.Equal(InstallationInfoStatus.Failed, row.GetProperty("status").GetString());
-        Assert.Equal("Install discovery failed. See the Aspire CLI logs for details.", row.GetProperty("statusReason").GetString());
+        Assert.False(doc.RootElement.TryGetProperty("installations", out _));
     }
 
     [Theory]

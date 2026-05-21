@@ -73,7 +73,7 @@ internal sealed class DoctorCommand : BaseCommand
             var self = InstallationInfoOutput.DescribeSelfSafely(_installationDiscovery, _logger);
             if (format == OutputFormat.Json)
             {
-                OutputJson([], self);
+                OutputJson([], self, includeSingleInstallation: true);
             }
             else
             {
@@ -104,7 +104,7 @@ internal sealed class DoctorCommand : BaseCommand
         return CommandResult.FromExitCode(hasFailures ? CliExitCodes.InvalidCommand : CliExitCodes.Success);
     }
 
-    private void OutputJson(IReadOnlyList<EnvironmentCheckResult> results, IReadOnlyList<InstallationInfo> installations)
+    private void OutputJson(IReadOnlyList<EnvironmentCheckResult> results, IReadOnlyList<InstallationInfo> installations, bool includeSingleInstallation = false)
     {
         var passed = results.Count(r => r.Status == EnvironmentCheckStatus.Pass);
         var warnings = results.Count(r => r.Status == EnvironmentCheckStatus.Warning);
@@ -119,7 +119,7 @@ internal sealed class DoctorCommand : BaseCommand
                 Warnings = warnings,
                 Failed = failed
             },
-            Installations = installations.ToList()
+            Installations = installations.Count > 1 || includeSingleInstallation ? installations.ToList() : null
         };
 
         var json = System.Text.Json.JsonSerializer.Serialize(response, JsonSourceGenerationContext.RelaxedEscaping.DoctorCheckResponse);
@@ -167,7 +167,10 @@ internal sealed class DoctorCommand : BaseCommand
             _ansiConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DetailedPrerequisitesLink, MarkupHelpers.SafeLink(InteractionService, prerequisitesUrl)));
         }
 
-        InstallationInfoOutput.OutputTable(_ansiConsole, installations);
+        if (installations.Count > 1)
+        {
+            InstallationInfoOutput.OutputTable(_ansiConsole, installations);
+        }
     }
 
     private void OutputCheckResult(EnvironmentCheckResult result)
