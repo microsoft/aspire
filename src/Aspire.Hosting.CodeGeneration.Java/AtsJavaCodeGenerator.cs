@@ -1561,8 +1561,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
         else if (returnInfo.HasReturn)
         {
-            var invocation = $"getClient().invokeCapability(\"{capability.CapabilityId}\", reqArgs)";
-            WriteLine($"        return {RenderJavaTransportValueConversion(capability.ReturnType, invocation, capability.ReturnType?.IsNullable == true)};");
+            WriteLine($"        var result = getClient().invokeCapability(\"{capability.CapabilityId}\", reqArgs);");
+            WriteLine($"        return {RenderJavaTransportValueConversion(capability.ReturnType, "result", capability.ReturnType?.IsNullable == true)};");
         }
         else
         {
