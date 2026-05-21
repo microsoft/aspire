@@ -624,8 +624,8 @@ internal sealed class RunCommand : BaseCommand
         var completedTask = await Task.WhenAny(startupOperation, pendingRun).ConfigureAwait(false);
         if (completedTask == pendingRun)
         {
+            ObserveFaults(startupOperation);
             await operationCts.CancelAsync().ConfigureAwait(false);
-            ObserveStartupOperationFault(startupOperation);
             throw new AppHostExitedDuringStartupException(await pendingRun.ConfigureAwait(false));
         }
 
@@ -652,15 +652,9 @@ internal sealed class RunCommand : BaseCommand
         }
     }
 
-    private static void ObserveStartupOperationFault(Task startupOperation)
+    private static void ObserveFaults(Task task)
     {
-        if (startupOperation.IsFaulted)
-        {
-            _ = startupOperation.Exception;
-            return;
-        }
-
-        _ = startupOperation.ContinueWith(
+        _ = task.ContinueWith(
             static completedTask => _ = completedTask.Exception,
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
