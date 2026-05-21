@@ -220,7 +220,7 @@ internal static class CliPathHelper
     /// <see cref="CleanupStaleCliSockets(string, TimeSpan, TimeProvider)"/>.
     /// </summary>
     /// <remarks>
-    /// Unlike <see cref="BackchannelConstants.CleanupOrphanedSockets(string, string, int)"/>,
+    /// Unlike <see cref="BackchannelConstants.CleanupOrphanedSockets"/>,
     /// CLI sockets don't encode the process ID in their filename — they're created with a random
     /// GUID-style suffix — so the only reliable signal we have for "this is stale" is the file's
     /// mtime. We pick a generous default threshold so an in-flight long-running run never has its

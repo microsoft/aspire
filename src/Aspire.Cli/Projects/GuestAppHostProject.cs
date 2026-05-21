@@ -1633,7 +1633,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 cliVersion,
                 configuredSdkVersion);
             _interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{Markup.Escape(message)}[/]", allowMarkup: true);
-            _logger.LogDebug("Aspire CLI/SDK version skew detected (CLI={CliVersion}, SDK={SdkVersion})", cliVersion, configuredSdkVersion);
         }
         catch (Exception ex)
         {
@@ -1647,6 +1646,15 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// (build suffixes, +commit hashes) and only flag a skew when the parsed major/minor/patch
     /// numbers disagree.
     /// </summary>
+    /// <summary>
+    /// Returns <see langword="true"/> when the supplied CLI and SDK versions differ in a way that
+    /// is known to produce ABI incompatibilities — specifically when they differ in
+    /// <see cref="SemVersion.Major"/>, <see cref="SemVersion.Minor"/>, <see cref="SemVersion.Patch"/>,
+    /// or in their prerelease identifiers (e.g. <c>13.4.0-preview.1.26218.1</c> vs
+    /// <c>13.4.0-preview.1.26227.1</c>, which was the exact reproduction case in
+    /// <see href="https://github.com/microsoft/aspire/issues/16709"/>). Build metadata
+    /// (everything after <c>+</c>) is ignored per the SemVer spec.
+    /// </summary>
     internal static bool IsKnownIncompatibleSkew(string cliVersion, string sdkVersion)
     {
         if (!SemVersion.TryParse(NormalizeVersion(cliVersion), SemVersionStyles.Any, out var cli) ||
@@ -1655,7 +1663,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return !string.Equals(cliVersion, sdkVersion, StringComparison.OrdinalIgnoreCase);
         }
 
-        return cli.Major != sdk.Major || cli.Minor != sdk.Minor || cli.Patch != sdk.Patch;
+        // Compare full precedence, which covers Major/Minor/Patch *and* prerelease identifiers
+        // but (per the SemVer spec) ignores build metadata. NormalizeVersion already strips '+'
+        // suffixes defensively for parsers that include them in precedence.
+        return SemVersion.ComparePrecedence(cli, sdk) != 0;
     }
 
     internal static string NormalizeVersion(string version)
@@ -1702,30 +1713,24 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var diagnostic = exception.Diagnostic;
         if (!string.IsNullOrWhiteSpace(diagnostic.OriginalExceptionType))
         {
-            _interactionService.DisplayMessage(KnownEmojis.Microscope, $"[grey]  Exception: {Markup.Escape(diagnostic.OriginalExceptionType)}[/]", allowMarkup: true);
+            _interactionService.DisplayPlainText($"   Exception: {diagnostic.OriginalExceptionType}");
         }
         if (!string.IsNullOrWhiteSpace(diagnostic.TypeName))
         {
-            _interactionService.DisplayMessage(KnownEmojis.Microscope, $"[grey]  Type: {Markup.Escape(diagnostic.TypeName!)}[/]", allowMarkup: true);
+            _interactionService.DisplayPlainText($"   Type: {diagnostic.TypeName}");
         }
         if (!string.IsNullOrWhiteSpace(diagnostic.MemberName))
         {
-            _interactionService.DisplayMessage(KnownEmojis.Microscope, $"[grey]  Member: {Markup.Escape(diagnostic.MemberName!)}[/]", allowMarkup: true);
+            _interactionService.DisplayPlainText($"   Member: {diagnostic.MemberName}");
         }
         if (!string.IsNullOrWhiteSpace(diagnostic.RuntimeAspireHostingVersion))
         {
-            _interactionService.DisplayMessage(
-                KnownEmojis.Microscope,
-                $"[grey]  Runtime Aspire.Hosting: {Markup.Escape(diagnostic.RuntimeAspireHostingVersion!)}[/]",
-                allowMarkup: true);
+            _interactionService.DisplayPlainText($"   Runtime Aspire.Hosting: {diagnostic.RuntimeAspireHostingVersion}");
         }
         foreach (var assembly in diagnostic.LoadedAssemblies)
         {
             var version = assembly.InformationalVersion ?? "<unknown>";
-            _interactionService.DisplayMessage(
-                KnownEmojis.Microscope,
-                $"[grey]  • {Markup.Escape(assembly.Name)} {Markup.Escape(version)}[/]",
-                allowMarkup: true);
+            _interactionService.DisplayPlainText($"   • {assembly.Name} {version}");
         }
     }
 

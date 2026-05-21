@@ -225,7 +225,10 @@ internal static class CodeGenerationDiagnosticBuilder
         string? runtimePath = null;
         var loaded = new List<CodeGenerationLoadedAssemblyInfo>();
 
-        var runtimeAspireHosting = typeof(global::Aspire.Hosting.RemoteHost.AssemblyLoader).Assembly;
+        // Locate the actually-loaded Aspire.Hosting assembly (the runtime that backed the failing
+        // codegen). We avoid `typeof(Aspire.Hosting.X).Assembly` because Aspire.Hosting.RemoteHost
+        // does not reference Aspire.Hosting; if for any reason it isn't in AppDomain.Assemblies we
+        // leave the version null rather than substituting a sibling like Aspire.Hosting.RemoteHost.
         var aspireHostingAssembly = AppDomain.CurrentDomain
             .GetAssemblies()
             .FirstOrDefault(a => string.Equals(a.GetName().Name, "Aspire.Hosting", StringComparison.OrdinalIgnoreCase));
@@ -234,11 +237,6 @@ internal static class CodeGenerationDiagnosticBuilder
         {
             runtimeVersion = GetInformationalVersion(aspireHostingAssembly);
             runtimePath = TryGetLocation(aspireHostingAssembly);
-        }
-        else if (runtimeAspireHosting is not null)
-        {
-            runtimeVersion = GetInformationalVersion(runtimeAspireHosting);
-            runtimePath = TryGetLocation(runtimeAspireHosting);
         }
 
         if (assemblyLoader is null)

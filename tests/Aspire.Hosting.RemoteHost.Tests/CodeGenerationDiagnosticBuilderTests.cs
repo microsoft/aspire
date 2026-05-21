@@ -108,4 +108,24 @@ public class CodeGenerationDiagnosticBuilderTests
 
         Assert.False(string.IsNullOrWhiteSpace(diagnostic.RuntimeAspireHostingVersion));
     }
+
+    [Fact]
+    public void BuildDiagnostic_RuntimeAspireHostingVersion_DoesNotFallBackToRemoteHostAssembly()
+    {
+        _ = typeof(global::Aspire.Hosting.DistributedApplication);
+
+        var diagnostic = CodeGenerationDiagnosticBuilder.BuildDiagnostic(
+            new TypeLoadException(),
+            assemblyLoader: null);
+
+        var aspireHosting = AppDomain.CurrentDomain.GetAssemblies()
+            .First(a => string.Equals(a.GetName().Name, "Aspire.Hosting", StringComparison.OrdinalIgnoreCase));
+        var aspireHostingVersion = aspireHosting
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+            ?? aspireHosting.GetName().Version?.ToString();
+
+        // Guards #16709 finding #3: prior code fell back to typeof(AssemblyLoader).Assembly which is
+        // Aspire.Hosting.RemoteHost - a sibling, not the runtime that backed the failing codegen.
+        Assert.Equal(aspireHostingVersion, diagnostic.RuntimeAspireHostingVersion);
+    }
 }
