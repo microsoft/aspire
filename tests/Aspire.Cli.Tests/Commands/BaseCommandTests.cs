@@ -112,6 +112,33 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, testInteractionService.DisplayEmptyLineCount);
     }
 
+    [Theory]
+    [InlineData("ps --format json", false)]
+    [InlineData("ps", true)]
+    public async Task BaseCommand_UpdateNotification_RespectJsonFormat(string args, bool expectNotifyCalled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var testNotifier = new TestCliUpdateNotifier
+        {
+            IsUpdateAvailableCallback = () => true,
+            NotifyIfUpdateAvailableCallback = () => testInteractionService.DisplayVersionUpdateNotification("13.3.0-preview.1", "aspire update")
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(args);
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(expectNotifyCalled, testNotifier.NotifyWasCalled);
+    }
+
     [Fact]
     public async Task BaseCommand_OnFailure_DisplaysLogFilePathOnStderr()
     {
