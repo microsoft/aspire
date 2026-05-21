@@ -3,6 +3,7 @@
 
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 
 /// <summary>
 /// Provides helper methods for looking up executables on the system PATH.
@@ -162,7 +163,7 @@ internal static class PathLookupHelper
         }
     }
 
-    private static bool TryCombine(string directory, string fileName, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? path)
+    private static bool TryCombine(string directory, string fileName, [NotNullWhen(true)] out string? path)
     {
         try
         {
@@ -192,7 +193,7 @@ internal static class PathLookupHelper
         }
     }
 
-    private static bool TryResolveExistingPath(Func<string, bool> fileExists, string path, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? existingPath)
+    private static bool TryResolveExistingPath(Func<string, bool> fileExists, string path, [NotNullWhen(true)] out string? existingPath)
     {
         existingPath = null;
         if (!FileExistsSafe(fileExists, path))
@@ -207,7 +208,7 @@ internal static class PathLookupHelper
         return true;
     }
 
-    private static bool TryGetActualPathCasing(string path, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? actualPath)
+    private static bool TryGetActualPathCasing(string path, [NotNullWhen(true)] out string? actualPath)
     {
         actualPath = null;
         if (!OperatingSystem.IsWindows())
