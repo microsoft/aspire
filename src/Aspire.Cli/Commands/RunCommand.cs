@@ -606,7 +606,7 @@ internal sealed class RunCommand : BaseCommand
 
         if (completedTask == pendingRun)
         {
-            return await pendingRun.ConfigureAwait(false);
+            return await GetAppHostStartupExitCodeAsync(pendingRun).ConfigureAwait(false);
         }
 
         return null;
@@ -626,7 +626,7 @@ internal sealed class RunCommand : BaseCommand
         {
             ObserveFaults(startupOperation);
             await operationCts.CancelAsync().ConfigureAwait(false);
-            throw new AppHostExitedDuringStartupException(await pendingRun.ConfigureAwait(false));
+            throw new AppHostExitedDuringStartupException(await GetAppHostStartupExitCodeAsync(pendingRun).ConfigureAwait(false));
         }
 
         try
@@ -685,15 +685,27 @@ internal sealed class RunCommand : BaseCommand
     {
         if (pendingRun.IsCompleted)
         {
-            throw new AppHostExitedDuringStartupException(await pendingRun.ConfigureAwait(false));
+            throw new AppHostExitedDuringStartupException(await GetAppHostStartupExitCodeAsync(pendingRun).ConfigureAwait(false));
         }
 
         interactionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.AppHostConnectionLostWaitingForExit);
-        var exitCode = await pendingRun.WaitAsync(cancellationToken).ConfigureAwait(false);
+        var exitCode = await GetAppHostStartupExitCodeAsync(pendingRun.WaitAsync(cancellationToken)).ConfigureAwait(false);
         throw new AppHostExitedDuringStartupException(exitCode);
     }
 
-    private sealed class AppHostExitedDuringStartupException(int exitCode) : Exception
+    private static async Task<int> GetAppHostStartupExitCodeAsync(Task<int> pendingRun)
+    {
+        try
+        {
+            return await pendingRun.ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            throw new AppHostExitedDuringStartupException(CliExitCodes.FailedToDotnetRunAppHost, ex);
+        }
+    }
+
+    private sealed class AppHostExitedDuringStartupException(int exitCode, Exception? innerException = null) : Exception("The AppHost exited during startup.", innerException)
     {
         public int ExitCode { get; } = exitCode;
     }
