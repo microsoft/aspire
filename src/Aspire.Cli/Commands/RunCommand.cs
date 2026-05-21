@@ -190,6 +190,8 @@ internal sealed class RunCommand : BaseCommand
 
         AppHostProjectContext? context = null;
         Activity? runActivity = null;
+        Task? pendingLogCapture = null;
+        CancellationTokenSource? logCaptureCancellationSource = null;
 
         try
         {
@@ -317,7 +319,8 @@ internal sealed class RunCommand : BaseCommand
             }
 
             // Set up log capture - writes to unified CLI log file
-            var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, cancellationToken);
+            logCaptureCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, logCaptureCancellationSource.Token);
 
             // Get dashboard URLs
             DashboardUrlsState dashboardUrls;
@@ -459,9 +462,11 @@ internal sealed class RunCommand : BaseCommand
                 try
                 {
                     await pendingLogCapture;
+                    pendingLogCapture = null;
                 }
                 catch (Exception ex)
                 {
+                    pendingLogCapture = null;
                     _logger.LogWarning(ex, "Failed to capture logs from AppHost");
                     InteractionService.DisplayMessage(KnownEmojis.Warning, "No longer receiving logs from AppHost.");
                 }
@@ -543,6 +548,13 @@ internal sealed class RunCommand : BaseCommand
         }
         finally
         {
+            if (pendingLogCapture is not null)
+            {
+                logCaptureCancellationSource?.Cancel();
+                await ObserveAppHostLogCaptureShutdownAsync(pendingLogCapture).ConfigureAwait(false);
+            }
+
+            logCaptureCancellationSource?.Dispose();
             runActivity?.Dispose();
         }
     }
@@ -562,6 +574,21 @@ internal sealed class RunCommand : BaseCommand
 
         interactionService.DisplayMessage(KnownEmojis.Information, $"{RunCommandStrings.RecentAppHostStartupOutput}:");
         interactionService.DisplayLines(outputLines);
+    }
+
+    private async Task ObserveAppHostLogCaptureShutdownAsync(Task pendingLogCapture)
+    {
+        try
+        {
+            await pendingLogCapture.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "AppHost log capture ended while the run command was exiting early.");
+        }
     }
 
     private static CommandResult CreateRunExitResult(int exitCode)
@@ -608,6 +635,7 @@ internal sealed class RunCommand : BaseCommand
         if (completedTask == pendingRun)
         {
             await operationCts.CancelAsync().ConfigureAwait(false);
+            ObserveStartupOperationFault(operationTask);
             throw new AppHostExitedDuringStartupException(await pendingRun.ConfigureAwait(false));
         }
 
@@ -620,6 +648,21 @@ internal sealed class RunCommand : BaseCommand
             await ThrowIfAppHostExitedAfterStartupOperationFailureAsync(pendingRun, cancellationToken).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private static void ObserveStartupOperationFault(Task operationTask)
+    {
+        if (operationTask.IsFaulted)
+        {
+            _ = operationTask.Exception;
+            return;
+        }
+
+        _ = operationTask.ContinueWith(
+            static completedTask => _ = completedTask.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
     }
 
     private static async Task WaitForStartupOperationOrAppHostExitAsync(
