@@ -894,7 +894,7 @@ class AspireClient:
         Results are automatically wrapped in Handle objects when applicable.
         '''
         self._check_connection()
-        result = self._send_request("invokeCapability", capability_id, args or {})
+        result = self._send_request("invokeCapability", capability_id, self._marshal_transport_value(args or {}))
 
         # Check for structured error response
         if _is_ats_error(result):
@@ -904,6 +904,15 @@ class AspireClient:
 
         # Wrap handles automatically
         return _wrap_if_handle(result, self, kwargs)
+
+    def _marshal_transport_value(self, value: typing.Any) -> typing.Any:
+        if callable(value):
+            return self.register_callback(value)
+        if isinstance(value, dict):
+            return {key: self._marshal_transport_value(nested_value) for key, nested_value in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self._marshal_transport_value(item) for item in value]
+        return value
 
     def _send_request(self, method: str, *params: typing.Any) -> typing.Any:
         '''Send a JSON-RPC request and wait for response'''
@@ -1507,6 +1516,8 @@ DistributedApplicationOperation = typing.Literal["Run", "Publish"]
 
 EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled"]
 
+HealthStatus = typing.Literal["Unhealthy", "Degraded", "Healthy"]
+
 HttpCommandResultMode = typing.Literal["None", "Auto", "Json", "Text"]
 
 IconVariant = typing.Literal["Regular", "Filled"]
@@ -1896,6 +1907,13 @@ class TestNestedDto(typing.TypedDict, total=False):
     Config: TestConfigDto
     Tags: typing.Iterable[str]
     Counts: typing.Mapping[str, int]
+
+class UpdateCommandStateResourceSnapshot(typing.TypedDict, total=False):
+    ResourceType: str
+    State: str | None
+    StateStyle: str | None
+    HealthStatus: HealthStatus | None
+    ExitCode: int | None
 
 
 # ============================================================================
@@ -4693,15 +4711,6 @@ class ExecuteCommandContext:
         return self._handle
 
     @_cached_property
-    def service_provider(self) -> AbstractServiceProvider:
-        """The service provider."""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider',
-            {'context': self._handle}
-        )
-        return typing.cast(AbstractServiceProvider, result)
-
-    @_cached_property
     def resource_name(self) -> str:
         """The resource name."""
         result = self._client.invoke_capability(
@@ -6102,13 +6111,13 @@ class UpdateCommandStateContext:
         return self._handle
 
     @_cached_property
-    def service_provider(self) -> AbstractServiceProvider:
-        """The service provider."""
+    def resource_snapshot(self) -> UpdateCommandStateResourceSnapshot:
+        """Gets the resource snapshot data available to polyglot command state callbacks."""
         result = self._client.invoke_capability(
-            'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider',
+            'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot',
             {'context': self._handle}
         )
-        return typing.cast(AbstractServiceProvider, result)
+        return typing.cast(UpdateCommandStateResourceSnapshot, result)
 
 
 # ============================================================================

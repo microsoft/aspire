@@ -6,10 +6,12 @@ import {
     createBuilder,
     CertificateTrustScope,
     EndpointProperty,
+    HealthStatus,
     IconVariant,
     InputType,
     OtlpProtocol,
     ProbeType,
+    ResourceCommandState,
     refExpr,
 } from './.modules/aspire.js';
 import type { DockerfileBuilderCallbackContext } from './.modules/aspire.js';
@@ -425,6 +427,7 @@ const _configExists: boolean = await builderConfiguration.exists("MyConfig:Key")
 const builderExecutionContext = await builder.executionContext();
 const executionContextServiceProvider = await builderExecutionContext.serviceProvider();
 const _distributedApplicationModelFromExecutionContext = await executionContextServiceProvider.getDistributedApplicationModel();
+const resourceCommandService = await executionContextServiceProvider.getResourceCommandService();
 
 await builder.addEventingSubscriber(async (registrationContext) => {
     const subscriberExecutionContext = await registrationContext.executionContext();
@@ -689,6 +692,16 @@ await container.withHealthCheck("http");
 // withCommand
 await container.withCommand("noop", "Noop", async () => {
     return { success: true };
+}, {
+    commandOptions: {
+        updateState: async (ctx) => {
+            const snapshot = await ctx.resourceSnapshot();
+
+            return snapshot.healthStatus === HealthStatus.Healthy
+                ? ResourceCommandState.Enabled
+                : ResourceCommandState.Disabled;
+        },
+    },
 });
 await container.withCommand("echo", "Echo", async (ctx) => {
     const commandArguments = await (await ctx.arguments()).toArray();
@@ -706,11 +719,9 @@ await container.withCommand("echo", "Echo", async (ctx) => {
     }
 });
 await container.withCommand("restart", "Restart", async (ctx) => {
-    const serviceProvider = await ctx.serviceProvider();
-    const commandService = await serviceProvider.getResourceCommandService();
     const cancellationToken = await ctx.cancellationToken();
 
-    return await commandService.executeCommandAsync(container, "echo", {
+    return await resourceCommandService.executeCommandAsync(container, "echo", {
         arguments: { message: "hello" },
         cancellationToken
     });
