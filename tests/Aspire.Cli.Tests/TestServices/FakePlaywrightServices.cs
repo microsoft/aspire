@@ -50,14 +50,26 @@ internal sealed class FakeNpmProvenanceChecker : INpmProvenanceChecker
 internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 {
     private readonly DirectoryInfo _bundleDirectory;
+    private readonly AspireSkillsInstallResult? _result;
 
     public FakeAspireSkillsInstaller(CliExecutionContext executionContext)
+        : this(executionContext, result: null)
+    {
+    }
+
+    public FakeAspireSkillsInstaller(CliExecutionContext executionContext, AspireSkillsInstallResult? result)
     {
         _bundleDirectory = new DirectoryInfo(Path.Combine(executionContext.WorkingDirectory.FullName, ".fake-aspire-skills-bundle"));
+        _result = result;
     }
 
     public async Task<AspireSkillsInstallResult> InstallAsync(CancellationToken cancellationToken)
     {
+        if (_result is not null)
+        {
+            return _result;
+        }
+
         await EnsureBundleAsync(cancellationToken);
         var bundle = await AspireSkillsBundle.LoadAsync(_bundleDirectory, cancellationToken);
         return AspireSkillsInstallResult.Installed(bundle);

@@ -3,7 +3,9 @@
 
 using System.Globalization;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -217,6 +219,65 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(aspireifySkillPath), $"Expected skill file at {aspireifySkillPath}");
         var deploymentSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
         Assert.True(File.Exists(deploymentSkillPath), $"Expected skill file at {deploymentSkillPath}");
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_NonInteractive_WithUnavailableAspireSkillsBundle_Fails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string installFailureMessage = "Aspire skills bundle is unavailable.";
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
+                serviceProvider.GetRequiredService<CliExecutionContext>(),
+                AspireSkillsInstallResult.Failed(installFailureMessage));
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations all");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Contains(installFailureMessage, interactionService.DisplayedErrors);
+        Assert.Empty(interactionService.DisplayedSuccess);
+    }
+
+    [Fact]
+    public async Task PromptAndChainAsync_WithUnavailableAspireSkillsBundle_SucceedsWithoutSelectedAspireSkills()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string installFailureMessage = "Aspire skills bundle is unavailable.";
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
+                serviceProvider.GetRequiredService<CliExecutionContext>(),
+                AspireSkillsInstallResult.Failed(installFailureMessage));
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AgentInitCommand>();
+
+        var result = await command.PromptAndChainAsync(
+            interactionService,
+            CliExitCodes.Success,
+            workspace.WorkspaceRoot,
+            PromptBinding.CreateDefault(true),
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.DoesNotContain(result.SelectedSkills, static skill => skill.SourceKind is SkillSourceKind.AspireSkillsBundle);
+        Assert.Contains(
+            interactionService.DisplayedMessages,
+            message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == installFailureMessage);
+        Assert.Contains(McpCommandStrings.InitCommand_ConfigurationComplete, interactionService.DisplayedSuccess);
     }
 
     [Fact]
