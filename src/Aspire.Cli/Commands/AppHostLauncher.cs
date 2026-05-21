@@ -163,9 +163,9 @@ internal sealed class AppHostLauncher(
         LaunchResult launchResult;
         try
         {
-            launchResult = await interactionService.ShowStatusAsync(
+            launchResult = await interactionService.ShowDynamicStatusAsync(
                 RunCommandStrings.StartingAppHostInBackground,
-                () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, cancellationToken));
+                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, updateStatus, cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -323,6 +323,7 @@ internal sealed class AppHostLauncher(
         List<string> childArgs,
         string expectedHash,
         string? legacyHash,
+        Action<string> updateStatus,
         CancellationToken cancellationToken)
     {
         Process childProcess;
@@ -425,7 +426,9 @@ internal sealed class AppHostLauncher(
                                 return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
                             }
 
-                            break;
+                            updateStatus(RunCommandStrings.AppHostConnectionLostWaitingForExit);
+                            await childProcess.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                            return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
                         }
 
                         if (appHostReady is null)
