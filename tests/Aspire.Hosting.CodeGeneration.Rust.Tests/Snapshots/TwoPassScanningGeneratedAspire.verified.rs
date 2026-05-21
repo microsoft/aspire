@@ -8449,15 +8449,6 @@ impl ExecuteCommandContext {
         &self.client
     }
 
-    /// Gets the ServiceProvider property
-    pub fn service_provider(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IServiceProvider::new(handle, self.client.clone()))
-    }
-
     /// Gets the ResourceName property
     pub fn resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -18141,15 +18132,6 @@ impl UpdateCommandStateContext {
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot", args)?;
         Ok(serde_json::from_value(result)?)
-    }
-
-    /// Gets the ServiceProvider property
-    pub fn service_provider(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 }
 

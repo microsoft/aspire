@@ -373,7 +373,6 @@ Aspire.Hosting.ApplicationModel/ExecuteCommandContext.arguments(context: Aspire.
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> cancellationToken
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.resourceName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> string
-Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/getEndpoint(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext, name: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
 Aspire.Hosting.ApplicationModel/getValueAsync(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression, cancellationToken: cancellationToken) -> string
 Aspire.Hosting.ApplicationModel/IAspireStore.basePath(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore) -> string
@@ -399,7 +398,6 @@ Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.addForEndpoint(context: Aspir
 Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.executionContext(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsEditor) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext
 Aspire.Hosting.ApplicationModel/set(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor, name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue) -> void
 Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateResourceSnapshot
-Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/warning(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.LogFacade, message: string) -> void
 Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext) -> cancellationToken
 Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext(context: Aspire.Hosting/Aspire.Hosting.Ats.EventingSubscriberRegistrationContext) -> Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext

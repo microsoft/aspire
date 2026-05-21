@@ -4348,8 +4348,6 @@ class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscr
 /** Context for `ExecuteCommand`. */
 export interface ExecuteCommandContext {
     toJSON(): MarshalledHandle;
-    /** The service provider. */
-    serviceProvider(): ServiceProviderPromise;
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -4376,17 +4374,6 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
-
-    serviceProvider(): ServiceProviderPromise {
-        const promise = (async () => {
-            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider',
-                { context: this._handle }
-            );
-            return new ServiceProviderImpl(handle, this._client);
-        })();
-        return new ServiceProviderPromiseImpl(promise, this._client, false);
-    }
 
     async resourceName(): Promise<string> {
         return await this._client.invokeCapability<string>(
@@ -7072,8 +7059,6 @@ export interface UpdateCommandStateContext {
     toJSON(): MarshalledHandle;
     /** Gets the resource snapshot data available to polyglot command state callbacks. */
     resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot>;
-    /** The service provider. */
-    serviceProvider(): ServiceProviderPromise;
 }
 
 // ============================================================================
@@ -7092,17 +7077,6 @@ class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
             'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot',
             { context: this._handle }
         );
-    }
-
-    serviceProvider(): ServiceProviderPromise {
-        const promise = (async () => {
-            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
-                'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider',
-                { context: this._handle }
-            );
-            return new ServiceProviderImpl(handle, this._client);
-        })();
-        return new ServiceProviderPromiseImpl(promise, this._client, false);
     }
 
 }
