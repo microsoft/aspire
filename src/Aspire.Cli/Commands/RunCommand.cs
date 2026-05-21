@@ -75,9 +75,9 @@ internal sealed class RunCommand : BaseCommand
     private bool _isDetachMode;
 
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
-    // afterward when the guest startup process hits a syntax or pre-execute error. Keep the
-    // detached parent waiting briefly so those early failures are reported instead of hidden.
-    private static readonly TimeSpan s_detachedStartupStabilityWindow = TimeSpan.FromSeconds(2);
+    // afterward when the guest startup process hits a syntax, pre-execute, or model validation
+    // error. Keep startup waits alive briefly so those failures are reported instead of hidden.
+    private static readonly TimeSpan s_startupFailureObservationWindow = TimeSpan.FromSeconds(2);
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
 
@@ -324,7 +324,10 @@ internal sealed class RunCommand : BaseCommand
             {
                 dashboardUrls = await InteractionService.ShowStatusAsync(
                     RunCommandStrings.StartingDashboard,
-                    async () => await backchannel.GetDashboardUrlsAsync(cancellationToken));
+                    async () => await WaitForStartupOperationOrAppHostExitAsync(
+                        ct => backchannel.GetDashboardUrlsAsync(ct),
+                        pendingRun,
+                        cancellationToken));
                 getDashboardUrlsActivity.SetAppHostDashboardHealthy(dashboardUrls.DashboardHealthy);
             }
 
@@ -338,14 +341,15 @@ internal sealed class RunCommand : BaseCommand
                 var observedExitCode = await ObserveEarlyDetachedStartupExitAsync(pendingRun, cancellationToken).ConfigureAwait(false);
                 if (observedExitCode is { } exitCode)
                 {
-                    return exitCode == CliExitCodes.Cancelled
-                        ? CommandResult.Cancelled(CliExitCodes.Success)
-                        : CommandResult.FromExitCode(exitCode);
+                    return CreateRunExitResult(exitCode);
                 }
 
             }
 
-            await backchannel.NotifyAppHostReadyAsync(cancellationToken).ConfigureAwait(false);
+            await WaitForStartupOperationOrAppHostExitAsync(
+                ct => backchannel.NotifyAppHostReadyAsync(ct),
+                pendingRun,
+                cancellationToken).ConfigureAwait(false);
 
             // Display the UX
             var appHostRelativePath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, effectiveAppHostFile.FullName);
@@ -524,6 +528,10 @@ internal sealed class RunCommand : BaseCommand
             // it terminates the process on stop/restart, causing the backchannel to drop.
             return CommandResult.Success();
         }
+        catch (AppHostExitedDuringStartupException ex)
+        {
+            return CreateRunExitResult(ex.ExitCode);
+        }
         catch (Exception ex)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, ex.GetType().FullName);
@@ -539,11 +547,18 @@ internal sealed class RunCommand : BaseCommand
 
     private bool IsDetachedStartChild() => _configuration.GetBool(KnownConfigNames.CliRunDetached) is true;
 
+    private static CommandResult CreateRunExitResult(int exitCode)
+    {
+        return exitCode == CliExitCodes.Cancelled
+            ? CommandResult.Cancelled(CliExitCodes.Success)
+            : CommandResult.FromExitCode(exitCode);
+    }
+
     private static async Task<int?> ObserveEarlyDetachedStartupExitAsync(Task<int> pendingRun, CancellationToken cancellationToken)
     {
         var completedTask = await Task.WhenAny(
             pendingRun,
-            Task.Delay(s_detachedStartupStabilityWindow, cancellationToken)).ConfigureAwait(false);
+            Task.Delay(s_startupFailureObservationWindow, cancellationToken)).ConfigureAwait(false);
 
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -553,6 +568,84 @@ internal sealed class RunCommand : BaseCommand
         }
 
         return null;
+    }
+
+    private static async Task<T> WaitForStartupOperationOrAppHostExitAsync<T>(
+        Func<CancellationToken, Task<T>> operationFactory,
+        Task<int> pendingRun,
+        CancellationToken cancellationToken)
+    {
+        using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task<T> operationTask;
+        try
+        {
+            operationTask = operationFactory(operationCts.Token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            await ThrowIfAppHostExitedAfterStartupOperationFailureAsync(pendingRun, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+
+        var completedTask = await Task.WhenAny(operationTask, pendingRun).ConfigureAwait(false);
+        if (completedTask == pendingRun)
+        {
+            await operationCts.CancelAsync().ConfigureAwait(false);
+            throw new AppHostExitedDuringStartupException(await pendingRun.ConfigureAwait(false));
+        }
+
+        try
+        {
+            return await operationTask.ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            await ThrowIfAppHostExitedAfterStartupOperationFailureAsync(pendingRun, cancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private static async Task WaitForStartupOperationOrAppHostExitAsync(
+        Func<CancellationToken, Task> operationFactory,
+        Task<int> pendingRun,
+        CancellationToken cancellationToken)
+    {
+        await WaitForStartupOperationOrAppHostExitAsync(
+            async ct =>
+            {
+                await operationFactory(ct).ConfigureAwait(false);
+                return true;
+            },
+            pendingRun,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async Task ThrowIfAppHostExitedAfterStartupOperationFailureAsync(
+        Task<int> pendingRun,
+        CancellationToken cancellationToken)
+    {
+        if (pendingRun.IsCompleted)
+        {
+            throw new AppHostExitedDuringStartupException(await pendingRun.ConfigureAwait(false));
+        }
+
+        // Startup RPC calls can fail because the AppHost process is already shutting down.
+        // Give the process task a short chance to surface the underlying startup failure
+        // before reporting a generic RPC/connection error.
+        var completedTask = await Task.WhenAny(
+            pendingRun,
+            Task.Delay(s_startupFailureObservationWindow, cancellationToken)).ConfigureAwait(false);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (completedTask == pendingRun)
+        {
+            throw new AppHostExitedDuringStartupException(await pendingRun.ConfigureAwait(false));
+        }
+    }
+
+    private sealed class AppHostExitedDuringStartupException(int exitCode) : Exception
+    {
+        public int ExitCode { get; } = exitCode;
     }
 
     private static IRenderable BuildCtrlCRenderable(int longestLocalizedLengthWithColon)

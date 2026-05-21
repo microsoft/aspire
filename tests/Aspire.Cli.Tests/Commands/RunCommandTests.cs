@@ -257,6 +257,66 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToTrustCertificates, exitCode);
     }
 
+    [Fact]
+    public async Task RunCommand_PrefersAppHostStartupFailureOverDashboardRpcFailure()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var dashboardRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(true);
+                context.BackchannelCompletionSource?.TrySetResult(new TestAppHostBackchannel
+                {
+                    GetDashboardUrlsAsyncCallback = _ =>
+                    {
+                        dashboardRequested.TrySetResult();
+                        throw new IOException("RPC connection closed before the startup failure was observed.");
+                    }
+                });
+
+                await dashboardRequested.Task.WaitAsync(cancellationToken);
+                interactionService.DisplayLines(
+                [
+                    (OutputLineStream.StdErr, "Endpoint 'http' must specify a port when isProxied is false.")
+                ]);
+
+                return CliExitCodes.FailedToDotnetRunAppHost;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Contains(interactionService.DisplayedLines, line => line.Line == "Endpoint 'http' must specify a port when isProxied is false.");
+        Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("RPC connection closed", StringComparison.Ordinal));
+        Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("Unexpected error", StringComparison.Ordinal));
+    }
+
     private sealed class ThrowingCertificateService : Aspire.Cli.Certificates.ICertificateService
     {
         public Task<Aspire.Cli.Certificates.EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
