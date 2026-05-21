@@ -9,9 +9,7 @@
     3. Verifies the archive shape contains the native CLI payload and no install-route sidecar
     4. Runs 'aspire --version' to validate the binary executes
     5. Runs 'aspire new aspire-starter' to test C# starter creation
-    6. Runs 'aspire new aspire-ts-starter' to test TypeScript starter restore/codegen against the shipped layout
-    7. Verifies the TypeScript starter path extracted the embedded bundle layout
-    8. Cleans up temp directories
+    6. Cleans up temp directories
 
 .PARAMETER ArchivePath
     Path to the CLI archive (.zip or .tar.gz)
@@ -119,48 +117,6 @@ function Test-ArchiveSidecar {
     Write-Step "$ridFamily-* archive correctly omits the install-route sidecar."
 }
 
-function Test-ExtractedBundleLayout {
-    param(
-        [Parameter(Mandatory = $true)][string]$LayoutRoot
-    )
-
-    $bundleRoot = Join-Path $LayoutRoot "bundle"
-    $managedExecutablePath = Join-Path $bundleRoot (Join-Path "managed" (Get-ExecutableFileName "aspire-managed"))
-    if (-not (Test-Path $managedExecutablePath)) {
-        throw "Expected extracted bundle-managed server binary at '$managedExecutablePath', but it was not found."
-    }
-
-    $wwwRootPath = Join-Path $bundleRoot (Join-Path "managed" "wwwroot")
-    if (-not (Test-Path $wwwRootPath)) {
-        throw "Expected dashboard web assets at '$wwwRootPath', but they were not found."
-    }
-
-    $wwwRootFileCount = @(Get-ChildItem -Path $wwwRootPath -Recurse -File -ErrorAction SilentlyContinue).Count
-    if ($wwwRootFileCount -eq 0) {
-        throw "Dashboard asset directory '$wwwRootPath' is empty."
-    }
-
-    $dcpExecutablePath = Join-Path $bundleRoot (Join-Path "dcp" (Get-ExecutableFileName "dcp"))
-    if (-not (Test-Path $dcpExecutablePath)) {
-        throw "Expected DCP binary at '$dcpExecutablePath', but it was not found."
-    }
-
-    Write-Step "Extracted bundle layout contains AppHost server assets."
-
-    # aspire-managed's top-level entry point is a hard dispatch on
-    # dashboard|server|nuget and returns 1 for anything else (including --help).
-    # Use a real subcommand whose System.CommandLine help path returns 0; this
-    # also exercises the NativeAOT-compiled CommandLine code path as part of
-    # the smoke check. See src/Aspire.Managed/Program.cs.
-    Write-Step "Running '$managedExecutablePath nuget --help'..."
-    $managedOutput = & $managedExecutablePath nuget --help 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "aspire-managed failed with exit code $LASTEXITCODE. Output: $managedOutput"
-    }
-
-    Write-Ok "Extracted bundled AppHost server is executable"
-}
-
 function Test-CSharpStarterProject {
     param(
         [Parameter(Mandatory = $true)][string]$AspireBin,
@@ -182,45 +138,6 @@ function Test-CSharpStarterProject {
     }
 
     Write-Ok "'aspire new aspire-starter' created project successfully"
-}
-
-function Test-TypeScriptStarterProject {
-    param(
-        [Parameter(Mandatory = $true)][string]$AspireBin,
-        [Parameter(Mandatory = $true)][string]$ProjectRoot
-    )
-
-    Write-Step "Running 'aspire new aspire-ts-starter --name VerifyTsApp --output $ProjectRoot --non-interactive --nologo'..."
-    & $AspireBin new aspire-ts-starter --name VerifyTsApp --output $ProjectRoot --non-interactive --nologo 2>&1 | Write-Host
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err "'aspire new aspire-ts-starter' failed with exit code $LASTEXITCODE"
-        exit 1
-    }
-
-    $expectedPaths = @(
-        "apphost.ts",
-        "aspire.config.json",
-        ".modules/aspire.ts",
-        "package.json",
-        "frontend/package.json",
-        "frontend/src/main.tsx",
-        "api/package.json",
-        "api/src/index.ts"
-    )
-
-    foreach ($relativePath in $expectedPaths) {
-        $fullPath = Join-Path $ProjectRoot $relativePath
-        if (-not (Test-Path $fullPath)) {
-            throw "Expected TypeScript starter asset '$relativePath' not found under '$ProjectRoot'."
-        }
-    }
-
-    $configContent = Get-Content -Path (Join-Path $ProjectRoot "aspire.config.json") -Raw
-    if ($configContent -notmatch '"sdk"') {
-        throw "TypeScript starter config '$ProjectRoot/aspire.config.json' did not contain the expected 'sdk' section."
-    }
-
-    Write-Ok "'aspire new aspire-ts-starter' produced AppHost restore/codegen artifacts successfully"
 }
 
 $userHome = Get-UserHome
@@ -303,8 +220,11 @@ try {
 
     # Assert the source sidecar matches the archive's RID family before mutating the
     # extracted shape. After Copy-Item moves the binary out, the archive layout is
-    # no longer observable.
-    Test-ArchiveSidecar -ExtractDir $archiveRoot -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
+    # no longer observable. Scan the full extraction directory, not $archiveRoot:
+    # the sidecar contract is about the archive itself, and Get-ArchiveRoot may
+    # return a single sub-directory (when the archive nests its binary), which
+    # would let a stray sidecar at the true archive root slip past.
+    Test-ArchiveSidecar -ExtractDir $extractDir -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
 
     # Install to ~/.aspire/bin so self-extraction works correctly
     Write-Step "Installing CLI to ~/.aspire/bin..."
@@ -328,17 +248,16 @@ try {
     Write-Host "  Version: $versionOutput"
     Write-Ok "'aspire --version' succeeded"
 
-    # Step 4: Create starter projects with aspire new. The C# starter covers the
-    # existing happy path; the TypeScript starter proves the shipped archive can
-    # supply the bundled AppHost server and generate the .modules SDK layout.
+    # Step 4: Create starter project with aspire new. The C# starter exercises
+    # template engine + bundle self-extraction without requiring a NuGet restore.
+    # The TypeScript starter check (#17274) is intentionally not invoked here:
+    # its packager-managed AppHost bootstrap triggers a NuGet restore whose
+    # transitive deps resolve to api.nuget.org, which the 1ES signed-build agent
+    # has no egress to. Re-adding it requires either an internal NuGet mirror
+    # config or skipping the auto-restore. Tracked in #17345.
     $csharpProjectDir = Join-Path $verifyTmpDir "VerifyApp"
     New-Item -ItemType Directory -Path $csharpProjectDir -Force | Out-Null
     Test-CSharpStarterProject -AspireBin $aspireBin -ProjectRoot $csharpProjectDir
-
-    $typeScriptProjectDir = Join-Path $verifyTmpDir "VerifyTsApp"
-    New-Item -ItemType Directory -Path $typeScriptProjectDir -Force | Out-Null
-    Test-TypeScriptStarterProject -AspireBin $aspireBin -ProjectRoot $typeScriptProjectDir
-    Test-ExtractedBundleLayout -LayoutRoot $aspireDir
 
     Write-Host ""
     Write-Host "=========================================="
