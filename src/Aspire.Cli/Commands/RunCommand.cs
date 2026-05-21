@@ -619,28 +619,19 @@ internal sealed class RunCommand : BaseCommand
         CancellationToken cancellationToken)
     {
         using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        Task<T> operationTask;
-        try
-        {
-            operationTask = operationFactory(operationCts.Token);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            await WaitForAppHostExitAfterStartupOperationFailureAsync(pendingRun, interactionService, cancellationToken).ConfigureAwait(false);
-            throw;
-        }
+        var startupOperation = StartStartupOperation(operationFactory, operationCts.Token);
 
-        var completedTask = await Task.WhenAny(operationTask, pendingRun).ConfigureAwait(false);
+        var completedTask = await Task.WhenAny(startupOperation, pendingRun).ConfigureAwait(false);
         if (completedTask == pendingRun)
         {
             await operationCts.CancelAsync().ConfigureAwait(false);
-            ObserveStartupOperationFault(operationTask);
+            ObserveStartupOperationFault(startupOperation);
             throw new AppHostExitedDuringStartupException(await pendingRun.ConfigureAwait(false));
         }
 
         try
         {
-            return await operationTask.ConfigureAwait(false);
+            return await startupOperation.ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -649,15 +640,27 @@ internal sealed class RunCommand : BaseCommand
         }
     }
 
-    private static void ObserveStartupOperationFault(Task operationTask)
+    private static Task<T> StartStartupOperation<T>(Func<CancellationToken, Task<T>> operationFactory, CancellationToken cancellationToken)
     {
-        if (operationTask.IsFaulted)
+        try
         {
-            _ = operationTask.Exception;
+            return operationFactory(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<T>(ex);
+        }
+    }
+
+    private static void ObserveStartupOperationFault(Task startupOperation)
+    {
+        if (startupOperation.IsFaulted)
+        {
+            _ = startupOperation.Exception;
             return;
         }
 
-        _ = operationTask.ContinueWith(
+        _ = startupOperation.ContinueWith(
             static completedTask => _ = completedTask.Exception,
             CancellationToken.None,
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
