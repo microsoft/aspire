@@ -13,8 +13,10 @@ usage() {
 Usage: $(basename "$0") [OPTIONS]
 
 Options:
-  --work-dir PATH       Directory to scaffold into (will be removed if it exists).
-                        Default: \${RUNNER_TEMP:-/tmp}/aspire-cli-smoke
+  --work-dir PATH       Parent directory in which to create a fresh scaffold
+                        subdirectory. A unique subdirectory is always created
+                        inside it; nothing in PATH is removed.
+                        Default: \${RUNNER_TEMP:-/tmp}
   --project-name NAME   Project name passed to 'aspire new'. Default: SmokeApp
   --log-level LEVEL     --log-level value passed to aspire commands. Default: trace
   --help                Show this help message
@@ -35,15 +37,19 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "$WORK_DIR" ]]; then
-  WORK_DIR="${RUNNER_TEMP:-/tmp}/aspire-cli-smoke"
-fi
+PARENT_DIR="${WORK_DIR:-${RUNNER_TEMP:-/tmp}}"
+mkdir -p "$PARENT_DIR"
+
+# Always scaffold into a fresh subdirectory created with mktemp under
+# $PARENT_DIR. This deliberately avoids ever rm -rf'ing a caller-provided
+# path: even if --work-dir points at a sensitive directory, the worst case is
+# a new empty aspire-cli-smoke.XXXXXX subdirectory being created underneath.
+# CI tears down RUNNER_TEMP between jobs; local users can clean up whenever.
+scaffold_dir="$(mktemp -d "$PARENT_DIR/aspire-cli-smoke.XXXXXX")"
+echo "Scaffolding into: $scaffold_dir"
 
 aspire --version
-
-rm -rf "$WORK_DIR"
-mkdir -p "$WORK_DIR"
-cd "$WORK_DIR"
+cd "$scaffold_dir"
 
 aspire --log-level "$LOG_LEVEL" new aspire-starter --name "$PROJECT_NAME" --output . --non-interactive --nologo --suppress-agent-init
 aspire --log-level "$LOG_LEVEL" restore --non-interactive --nologo

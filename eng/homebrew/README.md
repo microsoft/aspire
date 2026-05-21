@@ -72,13 +72,14 @@ Prepare validation currently runs:
 
 1. `ruby -c` for syntax validation
 2. `brew style --fix` on the generated cask
-3. `brew audit --cask --new --online local/aspire/aspire`
+3. `brew audit --cask --online local/aspire/aspire`
+   - Adds `--new` only when the cask is absent upstream (existing casks fail the additional `--new` checks).
+   - Adds `--no-signing` in offline mode (PR-artifact validation), because the served archives are local loopback URLs of unsigned PR builds rather than notarized release assets.
 4. `HOMEBREW_NO_INSTALL_FROM_API=1 brew install --cask ...` followed by uninstall validation
 
 PR artifact validation uses the same shared script and local tap, but rewrites
-the cask URLs to loopback archive URLs and passes `--no-signing` to
-`brew audit` because PR archives are not notarized release assets. Release
-preparation keeps the full signing audit.
+the cask URLs to loopback archive URLs and runs in offline mode (see above).
+Release preparation keeps the full online signing audit.
 
 To dogfood a GitHub Actions artifact locally, download the `homebrew-cask-prerelease`
 artifact and the `cli-native-archives-osx-*` artifacts into the same parent directory, then run:
