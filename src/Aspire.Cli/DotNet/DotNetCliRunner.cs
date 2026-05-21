@@ -123,9 +123,11 @@ internal sealed class DotNetCliRunner(
         }
         else
         {
-            // Native apphost executables still locate the shared framework via the dotnet host
-            // environment. Keep the same private-SDK DOTNET_ROOT/PATH setup that dotnet commands get,
-            // but launch the apphost executable itself to avoid the `dotnet run` command path.
+            // This part is Aspire-specific rather than copied from the SDK. The SDK can rely on its
+            // own host environment, but a native apphost executable launched by Aspire still needs
+            // our private-SDK DOTNET_ROOT/PATH setup to locate the same shared framework that the
+            // CLI-selected dotnet muxer would use. Launch the apphost executable itself to avoid
+            // the `dotnet run` command path.
             _ = ResolveDotNetPath(finalEnv);
             processFileName = command;
             effectiveArgs = args;
