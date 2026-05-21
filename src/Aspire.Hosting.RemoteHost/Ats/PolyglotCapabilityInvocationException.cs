@@ -514,6 +514,8 @@ internal static partial class PolyglotCapabilityErrorFormatter
             return message;
         }
 
+        message = RewritePolyglotUnfriendlyGuidance(message);
+
         if (!string.IsNullOrEmpty(polyglotMethodName) && !string.IsNullOrEmpty(clrMemberName))
         {
             message = Regex.Replace(
@@ -541,6 +543,40 @@ internal static partial class PolyglotCapabilityErrorFormatter
         message = ControlCharacterRegex().Replace(message, " ");
 
         return message.Trim();
+    }
+
+    // Rewrites guidance baked into framework exception messages so it makes sense for
+    // polyglot (non-.NET) app hosts that flow through this formatter. Native .NET app
+    // hosts never go through PolyglotCapabilityErrorFormatter, so their messages are
+    // unchanged.
+    //
+    // The Kestrel HTTPS dev-cert message has been stable across .NET versions and
+    // reads exactly:
+    //   "Unable to configure HTTPS endpoint. No server certificate was specified, and
+    //    the default developer certificate could not be found or is out of date. To
+    //    generate a developer certificate run 'dotnet dev-certs https'. To trust the
+    //    certificate (Windows and macOS only) run 'dotnet dev-certs https --trust'.
+    //    For more information on configuring HTTPS see
+    //    https://go.microsoft.com/fwlink/?linkid=848054."
+    // The advice to invoke `dotnet dev-certs` assumes a .NET SDK is on the PATH, which
+    // is not guaranteed for TypeScript / Node.js / Python app host users. Aspire ships
+    // `aspire certs trust`, which creates the dev cert when missing and trusts it in a
+    // single step, so we rewrite both sentences into one. See
+    // https://github.com/microsoft/aspire/issues/17273.
+    private static string RewritePolyglotUnfriendlyGuidance(string message)
+    {
+        const string KestrelDevCertGuidance =
+            "To generate a developer certificate run 'dotnet dev-certs https'. " +
+            "To trust the certificate (Windows and macOS only) run 'dotnet dev-certs https --trust'.";
+        const string AspireDevCertGuidance =
+            "To generate and trust a developer certificate run 'aspire certs trust'.";
+        const string KestrelHttpsFwlink = "https://go.microsoft.com/fwlink/?linkid=848054";
+        const string AspireHttpsDocs = "https://aspire.dev/docs/";
+
+        message = message.Replace(KestrelDevCertGuidance, AspireDevCertGuidance, StringComparison.Ordinal);
+        message = message.Replace(KestrelHttpsFwlink, AspireHttpsDocs, StringComparison.Ordinal);
+
+        return message;
     }
 
     [GeneratedRegex(@"\s{2,}")]
