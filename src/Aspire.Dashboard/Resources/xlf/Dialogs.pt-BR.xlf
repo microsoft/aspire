@@ -7,7 +7,7 @@
 
 The structured logs, distributed traces, and resource status in this dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
 
-Get started by running this command in your project:
+First, [install the Aspire CLI]({1}) if you haven't already. Then get started by running this command in your project:
 
 ```bash
 aspire agent init
@@ -22,7 +22,7 @@ For more information about using AI agents with Aspire, such as setting up skill
 
 The structured logs, distributed traces, and resource status in this dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
 
-Get started by running this command in your project:
+First, [install the Aspire CLI]({1}) if you haven't already. Then get started by running this command in your project:
 
 ```bash
 aspire agent init
@@ -33,14 +33,14 @@ This configures skill files for your AI assistant. The skill files tell the agen
 Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
 
 For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</target>
-        <note />
+        <note>{0} is the learn more URL, {1} is the install CLI URL</note>
       </trans-unit>
       <trans-unit id="AIAgentsDialogStandaloneDescription">
         <source>Build, debug, and profile apps using AI agents and Aspire 🚀
 
 The structured logs and distributed traces in the dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
 
-Use Aspire CLI commands to get telemetry data in your terminal:
+First, [install the Aspire CLI]({2}) if you haven't already. Then use Aspire CLI commands to get telemetry data in your terminal:
 
 ```bash
 aspire otel logs --dashboard-url {0}
@@ -56,7 +56,7 @@ For more information about using AI agents with the dashboard, such as setting u
 
 The structured logs and distributed traces in the dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
 
-Use Aspire CLI commands to get telemetry data in your terminal:
+First, [install the Aspire CLI]({2}) if you haven't already. Then use Aspire CLI commands to get telemetry data in your terminal:
 
 ```bash
 aspire otel logs --dashboard-url {0}
@@ -68,7 +68,7 @@ aspire otel logs --dashboard-url {0}
 - [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/) — Export telemetry and resource data to a zip file
 
 For more information about using AI agents with the dashboard, such as setting up skills, see [Standalone dashboard and AI coding agents]({1}).</target>
-        <note>{0} is the dashboard URL, {1} is the learn more URL</note>
+        <note>{0} is the dashboard URL, {1} is the learn more URL, {2} is the install CLI URL</note>
       </trans-unit>
       <trans-unit id="AIAgentsDialogTitle">
         <source>AI agents</source>
