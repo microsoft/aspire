@@ -255,7 +255,10 @@ function Show-LatestWinGetDiagLog {
     # When `winget install --manifest` exits non-zero, the diag log is almost always
     # the only place that says *why* (the console output is often truncated or empty,
     # and `winget` exit codes like 0x8A150001 are generic). Print the newest log to
-    # stderr so dogfood failures are diagnosable without separately hunting it down.
+    # the host console (Write-Host, matching the rest of this script) so dogfood
+    # failures are diagnosable without separately hunting it down. In CI runs the
+    # host output is captured into the job log, so this lands in the same place as
+    # the surrounding install output.
     #
     # Tests set ASPIRE_TEST_MODE=true and run a mock winget that doesn't produce diag
     # logs, so skip this in test mode to avoid emitting unrelated stale logs.
