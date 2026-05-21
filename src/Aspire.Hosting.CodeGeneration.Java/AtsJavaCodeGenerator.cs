@@ -560,7 +560,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 var methodName = ToPascalCase(property.Name);
                 var transportValueName = $"{fieldName}Value";
                 WriteLine($"        var {transportValueName} = map.get(\"{property.Name}\");");
-                WriteLine($"        value.set{methodName}({RenderJavaTransportValueConversion(property.Type, transportValueName, property.IsOptional)});");
+                WriteLine($"        value.set{methodName}({RenderJavaDtoPropertyTransportValueConversion(property.Type, transportValueName, property.IsOptional)});");
             }
             WriteLine("        return value;");
             WriteLine("    }");
@@ -1714,6 +1714,19 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         };
 
         return converted;
+    }
+
+    private string RenderJavaDtoPropertyTransportValueConversion(AtsTypeRef? typeRef, string valueExpression, bool isOptional)
+    {
+        if (typeRef?.Category != AtsTypeCategory.Dict)
+        {
+            return RenderJavaTransportValueConversion(typeRef, valueExpression, isOptional);
+        }
+
+        var allowNull = isOptional || typeRef.IsNullable == true;
+        var converted = $"({MapDtoPropertyTypeToJava(typeRef, allowNull, useBoxedTypes: true)}) {valueExpression}";
+
+        return allowNull ? $"{valueExpression} == null ? null : {converted}" : converted;
     }
 
     private static string RenderJavaPrimitiveTransportValueConversion(string typeId, string valueExpression, bool allowNull)

@@ -14498,7 +14498,7 @@ public class ParameterCustomInputOptions implements JsonSerializable {
         var enableDescriptionMarkdownValue = map.get("EnableDescriptionMarkdown");
         value.setEnableDescriptionMarkdown(enableDescriptionMarkdownValue == null ? null : (Boolean) enableDescriptionMarkdownValue);
         var optionsValue = map.get("Options");
-        value.setOptions((Map<String, String>) optionsValue);
+        value.setOptions(optionsValue == null ? null : (Map<String, String>) optionsValue);
         var valueValue = map.get("Value");
         value.setValue(valueValue == null ? null : (String) valueValue);
         var placeholderValue = map.get("Placeholder");
@@ -15804,7 +15804,7 @@ public class ProcessCommandExportOptions implements JsonSerializable {
         var workingDirectoryValue = map.get("WorkingDirectory");
         value.setWorkingDirectory(workingDirectoryValue == null ? null : (String) workingDirectoryValue);
         var environmentVariablesValue = map.get("EnvironmentVariables");
-        value.setEnvironmentVariables((Map<String, String>) environmentVariablesValue);
+        value.setEnvironmentVariables(environmentVariablesValue == null ? null : (Map<String, String>) environmentVariablesValue);
         var inheritEnvironmentVariablesValue = map.get("InheritEnvironmentVariables");
         value.setInheritEnvironmentVariables(inheritEnvironmentVariablesValue == null ? null : (Boolean) inheritEnvironmentVariablesValue);
         var standardInputContentValue = map.get("StandardInputContent");
@@ -15930,7 +15930,7 @@ public class ProcessCommandSpecExportData implements JsonSerializable {
         var workingDirectoryValue = map.get("WorkingDirectory");
         value.setWorkingDirectory(workingDirectoryValue == null ? null : (String) workingDirectoryValue);
         var environmentVariablesValue = map.get("EnvironmentVariables");
-        value.setEnvironmentVariables((Map<String, String>) environmentVariablesValue);
+        value.setEnvironmentVariables(environmentVariablesValue == null ? null : (Map<String, String>) environmentVariablesValue);
         var inheritEnvironmentVariablesValue = map.get("InheritEnvironmentVariables");
         value.setInheritEnvironmentVariables(inheritEnvironmentVariablesValue == null ? null : (Boolean) inheritEnvironmentVariablesValue);
         var standardInputContentValue = map.get("StandardInputContent");
@@ -20475,7 +20475,7 @@ public class TestDeeplyNestedDto implements JsonSerializable {
     public static TestDeeplyNestedDto fromMap(Map<String, Object> map) {
         var value = new TestDeeplyNestedDto();
         var nestedDataValue = map.get("NestedData");
-        value.setNestedData((AspireDict<String, AspireList<TestConfigDto>>) nestedDataValue);
+        value.setNestedData((Map<String, List<TestConfigDto>>) nestedDataValue);
         var metadataArrayValue = map.get("MetadataArray");
         value.setMetadataArray((AspireDict<String, String>[]) metadataArrayValue);
         return value;
@@ -20642,7 +20642,7 @@ public class TestNestedDto implements JsonSerializable {
         var tagsValue = map.get("Tags");
         value.setTags(((List<Object>) tagsValue).stream().map(item0 -> (String) item0).toList());
         var countsValue = map.get("Counts");
-        value.setCounts((AspireDict<String, Double>) countsValue);
+        value.setCounts((Map<String, Double>) countsValue);
         return value;
     }
 
