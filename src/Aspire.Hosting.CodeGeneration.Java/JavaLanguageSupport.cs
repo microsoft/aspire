@@ -102,16 +102,22 @@ internal sealed class JavaLanguageSupport : ILanguageSupport
             DisplayName = LanguageDisplayName,
             CodeGenLanguage = CodeGenTarget,
             DetectionPatterns = s_detectionPatterns,
-            // No separate install step - compilation happens in Execute
+            // No separate install step - compilation happens in PreExecute
             InstallDependencies = null,
+            PreExecute =
+            [
+                new CommandSpec
+                {
+                    Command = "javac",
+                    Args = OperatingSystem.IsWindows()
+                        ? ["--enable-preview", "--source", "25", "-d", ".java-build", "@.modules\\sources.txt", "AppHost.java"]
+                        : ["--enable-preview", "--source", "25", "-d", ".java-build", "@.modules/sources.txt", "AppHost.java"]
+                }
+            ],
             Execute = new CommandSpec
             {
-                // Use a shell to compile and run in sequence
-                // On Windows, use cmd /c; on Unix, use sh -c
-                Command = OperatingSystem.IsWindows() ? "cmd" : "sh",
-                Args = OperatingSystem.IsWindows()
-                    ? ["/c", "if not exist .java-build mkdir .java-build && javac --enable-preview --source 25 -d .java-build @.aspire\\modules\\sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
-                    : ["-c", "mkdir -p .java-build && javac --enable-preview --source 25 -d .java-build @.aspire/modules/sources.txt AppHost.java && java --enable-preview -cp .java-build AppHost {args}"]
+                Command = "java",
+                Args = ["--enable-preview", "-cp", ".java-build", "AppHost", "{args}"]
             }
         };
     }

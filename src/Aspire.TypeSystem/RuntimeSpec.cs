@@ -87,7 +87,7 @@ public sealed class CommandSpec
 
     /// <summary>
     /// Gets the arguments for the command.
-    /// Supports placeholders: {appHostFile}, {appHostDir}, {args}
+    /// Supports placeholders: {appHostFile}, {appHostDir}, and {args}. The {args} placeholder must be a standalone argument.
     /// </summary>
     public required string[] Args { get; init; }
 

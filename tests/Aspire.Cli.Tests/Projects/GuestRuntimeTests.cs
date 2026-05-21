@@ -620,6 +620,60 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunAsync_ArgsPlaceholderPreservesArgumentBoundaries()
+    {
+        var spec = CreateTestSpec(execute: new CommandSpec
+        {
+            Command = "test-cmd",
+            Args = ["{appHostFile}", "{args}"]
+        });
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+
+        await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            runArgs: ["arg with spaces", "; rm -rf important", "--flag=value"],
+            CancellationToken.None);
+
+        Assert.Equal([appHostFile.FullName, "arg with spaces", "; rm -rf important", "--flag=value"], launcher.LastArgs);
+    }
+
+    [Fact]
+    public void Constructor_RejectsEmbeddedArgsPlaceholder()
+    {
+        var spec = CreateTestSpec(execute: new CommandSpec
+        {
+            Command = "test-cmd",
+            Args = ["prefix-{args}"]
+        });
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CreateRuntime(spec));
+        Assert.Contains("{args} placeholder as a standalone argument", exception.Message);
+    }
+
+    [Fact]
+    public void Constructor_RejectsEmbeddedArgsPlaceholderEvenWithoutRunArgs()
+    {
+        var spec = CreateTestSpec(preExecute:
+        [
+            new CommandSpec
+            {
+                Command = "test-cmd",
+                Args = ["prefix-{args}"]
+            }
+        ]);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CreateRuntime(spec));
+        Assert.Contains("{args} placeholder as a standalone argument", exception.Message);
+    }
+
+    [Fact]
     public async Task PublishAsync_AdditionalArgsAppendedWhenNoPlaceholder()
     {
         var spec = CreateTestSpec(execute: new CommandSpec
