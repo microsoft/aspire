@@ -28,7 +28,7 @@ internal sealed class TestPackagingService : IPackagingService
         }
 
         // Default: Return a fake channel with template packages
-        var testChannel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache());
+        var testChannel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
         return Task.FromResult<IEnumerable<PackageChannel>>(new[] { testChannel });
     }
 

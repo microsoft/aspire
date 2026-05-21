@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Certificates;
@@ -51,6 +52,7 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(IntegrationSearchResult[]))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(List<CandidateAppHostDisplayInfo>))]
+[JsonSerializable(typeof(InstallationInfo))]
 [JsonSerializable(typeof(AppHostInfoCacheEntry))]
 [JsonSerializable(typeof(AppHostProjectInspectionOutput))]
 internal partial class JsonSourceGenerationContext : JsonSerializerContext

@@ -148,7 +148,7 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
             return null;
         }
 
-        var resolvedCliPath = ProcessPathResolver.ResolveSymlinks(cliPath, _logger);
+        var resolvedCliPath = CliPathHelper.ResolveSymlinkOrOriginalPath(cliPath, _logger);
         if (!string.Equals(resolvedCliPath, cliPath, StringComparison.Ordinal))
         {
             _logger.LogDebug("TryDiscoverRelativeLayout: Resolved CLI path {RawPath} -> {ResolvedPath}", cliPath, resolvedCliPath);

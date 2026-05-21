@@ -6,7 +6,6 @@ using System.Formats.Tar;
 using System.IO.Compression;
 using System.IO.Hashing;
 using System.Text;
-using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
@@ -198,7 +197,7 @@ internal sealed class BundleService(
         // non-Windows and once the sidecar already exists.
         if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
         {
-            var realBinaryPath = ProcessPathResolver.ResolveSymlinks(processPath, logger);
+            var realBinaryPath = CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, logger);
             var binaryDir = Path.GetDirectoryName(realBinaryPath);
             if (!string.IsNullOrEmpty(binaryDir))
             {
@@ -385,7 +384,10 @@ internal sealed class BundleService(
     /// Computes the bundle extract directory from the sidecar source value.
     /// See <c>docs/specs/install-routes.md</c> for the contract.
     /// </summary>
-    internal static string? ComputeDefaultExtractDir(string processPath, ILogger? logger = null)
+    internal static string? ComputeDefaultExtractDir(string processPath)
+        => ComputeDefaultExtractDir(processPath, logger: null);
+
+    private static string? ComputeDefaultExtractDir(string processPath, ILogger? logger)
     {
         logger ??= NullLogger.Instance;
 
@@ -394,53 +396,30 @@ internal sealed class BundleService(
             return null;
         }
 
-        var realBinaryPath = ProcessPathResolver.ResolveSymlinks(processPath, logger);
+        var realBinaryPath = CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, logger);
         var binaryDir = Path.GetDirectoryName(realBinaryPath);
         if (string.IsNullOrEmpty(binaryDir))
         {
             return null;
         }
 
-        var sidecarPath = Path.Combine(binaryDir, SidecarFileName);
-        var source = ReadSidecarSource(sidecarPath, logger);
+        // Sidecar parsing is shared with InstallSidecarReader; the layout
+        // mapping below intentionally uses the raw wire string so the
+        // mapping remains a static, dependency-free function callable from
+        // any context (including code paths that run before DI is wired).
+        var sidecarPath = Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName);
+        var source = InstallSidecarReader.ReadSourceField(sidecarPath);
 
         return source switch
         {
-            "winget" or "brew" or "dotnet-tool" => binaryDir,
-            "script" or "pr" => Path.GetDirectoryName(binaryDir) ?? binaryDir,
+            InstallSourceExtensions.WingetWire
+                or InstallSourceExtensions.BrewWire
+                or InstallSourceExtensions.DotnetToolWire => binaryDir,
+            InstallSourceExtensions.ScriptWire
+                or InstallSourceExtensions.PrWire
+                or InstallSourceExtensions.LocalHiveWire => Path.GetDirectoryName(binaryDir) ?? binaryDir,
             _ => Path.GetDirectoryName(binaryDir) ?? binaryDir,
         };
-    }
-
-    private const string SidecarFileName = ".aspire-install.json";
-
-    private static string? ReadSidecarSource(string sidecarPath, ILogger logger)
-    {
-        if (!File.Exists(sidecarPath))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var stream = File.OpenRead(sidecarPath);
-            using var doc = JsonDocument.Parse(stream);
-            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
-                doc.RootElement.TryGetProperty("source", out var sourceElement) &&
-                sourceElement.ValueKind == JsonValueKind.String)
-            {
-                return sourceElement.GetString();
-            }
-        }
-        catch (Exception ex)
-        {
-            // Best-effort sidecar read: any failure (I/O, malformed JSON, permissions,
-            // etc.) falls through to the parent-of-binary heuristic. Log so an
-            // unexpectedly-missing sidecar is diagnosable.
-            logger.LogDebug(ex, "Failed to read install-route sidecar at {Path}; treating as missing.", sidecarPath);
-        }
-
-        return null;
     }
 
     /// <summary>

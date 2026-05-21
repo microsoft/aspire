@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
@@ -160,6 +161,17 @@ internal static class CliTestHelper
         services.AddSingleton(options.BundlePayloadProviderFactory);
         services.AddSingleton(options.BundleServiceFactory);
         services.AddSingleton<BundleNuGetService>();
+        services.AddSingleton<IInstallSidecarReader, InstallSidecarReader>();
+        services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
+        services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
+        services.AddSingleton<WingetFirstRunProbe>();
+        // Always register the null reader by default so unit tests don't reach into the
+        // actual user registry through WingetFirstRunProbe on Windows. Tests that need
+        // the real reader (or a fake) should replace the registration explicitly.
+        services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
+        // IdentityChannelReader for AspireVersionCheck (doctor) — uses the same
+        // pattern as production wiring in Program.cs.
+        services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
         services.AddSingleton<ProfileCaptureService>();
 
         // AppHost project handlers - must match Program.cs registration pattern
