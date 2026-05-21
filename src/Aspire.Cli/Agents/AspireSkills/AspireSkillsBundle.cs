@@ -3,6 +3,8 @@
 
 using System.Globalization;
 using System.Security.Cryptography;
+using Aspire.Cli.Utils;
+using Semver;
 
 namespace Aspire.Cli.Agents.AspireSkills;
 
@@ -33,7 +35,22 @@ internal sealed class AspireSkillsBundle
     /// </summary>
     public static async Task<AspireSkillsBundle> LoadAsync(DirectoryInfo bundleDirectory, CancellationToken cancellationToken)
     {
+        return await LoadAsync(
+            bundleDirectory,
+            VersionHelper.GetDefaultSdkVersion(),
+            VersionHelper.GetDefaultSdkVersion(),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static async Task<AspireSkillsBundle> LoadAsync(
+        DirectoryInfo bundleDirectory,
+        string currentCliVersion,
+        string currentSdkVersion,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(bundleDirectory);
+        ArgumentException.ThrowIfNullOrWhiteSpace(currentCliVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(currentSdkVersion);
 
         var manifestPath = Path.Combine(bundleDirectory.FullName, ManifestFileName);
         if (!File.Exists(manifestPath))
@@ -52,7 +69,7 @@ internal sealed class AspireSkillsBundle
             throw new InvalidOperationException("Aspire skills bundle manifest is empty or invalid.");
         }
 
-        ValidateManifest(bundleDirectory, manifest);
+        ValidateManifest(bundleDirectory, manifest, currentCliVersion, currentSdkVersion);
 
         return new AspireSkillsBundle(bundleDirectory, manifest);
     }
@@ -88,12 +105,18 @@ internal sealed class AspireSkillsBundle
         return files;
     }
 
-    private static void ValidateManifest(DirectoryInfo bundleDirectory, SkillBundleManifest manifest)
+    private static void ValidateManifest(
+        DirectoryInfo bundleDirectory,
+        SkillBundleManifest manifest,
+        string currentCliVersion,
+        string currentSdkVersion)
     {
         if (string.IsNullOrWhiteSpace(manifest.Version))
         {
             throw new InvalidOperationException("Aspire skills bundle manifest must specify a version.");
         }
+
+        ValidateCompatibility(manifest.Supports, currentCliVersion, currentSdkVersion);
 
         var skills = manifest.Skills;
         if (skills is not { Length: > 0 })
@@ -214,5 +237,112 @@ internal sealed class AspireSkillsBundle
         return sha256.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
             ? sha256[prefix.Length..]
             : sha256;
+    }
+
+    private static void ValidateCompatibility(SkillBundleSupports? supports, string currentCliVersion, string currentSdkVersion)
+    {
+        if (supports is null)
+        {
+            throw new InvalidOperationException("Aspire skills bundle manifest must specify supported Aspire versions.");
+        }
+
+        if (string.IsNullOrWhiteSpace(supports.AspireCli))
+        {
+            throw new InvalidOperationException("Aspire skills bundle manifest must specify supports.aspireCli.");
+        }
+
+        if (!IsVersionInRange(currentCliVersion, supports.AspireCli))
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture,
+                "Aspire skills bundle supports Aspire CLI versions '{0}', but the current CLI version is '{1}'.",
+                supports.AspireCli,
+                currentCliVersion));
+        }
+
+        if (!string.IsNullOrWhiteSpace(supports.AspireSdk) &&
+            !IsVersionInRange(currentSdkVersion, supports.AspireSdk))
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture,
+                "Aspire skills bundle supports Aspire SDK versions '{0}', but the current SDK version is '{1}'.",
+                supports.AspireSdk,
+                currentSdkVersion));
+        }
+    }
+
+    private static bool IsVersionInRange(string version, string range)
+    {
+        var normalizedVersion = ParseCompatibilityVersion(version);
+        var comparators = range.Replace(',', ' ').Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (comparators.Length == 0)
+        {
+            throw new InvalidOperationException("Aspire skills bundle contains an empty version range.");
+        }
+
+        foreach (var comparator in comparators)
+        {
+            if (comparator is "*" or "x" or "X")
+            {
+                continue;
+            }
+
+            if (!SatisfiesComparator(normalizedVersion, comparator))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool SatisfiesComparator(SemVersion version, string comparator)
+    {
+        var (op, operandText) = ParseComparator(comparator);
+        var operand = ParseCompatibilityVersion(operandText);
+        var comparison = SemVersion.ComparePrecedence(version, operand);
+
+        return op switch
+        {
+            ">" => comparison > 0,
+            ">=" => comparison >= 0,
+            "<" => comparison < 0,
+            "<=" => comparison <= 0,
+            "=" or "==" => comparison == 0,
+            _ => throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Unsupported Aspire skills bundle version comparator '{0}'.", op))
+        };
+    }
+
+    private static (string Operator, string Operand) ParseComparator(string comparator)
+    {
+        foreach (var op in new[] { ">=", "<=", "==", ">", "<", "=" })
+        {
+            if (comparator.StartsWith(op, StringComparison.Ordinal))
+            {
+                var operand = comparator[op.Length..];
+                if (string.IsNullOrWhiteSpace(operand))
+                {
+                    throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle contains an invalid version comparator '{0}'.", comparator));
+                }
+
+                return (op, operand);
+            }
+        }
+
+        return ("=", comparator);
+    }
+
+    private static SemVersion ParseCompatibilityVersion(string version)
+    {
+        if (!SemVersion.TryParse(version, SemVersionStyles.Any, out var parsedVersion))
+        {
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle contains an invalid version value '{0}'.", version));
+        }
+
+        return SemVersion.Parse(
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"{parsedVersion.Major}.{parsedVersion.Minor}.{parsedVersion.Patch}"),
+            SemVersionStyles.Strict);
     }
 }

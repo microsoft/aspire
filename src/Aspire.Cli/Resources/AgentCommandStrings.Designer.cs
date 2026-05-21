@@ -358,7 +358,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire skills require npm for the first install, which was not found on PATH..
+        ///   Looks up a localized string similar to Aspire skills could not be downloaded from GitHub, and npm fallback is not available on PATH..
         /// </summary>
         internal static string AspireSkillsInstaller_NpmUnavailable {
             get {

@@ -169,7 +169,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        // Default static skills are installed. Playwright is not default so it is not selected.
+        // Default Aspire skills are installed. Playwright is not default so it is not selected.
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Verify the default Aspire skills were installed

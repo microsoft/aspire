@@ -72,6 +72,7 @@ public class AspireSkillsBundleTests
             var manifest = new SkillBundleManifest
             {
                 Version = AspireSkillsInstaller.Version,
+                Supports = CreateSupports(),
                 Skills =
                 [
                     new SkillBundleSkill
@@ -118,6 +119,10 @@ public class AspireSkillsBundleTests
                 $$"""
                 {
                   "version": "{{AspireSkillsInstaller.Version}}",
+                  "supports": {
+                    "aspireCli": ">=0.0.0 <999.0.0",
+                    "aspireSdk": ">=0.0.0 <999.0.0"
+                  },
                   "skills": [
                     {
                       "name": "{{SkillDefinition.Aspireify.Name}}",
@@ -145,7 +150,108 @@ public class AspireSkillsBundleTests
         }
     }
 
-    private static async Task CreateBundleAsync(string bundleDirectory, Dictionary<string, string> files, string? hashOverride = null)
+    [Fact]
+    public async Task LoadAsync_ThrowsWhenSupportsAreMissing()
+    {
+        var bundleDirectory = CreateTempDirectory();
+        var skillDirectory = Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name);
+        Directory.CreateDirectory(skillDirectory);
+        var skillPath = Path.Combine(skillDirectory, "SKILL.md");
+        await File.WriteAllTextAsync(skillPath, "# Aspire");
+
+        try
+        {
+            var manifest = new SkillBundleManifest
+            {
+                Version = AspireSkillsInstaller.Version,
+                Skills =
+                [
+                    new SkillBundleSkill
+                    {
+                        Name = SkillDefinition.Aspire.Name,
+                        Description = SkillDefinition.Aspire.Description,
+                        IsDefault = true,
+                        Files =
+                        [
+                            new SkillBundleFile
+                            {
+                                RelativePath = "SKILL.md",
+                                Sha256 = ComputeSha256(skillPath)
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            await WriteManifestAsync(bundleDirectory, manifest);
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
+
+            Assert.Contains("supported Aspire versions", exception.Message);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_ThrowsWhenCurrentCliVersionIsUnsupported()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            await CreateBundleAsync(
+                bundleDirectory,
+                new Dictionary<string, string> { ["SKILL.md"] = "# Aspire" },
+                supports: new SkillBundleSupports { AspireCli = ">=99.0.0 <100.0.0" });
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(
+                new DirectoryInfo(bundleDirectory),
+                currentCliVersion: "13.4.0",
+                currentSdkVersion: "13.4.0",
+                CancellationToken.None));
+
+            Assert.Contains("supports Aspire CLI versions", exception.Message);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_TreatsCurrentCliPrereleaseAsReleaseForCompatibilityRange()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            await CreateBundleAsync(
+                bundleDirectory,
+                new Dictionary<string, string> { ["SKILL.md"] = "# Aspire" },
+                supports: new SkillBundleSupports { AspireCli = ">=13.4.0 <13.5.0" });
+
+            var bundle = await AspireSkillsBundle.LoadAsync(
+                new DirectoryInfo(bundleDirectory),
+                currentCliVersion: "13.4.0-pr.17323.gf2228d9b",
+                currentSdkVersion: "13.4.0",
+                CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    private static async Task CreateBundleAsync(
+        string bundleDirectory,
+        Dictionary<string, string> files,
+        string? hashOverride = null,
+        SkillBundleSupports? supports = null)
     {
         var skillDirectory = Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name);
         Directory.CreateDirectory(skillDirectory);
@@ -160,6 +266,7 @@ public class AspireSkillsBundleTests
         var manifest = new SkillBundleManifest
         {
             Version = AspireSkillsInstaller.Version,
+            Supports = supports ?? CreateSupports(),
             Skills =
             [
                 new SkillBundleSkill
@@ -180,6 +287,15 @@ public class AspireSkillsBundleTests
         };
 
         await WriteManifestAsync(bundleDirectory, manifest);
+    }
+
+    private static SkillBundleSupports CreateSupports()
+    {
+        return new SkillBundleSupports
+        {
+            AspireCli = ">=0.0.0 <999.0.0",
+            AspireSdk = ">=0.0.0 <999.0.0"
+        };
     }
 
     private static Task WriteManifestAsync(string bundleDirectory, SkillBundleManifest manifest)

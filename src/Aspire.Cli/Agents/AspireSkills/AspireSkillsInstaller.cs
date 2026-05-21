@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Formats.Tar;
 using System.Globalization;
 using System.IO.Compression;
+using System.Net;
 using System.Security.Cryptography;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
@@ -21,6 +22,7 @@ namespace Aspire.Cli.Agents.AspireSkills;
 internal sealed class AspireSkillsInstaller(
     INpmRunner npmRunner,
     INpmProvenanceChecker provenanceChecker,
+    IHttpClientFactory httpClientFactory,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
     IConfiguration configuration,
@@ -29,7 +31,8 @@ internal sealed class AspireSkillsInstaller(
 {
     internal const string PackageName = "@microsoft/aspire-skills";
     internal const string Version = "0.0.1";
-    internal const string ExpectedSourceRepository = "https://github.com/microsoft/aspire-skills";
+    internal const string GitHubRepository = "microsoft/aspire-skills";
+    internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
     internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";
     internal const string ExpectedBuildType = "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1";
     internal const string DisablePackageValidationKey = "disableAspireSkillsPackageValidation";
@@ -68,21 +71,101 @@ internal sealed class AspireSkillsInstaller(
             return AspireSkillsInstallResult.Installed(cachedBundle);
         }
 
+        var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
+
+        var githubResult = await InstallFromGitHubAsync(cacheRoot, effectiveVersion, activity, cancellationToken).ConfigureAwait(false);
+        if (githubResult.Status == AcquisitionStatus.Installed)
+        {
+            CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
+            return AspireSkillsInstallResult.Installed(githubResult.Bundle!);
+        }
+
+        if (githubResult.Status == AcquisitionStatus.Failed)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, githubResult.Message);
+            return AspireSkillsInstallResult.Failed(githubResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_InvalidBundle);
+        }
+
         if (!npmRunner.IsAvailable)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "npm is unavailable.");
+            activity?.SetStatus(ActivityStatusCode.Error, "GitHub acquisition is unavailable and npm is unavailable.");
             return AspireSkillsInstallResult.Failed(AgentCommandStrings.AspireSkillsInstaller_NpmUnavailable);
         }
 
-        var packageInfo = await npmRunner.ResolvePackageAsync(PackageName, effectiveVersion, cancellationToken).ConfigureAwait(false);
+        var npmResult = await InstallFromNpmAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
+        if (npmResult.Status == AcquisitionStatus.Installed)
+        {
+            CleanupStaleCacheEntries(cacheRoot, npmResult.Bundle!.Version);
+            return AspireSkillsInstallResult.Installed(npmResult.Bundle);
+        }
+
+        activity?.SetStatus(ActivityStatusCode.Error, npmResult.Message);
+        return AspireSkillsInstallResult.Failed(npmResult.Message ?? string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveVersion)));
+    }
+
+    private async Task<AcquisitionResult> InstallFromGitHubAsync(
+        string cacheRoot,
+        string version,
+        Activity? activity,
+        CancellationToken cancellationToken)
+    {
+        var tempDir = Path.Combine(cacheRoot, $".github-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            foreach (var tag in GetGitHubTagCandidates(version))
+            {
+                var archiveUrl = GetGitHubTagArchiveUrl(tag);
+                var archivePath = Path.Combine(tempDir, $"{GetSafeFileName(tag)}.tar.gz");
+                var downloaded = await TryDownloadGitHubArchiveAsync(archiveUrl, archivePath, cancellationToken).ConfigureAwait(false);
+                if (!downloaded)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var bundle = await CacheArchiveAsync(cacheRoot, archivePath, version, cancellationToken).ConfigureAwait(false);
+                    activity?.SetTag("aspire.skills.source", "github");
+                    activity?.SetTag("aspire.skills.cache_hit", false);
+                    return AcquisitionResult.Installed(bundle);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+                {
+                    logger.LogWarning(ex, "Downloaded Aspire skills archive from {ArchiveUrl} is invalid.", archiveUrl);
+                    return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
+                }
+            }
+
+            logger.LogDebug("Aspire skills GitHub archive was unavailable for version {Version}.", version);
+            return AcquisitionResult.Unavailable();
+        }
+        catch (HttpRequestException ex)
+        {
+            logger.LogDebug(ex, "Aspire skills GitHub archive download failed for version {Version}. Falling back to npm if available.", version);
+            return AcquisitionResult.Unavailable();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    private async Task<AcquisitionResult> InstallFromNpmAsync(
+        string cacheRoot,
+        string version,
+        bool validationDisabled,
+        Activity? activity,
+        CancellationToken cancellationToken)
+    {
+        var packageInfo = await npmRunner.ResolvePackageAsync(PackageName, version, cancellationToken).ConfigureAwait(false);
         if (packageInfo is null)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "Package resolution failed.");
-            return AspireSkillsInstallResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveVersion)));
+            return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, version)));
         }
 
         var packageSpecifier = NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version);
-        var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
         if (!validationDisabled)
         {
             var provenanceResult = await provenanceChecker.VerifyProvenanceAsync(
@@ -99,63 +182,39 @@ internal sealed class AspireSkillsInstaller(
 
             if (!provenanceResult.IsVerified)
             {
-                activity?.SetStatus(ActivityStatusCode.Error, "Provenance verification failed.");
-                return AspireSkillsInstallResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed, packageSpecifier, provenanceResult.Outcome));
+                return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed, packageSpecifier, provenanceResult.Outcome));
             }
         }
 
-        var tempDir = Path.Combine(cacheRoot, $".tmp-{Guid.NewGuid():N}");
+        var tempDir = Path.Combine(cacheRoot, $".npm-{Guid.NewGuid():N}");
         Directory.CreateDirectory(tempDir);
-        var stageDir = Path.Combine(cacheRoot, $".stage-{Guid.NewGuid():N}");
 
         try
         {
             var tarballPath = await npmRunner.PackAsync(PackageName, packageInfo.Version.ToString(), tempDir, cancellationToken).ConfigureAwait(false);
             if (tarballPath is null)
             {
-                activity?.SetStatus(ActivityStatusCode.Error, "Package download failed.");
-                return AspireSkillsInstallResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToDownload, packageSpecifier));
+                return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToDownload, packageSpecifier));
             }
 
             if (!validationDisabled && !VerifyIntegrity(tarballPath, packageInfo.Integrity))
             {
-                activity?.SetStatus(ActivityStatusCode.Error, "Package integrity verification failed.");
-                return AspireSkillsInstallResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_IntegrityVerificationFailed, packageSpecifier));
+                return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_IntegrityVerificationFailed, packageSpecifier));
             }
 
-            var extractDir = Path.Combine(tempDir, "extracted");
-            Directory.CreateDirectory(extractDir);
-            ExtractTarball(tarballPath, extractDir);
-
-            var bundleRoot = FindBundleRoot(extractDir);
-            CopyDirectory(bundleRoot.FullName, stageDir);
-            _ = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(stageDir), cancellationToken).ConfigureAwait(false);
-
-            var targetDir = GetVersionCacheDirectory(cacheRoot, packageInfo.Version.ToString());
-            if (Directory.Exists(targetDir))
-            {
-                Directory.Delete(targetDir, recursive: true);
-            }
-
-            Directory.Move(stageDir, targetDir);
-            TouchLastUsed(targetDir);
-
-            var installedBundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(targetDir), cancellationToken).ConfigureAwait(false);
-            CleanupStaleCacheEntries(cacheRoot, packageInfo.Version.ToString());
-
+            var bundle = await CacheArchiveAsync(cacheRoot, tarballPath, packageInfo.Version.ToString(), cancellationToken).ConfigureAwait(false);
+            activity?.SetTag("aspire.skills.source", "npm");
             activity?.SetTag("aspire.skills.cache_hit", false);
-            return AspireSkillsInstallResult.Installed(installedBundle);
+            return AcquisitionResult.Installed(bundle);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             logger.LogWarning(ex, "Failed to install Aspire skills bundle.");
-            return AspireSkillsInstallResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
+            return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
         }
         finally
         {
             TryDeleteDirectory(tempDir);
-            TryDeleteDirectory(stageDir);
         }
     }
 
@@ -171,6 +230,7 @@ internal sealed class AspireSkillsInstaller(
         try
         {
             var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(cacheDirectory), cancellationToken).ConfigureAwait(false);
+            ValidateBundleVersion(bundle, version);
             TouchLastUsed(cacheDirectory);
             activity?.SetTag("aspire.skills.cache_hit", true);
             logger.LogDebug("Using cached Aspire skills bundle from {CacheDirectory}.", cacheDirectory);
@@ -180,6 +240,109 @@ internal sealed class AspireSkillsInstaller(
         {
             logger.LogDebug(ex, "Ignoring invalid cached Aspire skills bundle at {CacheDirectory}.", cacheDirectory);
             return null;
+        }
+    }
+
+    private async Task<AspireSkillsBundle> CacheArchiveAsync(
+        string cacheRoot,
+        string archivePath,
+        string version,
+        CancellationToken cancellationToken)
+    {
+        var extractDir = Path.Combine(cacheRoot, $".extract-{Guid.NewGuid():N}");
+        var stageDir = Path.Combine(cacheRoot, $".stage-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(extractDir);
+
+        try
+        {
+            ExtractTarball(archivePath, extractDir);
+
+            var bundleRoot = FindBundleRoot(extractDir);
+            CopyDirectory(bundleRoot.FullName, stageDir);
+
+            var stagedBundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(stageDir), cancellationToken).ConfigureAwait(false);
+            ValidateBundleVersion(stagedBundle, version);
+
+            var targetDir = GetVersionCacheDirectory(cacheRoot, version);
+            if (Directory.Exists(targetDir))
+            {
+                Directory.Delete(targetDir, recursive: true);
+            }
+
+            Directory.Move(stageDir, targetDir);
+            TouchLastUsed(targetDir);
+
+            var installedBundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(targetDir), cancellationToken).ConfigureAwait(false);
+            ValidateBundleVersion(installedBundle, version);
+
+            return installedBundle;
+        }
+        finally
+        {
+            TryDeleteDirectory(extractDir);
+            TryDeleteDirectory(stageDir);
+        }
+    }
+
+    private async Task<bool> TryDownloadGitHubArchiveAsync(string archiveUrl, string archivePath, CancellationToken cancellationToken)
+    {
+        var httpClient = httpClientFactory.CreateClient(nameof(AspireSkillsInstaller));
+        using var request = new HttpRequestMessage(HttpMethod.Get, archiveUrl);
+        request.Headers.UserAgent.ParseAdd("Aspire-Cli");
+
+        using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogDebug("Aspire skills GitHub archive request to {ArchiveUrl} returned HTTP {StatusCode}.", archiveUrl, response.StatusCode);
+            return false;
+        }
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var fileStream = File.Create(archivePath);
+        await responseStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
+
+        return true;
+    }
+
+    private static string GetGitHubTagArchiveUrl(string tag)
+    {
+        return $"https://github.com/{GitHubRepository}/archive/refs/tags/{Uri.EscapeDataString(tag)}.tar.gz";
+    }
+
+    private static IEnumerable<string> GetGitHubTagCandidates(string version)
+    {
+        yield return $"v{version}";
+
+        if (!version.StartsWith('v'))
+        {
+            yield return version;
+        }
+    }
+
+    private static string GetSafeFileName(string value)
+    {
+        foreach (var invalidCharacter in Path.GetInvalidFileNameChars())
+        {
+            value = value.Replace(invalidCharacter, '-');
+        }
+
+        return value;
+    }
+
+    private static void ValidateBundleVersion(AspireSkillsBundle bundle, string expectedVersion)
+    {
+        if (!string.Equals(bundle.Version, expectedVersion, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture,
+                "Aspire skills bundle version '{0}' does not match expected version '{1}'.",
+                bundle.Version,
+                expectedVersion));
         }
     }
 
@@ -250,9 +413,59 @@ internal sealed class AspireSkillsInstaller(
 
     private static void ExtractTarball(string tarballPath, string destinationDirectory)
     {
+        var destinationRoot = Path.GetFullPath(destinationDirectory);
+        Directory.CreateDirectory(destinationRoot);
+
         using var fileStream = File.OpenRead(tarballPath);
         using var gzipStream = new GZipStream(fileStream, CompressionMode.Decompress);
-        TarFile.ExtractToDirectory(gzipStream, destinationDirectory, overwriteFiles: true);
+        using var tarReader = new TarReader(gzipStream);
+
+        while (tarReader.GetNextEntry() is { } entry)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Name))
+            {
+                continue;
+            }
+
+            var entryName = entry.Name.Replace('\\', '/');
+            if (Path.IsPathRooted(entryName) ||
+                entryName.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or ".."))
+            {
+                throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' is not safe.", entry.Name));
+            }
+
+            var destinationPath = Path.GetFullPath(Path.Combine(destinationRoot, entryName.Replace('/', Path.DirectorySeparatorChar)));
+            if (!destinationPath.StartsWith(destinationRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
+                !string.Equals(destinationPath, destinationRoot, StringComparison.Ordinal))
+            {
+                throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' escapes the extraction directory.", entry.Name));
+            }
+
+            switch (entry.EntryType)
+            {
+                case TarEntryType.Directory:
+                    Directory.CreateDirectory(destinationPath);
+                    break;
+
+                case TarEntryType.RegularFile:
+                case TarEntryType.V7RegularFile:
+                    var destinationFileDirectory = Path.GetDirectoryName(destinationPath);
+                    if (!string.IsNullOrEmpty(destinationFileDirectory))
+                    {
+                        Directory.CreateDirectory(destinationFileDirectory);
+                    }
+
+                    entry.ExtractToFile(destinationPath, overwrite: true);
+                    break;
+
+                case TarEntryType.GlobalExtendedAttributes:
+                case TarEntryType.ExtendedAttributes:
+                    break;
+
+                default:
+                    throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' has unsupported type '{1}'.", entry.Name, entry.EntryType));
+            }
+        }
     }
 
     private static DirectoryInfo FindBundleRoot(string extractionDirectory)
@@ -268,6 +481,21 @@ internal sealed class AspireSkillsInstaller(
         if (File.Exists(packageManifestPath))
         {
             return new DirectoryInfo(packageDirectory);
+        }
+
+        var topLevelBundleDirectories = Directory
+            .EnumerateDirectories(extractionDirectory)
+            .Where(directory => File.Exists(Path.Combine(directory, "skill-manifest.json")))
+            .ToArray();
+
+        if (topLevelBundleDirectories.Length == 1)
+        {
+            return new DirectoryInfo(topLevelBundleDirectories[0]);
+        }
+
+        if (topLevelBundleDirectories.Length > 1)
+        {
+            throw new InvalidOperationException("Downloaded Aspire skills package contains multiple skill-manifest.json files.");
         }
 
         throw new InvalidOperationException("Downloaded Aspire skills package does not contain skill-manifest.json.");
@@ -306,6 +534,31 @@ internal sealed class AspireSkillsInstaller(
         var actualHash = Convert.ToBase64String(hashBytes);
 
         return string.Equals(expectedHash, actualHash, StringComparison.Ordinal);
+    }
+
+    private enum AcquisitionStatus
+    {
+        Installed,
+        Unavailable,
+        Failed
+    }
+
+    private sealed record AcquisitionResult(AcquisitionStatus Status, AspireSkillsBundle? Bundle, string? Message)
+    {
+        public static AcquisitionResult Installed(AspireSkillsBundle bundle)
+        {
+            return new AcquisitionResult(AcquisitionStatus.Installed, bundle, null);
+        }
+
+        public static AcquisitionResult Unavailable()
+        {
+            return new AcquisitionResult(AcquisitionStatus.Unavailable, null, null);
+        }
+
+        public static AcquisitionResult Failed(string message)
+        {
+            return new AcquisitionResult(AcquisitionStatus.Failed, null, message);
+        }
     }
 
     private void TryDeleteDirectory(string directory)

@@ -13,7 +13,19 @@ internal sealed class SkillBundleManifest
 {
     public string? Version { get; init; }
 
+    public SkillBundleSupports? Supports { get; init; }
+
     public SkillBundleSkill[] Skills { get; init; } = [];
+}
+
+/// <summary>
+/// Describes the Aspire versions supported by a skills bundle.
+/// </summary>
+internal sealed class SkillBundleSupports
+{
+    public string? AspireCli { get; init; }
+
+    public string? AspireSdk { get; init; }
 }
 
 /// <summary>

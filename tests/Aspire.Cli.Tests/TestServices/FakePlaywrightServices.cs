@@ -126,6 +126,11 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
         var manifest = new SkillBundleManifest
         {
             Version = AspireSkillsInstaller.Version,
+            Supports = new SkillBundleSupports
+            {
+                AspireCli = ">=0.0.0 <999.0.0",
+                AspireSdk = ">=0.0.0 <999.0.0"
+            },
             Skills =
             [
                 CreateSkill(CommonAgentApplicators.AspireSkillName, isDefault: true, ["evals"], files),
