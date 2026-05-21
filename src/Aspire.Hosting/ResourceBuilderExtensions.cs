@@ -4884,10 +4884,31 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Hides the resource from default resource lists after it completes successfully.
     /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="exitCode">The completion exit code to treat as successful. Defaults to <c>0</c>.</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// This method is useful for one-off resources such as setup scripts, migrations, or build steps that should remain visible while running
+    /// and then be hidden after successful completion.
+    /// Hidden resources can still be accessed directly by their name, by using <c>Show hidden resources</c> toggle in the dashboard or by using <c>aspire describe --include-hidden</c> from the CLI.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Use ATS-friendly overload that supports a single exit code or multiple exit codes.")]
+    public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, int exitCode = 0) where T : IResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.OnCompletion) { SuccessfulExitCodes = [exitCode] }, ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    /// <summary>
+    /// Hides the resource from default resource lists after it completes successfully.
+    /// </summary>
     /// <ats-summary>Hides the resource from default resource lists after successful completion</ats-summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="exitCode">The completion exit code to treat as successful. Defaults to <c>0</c>.</param>
+    /// <param name="exitCodes">Completion exit codes to treat as successful. If no values are provided, <c>0</c> is used.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
@@ -4895,12 +4916,14 @@ public static class ResourceBuilderExtensions
     /// and then be hidden after successful completion.
     /// Hidden resources can still be accessed directly by their name, by using <c>Show hidden resources</c> toggle in the dashboard or by using <c>aspire describe --include-hidden</c> from the CLI.
     /// </remarks>
-    [AspireExport]
-    public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, int exitCode = 0) where T : IResource
+    [AspireExport("withHiddenOnCompletion")]
+    internal static IResourceBuilder<T> WithHiddenOnCompletionExport<T>(this IResourceBuilder<T> builder, int? exitCode = null, int[]? exitCodes = null) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.OnCompletion) { SuccessfulExitCodes = [exitCode] }, ResourceAnnotationMutationBehavior.Replace);
+        return exitCodes is not null
+            ? WithHiddenOnCompletionCore(builder, exitCodes)
+            : WithHiddenOnCompletionCore(builder, exitCode is null ? [] : [exitCode.Value]);
     }
 
     /// <summary>
@@ -4915,13 +4938,18 @@ public static class ResourceBuilderExtensions
     /// and then be hidden after successful completion.
     /// Hidden resources can still be accessed directly by their name, by using <c>Show hidden resources</c> toggle in the dashboard or by using <c>aspire describe --include-hidden</c> from the CLI.
     /// </remarks>
-    [AspireExportIgnore(Reason = "Uses params array overload; use single-exit-code overload for ATS compatibility.")]
+    [AspireExportIgnore(Reason = "Uses params array overload; use ATS-friendly overload for polyglot SDKs.")]
     public static IResourceBuilder<T> WithHiddenOnCompletion<T>(this IResourceBuilder<T> builder, params int[] exitCodes) where T : IResource
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(exitCodes);
 
-        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.OnCompletion) { SuccessfulExitCodes = exitCodes.Length > 0 ? [.. exitCodes] : [0] }, ResourceAnnotationMutationBehavior.Replace);
+        return WithHiddenOnCompletionCore(builder, exitCodes);
+    }
+
+    private static IResourceBuilder<T> WithHiddenOnCompletionCore<T>(IResourceBuilder<T> builder, IReadOnlyList<int> exitCodes) where T : IResource
+    {
+        return builder.WithAnnotation(new HiddenAnnotation(HiddenBehavior.OnCompletion) { SuccessfulExitCodes = exitCodes.Count > 0 ? [.. exitCodes] : [0] }, ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>

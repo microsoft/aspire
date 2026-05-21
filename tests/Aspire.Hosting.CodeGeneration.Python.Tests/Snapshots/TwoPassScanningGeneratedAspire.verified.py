@@ -1558,6 +1558,11 @@ class ProcessCommandFactoryParameters(typing.TypedDict, total=False):
     options: ProcessCommandResultExportOptions
 
 
+class HiddenOnCompletionParameters(typing.TypedDict, total=False):
+    exit_code: int
+    exit_codes: typing.Iterable[int]
+
+
 class PipelineStepFactoryParameters(typing.TypedDict, total=False):
     step_name: typing.Required[str]
     callback: typing.Required[typing.Callable[[PipelineStepContext], None]]
@@ -6162,7 +6167,7 @@ class AbstractResource(abc.ABC):
         """Hides the resource from default resource lists"""
 
     @abc.abstractmethod
-    def with_hidden_on_completion(self, *, exit_code: int = 0) -> typing.Self:
+    def with_hidden_on_completion(self, *, exit_code: int | None = None, exit_codes: typing.Iterable[int] | None = None) -> typing.Self:
         """Hides the resource from default resource lists after successful completion"""
 
     @abc.abstractmethod
@@ -6523,7 +6528,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     icon_name: str | tuple[str, IconVariant]
     exclude_from_mcp: typing.Literal[True]
     hidden: typing.Literal[True]
-    hidden_on_completion: int | typing.Literal[True]
+    hidden_on_completion: HiddenOnCompletionParameters | typing.Literal[True]
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
     on_before_resource_started: typing.Callable[[BeforeResourceStartedEvent], None]
@@ -6819,11 +6824,13 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_hidden_on_completion(self, *, exit_code: int = 0) -> typing.Self:
+    def with_hidden_on_completion(self, *, exit_code: int | None = None, exit_codes: typing.Iterable[int] | None = None) -> typing.Self:
         """Hides the resource from default resource lists after successful completion"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if exit_code is not None:
             rpc_args['exitCode'] = exit_code
+        if exit_codes is not None:
+            rpc_args['exitCodes'] = exit_codes
         result = self._client.invoke_capability(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpc_args,
@@ -7337,15 +7344,16 @@ class _BaseResource(AbstractResource):
             else:
                 raise TypeError("Invalid type for option 'hidden'. Expected: Literal[True]")
         if _hidden_on_completion := kwargs.pop("hidden_on_completion", None):
-            if _validate_type(_hidden_on_completion, int):
+            if _validate_dict_types(_hidden_on_completion, HiddenOnCompletionParameters):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["exitCode"] = typing.cast(int, _hidden_on_completion)
+                rpc_args["exitCode"] = typing.cast(HiddenOnCompletionParameters, _hidden_on_completion).get("exit_code")
+                rpc_args["exitCodes"] = typing.cast(HiddenOnCompletionParameters, _hidden_on_completion).get("exit_codes")
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
             elif _hidden_on_completion is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'hidden_on_completion'. Expected: int or Literal[True]")
+                raise TypeError("Invalid type for option 'hidden_on_completion'. Expected: HiddenOnCompletionParameters or Literal[True]")
         if _pipeline_step_factory := kwargs.pop("pipeline_step_factory", None):
             if _validate_tuple_types(_pipeline_step_factory, (str, typing.Callable[[PipelineStepContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}

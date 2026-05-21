@@ -2373,11 +2373,14 @@ impl CSharpAppResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -3468,11 +3471,14 @@ impl ContainerRegistryResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -4726,11 +4732,14 @@ impl ContainerResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -6493,11 +6502,14 @@ impl DotnetToolResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -8269,11 +8281,14 @@ impl ExecutableResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -9052,11 +9067,14 @@ impl ExternalServiceResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -11690,11 +11708,14 @@ impl ParameterResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -13247,11 +13268,14 @@ impl ProjectResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -15241,11 +15265,14 @@ impl TestDatabaseResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -16734,11 +16761,14 @@ impl TestRedisResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;
@@ -18293,11 +18323,14 @@ impl TestVaultResource {
     }
 
     /// Hides the resource from default resource lists after successful completion
-    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn with_hidden_on_completion(&self, exit_code: Option<f64>, exit_codes: Option<Vec<f64>>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = exit_code {
             args.insert("exitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = exit_codes {
+            args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
         let handle: Handle = serde_json::from_value(result)?;

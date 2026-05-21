@@ -1357,6 +1357,8 @@ export interface WithEndpointOptions {
 export interface WithHiddenOnCompletionOptions {
     /** The completion exit code to treat as successful. Defaults to `0`. */
     exitCode?: number;
+    /** Completion exit codes to treat as successful. If no values are provided, `0` is used. */
+    exitCodes?: number[];
 }
 
 export interface WithHttpEndpointCallbackOptions {
@@ -11396,9 +11398,10 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ContainerRegistryResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -11417,7 +11420,8 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerRegistryResourcePromise {
         const exitCode = options?.exitCode;
-        return new ContainerRegistryResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new ContainerRegistryResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -15225,9 +15229,10 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ContainerResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -15246,7 +15251,8 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ContainerResourcePromise {
         const exitCode = options?.exitCode;
-        return new ContainerResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new ContainerResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -18830,9 +18836,10 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<CSharpAppResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -18851,7 +18858,8 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): CSharpAppResourcePromise {
         const exitCode = options?.exitCode;
-        return new CSharpAppResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new CSharpAppResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -22490,9 +22498,10 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<DotnetToolResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -22511,7 +22520,8 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): DotnetToolResourcePromise {
         const exitCode = options?.exitCode;
-        return new DotnetToolResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new DotnetToolResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -26007,9 +26017,10 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ExecutableResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -26028,7 +26039,8 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExecutableResourcePromise {
         const exitCode = options?.exitCode;
-        return new ExecutableResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new ExecutableResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -28187,9 +28199,10 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ExternalServiceResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -28208,7 +28221,8 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ExternalServiceResourcePromise {
         const exitCode = options?.exitCode;
-        return new ExternalServiceResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new ExternalServiceResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -30123,9 +30137,10 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ParameterResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -30144,7 +30159,8 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ParameterResourcePromise {
         const exitCode = options?.exitCode;
-        return new ParameterResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new ParameterResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -33360,9 +33376,10 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<ProjectResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -33381,7 +33398,8 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ProjectResourcePromise {
         const exitCode = options?.exitCode;
-        return new ProjectResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new ProjectResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -37474,9 +37492,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<TestDatabaseResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -37495,7 +37514,8 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestDatabaseResourcePromise {
         const exitCode = options?.exitCode;
-        return new TestDatabaseResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new TestDatabaseResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -41843,9 +41863,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<TestRedisResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -41864,7 +41885,8 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestRedisResourcePromise {
         const exitCode = options?.exitCode;
-        return new TestRedisResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new TestRedisResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -46323,9 +46345,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<TestVaultResource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -46344,7 +46367,8 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): TestVaultResourcePromise {
         const exitCode = options?.exitCode;
-        return new TestVaultResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new TestVaultResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */
@@ -48904,9 +48928,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withHiddenOnCompletionInternal(exitCode?: number): Promise<Resource> {
+    private async _withHiddenOnCompletionInternal(exitCode?: number, exitCodes?: number[]): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (exitCode !== undefined) rpcArgs.exitCode = exitCode;
+        if (exitCodes !== undefined) rpcArgs.exitCodes = exitCodes;
         const result = await this._client.invokeCapability<IResourceHandle>(
             'Aspire.Hosting/withHiddenOnCompletion',
             rpcArgs
@@ -48925,7 +48950,8 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      */
     withHiddenOnCompletion(options?: WithHiddenOnCompletionOptions): ResourcePromise {
         const exitCode = options?.exitCode;
-        return new ResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode), this._client);
+        const exitCodes = options?.exitCodes;
+        return new ResourcePromiseImpl(this._withHiddenOnCompletionInternal(exitCode, exitCodes), this._client);
     }
 
     /** @internal */

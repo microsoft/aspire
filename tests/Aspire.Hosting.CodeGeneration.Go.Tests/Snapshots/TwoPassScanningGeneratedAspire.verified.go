@@ -25453,12 +25453,14 @@ func (o *WithHttpProbeOptions) ToMap() map[string]any {
 // WithHiddenOnCompletionOptions carries optional parameters for WithHiddenOnCompletion.
 type WithHiddenOnCompletionOptions struct {
 	ExitCode *float64 `json:"exitCode,omitempty"`
+	ExitCodes []float64 `json:"exitCodes,omitempty"`
 }
 
 func (o *WithHiddenOnCompletionOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
 	if o.ExitCode != nil { m["exitCode"] = serializeValue(o.ExitCode) }
+	if o.ExitCodes != nil { m["exitCodes"] = serializeValue(o.ExitCodes) }
 	return m
 }
 
