@@ -76,42 +76,57 @@ public static class FakeArchiveHelper
     }
 
     /// <summary>
-    /// Creates a CLI archive whose fake executable simulates embedded bundle extraction so
-    /// verify-cli-archive.ps1 can test the shipped archive contract without depending on
-    /// signed build artifacts or running the real Aspire CLI.
+    /// Creates a per-RID CLI archive whose fake aspire binary handles the commands
+    /// verify-cli-archive.ps1 invokes (<c>aspire --version</c> and
+    /// <c>aspire new aspire-starter --name NAME --output OUTPUT ...</c>). The fake
+    /// binary is a bash script, so this is only usable on platforms where the
+    /// verifier executes the binary directly (Linux/macOS).
     /// </summary>
-    public static async Task<FakeArchive> CreateFakeBundleArchiveAsync(string outputDir, string platform = "linux-x64")
+    /// <param name="includeStraySidecar">When true, adds a <c>.aspire-install.json</c>
+    /// at the archive root so the verifier's sidecar-rejection contract can be
+    /// asserted; see <c>docs/specs/install-routes.md</c>.</param>
+    /// <param name="nestAspireUnderSubdir">When true, places the <c>aspire</c> binary
+    /// under a single subdirectory inside the archive rather than at the root. This
+    /// exercises <c>Get-ArchiveRoot</c>'s single-subdirectory branch and confirms the
+    /// sidecar scan still inspects the true archive root.</param>
+    public static async Task<FakeArchive> CreateFakeVerifyArchiveAsync(
+        string outputDir,
+        string platform = "linux-x64",
+        bool includeStraySidecar = false,
+        bool nestAspireUnderSubdir = false)
     {
         Directory.CreateDirectory(outputDir);
 
-        var isWindows = platform.StartsWith("win", StringComparison.OrdinalIgnoreCase);
-        var extension = isWindows ? "zip" : "tar.gz";
+        var extension = "tar.gz";
         var archivePath = Path.Combine(outputDir, $"aspire-cli-{platform}.{extension}");
         var checksumPath = archivePath + ".sha512";
 
-        var contentDir = Path.Combine(outputDir, $"bundle-content-{Guid.NewGuid():N}");
+        var contentDir = Path.Combine(outputDir, $"verify-content-{Guid.NewGuid():N}");
         Directory.CreateDirectory(contentDir);
 
         try
         {
-            var cliBinaryName = isWindows ? "aspire.exe" : "aspire";
-            var cliBinaryPath = Path.Combine(contentDir, cliBinaryName);
+            // When nesting, the binary lives at <contentDir>/payload/aspire, mirroring
+            // archives whose producer wraps everything in a top-level directory.
+            var binaryDir = nestAspireUnderSubdir
+                ? Path.Combine(contentDir, "payload")
+                : contentDir;
+            Directory.CreateDirectory(binaryDir);
 
-            await File.WriteAllTextAsync(cliBinaryPath, CreateFakeCliScript(isWindows));
+            var binaryPath = Path.Combine(binaryDir, "aspire");
+            await File.WriteAllTextAsync(binaryPath, FakeVerifyAspireScript);
+            FileHelper.MakeExecutable(binaryPath);
 
-            if (!isWindows)
+            if (includeStraySidecar)
             {
-                FileHelper.MakeExecutable(cliBinaryPath);
+                // Per docs/specs/install-routes.md, per-RID archives must ship
+                // sidecar-free. The verifier rejects archives that contain a
+                // .aspire-install.json at the archive root.
+                var sidecarPath = Path.Combine(contentDir, ".aspire-install.json");
+                await File.WriteAllTextAsync(sidecarPath, "{\"source\":\"stray\"}");
             }
 
-            if (isWindows)
-            {
-                ZipFile.CreateFromDirectory(contentDir, archivePath);
-            }
-            else
-            {
-                await CreateTarGzAsync(contentDir, archivePath);
-            }
+            await CreateTarGzAsync(contentDir, archivePath);
 
             var hashHex = await ComputeSha512Async(archivePath);
             await File.WriteAllTextAsync(checksumPath, hashHex);
@@ -127,149 +142,47 @@ public static class FakeArchiveHelper
         }
     }
 
-    private static string CreateFakeCliScript(bool isWindows)
-    {
-        return isWindows
-            ? """
-                @echo off
-                setlocal
-                if "%~1"=="--version" (
-                    echo aspire mock v1.0
-                    exit /b 0
-                )
-                if "%~1"=="new" goto :new
-                echo Unsupported command: %* 1>&2
-                exit /b 1
+    // Minimal aspire mock for verify-cli-archive.ps1. Handles:
+    //   aspire --version              -> print version, exit 0
+    //   aspire new aspire-starter --name <n> --output <dir> [--non-interactive] [--nologo]
+    //                                  -> mkdir "<dir>/<n>.AppHost", exit 0
+    // Anything else exits non-zero so unexpected verifier invocations surface as test failures.
+    private const string FakeVerifyAspireScript = """
+        #!/usr/bin/env bash
+        set -euo pipefail
 
-                :new
-                set "template=%~2"
-                set "name="
-                set "output="
-                shift
-                shift
-                :parse
-                if "%~1"=="" goto :parsed
-                if "%~1"=="--name" (
-                    set "name=%~2"
-                    shift
-                    shift
-                    goto :parse
-                )
-                if "%~1"=="--output" (
-                    set "output=%~2"
-                    shift
-                    shift
-                    goto :parse
-                )
-                shift
-                goto :parse
+        if [[ "${1:-}" == "--version" ]]; then
+            echo "aspire mock v1.0"
+            exit 0
+        fi
 
-                :parsed
-                if not exist "%output%" mkdir "%output%"
-                if "%template%"=="aspire-starter" (
-                    mkdir "%output%\%name%.AppHost" >nul 2>&1
-                    exit /b 0
-                )
-                if "%template%"=="aspire-ts-starter" (
-                    call :extract_bundle
-                    mkdir "%output%\.modules" >nul 2>&1
-                    mkdir "%output%\frontend\src" >nul 2>&1
-                    mkdir "%output%\api\src" >nul 2>&1
-                    > "%output%\apphost.ts" echo // apphost
-                    > "%output%\.modules\aspire.ts" echo // generated sdk
-                    > "%output%\package.json" echo {}
-                    > "%output%\package-lock.json" echo {}
-                    > "%output%\frontend\package.json" echo {}
-                    > "%output%\frontend\package-lock.json" echo {}
-                    > "%output%\frontend\src\main.tsx" echo // frontend
-                    > "%output%\api\package.json" echo {}
-                    > "%output%\api\src\index.ts" echo // api
-                    > "%output%\aspire.config.json" echo {"sdk":{"version":"10.0.0-preview.1"}}
-                    exit /b 0
-                )
-                echo Unsupported template: %template% 1>&2
-                exit /b 1
+        if [[ "${1:-}" == "new" ]]; then
+            template="${2:-}"
+            shift 2 || true
 
-                :extract_bundle
-                set "bundleRoot=%USERPROFILE%\.aspire\bundle"
-                mkdir "%bundleRoot%\managed\wwwroot" >nul 2>&1
-                mkdir "%bundleRoot%\dcp" >nul 2>&1
-                > "%bundleRoot%\managed\aspire-managed.exe" echo @echo off
-                >> "%bundleRoot%\managed\aspire-managed.exe" echo echo aspire-managed mock
-                > "%bundleRoot%\managed\wwwroot\index.html" echo ^<html^>dashboard^</html^>
-                > "%bundleRoot%\dcp\dcp.exe" echo @echo off
-                >> "%bundleRoot%\dcp\dcp.exe" echo echo dcp mock
-                exit /b 0
-                """
-            : """
-                #!/usr/bin/env bash
-                set -euo pipefail
+            name=""
+            output=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --name)   name="$2";   shift 2 ;;
+                    --output) output="$2"; shift 2 ;;
+                    *)        shift ;;
+                esac
+            done
 
-                if [[ "${1:-}" == "--version" ]]; then
-                    echo "aspire mock v1.0"
-                    exit 0
-                fi
-
-                if [[ "${1:-}" == "new" ]]; then
-                    template="${2:-}"
-                    shift 2
-
-                    name=""
-                    output=""
-                    while [[ $# -gt 0 ]]; do
-                        case "$1" in
-                            --name)
-                                name="$2"
-                                shift 2
-                                ;;
-                            --output)
-                                output="$2"
-                                shift 2
-                                ;;
-                            *)
-                                shift
-                                ;;
-                        esac
-                    done
-
-                    mkdir -p "$output"
-
-                    case "$template" in
-                        aspire-starter)
-                            mkdir -p "$output/$name.AppHost"
-                            ;;
-                        aspire-ts-starter)
-                            bundle_root="${HOME}/.aspire/bundle"
-                            mkdir -p "$bundle_root/managed/wwwroot" "$bundle_root/dcp"
-                            printf '#!/usr/bin/env bash\nset -euo pipefail\necho "aspire-managed mock"\n' > "$bundle_root/managed/aspire-managed"
-                            printf '<html>dashboard</html>\n' > "$bundle_root/managed/wwwroot/index.html"
-                            printf '#!/usr/bin/env bash\nset -euo pipefail\necho "dcp mock"\n' > "$bundle_root/dcp/dcp"
-                            chmod +x "$bundle_root/managed/aspire-managed" "$bundle_root/dcp/dcp"
-                            mkdir -p "$output/.modules" "$output/frontend/src" "$output/api/src"
-                            printf '// apphost\n' > "$output/apphost.ts"
-                            printf '// generated sdk\n' > "$output/.modules/aspire.ts"
-                            printf '{}\n' > "$output/package.json"
-                            printf '{}\n' > "$output/package-lock.json"
-                            printf '{}\n' > "$output/frontend/package.json"
-                            printf '{}\n' > "$output/frontend/package-lock.json"
-                            printf '// frontend\n' > "$output/frontend/src/main.tsx"
-                            printf '{}\n' > "$output/api/package.json"
-                            printf '// api\n' > "$output/api/src/index.ts"
-                            printf '{"sdk":{"version":"10.0.0-preview.1"}}\n' > "$output/aspire.config.json"
-                            ;;
-                        *)
-                            echo "Unsupported template: $template" >&2
-                            exit 1
-                            ;;
-                    esac
-
-                    exit 0
-                fi
-
-                echo "Unsupported command: $*" >&2
+            if [[ "$template" != "aspire-starter" ]]; then
+                echo "Unsupported template: $template" >&2
                 exit 1
-                """;
-    }
+            fi
+
+            mkdir -p "$output/$name.AppHost"
+            exit 0
+        fi
+
+        echo "Unsupported command: $*" >&2
+        exit 1
+
+        """;
 
     private static async Task CreateTarGzAsync(string contentDir, string archivePath)
     {

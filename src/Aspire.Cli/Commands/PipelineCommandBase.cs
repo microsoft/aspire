@@ -41,7 +41,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
     private readonly Option<string?> _outputPathOption;
 
-    protected static readonly Option<string?> s_logLevelOption = new("--log-level")
+    protected static readonly Option<string?> s_pipelineLogLevelOption = new("--pipeline-log-level")
     {
         Description = SharedCommandStrings.PipelineLogLevelOptionDescription
     };
@@ -97,7 +97,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         Options.Add(s_appHostOption);
         Options.Add(_outputPathOption);
-        Options.Add(s_logLevelOption);
+        Options.Add(s_pipelineLogLevelOption);
         Options.Add(s_environmentOption);
         Options.Add(s_includeExceptionDetailsOption);
         Options.Add(s_noBuildOption);
@@ -281,7 +281,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             var publishingActivities = backchannel.GetPublishingActivitiesAsync(cancellationToken);
 
             // Check if debug or trace logging is enabled
-            var logLevel = parseResult.GetValue(s_logLevelOption);
+            var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
             var isDebugOrTraceLoggingEnabled = logLevel?.Equals("debug", StringComparison.OrdinalIgnoreCase) == true ||
                                                  logLevel?.Equals("trace", StringComparison.OrdinalIgnoreCase) == true;
 

@@ -224,11 +224,16 @@ void main() throws Exception {
             var snapshot = ctx.resourceSnapshot();
             return snapshot.getHealthStatus() == HealthStatus.HEALTHY ? ResourceCommandState.ENABLED : ResourceCommandState.DISABLED;
         });
-        container.withCommand("restart", "Restart", (_ctx) -> {
+        container.withCommand("noop", "Noop", (_ctx) -> {
             var result = new ExecuteCommandResult();
             result.setSuccess(true);
             return result;
         }, commandOptions);
+        container.withCommand("restart", "Restart", (_ctx) -> {
+            var result = new ExecuteCommandResult();
+            result.setSuccess(true);
+            return result;
+        });
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();
         httpCmdOptions.setMethodName("POST");

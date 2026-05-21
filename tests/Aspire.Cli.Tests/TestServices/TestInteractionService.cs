@@ -25,6 +25,7 @@ internal sealed class TestInteractionService : IInteractionService
     public Action<string>? DisplayConsoleWriteLineMessage { get; set; }
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Action<string>? ShowStatusCallback { get; set; }
+    public Action<string>? ShowDynamicStatusCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
     public string? LastVersionUpdateCommand { get; private set; }
 
@@ -48,6 +49,8 @@ internal sealed class TestInteractionService : IInteractionService
     public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
     public List<string> DisplayedPlainText { get; } = [];
     public List<(string Text, ConsoleOutput? ConsoleOverride)> DisplayedRawText { get; } = [];
+    public List<IRenderable> DisplayedRenderables { get; } = [];
+    public List<IRenderable> DisplayedLiveRenderables { get; } = [];
     public List<string> DisplayedSuccess { get; } = [];
     public List<string> ShownStatuses { get; } = [];
     public int DisplayEmptyLineCount { get; private set; }
@@ -76,6 +79,25 @@ internal sealed class TestInteractionService : IInteractionService
 
         ShowStatusCallback?.Invoke(statusText);
         return action();
+    }
+
+    public List<string> DynamicStatusTexts { get; } = [];
+
+    public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
+    {
+        AddDynamicStatusText(initialStatusText);
+
+        return action(AddDynamicStatusText);
+
+        void AddDynamicStatusText(string text)
+        {
+            lock (_displayLock)
+            {
+                DynamicStatusTexts.Add(text);
+            }
+
+            ShowDynamicStatusCallback?.Invoke(text);
+        }
     }
 
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
@@ -315,11 +337,26 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayRenderable(IRenderable renderable)
     {
+        lock (_displayLock)
+        {
+            DisplayedRenderables.Add(renderable);
+        }
     }
 
     public Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback)
     {
-        return callback(_ => { });
+        lock (_displayLock)
+        {
+            DisplayedLiveRenderables.Add(initialRenderable);
+        }
+
+        return callback(renderable =>
+        {
+            lock (_displayLock)
+            {
+                DisplayedLiveRenderables.Add(renderable);
+            }
+        });
     }
 }
 

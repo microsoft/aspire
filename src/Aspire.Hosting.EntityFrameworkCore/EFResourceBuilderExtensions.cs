@@ -554,11 +554,11 @@ public static class EFResourceBuilderExtensions
             .WithParentRelationship(migrationBuilder)
             .WithWorkingDirectory(startupProjectDir)
             .WithExplicitStart()
+            .WithHidden()
             .WithInitialState(new CustomResourceSnapshot
             {
                 ResourceType = "Tool",
-                Properties = [],
-                IsHidden = true
+                Properties = []
             });
 
         // Register the EF-specific start command. The tool resource is captured by the closure

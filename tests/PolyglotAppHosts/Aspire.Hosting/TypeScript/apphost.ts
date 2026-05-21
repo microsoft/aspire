@@ -689,7 +689,7 @@ await container.withUrl(refExpr`http://${endpoint}`);
 await container.withHealthCheck("http");
 
 // withCommand
-await container.withCommand("restart", "Restart", async (_ctx) => {
+await container.withCommand("noop", "Noop", async () => {
     return { success: true };
 }, {
     commandOptions: {
@@ -701,6 +701,9 @@ await container.withCommand("restart", "Restart", async (_ctx) => {
                 : ResourceCommandState.Disabled;
         },
     },
+});
+await container.withCommand("restart", "Restart", async (ctx) => {
+    return { success: true };
 });
 
 // withProcessCommand

@@ -1569,6 +1569,11 @@ class ProcessCommandFactoryParameters(typing.TypedDict, total=False):
     options: ProcessCommandResultExportOptions
 
 
+class HiddenOnCompletionParameters(typing.TypedDict, total=False):
+    exit_code: int
+    exit_codes: typing.Iterable[int]
+
+
 class PipelineStepFactoryParameters(typing.TypedDict, total=False):
     step_name: typing.Required[str]
     callback: typing.Required[typing.Callable[[PipelineStepContext], None]]
@@ -3101,6 +3106,15 @@ class AbstractServiceProvider:
             rpc_args,
         )
         return typing.cast(ResourceNotificationService, result)
+
+    def get_resource_command_service(self) -> ResourceCommandService:
+        """Gets the resource command service from the service provider."""
+        rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getResourceCommandService',
+            rpc_args,
+        )
+        return typing.cast(ResourceCommandService, result)
 
     def get_aspire_store(self) -> AbstractAspireStore:
         """Gets the Aspire store from the service provider."""
@@ -5438,6 +5452,35 @@ class ReferenceExpressionBuilder:
         return typing.cast(ReferenceExpression, result)
 
 
+class ResourceCommandService:
+    """Type class for ResourceCommandService."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ResourceCommandService(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def execute_command(self, resource_id: str, command_name: str, *, timeout: int | None = None) -> ExecuteCommandResult:
+        """Executes a command for the specified resource."""
+        rpc_args: dict[str, typing.Any] = {'resourceCommandService': self._handle}
+        rpc_args['resourceId'] = resource_id
+        rpc_args['commandName'] = command_name
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/executeResourceCommand',
+            rpc_args,
+        )
+        return typing.cast(ExecuteCommandResult, result)
+
+
 class ResourceEndpointsAllocatedEvent:
     """Type class for ResourceEndpointsAllocatedEvent."""
 
@@ -6167,6 +6210,14 @@ class AbstractResource(abc.ABC):
         """Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry."""
 
     @abc.abstractmethod
+    def with_hidden(self) -> typing.Self:
+        """Hides the resource from default resource lists"""
+
+    @abc.abstractmethod
+    def with_hidden_on_completion(self, *, exit_code: int | None = None, exit_codes: typing.Iterable[int] | None = None) -> typing.Self:
+        """Hides the resource from default resource lists after successful completion"""
+
+    @abc.abstractmethod
     def with_pipeline_step_factory(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None, tags: typing.Iterable[str] | None = None, description: str | None = None) -> typing.Self:
         """Adds a pipeline step to the resource that will be executed during deployment."""
 
@@ -6523,6 +6574,8 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     child_relationship: AbstractResource
     icon_name: str | tuple[str, IconVariant]
     exclude_from_mcp: typing.Literal[True]
+    hidden: typing.Literal[True]
+    hidden_on_completion: HiddenOnCompletionParameters | typing.Literal[True]
     pipeline_step_factory: tuple[str, typing.Callable[[PipelineStepContext], None]] | PipelineStepFactoryParameters
     pipeline_config: typing.Callable[[PipelineConfigurationContext], None]
     on_before_resource_started: typing.Callable[[BeforeResourceStartedEvent], None]
@@ -6803,6 +6856,30 @@ class _BaseResource(AbstractResource):
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting/excludeFromMcp',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_hidden(self) -> typing.Self:
+        """Hides the resource from default resource lists"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHidden',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_hidden_on_completion(self, *, exit_code: int | None = None, exit_codes: typing.Iterable[int] | None = None) -> typing.Self:
+        """Hides the resource from default resource lists after successful completion"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        if exit_code is not None:
+            rpc_args['exitCode'] = exit_code
+        if exit_codes is not None:
+            rpc_args['exitCodes'] = exit_codes
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withHiddenOnCompletion',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -7307,6 +7384,23 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/excludeFromMcp', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'exclude_from_mcp'. Expected: Literal[True]")
+        if _hidden := kwargs.pop("hidden", None):
+            if _hidden is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHidden', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'hidden'. Expected: Literal[True]")
+        if _hidden_on_completion := kwargs.pop("hidden_on_completion", None):
+            if _validate_dict_types(_hidden_on_completion, HiddenOnCompletionParameters):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["exitCode"] = typing.cast(HiddenOnCompletionParameters, _hidden_on_completion).get("exit_code")
+                rpc_args["exitCodes"] = typing.cast(HiddenOnCompletionParameters, _hidden_on_completion).get("exit_codes")
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
+            elif _hidden_on_completion is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withHiddenOnCompletion', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'hidden_on_completion'. Expected: HiddenOnCompletionParameters or Literal[True]")
         if _pipeline_step_factory := kwargs.pop("pipeline_step_factory", None):
             if _validate_tuple_types(_pipeline_step_factory, (str, typing.Callable[[PipelineStepContext], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -11335,6 +11429,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFa
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary", PipelineSummary)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions", ProjectResourceOptions)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", ReferenceExpressionBuilder)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", ResourceCommandService)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceEndpointsAllocatedEvent", ResourceEndpointsAllocatedEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", ResourceLoggerService)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService", ResourceNotificationService)

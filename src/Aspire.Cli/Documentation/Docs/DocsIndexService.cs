@@ -54,6 +54,7 @@ internal interface IDocsIndexService
 /// <summary>
 /// Represents a document in the list.
 /// </summary>
+// `aspire docs list --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class DocsListItem
 {
     public required string Title { get; init; }
@@ -76,6 +77,7 @@ internal sealed class DocsSearchResult
 /// <summary>
 /// Represents document content with available sections.
 /// </summary>
+// `aspire docs get --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class DocsContent
 {
     public required string Title { get; init; }

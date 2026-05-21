@@ -485,7 +485,7 @@ internal interface INewCommandPrompter
 {
     Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken);
     Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken);
-    Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default);
+    Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null);
 }
 
 internal interface ITemplateVersionPrompter
@@ -598,15 +598,23 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
         return await topSelection.Action(cancellationToken);
     }
 
-    public virtual async Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default)
+    public virtual async Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
     {
-        return await interactionService.PromptForFilePathAsync(
+        var resolvedValidator = validator;
+        if (validator is not null && outputPathResolver is not null)
+        {
+            resolvedValidator = candidatePath => validator(outputPathResolver(candidatePath));
+        }
+
+        var outputPath = await interactionService.PromptForFilePathAsync(
             NewCommandStrings.EnterTheOutputPath,
-            validator: validator,
+            validator: resolvedValidator,
             binding: PromptBinding.Create(parseResult, NewCommand.s_outputOption, path),
             directory: true,
             cancellationToken: cancellationToken
             );
+
+        return outputPathResolver?.Invoke(outputPath) ?? outputPath;
     }
 
     public virtual async Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)

@@ -504,13 +504,15 @@ func main() {
 		}
 		return aspire.ResourceCommandStateDisabled
 	}
-	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		_ = ctx
-		return &aspire.ExecuteCommandResult{}
+	_ = container.WithCommand("noop", "Noop", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		return &aspire.ExecuteCommandResult{Success: true}
 	}, &aspire.WithCommandOptions{
 		CommandOptions: &aspire.CommandOptions{
 			UpdateState: updateCommandState,
 		},
+	})
+	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		return &aspire.ExecuteCommandResult{Success: true}
 	})
 
 	app, err := builder.Build()

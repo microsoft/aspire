@@ -565,6 +565,9 @@ internal sealed class SdkDumpCommand : BaseCommand
 
 #region Response DTOs (matching server response)
 
+// `aspire sdk dump --format json` uses these shapes; keep
+// docs/specs/cli-output-formats.md in sync when changing them.
+
 internal sealed class CapabilitiesInfo
 {
     public List<PackageInfo> Packages { get; set; } = [];

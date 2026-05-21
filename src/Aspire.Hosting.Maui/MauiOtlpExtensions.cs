@@ -102,11 +102,10 @@ public static class MauiOtlpExtensions
             .ExcludeFromManifest();
 
         // Hide the stub from the dashboard UI
-        stubBuilder.WithInitialState(new CustomResourceSnapshot
+        stubBuilder.WithHidden().WithInitialState(new CustomResourceSnapshot
         {
             ResourceType = "OtlpStub",
-            Properties = [],
-            IsHidden = true
+            Properties = []
         });
 
         // Create dev tunnel with anonymous access for OTLP

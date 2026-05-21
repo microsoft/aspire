@@ -10,32 +10,32 @@ namespace Aspire.Hosting
 {
     public static partial class MongoDBBuilderExtensions
     {
-        [AspireExport("addDatabase", Description = "Adds a MongoDB database resource")]
+        [AspireExport(Description = "Adds a MongoDB database resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, string name, string? databaseName = null) { throw null; }
 
-        [AspireExport("addMongoDB", Description = "Adds a MongoDB container resource")]
+        [AspireExport(Description = "Adds a MongoDB container resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> AddMongoDB(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Convenience overload. Use the overload with optional userName and password parameters instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> AddMongoDB(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
-        [AspireExport("withDataBindMount", Description = "Adds a bind mount for the MongoDB data folder")]
+        [AspireExport(Description = "Adds a bind mount for the MongoDB data folder")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withDataVolume", Description = "Adds a named volume for the MongoDB data folder")]
+        [AspireExport(Description = "Adds a named volume for the MongoDB data folder")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withHostPort", Description = "Sets the host port for the Mongo Express resource")]
+        [AspireExport(Description = "Sets the host port for the Mongo Express resource")]
         public static ApplicationModel.IResourceBuilder<MongoDB.MongoExpressContainerResource> WithHostPort(this ApplicationModel.IResourceBuilder<MongoDB.MongoExpressContainerResource> builder, int? port) { throw null; }
 
         [System.Obsolete("Use WithInitFiles instead.")]
         [AspireExportIgnore(Reason = "Obsolete API. Use WithInitFiles instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithInitBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, string source, bool isReadOnly = true) { throw null; }
 
-        [AspireExport("withInitFiles", Description = "Copies init files into a MongoDB container")]
+        [AspireExport(Description = "Copies init files into a MongoDB container")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> WithInitFiles(this ApplicationModel.IResourceBuilder<ApplicationModel.MongoDBServerResource> builder, string source) { throw null; }
 
-        [AspireExport("withMongoExpress", Description = "Adds a MongoExpress administration platform for MongoDB", RunSyncOnBackgroundThread = true)]
+        [AspireExport(Description = "Adds a MongoExpress administration platform for MongoDB", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithMongoExpress<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<MongoDB.MongoExpressContainerResource>>? configureContainer = null, string? containerName = null)
             where T : ApplicationModel.MongoDBServerResource { throw null; }
     }
@@ -45,7 +45,7 @@ namespace Aspire.Hosting.ApplicationModel
 {
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Database = {DatabaseName}")]
     [AspireExport(ExposeProperties = true)]
-    public partial class MongoDBDatabaseResource : Resource, IResourceWithParent<MongoDBServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class MongoDBDatabaseResource : Resource, IResourceWithParent<MongoDBServerResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public MongoDBDatabaseResource(string name, string databaseName, MongoDBServerResource parent) : base(default!) { }
 
@@ -61,7 +61,7 @@ namespace Aspire.Hosting.ApplicationModel
     }
 
     [AspireExport(ExposeProperties = true)]
-    public partial class MongoDBServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class MongoDBServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public MongoDBServerResource(string name, ParameterResource? userNameParameter, ParameterResource? passwordParameter) : base(default!, default) { }
 

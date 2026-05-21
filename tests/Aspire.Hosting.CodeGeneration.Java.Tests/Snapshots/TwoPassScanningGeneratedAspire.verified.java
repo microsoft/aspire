@@ -1342,6 +1342,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("System.ComponentModel/System.IServiceProvider", (h, c) -> new IServiceProvider(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService", (h, c) -> new ResourceNotificationService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", (h, c) -> new ResourceLoggerService(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", (h, c) -> new ResourceCommandService(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", (h, c) -> new IConfiguration(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection", (h, c) -> new IConfigurationSection(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", (h, c) -> new IHostEnvironment(h, c));
@@ -2634,6 +2635,39 @@ public class CSharpAppResource extends ProjectResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists */
+    public CSharpAppResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public CSharpAppResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public CSharpAppResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private CSharpAppResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
         return this;
     }
 
@@ -4322,6 +4356,39 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Hides the resource from default resource lists */
+    public ContainerRegistryResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public ContainerRegistryResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public ContainerRegistryResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private ContainerRegistryResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ContainerRegistryResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
@@ -5966,6 +6033,39 @@ public class ContainerResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists */
+    public ContainerResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public ContainerResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public ContainerResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private ContainerResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
         return this;
     }
 
@@ -8180,6 +8280,39 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Hides the resource from default resource lists */
+    public DotnetToolResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public DotnetToolResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public DotnetToolResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private DotnetToolResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
     /** Adds an asynchronous callback to configure container image push options for the resource. */
     public DotnetToolResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -10339,6 +10472,39 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Hides the resource from default resource lists */
+    public ExecutableResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public ExecutableResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public ExecutableResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private ExecutableResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
     /** Adds an asynchronous callback to configure container image push options for the resource. */
     public ExecutableResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -11297,6 +11463,39 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists */
+    public ExternalServiceResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public ExternalServiceResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public ExternalServiceResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private ExternalServiceResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
         return this;
     }
 
@@ -13713,6 +13912,14 @@ public class IServiceProvider extends HandleWrapperBase {
         return (ResourceNotificationService) result;
     }
 
+    /** Gets the resource command service from the service provider. */
+    public ResourceCommandService getResourceCommandService() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/getResourceCommandService", reqArgs);
+        return (ResourceCommandService) result;
+    }
+
     /** Gets the Aspire store from the service provider. */
     public IAspireStore getAspireStore() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14654,6 +14861,39 @@ public class ParameterResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists */
+    public ParameterResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public ParameterResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public ParameterResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private ParameterResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
         return this;
     }
 
@@ -16730,6 +16970,39 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Hides the resource from default resource lists */
+    public ProjectResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public ProjectResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public ProjectResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private ProjectResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
     /** Adds an asynchronous callback to configure container image push options for the resource. */
     public ProjectResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -17655,6 +17928,39 @@ public class ResourceBuilderBase extends HandleWrapperBase {
     ResourceBuilderBase(Handle handle, AspireClient client) {
         super(handle, client);
     }
+}
+
+// ===== ResourceCommandService.java =====
+// ResourceCommandService.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService. */
+public class ResourceCommandService extends HandleWrapperBase {
+    ResourceCommandService(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    public ExecuteCommandResult executeCommandAsync(String resourceId, String commandName) {
+        return executeCommandAsync(resourceId, commandName, null);
+    }
+
+    /** Executes a command for the specified resource. */
+    public ExecuteCommandResult executeCommandAsync(String resourceId, String commandName, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("resourceCommandService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("resourceId", AspireClient.serializeValue(resourceId));
+        reqArgs.put("commandName", AspireClient.serializeValue(commandName));
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/executeResourceCommand", reqArgs);
+        return ExecuteCommandResult.fromMap((Map<String, Object>) result);
+    }
+
 }
 
 // ===== ResourceCommandState.java =====
@@ -19566,6 +19872,39 @@ public class TestDatabaseResource extends ContainerResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists */
+    public TestDatabaseResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public TestDatabaseResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public TestDatabaseResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private TestDatabaseResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
         return this;
     }
 
@@ -21574,6 +21913,39 @@ public class TestRedisResource extends ContainerResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         getClient().invokeCapability("Aspire.Hosting/excludeFromMcp", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists */
+    public TestRedisResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public TestRedisResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public TestRedisResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private TestRedisResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
         return this;
     }
 
@@ -23603,6 +23975,39 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Hides the resource from default resource lists */
+    public TestVaultResource withHidden() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withHidden", reqArgs);
+        return this;
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    public TestVaultResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
+        var exitCode = options == null ? null : options.getExitCode();
+        var exitCodes = options == null ? null : options.getExitCodes();
+        return withHiddenOnCompletionImpl(exitCode, exitCodes);
+    }
+
+    public TestVaultResource withHiddenOnCompletion() {
+        return withHiddenOnCompletion(null);
+    }
+
+    /** Hides the resource from default resource lists after successful completion */
+    private TestVaultResource withHiddenOnCompletionImpl(Double exitCode, double[] exitCodes) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        if (exitCode != null) {
+            reqArgs.put("exitCode", AspireClient.serializeValue(exitCode));
+        }
+        if (exitCodes != null) {
+            reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
+        }
+        getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
     /** Adds an asynchronous callback to configure container image push options for the resource. */
     public TestVaultResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -24574,6 +24979,33 @@ public final class WithEndpointOptions {
 
 }
 
+// ===== WithHiddenOnCompletionOptions.java =====
+// WithHiddenOnCompletionOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for WithHiddenOnCompletion. */
+public final class WithHiddenOnCompletionOptions {
+    private Double exitCode;
+    private double[] exitCodes;
+
+    public Double getExitCode() { return exitCode; }
+    public WithHiddenOnCompletionOptions exitCode(Double value) {
+        this.exitCode = value;
+        return this;
+    }
+
+    public double[] getExitCodes() { return exitCodes; }
+    public WithHiddenOnCompletionOptions exitCodes(double[] value) {
+        this.exitCodes = value;
+        return this;
+    }
+
+}
+
 // ===== WithHttpEndpointCallbackOptions.java =====
 // WithHttpEndpointCallbackOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -25177,6 +25609,7 @@ public final class WithVolumeOptions {
 .modules/ReferenceExpression.java
 .modules/ReferenceExpressionBuilder.java
 .modules/ResourceBuilderBase.java
+.modules/ResourceCommandService.java
 .modules/ResourceCommandState.java
 .modules/ResourceCommandVisibility.java
 .modules/ResourceEndpointsAllocatedEvent.java
@@ -25214,6 +25647,7 @@ public final class WithVolumeOptions {
 .modules/WithDockerfileBaseImageOptions.java
 .modules/WithDockerfileOptions.java
 .modules/WithEndpointOptions.java
+.modules/WithHiddenOnCompletionOptions.java
 .modules/WithHttpEndpointCallbackOptions.java
 .modules/WithHttpEndpointOptions.java
 .modules/WithHttpHealthCheckOptions.java

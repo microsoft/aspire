@@ -389,6 +389,9 @@ public class DotNetTemplateFactoryTests
         public Task<TResult> ShowStatusAsync<TResult>(string message, Func<Task<TResult>> work, KnownEmoji? emoji = null, bool allowMarkup = false)
             => throw new NotImplementedException();
 
+        public Task<TResult> ShowDynamicStatusAsync<TResult>(string initialStatusText, Func<Action<string>, Task<TResult>> action, KnownEmoji? emoji = null)
+            => throw new NotImplementedException();
+
         public Task ShowStatusAsync(string message, Func<Task> work)
             => throw new NotImplementedException();
 
@@ -473,7 +476,7 @@ public class DotNetTemplateFactoryTests
         public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default)
+        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
             => throw new NotImplementedException();
 
         public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)

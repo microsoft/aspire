@@ -39,6 +39,7 @@ You run `aspire run`, and the CLI starts both the .NET AppHost server and your g
 - **DTO** - A serializable data transfer object (marked with `[AspireDto]`)
 - **Enum** - A .NET enum type that serializes as its string name
 - **Exported Value** - An immutable predefined value (marked with `[AspireValue]`) emitted into guest SDK catalogs
+- **Documentation** - Structured XML documentation captured during ATS scanning and emitted by guest SDK generators
 
 ---
 
@@ -47,7 +48,7 @@ You run `aspire run`, and the CLI starts both the .NET AppHost server and your g
 ATS leverages .NET's rich type system rather than replacing it. The `[AspireExport]`, `[AspireDto]`, and `[AspireValue]` attributes mark what should be exposed—the rest is inferred from the C# signatures. This means:
 
 - Integration authors write **normal C# extension methods**
-- The scanner **extracts types, parameters, and relationships** at build time
+- The scanner **extracts types, parameters, relationships, and documentation** at build time
 - Code generators produce **idiomatic APIs** in each target language
 
 ATS then flattens .NET's polymorphism into a simple, portable model that any language can work with:
@@ -959,7 +960,67 @@ The CLI generates language-specific SDKs from ATS capabilities.
 1. Load assemblies from AppHost server build
 2. Scan for `[AspireExport]`, `[AspireDto]`, and `[AspireValue]` metadata using `AtsCapabilityScanner`
 3. Expand interface targets to concrete implementations
-4. Generate language-specific SDK, including predefined value catalogs
+4. Capture XML documentation for generated public SDK surfaces
+5. Generate language-specific SDK, including predefined value catalogs and documentation comments
+
+### Documentation Model
+
+ATS treats C# XML documentation as part of the code-generation model, not as export-shaping metadata. The scanner captures documentation into `AtsDocumentationInfo` so every language generator can choose how to render it.
+
+Documentation is captured for:
+
+- Exported handle and resource types
+- Capabilities, including summaries, remarks, returns, and parameters
+- Callback parameters
+- DTO types and DTO properties
+- Enum types and enum values
+- Exported value catalogs and exported values
+
+`[AspireExport(Description = "...")]` remains compatibility metadata and is only used as a fallback summary when XML summary documentation is unavailable (either because the member has no XML documentation or because its `<summary>`/`<ats-summary>` text is missing). New API documentation should prefer XML docs so C# and generated guest SDK documentation stay tied together.
+
+First-level `ats-*` tags override the matching standard XML documentation when generated SDKs need language-neutral or polyglot-specific text:
+
+| Standard tag | ATS override |
+|--------------|--------------|
+| `<summary>` | `<ats-summary>` |
+| `<param name="...">` | `<ats-param name="...">` |
+| `<returns>` | `<ats-returns>` |
+| `<remarks>` | `<ats-remarks>` |
+
+An empty `ats-*` override intentionally suppresses the matching standard documentation. This is useful when C# documentation is correct for .NET callers but misleading for generated guest language APIs.
+
+```csharp
+/// <summary>
+/// Adds a PostgreSQL resource to the application model.
+/// </summary>
+/// <ats-summary>
+/// Adds a PostgreSQL server resource to the application model.
+/// </ats-summary>
+/// <param name="builder">The distributed application builder.</param>
+/// <param name="name">The resource name.</param>
+/// <ats-param name="name">The name used when referencing this resource from other resources.</ats-param>
+/// <returns>The PostgreSQL resource builder.</returns>
+[AspireExport("addPostgres")]
+public static IResourceBuilder<PostgresServerResource> AddPostgres(
+    this IDistributedApplicationBuilder builder,
+    string name)
+```
+
+Language-neutral links use `ats-see` and `ats-seealso` with generated SDK identifiers instead of C# `cref` syntax:
+
+```csharp
+/// <summary>
+/// Configures <ats-see cref="type:RedisResource" />.
+/// </summary>
+/// <remarks>
+/// See <ats-see cref="method:RedisResource.withPersistence" /> and
+/// <ats-see cref="field:RedisDefaults.Port" />.
+/// </remarks>
+```
+
+The supported reference kinds are `type`, `method`, and `field`. The target uses dot notation over generated polyglot-visible identifiers and must not use C# generic type syntax. TypeScript currently renders these references as JSDoc `{@link ...}` tags.
+
+TypeScript renders captured documentation as JSDoc on generated classes, interfaces, enums, enum values, exported values, methods, method parameters, callback option parameters, and return values. Other language generators should consume the same `AtsDocumentationInfo` model and render documentation in the idiomatic format for that language.
 
 ### Capability Expansion
 
@@ -1487,18 +1548,28 @@ public sealed class AtsContext
 - `ExpandedTargetTypeIds` - Concrete types for interface targets
 - `ReturnType` - Return type reference with category
 - `Parameters` - List of parameter info
-- `Description` - Documentation
+- `Description` - Compatibility/fallback summary metadata
+- `Documentation` - Structured XML documentation for generated SDKs
 
 **AtsEnumTypeInfo** contains:
 - `TypeId` - Enum type ID
 - `Name` - Simple enum name (e.g., `ContainerLifetime`)
 - `Values` - List of enum member names
+- `ValueInfos` - Enum member names with documentation
+- `Documentation` - Structured XML documentation for the enum type
 
 **AtsExportedValueInfo** contains:
 - `PathSegments` - Guest SDK catalog path segments (for example, `["FoundryModels", "OpenAI", "Gpt41Mini"]`)
 - `Type` - ATS type metadata for the snapped value
 - `Value` - Snapped JSON payload emitted into guest SDKs
-- `Description` - Optional XML documentation summary
+- `Description` - Optional compatibility/fallback summary metadata
+- `Documentation` - Structured XML documentation for the exported value
+
+**AtsDocumentationInfo** contains:
+- `Summary` - Summary text
+- `Remarks` - Longer remarks text
+- `Returns` - Return value documentation
+- `Parameters` - List of parameter documentation entries, each with the C# parameter name and description
 
 **Generation steps:**
 

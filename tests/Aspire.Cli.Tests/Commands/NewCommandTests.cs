@@ -2559,6 +2559,317 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandInExtensionModeAppendsProjectNameToCliTemplateOutputPath()
+    {
+        const string projectName = "MyFirstApp";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        DirectoryInfo? capturedTargetDirectory = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "baseline.v1"),
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathCallback = (_) =>
+                    Path.Combine(workspace.WorkspaceRoot.FullName, "source");
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                capturedTargetDirectory = context.TargetDirectory;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedTargetDirectory);
+        var expectedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "source", projectName);
+        Assert.Equal(expectedPath, capturedTargetDirectory.FullName);
+        Assert.True(File.Exists(Path.Combine(expectedPath, "apphost.ts")));
+    }
+
+    [Fact]
+    public async Task NewCommandInExtensionModeValidatesAdjustedCliTemplateOutputPath()
+    {
+        const string projectName = "MyFirstApp";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var selectedParent = workspace.CreateDirectory("source");
+        File.WriteAllText(Path.Combine(selectedParent.FullName, "existing.txt"), "existing content");
+
+        DirectoryInfo? capturedTargetDirectory = null;
+        var selectedParentWasValidated = false;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "baseline.v1"),
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathWithValidatorCallback = (_, validator) =>
+                {
+                    Assert.NotNull(validator);
+                    var validationResult = validator(selectedParent.FullName);
+                    selectedParentWasValidated = true;
+                    Assert.True(validationResult.Successful, validationResult.Message);
+                    return selectedParent.FullName;
+                };
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                capturedTargetDirectory = context.TargetDirectory;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(selectedParentWasValidated);
+        Assert.NotNull(capturedTargetDirectory);
+        var expectedPath = Path.Combine(selectedParent.FullName, projectName);
+        Assert.Equal(expectedPath, capturedTargetDirectory.FullName);
+        Assert.True(File.Exists(Path.Combine(expectedPath, "apphost.ts")));
+    }
+
+    [Fact]
+    public async Task NewCommandInExtensionModePromptsBeforeFolderPickerForCliTemplateSubdirectory()
+    {
+        const string projectName = "MyFirstApp";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var selectedParent = workspace.CreateDirectory("source");
+        DirectoryInfo? capturedTargetDirectory = null;
+        var selectionPrompted = false;
+        const string expectedPrompt = "Where do you want the project to be created?";
+        var expectedSubdirectoryChoice = $"In a subdirectory named '{projectName}' in the selected folder";
+        const string expectedDirectChoice = "Directly in the selected folder";
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
+            {
+                ConfirmCallback = (_, defaultValue) => defaultValue,
+                SelectionCallback = (promptText, choices) =>
+                {
+                    Assert.Equal(expectedPrompt, promptText);
+                    Assert.Equal([expectedSubdirectoryChoice, expectedDirectChoice], choices);
+                    selectionPrompted = true;
+                    return expectedSubdirectoryChoice;
+                }
+            };
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "baseline.v1"),
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathCallback = (_) =>
+                {
+                    Assert.True(selectionPrompted);
+                    return selectedParent.FullName;
+                };
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                capturedTargetDirectory = context.TargetDirectory;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(selectionPrompted);
+        Assert.NotNull(capturedTargetDirectory);
+        var expectedPath = Path.Combine(selectedParent.FullName, projectName);
+        Assert.Equal(expectedPath, capturedTargetDirectory.FullName);
+        Assert.True(File.Exists(Path.Combine(expectedPath, "apphost.ts")));
+    }
+
+    [Fact]
+    public async Task NewCommandInExtensionModeUsesSelectedCliTemplateOutputPathWhenSubdirectoryDeclined()
+    {
+        const string projectName = "MyFirstApp";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var selectedOutputPath = workspace.CreateDirectory("source");
+        DirectoryInfo? capturedTargetDirectory = null;
+        var selectionPrompted = false;
+        const string expectedPrompt = "Where do you want the project to be created?";
+        var expectedSubdirectoryChoice = $"In a subdirectory named '{projectName}' in the selected folder";
+        const string expectedDirectChoice = "Directly in the selected folder";
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp)
+            {
+                ConfirmCallback = (_, defaultValue) => defaultValue,
+                SelectionCallback = (promptText, choices) =>
+                {
+                    Assert.Equal(expectedPrompt, promptText);
+                    Assert.Equal([expectedSubdirectoryChoice, expectedDirectChoice], choices);
+                    selectionPrompted = true;
+                    return expectedDirectChoice;
+                }
+            };
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "baseline.v1"),
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathCallback = (_) =>
+                    selectedOutputPath.FullName;
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                capturedTargetDirectory = context.TargetDirectory;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(selectionPrompted);
+        Assert.NotNull(capturedTargetDirectory);
+        Assert.Equal(selectedOutputPath.FullName, capturedTargetDirectory.FullName);
+        Assert.True(File.Exists(Path.Combine(selectedOutputPath.FullName, "apphost.ts")));
+        Assert.False(File.Exists(Path.Combine(selectedOutputPath.FullName, projectName, "apphost.ts")));
+    }
+
+    [Fact]
+    public async Task NewCommandInExtensionModeDoesNotDoubleAppendProjectNameToCliTemplateOutputPath()
+    {
+        const string projectName = "MyFirstApp";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        DirectoryInfo? capturedTargetDirectory = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel
+            {
+                HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "baseline.v1"),
+            };
+
+            options.NewCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestNewCommandPrompter(interactionService);
+
+                prompter.PromptForOutputPathCallback = (_) =>
+                    Path.Combine(workspace.WorkspaceRoot.FullName, "source", projectName);
+
+                return prompter;
+            };
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, cancellationToken) =>
+            {
+                capturedTargetDirectory = context.TargetDirectory;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedTargetDirectory);
+        var expectedPath = Path.Combine(workspace.WorkspaceRoot.FullName, "source", projectName);
+        Assert.Equal(expectedPath, capturedTargetDirectory.FullName);
+        Assert.True(File.Exists(Path.Combine(expectedPath, "apphost.ts")));
+    }
+
+    [Fact]
     public async Task NewCommandNonInteractive_SuppressAgentInitTrue_SkipsAgentInit()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

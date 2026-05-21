@@ -398,11 +398,12 @@ with create_builder() as builder:
         return "Enabled" if snapshot.get("HealthStatus") == "Healthy" else "Disabled"
 
     container.with_command(
-        "command",
-        "Command",
+        "noop",
+        "Noop",
         lambda *_args, **_kwargs: {"success": True},
         command_options={"UpdateState": update_command_state}
     )
+    container.with_command("restart", "Restart", lambda *_args, **_kwargs: {"success": True})
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})

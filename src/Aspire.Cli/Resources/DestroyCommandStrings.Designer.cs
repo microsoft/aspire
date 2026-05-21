@@ -77,6 +77,15 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The destroy command requires --yes when the --non-interactive option is specified..
+        /// </summary>
+        public static string NonInteractiveRequiresYes {
+            get {
+                return ResourceManager.GetString("NonInteractiveRequiresYes", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to The output path containing the deployment artifacts to destroy.

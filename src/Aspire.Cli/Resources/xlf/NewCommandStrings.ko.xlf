@@ -12,6 +12,16 @@
         <target state="translated">템플릿에 사용할 채널(안정, 스테이징, 데일리)</target>
         <note />
       </trans-unit>
+      <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
+        <source>Directly in the selected folder</source>
+        <target state="new">Directly in the selected folder</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CreateProjectNameSubdirectoryChoice">
+        <source>In a subdirectory named '{0}' in the selected folder</source>
+        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
         <target state="needs-review-translation">새 Aspire 프로젝트를 만듭니다.</target>
@@ -90,6 +100,11 @@
       <trans-unit id="SelectATemplateVersion">
         <source>Select a template version:</source>
         <target state="translated">템플릿 버전 선택:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelectProjectCreationLocation">
+        <source>Where do you want the project to be created?</source>
+        <target state="new">Where do you want the project to be created?</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceArgumentDescription">

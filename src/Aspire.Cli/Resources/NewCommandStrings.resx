@@ -136,6 +136,15 @@
   <data name="EnterTheProjectName" xml:space="preserve">
     <value>Enter the project name</value>
   </data>
+  <data name="SelectProjectCreationLocation" xml:space="preserve">
+    <value>Where do you want the project to be created?</value>
+  </data>
+  <data name="CreateProjectNameSubdirectoryChoice" xml:space="preserve">
+    <value>In a subdirectory named '{0}' in the selected folder</value>
+  </data>
+  <data name="CreateProjectDirectlyInSelectedFolderChoice" xml:space="preserve">
+    <value>Directly in the selected folder</value>
+  </data>
   <data name="InvalidProjectName" xml:space="preserve">
     <value>Invalid project name.</value>
   </data>
