@@ -172,7 +172,7 @@ Additional scripts exist to fetch CLI and NuGet artifacts from a pull request bu
 The PR scripts support two install modes:
 
 - **Archive mode** (default) installs the PR's native CLI archive under a PR-specific dogfood path and copies PR packages into `~/.aspire/hives/pr-<PR_NUMBER>/packages`.
-- **Tool mode** installs the PR's `Aspire.Cli` package as a .NET tool from the RID-specific NuGet artifact and also populates the same `~/.aspire/hives/pr-<PR_NUMBER>/packages` hive. Use this when you also want to dogfood the dotnet-tool packaging or acquisition route.
+- **Tool mode** installs the PR's `Aspire.Cli` package as a .NET tool from the RID-specific NuGet artifact and also populates the same `~/.aspire/hives/pr-<PR_NUMBER>/packages` hive. Use this when you also want to dogfood the dotnet-tool packaging or acquisition source.
 
 Quick archive-mode fetch (Bash):
 ```bash

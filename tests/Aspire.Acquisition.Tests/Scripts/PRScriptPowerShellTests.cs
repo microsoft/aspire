@@ -435,8 +435,8 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain("run-99999", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
-    // PR-route CLI binary lands at <prefix>/dogfood/pr-<N>/bin so PR installs
-    // do not collide with the script-route prefix or with other PR installs.
+    // PR CLI binary lands at <prefix>/dogfood/pr-<N>/bin so PR installs
+    // do not collide with the script install prefix or with other PR installs.
     // Under -WhatIf the script emits the absolute install path via a
     // "What if: Aspire CLI binary would be installed to: <path>" message on stdout
     // (PS-native WhatIf style); this test parses that message to verify the
@@ -455,11 +455,11 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains($"What if: Aspire CLI binary would be installed to: {expectedBinaryPath}", result.Output);
     }
 
-    // Under -WhatIf the PR-route script must NOT write the source=pr sidecar
+    // Under -WhatIf the PR script must NOT write the source=pr sidecar
     // at <prefix>/dogfood/pr-<N>/.aspire-install.json. The describe-but-do-not-do
     // contract requires the script to print a "What if:" message naming the path
     // it would write, then return without touching the filesystem. Positive
-    // sidecar content (the source field) for the PR route is covered by
+    // sidecar content (the source field) for the PR source is covered by
     // end-to-end install runs, not at this unit-test layer.
     [Fact]
     public async Task WhatIf_PRRoute_DoesNotWriteSidecar_AndAnnouncesPath()
@@ -472,13 +472,13 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-99999", "bin", ".aspire-install.json");
-        Assert.Contains($"What if: Route sidecar would be written to: {sidecarPath}", result.Output);
+        Assert.Contains($"What if: Source sidecar would be written to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under -WhatIf, but found one at {sidecarPath}");
     }
 
-    // PR-route install prints the PATH-activation hint via Write-Host. The
+    // PR install prints the PATH-activation hint via Write-Host. The
     // OS path separator keeps the line valid on both Windows (;) and Unix (:).
     // The new-PATH expression must be double-quoted so PowerShell expands
     // `$env:PATH` when the user pastes the line into their profile — single
@@ -541,7 +541,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         return string.Empty;
     }
 
-    // PR-route hive location is unchanged at <prefix>/hives/pr-<N>/packages.
+    // PR hive location is unchanged at <prefix>/hives/pr-<N>/packages.
     [Fact]
     public async Task WhatIf_PRRoute_HiveLocation_IsUnchanged()
     {
@@ -555,7 +555,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains(expectedHive, result.Output);
     }
 
-    // The PR-route script must not mutate route sidecars under -WhatIf.
+    // The PR script must not mutate source sidecars under -WhatIf.
     // Companion to WhatIf_PRRoute_DoesNotWriteSidecar_AndAnnouncesPath; kept as a
     // separate test method to keep -WhatIf sidecar-absence coverage visible in
     // test inventories alongside the other -WhatIf guards.
@@ -618,7 +618,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         // -LocalDir without a PR number is an unmanaged install, so the script must
         // not write a sidecar; the resolver should return Unknown for these installs.
         var binSidecar = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
-        Assert.False(File.Exists(binSidecar), $"--local-dir install must not write sidecar at {binSidecar} (unmanaged route).");
+        Assert.False(File.Exists(binSidecar), $"--local-dir install must not write sidecar at {binSidecar} (unmanaged source).");
 
         // Defensive: assert no .aspire-install.json anywhere under the install root.
         var aspireRoot = Path.Combine(env.MockHome, ".aspire");
@@ -659,7 +659,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
 
     // Non-numeric / special-char PR_NUMBER is rejected at parameter
     // binding ([int] cast or ValidateRange). This guards against path injection / command
-    // injection routes via the PR_NUMBER value.
+    // injection paths via the PR_NUMBER value.
     [Theory]
     [InlineData("../etc")]
     [InlineData("..")]

@@ -490,10 +490,10 @@ if (-not $SkipCli) {
       throw
     }
 
-    # Stamp the install-route sidecar so `aspire info` / `aspire uninstall`
+    # Stamp the install-source sidecar so `aspire info` / `aspire uninstall`
     # can identify this binary as a locally-built (`localhive`) install.
-    # The format matches docs/specs/install-routes.md exactly; localhive
-    # shares the script-route layout (binary under <prefix>/bin/, bundle
+    # The format matches docs/specs/install-sources.md exactly; localhive
+    # shares the script-source layout (binary under <prefix>/bin/, bundle
     # extracted at parent-of-bin).
     $sidecarPath = Join-Path $cliBinDir ".aspire-install.json"
     Set-Content -LiteralPath $sidecarPath -Value '{"source":"localhive"}' -Encoding UTF8 -NoNewline
@@ -526,9 +526,9 @@ if ($Archive) {
     # Compress-Archive. Compress-Archive enumerates inputs via the PowerShell
     # provider, which on non-Windows hosts treats files whose name starts with
     # '.' as hidden and excludes them from `<dir>/*` wildcard expansion. The
-    # portable layout includes bin/.aspire-install.json — the localhive route
-    # sidecar that `aspire doctor` and route-aware Aspire-home selection rely
-    # on (see docs/specs/install-routes.md) — and silently dropping it from
+    # portable layout includes bin/.aspire-install.json — the localhive source
+    # sidecar that `aspire doctor` and source-aware Aspire-home selection rely
+    # on (see docs/specs/install-sources.md) — and silently dropping it from
     # win-* zips built on Linux/macOS would produce sidecar-less installs on
     # the target machine. ZipFile walks the filesystem directly and includes
     # dotfiles unconditionally.
@@ -559,7 +559,7 @@ if ($Archive) {
         $zip.Dispose()
       }
       if (-not $hasSidecar) {
-        throw "Archive '$archivePath' is missing the install-route sidecar entry '$sidecarEntryName'. The zip creation path is dropping hidden files."
+        throw "Archive '$archivePath' is missing the install-source sidecar entry '$sidecarEntryName'. The zip creation path is dropping hidden files."
       }
     }
   } else {

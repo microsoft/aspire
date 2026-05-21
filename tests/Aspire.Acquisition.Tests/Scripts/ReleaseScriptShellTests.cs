@@ -214,7 +214,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
             $"install.sh must not create global aspire.config.json; found at {configPath}.");
     }
 
-    // Under --dry-run the release-route script must NOT write the script-route
+    // Under --dry-run the release script must NOT write the script source
     // sidecar at <prefix>/.aspire-install.json. The describe-but-do-not-do
     // contract requires the script to print a DRYRUN message naming the path it
     // would write, then return without touching the filesystem. A previous
@@ -231,13 +231,13 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
-        Assert.Contains($"DRYRUN: would write route sidecar to: {sidecarPath}", result.Output);
+        Assert.Contains($"DRYRUN: would write source sidecar to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under --dry-run, but found one at {sidecarPath}");
     }
 
-    // The release-route script must not mutate route sidecars under --dry-run,
+    // The release script must not mutate source sidecars under --dry-run,
     // regardless of the configured quality. This guards the dry-run contract on
     // the 'dev' quality path, which historically took a slightly different
     // code branch in the script body.
@@ -251,7 +251,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
-        Assert.Contains($"DRYRUN: would write route sidecar to: {sidecarPath}", result.Output);
+        Assert.Contains($"DRYRUN: would write source sidecar to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under --dry-run, but found one at {sidecarPath}");

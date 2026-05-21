@@ -1213,7 +1213,7 @@ install_aspire_cli_from_binary() {
 
 # Computes the CLI install directory. PR installs are isolated under
 # <prefix>/dogfood/pr-<N>/bin; without PR_NUMBER, falls back to the shared
-# script-route bin dir.
+# script-source bin dir.
 compute_cli_install_dir() {
     if [[ -n "$PR_NUMBER" ]]; then
         printf '%s' "$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
@@ -1226,8 +1226,8 @@ compute_cli_install_dir() {
 # <install_prefix>/dogfood/pr-<N>/bin/.aspire-install.json. The sidecar marks
 # the install as PR-sourced so downstream consumers (e.g. 'aspire update')
 # know not to assume the stable script source. Per-RID archives produced
-# by eng/clipack are shared across routes and ship without a baked sidecar;
-# this write is the PR-route's authoritative author. If a future or
+# by eng/clipack are shared across sources and ship without a baked sidecar;
+# this write is the PR installer's authoritative author. If a future or
 # external archive ever smuggles a sidecar at the same path, this write
 # overwrites it by design. Under --dry-run the script is describe-but-do-
 # not-do: print the path it would write to and skip the filesystem mutation
@@ -1241,7 +1241,7 @@ write_pr_route_sidecar() {
     local sidecar_content='{"source":"pr"}'
 
     if [[ "$DRY_RUN" == true ]]; then
-        printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
+        printf 'DRYRUN: would write source sidecar to: %s\n' "$sidecar_path"
     else
         mkdir -p "$sidecar_dir"
         printf '%s\n' "$sidecar_content" > "$sidecar_path"
@@ -1290,8 +1290,8 @@ install_from_local_dir() {
 
     say_info "Installing from local directory: $local_dir"
 
-    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
-    # don't collide with the script-route prefix or with other PR installs.
+    # PR installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
+    # don't collide with the script install prefix or with other PR installs.
     # Hives remain shared under <prefix>/hives/<label>/packages.
     local cli_install_dir
     cli_install_dir="$(compute_cli_install_dir)"
@@ -1434,8 +1434,8 @@ download_and_install_from_pr() {
 
     say_info "Using workflow run https://github.com/${REPO}/actions/runs/$workflow_run_id"
 
-    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
-    # don't collide with the script-route prefix or with other PR installs.
+    # PR installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
+    # don't collide with the script install prefix or with other PR installs.
     # Hives remain shared under <prefix>/hives/<label>/packages.
     local cli_install_dir
     cli_install_dir="$(compute_cli_install_dir)"
@@ -1546,7 +1546,7 @@ download_and_install_from_pr() {
         fi
     fi
 
-    # Write the PR-route sidecar only for installs from archives. Tool-mode packages
+    # Write the PR source sidecar only for installs from archives. Tool-mode packages
     # carry their own source=dotnet-tool sidecar.
     if [[ "$HIVE_ONLY" != true && "$INSTALL_MODE" == "archive" && -n "$PR_NUMBER" ]]; then
         write_pr_route_sidecar "$INSTALL_PREFIX" "$PR_NUMBER"
@@ -1617,8 +1617,8 @@ main() {
     fi
 
     # Set paths based on install prefix.
-    # PR-route installs go under $INSTALL_PREFIX/dogfood/pr-<N>/bin to isolate them from
-    # the script-route prefix and from other PR installs.
+    # PR installs go under $INSTALL_PREFIX/dogfood/pr-<N>/bin to isolate them from
+    # the script install prefix and from other PR installs.
     if [[ -n "$PR_NUMBER" ]]; then
         cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
         INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/dogfood/pr-$PR_NUMBER/bin"

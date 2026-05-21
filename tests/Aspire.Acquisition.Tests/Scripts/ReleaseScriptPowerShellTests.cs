@@ -263,7 +263,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
             $"install.ps1 must not create global aspire.config.json; found at {configPath}.");
     }
 
-    // Under -WhatIf the release-route script must NOT write the script-route
+    // Under -WhatIf the release script must NOT write the script source
     // sidecar at <prefix>/.aspire-install.json. The describe-but-do-not-do
     // contract requires the script to print a "What if:" message naming the path
     // it would write, then return without touching the filesystem. A previous
@@ -280,13 +280,13 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
-        Assert.Contains($"What if: Route sidecar would be written to: {sidecarPath}", result.Output);
+        Assert.Contains($"What if: Source sidecar would be written to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under -WhatIf, but found one at {sidecarPath}");
     }
 
-    // The release-route script must not mutate route sidecars under -WhatIf,
+    // The release script must not mutate source sidecars under -WhatIf,
     // regardless of the configured quality.
     [Fact]
     public async Task WhatIf_DevQuality_DoesNotWriteScriptRouteSidecar()
@@ -298,7 +298,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
-        Assert.Contains($"What if: Route sidecar would be written to: {sidecarPath}", result.Output);
+        Assert.Contains($"What if: Source sidecar would be written to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under -WhatIf, but found one at {sidecarPath}");

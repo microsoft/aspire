@@ -77,7 +77,7 @@ public class LocalHiveScriptFunctionTests
     {
         // Compress-Archive enumerates inputs via the PowerShell provider, which on
         // non-Windows hosts hides dotfiles from `<dir>/*` wildcard expansion. The
-        // portable layout includes bin/.aspire-install.json — the localhive route
+        // portable layout includes bin/.aspire-install.json — the localhive source
         // sidecar — and silently dropping it from a win-* zip built on Linux/macOS
         // would produce sidecar-less installs on the target. Use
         // [System.IO.Compression.ZipFile]::CreateFromDirectory instead.

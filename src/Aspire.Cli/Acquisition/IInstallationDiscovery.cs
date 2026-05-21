@@ -27,7 +27,7 @@ internal interface IInstallationDiscovery
     /// <summary>
     /// Describes the currently running CLI. The result always has
     /// <see cref="InstallationInfo.Status"/> = <c>ok</c> with version /
-    /// channel / route populated from in-process readers.
+    /// channel / source populated from in-process readers.
     /// </summary>
     InstallationInfo DescribeSelf();
 

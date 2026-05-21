@@ -64,7 +64,7 @@ internal sealed record InstallationInfo
     public string? Channel { get; init; }
 
     /// <summary>
-    /// Install source as recorded by the install route's sidecar
+    /// Install source as recorded by the installer's sidecar
     /// (<c>.aspire-install.json</c>). Wire string from
     /// <see cref="InstallSourceExtensions.ToWireString"/>. May be
     /// <see langword="null"/> for PATH discoveries whose install metadata
@@ -161,7 +161,7 @@ internal static class InstallationInfoParser
             CanonicalPath = GetOptionalString("canonicalPath"),
             Version = GetOptionalString("version"),
             Channel = GetOptionalString("channel"),
-            Source = GetOptionalString("source") ?? GetOptionalString("route"),
+            Source = GetOptionalString("source"),
             PathStatus = pathStatus,
             Status = GetStringOr("status", InstallationInfoStatus.Ok),
             StatusReason = GetOptionalString("statusReason"),

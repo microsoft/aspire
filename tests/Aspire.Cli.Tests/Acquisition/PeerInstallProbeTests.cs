@@ -17,7 +17,7 @@ namespace Aspire.Cli.Tests.Acquisition;
 /// </summary>
 public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
 {
-    // Route internal probe diagnostics (LogDebug for "JSON without an
+    // Send internal probe diagnostics (LogDebug for "JSON without an
     // installation row", "invalid JSON", etc.) into the xunit test output
     // so a failure log tells us why the probe took whichever code path it
     // took. Keep the factory alive for the lifetime of the test class so
@@ -107,30 +107,6 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.Equal("stable", ok.Info.Channel);
         Assert.Equal("script", ok.Info.Source);
         Assert.Equal(InstallationPathStatus.Shadowed, ok.Info.PathStatus);
-    }
-
-    [Fact]
-    public async Task ProbeAsync_PeerEmitsLegacyRoute_ReturnsSource()
-    {
-        using var fakePeer = FakePeerScript.Build(
-            outputHelper,
-            stdout: """
-                    [
-                      {
-                        "path": "/peer/aspire",
-                        "version": "12.5.0",
-                        "route": "script",
-                        "status": "ok"
-                      }
-                    ]
-                    """,
-            exitCode: 0);
-
-        var probe = new PeerInstallProbe(ProbeLogger);
-        var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
-
-        var ok = AssertProbeOk(result);
-        Assert.Equal("script", ok.Info.Source);
     }
 
     [Fact]
@@ -267,8 +243,8 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
 
         var ok = AssertProbeOk(result);
         Assert.Equal("13.4.0-pr.16817.g790d6fa3", ok.Info.Version);
-        // Fallback can't read route or channel from the older peer; the
-        // discovery layer overlays the route from the local sidecar.
+        // Fallback can't read source or channel from the older peer; the
+        // discovery layer overlays the source from the local sidecar.
         Assert.Null(ok.Info.Channel);
     }
 

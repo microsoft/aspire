@@ -9,7 +9,7 @@ namespace Aspire.Cli.Tests;
 // distribution shape that ships an .aspire-install.json sidecar must land
 // extraction at the install prefix the packager owns so versions/<id>/ stays
 // inside the directory the packager actually manages. These tests construct the
-// real on-disk layout each route produces, then assert the helper picks the
+// real on-disk layout each source produces, then assert the helper picks the
 // directory whose versions/ subdirectory the bundle should populate. They are
 // the regression net against a packager moving the sidecar or the bundle
 // pipeline changing its switch on the sidecar's source field.
@@ -22,7 +22,7 @@ public class BundleServiceComputeDefaultExtractDirTests
     [InlineData("localhive")] // localhive.{sh,ps1}
     public void ComputeDefaultExtractDir_SharedPrefixSource_ReturnsParentOfBinaryDir(string source)
     {
-        // Both the get-aspire-cli script route and the localhive route lay the
+        // Both the get-aspire-cli script source and the localhive source lay the
         // CLI out at <prefix>/bin/aspire with a colocated .aspire-install.json,
         // so extraction must land at <prefix>/ (parent of the binary's dir) so
         // the eventual versions/<id>/ tree sits next to the bin/ directory
@@ -48,7 +48,7 @@ public class BundleServiceComputeDefaultExtractDirTests
         // dogfood/pr-<N>/bin subdirectory with its own colocated sidecar. The
         // sidecar value is always source=pr; the per-PR namespace lives in the
         // directory layout. Extraction must land at the dogfood/pr-<N>/ directory
-        // — not the outer install root — to keep stable and PR-route versions/
+        // — not the outer install root — to keep stable and PR-source versions/
         // trees from colliding.
         using var temp = new TestTempDirectory();
         var prDir = Path.Combine(temp.Path, "dogfood", "pr-12345");

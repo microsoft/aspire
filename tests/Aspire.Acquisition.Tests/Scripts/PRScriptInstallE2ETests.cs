@@ -57,7 +57,7 @@ public class PRScriptInstallE2ETests(ITestOutputHelper testOutput)
         Assert.True(File.Exists(Path.Combine(binDir, "aspire")), $"CLI binary missing under {binDir}");
 
         var sidecarPath = Path.Combine(binDir, ".aspire-install.json");
-        Assert.True(File.Exists(sidecarPath), $"Route sidecar missing at {sidecarPath}");
+        Assert.True(File.Exists(sidecarPath), $"Source sidecar missing at {sidecarPath}");
 
         var sidecarContent = await File.ReadAllTextAsync(sidecarPath, cancellationToken);
         _testOutput.WriteLine($"Sidecar content after install: {sidecarContent}");

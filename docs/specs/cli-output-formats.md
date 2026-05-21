@@ -495,7 +495,7 @@ The `installations` property is omitted when no install-listing information is a
 | `canonicalPath` | Symlink-resolved absolute path used to deduplicate entries, when available. |
 | `version` | CLI version string, when the install could be probed. |
 | `channel` | CLI identity channel, such as `stable`, `staging`, `daily`, `local`, or `pr-<N>`, when available. |
-| `source` | Install source recorded by `.aspire-install.json`, such as `script`, `pr`, `winget`, `brew`, or `dotnet-tool`, when available. Current CLIs emit `source`; `route` was the legacy field name and is accepted only when parsing older peer responses. |
+| `source` | Install source recorded by `.aspire-install.json`, such as `script`, `pr`, `winget`, `brew`, or `dotnet-tool`, when available. |
 | `pathStatus` | Relationship to `PATH`: `active`, `shadowed`, or `notOnPath`. |
 | `status` | Installation row status: `ok`, `notProbed`, or `failed`. |
 | `statusReason` | Free-form reason for a non-`ok` row, when available. |

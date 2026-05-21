@@ -53,7 +53,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             string.Equals(r.CanonicalPath, noSidecarBinary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal(InstallationInfoStatus.NotProbed, noSidecarRow.Status);
         var expectedSidecarPath = Path.Combine(pathDir, InstallSidecarReader.SidecarFileName);
-        Assert.Equal($"No install-route sidecar found at {expectedSidecarPath}; peer was not probed.", noSidecarRow.StatusReason);
+        Assert.Equal($"No install-source sidecar found at {expectedSidecarPath}; peer was not probed.", noSidecarRow.StatusReason);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             Assert.DoesNotContain(probe.ProbedPaths, p => string.Equals(p, binary, StringComparison.Ordinal));
             var row = Assert.Single(results, r => string.Equals(r.CanonicalPath, binary, StringComparison.Ordinal));
             Assert.Equal(InstallationInfoStatus.NotProbed, row.Status);
-            Assert.Equal($"Install-route sidecar at {sidecarPath} could not be read or parsed; peer was not probed.", row.StatusReason);
+            Assert.Equal($"Install-source sidecar at {sidecarPath} could not be read or parsed; peer was not probed.", row.StatusReason);
         }
         finally
         {
@@ -114,13 +114,13 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var row = Assert.Single(results, r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal(InstallationInfoStatus.NotProbed, row.Status);
-        Assert.Equal($"Install-route sidecar at {sidecarPath} could not be read or parsed; peer was not probed.", row.StatusReason);
+        Assert.Equal($"Install-source sidecar at {sidecarPath} could not be read or parsed; peer was not probed.", row.StatusReason);
     }
 
     [Fact]
     public async Task DiscoverAllAsync_TrustedSidecar_IsSpawnedAndDecoratedWithDiscoveredPath()
     {
-        // A binary with a script-route sidecar in its directory has enough
+        // A binary with a script-source sidecar in its directory has enough
         // install metadata to be probed. The peer probe is called, and its returned
         // InstallationInfo is merged with the discovered path so the row
         // displayed to the user matches what `which` would show.
@@ -212,7 +212,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task DiscoverAllAsync_UnknownSidecarSource_WithSuccessfulProbe_ProbesAndSurfacesRawRoute()
+    public async Task DiscoverAllAsync_UnknownSidecarSource_WithSuccessfulProbe_ProbesAndSurfacesRawSource()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bin");
@@ -243,7 +243,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task DiscoverAllAsync_UnknownSidecarSource_WithFailedProbe_ProbesAndSurfacesFailedWithRawRoute()
+    public async Task DiscoverAllAsync_UnknownSidecarSource_WithFailedProbe_ProbesAndSurfacesFailedWithRawSource()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bin");
@@ -267,10 +267,10 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task DiscoverAllAsync_PeerProbeFails_RowSurvivesAsFailed_WithRouteIntact()
+    public async Task DiscoverAllAsync_PeerProbeFails_RowSurvivesAsFailed_WithSourceIntact()
     {
         // A peer that fails (timeout / non-zero exit / invalid JSON) is per-row,
-        // not whole-command. The route from the sidecar is still surfaced so the
+        // not whole-command. The source from the sidecar is still surfaced so the
         // user sees "this is a PR install but it wouldn't talk to me", not nothing.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var prDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "dogfood", "pr-9999", "bin");

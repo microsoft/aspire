@@ -19,7 +19,7 @@ namespace Aspire.Cli.Tests.Commands;
 /// channel preference from <c>--channel</c>, <see cref="CliExecutionContext.IdentityChannel"/>,
 /// and the registered channel set only — never from the global <c>IConfigurationService</c>
 /// <c>channel</c> key. This test pins that contract so a regression can't quietly re-introduce
-/// cross-route channel contamination.
+/// cross-source channel contamination.
 /// </summary>
 public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
 {

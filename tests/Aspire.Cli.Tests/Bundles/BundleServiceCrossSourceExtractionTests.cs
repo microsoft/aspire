@@ -7,14 +7,14 @@ namespace Aspire.Cli.Tests.Bundles;
 
 /// <summary>
 /// Verifies <see cref="BundleService.ComputeDefaultExtractDir(string)"/> against
-/// every (source × prefix shape) combination the supported install routes produce.
+/// every (source × prefix shape) combination the supported install sources produce.
 /// The matrix locks in the contract: the reader walks the sidecar's
 /// <c>source</c> field — and nothing else — to decide between
 /// <c>binaryDir</c> (winget / brew / dotnet-tool) and the parent of
 /// <c>binaryDir</c> (script / pr / localhive). Missing, invalid, or unknown sidecars fall
 /// through to the parent-of-binary heuristic.
 /// </summary>
-public class BundleServiceCrossRouteExtractionTests
+public class BundleServiceCrossSourceExtractionTests
 {
     // The inline-data paths use forward slashes for source-readability; the test
     // method converts them to platform-native separators before constructing
@@ -37,7 +37,7 @@ public class BundleServiceCrossRouteExtractionTests
     [InlineData("pr", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817")]
     // 6) localhive canonical: local dev hive with the same bin layout as script.
     [InlineData("localhive", ".aspire/local/bin/aspire", ".aspire/local")]
-    // 7) Cross-route smuggle case: a brew-source sidecar dropped into a
+    // 7) Cross-source smuggle case: a brew-source sidecar dropped into a
     //    script-layout prefix MUST resolve to binaryDir per the switch — the
     //    reader is honest about whatever the producer put on disk. When the
     //    producer side correctly suppresses the smuggled sidecar, this row's
