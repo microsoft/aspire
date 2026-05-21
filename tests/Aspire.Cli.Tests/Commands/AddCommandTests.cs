@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Xml.Linq;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -354,7 +355,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task IntegrationSearchCommandFormatJsonWithAppHostUsesConfiguredChannel()
+    public async Task IntegrationListCommandFormatJsonWithAppHostUsesConfiguredChannelAndKeepsImplicitPackages()
     {
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
@@ -373,7 +374,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var implicitCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([
+                CreatePackage("Aspire.Hosting.Redis", "1.0.0"),
+                CreatePackage("CommunityToolkit.Aspire.Hosting.NodeJS", "1.0.0")
+            ])
         };
         var dailyCache = new FakeNuGetPackageCache
         {
@@ -395,6 +399,114 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration list --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var integrations = ReadIntegrationResults(rawJson);
+        Assert.Equal(2, integrations.Length);
+        Assert.Contains(integrations, i => i.Package == "Aspire.Hosting.Redis" && i.Version == "2.0.0");
+        Assert.Contains(integrations, i => i.Package == "CommunityToolkit.Aspire.Hosting.NodeJS" && i.Version == "1.0.0");
+    }
+
+    [Fact]
+    public async Task IntegrationListCommandFormatJsonWithAppHostReturnsEmptyWhenConfiguredChannelIsUnavailable()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "missing"
+            }
+            """);
+
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures())
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration list --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Empty(ReadIntegrationResults(rawJson));
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonWithCSharpAppHostUsesConfiguredChannel()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "pr-12345"
+            }
+            """);
+
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([
+                CreatePackage("Aspire.Hosting.Redis", "1.0.0"),
+                CreatePackage("CommunityToolkit.Aspire.Hosting.NodeJS", "1.0.0")
+            ])
+        };
+        var prCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0-pr.12345.gabcdef")])
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "pr-12345")], prCache, new TestFeatures())
+                ])
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"integration search redis --apphost \"{appHostFile.FullName}\" --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
@@ -403,7 +515,159 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
-        Assert.Equal("2.0.0", integration.Version);
+        Assert.Equal("2.0.0-pr.12345.gabcdef", integration.Version);
+    }
+
+    [Fact]
+    public async Task AddCommandWithCSharpAppHostUsesConfiguredChannelVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "pr-12345"
+            }
+            """);
+
+        var selectedPackageVersion = string.Empty;
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+        };
+        var prCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0-pr.12345.gabcdef")])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "pr-12345")], prCache, new TestFeatures())
+                ])
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.AddPackageAsyncCallback = (_, _, packageVersion, _, _, _, _) =>
+                {
+                    selectedPackageVersion = packageVersion;
+                    return 0;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add redis --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("2.0.0-pr.12345.gabcdef", selectedPackageVersion);
+    }
+
+    [Fact]
+    public async Task AddCommandWithConfiguredLocalBuildChannelMergesHiveSourceIntoExistingNuGetConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "pr-12345"
+            }
+            """);
+
+        var hiveSource = Path.Combine(workspace.WorkspaceRoot.FullName, "pr-hive-packages");
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        File.WriteAllText(nugetConfigPath, $$"""
+            <configuration>
+              <packageSources>
+                <add key="existing" value="https://example.test/nuget/index.json" />
+                <add key="{{hiveSource}}" value="https://example.test/conflicting-key/index.json" />
+              </packageSources>
+            </configuration>
+            """);
+
+        var selectedPackageId = string.Empty;
+        var selectedPackageVersion = string.Empty;
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+        };
+        var prCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0-pr.12345.gabcdef")])
+        };
+        var appHostProjectFactory = new TestAppHostProjectFactory
+        {
+            AddPackageAsyncCallback = (context, _) =>
+            {
+                selectedPackageId = context.PackageId;
+                selectedPackageVersion = context.PackageVersion;
+                return Task.FromResult(true);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [new PackageMapping("Aspire*", hiveSource), new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)], prCache, new TestFeatures())
+                ])
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) => 0;
+                return runner;
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(appHostProjectFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add redis --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal("Aspire.Hosting.Redis", selectedPackageId);
+        Assert.Equal("2.0.0-pr.12345.gabcdef", selectedPackageVersion);
+
+        var nugetConfig = XDocument.Load(nugetConfigPath);
+        var sources = nugetConfig.Root!.Element("packageSources")!.Elements("add")
+            .Select(e => (Key: (string?)e.Attribute("key"), Value: (string?)e.Attribute("value")))
+            .ToArray();
+        Assert.Contains(sources, s => s is { Key: "existing", Value: "https://example.test/nuget/index.json" });
+        Assert.Contains(sources, s => s.Value == "https://example.test/conflicting-key/index.json");
+        Assert.Contains(sources, s => s.Value == hiveSource);
+        Assert.Equal(3, sources.Length);
     }
 
     [Fact]
@@ -1860,7 +2124,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         };
 
         // Act
-        var result = await prompter.PromptForIntegrationVersionAsync(packages, CancellationToken.None).DefaultTimeout();
+        var result = await prompter.PromptForIntegrationVersionAsync(packages, configuredChannel: null, CancellationToken.None).DefaultTimeout();
 
         // Assert - For implicit channel with no explicit channels, should automatically select highest version without prompting
         Assert.Null(displayedChoices); // No prompt should be shown
@@ -1912,7 +2176,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         };
 
         // Act
-        await prompter.PromptForIntegrationVersionAsync(packages, CancellationToken.None).DefaultTimeout();
+        await prompter.PromptForIntegrationVersionAsync(packages, configuredChannel: null, CancellationToken.None).DefaultTimeout();
 
         // Assert - should show 2 root choices: one for implicit channel, one submenu for explicit channel
         Assert.NotNull(displayedChoices);
@@ -2136,6 +2400,90 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.NotEqual(staleVersion, selectedVersion);
     }
 
+    [Fact]
+    public async Task AddCommand_WithCurrentCliVersionInMultipleLocalBuildChannels_PrefersIdentityChannel()
+    {
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostFile.FullName, """
+            <Project Sdk="Microsoft.NET.Sdk">
+              <PropertyGroup>
+                <TargetFramework>net10.0</TargetFramework>
+                <IsAspireHost>true</IsAspireHost>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        var hivesRoot = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        hivesRoot.Create();
+        hivesRoot.CreateSubdirectory("pr-12345");
+
+        var localSource = Path.Combine(workspace.WorkspaceRoot.FullName, "local-packages");
+        var prSource = Path.Combine(workspace.WorkspaceRoot.FullName, "pr-packages");
+        var selectedPackageVersion = string.Empty;
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "13.2.2")])
+        };
+        var localCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", cliVersion)])
+        };
+        var prCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = async (_, _, _, cancellationToken) =>
+            {
+                await Task.Delay(100, cancellationToken);
+                return [CreatePackage("Aspire.Hosting.Redis", cliVersion)];
+            }
+        };
+        var appHostProjectFactory = new TestAppHostProjectFactory
+        {
+            AddPackageAsyncCallback = (context, _) =>
+            {
+                selectedPackageVersion = context.PackageVersion;
+                return Task.FromResult(true);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace, "pr-12345");
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Local, PackageChannelQuality.Both, [new PackageMapping("Aspire*", localSource), new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)], localCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [new PackageMapping("Aspire*", prSource), new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)], prCache, new TestFeatures())
+                ])
+            };
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) => 0;
+                return runner;
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(appHostProjectFactory);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add redis --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(cliVersion, selectedPackageVersion);
+
+        var nugetConfig = await File.ReadAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config"));
+        Assert.Contains(prSource, nugetConfig);
+        Assert.DoesNotContain(localSource, nugetConfig);
+    }
+
     /// <summary>
     /// Shared scaffolding for "aspire add redis" + hive precedence tests. The three tests
     /// (PR-hive / local-hive / both-hives) differ only in (a) how the hive directory is
@@ -2251,7 +2599,7 @@ internal sealed class TestAddCommandPrompter(IInteractionService interactionServ
         };
     }
 
-    public override Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)
+    public override Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken)
     {
         return PromptForIntegrationVersionCallback switch
         {

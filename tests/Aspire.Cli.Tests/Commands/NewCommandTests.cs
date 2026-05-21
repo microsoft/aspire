@@ -152,7 +152,8 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var config = AspireConfigFile.Load(outputDirectory);
         Assert.NotNull(config);
-        Assert.Null(config.Channel);
+        Assert.Equal(PackageChannelNames.Staging, config.Channel);
+        Assert.Equal("13.4.0-preview.1.12345", config.SdkVersion);
     }
 
     [Fact]

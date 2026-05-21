@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
@@ -138,10 +139,10 @@ internal sealed class AddCommand : BaseCommand
             // the version. If there is more than one match then we prompt.
             var selectedNuGetPackage = filteredPackagesWithShortName.Count() switch
             {
-                0 => await GetPackageByInteractiveFlowWithNoMatchesMessage(effectiveAppHostProjectFile.Directory!, packagesWithShortName, integrationName, version, cancellationToken),
+                0 => await GetPackageByInteractiveFlowWithNoMatchesMessage(effectiveAppHostProjectFile.Directory!, packagesWithShortName, integrationName, version, configuredChannel, cancellationToken),
                 1 when filteredPackagesWithShortName.First().Package.Version == version
                     => filteredPackagesWithShortName.First(),
-                _ => await GetPackageByInteractiveFlow(effectiveAppHostProjectFile.Directory!, filteredPackagesWithShortName, version, cancellationToken)
+                _ => await GetPackageByInteractiveFlow(effectiveAppHostProjectFile.Directory!, filteredPackagesWithShortName, version, configuredChannel, cancellationToken)
             };
 
             // When installing from a PR channel, ensure the project has access to
@@ -161,18 +162,8 @@ internal sealed class AddCommand : BaseCommand
                         .Distinct(StringComparer.OrdinalIgnoreCase);
 
                     var projectDir = effectiveAppHostProjectFile.Directory!;
-                    var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
-                    if (!File.Exists(nugetConfigPath))
+                    if (await EnsureNuGetConfigHasPackageSourcesAsync(projectDir, hiveSources, cancellationToken))
                     {
-                        projectDir.Create(); // ensure directory exists
-                        var configXml = new System.Xml.Linq.XDocument(
-                            new System.Xml.Linq.XElement("configuration",
-                                new System.Xml.Linq.XElement("packageSources",
-                                    hiveSources.Select(s =>
-                                        new System.Xml.Linq.XElement("add",
-                                            new System.Xml.Linq.XAttribute("key", s),
-                                            new System.Xml.Linq.XAttribute("value", s))))));
-                        configXml.Save(nugetConfigPath);
                         InteractionService.DisplayMessage(KnownEmojis.Package, Aspire.Cli.Resources.TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
                     }
                 }
@@ -262,7 +253,7 @@ internal sealed class AddCommand : BaseCommand
         return versions;
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? preferredVersion, CancellationToken cancellationToken)
+    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? preferredVersion, string? configuredChannel, CancellationToken cancellationToken)
     {
         var distinctPackages = possiblePackages.DistinctBy(p => p.Package.Id);
 
@@ -304,6 +295,10 @@ internal sealed class AddCommand : BaseCommand
         // CLI/SDK version so template- and add-generated projects stay on the same build.
         var prChannelPackageVersions = packageVersions
             .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name))
+            .OrderByDescending(p => IntegrationPackageSearchService.IsConfiguredChannel(p.Channel, configuredChannel))
+            .ThenByDescending(p => string.Equals(p.Channel.Name, ExecutionContext.IdentityChannel, StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(p => string.Equals(p.Channel.Name, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+            .ThenBy(p => p.Channel.Name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         if (VersionHelper.TryGetCurrentCliVersionMatch(
@@ -316,11 +311,11 @@ internal sealed class AddCommand : BaseCommand
             return cliVersionPackage;
         }
 
-        // In non-interactive mode, prefer the implicit/default channel first to keep
-        // package selection aligned with the project's configured feeds. Then select
-        // the latest version within the chosen channel.
+        // A project-pinned channel wins for shared package IDs; otherwise keep the
+        // existing implicit/default preference for unpinned projects with hives.
         var orderedPackageVersions = packageVersions
-            .OrderByDescending(p => p.Channel.Type is PackageChannelType.Implicit)
+            .OrderByDescending(p => IntegrationPackageSearchService.IsConfiguredChannel(p.Channel, configuredChannel))
+            .ThenByDescending(p => string.IsNullOrEmpty(configuredChannel) && p.Channel.Type is PackageChannelType.Implicit)
             .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
@@ -328,19 +323,95 @@ internal sealed class AddCommand : BaseCommand
         }
 
         // ... otherwise we had better prompt.
-        var version = await _prompter.PromptForIntegrationVersionAsync(orderedPackageVersions, cancellationToken);
+        var version = await _prompter.PromptForIntegrationVersionAsync(orderedPackageVersions, configuredChannel, cancellationToken);
 
         return version;
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlowWithNoMatchesMessage(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? searchTerm, string? preferredVersion, CancellationToken cancellationToken)
+    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlowWithNoMatchesMessage(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? searchTerm, string? preferredVersion, string? configuredChannel, CancellationToken cancellationToken)
     {
         if (searchTerm is not null)
         {
             InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoPackagesMatchedSearchTerm, searchTerm));
         }
 
-        return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, cancellationToken);
+        return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, configuredChannel, cancellationToken);
+    }
+
+    private static async Task<bool> EnsureNuGetConfigHasPackageSourcesAsync(DirectoryInfo projectDir, IEnumerable<string> packageSources, CancellationToken cancellationToken)
+    {
+        var sources = packageSources
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (sources.Length == 0)
+        {
+            return false;
+        }
+
+        projectDir.Create();
+        var nugetConfigPath = Path.Combine(projectDir.FullName, "nuget.config");
+        XDocument configXml;
+        if (File.Exists(nugetConfigPath))
+        {
+            await using var readStream = File.OpenRead(nugetConfigPath);
+            configXml = await XDocument.LoadAsync(readStream, LoadOptions.None, cancellationToken);
+        }
+        else
+        {
+            configXml = new XDocument(new XElement("configuration"));
+        }
+
+        var configuration = configXml.Root ?? new XElement("configuration");
+        if (configXml.Root is null)
+        {
+            configXml.Add(configuration);
+        }
+
+        var packageSourcesElement = configuration.Element("packageSources");
+        if (packageSourcesElement is null)
+        {
+            packageSourcesElement = new XElement("packageSources");
+            configuration.Add(packageSourcesElement);
+        }
+
+        var existingValues = new HashSet<string>(
+            packageSourcesElement.Elements("add").Select(e => (string?)e.Attribute("value") ?? string.Empty),
+            StringComparer.OrdinalIgnoreCase);
+        var existingKeys = new HashSet<string>(
+            packageSourcesElement.Elements("add").Select(e => (string?)e.Attribute("key") ?? string.Empty),
+            StringComparer.OrdinalIgnoreCase);
+
+        var changed = false;
+        foreach (var source in sources)
+        {
+            if (existingValues.Contains(source))
+            {
+                continue;
+            }
+
+            var key = source;
+            for (var suffix = 2; existingKeys.Contains(key); suffix++)
+            {
+                key = $"{source} ({suffix})";
+            }
+
+            packageSourcesElement.Add(new XElement("add",
+                new XAttribute("key", key),
+                new XAttribute("value", source)));
+            existingKeys.Add(key);
+            existingValues.Add(source);
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return false;
+        }
+
+        await using var writeStream = File.Create(nugetConfigPath);
+        await configXml.SaveAsync(writeStream, SaveOptions.None, cancellationToken);
+        return true;
     }
 
 }
@@ -348,12 +419,12 @@ internal sealed class AddCommand : BaseCommand
 internal interface IAddCommandPrompter
 {
     Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken);
-    Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken);
+    Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken);
 }
 
 internal class AddCommandPrompter(IInteractionService interactionService) : IAddCommandPrompter
 {
-    public virtual async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)
+    public virtual async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> PromptForIntegrationVersionAsync(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? configuredChannel, CancellationToken cancellationToken)
     {
         var firstPackage = packages.First();
 
@@ -402,11 +473,12 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
             .ToArray();
 
         var implicitGroup = byChannel.FirstOrDefault(g => g.Channel.Type is Packaging.PackageChannelType.Implicit);
+        var configuredGroup = byChannel.FirstOrDefault(g => IntegrationPackageSearchService.IsConfiguredChannel(g.Channel, configuredChannel));
         var explicitGroups = byChannel
             .Where(g => g.Channel.Type is Packaging.PackageChannelType.Explicit)
             .ToArray();
 
-        // If there are no explicit channels, automatically select from the implicit channel
+        // If there are no explicit channels, automatically select from the implicit channel.
         if (explicitGroups.Length == 0 && implicitGroup is not null)
         {
             return implicitGroup.HighestVersion;
@@ -415,25 +487,44 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
         // Build the root menu: implicit channel packages directly, explicit channels as submenus
         var rootChoices = new List<(string Label, Func<CancellationToken, Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>> Action)>();
 
-        if (implicitGroup is not null)
+        void AddRootChoice(PackageChannel channel, (string FriendlyName, NuGetPackage Package, PackageChannel Channel) item)
         {
-            var captured = implicitGroup.HighestVersion;
-            rootChoices.Add((
-                Label: FormatVersionLabel(captured),
-                Action: ct => Task.FromResult(captured)
-            ));
+            if (channel.Type is Packaging.PackageChannelType.Implicit)
+            {
+                rootChoices.Add((
+                    Label: FormatVersionLabel(item),
+                    Action: ct => Task.FromResult(item)
+                ));
+            }
+            else
+            {
+                rootChoices.Add((
+                    Label: channel.Name.EscapeMarkup(),
+                    Action: ct => PromptForChannelPackagesAsync(channel, new[] { item }, ct)
+                ));
+            }
+        }
+
+        if (configuredGroup is not null)
+        {
+            AddRootChoice(configuredGroup.Channel, configuredGroup.HighestVersion);
+        }
+
+        if (implicitGroup is not null && !IntegrationPackageSearchService.IsConfiguredChannel(implicitGroup.Channel, configuredChannel))
+        {
+            AddRootChoice(implicitGroup.Channel, implicitGroup.HighestVersion);
         }
 
         foreach (var channelGroup in explicitGroups)
         {
             var channel = channelGroup.Channel;
             var item = channelGroup.HighestVersion;
+            if (IntegrationPackageSearchService.IsConfiguredChannel(channel, configuredChannel))
+            {
+                continue;
+            }
 
-            rootChoices.Add((
-                Label: channel.Name.EscapeMarkup(),
-                // For explicit channels, we still show submenu but with only the highest version
-                Action: ct => PromptForChannelPackagesAsync(channel, new[] { item }, ct)
-            ));
+            AddRootChoice(channel, item);
         }
 
         // Fallback if no choices for some reason

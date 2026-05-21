@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
@@ -70,7 +71,7 @@ internal sealed partial class CliTemplateFactory
                     if (isCsharp)
                     {
                         _logger.LogDebug("Using embedded C# empty AppHost template for '{OutputPath}'.", outputPath);
-                        await WriteCSharpEmptyAppHostAsync(inputs.Version, outputPath, projectName, useLocalhostTld, cancellationToken);
+                        await WriteCSharpEmptyAppHostAsync(inputs.Version, inputs.Channel, outputPath, projectName, useLocalhostTld, cancellationToken);
                     }
                     else
                     {
@@ -154,7 +155,7 @@ internal sealed partial class CliTemplateFactory
         }
     }
 
-    private async Task WriteCSharpEmptyAppHostAsync(string? templateVersion, string outputPath, string projectName, bool useLocalhostTld, CancellationToken cancellationToken)
+    private async Task WriteCSharpEmptyAppHostAsync(string? templateVersion, string? configuredChannel, string outputPath, string projectName, bool useLocalhostTld, CancellationToken cancellationToken)
     {
         var aspireVersion = string.IsNullOrWhiteSpace(templateVersion)
             ? VersionHelper.GetDefaultTemplateVersion()
@@ -166,5 +167,19 @@ internal sealed partial class CliTemplateFactory
 
         _logger.LogDebug("Writing C# empty AppHost template files to '{OutputPath}' with Aspire version '{AspireVersion}'.", outputPath, aspireVersion);
         await CopyTemplateTreeToDiskAsync("empty-apphost", outputPath, ApplyAllTokens, cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(templateVersion) || !string.IsNullOrEmpty(configuredChannel))
+        {
+            var config = AspireConfigFile.Load(outputPath) ?? new AspireConfigFile();
+            if (!string.IsNullOrWhiteSpace(templateVersion))
+            {
+                config.SdkVersion = templateVersion;
+            }
+            if (!string.IsNullOrEmpty(configuredChannel))
+            {
+                config.Channel = configuredChannel;
+            }
+            config.Save(outputPath);
+        }
     }
 }
