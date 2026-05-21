@@ -537,7 +537,7 @@ First, [install the Aspire CLI]({1}) if you haven't already. Then use an Aspire 
 aspire agent init
 ```
 
-This configures Aspire skill files for your AI agent. The skill files tell the agent how to use Aspire CLI commands such as [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
+This configures skill files for your AI agent. The skill files tell the agent how to use Aspire CLI commands such as [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
 
 Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
 
