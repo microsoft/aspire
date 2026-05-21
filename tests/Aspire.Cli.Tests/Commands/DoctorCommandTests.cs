@@ -583,7 +583,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                     CanonicalPath = "/home/test/.aspire/bin/aspire",
                     Version = "13.0.0",
                     Channel = "stable",
-                    Route = "script",
+                    Source = "script",
                     PathStatus = InstallationPathStatus.Active,
                     Status = InstallationInfoStatus.Ok,
                 },
@@ -595,7 +595,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                         CanonicalPath = "/home/test/.aspire/dogfood/pr-1234/bin/aspire",
                         Version = "13.1.0-preview",
                         Channel = "pr-1234",
-                        Route = "pr",
+                        Source = "pr",
                         PathStatus = InstallationPathStatus.Shadowed,
                         Status = InstallationInfoStatus.Ok,
                     },
@@ -607,13 +607,15 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         var self = installations[0];
         Assert.Equal("/home/test/.aspire/bin/aspire", self.GetProperty("path").GetString());
         Assert.Equal("stable", self.GetProperty("channel").GetString());
-        Assert.Equal("script", self.GetProperty("route").GetString());
+        Assert.Equal("script", self.GetProperty("source").GetString());
+        Assert.False(self.TryGetProperty("route", out _));
         Assert.Equal(InstallationPathStatus.Active, self.GetProperty("pathStatus").GetString());
 
         var peer = installations[1];
         Assert.Equal("/home/test/.aspire/dogfood/pr-1234/bin/aspire", peer.GetProperty("path").GetString());
         Assert.Equal("pr-1234", peer.GetProperty("channel").GetString());
-        Assert.Equal("pr", peer.GetProperty("route").GetString());
+        Assert.Equal("pr", peer.GetProperty("source").GetString());
+        Assert.False(peer.TryGetProperty("route", out _));
         Assert.Equal(InstallationPathStatus.Shadowed, peer.GetProperty("pathStatus").GetString());
     }
 
@@ -650,7 +652,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 CanonicalPath = "/home/test/.aspire/bin/aspire",
                 Version = "13.4.0-pr.17115.gcd700928",
                 Channel = "pr-17115",
-                Route = "brew",
+                Source = "brew",
                 PathStatus = InstallationPathStatus.Active,
                 Status = InstallationInfoStatus.Ok,
             },
@@ -662,7 +664,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                     CanonicalPath = "/peer/aspire",
                     Version = "13.1.0-preview",
                     Channel = "pr-1234",
-                    Route = "pr",
+                    Source = "pr",
                     PathStatus = InstallationPathStatus.Shadowed,
                     Status = InstallationInfoStatus.Ok,
                 },
@@ -715,7 +717,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 CanonicalPath = "/home/test/.aspire/bin/aspire",
                 Version = "13.0.0",
                 Channel = "stable",
-                Route = "script",
+                Source = "script",
                 PathStatus = InstallationPathStatus.Active,
                 Status = InstallationInfoStatus.Ok,
             },
@@ -727,7 +729,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                     CanonicalPath = "/peer/aspire",
                     Version = "13.1.0-preview",
                     Channel = "pr-1234",
-                    Route = "pr",
+                    Source = "pr",
                     PathStatus = InstallationPathStatus.Shadowed,
                     Status = InstallationInfoStatus.Ok,
                 },
@@ -771,7 +773,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 CanonicalPath = "/home/test/.aspire/bin/aspire",
                 Version = "13.0.0",
                 Channel = "stable",
-                Route = "script",
+                Source = "script",
                 PathStatus = InstallationPathStatus.Active,
                 Status = InstallationInfoStatus.Ok,
             },
@@ -781,7 +783,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 CanonicalPath = "/peer/aspire",
                 Version = "13.1.0-preview",
                 Channel = "pr-1234",
-                Route = "pr",
+                Source = "pr",
                 PathStatus = InstallationPathStatus.Shadowed,
                 Status = InstallationInfoStatus.Ok,
             },
@@ -791,7 +793,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 CanonicalPath = "/off-path/aspire",
                 Version = "13.2.0-preview",
                 Channel = "daily",
-                Route = "script",
+                Source = "script",
                 PathStatus = InstallationPathStatus.NotOnPath,
                 Status = InstallationInfoStatus.Ok,
             },
@@ -839,7 +841,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 CanonicalPath = "/home/test/.aspire/bin/aspire",
                 Version = "13.0.0",
                 Channel = "stable",
-                Route = "script",
+                Source = "script",
                 PathStatus = "custom[red]status[/]",
                 Status = InstallationInfoStatus.Ok,
             });
@@ -885,7 +887,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                     CanonicalPath = "/usr/local/bin/aspire",
                     Version = "13.0.0",
                     Channel = "stable",
-                    Route = "script",
+                    Source = "script",
                     PathStatus = InstallationPathStatus.Active,
                     Status = InstallationInfoStatus.Ok,
                 }));
@@ -896,7 +898,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("/usr/local/bin/aspire", row.GetProperty("path").GetString());
         Assert.Equal("13.0.0", row.GetProperty("version").GetString());
         Assert.Equal("stable", row.GetProperty("channel").GetString());
-        Assert.Equal("script", row.GetProperty("route").GetString());
+        Assert.Equal("script", row.GetProperty("source").GetString());
         Assert.Equal(InstallationPathStatus.Active, row.GetProperty("pathStatus").GetString());
         Assert.Equal(InstallationInfoStatus.Ok, row.GetProperty("status").GetString());
     }
@@ -957,7 +959,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 CanonicalPath = "/home/test/.aspire/bin/aspire",
                 Version = "13.0.0",
                 Channel = "stable",
-                Route = "script",
+                Source = "script",
                 PathStatus = InstallationPathStatus.Active,
                 Status = InstallationInfoStatus.Ok,
             },
@@ -1049,7 +1051,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 CanonicalPath = "/test/aspire",
                 Version = "13.0.0",
                 Channel = "stable",
-                Route = "script",
+                Source = "script",
                 PathStatus = InstallationPathStatus.Active,
                 Status = InstallationInfoStatus.Ok,
             });

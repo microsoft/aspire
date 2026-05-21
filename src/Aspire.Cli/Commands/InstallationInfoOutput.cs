@@ -122,7 +122,7 @@ internal static class InstallationInfoOutput
                 pathDisplay,
                 ValueOrPlaceholder(install.Version, install.Status),
                 ValueOrPlaceholder(install.Channel, install.Status),
-                ValueOrPlaceholder(install.Route, install.Status),
+                ValueOrPlaceholder(install.Source, install.Status),
                 PathStatusDisplay(install.PathStatus));
         }
 

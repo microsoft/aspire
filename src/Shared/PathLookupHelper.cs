@@ -203,22 +203,23 @@ internal static class PathLookupHelper
         // Windows PATH probing appends PATHEXT entries such as ".EXE" even when
         // the file is named "aspire.exe"; return the filesystem spelling so
         // user-facing output doesn't inherit PATHEXT casing.
-        existingPath = TryGetActualPathCasing(path) ?? path;
+        existingPath = TryGetActualPathCasing(path, out var actualPath) ? actualPath : path;
         return true;
     }
 
-    private static string? TryGetActualPathCasing(string path)
+    private static bool TryGetActualPathCasing(string path, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out string? actualPath)
     {
+        actualPath = null;
         if (!OperatingSystem.IsWindows())
         {
-            return null;
+            return false;
         }
 
         var directory = Path.GetDirectoryName(path);
         var fileName = Path.GetFileName(path);
         if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(fileName))
         {
-            return null;
+            return false;
         }
 
         try
@@ -227,16 +228,17 @@ internal static class PathLookupHelper
             {
                 if (string.Equals(Path.GetFileName(entry), fileName, StringComparison.OrdinalIgnoreCase))
                 {
-                    return entry;
+                    actualPath = entry;
+                    return true;
                 }
             }
         }
         catch (Exception ex) when (ex is ArgumentException or DirectoryNotFoundException or IOException or NotSupportedException or PathTooLongException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            return null;
+            return false;
         }
 
-        return null;
+        return false;
     }
 
     private static bool IsExplicitExecutablePath(string executablePath)

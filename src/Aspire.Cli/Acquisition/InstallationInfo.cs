@@ -64,14 +64,14 @@ internal sealed record InstallationInfo
     public string? Channel { get; init; }
 
     /// <summary>
-    /// Install route as recorded by the route's own sidecar
+    /// Install source as recorded by the install route's sidecar
     /// (<c>.aspire-install.json</c>). Wire string from
     /// <see cref="InstallSourceExtensions.ToWireString"/>. May be
     /// <see langword="null"/> for PATH discoveries whose install metadata
     /// sidecar is missing or invalid — see <see cref="Status"/>.
     /// </summary>
-    [JsonPropertyName("route")]
-    public string? Route { get; init; }
+    [JsonPropertyName("source")]
+    public string? Source { get; init; }
 
     /// <summary>
     /// Relationship between this binary and the user's <c>$PATH</c>.
@@ -161,7 +161,7 @@ internal static class InstallationInfoParser
             CanonicalPath = GetOptionalString("canonicalPath"),
             Version = GetOptionalString("version"),
             Channel = GetOptionalString("channel"),
-            Route = GetOptionalString("route"),
+            Source = GetOptionalString("source") ?? GetOptionalString("route"),
             PathStatus = pathStatus,
             Status = GetStringOr("status", InstallationInfoStatus.Ok),
             StatusReason = GetOptionalString("statusReason"),
