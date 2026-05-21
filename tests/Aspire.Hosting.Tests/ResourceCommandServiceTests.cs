@@ -996,6 +996,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     public async Task ExecuteCommandAsync_NonInteractiveWithoutArguments_DoesNotPrompt()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
 
         var testInteractionService = new TestInteractionService();
         builder.Services.AddSingleton<IInteractionService>(testInteractionService);
