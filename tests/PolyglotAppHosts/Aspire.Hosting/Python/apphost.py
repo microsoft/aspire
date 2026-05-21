@@ -282,6 +282,7 @@ with create_builder() as builder:
     builder_execution_context = builder.execution_context
     execution_context_service_provider = builder_execution_context.service_provider
     _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
+    resource_command_service = execution_context_service_provider.get_resource_command_service()
 
     def configure_eventing_subscriber(registration_context):
         _subscriber_execution_context = registration_context.execution_context
@@ -403,7 +404,11 @@ with create_builder() as builder:
         lambda *_args, **_kwargs: {"success": True},
         command_options={"UpdateState": update_command_state}
     )
-    container.with_command("restart", "Restart", lambda *_args, **_kwargs: {"success": True})
+
+    def restart_command(_ctx):
+        return resource_command_service.execute_command("mycontainer", "noop")
+
+    container.with_command("restart", "Restart", restart_command)
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})

@@ -348,6 +348,7 @@ func main() {
 	builderExecutionContext := builder.ExecutionContext()
 	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
 	_ = executionContextServiceProvider.GetDistributedApplicationModel()
+	resourceCommandService := executionContextServiceProvider.GetResourceCommandService()
 
 	// Subscriptions (typed callbacks)
 	beforeStartSub := builder.SubscribeBeforeStart(func(e aspire.BeforeStartEvent) {
@@ -512,7 +513,16 @@ func main() {
 		},
 	})
 	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		return &aspire.ExecuteCommandResult{Success: true}
+		cancellationToken, err := ctx.CancellationToken()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		result, err := resourceCommandService.ExecuteCommandAsync("mycontainer", "noop", &aspire.ExecuteCommandAsyncOptions{CancellationToken: cancellationToken})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		return result
 	})
 
 	app, err := builder.Build()

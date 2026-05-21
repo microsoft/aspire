@@ -129,6 +129,7 @@ void main() throws Exception {
         var builderExecutionContext = builder.executionContext();
         var executionContextServiceProvider = builderExecutionContext.serviceProvider();
         var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
+        var resourceCommandService = executionContextServiceProvider.getResourceCommandService();
         builder.addEventingSubscriber((registrationContext) -> {
             var subscriberExecutionContext = registrationContext.executionContext();
             var _subscriberIsRunMode = subscriberExecutionContext.isRunMode();
@@ -230,9 +231,8 @@ void main() throws Exception {
             return result;
         }, commandOptions);
         container.withCommand("restart", "Restart", (_ctx) -> {
-            var result = new ExecuteCommandResult();
-            result.setSuccess(true);
-            return result;
+            var cancellationToken = _ctx.cancellationToken();
+            return resourceCommandService.executeCommandAsync("mycontainer", "noop", cancellationToken);
         });
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();

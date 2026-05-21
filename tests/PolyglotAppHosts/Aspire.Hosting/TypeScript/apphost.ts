@@ -427,6 +427,7 @@ const _configExists: boolean = await builderConfiguration.exists("MyConfig:Key")
 const builderExecutionContext = await builder.executionContext();
 const executionContextServiceProvider = await builderExecutionContext.serviceProvider();
 const _distributedApplicationModelFromExecutionContext = await executionContextServiceProvider.getDistributedApplicationModel();
+const resourceCommandService = await executionContextServiceProvider.getResourceCommandService();
 
 await builder.addEventingSubscriber(async (registrationContext) => {
     const subscriberExecutionContext = await registrationContext.executionContext();
@@ -703,7 +704,9 @@ await container.withCommand("noop", "Noop", async () => {
     },
 });
 await container.withCommand("restart", "Restart", async (ctx) => {
-    return { success: true };
+    const cancellationToken = await ctx.cancellationToken();
+
+    return await resourceCommandService.executeCommandAsync("mycontainer", "noop", { cancellationToken });
 });
 
 // withProcessCommand
