@@ -237,6 +237,17 @@ public class ResourceNotificationService : IDisposable
     public async Task<ResourceEvent> WaitForResourceHealthyAsync(string resourceName, WaitBehavior waitBehavior, CancellationToken cancellationToken = default)
     {
         _logger.LogDebug("Waiting for resource '{ResourceName}' to enter the '{State}' state.", resourceName, HealthStatus.Healthy);
+
+        if (waitBehavior == WaitBehavior.StopOnResourceUnavailable)
+        {
+            var appModel = _serviceProvider.GetService<DistributedApplicationModel>();
+            if (appModel is not null && !appModel.Resources.Any(r => string.Equals(r.Name, resourceName, StringComparisons.ResourceName)))
+            {
+                _logger.LogError("Stopped waiting for resource '{ResourceName}' to become healthy because it does not exist in the application model.", resourceName);
+                throw new DistributedApplicationException($"Stopped waiting for resource '{resourceName}' to become healthy because it does not exist in the application model.");
+            }
+        }
+
         var resourceEvent = await WaitForResourceCoreAsync(
             resourceName,
             re => ShouldYieldHealthyWait(waitBehavior, re.Snapshot),
