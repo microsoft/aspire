@@ -269,13 +269,9 @@ public class PathLookupHelperTests
     }
 
     [Fact]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX, "On-disk executable casing is only normalized on Windows.")]
     public void FindFullPathFromPath_WithPathExtensions_PreservesFileSystemCasingOnWindows()
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            return;
-        }
-
         using var tempDirectory = new TestTempDirectory();
         var binPath = Path.Combine(tempDirectory.Path, "bin");
         Directory.CreateDirectory(binPath);
