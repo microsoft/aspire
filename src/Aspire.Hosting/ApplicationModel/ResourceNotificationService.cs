@@ -240,8 +240,17 @@ public class ResourceNotificationService : IDisposable
 
         if (waitBehavior == WaitBehavior.StopOnResourceUnavailable && !TryGetCurrentState(resourceName, out _))
         {
-            _logger.LogError("Stopped waiting for resource '{ResourceName}' to become healthy because it does not exist in the application model.", resourceName);
-            throw new DistributedApplicationException($"Stopped waiting for resource '{resourceName}' to become healthy because it does not exist in the application model.");
+            // TryGetCurrentState returns false both when a resource doesn't exist and when it exists
+            // but hasn't published its first event yet. Check the app model to distinguish the two:
+            // only throw if the resource is definitively absent from the model. When the model is
+            // unavailable (e.g. the obsolete constructor path) we skip the check to preserve
+            // backward compatibility.
+            var appModel = _serviceProvider.GetService<DistributedApplicationModel>();
+            if (appModel is not null && !appModel.Resources.Any(r => string.Equals(r.Name, resourceName, StringComparisons.ResourceName)))
+            {
+                _logger.LogError("Stopped waiting for resource '{ResourceName}' to become healthy because it does not exist in the application model.", resourceName);
+                throw new DistributedApplicationException($"Stopped waiting for resource '{resourceName}' to become healthy because it does not exist in the application model.");
+            }
         }
 
         var resourceEvent = await WaitForResourceCoreAsync(

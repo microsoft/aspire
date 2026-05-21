@@ -7,6 +7,7 @@ using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
@@ -1144,7 +1145,13 @@ public class ResourceNotificationTests
     [Fact]
     public async Task WaitForResourceHealthyAsync_StopOnResourceUnavailable_ThrowsIfResourceNotInModel()
     {
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+        var appModel = new DistributedApplicationModel([new CustomResource("existingResource")]);
+        var serviceProvider = new TestServiceProvider().AddService(appModel);
+        var notificationService = new ResourceNotificationService(
+            new NullLogger<ResourceNotificationService>(),
+            new TestHostApplicationLifetime(),
+            serviceProvider,
+            new ResourceLoggerService());
 
         var ex = await Assert.ThrowsAsync<DistributedApplicationException>(
             () => notificationService.WaitForResourceHealthyAsync("does-not-exist", WaitBehavior.StopOnResourceUnavailable));
