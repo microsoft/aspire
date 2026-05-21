@@ -1506,7 +1506,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
     /// <summary>
     /// Verifies that for a local hive channel with a pinned version, GetIntegrationPackagesAsync
-    /// enumerates .nupkg files directly from the local folder and returns all Aspire.Hosting.*
+    /// enumerates .nupkg files directly from the local folder and returns Aspire.Hosting.* integration
     /// packages without calling dotnet package search (which does not support local folder sources).
     /// </summary>
     [Fact]
@@ -1522,8 +1522,9 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         localPackagesDir.Create();
 
         const string localVersion = "13.4.0-pr.16820.g1a99aa46";
-        // Hosting integration packages that should be returned
+        // Root hosting package that should not appear in integration search
         File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.{localVersion}.nupkg"), string.Empty);
+        // Hosting integration packages that should be returned
         File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.Redis.{localVersion}.nupkg"), string.Empty);
         File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.Hosting.JavaScript.{localVersion}.nupkg"), string.Empty);
         // Non-hosting packages that should NOT be returned by GetIntegrationPackagesAsync
@@ -1539,12 +1540,12 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         // Assert
         var packageList = integrationPackages.ToList();
-        Assert.Equal(3, packageList.Count);
+        Assert.Equal(2, packageList.Count);
         Assert.All(packageList, p => Assert.Equal(localVersion, p.Version));
-        Assert.Contains(packageList, p => p.Id == "Aspire.Hosting");
         Assert.Contains(packageList, p => p.Id == "Aspire.Hosting.Redis");
         Assert.Contains(packageList, p => p.Id == "Aspire.Hosting.JavaScript");
         // Non-hosting packages must not appear
+        Assert.DoesNotContain(packageList, p => p.Id == "Aspire.Hosting");
         Assert.DoesNotContain(packageList, p => p.Id == "Aspire.ProjectTemplates");
         Assert.DoesNotContain(packageList, p => p.Id == "Aspire.AppHost.Sdk");
     }

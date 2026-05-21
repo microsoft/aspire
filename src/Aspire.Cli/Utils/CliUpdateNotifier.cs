@@ -17,7 +17,28 @@ internal interface ICliUpdateNotifier
     bool IsUpdateAvailable();
 }
 
-internal sealed record CliVersionStatus(string? CurrentVersion, string? LatestVersion, string? UpdateCommand, string? UpdateCheckError = null);
+internal sealed record CliVersionStatus(
+    string? CurrentVersion,
+    string? LatestVersion,
+    string? UpdateCommand,
+    string? UpdateCheckError = null,
+    string? LatestVersionChannel = null);
+
+/// <summary>
+/// Coarse-grained labels for the channel a recommended CLI update is being
+/// pulled from. <see cref="PackageUpdateHelpers.GetNewerVersion"/> picks
+/// between <c>newestStable</c> and <c>newestPrerelease</c> when computing
+/// the recommendation, so labelling by stable vs prerelease is faithful to
+/// the underlying decision rule. We deliberately don't try to distinguish
+/// staging from daily here — the version string alone can't reliably do so,
+/// and the user-visible doctor message only needs to convey "where to
+/// look", not the specific feed identity.
+/// </summary>
+internal static class PackageUpdateRecommendationChannels
+{
+    public const string Stable = "stable";
+    public const string Prerelease = "prerelease";
+}
 
 internal class CliUpdateNotifier(
     ILogger<CliUpdateNotifier> logger,
@@ -96,7 +117,16 @@ internal class CliUpdateNotifier(
 
         var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, _availablePackages);
         var updateCommand = newerVersion is null ? null : DotNetToolDetection.GetDotNetToolUpdateCommand() ?? "aspire update";
-        return new CliVersionStatus(currentVersionString, newerVersion?.ToString(), updateCommand);
+        // Derive the lane the recommendation comes from so doctor can show
+        // 'Latest version is X (channel: stable)' vs '(channel: prerelease)'.
+        // GetNewerVersion picks between newestStable and newestPrerelease
+        // by exactly this rule, so re-classifying from the returned
+        // version's prerelease flag is faithful to the decision the
+        // package helper made.
+        var latestChannel = newerVersion is null
+            ? null
+            : (newerVersion.IsPrerelease ? PackageUpdateRecommendationChannels.Prerelease : PackageUpdateRecommendationChannels.Stable);
+        return new CliVersionStatus(currentVersionString, newerVersion?.ToString(), updateCommand, UpdateCheckError: null, LatestVersionChannel: latestChannel);
     }
 
     private async Task<IEnumerable<Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)

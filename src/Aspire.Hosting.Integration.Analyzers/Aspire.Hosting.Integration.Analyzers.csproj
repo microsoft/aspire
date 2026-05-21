@@ -6,15 +6,23 @@
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
     <EnablePackageValidation>false</EnablePackageValidation>
-    <IsPackable>false</IsPackable>
+    <IsPackable>true</IsPackable>
+    <!-- This is an analyzer-only package: avoid lib/ assets and prevent transitive exposure from consuming projects. -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <DevelopmentDependency>true</DevelopmentDependency>
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>aspire hosting analyzers ats polyglot integration</PackageTags>
+    <Description>Experimental analyzers for Aspire hosting integration authors.</Description>
     <LangVersion>12.0</LangVersion>
     <!--
       Analyzer projects don't need XML docs
       CS1573: Parameter 'parameter' has no matching param tag in the XML comment for 'parameter' (but other parameters do)
       CS1591: Missing XML comment for publicly visible type or member 'Type_or_Member'
       CS1712: Type parameter 'type_parameter' has no matching typeparam tag in the XML comment on 'type_or_member' (but other type parameters do)
+      NU5128: Analyzer-only packages intentionally don't include lib/ref assets that match dependency groups
     -->
-    <NoWarn>$(NoWarn),1573,1591,1712</NoWarn>
+    <NoWarn>$(NoWarn),1573,1591,1712,NU5128</NoWarn>
     <!--
       We manually control the dependency versions that the analyzer uses as it needs to be loaded into the compiler host, e.g. Visual Studio,
       which may have a different set of dependencies.
@@ -35,6 +43,10 @@
          we take the minimum of those. -->
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" PrivateAssets="All" />
     <PackageReference Update="Microsoft.DotNet.GenAPI.Task" Version="9.0.103-servicing.25065.25" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="$(TargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
 
   <ItemGroup>

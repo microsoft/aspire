@@ -1658,8 +1658,8 @@ public static class AtsCapabilityScanner
                 // Get custom method name from attribute if specified
                 var customMethodName = memberExportAttr?.Id;
                 var methodNameOverride = memberExportAttr?.MethodName;
-                var propertyDescription = memberExportAttr?.Description ?? $"Gets the {property.Name} property";
-                var propertyDocumentation = GetXmlDocumentation(property);
+                var propertyDocumentation = GetXmlDocumentation(property, memberExportAttr?.Description);
+                var propertyDescription = memberExportAttr?.Description ?? propertyDocumentation?.Summary ?? $"Gets the {property.Name} property";
 
                 // Generate getter capability if property is readable
                 // Naming: {TypeName}.{propertyName} (camelCase, no "get" prefix)
@@ -1855,8 +1855,8 @@ public static class AtsCapabilityScanner
 
                 // The method documentation contains all <param> entries, so load it once and
                 // project each parameter's documentation from the shared parsed member element.
-                var description = memberExportAttr?.Description ?? $"Invokes the {method.Name} method";
-                var methodDocumentation = GetXmlDocumentation(method, description);
+                var methodDocumentation = GetXmlDocumentation(method, memberExportAttr?.Description);
+                var description = memberExportAttr?.Description ?? methodDocumentation?.Summary ?? $"Invokes the {method.Name} method";
                 var paramIndex = 0;
                 var hasUnmappedRequiredParam = false;
                 foreach (var param in method.GetParameters())
@@ -1992,7 +1992,6 @@ public static class AtsCapabilityScanner
         }
 
         // Get named arguments
-        var description = exportAttr.Description;
         var methodNameOverride = exportAttr.MethodName;
         var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
@@ -2033,7 +2032,8 @@ public static class AtsCapabilityScanner
         var skipFirst = extendsTypeId != null;
         var paramList = skipFirst ? parameters.Skip(1) : parameters;
 
-        var methodDocumentation = GetXmlDocumentation(method, description);
+        var methodDocumentation = GetXmlDocumentation(method, exportAttr.Description);
+        var description = exportAttr.Description ?? methodDocumentation?.Summary;
         var paramIndex = 0;
         foreach (var param in paramList)
         {
@@ -3642,6 +3642,11 @@ public static class AtsCapabilityScanner
 
     private static bool TryParseAtsDocumentationReference(string value, out string kind, out string target)
     {
+        if (value.StartsWith("!:", StringComparison.Ordinal))
+        {
+            value = value[2..];
+        }
+
         var separatorIndex = value.IndexOf(':', StringComparison.Ordinal);
         if (separatorIndex < 1 || separatorIndex == value.Length - 1)
         {

@@ -1,4 +1,4 @@
-import { createBuilder, ContainerLifetime } from './.modules/aspire.js';
+import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -22,7 +22,7 @@ await builder.addSqlServer("sql-custom-pass", { password: customPassword });
 
 // Test 6: Chained configuration - multiple With* methods
 const sqlChained = await builder.addSqlServer("sql-chained")
-    .withLifetime(ContainerLifetime.Persistent)
+    .withPersistentLifetime()
     .withDataVolume({ name: "sql-chained-data" })
     .withHostPort({ port: 12433 });
 

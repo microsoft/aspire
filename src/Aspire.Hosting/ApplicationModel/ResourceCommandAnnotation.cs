@@ -355,6 +355,7 @@ public sealed class CommandResultData
 /// <summary>
 /// Context for <see cref="ResourceCommandAnnotation.UpdateState"/>.
 /// </summary>
+/// <ats-summary>Context for <ats-see cref="!:method:ResourceCommandAnnotation.UpdateState" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public sealed class UpdateCommandStateContext
 {
@@ -424,6 +425,7 @@ internal sealed class UpdateCommandStateResourceSnapshot
 /// <summary>
 /// Context for <see cref="ResourceCommandAnnotation.ExecuteCommand"/>.
 /// </summary>
+/// <ats-summary>Context for <ats-see cref="!:method:ResourceCommandAnnotation.ExecuteCommand" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public sealed class ExecuteCommandContext
 {

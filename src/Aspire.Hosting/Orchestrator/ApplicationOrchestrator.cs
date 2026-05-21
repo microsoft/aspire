@@ -135,17 +135,11 @@ internal sealed class ApplicationOrchestrator
         }
     }
 
-    private async Task OnEndpointsAllocated(OnEndpointsAllocatedContext context)
+    private Task OnEndpointsAllocated(OnEndpointsAllocatedContext context)
     {
-#pragma warning disable CS0618 // Type or member is obsolete
-        var afterEndpointsAllocatedEvent = new AfterEndpointsAllocatedEvent(_serviceProvider, _model);
-#pragma warning restore CS0618 // Type or member is obsolete
-        await _eventing.PublishAsync(afterEndpointsAllocatedEvent, context.CancellationToken).ConfigureAwait(false);
-
-        foreach (var lifecycleHook in _lifecycleHooks)
-        {
-            await lifecycleHook.AfterEndpointsAllocatedAsync(_model, context.CancellationToken).ConfigureAwait(false);
-        }
+        // Endpoint allocation can now complete after resource creation, so there is no longer a single
+        // app-wide point where all endpoints are guaranteed to be allocated.
+        return Task.CompletedTask;
     }
 
     private async Task PublishResourceEndpointUrls(IResource resource, CancellationToken cancellationToken)
@@ -238,7 +232,7 @@ internal sealed class ApplicationOrchestrator
                 foreach (var endpoint in endpoints)
                 {
                     // Create a URL for each endpoint
-                    Debug.Assert(endpoint.AllocatedEndpoint is not null, "Endpoint should be allocated at this point as we're calling this from ResourceEndpointsAllocatedEvent handler.");
+                    Debug.Assert(endpoint.AllocatedEndpoint is not null, "Endpoint should be allocated at this point as we're processing resource endpoint allocation.");
                     if (endpoint.AllocatedEndpoint is not { } allocatedEndpoint)
                     {
                         continue;

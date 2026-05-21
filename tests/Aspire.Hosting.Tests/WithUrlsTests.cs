@@ -473,7 +473,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
 
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var notification in rns.WatchAsync().DefaultTimeout())
+            await foreach (var notification in rns.WatchAsync().DefaultTimeout(TestConstants.LongTimeoutDuration))
             {
                 if (notification.Resource == servicea.Resource && notification.Snapshot.Urls.Length > 0)
                 {
@@ -589,7 +589,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
 
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var notification in rns.WatchAsync().DefaultTimeout())
+            await foreach (var notification in rns.WatchAsync().DefaultTimeout(TestConstants.LongTimeoutDuration))
             {
                 if (notification.Resource == custom.Resource && notification.Snapshot.Urls.Length > 0)
                 {
