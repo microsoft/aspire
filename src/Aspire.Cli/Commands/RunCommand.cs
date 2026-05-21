@@ -551,7 +551,17 @@ internal sealed class RunCommand : BaseCommand
 
             if (pendingLogCapture is not null)
             {
-                await ObserveAppHostLogCaptureShutdownAsync(pendingLogCapture).ConfigureAwait(false);
+                try
+                {
+                    await pendingLogCapture.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "AppHost log capture ended while the run command was exiting early.");
+                }
             }
 
             runActivity?.Dispose();
@@ -573,21 +583,6 @@ internal sealed class RunCommand : BaseCommand
 
         interactionService.DisplayMessage(KnownEmojis.Information, $"{RunCommandStrings.RecentAppHostStartupOutput}:");
         interactionService.DisplayLines(outputLines);
-    }
-
-    private async Task ObserveAppHostLogCaptureShutdownAsync(Task pendingLogCapture)
-    {
-        try
-        {
-            await pendingLogCapture.ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "AppHost log capture ended while the run command was exiting early.");
-        }
     }
 
     private static CommandResult CreateRunExitResult(int exitCode)
