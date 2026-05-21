@@ -208,10 +208,6 @@
     align-items: center;
 }
 
-::deep .minimum-duration-filter {
-    width: 145px;
-}
-
 ::deep .span-button-container {
     position: absolute;
     left: 0;

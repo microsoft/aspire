@@ -51,7 +51,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private AspirePageContentLayout? _layout;
     private List<SelectViewModel<SpanType>> _spanTypes = default!;
     private SelectViewModel<SpanType> _selectedSpanType = default!;
-    private readonly string _minimumDurationFilterId = $"minimum-duration-{Guid.NewGuid():N}";
 
     [Parameter]
     public required string TraceId { get; set; }
@@ -105,7 +104,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
-    internal double? MinimumSpanDurationMilliseconds { get; set; }
+    internal List<FieldTelemetryFilter> Filters => _filters;
 
     protected override void OnInitialized()
     {
@@ -192,6 +191,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     {
         Debug.Assert(_spanWaterfallViewModels != null);
 
+        var durationFilters = _filters.Where(f => f.Enabled && f.Field == KnownTraceFields.DurationField).ToList();
+        var contextualFilters = _filters.Where(f => f.Field != KnownTraceFields.DurationField).ToList();
+
         var visibleViewModels = new HashSet<SpanWaterfallViewModel>();
         foreach (var viewModel in _spanWaterfallViewModels)
         {
@@ -200,7 +202,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
                 continue;
             }
 
-            if (viewModel.MatchesFilter(_filter, _selectedSpanType.Id?.Filter, _filters, GetResourceName, out var matchedDescendents))
+            if (viewModel.MatchesFilter(_filter, _selectedSpanType.Id?.Filter, contextualFilters, GetResourceName, out var matchedDescendents))
             {
                 visibleViewModels.Add(viewModel);
                 foreach (var descendent in matchedDescendents.Where(d => !d.IsHidden))
@@ -210,15 +212,15 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             }
         }
 
-        var minimumDuration = GetMinimumSpanDuration();
-        if (minimumDuration is not { } threshold)
+        if (durationFilters.Count == 0)
         {
             return _spanWaterfallViewModels.Where(visibleViewModels.Contains);
         }
 
-        // Apply duration last so it always removes short spans, even when a matched
-        // parent makes descendants visible for context in the text/type filters.
-        return _spanWaterfallViewModels.Where(vm => visibleViewModels.Contains(vm) && vm.Span.Duration >= threshold);
+        // Duration filters are intended to remove profiling noise. Apply them after
+        // context-preserving filters so short descendant spans stay hidden even when
+        // their parent span matched another filter.
+        return _spanWaterfallViewModels.Where(vm => visibleViewModels.Contains(vm) && durationFilters.All(f => f.Apply(vm.Span)));
     }
 
     private string? GetPageTitle()
@@ -348,34 +350,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         await InvokeAsync(StateHasChanged);
 
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
-    }
-
-    private async Task HandleMinimumSpanDurationChangedAsync()
-    {
-        SelectedData = null;
-        await InvokeAsync(StateHasChanged);
-
-        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
-    }
-
-    private TimeSpan? GetMinimumSpanDuration()
-    {
-        if (MinimumSpanDurationMilliseconds is not > 0)
-        {
-            return null;
-        }
-
-        var minimumDurationMilliseconds = MinimumSpanDurationMilliseconds.Value;
-        if (!double.IsFinite(minimumDurationMilliseconds))
-        {
-            return null;
-        }
-        if (minimumDurationMilliseconds >= TimeSpan.MaxValue.TotalMilliseconds)
-        {
-            return TimeSpan.MaxValue;
-        }
-
-        return TimeSpan.FromTicks((long)Math.Ceiling(minimumDurationMilliseconds * TimeSpan.TicksPerMillisecond));
     }
 
     private void UpdateSubscription()
@@ -623,7 +597,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             DialogService,
             DialogService.CreateDialogCallback(this, HandleFilterDialog),
             propertyKeys: GetTraceSpanPropertyKeys(),
-            knownKeys: KnownTraceFields.AllFields,
+            knownKeys: [.. KnownTraceFields.AllFields, KnownTraceFields.DurationField],
             getFieldValues: GetTraceSpanFieldValues,
             FilterLoc);
     }

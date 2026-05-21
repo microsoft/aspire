@@ -385,7 +385,7 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Render_MinimumSpanDuration_FiltersShortSpans()
+    public async Task Render_DurationFilter_FiltersShortSpans()
     {
         SetupTraceDetailsServices();
 
@@ -440,10 +440,15 @@ public partial class TraceDetailsTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
-        cut.Instance.MinimumSpanDurationMilliseconds = 2;
+        cut.Instance.Filters.Add(new FieldTelemetryFilter
+        {
+            Field = KnownTraceFields.DurationField,
+            Condition = FilterCondition.GreaterThanOrEqual,
+            Value = "2"
+        });
         var filteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
 
-        cut.Instance.MinimumSpanDurationMilliseconds = null;
+        cut.Instance.Filters.Clear();
         var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
 
         Assert.Collection(filteredData.Items,

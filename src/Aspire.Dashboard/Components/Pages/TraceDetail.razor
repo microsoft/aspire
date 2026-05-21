@@ -63,26 +63,6 @@
 
                             <DesktopToolbarDivider />
 
-                            <FluentInputLabel Label="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinimumDurationLabel)]"
-                                              ForId="@_minimumDurationFilterId"
-                                              Orientation="Orientation.Horizontal" />
-
-                            <FluentNumberField TValue="double?"
-                                               Id="@_minimumDurationFilterId"
-                                               @bind-Value="MinimumSpanDurationMilliseconds"
-                                               @bind-Value:after="HandleMinimumSpanDurationChangedAsync"
-                                               Min="0"
-                                               Step="50"
-                                               Name="spans-minimum-duration"
-                                               Immediate="true"
-                                               ImmediateDelay="@FluentUIExtensions.InputDelay"
-                                               Placeholder="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinimumDurationPlaceholder)]"
-                                               Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinimumDurationTitle)]"
-                                               AriaLabel="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinimumDurationTitle)]"
-                                               Class="minimum-duration-filter" />
-
-                            <DesktopToolbarDivider />
-
                             @if (_filters.Count == 0)
                             {
                                 <span slot="end">@FilterLoc[nameof(StructuredFiltering.NoFilters)]</span>
@@ -121,19 +101,6 @@
                     <SpanTypeSelect @bind-SpanType="@_selectedSpanType"
                                     SpanTypes="@_spanTypes"
                                     HandleSelectedSpanTypeChangedAsync="@HandleSelectedSpanTypeChangedAsync" />
-                    <FluentNumberField TValue="double?"
-                                       Id="@_minimumDurationFilterId"
-                                       @bind-Value="MinimumSpanDurationMilliseconds"
-                                       @bind-Value:after="HandleMinimumSpanDurationChangedAsync"
-                                       Min="0"
-                                       Step="50"
-                                       Name="spans-minimum-duration"
-                                       Immediate="true"
-                                       ImmediateDelay="@FluentUIExtensions.InputDelay"
-                                       Placeholder="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinimumDurationPlaceholder)]"
-                                       Title="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinimumDurationTitle)]"
-                                       AriaLabel="@Loc[nameof(Dashboard.Resources.TraceDetail.TraceDetailMinimumDurationTitle)]"
-                                       Class="minimum-duration-filter" />
                     @if (_filters.Count > 0)
                     {
                         <div slot="end">

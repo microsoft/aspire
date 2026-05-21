@@ -1237,6 +1237,7 @@ public class TraceTests
     [InlineData(KnownResourceFields.ServiceNameField, "resource1")]
     [InlineData(KnownResourceFields.ServiceNameField, "TestPeer")]
     [InlineData(KnownSourceFields.NameField, "TestScope")]
+    [InlineData(KnownTraceFields.DurationField, "540000")]
     public void GetTraces_KnownFilters(string name, string value)
     {
         // Arrange
