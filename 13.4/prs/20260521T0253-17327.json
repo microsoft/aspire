@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Trivial doc comment correction; no behavioral change",
+  "mergedAt": "2026-05-21T02:53:19Z",
+  "number": 17327,
+  "runDate": "2026-05-21T03:10:52Z",
+  "status": "excluded",
+  "title": "Fix StripPrefix XML doc default value"
+}

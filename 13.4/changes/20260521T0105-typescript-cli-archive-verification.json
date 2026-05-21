@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI archive verifier now validates TypeScript AppHost archive layout in addition to the C# starter path. It asserts that the managed AppHost server, dashboard web assets, and DCP are present in the extracted archive, then exercises the TypeScript starter flow end-to-end, catching archive layout issues that would break TypeScript users before they reach production.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-05-21T01:05:14Z",
+  "lastMergedAt": "2026-05-21T01:05:14Z",
+  "name": "CLI archive verifier now covers TypeScript AppHosts",
+  "owner": "sebastienros",
+  "prs": [
+    17274
+  ]
+}

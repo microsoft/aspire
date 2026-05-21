@@ -5,17 +5,18 @@
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
-  "description": "Added an AI Agents dialog accessible from the dashboard header, providing quick access to AI agent information and actions within the Aspire dashboard.",
+  "description": "Added an AI Agents dialog accessible from the dashboard header, providing quick access to AI agent information and actions. The dialog now includes a link to the CLI installation page, guiding users to install the Aspire CLI before running AI agent commands.",
   "docsPrs": [
     888
   ],
   "docsRequired": true,
   "emoji": "🤖",
   "firstMergedAt": "2026-05-08T06:54:53Z",
-  "lastMergedAt": "2026-05-08T06:54:53Z",
+  "lastMergedAt": "2026-05-21T02:17:37Z",
   "name": "AI Agents dialog in dashboard header",
   "owner": "JamesNK",
   "prs": [
-    16869
+    16869,
+    17331
   ]
 }

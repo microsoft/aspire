@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Updates C# XML docs to language-neutral ATS format for polyglot SDK generation; grouped with TypeScript JSDoc entry",
+  "mergedAt": "2026-05-21T00:41:10Z",
+  "number": 17289,
+  "runDate": "2026-05-21T03:10:52Z",
+  "status": "included",
+  "title": "Update ATS docs for polyglot APIs"
+}

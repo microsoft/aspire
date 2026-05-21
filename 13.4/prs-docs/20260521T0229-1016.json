@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "aspire.dev CI infrastructure change; not related to product documentation",
+  "mergedAt": "2026-05-21T02:29:50Z",
+  "number": 1016,
+  "runDate": "2026-05-21T03:10:52Z",
+  "status": "excluded",
+  "title": "feat: add ci-coach, workflow-health-manager, and issue-arborist agentic workflows"
+}

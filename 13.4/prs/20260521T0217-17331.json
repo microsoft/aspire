@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "UX improvement to AI Agents dialog; grouped with existing entry",
+  "mergedAt": "2026-05-21T02:17:37Z",
+  "number": 17331,
+  "runDate": "2026-05-21T03:10:52Z",
+  "status": "included",
+  "title": "Add install CLI link to AI Agents dialog descriptions"
+}

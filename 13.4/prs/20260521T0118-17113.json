@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Improvement to aspire ls command; grouped with existing ls entry",
+  "mergedAt": "2026-05-21T01:18:55Z",
+  "number": 17113,
+  "runDate": "2026-05-21T03:10:52Z",
+  "status": "included",
+  "title": "Stream aspire ls results in interactive mode"
+}

@@ -5,15 +5,16 @@
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
-  "description": "Added a new aspire ls command that lists candidate AppHost projects in the current directory without starting or selecting one, supporting both interactive table output and machine-readable JSON output.",
+  "description": "Added a new aspire ls command that lists candidate AppHost projects in the current directory without starting one, supporting interactive table output and machine-readable JSON output. In interactive terminals, discovered AppHosts now stream into the live table as validation completes, giving users visible progress rather than a blank screen during large workspace scans.",
   "docsPrs": [],
   "docsRequired": true,
   "emoji": "📋",
   "firstMergedAt": "2026-05-09T01:58:11Z",
-  "lastMergedAt": "2026-05-09T01:58:11Z",
+  "lastMergedAt": "2026-05-21T01:18:55Z",
   "name": "New aspire ls command",
   "owner": "davidfowl",
   "prs": [
-    16696
+    16696,
+    17113
   ]
 }

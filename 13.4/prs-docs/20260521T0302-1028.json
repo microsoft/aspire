@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "aspire.dev CI workflow upgrade; not product documentation",
+  "mergedAt": "2026-05-21T03:02:12Z",
+  "number": 1028,
+  "runDate": "2026-05-21T03:10:52Z",
+  "status": "excluded",
+  "title": "ci: Recompile gh-aw workflows with v0.74.8"
+}
