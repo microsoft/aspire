@@ -80,11 +80,6 @@ internal sealed class DotNetCliRunner(
     private static long s_binlogSequence;
     private static readonly TimeSpan[] s_searchRetryDelays = [TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2)];
 
-    private string GetMsBuildServerValue()
-    {
-        return configuration["DOTNET_CLI_USE_MSBUILD_SERVER"] ?? "true";
-    }
-
     internal static string GetBackchannelSocketPath()
     {
         return CliPathHelper.CreateUnixDomainSocketPath("cli.sock");
@@ -730,7 +725,6 @@ internal sealed class DotNetCliRunner(
         var finalEnv = CreateRunEnvironment(
             env,
             watch,
-            injectMsBuildServer: !noBuild,
             backchannelCompletionSource);
 
         return await ExecuteAsync(
@@ -758,7 +752,6 @@ internal sealed class DotNetCliRunner(
         var finalEnv = CreateRunEnvironment(
             env,
             watch: false,
-            injectMsBuildServer: false,
             backchannelCompletionSource);
 
         return await ExecuteAsync(
@@ -775,16 +768,10 @@ internal sealed class DotNetCliRunner(
     private Dictionary<string, string> CreateRunEnvironment(
         IDictionary<string, string>? env,
         bool watch,
-        bool injectMsBuildServer,
         TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource)
     {
         // We copy the dictionary here because we don't want to mutate the input.
         var finalEnv = env?.ToDictionary() ?? new Dictionary<string, string>();
-
-        if (injectMsBuildServer)
-        {
-            finalEnv["DOTNET_CLI_USE_MSBUILD_SERVER"] = GetMsBuildServerValue();
-        }
 
         // Check if update notifications are disabled and set version check environment variable
         if (!features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, defaultValue: true))
@@ -1061,15 +1048,9 @@ internal sealed class DotNetCliRunner(
         string[] cliArgs = ["build", noRestoreSwitch, projectFilePath.FullName];
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
 
-        // Always inject DOTNET_CLI_USE_MSBUILD_SERVER for apphost builds
-        var env = new Dictionary<string, string>
-        {
-            ["DOTNET_CLI_USE_MSBUILD_SERVER"] = GetMsBuildServerValue()
-        };
-
         return await ExecuteAsync(
             args: cliArgs,
-            env: env,
+            env: null,
             projectFile: projectFilePath,
             workingDirectory: projectFilePath.Directory!,
             backchannelCompletionSource: null,

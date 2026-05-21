@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
@@ -100,7 +101,7 @@ internal static class CliTestHelper
 
         services.AddSingleton(options.ConsoleEnvironmentFactory);
         services.AddSingleton(sp => sp.GetRequiredService<ConsoleEnvironment>().Out);
-        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(options.TimeProvider);
         services.AddSingleton(options.TelemetryFactory);
         services.AddSingleton<ProfilingTelemetry>();
         services.AddSingleton(options.ProjectLocatorFactory);
@@ -150,6 +151,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.AppHostServerSessionFactory);
         services.AddSingleton<ILanguageDiscovery, DefaultLanguageDiscovery>();
         services.AddSingleton(options.LanguageServiceFactory);
+        services.AddSingleton<TemplateNuGetConfigService>();
 
         // Bundle layout services - return null/no-op implementations to trigger SDK mode fallback
         // This ensures backward compatibility: no layout found = use legacy SDK mode
@@ -160,6 +162,17 @@ internal static class CliTestHelper
         services.AddSingleton(options.BundlePayloadProviderFactory);
         services.AddSingleton(options.BundleServiceFactory);
         services.AddSingleton<BundleNuGetService>();
+        services.AddSingleton<IInstallSidecarReader, InstallSidecarReader>();
+        services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
+        services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
+        services.AddSingleton<WingetFirstRunProbe>();
+        // Always register the null reader by default so unit tests don't reach into the
+        // actual user registry through WingetFirstRunProbe on Windows. Tests that need
+        // the real reader (or a fake) should replace the registration explicitly.
+        services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
+        // IdentityChannelReader for AspireVersionCheck (doctor) — uses the same
+        // pattern as production wiring in Program.cs.
+        services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
         services.AddSingleton<ProfileCaptureService>();
 
         // AppHost project handlers - must match Program.cs registration pattern
@@ -302,6 +315,7 @@ internal sealed class CliServiceCollectionTestOptions
     public TestOutputTextWriter? OutputTextWriter { get; set; }
     public StringWriter? ErrorTextWriter { get; set; }
     public bool DisableAnsi { get; set; }
+    public TimeProvider TimeProvider { get; set; } = TimeProvider.System;
 
     public Func<IServiceProvider, ConsoleEnvironment> ConsoleEnvironmentFactory => (IServiceProvider serviceProvider) =>
     {

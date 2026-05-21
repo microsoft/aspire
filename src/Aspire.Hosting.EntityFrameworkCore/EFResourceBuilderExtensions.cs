@@ -114,7 +114,7 @@ public static class EFResourceBuilderExtensions
     /// <summary>
     /// Adds EF Core migration management for polyglot app hosts.
     /// </summary>
-    [AspireExport("addEFMigrations", Description = "Adds EF Core migration management for auto-detected DbContext types or for a specific DbContext type identified by name")]
+    [AspireExport("addEFMigrations")]
     internal static IResourceBuilder<EFMigrationResource> AddEFMigrationsForPolyglot(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,

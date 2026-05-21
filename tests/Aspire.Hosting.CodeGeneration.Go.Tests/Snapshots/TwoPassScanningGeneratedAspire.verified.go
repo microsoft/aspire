@@ -891,7 +891,7 @@ func newAfterPublishEventFromHandle(h *handle, c *client) AfterPublishEvent {
 	return &afterPublishEvent{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Model gets the Model property
+// Model the `DistributedApplicationModel` instance.
 func (s *afterPublishEvent) Model() DistributedApplicationModel {
 	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -910,7 +910,7 @@ func (s *afterPublishEvent) Model() DistributedApplicationModel {
 	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Services gets the Services property
+// Services the `IServiceProvider` for the app host.
 func (s *afterPublishEvent) Services() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -947,7 +947,7 @@ func newAfterResourcesCreatedEventFromHandle(h *handle, c *client) AfterResource
 	return &afterResourcesCreatedEvent{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Model gets the Model property
+// Model the `DistributedApplicationModel` instance.
 func (s *afterResourcesCreatedEvent) Model() DistributedApplicationModel {
 	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -966,7 +966,7 @@ func (s *afterResourcesCreatedEvent) Model() DistributedApplicationModel {
 	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Services gets the Services property
+// Services the `IServiceProvider` instance.
 func (s *afterResourcesCreatedEvent) Services() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -1003,7 +1003,7 @@ func newAspireStoreFromHandle(h *handle, c *client) AspireStore {
 	return &aspireStore{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// BasePath gets the BasePath property
+// BasePath gets the base path of this store.
 func (s *aspireStore) BasePath() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -1018,7 +1018,7 @@ func (s *aspireStore) BasePath() (string, error) {
 	return decodeAs[string](result)
 }
 
-// GetFileNameWithContent gets a deterministic file path for the specified file contents
+// GetFileNameWithContent gets a deterministic file path that is a copy of the `sourceFilename`. The resulting file name will depend on the content of the file.
 func (s *aspireStore) GetFileNameWithContent(filenameTemplate string, sourceFilename string) (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -1157,7 +1157,7 @@ func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *han
 	return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsHttp2Service configures resource for HTTP/2
+// AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsHttp2Service() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1168,7 +1168,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsHttp2Service
 	return s
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -1187,7 +1187,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) CreateExecutio
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) ExcludeFromManifest() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1198,7 +1198,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) ExcludeFromMan
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) ExcludeFromMcp() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1229,7 +1229,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetEndpoint(na
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -1244,7 +1244,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) GetResourceNam
 	return decodeAs[string](result)
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1263,7 +1263,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnBeforeResour
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1282,7 +1282,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnInitializeRe
 	return s
 }
 
-// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1301,7 +1301,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceEndp
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceReady(callback func(arg ResourceReadyEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1320,7 +1320,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceRead
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1339,7 +1339,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) OnResourceStop
 	return s
 }
 
-// PublishAsConnectionString publishes the resource as a connection string
+// PublishAsConnectionString changes the resource to be published as a connection string reference in the manifest.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsConnectionString() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1350,7 +1350,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsConne
 	return s
 }
 
-// PublishAsContainer configures the resource to be published as a container
+// PublishAsContainer changes the resource to be published as a container in the manifest.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) PublishAsContainer() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1413,7 +1413,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitFor(depend
 	return s
 }
 
-// WaitForCompletion waits for resource completion
+// WaitForCompletion waits for the dependency resource to enter the Exited or Finished state before starting the resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -1453,7 +1453,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WaitForStart(d
 	return s
 }
 
-// WithArgs adds arguments
+// WithArgs adds arguments to be passed to a resource that supports arguments when it is launched.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgs(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1465,7 +1465,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgs(args 
 	return s
 }
 
-// WithArgsCallback sets command-line arguments via callback
+// WithArgsCallback adds a callback to be executed with a list of command-line arguments when a resource is started.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1484,7 +1484,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithArgsCallba
 	return s
 }
 
-// WithBindMount adds a bind mount
+// WithBindMount adds a bind mount to a container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1504,7 +1504,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBindMount(
 	return s
 }
 
-// WithBuildArg adds a build argument from a string value or parameter resource
+// WithBuildArg adds a build argument when the container is built from a Dockerfile.
 // Allowed types for parameter value: string, ParameterResource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBuildArg(name string, value any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -1524,7 +1524,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBuildArg(n
 	return s
 }
 
-// WithBuildSecret adds a build secret from a parameter resource
+// WithBuildSecret adds a secret build argument when the container is built from a Dockerfile.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithBuildSecret(name string, value ParameterResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
@@ -1609,7 +1609,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCommand(na
 	return s
 }
 
-// WithComputeEnvironment configures the compute environment for the compute resource
+// WithComputeEnvironment configures the compute environment for the compute resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
@@ -1634,7 +1634,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(con
 	return s
 }
 
-// WithContainerCertificatePaths overrides container certificate bundle and directory paths used for trust configuration
+// WithContainerCertificatePaths adds container certificate path overrides used for certificate trust at run time.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1652,7 +1652,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerC
 	return s
 }
 
-// WithContainerName sets the container name
+// WithContainerName overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerName(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1664,7 +1664,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerN
 	return s
 }
 
-// WithContainerNetworkAlias adds a network alias for the container
+// WithContainerNetworkAlias adds a network alias to container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerNetworkAlias(alias string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1676,7 +1676,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerN
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerRegistry(registry Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -1689,7 +1689,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerR
 	return s
 }
 
-// WithContainerRuntimeArgs adds runtime arguments for the container
+// WithContainerRuntimeArgs adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerRuntimeArgs(args []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1738,7 +1738,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency
 	return s
 }
 
-// WithDeveloperCertificateTrust configures developer certificate trust
+// WithDeveloperCertificateTrust indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDeveloperCertificateTrust(trust bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1750,7 +1750,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDeveloperC
 	return s
 }
 
-// WithDockerfile configures the resource to use a Dockerfile
+// WithDockerfile causes Aspire to build the specified container image from a Dockerfile.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfile(contextPath string, options ...*WithDockerfileOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1769,7 +1769,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfile
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1859,7 +1859,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpointCa
 	return s
 }
 
-// WithEndpointProxySupport configures endpoint proxy support
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpointProxySupport(proxyEnabled bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1883,7 +1883,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoints(
 	return s
 }
 
-// WithEntrypoint sets the container entrypoint
+// WithEntrypoint sets the Entrypoint for the container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEntrypoint(entrypoint string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1915,7 +1915,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 	return s
 }
 
-// WithEnvironmentCallback sets environment variables via callback
+// WithEnvironmentCallback allows for the population of environment variables on a resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1957,7 +1957,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithExplicitSt
 	return s
 }
 
-// WithExternalHttpEndpoints makes HTTP endpoints externally accessible
+// WithExternalHttpEndpoints marks existing http or https endpoints on a resource as external.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithExternalHttpEndpoints() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2044,7 +2044,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpEndpoi
 	return s
 }
 
-// WithHttpHealthCheck adds an HTTP health check
+// WithHttpHealthCheck adds a health check to the resource which is mapped to a specific endpoint.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2081,7 +2081,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpProbe(
 	return s
 }
 
-// WithHttpsDeveloperCertificate configures HTTPS with a developer certificate
+// WithHttpsDeveloperCertificate indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2143,7 +2143,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHttpsEndpo
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithIconName(iconName string, options ...*WithIconNameOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2162,7 +2162,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithIconName(i
 	return s
 }
 
-// WithImage sets the container image
+// WithImage allows overriding the image on a container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImage(image string, options ...*WithImageOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2181,7 +2181,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImage(imag
 	return s
 }
 
-// WithImagePullPolicy sets the container image pull policy
+// WithImagePullPolicy sets the pull policy for the container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2193,7 +2193,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImagePullP
 	return s
 }
 
-// WithImagePushOptions sets image push options via callback
+// WithImagePushOptions adds an asynchronous callback to configure container image push options for the resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2212,7 +2212,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImagePushO
 	return s
 }
 
-// WithImageRegistry sets the container image registry
+// WithImageRegistry allows overriding the image registry on a container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageRegistry(registry string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2224,7 +2224,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageRegis
 	return s
 }
 
-// WithImageSHA256 sets the image SHA256 digest
+// WithImageSHA256 allows setting the image to a specific sha256 on a container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageSHA256(sha256 string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2236,7 +2236,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageSHA25
 	return s
 }
 
-// WithImageTag sets the container image tag
+// WithImageTag allows overriding the image tag on a container.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageTag(tag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2248,7 +2248,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithImageTag(t
 	return s
 }
 
-// WithLifetime sets the lifetime behavior of the container resource
+// WithLifetime sets the lifetime behavior of the container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetime(lifetime ContainerLifetime) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2260,7 +2260,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetime(l
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetimeOf(sourceBuilder Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -2273,7 +2273,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetimeOf
 	return s
 }
 
-// WithMcpServer configures an MCP server endpoint on the resource
+// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMcpServer(options ...*WithMcpServerOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2499,7 +2499,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOtlpExport
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithParentProcessLifetime(parentProcessId float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2524,7 +2524,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithParentRela
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPersistentLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2535,7 +2535,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPersistent
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2554,7 +2554,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineCo
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2581,7 +2581,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPipelineSt
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2595,7 +2595,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCom
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2648,7 +2648,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReference(
 	return s
 }
 
-// WithReferenceEnvironment configures which reference values are injected into environment variables
+// WithReferenceEnvironment configures how information is injected into environment variables when the resource references other resources.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2660,7 +2660,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithReferenceE
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRelationship(resourceBuilder Resource, type_ string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -2674,7 +2674,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRelationsh
 	return s
 }
 
-// WithRemoteImageName sets the remote image name for publishing
+// WithRemoteImageName sets the remote image name (without registry endpoint or tag) for container push operations.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRemoteImageName(remoteImageName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2686,7 +2686,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRemoteImag
 	return s
 }
 
-// WithRemoteImageTag sets the remote image tag for publishing
+// WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRemoteImageTag(remoteImageTag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2698,7 +2698,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRemoteImag
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2717,7 +2717,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2785,7 +2785,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrl(url an
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2808,7 +2808,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrlForEndp
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2857,7 +2857,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVaultDirec
 	return s
 }
 
-// WithVolume adds a volume
+// WithVolume adds a volume to a container resource.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVolume(target string, options ...*WithVolumeOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2876,7 +2876,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVolume(tar
 	return s
 }
 
-// WithoutHttpsCertificate removes HTTPS certificate configuration
+// WithoutHttpsCertificate disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithoutHttpsCertificate() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2905,7 +2905,7 @@ func newBeforePublishEventFromHandle(h *handle, c *client) BeforePublishEvent {
 	return &beforePublishEvent{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Model gets the Model property
+// Model the `DistributedApplicationModel` instance.
 func (s *beforePublishEvent) Model() DistributedApplicationModel {
 	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -2924,7 +2924,7 @@ func (s *beforePublishEvent) Model() DistributedApplicationModel {
 	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Services gets the Services property
+// Services the `IServiceProvider` for the app host.
 func (s *beforePublishEvent) Services() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -3015,7 +3015,7 @@ func newBeforeStartEventFromHandle(h *handle, c *client) BeforeStartEvent {
 	return &beforeStartEvent{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Model gets the Model property
+// Model the `DistributedApplicationModel` instance.
 func (s *beforeStartEvent) Model() DistributedApplicationModel {
 	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -3034,7 +3034,7 @@ func (s *beforeStartEvent) Model() DistributedApplicationModel {
 	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Services gets the Services property
+// Services the `IServiceProvider` instance.
 func (s *beforeStartEvent) Services() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -3159,7 +3159,7 @@ func newCSharpAppResourceFromHandle(h *handle, c *client) CSharpAppResource {
 	return &cSharpAppResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsHttp2Service configures resource for HTTP/2
+// AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *cSharpAppResource) AsHttp2Service() CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3170,7 +3170,7 @@ func (s *cSharpAppResource) AsHttp2Service() CSharpAppResource {
 	return s
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *cSharpAppResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -3189,7 +3189,7 @@ func (s *cSharpAppResource) CreateExecutionConfiguration() ExecutionConfiguratio
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// DisableForwardedHeaders disables forwarded headers for the project
+// DisableForwardedHeaders configures the project to disable forwarded headers when being published.
 func (s *cSharpAppResource) DisableForwardedHeaders() CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3200,7 +3200,7 @@ func (s *cSharpAppResource) DisableForwardedHeaders() CSharpAppResource {
 	return s
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *cSharpAppResource) ExcludeFromManifest() CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3211,7 +3211,7 @@ func (s *cSharpAppResource) ExcludeFromManifest() CSharpAppResource {
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *cSharpAppResource) ExcludeFromMcp() CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3242,7 +3242,7 @@ func (s *cSharpAppResource) GetEndpoint(name string) EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *cSharpAppResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -3257,7 +3257,7 @@ func (s *cSharpAppResource) GetResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *cSharpAppResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3276,7 +3276,7 @@ func (s *cSharpAppResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *cSharpAppResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3295,7 +3295,7 @@ func (s *cSharpAppResource) OnInitializeResource(callback func(arg InitializeRes
 	return s
 }
 
-// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event.
 func (s *cSharpAppResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3314,7 +3314,7 @@ func (s *cSharpAppResource) OnResourceEndpointsAllocated(callback func(arg Resou
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *cSharpAppResource) OnResourceReady(callback func(arg ResourceReadyEvent)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3333,7 +3333,7 @@ func (s *cSharpAppResource) OnResourceReady(callback func(arg ResourceReadyEvent
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *cSharpAppResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3378,7 +3378,7 @@ func (s *cSharpAppResource) PublishAsDockerFile(options ...*PublishAsDockerFileO
 	return s
 }
 
-// PublishWithContainerFiles configures the resource to copy container files from the specified source during publishing
+// PublishWithContainerFiles configures the resource to copy container files from the specified source resource during publishing.
 func (s *cSharpAppResource) PublishWithContainerFiles(source ResourceWithContainerFiles, destinationPath string) CSharpAppResource {
 	if s.err != nil { return s }
 	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
@@ -3444,7 +3444,7 @@ func (s *cSharpAppResource) WaitFor(dependency Resource, options ...*WaitForOpti
 	return s
 }
 
-// WaitForCompletion waits for resource completion
+// WaitForCompletion waits for the dependency resource to enter the Exited or Finished state before starting the resource.
 func (s *cSharpAppResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -3484,7 +3484,7 @@ func (s *cSharpAppResource) WaitForStart(dependency Resource, options ...*WaitFo
 	return s
 }
 
-// WithArgs adds arguments
+// WithArgs adds arguments to be passed to a resource that supports arguments when it is launched.
 func (s *cSharpAppResource) WithArgs(args []string) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3496,7 +3496,7 @@ func (s *cSharpAppResource) WithArgs(args []string) CSharpAppResource {
 	return s
 }
 
-// WithArgsCallback sets command-line arguments via callback
+// WithArgsCallback adds a callback to be executed with a list of command-line arguments when a resource is started.
 func (s *cSharpAppResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3586,7 +3586,7 @@ func (s *cSharpAppResource) WithCommand(name string, displayName string, execute
 	return s
 }
 
-// WithComputeEnvironment configures the compute environment for the compute resource
+// WithComputeEnvironment configures the compute environment for the compute resource.
 func (s *cSharpAppResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) CSharpAppResource {
 	if s.err != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
@@ -3611,7 +3611,7 @@ func (s *cSharpAppResource) WithConfig(config *TestConfigDto) CSharpAppResource 
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *cSharpAppResource) WithContainerRegistry(registry Resource) CSharpAppResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -3661,7 +3661,7 @@ func (s *cSharpAppResource) WithDependency(dependency ResourceWithConnectionStri
 	return s
 }
 
-// WithDeveloperCertificateTrust configures developer certificate trust
+// WithDeveloperCertificateTrust indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
 func (s *cSharpAppResource) WithDeveloperCertificateTrust(trust bool) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3673,7 +3673,7 @@ func (s *cSharpAppResource) WithDeveloperCertificateTrust(trust bool) CSharpAppR
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *cSharpAppResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3736,7 +3736,7 @@ func (s *cSharpAppResource) WithEndpointCallback(endpointName string, callback f
 	return s
 }
 
-// WithEndpointProxySupport configures endpoint proxy support
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *cSharpAppResource) WithEndpointProxySupport(proxyEnabled bool) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3780,7 +3780,7 @@ func (s *cSharpAppResource) WithEnvironment(name string, value any) CSharpAppRes
 	return s
 }
 
-// WithEnvironmentCallback sets environment variables via callback
+// WithEnvironmentCallback allows for the population of environment variables on a resource.
 func (s *cSharpAppResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3822,7 +3822,7 @@ func (s *cSharpAppResource) WithExplicitStart() CSharpAppResource {
 	return s
 }
 
-// WithExternalHttpEndpoints makes HTTP endpoints externally accessible
+// WithExternalHttpEndpoints marks existing http or https endpoints on a resource as external.
 func (s *cSharpAppResource) WithExternalHttpEndpoints() CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3909,7 +3909,7 @@ func (s *cSharpAppResource) WithHttpEndpointCallback(callback func(obj EndpointU
 	return s
 }
 
-// WithHttpHealthCheck adds an HTTP health check
+// WithHttpHealthCheck adds a health check to the resource which is mapped to a specific endpoint.
 func (s *cSharpAppResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -3946,7 +3946,7 @@ func (s *cSharpAppResource) WithHttpProbe(probeType ProbeType, options ...*WithH
 	return s
 }
 
-// WithHttpsDeveloperCertificate configures HTTPS with a developer certificate
+// WithHttpsDeveloperCertificate indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
 func (s *cSharpAppResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4008,7 +4008,7 @@ func (s *cSharpAppResource) WithHttpsEndpointCallback(callback func(obj Endpoint
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *cSharpAppResource) WithIconName(iconName string, options ...*WithIconNameOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4027,7 +4027,7 @@ func (s *cSharpAppResource) WithIconName(iconName string, options ...*WithIconNa
 	return s
 }
 
-// WithImagePushOptions sets image push options via callback
+// WithImagePushOptions adds an asynchronous callback to configure container image push options for the resource.
 func (s *cSharpAppResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4046,7 +4046,7 @@ func (s *cSharpAppResource) WithImagePushOptions(callback func(arg ContainerImag
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *cSharpAppResource) WithLifetimeOf(sourceBuilder Resource) CSharpAppResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -4059,7 +4059,7 @@ func (s *cSharpAppResource) WithLifetimeOf(sourceBuilder Resource) CSharpAppReso
 	return s
 }
 
-// WithMcpServer configures an MCP server endpoint on the resource
+// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *cSharpAppResource) WithMcpServer(options ...*WithMcpServerOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4285,7 +4285,7 @@ func (s *cSharpAppResource) WithOtlpExporter(options ...*WithOtlpExporterOptions
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *cSharpAppResource) WithParentProcessLifetime(parentProcessId float64) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4310,7 +4310,7 @@ func (s *cSharpAppResource) WithParentRelationship(parent Resource) CSharpAppRes
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *cSharpAppResource) WithPersistentLifetime() CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4321,7 +4321,7 @@ func (s *cSharpAppResource) WithPersistentLifetime() CSharpAppResource {
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *cSharpAppResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4340,7 +4340,7 @@ func (s *cSharpAppResource) WithPipelineConfiguration(callback func(obj Pipeline
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *cSharpAppResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4367,7 +4367,7 @@ func (s *cSharpAppResource) WithPipelineStepFactory(stepName string, callback fu
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *cSharpAppResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4381,7 +4381,7 @@ func (s *cSharpAppResource) WithProcessCommand(commandName string, displayName s
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *cSharpAppResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4434,7 +4434,7 @@ func (s *cSharpAppResource) WithReference(source any, options ...*WithReferenceO
 	return s
 }
 
-// WithReferenceEnvironment configures which reference values are injected into environment variables
+// WithReferenceEnvironment configures how information is injected into environment variables when the resource references other resources.
 func (s *cSharpAppResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4446,7 +4446,7 @@ func (s *cSharpAppResource) WithReferenceEnvironment(options *ReferenceEnvironme
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *cSharpAppResource) WithRelationship(resourceBuilder Resource, type_ string) CSharpAppResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -4460,7 +4460,7 @@ func (s *cSharpAppResource) WithRelationship(resourceBuilder Resource, type_ str
 	return s
 }
 
-// WithRemoteImageName sets the remote image name for publishing
+// WithRemoteImageName sets the remote image name (without registry endpoint or tag) for container push operations.
 func (s *cSharpAppResource) WithRemoteImageName(remoteImageName string) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4472,7 +4472,7 @@ func (s *cSharpAppResource) WithRemoteImageName(remoteImageName string) CSharpAp
 	return s
 }
 
-// WithRemoteImageTag sets the remote image tag for publishing
+// WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *cSharpAppResource) WithRemoteImageTag(remoteImageTag string) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4484,7 +4484,7 @@ func (s *cSharpAppResource) WithRemoteImageTag(remoteImageTag string) CSharpAppR
 	return s
 }
 
-// WithReplicas sets the number of replicas
+// WithReplicas configures how many replicas of the project should be created for the project.
 func (s *cSharpAppResource) WithReplicas(replicas float64) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4496,7 +4496,7 @@ func (s *cSharpAppResource) WithReplicas(replicas float64) CSharpAppResource {
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *cSharpAppResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4515,7 +4515,7 @@ func (s *cSharpAppResource) WithRequiredCommand(command string, options ...*With
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *cSharpAppResource) WithSessionLifetime() CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4583,7 +4583,7 @@ func (s *cSharpAppResource) WithUrl(url any, options ...*WithUrlOptions) CSharpA
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *cSharpAppResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4606,7 +4606,7 @@ func (s *cSharpAppResource) WithUrlForEndpoint(endpointName string, callback fun
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *cSharpAppResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4643,7 +4643,7 @@ func (s *cSharpAppResource) WithValidator(validator func(arg TestResourceContext
 	return s
 }
 
-// WithoutHttpsCertificate removes HTTPS certificate configuration
+// WithoutHttpsCertificate disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *cSharpAppResource) WithoutHttpsCertificate() CSharpAppResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -4674,7 +4674,7 @@ func newCommandLineArgsCallbackContextFromHandle(h *handle, c *client) CommandLi
 	return &commandLineArgsCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Args gets the command-line argument editor
+// Args gets the editor used to manipulate command-line arguments in polyglot callbacks.
 func (s *commandLineArgsCallbackContext) Args() CommandLineArgsEditor {
 	if s.err != nil { return &commandLineArgsEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -4693,7 +4693,7 @@ func (s *commandLineArgsCallbackContext) Args() CommandLineArgsEditor {
 	return &commandLineArgsEditor{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExecutionContext gets the execution context for this callback invocation
+// ExecutionContext gets the execution context associated with this callback.
 func (s *commandLineArgsCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -4712,7 +4712,7 @@ func (s *commandLineArgsCallbackContext) ExecutionContext() DistributedApplicati
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Log gets the callback logger facade
+// Log gets the logger facade used by polyglot callbacks.
 func (s *commandLineArgsCallbackContext) Log() LogFacade {
 	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -4731,7 +4731,7 @@ func (s *commandLineArgsCallbackContext) Log() LogFacade {
 	return &logFacade{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Resource gets the resource associated with this callback
+// Resource the resource associated with this callback context.
 func (s *commandLineArgsCallbackContext) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -4765,7 +4765,7 @@ func newCommandLineArgsEditorFromHandle(h *handle, c *client) CommandLineArgsEdi
 	return &commandLineArgsEditor{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Add adds a command-line argument
+// Add adds a command-line argument.
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue.
 func (s *commandLineArgsEditor) Add(value any) error {
 	if s.err != nil { return s.err }
@@ -4805,7 +4805,7 @@ func newConfigurationFromHandle(h *handle, c *client) Configuration {
 	return &configuration{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Exists checks whether a configuration section exists
+// Exists checks whether a configuration section exists.
 func (s *configuration) Exists(key string) (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -4821,7 +4821,7 @@ func (s *configuration) Exists(key string) (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// GetChildren gets child configuration sections
+// GetChildren gets the child sections of a configuration handle.
 func (s *configuration) GetChildren() ([]ConfigurationSection, error) {
 	if s.err != nil { var zero []ConfigurationSection; return zero, s.err }
 	ctx := context.Background()
@@ -4836,7 +4836,7 @@ func (s *configuration) GetChildren() ([]ConfigurationSection, error) {
 	return decodeAs[[]ConfigurationSection](result)
 }
 
-// GetConfigValue gets a configuration value by key
+// GetConfigValue gets a configuration value by key.
 func (s *configuration) GetConfigValue(key string) (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -4852,7 +4852,7 @@ func (s *configuration) GetConfigValue(key string) (string, error) {
 	return decodeAs[string](result)
 }
 
-// GetConnectionString gets a connection string by name
+// GetConnectionString gets a connection string by name.
 func (s *configuration) GetConnectionString(name string) (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -4868,7 +4868,7 @@ func (s *configuration) GetConnectionString(name string) (string, error) {
 	return decodeAs[string](result)
 }
 
-// GetSection gets a configuration section by key
+// GetSection gets a configuration section by key.
 func (s *configuration) GetSection(key string) ConfigurationSection {
 	if s.err != nil { return &configurationSection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -5039,7 +5039,7 @@ func newContainerImagePushOptionsFromHandle(h *handle, c *client) ContainerImage
 	return &containerImagePushOptions{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// RemoteImageName gets the RemoteImageName property
+// RemoteImageName gets or sets the remote image name (repository path without registry endpoint or tag).
 func (s *containerImagePushOptions) RemoteImageName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -5054,7 +5054,7 @@ func (s *containerImagePushOptions) RemoteImageName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// RemoteImageTag gets the RemoteImageTag property
+// RemoteImageTag gets or sets the remote image tag.
 func (s *containerImagePushOptions) RemoteImageTag() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -5112,7 +5112,7 @@ func newContainerImagePushOptionsCallbackContextFromHandle(h *handle, c *client)
 	return &containerImagePushOptionsCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken gets the CancellationToken property
+// CancellationToken gets the cancellation token to observe while configuring image push options.
 func (s *containerImagePushOptionsCallbackContext) CancellationToken() (*CancellationToken, error) {
 	if s.err != nil { var zero *CancellationToken; return zero, s.err }
 	ctx := context.Background()
@@ -5127,7 +5127,7 @@ func (s *containerImagePushOptionsCallbackContext) CancellationToken() (*Cancell
 	return decodeAs[*CancellationToken](result)
 }
 
-// Options gets the Options property
+// Options gets the container image push options that can be modified by the callback.
 func (s *containerImagePushOptionsCallbackContext) Options() ContainerImagePushOptions {
 	if s.err != nil { return &containerImagePushOptions{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -5146,7 +5146,7 @@ func (s *containerImagePushOptionsCallbackContext) Options() ContainerImagePushO
 	return &containerImagePushOptions{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Resource gets the Resource property
+// Resource gets the resource being configured for container image push operations.
 func (s *containerImagePushOptionsCallbackContext) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -5181,7 +5181,7 @@ func newContainerImageReferenceFromHandle(h *handle, c *client) ContainerImageRe
 	return &containerImageReference{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Resource gets the Resource property
+// Resource gets the resource that this container image is associated with.
 func (s *containerImageReference) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -5233,7 +5233,7 @@ func newContainerMountAnnotationFromHandle(h *handle, c *client) ContainerMountA
 	return &containerMountAnnotation{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// IsReadOnly gets the IsReadOnly property
+// IsReadOnly gets a value indicating whether the volume mount is read-only.
 func (s *containerMountAnnotation) IsReadOnly() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -5248,7 +5248,7 @@ func (s *containerMountAnnotation) IsReadOnly() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// Source gets the Source property
+// Source gets the source of the bind mount or name if a volume. Can be `null` if the mount is an anonymous volume.
 func (s *containerMountAnnotation) Source() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -5263,7 +5263,7 @@ func (s *containerMountAnnotation) Source() (string, error) {
 	return decodeAs[string](result)
 }
 
-// Target gets the Target property
+// Target gets the target of the mount.
 func (s *containerMountAnnotation) Target() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -5278,7 +5278,7 @@ func (s *containerMountAnnotation) Target() (string, error) {
 	return decodeAs[string](result)
 }
 
-// Type gets the Type property
+// Type gets the type of the mount.
 func (s *containerMountAnnotation) Type() (ContainerMountType, error) {
 	if s.err != nil { var zero ContainerMountType; return zero, s.err }
 	ctx := context.Background()
@@ -5311,7 +5311,7 @@ func newContainerPortReferenceFromHandle(h *handle, c *client) ContainerPortRefe
 	return &containerPortReference{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Resource gets the Resource property
+// Resource gets the resource that this container port is associated with.
 func (s *containerPortReference) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -5410,7 +5410,7 @@ func newContainerRegistryResourceFromHandle(h *handle, c *client) ContainerRegis
 	return &containerRegistryResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *containerRegistryResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -5429,7 +5429,7 @@ func (s *containerRegistryResource) CreateExecutionConfiguration() ExecutionConf
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *containerRegistryResource) ExcludeFromManifest() ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -5440,7 +5440,7 @@ func (s *containerRegistryResource) ExcludeFromManifest() ContainerRegistryResou
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *containerRegistryResource) ExcludeFromMcp() ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -5451,7 +5451,7 @@ func (s *containerRegistryResource) ExcludeFromMcp() ContainerRegistryResource {
 	return s
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *containerRegistryResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -5466,7 +5466,7 @@ func (s *containerRegistryResource) GetResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *containerRegistryResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -5485,7 +5485,7 @@ func (s *containerRegistryResource) OnBeforeResourceStarted(callback func(arg Be
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *containerRegistryResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -5504,7 +5504,7 @@ func (s *containerRegistryResource) OnInitializeResource(callback func(arg Initi
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *containerRegistryResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -5523,7 +5523,7 @@ func (s *containerRegistryResource) OnResourceReady(callback func(arg ResourceRe
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *containerRegistryResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -5626,7 +5626,7 @@ func (s *containerRegistryResource) WithConfig(config *TestConfigDto) ContainerR
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *containerRegistryResource) WithContainerRegistry(registry Resource) ContainerRegistryResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -5676,7 +5676,7 @@ func (s *containerRegistryResource) WithDependency(dependency ResourceWithConnec
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *containerRegistryResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -5729,7 +5729,7 @@ func (s *containerRegistryResource) WithHealthCheck(key string) ContainerRegistr
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *containerRegistryResource) WithIconName(iconName string, options ...*WithIconNameOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -5748,7 +5748,7 @@ func (s *containerRegistryResource) WithIconName(iconName string, options ...*Wi
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *containerRegistryResource) WithLifetimeOf(sourceBuilder Resource) ContainerRegistryResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -5951,7 +5951,7 @@ func (s *containerRegistryResource) WithOptionalString(options ...*WithOptionalS
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *containerRegistryResource) WithParentProcessLifetime(parentProcessId float64) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -5976,7 +5976,7 @@ func (s *containerRegistryResource) WithParentRelationship(parent Resource) Cont
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *containerRegistryResource) WithPersistentLifetime() ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -5987,7 +5987,7 @@ func (s *containerRegistryResource) WithPersistentLifetime() ContainerRegistryRe
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *containerRegistryResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6006,7 +6006,7 @@ func (s *containerRegistryResource) WithPipelineConfiguration(callback func(obj 
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *containerRegistryResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6033,7 +6033,7 @@ func (s *containerRegistryResource) WithPipelineStepFactory(stepName string, cal
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *containerRegistryResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6047,7 +6047,7 @@ func (s *containerRegistryResource) WithProcessCommand(commandName string, displ
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *containerRegistryResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6074,7 +6074,7 @@ func (s *containerRegistryResource) WithProcessCommandFactory(commandName string
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *containerRegistryResource) WithRelationship(resourceBuilder Resource, type_ string) ContainerRegistryResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -6088,7 +6088,7 @@ func (s *containerRegistryResource) WithRelationship(resourceBuilder Resource, t
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *containerRegistryResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6107,7 +6107,7 @@ func (s *containerRegistryResource) WithRequiredCommand(command string, options 
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *containerRegistryResource) WithSessionLifetime() ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6175,7 +6175,7 @@ func (s *containerRegistryResource) WithUrl(url any, options ...*WithUrlOptions)
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *containerRegistryResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6198,7 +6198,7 @@ func (s *containerRegistryResource) WithUrlForEndpoint(endpointName string, call
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *containerRegistryResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ContainerRegistryResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6356,7 +6356,7 @@ func newContainerResourceFromHandle(h *handle, c *client) ContainerResource {
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsHttp2Service configures resource for HTTP/2
+// AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *containerResource) AsHttp2Service() ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6367,7 +6367,7 @@ func (s *containerResource) AsHttp2Service() ContainerResource {
 	return s
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *containerResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -6386,7 +6386,7 @@ func (s *containerResource) CreateExecutionConfiguration() ExecutionConfiguratio
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *containerResource) ExcludeFromManifest() ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6397,7 +6397,7 @@ func (s *containerResource) ExcludeFromManifest() ContainerResource {
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *containerResource) ExcludeFromMcp() ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6428,7 +6428,7 @@ func (s *containerResource) GetEndpoint(name string) EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *containerResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -6443,7 +6443,7 @@ func (s *containerResource) GetResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *containerResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6462,7 +6462,7 @@ func (s *containerResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *containerResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6481,7 +6481,7 @@ func (s *containerResource) OnInitializeResource(callback func(arg InitializeRes
 	return s
 }
 
-// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event.
 func (s *containerResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6500,7 +6500,7 @@ func (s *containerResource) OnResourceEndpointsAllocated(callback func(arg Resou
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *containerResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6519,7 +6519,7 @@ func (s *containerResource) OnResourceReady(callback func(arg ResourceReadyEvent
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *containerResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6538,7 +6538,7 @@ func (s *containerResource) OnResourceStopped(callback func(arg ResourceStoppedE
 	return s
 }
 
-// PublishAsConnectionString publishes the resource as a connection string
+// PublishAsConnectionString changes the resource to be published as a connection string reference in the manifest.
 func (s *containerResource) PublishAsConnectionString() ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6549,7 +6549,7 @@ func (s *containerResource) PublishAsConnectionString() ContainerResource {
 	return s
 }
 
-// PublishAsContainer configures the resource to be published as a container
+// PublishAsContainer changes the resource to be published as a container in the manifest.
 func (s *containerResource) PublishAsContainer() ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6612,7 +6612,7 @@ func (s *containerResource) WaitFor(dependency Resource, options ...*WaitForOpti
 	return s
 }
 
-// WaitForCompletion waits for resource completion
+// WaitForCompletion waits for the dependency resource to enter the Exited or Finished state before starting the resource.
 func (s *containerResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ContainerResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -6652,7 +6652,7 @@ func (s *containerResource) WaitForStart(dependency Resource, options ...*WaitFo
 	return s
 }
 
-// WithArgs adds arguments
+// WithArgs adds arguments to be passed to a resource that supports arguments when it is launched.
 func (s *containerResource) WithArgs(args []string) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6664,7 +6664,7 @@ func (s *containerResource) WithArgs(args []string) ContainerResource {
 	return s
 }
 
-// WithArgsCallback sets command-line arguments via callback
+// WithArgsCallback adds a callback to be executed with a list of command-line arguments when a resource is started.
 func (s *containerResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6683,7 +6683,7 @@ func (s *containerResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 	return s
 }
 
-// WithBindMount adds a bind mount
+// WithBindMount adds a bind mount to a container resource.
 func (s *containerResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6703,7 +6703,7 @@ func (s *containerResource) WithBindMount(source string, target string, options 
 	return s
 }
 
-// WithBuildArg adds a build argument from a string value or parameter resource
+// WithBuildArg adds a build argument when the container is built from a Dockerfile.
 // Allowed types for parameter value: string, ParameterResource.
 func (s *containerResource) WithBuildArg(name string, value any) ContainerResource {
 	if s.err != nil { return s }
@@ -6723,7 +6723,7 @@ func (s *containerResource) WithBuildArg(name string, value any) ContainerResour
 	return s
 }
 
-// WithBuildSecret adds a build secret from a parameter resource
+// WithBuildSecret adds a secret build argument when the container is built from a Dockerfile.
 func (s *containerResource) WithBuildSecret(name string, value ParameterResource) ContainerResource {
 	if s.err != nil { return s }
 	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
@@ -6808,7 +6808,7 @@ func (s *containerResource) WithCommand(name string, displayName string, execute
 	return s
 }
 
-// WithComputeEnvironment configures the compute environment for the compute resource
+// WithComputeEnvironment configures the compute environment for the compute resource.
 func (s *containerResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ContainerResource {
 	if s.err != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
@@ -6833,7 +6833,7 @@ func (s *containerResource) WithConfig(config *TestConfigDto) ContainerResource 
 	return s
 }
 
-// WithContainerCertificatePaths overrides container certificate bundle and directory paths used for trust configuration
+// WithContainerCertificatePaths adds container certificate path overrides used for certificate trust at run time.
 func (s *containerResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6851,7 +6851,7 @@ func (s *containerResource) WithContainerCertificatePaths(options ...*WithContai
 	return s
 }
 
-// WithContainerName sets the container name
+// WithContainerName overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
 func (s *containerResource) WithContainerName(name string) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6863,7 +6863,7 @@ func (s *containerResource) WithContainerName(name string) ContainerResource {
 	return s
 }
 
-// WithContainerNetworkAlias adds a network alias for the container
+// WithContainerNetworkAlias adds a network alias to container resource.
 func (s *containerResource) WithContainerNetworkAlias(alias string) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6875,7 +6875,7 @@ func (s *containerResource) WithContainerNetworkAlias(alias string) ContainerRes
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *containerResource) WithContainerRegistry(registry Resource) ContainerResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -6888,7 +6888,7 @@ func (s *containerResource) WithContainerRegistry(registry Resource) ContainerRe
 	return s
 }
 
-// WithContainerRuntimeArgs adds runtime arguments for the container
+// WithContainerRuntimeArgs adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started.
 func (s *containerResource) WithContainerRuntimeArgs(args []string) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6937,7 +6937,7 @@ func (s *containerResource) WithDependency(dependency ResourceWithConnectionStri
 	return s
 }
 
-// WithDeveloperCertificateTrust configures developer certificate trust
+// WithDeveloperCertificateTrust indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
 func (s *containerResource) WithDeveloperCertificateTrust(trust bool) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6949,7 +6949,7 @@ func (s *containerResource) WithDeveloperCertificateTrust(trust bool) ContainerR
 	return s
 }
 
-// WithDockerfile configures the resource to use a Dockerfile
+// WithDockerfile causes Aspire to build the specified container image from a Dockerfile.
 func (s *containerResource) WithDockerfile(contextPath string, options ...*WithDockerfileOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -6968,7 +6968,7 @@ func (s *containerResource) WithDockerfile(contextPath string, options ...*WithD
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *containerResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7058,7 +7058,7 @@ func (s *containerResource) WithEndpointCallback(endpointName string, callback f
 	return s
 }
 
-// WithEndpointProxySupport configures endpoint proxy support
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *containerResource) WithEndpointProxySupport(proxyEnabled bool) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7082,7 +7082,7 @@ func (s *containerResource) WithEndpoints(endpoints []string) ContainerResource 
 	return s
 }
 
-// WithEntrypoint sets the container entrypoint
+// WithEntrypoint sets the Entrypoint for the container.
 func (s *containerResource) WithEntrypoint(entrypoint string) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7114,7 +7114,7 @@ func (s *containerResource) WithEnvironment(name string, value any) ContainerRes
 	return s
 }
 
-// WithEnvironmentCallback sets environment variables via callback
+// WithEnvironmentCallback allows for the population of environment variables on a resource.
 func (s *containerResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7156,7 +7156,7 @@ func (s *containerResource) WithExplicitStart() ContainerResource {
 	return s
 }
 
-// WithExternalHttpEndpoints makes HTTP endpoints externally accessible
+// WithExternalHttpEndpoints marks existing http or https endpoints on a resource as external.
 func (s *containerResource) WithExternalHttpEndpoints() ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7243,7 +7243,7 @@ func (s *containerResource) WithHttpEndpointCallback(callback func(obj EndpointU
 	return s
 }
 
-// WithHttpHealthCheck adds an HTTP health check
+// WithHttpHealthCheck adds a health check to the resource which is mapped to a specific endpoint.
 func (s *containerResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7280,7 +7280,7 @@ func (s *containerResource) WithHttpProbe(probeType ProbeType, options ...*WithH
 	return s
 }
 
-// WithHttpsDeveloperCertificate configures HTTPS with a developer certificate
+// WithHttpsDeveloperCertificate indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
 func (s *containerResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7342,7 +7342,7 @@ func (s *containerResource) WithHttpsEndpointCallback(callback func(obj Endpoint
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *containerResource) WithIconName(iconName string, options ...*WithIconNameOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7361,7 +7361,7 @@ func (s *containerResource) WithIconName(iconName string, options ...*WithIconNa
 	return s
 }
 
-// WithImage sets the container image
+// WithImage allows overriding the image on a container.
 func (s *containerResource) WithImage(image string, options ...*WithImageOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7380,7 +7380,7 @@ func (s *containerResource) WithImage(image string, options ...*WithImageOptions
 	return s
 }
 
-// WithImagePullPolicy sets the container image pull policy
+// WithImagePullPolicy sets the pull policy for the container resource.
 func (s *containerResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7392,7 +7392,7 @@ func (s *containerResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) Cont
 	return s
 }
 
-// WithImagePushOptions sets image push options via callback
+// WithImagePushOptions adds an asynchronous callback to configure container image push options for the resource.
 func (s *containerResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7411,7 +7411,7 @@ func (s *containerResource) WithImagePushOptions(callback func(arg ContainerImag
 	return s
 }
 
-// WithImageRegistry sets the container image registry
+// WithImageRegistry allows overriding the image registry on a container.
 func (s *containerResource) WithImageRegistry(registry string) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7423,7 +7423,7 @@ func (s *containerResource) WithImageRegistry(registry string) ContainerResource
 	return s
 }
 
-// WithImageSHA256 sets the image SHA256 digest
+// WithImageSHA256 allows setting the image to a specific sha256 on a container.
 func (s *containerResource) WithImageSHA256(sha256 string) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7435,7 +7435,7 @@ func (s *containerResource) WithImageSHA256(sha256 string) ContainerResource {
 	return s
 }
 
-// WithImageTag sets the container image tag
+// WithImageTag allows overriding the image tag on a container.
 func (s *containerResource) WithImageTag(tag string) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7447,7 +7447,7 @@ func (s *containerResource) WithImageTag(tag string) ContainerResource {
 	return s
 }
 
-// WithLifetime sets the lifetime behavior of the container resource
+// WithLifetime sets the lifetime behavior of the container resource.
 func (s *containerResource) WithLifetime(lifetime ContainerLifetime) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7459,7 +7459,7 @@ func (s *containerResource) WithLifetime(lifetime ContainerLifetime) ContainerRe
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *containerResource) WithLifetimeOf(sourceBuilder Resource) ContainerResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -7472,7 +7472,7 @@ func (s *containerResource) WithLifetimeOf(sourceBuilder Resource) ContainerReso
 	return s
 }
 
-// WithMcpServer configures an MCP server endpoint on the resource
+// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *containerResource) WithMcpServer(options ...*WithMcpServerOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7698,7 +7698,7 @@ func (s *containerResource) WithOtlpExporter(options ...*WithOtlpExporterOptions
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *containerResource) WithParentProcessLifetime(parentProcessId float64) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7723,7 +7723,7 @@ func (s *containerResource) WithParentRelationship(parent Resource) ContainerRes
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *containerResource) WithPersistentLifetime() ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7734,7 +7734,7 @@ func (s *containerResource) WithPersistentLifetime() ContainerResource {
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *containerResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7753,7 +7753,7 @@ func (s *containerResource) WithPipelineConfiguration(callback func(obj Pipeline
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *containerResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7780,7 +7780,7 @@ func (s *containerResource) WithPipelineStepFactory(stepName string, callback fu
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *containerResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7794,7 +7794,7 @@ func (s *containerResource) WithProcessCommand(commandName string, displayName s
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *containerResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7847,7 +7847,7 @@ func (s *containerResource) WithReference(source any, options ...*WithReferenceO
 	return s
 }
 
-// WithReferenceEnvironment configures which reference values are injected into environment variables
+// WithReferenceEnvironment configures how information is injected into environment variables when the resource references other resources.
 func (s *containerResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7859,7 +7859,7 @@ func (s *containerResource) WithReferenceEnvironment(options *ReferenceEnvironme
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *containerResource) WithRelationship(resourceBuilder Resource, type_ string) ContainerResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -7873,7 +7873,7 @@ func (s *containerResource) WithRelationship(resourceBuilder Resource, type_ str
 	return s
 }
 
-// WithRemoteImageName sets the remote image name for publishing
+// WithRemoteImageName sets the remote image name (without registry endpoint or tag) for container push operations.
 func (s *containerResource) WithRemoteImageName(remoteImageName string) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7885,7 +7885,7 @@ func (s *containerResource) WithRemoteImageName(remoteImageName string) Containe
 	return s
 }
 
-// WithRemoteImageTag sets the remote image tag for publishing
+// WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *containerResource) WithRemoteImageTag(remoteImageTag string) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7897,7 +7897,7 @@ func (s *containerResource) WithRemoteImageTag(remoteImageTag string) ContainerR
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *containerResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7916,7 +7916,7 @@ func (s *containerResource) WithRequiredCommand(command string, options ...*With
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *containerResource) WithSessionLifetime() ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7984,7 +7984,7 @@ func (s *containerResource) WithUrl(url any, options ...*WithUrlOptions) Contain
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *containerResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -8007,7 +8007,7 @@ func (s *containerResource) WithUrlForEndpoint(endpointName string, callback fun
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *containerResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -8044,7 +8044,7 @@ func (s *containerResource) WithValidator(validator func(arg TestResourceContext
 	return s
 }
 
-// WithVolume adds a volume
+// WithVolume adds a volume to a container resource.
 func (s *containerResource) WithVolume(target string, options ...*WithVolumeOptions) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -8063,7 +8063,7 @@ func (s *containerResource) WithVolume(target string, options ...*WithVolumeOpti
 	return s
 }
 
-// WithoutHttpsCertificate removes HTTPS certificate configuration
+// WithoutHttpsCertificate disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *containerResource) WithoutHttpsCertificate() ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -8213,7 +8213,7 @@ func (s *distributedApplicationBuilder) AddConnectionString(name string, options
 	return typed
 }
 
-// AddContainer adds a container resource
+// AddContainer adds a container resource to the application.
 // Allowed types for parameter image: string, *AddContainerOptions.
 func (s *distributedApplicationBuilder) AddContainer(name string, image any) ContainerResource {
 	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
@@ -8276,7 +8276,7 @@ func (s *distributedApplicationBuilder) AddContainerRegistry(name string, endpoi
 	return &containerRegistryResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// AddDockerfile adds a container resource built from a Dockerfile
+// AddDockerfile adds a Dockerfile to the application model that can be treated like a container resource.
 func (s *distributedApplicationBuilder) AddDockerfile(name string, contextPath string, options ...*AddDockerfileOptions) ContainerResource {
 	if s.err != nil { return &containerResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8340,7 +8340,7 @@ func (s *distributedApplicationBuilder) AddDockerfileBuilder(name string, contex
 	return &containerResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// AddDotnetTool adds a .NET tool resource
+// AddDotnetTool adds a .NET tool resource to the application model.
 func (s *distributedApplicationBuilder) AddDotnetTool(name string, packageId string) DotnetToolResource {
 	if s.err != nil { return &dotnetToolResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8361,7 +8361,7 @@ func (s *distributedApplicationBuilder) AddDotnetTool(name string, packageId str
 	return &dotnetToolResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// AddEventingSubscriber adds an eventing subscriber
+// AddEventingSubscriber adds an ATS-friendly eventing subscriber callback to the distributed-application builder.
 func (s *distributedApplicationBuilder) AddEventingSubscriber(subscribe func(arg EventingSubscriberRegistrationContext)) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -8380,7 +8380,7 @@ func (s *distributedApplicationBuilder) AddEventingSubscriber(subscribe func(arg
 	return err
 }
 
-// AddExecutable adds an executable resource
+// AddExecutable adds an executable resource to the application model.
 func (s *distributedApplicationBuilder) AddExecutable(name string, command string, workingDirectory string, args []string) ExecutableResource {
 	if s.err != nil { return &executableResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8458,7 +8458,7 @@ func (s *distributedApplicationBuilder) AddParameter(name string, options ...*Ad
 	return &parameterResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// AddParameterFromConfiguration adds a parameter sourced from configuration
+// AddParameterFromConfiguration adds a parameter resource to the application, with a value coming from configuration.
 func (s *distributedApplicationBuilder) AddParameterFromConfiguration(name string, configurationKey string, options ...*AddParameterFromConfigurationOptions) ParameterResource {
 	if s.err != nil { return &parameterResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8542,7 +8542,7 @@ func (s *distributedApplicationBuilder) AddProject(name string, projectPath stri
 	return &projectResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// AddTestRedis adds a test Redis resource
+// AddTestRedis adds a test Redis resource from ATS documentation.
 func (s *distributedApplicationBuilder) AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource {
 	if s.err != nil { return &testRedisResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8589,7 +8589,7 @@ func (s *distributedApplicationBuilder) AddTestVault(name string) Aspire_Hosting
 	return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// AppHostDirectory gets the AppHostDirectory property
+// AppHostDirectory directory of the project where the app host is located. Defaults to the content root if there's no project.
 func (s *distributedApplicationBuilder) AppHostDirectory() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -8623,7 +8623,7 @@ func (s *distributedApplicationBuilder) Environment() HostEnvironment {
 	return &hostEnvironment{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Eventing gets the Eventing property
+// Eventing eventing infrastructure for AppHost lifecycle.
 func (s *distributedApplicationBuilder) Eventing() DistributedApplicationEventing {
 	if s.err != nil { return &distributedApplicationEventing{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8642,7 +8642,7 @@ func (s *distributedApplicationBuilder) Eventing() DistributedApplicationEventin
 	return &distributedApplicationEventing{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExecutionContext gets the ExecutionContext property
+// ExecutionContext execution context for this invocation of the AppHost.
 func (s *distributedApplicationBuilder) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8661,7 +8661,7 @@ func (s *distributedApplicationBuilder) ExecutionContext() DistributedApplicatio
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetConfiguration gets the application configuration
+// GetConfiguration gets the application configuration.
 func (s *distributedApplicationBuilder) GetConfiguration() Configuration {
 	if s.err != nil { return &configuration{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8680,7 +8680,7 @@ func (s *distributedApplicationBuilder) GetConfiguration() Configuration {
 	return &configuration{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Pipeline gets the Pipeline property
+// Pipeline gets the deployment pipeline for this distributed application.
 func (s *distributedApplicationBuilder) Pipeline() DistributedApplicationPipeline {
 	if s.err != nil { return &distributedApplicationPipeline{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8699,7 +8699,7 @@ func (s *distributedApplicationBuilder) Pipeline() DistributedApplicationPipelin
 	return &distributedApplicationPipeline{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// SubscribeAfterPublish subscribes to the AfterPublish event
+// SubscribeAfterPublish subscribes to the AfterPublish event, which fires after the application is published.
 func (s *distributedApplicationBuilder) SubscribeAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8726,7 +8726,7 @@ func (s *distributedApplicationBuilder) SubscribeAfterPublish(callback func(arg 
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// SubscribeAfterResourcesCreated subscribes to the AfterResourcesCreated event
+// SubscribeAfterResourcesCreated subscribes to the AfterResourcesCreated event, which fires after all resources are created.
 func (s *distributedApplicationBuilder) SubscribeAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8753,7 +8753,7 @@ func (s *distributedApplicationBuilder) SubscribeAfterResourcesCreated(callback 
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// SubscribeBeforePublish subscribes to the BeforePublish event
+// SubscribeBeforePublish subscribes to the BeforePublish event, which fires before the application is published.
 func (s *distributedApplicationBuilder) SubscribeBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8780,7 +8780,7 @@ func (s *distributedApplicationBuilder) SubscribeBeforePublish(callback func(arg
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// SubscribeBeforeStart subscribes to the BeforeStart event
+// SubscribeBeforeStart subscribes to the BeforeStart event, which fires before the application starts.
 func (s *distributedApplicationBuilder) SubscribeBeforeStart(callback func(arg BeforeStartEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8807,7 +8807,7 @@ func (s *distributedApplicationBuilder) SubscribeBeforeStart(callback func(arg B
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// TryAddEventingSubscriber attempts to add an eventing subscriber
+// TryAddEventingSubscriber attempts to add an ATS-friendly eventing subscriber callback to the distributed-application builder.
 func (s *distributedApplicationBuilder) TryAddEventingSubscriber(subscribe func(arg EventingSubscriberRegistrationContext)) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -8826,7 +8826,7 @@ func (s *distributedApplicationBuilder) TryAddEventingSubscriber(subscribe func(
 	return err
 }
 
-// UserSecretsManager gets the UserSecretsManager property
+// UserSecretsManager gets the service for managing user secrets.
 func (s *distributedApplicationBuilder) UserSecretsManager() UserSecretsManager {
 	if s.err != nil { return &userSecretsManager{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -8878,7 +8878,7 @@ func newDistributedApplicationEventingFromHandle(h *handle, c *client) Distribut
 	return &distributedApplicationEventing{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Unsubscribe invokes the Unsubscribe method
+// Unsubscribe unsubscribe from an event.
 func (s *distributedApplicationEventing) Unsubscribe(subscription DistributedApplicationEventSubscription) error {
 	if s.err != nil { return s.err }
 	if subscription != nil { if err := subscription.Err(); err != nil { return err } }
@@ -8913,7 +8913,7 @@ func newDistributedApplicationExecutionContextFromHandle(h *handle, c *client) D
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// IsPublishMode gets the IsPublishMode property
+// IsPublishMode returns true if the current operation is publishing.
 func (s *distributedApplicationExecutionContext) IsPublishMode() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -8928,7 +8928,7 @@ func (s *distributedApplicationExecutionContext) IsPublishMode() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// IsRunMode gets the IsRunMode property
+// IsRunMode returns true if the current operation is running.
 func (s *distributedApplicationExecutionContext) IsRunMode() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -8943,7 +8943,7 @@ func (s *distributedApplicationExecutionContext) IsRunMode() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// Operation gets the Operation property
+// Operation the operation currently being performed by the AppHost.
 func (s *distributedApplicationExecutionContext) Operation() (DistributedApplicationOperation, error) {
 	if s.err != nil { var zero DistributedApplicationOperation; return zero, s.err }
 	ctx := context.Background()
@@ -8958,7 +8958,7 @@ func (s *distributedApplicationExecutionContext) Operation() (DistributedApplica
 	return decodeAs[DistributedApplicationOperation](result)
 }
 
-// PublisherName gets the PublisherName property
+// PublisherName the name of the publisher that is being used if `Operation` is set to `Publish`.
 func (s *distributedApplicationExecutionContext) PublisherName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -8973,7 +8973,7 @@ func (s *distributedApplicationExecutionContext) PublisherName() (string, error)
 	return decodeAs[string](result)
 }
 
-// ServiceProvider gets the ServiceProvider property
+// ServiceProvider the `IServiceProvider` for the AppHost.
 func (s *distributedApplicationExecutionContext) ServiceProvider() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -9038,7 +9038,7 @@ func newDistributedApplicationModelFromHandle(h *handle, c *client) DistributedA
 	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// FindResourceByName finds a resource by name
+// FindResourceByName finds a resource by name.
 func (s *distributedApplicationModel) FindResourceByName(name string) Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -9056,7 +9056,7 @@ func (s *distributedApplicationModel) FindResourceByName(name string) Resource {
 	return typed
 }
 
-// GetResources gets resources from the distributed application model
+// GetResources gets all resources in the distributed application model.
 func (s *distributedApplicationModel) GetResources() ([]Resource, error) {
 	if s.err != nil { var zero []Resource; return zero, s.err }
 	ctx := context.Background()
@@ -9090,7 +9090,7 @@ func newDistributedApplicationPipelineFromHandle(h *handle, c *client) Distribut
 	return &distributedApplicationPipeline{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AddStep adds a pipeline step to the application
+// AddStep adds an application-level pipeline step in a TypeScript-friendly shape.
 func (s *distributedApplicationPipeline) AddStep(stepName string, callback func(arg PipelineStepContext), options ...*AddStepOptions) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -9117,7 +9117,7 @@ func (s *distributedApplicationPipeline) AddStep(stepName string, callback func(
 	return err
 }
 
-// Configure configures the application pipeline via a callback
+// Configure registers a pipeline configuration callback in a TypeScript-friendly shape.
 func (s *distributedApplicationPipeline) Configure(callback func(arg PipelineConfigurationContext)) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -9136,7 +9136,7 @@ func (s *distributedApplicationPipeline) Configure(callback func(arg PipelineCon
 	return err
 }
 
-// DisableBuildOnlyContainerValidation disables publish and deploy validation for unconsumed build-only containers.
+// DisableBuildOnlyContainerValidation disables the publish and deploy validation that requires build-only containers to be consumed by another resource.
 func (s *distributedApplicationPipeline) DisableBuildOnlyContainerValidation() DistributedApplicationPipeline {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -9268,7 +9268,7 @@ func newDockerfileBuilderCallbackContextFromHandle(h *handle, c *client) Dockerf
 	return &dockerfileBuilderCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Builder gets the Builder property
+// Builder gets the Dockerfile builder instance.
 func (s *dockerfileBuilderCallbackContext) Builder() DockerfileBuilder {
 	if s.err != nil { return &dockerfileBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -9287,7 +9287,7 @@ func (s *dockerfileBuilderCallbackContext) Builder() DockerfileBuilder {
 	return &dockerfileBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// CancellationToken gets the CancellationToken property
+// CancellationToken gets the cancellation token to observe while waiting for the task to complete.
 func (s *dockerfileBuilderCallbackContext) CancellationToken() (*CancellationToken, error) {
 	if s.err != nil { var zero *CancellationToken; return zero, s.err }
 	ctx := context.Background()
@@ -9302,7 +9302,7 @@ func (s *dockerfileBuilderCallbackContext) CancellationToken() (*CancellationTok
 	return decodeAs[*CancellationToken](result)
 }
 
-// Resource gets the Resource property
+// Resource gets the resource being built.
 func (s *dockerfileBuilderCallbackContext) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -9319,7 +9319,7 @@ func (s *dockerfileBuilderCallbackContext) Resource() Resource {
 	return typed
 }
 
-// Services gets the Services property
+// Services gets the service provider for dependency injection.
 func (s *dockerfileBuilderCallbackContext) Services() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -9681,7 +9681,7 @@ func newDotnetToolResourceFromHandle(h *handle, c *client) DotnetToolResource {
 	return &dotnetToolResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsHttp2Service configures resource for HTTP/2
+// AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *dotnetToolResource) AsHttp2Service() DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -9692,7 +9692,7 @@ func (s *dotnetToolResource) AsHttp2Service() DotnetToolResource {
 	return s
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *dotnetToolResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -9711,7 +9711,7 @@ func (s *dotnetToolResource) CreateExecutionConfiguration() ExecutionConfigurati
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *dotnetToolResource) ExcludeFromManifest() DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -9722,7 +9722,7 @@ func (s *dotnetToolResource) ExcludeFromManifest() DotnetToolResource {
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *dotnetToolResource) ExcludeFromMcp() DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -9753,7 +9753,7 @@ func (s *dotnetToolResource) GetEndpoint(name string) EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *dotnetToolResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -9768,7 +9768,7 @@ func (s *dotnetToolResource) GetResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *dotnetToolResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -9787,7 +9787,7 @@ func (s *dotnetToolResource) OnBeforeResourceStarted(callback func(arg BeforeRes
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *dotnetToolResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -9806,7 +9806,7 @@ func (s *dotnetToolResource) OnInitializeResource(callback func(arg InitializeRe
 	return s
 }
 
-// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event.
 func (s *dotnetToolResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -9825,7 +9825,7 @@ func (s *dotnetToolResource) OnResourceEndpointsAllocated(callback func(arg Reso
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *dotnetToolResource) OnResourceReady(callback func(arg ResourceReadyEvent)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -9844,7 +9844,7 @@ func (s *dotnetToolResource) OnResourceReady(callback func(arg ResourceReadyEven
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *dotnetToolResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -9934,7 +9934,7 @@ func (s *dotnetToolResource) WaitFor(dependency Resource, options ...*WaitForOpt
 	return s
 }
 
-// WaitForCompletion waits for resource completion
+// WaitForCompletion waits for the dependency resource to enter the Exited or Finished state before starting the resource.
 func (s *dotnetToolResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -9974,7 +9974,7 @@ func (s *dotnetToolResource) WaitForStart(dependency Resource, options ...*WaitF
 	return s
 }
 
-// WithArgs adds arguments
+// WithArgs adds arguments to be passed to a resource that supports arguments when it is launched.
 func (s *dotnetToolResource) WithArgs(args []string) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -9986,7 +9986,7 @@ func (s *dotnetToolResource) WithArgs(args []string) DotnetToolResource {
 	return s
 }
 
-// WithArgsCallback sets command-line arguments via callback
+// WithArgsCallback adds a callback to be executed with a list of command-line arguments when a resource is started.
 func (s *dotnetToolResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10076,7 +10076,7 @@ func (s *dotnetToolResource) WithCommand(name string, displayName string, execut
 	return s
 }
 
-// WithComputeEnvironment configures the compute environment for the compute resource
+// WithComputeEnvironment configures the compute environment for the compute resource.
 func (s *dotnetToolResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) DotnetToolResource {
 	if s.err != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
@@ -10101,7 +10101,7 @@ func (s *dotnetToolResource) WithConfig(config *TestConfigDto) DotnetToolResourc
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *dotnetToolResource) WithContainerRegistry(registry Resource) DotnetToolResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -10151,7 +10151,7 @@ func (s *dotnetToolResource) WithDependency(dependency ResourceWithConnectionStr
 	return s
 }
 
-// WithDeveloperCertificateTrust configures developer certificate trust
+// WithDeveloperCertificateTrust indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
 func (s *dotnetToolResource) WithDeveloperCertificateTrust(trust bool) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10163,7 +10163,7 @@ func (s *dotnetToolResource) WithDeveloperCertificateTrust(trust bool) DotnetToo
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *dotnetToolResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10226,7 +10226,7 @@ func (s *dotnetToolResource) WithEndpointCallback(endpointName string, callback 
 	return s
 }
 
-// WithEndpointProxySupport configures endpoint proxy support
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *dotnetToolResource) WithEndpointProxySupport(proxyEnabled bool) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10270,7 +10270,7 @@ func (s *dotnetToolResource) WithEnvironment(name string, value any) DotnetToolR
 	return s
 }
 
-// WithEnvironmentCallback sets environment variables via callback
+// WithEnvironmentCallback allows for the population of environment variables on a resource.
 func (s *dotnetToolResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10301,7 +10301,7 @@ func (s *dotnetToolResource) WithEnvironmentVariables(variables map[string]strin
 	return s
 }
 
-// WithExecutableCommand sets the executable command
+// WithExecutableCommand sets the command for the executable resource.
 func (s *dotnetToolResource) WithExecutableCommand(command string) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10324,7 +10324,7 @@ func (s *dotnetToolResource) WithExplicitStart() DotnetToolResource {
 	return s
 }
 
-// WithExternalHttpEndpoints makes HTTP endpoints externally accessible
+// WithExternalHttpEndpoints marks existing http or https endpoints on a resource as external.
 func (s *dotnetToolResource) WithExternalHttpEndpoints() DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10411,7 +10411,7 @@ func (s *dotnetToolResource) WithHttpEndpointCallback(callback func(obj Endpoint
 	return s
 }
 
-// WithHttpHealthCheck adds an HTTP health check
+// WithHttpHealthCheck adds a health check to the resource which is mapped to a specific endpoint.
 func (s *dotnetToolResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10448,7 +10448,7 @@ func (s *dotnetToolResource) WithHttpProbe(probeType ProbeType, options ...*With
 	return s
 }
 
-// WithHttpsDeveloperCertificate configures HTTPS with a developer certificate
+// WithHttpsDeveloperCertificate indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
 func (s *dotnetToolResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10510,7 +10510,7 @@ func (s *dotnetToolResource) WithHttpsEndpointCallback(callback func(obj Endpoin
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *dotnetToolResource) WithIconName(iconName string, options ...*WithIconNameOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10529,7 +10529,7 @@ func (s *dotnetToolResource) WithIconName(iconName string, options ...*WithIconN
 	return s
 }
 
-// WithImagePushOptions sets image push options via callback
+// WithImagePushOptions adds an asynchronous callback to configure container image push options for the resource.
 func (s *dotnetToolResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10548,7 +10548,7 @@ func (s *dotnetToolResource) WithImagePushOptions(callback func(arg ContainerIma
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *dotnetToolResource) WithLifetimeOf(sourceBuilder Resource) DotnetToolResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -10561,7 +10561,7 @@ func (s *dotnetToolResource) WithLifetimeOf(sourceBuilder Resource) DotnetToolRe
 	return s
 }
 
-// WithMcpServer configures an MCP server endpoint on the resource
+// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *dotnetToolResource) WithMcpServer(options ...*WithMcpServerOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10787,7 +10787,7 @@ func (s *dotnetToolResource) WithOtlpExporter(options ...*WithOtlpExporterOption
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *dotnetToolResource) WithParentProcessLifetime(parentProcessId float64) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10812,7 +10812,7 @@ func (s *dotnetToolResource) WithParentRelationship(parent Resource) DotnetToolR
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *dotnetToolResource) WithPersistentLifetime() DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10823,7 +10823,7 @@ func (s *dotnetToolResource) WithPersistentLifetime() DotnetToolResource {
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *dotnetToolResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10842,7 +10842,7 @@ func (s *dotnetToolResource) WithPipelineConfiguration(callback func(obj Pipelin
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *dotnetToolResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10869,7 +10869,7 @@ func (s *dotnetToolResource) WithPipelineStepFactory(stepName string, callback f
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *dotnetToolResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10883,7 +10883,7 @@ func (s *dotnetToolResource) WithProcessCommand(commandName string, displayName 
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *dotnetToolResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10936,7 +10936,7 @@ func (s *dotnetToolResource) WithReference(source any, options ...*WithReference
 	return s
 }
 
-// WithReferenceEnvironment configures which reference values are injected into environment variables
+// WithReferenceEnvironment configures how information is injected into environment variables when the resource references other resources.
 func (s *dotnetToolResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10948,7 +10948,7 @@ func (s *dotnetToolResource) WithReferenceEnvironment(options *ReferenceEnvironm
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *dotnetToolResource) WithRelationship(resourceBuilder Resource, type_ string) DotnetToolResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -10962,7 +10962,7 @@ func (s *dotnetToolResource) WithRelationship(resourceBuilder Resource, type_ st
 	return s
 }
 
-// WithRemoteImageName sets the remote image name for publishing
+// WithRemoteImageName sets the remote image name (without registry endpoint or tag) for container push operations.
 func (s *dotnetToolResource) WithRemoteImageName(remoteImageName string) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10974,7 +10974,7 @@ func (s *dotnetToolResource) WithRemoteImageName(remoteImageName string) DotnetT
 	return s
 }
 
-// WithRemoteImageTag sets the remote image tag for publishing
+// WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *dotnetToolResource) WithRemoteImageTag(remoteImageTag string) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -10986,7 +10986,7 @@ func (s *dotnetToolResource) WithRemoteImageTag(remoteImageTag string) DotnetToo
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *dotnetToolResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11005,7 +11005,7 @@ func (s *dotnetToolResource) WithRequiredCommand(command string, options ...*Wit
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *dotnetToolResource) WithSessionLifetime() DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11028,7 +11028,7 @@ func (s *dotnetToolResource) WithStatus(status TestResourceStatus) DotnetToolRes
 	return s
 }
 
-// WithToolIgnoreExistingFeeds ignores existing NuGet feeds
+// WithToolIgnoreExistingFeeds configures the tool to use only the specified package sources, ignoring existing NuGet configuration.
 func (s *dotnetToolResource) WithToolIgnoreExistingFeeds() DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11039,7 +11039,7 @@ func (s *dotnetToolResource) WithToolIgnoreExistingFeeds() DotnetToolResource {
 	return s
 }
 
-// WithToolIgnoreFailedSources ignores failed NuGet sources
+// WithToolIgnoreFailedSources configures the resource to treat package source failures as warnings.
 func (s *dotnetToolResource) WithToolIgnoreFailedSources() DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11050,7 +11050,7 @@ func (s *dotnetToolResource) WithToolIgnoreFailedSources() DotnetToolResource {
 	return s
 }
 
-// WithToolPackage sets the tool package ID
+// WithToolPackage sets the package identifier for the tool configuration associated with the resource builder.
 func (s *dotnetToolResource) WithToolPackage(packageId string) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11062,7 +11062,7 @@ func (s *dotnetToolResource) WithToolPackage(packageId string) DotnetToolResourc
 	return s
 }
 
-// WithToolPrerelease allows prerelease tool versions
+// WithToolPrerelease allows prerelease versions of the tool to be used
 func (s *dotnetToolResource) WithToolPrerelease() DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11073,7 +11073,7 @@ func (s *dotnetToolResource) WithToolPrerelease() DotnetToolResource {
 	return s
 }
 
-// WithToolSource adds a NuGet source for the tool
+// WithToolSource adds a NuGet package source for tool acquisition.
 func (s *dotnetToolResource) WithToolSource(source string) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11085,7 +11085,7 @@ func (s *dotnetToolResource) WithToolSource(source string) DotnetToolResource {
 	return s
 }
 
-// WithToolVersion sets the tool version
+// WithToolVersion sets the package version for a tool to use.
 func (s *dotnetToolResource) WithToolVersion(version string) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11142,7 +11142,7 @@ func (s *dotnetToolResource) WithUrl(url any, options ...*WithUrlOptions) Dotnet
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *dotnetToolResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11165,7 +11165,7 @@ func (s *dotnetToolResource) WithUrlForEndpoint(endpointName string, callback fu
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *dotnetToolResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11202,7 +11202,7 @@ func (s *dotnetToolResource) WithValidator(validator func(arg TestResourceContex
 	return s
 }
 
-// WithWorkingDirectory sets the executable working directory
+// WithWorkingDirectory sets the working directory for the executable resource.
 func (s *dotnetToolResource) WithWorkingDirectory(workingDirectory string) DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11214,7 +11214,7 @@ func (s *dotnetToolResource) WithWorkingDirectory(workingDirectory string) Dotne
 	return s
 }
 
-// WithoutHttpsCertificate removes HTTPS certificate configuration
+// WithoutHttpsCertificate disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *dotnetToolResource) WithoutHttpsCertificate() DotnetToolResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -11259,7 +11259,7 @@ func newEndpointReferenceFromHandle(h *handle, c *client) EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// EndpointName gets the EndpointName property
+// EndpointName gets the name of the endpoint associated with the endpoint reference.
 func (s *endpointReference) EndpointName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11274,7 +11274,7 @@ func (s *endpointReference) EndpointName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// ErrorMessage gets the ErrorMessage property
+// ErrorMessage gets or sets a custom error message to be thrown when the endpoint annotation is not found.
 func (s *endpointReference) ErrorMessage() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11289,7 +11289,7 @@ func (s *endpointReference) ErrorMessage() (string, error) {
 	return decodeAs[string](result)
 }
 
-// ExcludeReferenceEndpoint gets the ExcludeReferenceEndpoint property
+// ExcludeReferenceEndpoint gets a value indicating whether this endpoint is excluded from the default set when referencing the resource's endpoints.
 func (s *endpointReference) ExcludeReferenceEndpoint() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11304,7 +11304,7 @@ func (s *endpointReference) ExcludeReferenceEndpoint() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// Exists gets the Exists property
+// Exists gets a value indicating whether the endpoint exists.
 func (s *endpointReference) Exists() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11340,7 +11340,7 @@ func (s *endpointReference) GetTlsValue(enabledValue *ReferenceExpression, disab
 	return typed
 }
 
-// GetValueAsync gets the URL of the endpoint asynchronously
+// GetValueAsync gets the URL of the endpoint asynchronously. Waits for the endpoint to be allocated if necessary.
 func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11368,7 +11368,7 @@ func (s *endpointReference) GetValueAsync(options ...*GetValueAsyncOptions) (str
 	return decodeAs[string](result)
 }
 
-// Host gets the Host property
+// Host gets the host for this endpoint.
 func (s *endpointReference) Host() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11383,7 +11383,7 @@ func (s *endpointReference) Host() (string, error) {
 	return decodeAs[string](result)
 }
 
-// IsAllocated gets the IsAllocated property
+// IsAllocated gets a value indicating whether the endpoint is allocated.
 func (s *endpointReference) IsAllocated() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11398,7 +11398,7 @@ func (s *endpointReference) IsAllocated() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// IsHttp gets the IsHttp property
+// IsHttp gets a value indicating whether the endpoint uses HTTP scheme.
 func (s *endpointReference) IsHttp() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11413,7 +11413,7 @@ func (s *endpointReference) IsHttp() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// IsHttpSchemeNamedEndpoint gets the IsHttpSchemeNamedEndpoint property
+// IsHttpSchemeNamedEndpoint gets a value indicating whether the endpoint name is "http" or "https", ignoring case. This is a convention used to identify endpoints that will be resolved based on the scheme of the endpoint in service discovery rather than by the specific endpoint name. This is done to allow http endpoints that are dynamically updated to https to be mapped correctly despite the endpoint name no longer matching the scheme.
 func (s *endpointReference) IsHttpSchemeNamedEndpoint() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11428,7 +11428,7 @@ func (s *endpointReference) IsHttpSchemeNamedEndpoint() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// IsHttps gets the IsHttps property
+// IsHttps gets a value indicating whether the endpoint uses HTTPS scheme.
 func (s *endpointReference) IsHttps() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11443,7 +11443,7 @@ func (s *endpointReference) IsHttps() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// Port gets the Port property
+// Port gets the port for this endpoint.
 func (s *endpointReference) Port() (float64, error) {
 	if s.err != nil { var zero float64; return zero, s.err }
 	ctx := context.Background()
@@ -11458,7 +11458,7 @@ func (s *endpointReference) Port() (float64, error) {
 	return decodeAs[float64](result)
 }
 
-// Property gets the specified property expression of the endpoint
+// Property gets the specified property expression of the endpoint.
 func (s *endpointReference) Property(property EndpointProperty) EndpointReferenceExpression {
 	if s.err != nil { return &endpointReferenceExpression{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -11478,7 +11478,7 @@ func (s *endpointReference) Property(property EndpointProperty) EndpointReferenc
 	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Resource gets the Resource property
+// Resource gets the resource owner of the endpoint reference.
 func (s *endpointReference) Resource() ResourceWithEndpoints {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -11495,7 +11495,7 @@ func (s *endpointReference) Resource() ResourceWithEndpoints {
 	return typed
 }
 
-// Scheme gets the Scheme property
+// Scheme gets the scheme for this endpoint.
 func (s *endpointReference) Scheme() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11510,7 +11510,7 @@ func (s *endpointReference) Scheme() (string, error) {
 	return decodeAs[string](result)
 }
 
-// TargetPort gets the TargetPort property
+// TargetPort gets the target port for this endpoint. If the port is dynamically allocated, this will return `null`.
 func (s *endpointReference) TargetPort() (float64, error) {
 	if s.err != nil { var zero float64; return zero, s.err }
 	ctx := context.Background()
@@ -11525,7 +11525,7 @@ func (s *endpointReference) TargetPort() (float64, error) {
 	return decodeAs[float64](result)
 }
 
-// TlsEnabled gets the TlsEnabled property
+// TlsEnabled gets a value indicating whether TLS is enabled for this endpoint.
 func (s *endpointReference) TlsEnabled() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11540,7 +11540,7 @@ func (s *endpointReference) TlsEnabled() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// Url gets the Url property
+// Url gets the URL for this endpoint.
 func (s *endpointReference) Url() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11574,7 +11574,7 @@ func newEndpointReferenceExpressionFromHandle(h *handle, c *client) EndpointRefe
 	return &endpointReferenceExpression{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Endpoint gets the Endpoint property
+// Endpoint gets the `EndpointReference`.
 func (s *endpointReferenceExpression) Endpoint() EndpointReference {
 	if s.err != nil { return &endpointReference{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -11593,7 +11593,7 @@ func (s *endpointReferenceExpression) Endpoint() EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Property gets the Property property
+// Property gets the `EndpointProperty` for the property expression.
 func (s *endpointReferenceExpression) Property() (EndpointProperty, error) {
 	if s.err != nil { var zero EndpointProperty; return zero, s.err }
 	ctx := context.Background()
@@ -11608,7 +11608,7 @@ func (s *endpointReferenceExpression) Property() (EndpointProperty, error) {
 	return decodeAs[EndpointProperty](result)
 }
 
-// ValueExpression gets the ValueExpression property
+// ValueExpression gets the expression of the property of the endpoint.
 func (s *endpointReferenceExpression) ValueExpression() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11660,7 +11660,7 @@ func newEndpointUpdateContextFromHandle(h *handle, c *client) EndpointUpdateCont
 	return &endpointUpdateContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// ExcludeReferenceEndpoint gets the ExcludeReferenceEndpoint property
+// ExcludeReferenceEndpoint gets or sets a value indicating whether the endpoint is excluded from the default reference set.
 func (s *endpointUpdateContext) ExcludeReferenceEndpoint() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11675,7 +11675,7 @@ func (s *endpointUpdateContext) ExcludeReferenceEndpoint() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// IsExternal gets the IsExternal property
+// IsExternal gets or sets a value indicating whether the endpoint is external.
 func (s *endpointUpdateContext) IsExternal() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11690,7 +11690,7 @@ func (s *endpointUpdateContext) IsExternal() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// IsProxied gets the IsProxied property
+// IsProxied gets or sets a value indicating whether the endpoint is proxied.
 func (s *endpointUpdateContext) IsProxied() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11705,7 +11705,7 @@ func (s *endpointUpdateContext) IsProxied() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// Name gets the Name property
+// Name gets the endpoint name.
 func (s *endpointUpdateContext) Name() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11720,7 +11720,7 @@ func (s *endpointUpdateContext) Name() (string, error) {
 	return decodeAs[string](result)
 }
 
-// Port gets the Port property
+// Port gets or sets the desired host port.
 func (s *endpointUpdateContext) Port() (float64, error) {
 	if s.err != nil { var zero float64; return zero, s.err }
 	ctx := context.Background()
@@ -11735,7 +11735,7 @@ func (s *endpointUpdateContext) Port() (float64, error) {
 	return decodeAs[float64](result)
 }
 
-// Protocol gets the Protocol property
+// Protocol gets or sets the network protocol.
 func (s *endpointUpdateContext) Protocol() (ProtocolType, error) {
 	if s.err != nil { var zero ProtocolType; return zero, s.err }
 	ctx := context.Background()
@@ -11870,7 +11870,7 @@ func (s *endpointUpdateContext) SetUriScheme(value string) EndpointUpdateContext
 	return s
 }
 
-// TargetHost gets the TargetHost property
+// TargetHost gets or sets the target host.
 func (s *endpointUpdateContext) TargetHost() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11885,7 +11885,7 @@ func (s *endpointUpdateContext) TargetHost() (string, error) {
 	return decodeAs[string](result)
 }
 
-// TargetPort gets the TargetPort property
+// TargetPort gets or sets the target port.
 func (s *endpointUpdateContext) TargetPort() (float64, error) {
 	if s.err != nil { var zero float64; return zero, s.err }
 	ctx := context.Background()
@@ -11900,7 +11900,7 @@ func (s *endpointUpdateContext) TargetPort() (float64, error) {
 	return decodeAs[float64](result)
 }
 
-// TlsEnabled gets the TlsEnabled property
+// TlsEnabled gets or sets a value indicating whether TLS is enabled.
 func (s *endpointUpdateContext) TlsEnabled() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -11915,7 +11915,7 @@ func (s *endpointUpdateContext) TlsEnabled() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// Transport gets the Transport property
+// Transport gets or sets the transport.
 func (s *endpointUpdateContext) Transport() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11930,7 +11930,7 @@ func (s *endpointUpdateContext) Transport() (string, error) {
 	return decodeAs[string](result)
 }
 
-// UriScheme gets the UriScheme property
+// UriScheme gets or sets the URI scheme.
 func (s *endpointUpdateContext) UriScheme() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -11965,7 +11965,7 @@ func newEnvironmentCallbackContextFromHandle(h *handle, c *client) EnvironmentCa
 	return &environmentCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Environment gets the environment variable editor
+// Environment gets the editor used to set environment variables in polyglot callbacks.
 func (s *environmentCallbackContext) Environment() EnvironmentEditor {
 	if s.err != nil { return &environmentEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -11984,7 +11984,7 @@ func (s *environmentCallbackContext) Environment() EnvironmentEditor {
 	return &environmentEditor{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExecutionContext gets the execution context for this callback invocation
+// ExecutionContext gets the execution context associated with this invocation of the AppHost.
 func (s *environmentCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -12003,7 +12003,7 @@ func (s *environmentCallbackContext) ExecutionContext() DistributedApplicationEx
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Log gets the callback logger facade
+// Log gets the logger facade used by polyglot callbacks.
 func (s *environmentCallbackContext) Log() LogFacade {
 	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -12022,7 +12022,7 @@ func (s *environmentCallbackContext) Log() LogFacade {
 	return &logFacade{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Resource gets the resource associated with this callback
+// Resource the resource associated with this callback context.
 func (s *environmentCallbackContext) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -12056,7 +12056,7 @@ func newEnvironmentEditorFromHandle(h *handle, c *client) EnvironmentEditor {
 	return &environmentEditor{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Set sets an environment variable
+// Set sets an environment variable.
 // Allowed types for parameter value: string, *ReferenceExpression, EndpointReference, ParameterResource, ResourceWithConnectionString, ExpressionValue.
 func (s *environmentEditor) Set(name string, value any) error {
 	if s.err != nil { return s.err }
@@ -12098,7 +12098,7 @@ func newEventingSubscriberRegistrationContextFromHandle(h *handle, c *client) Ev
 	return &eventingSubscriberRegistrationContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken gets the CancellationToken property
+// CancellationToken the cancellation token associated with the subscriber registration.
 func (s *eventingSubscriberRegistrationContext) CancellationToken() (*CancellationToken, error) {
 	if s.err != nil { var zero *CancellationToken; return zero, s.err }
 	ctx := context.Background()
@@ -12113,7 +12113,7 @@ func (s *eventingSubscriberRegistrationContext) CancellationToken() (*Cancellati
 	return decodeAs[*CancellationToken](result)
 }
 
-// ExecutionContext gets the ExecutionContext property
+// ExecutionContext the execution context for the AppHost invocation.
 func (s *eventingSubscriberRegistrationContext) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -12132,7 +12132,7 @@ func (s *eventingSubscriberRegistrationContext) ExecutionContext() DistributedAp
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// OnAfterPublish subscribes an eventing subscriber to the AfterPublish event
+// OnAfterPublish subscribes to the AfterPublish event from an eventing subscriber registration context.
 func (s *eventingSubscriberRegistrationContext) OnAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -12159,7 +12159,7 @@ func (s *eventingSubscriberRegistrationContext) OnAfterPublish(callback func(arg
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// OnAfterResourcesCreated subscribes an eventing subscriber to the AfterResourcesCreated event
+// OnAfterResourcesCreated subscribes to the AfterResourcesCreated event from an eventing subscriber registration context.
 func (s *eventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -12186,7 +12186,7 @@ func (s *eventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// OnBeforePublish subscribes an eventing subscriber to the BeforePublish event
+// OnBeforePublish subscribes to the BeforePublish event from an eventing subscriber registration context.
 func (s *eventingSubscriberRegistrationContext) OnBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -12213,7 +12213,7 @@ func (s *eventingSubscriberRegistrationContext) OnBeforePublish(callback func(ar
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// OnBeforeStart subscribes an eventing subscriber to the BeforeStart event
+// OnBeforeStart subscribes to the BeforeStart event from an eventing subscriber registration context.
 func (s *eventingSubscriberRegistrationContext) OnBeforeStart(callback func(arg BeforeStartEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -12345,7 +12345,7 @@ func newExecutableResourceFromHandle(h *handle, c *client) ExecutableResource {
 	return &executableResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsHttp2Service configures resource for HTTP/2
+// AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *executableResource) AsHttp2Service() ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12356,7 +12356,7 @@ func (s *executableResource) AsHttp2Service() ExecutableResource {
 	return s
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *executableResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -12375,7 +12375,7 @@ func (s *executableResource) CreateExecutionConfiguration() ExecutionConfigurati
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *executableResource) ExcludeFromManifest() ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12386,7 +12386,7 @@ func (s *executableResource) ExcludeFromManifest() ExecutableResource {
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *executableResource) ExcludeFromMcp() ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12417,7 +12417,7 @@ func (s *executableResource) GetEndpoint(name string) EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *executableResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -12432,7 +12432,7 @@ func (s *executableResource) GetResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *executableResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12451,7 +12451,7 @@ func (s *executableResource) OnBeforeResourceStarted(callback func(arg BeforeRes
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *executableResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12470,7 +12470,7 @@ func (s *executableResource) OnInitializeResource(callback func(arg InitializeRe
 	return s
 }
 
-// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event.
 func (s *executableResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12489,7 +12489,7 @@ func (s *executableResource) OnResourceEndpointsAllocated(callback func(arg Reso
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *executableResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12508,7 +12508,7 @@ func (s *executableResource) OnResourceReady(callback func(arg ResourceReadyEven
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *executableResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12598,7 +12598,7 @@ func (s *executableResource) WaitFor(dependency Resource, options ...*WaitForOpt
 	return s
 }
 
-// WaitForCompletion waits for resource completion
+// WaitForCompletion waits for the dependency resource to enter the Exited or Finished state before starting the resource.
 func (s *executableResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ExecutableResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -12638,7 +12638,7 @@ func (s *executableResource) WaitForStart(dependency Resource, options ...*WaitF
 	return s
 }
 
-// WithArgs adds arguments
+// WithArgs adds arguments to be passed to a resource that supports arguments when it is launched.
 func (s *executableResource) WithArgs(args []string) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12650,7 +12650,7 @@ func (s *executableResource) WithArgs(args []string) ExecutableResource {
 	return s
 }
 
-// WithArgsCallback sets command-line arguments via callback
+// WithArgsCallback adds a callback to be executed with a list of command-line arguments when a resource is started.
 func (s *executableResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12740,7 +12740,7 @@ func (s *executableResource) WithCommand(name string, displayName string, execut
 	return s
 }
 
-// WithComputeEnvironment configures the compute environment for the compute resource
+// WithComputeEnvironment configures the compute environment for the compute resource.
 func (s *executableResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ExecutableResource {
 	if s.err != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
@@ -12765,7 +12765,7 @@ func (s *executableResource) WithConfig(config *TestConfigDto) ExecutableResourc
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *executableResource) WithContainerRegistry(registry Resource) ExecutableResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -12815,7 +12815,7 @@ func (s *executableResource) WithDependency(dependency ResourceWithConnectionStr
 	return s
 }
 
-// WithDeveloperCertificateTrust configures developer certificate trust
+// WithDeveloperCertificateTrust indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
 func (s *executableResource) WithDeveloperCertificateTrust(trust bool) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12827,7 +12827,7 @@ func (s *executableResource) WithDeveloperCertificateTrust(trust bool) Executabl
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *executableResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12890,7 +12890,7 @@ func (s *executableResource) WithEndpointCallback(endpointName string, callback 
 	return s
 }
 
-// WithEndpointProxySupport configures endpoint proxy support
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *executableResource) WithEndpointProxySupport(proxyEnabled bool) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12934,7 +12934,7 @@ func (s *executableResource) WithEnvironment(name string, value any) ExecutableR
 	return s
 }
 
-// WithEnvironmentCallback sets environment variables via callback
+// WithEnvironmentCallback allows for the population of environment variables on a resource.
 func (s *executableResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12965,7 +12965,7 @@ func (s *executableResource) WithEnvironmentVariables(variables map[string]strin
 	return s
 }
 
-// WithExecutableCommand sets the executable command
+// WithExecutableCommand sets the command for the executable resource.
 func (s *executableResource) WithExecutableCommand(command string) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -12988,7 +12988,7 @@ func (s *executableResource) WithExplicitStart() ExecutableResource {
 	return s
 }
 
-// WithExternalHttpEndpoints makes HTTP endpoints externally accessible
+// WithExternalHttpEndpoints marks existing http or https endpoints on a resource as external.
 func (s *executableResource) WithExternalHttpEndpoints() ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13075,7 +13075,7 @@ func (s *executableResource) WithHttpEndpointCallback(callback func(obj Endpoint
 	return s
 }
 
-// WithHttpHealthCheck adds an HTTP health check
+// WithHttpHealthCheck adds a health check to the resource which is mapped to a specific endpoint.
 func (s *executableResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13112,7 +13112,7 @@ func (s *executableResource) WithHttpProbe(probeType ProbeType, options ...*With
 	return s
 }
 
-// WithHttpsDeveloperCertificate configures HTTPS with a developer certificate
+// WithHttpsDeveloperCertificate indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
 func (s *executableResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13174,7 +13174,7 @@ func (s *executableResource) WithHttpsEndpointCallback(callback func(obj Endpoin
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *executableResource) WithIconName(iconName string, options ...*WithIconNameOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13193,7 +13193,7 @@ func (s *executableResource) WithIconName(iconName string, options ...*WithIconN
 	return s
 }
 
-// WithImagePushOptions sets image push options via callback
+// WithImagePushOptions adds an asynchronous callback to configure container image push options for the resource.
 func (s *executableResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13212,7 +13212,7 @@ func (s *executableResource) WithImagePushOptions(callback func(arg ContainerIma
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *executableResource) WithLifetimeOf(sourceBuilder Resource) ExecutableResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -13225,7 +13225,7 @@ func (s *executableResource) WithLifetimeOf(sourceBuilder Resource) ExecutableRe
 	return s
 }
 
-// WithMcpServer configures an MCP server endpoint on the resource
+// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *executableResource) WithMcpServer(options ...*WithMcpServerOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13451,7 +13451,7 @@ func (s *executableResource) WithOtlpExporter(options ...*WithOtlpExporterOption
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *executableResource) WithParentProcessLifetime(parentProcessId float64) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13476,7 +13476,7 @@ func (s *executableResource) WithParentRelationship(parent Resource) ExecutableR
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *executableResource) WithPersistentLifetime() ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13487,7 +13487,7 @@ func (s *executableResource) WithPersistentLifetime() ExecutableResource {
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *executableResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13506,7 +13506,7 @@ func (s *executableResource) WithPipelineConfiguration(callback func(obj Pipelin
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *executableResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13533,7 +13533,7 @@ func (s *executableResource) WithPipelineStepFactory(stepName string, callback f
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *executableResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13547,7 +13547,7 @@ func (s *executableResource) WithProcessCommand(commandName string, displayName 
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *executableResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13600,7 +13600,7 @@ func (s *executableResource) WithReference(source any, options ...*WithReference
 	return s
 }
 
-// WithReferenceEnvironment configures which reference values are injected into environment variables
+// WithReferenceEnvironment configures how information is injected into environment variables when the resource references other resources.
 func (s *executableResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13612,7 +13612,7 @@ func (s *executableResource) WithReferenceEnvironment(options *ReferenceEnvironm
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *executableResource) WithRelationship(resourceBuilder Resource, type_ string) ExecutableResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -13626,7 +13626,7 @@ func (s *executableResource) WithRelationship(resourceBuilder Resource, type_ st
 	return s
 }
 
-// WithRemoteImageName sets the remote image name for publishing
+// WithRemoteImageName sets the remote image name (without registry endpoint or tag) for container push operations.
 func (s *executableResource) WithRemoteImageName(remoteImageName string) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13638,7 +13638,7 @@ func (s *executableResource) WithRemoteImageName(remoteImageName string) Executa
 	return s
 }
 
-// WithRemoteImageTag sets the remote image tag for publishing
+// WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *executableResource) WithRemoteImageTag(remoteImageTag string) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13650,7 +13650,7 @@ func (s *executableResource) WithRemoteImageTag(remoteImageTag string) Executabl
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *executableResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13669,7 +13669,7 @@ func (s *executableResource) WithRequiredCommand(command string, options ...*Wit
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *executableResource) WithSessionLifetime() ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13737,7 +13737,7 @@ func (s *executableResource) WithUrl(url any, options ...*WithUrlOptions) Execut
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *executableResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13760,7 +13760,7 @@ func (s *executableResource) WithUrlForEndpoint(endpointName string, callback fu
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *executableResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13797,7 +13797,7 @@ func (s *executableResource) WithValidator(validator func(arg TestResourceContex
 	return s
 }
 
-// WithWorkingDirectory sets the executable working directory
+// WithWorkingDirectory sets the working directory for the executable resource.
 func (s *executableResource) WithWorkingDirectory(workingDirectory string) ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13809,7 +13809,7 @@ func (s *executableResource) WithWorkingDirectory(workingDirectory string) Execu
 	return s
 }
 
-// WithoutHttpsCertificate removes HTTPS certificate configuration
+// WithoutHttpsCertificate disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *executableResource) WithoutHttpsCertificate() ExecutableResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13841,7 +13841,7 @@ func newExecuteCommandContextFromHandle(h *handle, c *client) ExecuteCommandCont
 	return &executeCommandContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Arguments gets the Arguments property
+// Arguments gets the invocation arguments supplied by the client when the command is executed.
 func (s *executeCommandContext) Arguments() InteractionInputCollection {
 	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -13860,7 +13860,7 @@ func (s *executeCommandContext) Arguments() InteractionInputCollection {
 	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// CancellationToken gets the CancellationToken property
+// CancellationToken the cancellation token.
 func (s *executeCommandContext) CancellationToken() (*CancellationToken, error) {
 	if s.err != nil { var zero *CancellationToken; return zero, s.err }
 	ctx := context.Background()
@@ -13875,7 +13875,7 @@ func (s *executeCommandContext) CancellationToken() (*CancellationToken, error) 
 	return decodeAs[*CancellationToken](result)
 }
 
-// Logger gets the Logger property
+// Logger the logger for the resource.
 func (s *executeCommandContext) Logger() Logger {
 	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -13894,7 +13894,7 @@ func (s *executeCommandContext) Logger() Logger {
 	return &logger{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ResourceName gets the ResourceName property
+// ResourceName the resource name.
 func (s *executeCommandContext) ResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -13909,7 +13909,7 @@ func (s *executeCommandContext) ResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// ServiceProvider gets the ServiceProvider property
+// ServiceProvider the service provider.
 func (s *executeCommandContext) ServiceProvider() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -13949,7 +13949,7 @@ func newExecutionConfigurationBuilderFromHandle(h *handle, c *client) ExecutionC
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Build builds the execution configuration
+// Build builds the execution configuration for the specified builder.
 func (s *executionConfigurationBuilder) Build(executionContext DistributedApplicationExecutionContext, options ...*BuildOptions) ExecutionConfigurationResult {
 	if s.err != nil { return &executionConfigurationResult{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	if executionContext != nil { if err := executionContext.Err(); err != nil { return &executionConfigurationResult{resourceBuilderBase: newErroredResourceBuilder(err, s.client)} } }
@@ -13983,7 +13983,7 @@ func (s *executionConfigurationBuilder) Build(executionContext DistributedApplic
 	return &executionConfigurationResult{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// WithArgumentsConfig adds an arguments configuration gatherer
+// WithArgumentsConfig adds a command line arguments configuration gatherer to the builder.
 func (s *executionConfigurationBuilder) WithArgumentsConfig() ExecutionConfigurationBuilder {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -13994,7 +13994,7 @@ func (s *executionConfigurationBuilder) WithArgumentsConfig() ExecutionConfigura
 	return s
 }
 
-// WithCertificateTrustConfig adds a certificate trust configuration gatherer
+// WithCertificateTrustConfig adds a certificate trust configuration gatherer to the builder.
 func (s *executionConfigurationBuilder) WithCertificateTrustConfig(configContextFactory func(arg CertificateTrustScope) *CertificateTrustExecutionConfigurationContext) ExecutionConfigurationBuilder {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14012,7 +14012,7 @@ func (s *executionConfigurationBuilder) WithCertificateTrustConfig(configContext
 	return s
 }
 
-// WithEnvironmentVariablesConfig adds an environment variables configuration gatherer
+// WithEnvironmentVariablesConfig adds an environment variables configuration gatherer to the builder.
 func (s *executionConfigurationBuilder) WithEnvironmentVariablesConfig() ExecutionConfigurationBuilder {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14023,7 +14023,7 @@ func (s *executionConfigurationBuilder) WithEnvironmentVariablesConfig() Executi
 	return s
 }
 
-// WithHttpsCertificateConfig adds an HTTPS certificate configuration gatherer
+// WithHttpsCertificateConfig adds an HTTPS certificate configuration gatherer using certificate metadata instead of a raw X509 certificate.
 func (s *executionConfigurationBuilder) WithHttpsCertificateConfig(configContextFactory func(arg *HttpsCertificateInfo) *HttpsCertificateExecutionConfigurationContext) ExecutionConfigurationBuilder {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14059,7 +14059,7 @@ func newExecutionConfigurationResultFromHandle(h *handle, c *client) ExecutionCo
 	return &executionConfigurationResult{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// GetCertificateTrustData gets certificate trust execution-configuration data
+// GetCertificateTrustData gets certificate trust execution-configuration data when present.
 func (s *executionConfigurationResult) GetCertificateTrustData() (*CertificateTrustExecutionConfigurationExportData, error) {
 	if s.err != nil { var zero *CertificateTrustExecutionConfigurationExportData; return zero, s.err }
 	ctx := context.Background()
@@ -14074,7 +14074,7 @@ func (s *executionConfigurationResult) GetCertificateTrustData() (*CertificateTr
 	return decodeAs[*CertificateTrustExecutionConfigurationExportData](result)
 }
 
-// GetHttpsCertificateData gets HTTPS certificate execution-configuration data
+// GetHttpsCertificateData gets HTTPS certificate execution-configuration data when present.
 func (s *executionConfigurationResult) GetHttpsCertificateData() (*HttpsCertificateExecutionConfigurationExportData, error) {
 	if s.err != nil { var zero *HttpsCertificateExecutionConfigurationExportData; return zero, s.err }
 	ctx := context.Background()
@@ -14157,7 +14157,7 @@ func newExternalServiceResourceFromHandle(h *handle, c *client) ExternalServiceR
 	return &externalServiceResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *externalServiceResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -14176,7 +14176,7 @@ func (s *externalServiceResource) CreateExecutionConfiguration() ExecutionConfig
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *externalServiceResource) ExcludeFromManifest() ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14187,7 +14187,7 @@ func (s *externalServiceResource) ExcludeFromManifest() ExternalServiceResource 
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *externalServiceResource) ExcludeFromMcp() ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14198,7 +14198,7 @@ func (s *externalServiceResource) ExcludeFromMcp() ExternalServiceResource {
 	return s
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *externalServiceResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -14213,7 +14213,7 @@ func (s *externalServiceResource) GetResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *externalServiceResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14232,7 +14232,7 @@ func (s *externalServiceResource) OnBeforeResourceStarted(callback func(arg Befo
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *externalServiceResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14251,7 +14251,7 @@ func (s *externalServiceResource) OnInitializeResource(callback func(arg Initial
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *externalServiceResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14270,7 +14270,7 @@ func (s *externalServiceResource) OnResourceReady(callback func(arg ResourceRead
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *externalServiceResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14373,7 +14373,7 @@ func (s *externalServiceResource) WithConfig(config *TestConfigDto) ExternalServ
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *externalServiceResource) WithContainerRegistry(registry Resource) ExternalServiceResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -14423,7 +14423,7 @@ func (s *externalServiceResource) WithDependency(dependency ResourceWithConnecti
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *externalServiceResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14476,7 +14476,7 @@ func (s *externalServiceResource) WithHealthCheck(key string) ExternalServiceRes
 	return s
 }
 
-// WithHttpHealthCheck adds an HTTP health check to the external service
+// WithHttpHealthCheck adds an HTTP health check to the external service for polyglot app hosts.
 func (s *externalServiceResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14494,7 +14494,7 @@ func (s *externalServiceResource) WithHttpHealthCheck(options ...*WithHttpHealth
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *externalServiceResource) WithIconName(iconName string, options ...*WithIconNameOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14513,7 +14513,7 @@ func (s *externalServiceResource) WithIconName(iconName string, options ...*With
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *externalServiceResource) WithLifetimeOf(sourceBuilder Resource) ExternalServiceResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -14716,7 +14716,7 @@ func (s *externalServiceResource) WithOptionalString(options ...*WithOptionalStr
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *externalServiceResource) WithParentProcessLifetime(parentProcessId float64) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14741,7 +14741,7 @@ func (s *externalServiceResource) WithParentRelationship(parent Resource) Extern
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *externalServiceResource) WithPersistentLifetime() ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14752,7 +14752,7 @@ func (s *externalServiceResource) WithPersistentLifetime() ExternalServiceResour
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *externalServiceResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14771,7 +14771,7 @@ func (s *externalServiceResource) WithPipelineConfiguration(callback func(obj Pi
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *externalServiceResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14798,7 +14798,7 @@ func (s *externalServiceResource) WithPipelineStepFactory(stepName string, callb
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *externalServiceResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14812,7 +14812,7 @@ func (s *externalServiceResource) WithProcessCommand(commandName string, display
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *externalServiceResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14839,7 +14839,7 @@ func (s *externalServiceResource) WithProcessCommandFactory(commandName string, 
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *externalServiceResource) WithRelationship(resourceBuilder Resource, type_ string) ExternalServiceResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -14853,7 +14853,7 @@ func (s *externalServiceResource) WithRelationship(resourceBuilder Resource, typ
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *externalServiceResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14872,7 +14872,7 @@ func (s *externalServiceResource) WithRequiredCommand(command string, options ..
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *externalServiceResource) WithSessionLifetime() ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14940,7 +14940,7 @@ func (s *externalServiceResource) WithUrl(url any, options ...*WithUrlOptions) E
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *externalServiceResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -14963,7 +14963,7 @@ func (s *externalServiceResource) WithUrlForEndpoint(endpointName string, callba
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *externalServiceResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ExternalServiceResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -15071,7 +15071,7 @@ func (s *hostEnvironment) EnvironmentName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// IsDevelopment checks if running in Development environment
+// IsDevelopment checks if the environment is Development.
 func (s *hostEnvironment) IsDevelopment() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -15086,7 +15086,7 @@ func (s *hostEnvironment) IsDevelopment() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// IsEnvironment checks if the environment matches the specified name
+// IsEnvironment checks if the environment matches the specified name.
 func (s *hostEnvironment) IsEnvironment(environmentName string) (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -15102,7 +15102,7 @@ func (s *hostEnvironment) IsEnvironment(environmentName string) (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// IsProduction checks if running in Production environment
+// IsProduction checks if the environment is Production.
 func (s *hostEnvironment) IsProduction() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -15117,7 +15117,7 @@ func (s *hostEnvironment) IsProduction() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// IsStaging checks if running in Staging environment
+// IsStaging checks if the environment is Staging.
 func (s *hostEnvironment) IsStaging() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -15221,7 +15221,7 @@ func newInitializeResourceEventFromHandle(h *handle, c *client) InitializeResour
 	return &initializeResourceEvent{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Eventing gets the Eventing property
+// Eventing the `IDistributedApplicationEventing` service for the app host.
 func (s *initializeResourceEvent) Eventing() DistributedApplicationEventing {
 	if s.err != nil { return &distributedApplicationEventing{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -15240,7 +15240,7 @@ func (s *initializeResourceEvent) Eventing() DistributedApplicationEventing {
 	return &distributedApplicationEventing{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Logger gets the Logger property
+// Logger an instance of `ILogger` that can be used to log messages for the resource.
 func (s *initializeResourceEvent) Logger() Logger {
 	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -15259,7 +15259,7 @@ func (s *initializeResourceEvent) Logger() Logger {
 	return &logger{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Notifications gets the Notifications property
+// Notifications the `ResourceNotificationService` for the app host.
 func (s *initializeResourceEvent) Notifications() ResourceNotificationService {
 	if s.err != nil { return &resourceNotificationService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -15295,7 +15295,7 @@ func (s *initializeResourceEvent) Resource() Resource {
 	return typed
 }
 
-// Services gets the Services property
+// Services the `IServiceProvider` for the app host.
 func (s *initializeResourceEvent) Services() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -15333,7 +15333,7 @@ func newInputsDialogValidationContextFromHandle(h *handle, c *client) InputsDial
 	return &inputsDialogValidationContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AddValidationError invokes the AddValidationError method
+// AddValidationError adds a validation error for the input with the specified name.
 func (s *inputsDialogValidationContext) AddValidationError(inputName string, errorMessage string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -15346,7 +15346,7 @@ func (s *inputsDialogValidationContext) AddValidationError(inputName string, err
 	return err
 }
 
-// CancellationToken gets the CancellationToken property
+// CancellationToken gets the cancellation token for the validation operation.
 func (s *inputsDialogValidationContext) CancellationToken() (*CancellationToken, error) {
 	if s.err != nil { var zero *CancellationToken; return zero, s.err }
 	ctx := context.Background()
@@ -15361,7 +15361,7 @@ func (s *inputsDialogValidationContext) CancellationToken() (*CancellationToken,
 	return decodeAs[*CancellationToken](result)
 }
 
-// Inputs gets the Inputs property
+// Inputs gets the inputs that are being validated.
 func (s *inputsDialogValidationContext) Inputs() InteractionInputCollection {
 	if s.err != nil { return &interactionInputCollection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -15397,7 +15397,7 @@ func newInteractionInputCollectionFromHandle(h *handle, c *client) InteractionIn
 	return &interactionInputCollection{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// ToArray invokes the ToArray method
+// ToArray gets all inputs in declaration order.
 func (s *interactionInputCollection) ToArray() ([]*InteractionInput, error) {
 	if s.err != nil { var zero []*InteractionInput; return zero, s.err }
 	ctx := context.Background()
@@ -15432,7 +15432,7 @@ func newLogFacadeFromHandle(h *handle, c *client) LogFacade {
 	return &logFacade{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Debug writes a debug log message
+// Debug writes a debug log message.
 func (s *logFacade) Debug(message string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -15444,7 +15444,7 @@ func (s *logFacade) Debug(message string) error {
 	return err
 }
 
-// Error writes an error log message
+// Error writes an error log message.
 func (s *logFacade) Error(message string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -15456,7 +15456,7 @@ func (s *logFacade) Error(message string) error {
 	return err
 }
 
-// Info writes an informational log message
+// Info writes an informational log message.
 func (s *logFacade) Info(message string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -15468,7 +15468,7 @@ func (s *logFacade) Info(message string) error {
 	return err
 }
 
-// Warning writes a warning log message
+// Warning writes a warning log message.
 func (s *logFacade) Warning(message string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -15501,7 +15501,7 @@ func newLoggerFromHandle(h *handle, c *client) Logger {
 	return &logger{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Log logs a message with specified level
+// Log logs a message with a specified log level.
 func (s *logger) Log(level string, message string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -15514,7 +15514,7 @@ func (s *logger) Log(level string, message string) error {
 	return err
 }
 
-// LogDebug logs a debug message
+// LogDebug logs a debug message.
 func (s *logger) LogDebug(message string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -15526,7 +15526,7 @@ func (s *logger) LogDebug(message string) error {
 	return err
 }
 
-// LogError logs an error message
+// LogError logs an error message.
 func (s *logger) LogError(message string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -15538,7 +15538,7 @@ func (s *logger) LogError(message string) error {
 	return err
 }
 
-// LogInformation logs an information message
+// LogInformation logs an information message.
 func (s *logger) LogInformation(message string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -15550,7 +15550,7 @@ func (s *logger) LogInformation(message string) error {
 	return err
 }
 
-// LogWarning logs a warning message
+// LogWarning logs a warning message.
 func (s *logger) LogWarning(message string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -15579,7 +15579,7 @@ func newLoggerFactoryFromHandle(h *handle, c *client) LoggerFactory {
 	return &loggerFactory{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CreateLogger creates a logger for a category
+// CreateLogger creates a logger for the specified category name.
 func (s *loggerFactory) CreateLogger(categoryName string) Logger {
 	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -15668,7 +15668,7 @@ func newParameterResourceFromHandle(h *handle, c *client) ParameterResource {
 	return &parameterResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *parameterResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -15687,7 +15687,7 @@ func (s *parameterResource) CreateExecutionConfiguration() ExecutionConfiguratio
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *parameterResource) ExcludeFromManifest() ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -15698,7 +15698,7 @@ func (s *parameterResource) ExcludeFromManifest() ParameterResource {
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *parameterResource) ExcludeFromMcp() ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -15709,7 +15709,7 @@ func (s *parameterResource) ExcludeFromMcp() ParameterResource {
 	return s
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *parameterResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -15724,7 +15724,7 @@ func (s *parameterResource) GetResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *parameterResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -15743,7 +15743,7 @@ func (s *parameterResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *parameterResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -15762,7 +15762,7 @@ func (s *parameterResource) OnInitializeResource(callback func(arg InitializeRes
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *parameterResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -15781,7 +15781,7 @@ func (s *parameterResource) OnResourceReady(callback func(arg ResourceReadyEvent
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *parameterResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -15884,7 +15884,7 @@ func (s *parameterResource) WithConfig(config *TestConfigDto) ParameterResource 
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *parameterResource) WithContainerRegistry(registry Resource) ParameterResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -15921,7 +15921,7 @@ func (s *parameterResource) WithCreatedAt(createdAt string) ParameterResource {
 	return s
 }
 
-// WithCustomInput sets a custom input for the parameter
+// WithCustomInput sets a custom input for the parameter resource from a polyglot app host.
 func (s *parameterResource) WithCustomInput(options *ParameterCustomInputOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -15946,7 +15946,7 @@ func (s *parameterResource) WithDependency(dependency ResourceWithConnectionStri
 	return s
 }
 
-// WithDescription sets a parameter description
+// WithDescription sets the description of the parameter resource.
 func (s *parameterResource) WithDescription(description string, options ...*WithDescriptionOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -15965,7 +15965,7 @@ func (s *parameterResource) WithDescription(description string, options ...*With
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *parameterResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16018,7 +16018,7 @@ func (s *parameterResource) WithHealthCheck(key string) ParameterResource {
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *parameterResource) WithIconName(iconName string, options ...*WithIconNameOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16037,7 +16037,7 @@ func (s *parameterResource) WithIconName(iconName string, options ...*WithIconNa
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *parameterResource) WithLifetimeOf(sourceBuilder Resource) ParameterResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -16240,7 +16240,7 @@ func (s *parameterResource) WithOptionalString(options ...*WithOptionalStringOpt
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *parameterResource) WithParentProcessLifetime(parentProcessId float64) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16265,7 +16265,7 @@ func (s *parameterResource) WithParentRelationship(parent Resource) ParameterRes
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *parameterResource) WithPersistentLifetime() ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16276,7 +16276,7 @@ func (s *parameterResource) WithPersistentLifetime() ParameterResource {
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *parameterResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16295,7 +16295,7 @@ func (s *parameterResource) WithPipelineConfiguration(callback func(obj Pipeline
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *parameterResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16322,7 +16322,7 @@ func (s *parameterResource) WithPipelineStepFactory(stepName string, callback fu
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *parameterResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16336,7 +16336,7 @@ func (s *parameterResource) WithProcessCommand(commandName string, displayName s
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *parameterResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16363,7 +16363,7 @@ func (s *parameterResource) WithProcessCommandFactory(commandName string, displa
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *parameterResource) WithRelationship(resourceBuilder Resource, type_ string) ParameterResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -16377,7 +16377,7 @@ func (s *parameterResource) WithRelationship(resourceBuilder Resource, type_ str
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *parameterResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16396,7 +16396,7 @@ func (s *parameterResource) WithRequiredCommand(command string, options ...*With
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *parameterResource) WithSessionLifetime() ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16464,7 +16464,7 @@ func (s *parameterResource) WithUrl(url any, options ...*WithUrlOptions) Paramet
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *parameterResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16487,7 +16487,7 @@ func (s *parameterResource) WithUrlForEndpoint(endpointName string, callback fun
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *parameterResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ParameterResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -16543,7 +16543,7 @@ func newPipelineConfigurationContextFromHandle(h *handle, c *client) PipelineCon
 	return &pipelineConfigurationContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// GetSteps gets pipeline steps with the specified tag
+// GetSteps gets all pipeline steps with the specified tag.
 func (s *pipelineConfigurationContext) GetSteps(tag string) ([]PipelineStep, error) {
 	if s.err != nil { var zero []PipelineStep; return zero, s.err }
 	ctx := context.Background()
@@ -16559,7 +16559,7 @@ func (s *pipelineConfigurationContext) GetSteps(tag string) ([]PipelineStep, err
 	return decodeAs[[]PipelineStep](result)
 }
 
-// Log gets the callback logger facade
+// Log gets the logger facade used by polyglot callbacks.
 func (s *pipelineConfigurationContext) Log() LogFacade {
 	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -16578,7 +16578,7 @@ func (s *pipelineConfigurationContext) Log() LogFacade {
 	return &logFacade{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Pipeline gets the pipeline editor
+// Pipeline gets the pipeline editor used by polyglot callbacks.
 func (s *pipelineConfigurationContext) Pipeline() PipelineEditor {
 	if s.err != nil { return &pipelineEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -16620,7 +16620,7 @@ func newPipelineContextFromHandle(h *handle, c *client) PipelineContext {
 	return &pipelineContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken gets the CancellationToken property
+// CancellationToken gets the cancellation token for the pipeline operation.
 func (s *pipelineContext) CancellationToken() (*CancellationToken, error) {
 	if s.err != nil { var zero *CancellationToken; return zero, s.err }
 	ctx := context.Background()
@@ -16635,7 +16635,7 @@ func (s *pipelineContext) CancellationToken() (*CancellationToken, error) {
 	return decodeAs[*CancellationToken](result)
 }
 
-// ExecutionContext gets the ExecutionContext property
+// ExecutionContext gets the execution context for the distributed application.
 func (s *pipelineContext) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -16654,7 +16654,7 @@ func (s *pipelineContext) ExecutionContext() DistributedApplicationExecutionCont
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Logger gets the Logger property
+// Logger gets the logger for pipeline operations.
 func (s *pipelineContext) Logger() Logger {
 	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -16673,7 +16673,7 @@ func (s *pipelineContext) Logger() Logger {
 	return &logger{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Model gets the Model property
+// Model gets the distributed application model to be deployed.
 func (s *pipelineContext) Model() DistributedApplicationModel {
 	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -16692,7 +16692,7 @@ func (s *pipelineContext) Model() DistributedApplicationModel {
 	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Services gets the Services property
+// Services gets the service provider for dependency resolution.
 func (s *pipelineContext) Services() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -16735,7 +16735,7 @@ func (s *pipelineContext) SetCancellationToken(options ...*SetCancellationTokenO
 	return s
 }
 
-// Summary gets the Summary property
+// Summary gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
 func (s *pipelineContext) Summary() PipelineSummary {
 	if s.err != nil { return &pipelineSummary{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -16772,7 +16772,7 @@ func newPipelineEditorFromHandle(h *handle, c *client) PipelineEditor {
 	return &pipelineEditor{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Steps gets all configured pipeline steps
+// Steps gets all configured pipeline steps.
 func (s *pipelineEditor) Steps() ([]PipelineStep, error) {
 	if s.err != nil { var zero []PipelineStep; return zero, s.err }
 	ctx := context.Background()
@@ -16787,7 +16787,7 @@ func (s *pipelineEditor) Steps() ([]PipelineStep, error) {
 	return decodeAs[[]PipelineStep](result)
 }
 
-// StepsByTag gets pipeline steps with the specified tag
+// StepsByTag gets all pipeline steps that have the specified tag.
 func (s *pipelineEditor) StepsByTag(tag string) ([]PipelineStep, error) {
 	if s.err != nil { var zero []PipelineStep; return zero, s.err }
 	ctx := context.Background()
@@ -16830,7 +16830,7 @@ func newPipelineStepFromHandle(h *handle, c *client) PipelineStep {
 	return &pipelineStep{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AddTag adds a tag to the step
+// AddTag adds a tag to the step.
 func (s *pipelineStep) AddTag(tag string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -16842,7 +16842,7 @@ func (s *pipelineStep) AddTag(tag string) error {
 	return err
 }
 
-// DependsOn adds a dependency on another step by name
+// DependsOn adds a dependency on another step.
 func (s *pipelineStep) DependsOn(stepName string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -16854,7 +16854,7 @@ func (s *pipelineStep) DependsOn(stepName string) error {
 	return err
 }
 
-// DependsOnSteps gets the step names that this step depends on
+// DependsOnSteps gets or initializes the list of step names that this step depends on.
 func (s *pipelineStep) DependsOnSteps() *List[string] {
 	if s.dependsOnSteps == nil {
 		s.dependsOnSteps = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps")
@@ -16862,7 +16862,7 @@ func (s *pipelineStep) DependsOnSteps() *List[string] {
 	return s.dependsOnSteps
 }
 
-// Description gets the human-readable description of the step
+// Description gets or initializes the description of the step.
 func (s *pipelineStep) Description() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -16877,7 +16877,7 @@ func (s *pipelineStep) Description() (string, error) {
 	return decodeAs[string](result)
 }
 
-// Name gets the unique name of the step
+// Name gets or initializes the unique name of the step.
 func (s *pipelineStep) Name() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -16892,7 +16892,7 @@ func (s *pipelineStep) Name() (string, error) {
 	return decodeAs[string](result)
 }
 
-// RequiredBy specifies that another step requires this step by name
+// RequiredBy specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
 func (s *pipelineStep) RequiredBy(stepName string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -16904,7 +16904,7 @@ func (s *pipelineStep) RequiredBy(stepName string) error {
 	return err
 }
 
-// RequiredBySteps gets the step names that require this step to complete
+// RequiredBySteps gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships.
 func (s *pipelineStep) RequiredBySteps() *List[string] {
 	if s.requiredBySteps == nil {
 		s.requiredBySteps = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps")
@@ -16912,7 +16912,7 @@ func (s *pipelineStep) RequiredBySteps() *List[string] {
 	return s.requiredBySteps
 }
 
-// Tags gets the tags that categorize this step
+// Tags gets or initializes the list of tags that categorize this step.
 func (s *pipelineStep) Tags() *List[string] {
 	if s.tags == nil {
 		s.tags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.tags")
@@ -16944,7 +16944,7 @@ func newPipelineStepContextFromHandle(h *handle, c *client) PipelineStepContext 
 	return &pipelineStepContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken gets the CancellationToken property
+// CancellationToken gets the cancellation token for the pipeline operation.
 func (s *pipelineStepContext) CancellationToken() (*CancellationToken, error) {
 	if s.err != nil { var zero *CancellationToken; return zero, s.err }
 	ctx := context.Background()
@@ -16959,7 +16959,7 @@ func (s *pipelineStepContext) CancellationToken() (*CancellationToken, error) {
 	return decodeAs[*CancellationToken](result)
 }
 
-// ExecutionContext gets the ExecutionContext property
+// ExecutionContext gets the execution context for the distributed application.
 func (s *pipelineStepContext) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -16978,7 +16978,7 @@ func (s *pipelineStepContext) ExecutionContext() DistributedApplicationExecution
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Logger gets the Logger property
+// Logger gets the logger for pipeline operations that writes to both the pipeline logger and the step logger.
 func (s *pipelineStepContext) Logger() Logger {
 	if s.err != nil { return &logger{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -16997,7 +16997,7 @@ func (s *pipelineStepContext) Logger() Logger {
 	return &logger{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Model gets the Model property
+// Model gets the distributed application model to be deployed.
 func (s *pipelineStepContext) Model() DistributedApplicationModel {
 	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -17016,7 +17016,7 @@ func (s *pipelineStepContext) Model() DistributedApplicationModel {
 	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// PipelineContext gets the PipelineContext property
+// PipelineContext gets the pipeline context shared across all steps.
 func (s *pipelineStepContext) PipelineContext() PipelineContext {
 	if s.err != nil { return &pipelineContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -17035,7 +17035,7 @@ func (s *pipelineStepContext) PipelineContext() PipelineContext {
 	return &pipelineContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ReportingStep gets the ReportingStep property
+// ReportingStep gets the publishing step associated with this specific step execution.
 func (s *pipelineStepContext) ReportingStep() ReportingStep {
 	if s.err != nil { return &reportingStep{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -17054,7 +17054,7 @@ func (s *pipelineStepContext) ReportingStep() ReportingStep {
 	return &reportingStep{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Services gets the Services property
+// Services gets the service provider for dependency resolution.
 func (s *pipelineStepContext) Services() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -17073,7 +17073,7 @@ func (s *pipelineStepContext) Services() ServiceProvider {
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Summary gets the Summary property
+// Summary gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
 func (s *pipelineStepContext) Summary() PipelineSummary {
 	if s.err != nil { return &pipelineSummary{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -17110,7 +17110,7 @@ func newPipelineStepFactoryContextFromHandle(h *handle, c *client) PipelineStepF
 	return &pipelineStepFactoryContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// PipelineContext gets the PipelineContext property
+// PipelineContext gets the pipeline context that has the model and other properties.
 func (s *pipelineStepFactoryContext) PipelineContext() PipelineContext {
 	if s.err != nil { return &pipelineContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -17129,7 +17129,7 @@ func (s *pipelineStepFactoryContext) PipelineContext() PipelineContext {
 	return &pipelineContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Resource gets the Resource property
+// Resource gets the resource that this factory is associated with.
 func (s *pipelineStepFactoryContext) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -17164,7 +17164,7 @@ func newPipelineSummaryFromHandle(h *handle, c *client) PipelineSummary {
 	return &pipelineSummary{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Add invokes the Add method
+// Add adds a key-value pair to the pipeline summary with a plain-text value.
 func (s *pipelineSummary) Add(key string, value string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -17177,7 +17177,7 @@ func (s *pipelineSummary) Add(key string, value string) error {
 	return err
 }
 
-// AddMarkdown adds a Markdown-formatted value to the pipeline summary
+// AddMarkdown adds a key-value pair to the pipeline summary with a Markdown-formatted value.
 func (s *pipelineSummary) AddMarkdown(key string, markdownString string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -17296,7 +17296,7 @@ func newProjectResourceFromHandle(h *handle, c *client) ProjectResource {
 	return &projectResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsHttp2Service configures resource for HTTP/2
+// AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *projectResource) AsHttp2Service() ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17307,7 +17307,7 @@ func (s *projectResource) AsHttp2Service() ProjectResource {
 	return s
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *projectResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -17326,7 +17326,7 @@ func (s *projectResource) CreateExecutionConfiguration() ExecutionConfigurationB
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// DisableForwardedHeaders disables forwarded headers for the project
+// DisableForwardedHeaders configures the project to disable forwarded headers when being published.
 func (s *projectResource) DisableForwardedHeaders() ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17337,7 +17337,7 @@ func (s *projectResource) DisableForwardedHeaders() ProjectResource {
 	return s
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *projectResource) ExcludeFromManifest() ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17348,7 +17348,7 @@ func (s *projectResource) ExcludeFromManifest() ProjectResource {
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *projectResource) ExcludeFromMcp() ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17379,7 +17379,7 @@ func (s *projectResource) GetEndpoint(name string) EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *projectResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -17394,7 +17394,7 @@ func (s *projectResource) GetResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *projectResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17413,7 +17413,7 @@ func (s *projectResource) OnBeforeResourceStarted(callback func(arg BeforeResour
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *projectResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17432,7 +17432,7 @@ func (s *projectResource) OnInitializeResource(callback func(arg InitializeResou
 	return s
 }
 
-// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event.
 func (s *projectResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17451,7 +17451,7 @@ func (s *projectResource) OnResourceEndpointsAllocated(callback func(arg Resourc
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *projectResource) OnResourceReady(callback func(arg ResourceReadyEvent)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17470,7 +17470,7 @@ func (s *projectResource) OnResourceReady(callback func(arg ResourceReadyEvent))
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *projectResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17515,7 +17515,7 @@ func (s *projectResource) PublishAsDockerFile(options ...*PublishAsDockerFileOpt
 	return s
 }
 
-// PublishWithContainerFiles configures the resource to copy container files from the specified source during publishing
+// PublishWithContainerFiles configures the resource to copy container files from the specified source resource during publishing.
 func (s *projectResource) PublishWithContainerFiles(source ResourceWithContainerFiles, destinationPath string) ProjectResource {
 	if s.err != nil { return s }
 	if source != nil { if err := source.Err(); err != nil { s.setErr(err); return s } }
@@ -17581,7 +17581,7 @@ func (s *projectResource) WaitFor(dependency Resource, options ...*WaitForOption
 	return s
 }
 
-// WaitForCompletion waits for resource completion
+// WaitForCompletion waits for the dependency resource to enter the Exited or Finished state before starting the resource.
 func (s *projectResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) ProjectResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -17621,7 +17621,7 @@ func (s *projectResource) WaitForStart(dependency Resource, options ...*WaitForS
 	return s
 }
 
-// WithArgs adds arguments
+// WithArgs adds arguments to be passed to a resource that supports arguments when it is launched.
 func (s *projectResource) WithArgs(args []string) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17633,7 +17633,7 @@ func (s *projectResource) WithArgs(args []string) ProjectResource {
 	return s
 }
 
-// WithArgsCallback sets command-line arguments via callback
+// WithArgsCallback adds a callback to be executed with a list of command-line arguments when a resource is started.
 func (s *projectResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17723,7 +17723,7 @@ func (s *projectResource) WithCommand(name string, displayName string, executeCo
 	return s
 }
 
-// WithComputeEnvironment configures the compute environment for the compute resource
+// WithComputeEnvironment configures the compute environment for the compute resource.
 func (s *projectResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ProjectResource {
 	if s.err != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
@@ -17748,7 +17748,7 @@ func (s *projectResource) WithConfig(config *TestConfigDto) ProjectResource {
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *projectResource) WithContainerRegistry(registry Resource) ProjectResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -17798,7 +17798,7 @@ func (s *projectResource) WithDependency(dependency ResourceWithConnectionString
 	return s
 }
 
-// WithDeveloperCertificateTrust configures developer certificate trust
+// WithDeveloperCertificateTrust indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
 func (s *projectResource) WithDeveloperCertificateTrust(trust bool) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17810,7 +17810,7 @@ func (s *projectResource) WithDeveloperCertificateTrust(trust bool) ProjectResou
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *projectResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17873,7 +17873,7 @@ func (s *projectResource) WithEndpointCallback(endpointName string, callback fun
 	return s
 }
 
-// WithEndpointProxySupport configures endpoint proxy support
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *projectResource) WithEndpointProxySupport(proxyEnabled bool) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17917,7 +17917,7 @@ func (s *projectResource) WithEnvironment(name string, value any) ProjectResourc
 	return s
 }
 
-// WithEnvironmentCallback sets environment variables via callback
+// WithEnvironmentCallback allows for the population of environment variables on a resource.
 func (s *projectResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -17959,7 +17959,7 @@ func (s *projectResource) WithExplicitStart() ProjectResource {
 	return s
 }
 
-// WithExternalHttpEndpoints makes HTTP endpoints externally accessible
+// WithExternalHttpEndpoints marks existing http or https endpoints on a resource as external.
 func (s *projectResource) WithExternalHttpEndpoints() ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18046,7 +18046,7 @@ func (s *projectResource) WithHttpEndpointCallback(callback func(obj EndpointUpd
 	return s
 }
 
-// WithHttpHealthCheck adds an HTTP health check
+// WithHttpHealthCheck adds a health check to the resource which is mapped to a specific endpoint.
 func (s *projectResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18083,7 +18083,7 @@ func (s *projectResource) WithHttpProbe(probeType ProbeType, options ...*WithHtt
 	return s
 }
 
-// WithHttpsDeveloperCertificate configures HTTPS with a developer certificate
+// WithHttpsDeveloperCertificate indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
 func (s *projectResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18145,7 +18145,7 @@ func (s *projectResource) WithHttpsEndpointCallback(callback func(obj EndpointUp
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *projectResource) WithIconName(iconName string, options ...*WithIconNameOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18164,7 +18164,7 @@ func (s *projectResource) WithIconName(iconName string, options ...*WithIconName
 	return s
 }
 
-// WithImagePushOptions sets image push options via callback
+// WithImagePushOptions adds an asynchronous callback to configure container image push options for the resource.
 func (s *projectResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18183,7 +18183,7 @@ func (s *projectResource) WithImagePushOptions(callback func(arg ContainerImageP
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *projectResource) WithLifetimeOf(sourceBuilder Resource) ProjectResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -18196,7 +18196,7 @@ func (s *projectResource) WithLifetimeOf(sourceBuilder Resource) ProjectResource
 	return s
 }
 
-// WithMcpServer configures an MCP server endpoint on the resource
+// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *projectResource) WithMcpServer(options ...*WithMcpServerOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18422,7 +18422,7 @@ func (s *projectResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) 
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *projectResource) WithParentProcessLifetime(parentProcessId float64) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18447,7 +18447,7 @@ func (s *projectResource) WithParentRelationship(parent Resource) ProjectResourc
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *projectResource) WithPersistentLifetime() ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18458,7 +18458,7 @@ func (s *projectResource) WithPersistentLifetime() ProjectResource {
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *projectResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18477,7 +18477,7 @@ func (s *projectResource) WithPipelineConfiguration(callback func(obj PipelineCo
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *projectResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18504,7 +18504,7 @@ func (s *projectResource) WithPipelineStepFactory(stepName string, callback func
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *projectResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18518,7 +18518,7 @@ func (s *projectResource) WithProcessCommand(commandName string, displayName str
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *projectResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18571,7 +18571,7 @@ func (s *projectResource) WithReference(source any, options ...*WithReferenceOpt
 	return s
 }
 
-// WithReferenceEnvironment configures which reference values are injected into environment variables
+// WithReferenceEnvironment configures how information is injected into environment variables when the resource references other resources.
 func (s *projectResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18583,7 +18583,7 @@ func (s *projectResource) WithReferenceEnvironment(options *ReferenceEnvironment
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *projectResource) WithRelationship(resourceBuilder Resource, type_ string) ProjectResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -18597,7 +18597,7 @@ func (s *projectResource) WithRelationship(resourceBuilder Resource, type_ strin
 	return s
 }
 
-// WithRemoteImageName sets the remote image name for publishing
+// WithRemoteImageName sets the remote image name (without registry endpoint or tag) for container push operations.
 func (s *projectResource) WithRemoteImageName(remoteImageName string) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18609,7 +18609,7 @@ func (s *projectResource) WithRemoteImageName(remoteImageName string) ProjectRes
 	return s
 }
 
-// WithRemoteImageTag sets the remote image tag for publishing
+// WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *projectResource) WithRemoteImageTag(remoteImageTag string) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18621,7 +18621,7 @@ func (s *projectResource) WithRemoteImageTag(remoteImageTag string) ProjectResou
 	return s
 }
 
-// WithReplicas sets the number of replicas
+// WithReplicas configures how many replicas of the project should be created for the project.
 func (s *projectResource) WithReplicas(replicas float64) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18633,7 +18633,7 @@ func (s *projectResource) WithReplicas(replicas float64) ProjectResource {
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *projectResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18652,7 +18652,7 @@ func (s *projectResource) WithRequiredCommand(command string, options ...*WithRe
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *projectResource) WithSessionLifetime() ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18720,7 +18720,7 @@ func (s *projectResource) WithUrl(url any, options ...*WithUrlOptions) ProjectRe
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *projectResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18743,7 +18743,7 @@ func (s *projectResource) WithUrlForEndpoint(endpointName string, callback func(
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *projectResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18780,7 +18780,7 @@ func (s *projectResource) WithValidator(validator func(arg TestResourceContext) 
 	return s
 }
 
-// WithoutHttpsCertificate removes HTTPS certificate configuration
+// WithoutHttpsCertificate disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *projectResource) WithoutHttpsCertificate() ProjectResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -18813,7 +18813,7 @@ func newProjectResourceOptionsFromHandle(h *handle, c *client) ProjectResourceOp
 	return &projectResourceOptions{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// ExcludeKestrelEndpoints gets the ExcludeKestrelEndpoints property
+// ExcludeKestrelEndpoints if set, ignore endpoints coming from Kestrel configuration.
 func (s *projectResourceOptions) ExcludeKestrelEndpoints() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -18828,7 +18828,7 @@ func (s *projectResourceOptions) ExcludeKestrelEndpoints() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// ExcludeLaunchProfile gets the ExcludeLaunchProfile property
+// ExcludeLaunchProfile if set, no launch profile will be used, and LaunchProfileName will be ignored.
 func (s *projectResourceOptions) ExcludeLaunchProfile() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -18843,7 +18843,7 @@ func (s *projectResourceOptions) ExcludeLaunchProfile() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// LaunchProfileName gets the LaunchProfileName property
+// LaunchProfileName the launch profile to use. If `null` then the default launch profile will be used.
 func (s *projectResourceOptions) LaunchProfileName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -18915,7 +18915,7 @@ func newReferenceExpressionBuilderFromHandle(h *handle, c *client) ReferenceExpr
 	return &referenceExpressionBuilder{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AppendFormatted appends a formatted string value to the reference expression
+// AppendFormatted appends a formatted value to the expression.
 func (s *referenceExpressionBuilder) AppendFormatted(value string, options ...*AppendFormattedOptions) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -18934,7 +18934,7 @@ func (s *referenceExpressionBuilder) AppendFormatted(value string, options ...*A
 	return err
 }
 
-// AppendLiteral appends a literal string to the reference expression
+// AppendLiteral appends a literal value to the expression.
 func (s *referenceExpressionBuilder) AppendLiteral(value string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -18982,7 +18982,7 @@ func (s *referenceExpressionBuilder) Build() *ReferenceExpression {
 	return typed
 }
 
-// IsEmpty gets the IsEmpty property
+// IsEmpty indicates whether the expression is empty.
 func (s *referenceExpressionBuilder) IsEmpty() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -19019,7 +19019,7 @@ func newReportingStepFromHandle(h *handle, c *client) ReportingStep {
 	return &reportingStep{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CompleteStep completes the reporting step with plain-text completion text
+// CompleteStep completes the reporting step with plain-text completion text.
 func (s *reportingStep) CompleteStep(completionText string, options ...*CompleteStepOptions) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -19044,7 +19044,7 @@ func (s *reportingStep) CompleteStep(completionText string, options ...*Complete
 	return err
 }
 
-// CompleteStepMarkdown completes the reporting step with Markdown-formatted completion text
+// CompleteStepMarkdown completes the reporting step with Markdown-formatted completion text.
 func (s *reportingStep) CompleteStepMarkdown(markdownString string, options ...*CompleteStepMarkdownOptions) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -19069,7 +19069,7 @@ func (s *reportingStep) CompleteStepMarkdown(markdownString string, options ...*
 	return err
 }
 
-// CreateMarkdownTask creates a reporting task with Markdown-formatted status text
+// CreateMarkdownTask creates a reporting task with Markdown-formatted status text.
 func (s *reportingStep) CreateMarkdownTask(markdownString string, options ...*CreateMarkdownTaskOptions) ReportingTask {
 	if s.err != nil { return &reportingTask{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19102,7 +19102,7 @@ func (s *reportingStep) CreateMarkdownTask(markdownString string, options ...*Cr
 	return &reportingTask{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// CreateTask creates a reporting task with plain-text status text
+// CreateTask creates a reporting task with plain-text status text.
 func (s *reportingStep) CreateTask(statusText string, options ...*CreateTaskOptions) ReportingTask {
 	if s.err != nil { return &reportingTask{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19135,7 +19135,7 @@ func (s *reportingStep) CreateTask(statusText string, options ...*CreateTaskOpti
 	return &reportingTask{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// LogStep logs a plain-text message for the reporting step
+// LogStep logs a plain-text message for the reporting step.
 func (s *reportingStep) LogStep(level string, message string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -19148,7 +19148,7 @@ func (s *reportingStep) LogStep(level string, message string) error {
 	return err
 }
 
-// LogStepMarkdown logs a Markdown-formatted message for the reporting step
+// LogStepMarkdown logs a Markdown-formatted message for the reporting step.
 func (s *reportingStep) LogStepMarkdown(level string, markdownString string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -19181,7 +19181,7 @@ func newReportingTaskFromHandle(h *handle, c *client) ReportingTask {
 	return &reportingTask{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CompleteTask completes the reporting task with plain-text completion text
+// CompleteTask completes the reporting task with plain-text completion text.
 func (s *reportingTask) CompleteTask(options ...*CompleteTaskOptions) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -19205,7 +19205,7 @@ func (s *reportingTask) CompleteTask(options ...*CompleteTaskOptions) error {
 	return err
 }
 
-// CompleteTaskMarkdown completes the reporting task with Markdown-formatted completion text
+// CompleteTaskMarkdown completes the reporting task with Markdown-formatted completion text.
 func (s *reportingTask) CompleteTaskMarkdown(markdownString string, options ...*CompleteTaskMarkdownOptions) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -19230,7 +19230,7 @@ func (s *reportingTask) CompleteTaskMarkdown(markdownString string, options ...*
 	return err
 }
 
-// UpdateTask updates the reporting task with plain-text status text
+// UpdateTask updates the reporting task with plain-text status text.
 func (s *reportingTask) UpdateTask(statusText string, options ...*UpdateTaskOptions) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -19255,7 +19255,7 @@ func (s *reportingTask) UpdateTask(statusText string, options ...*UpdateTaskOpti
 	return err
 }
 
-// UpdateTaskMarkdown updates the reporting task with Markdown-formatted status text
+// UpdateTaskMarkdown updates the reporting task with Markdown-formatted status text.
 func (s *reportingTask) UpdateTaskMarkdown(markdownString string, options ...*UpdateTaskMarkdownOptions) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -19352,7 +19352,7 @@ func newResourceLoggerServiceFromHandle(h *handle, c *client) ResourceLoggerServ
 	return &resourceLoggerService{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CompleteLog completes the log stream for a resource
+// CompleteLog completes the log stream for a resource.
 func (s *resourceLoggerService) CompleteLog(resource Resource) error {
 	if s.err != nil { return s.err }
 	if resource != nil { if err := resource.Err(); err != nil { return err } }
@@ -19365,7 +19365,7 @@ func (s *resourceLoggerService) CompleteLog(resource Resource) error {
 	return err
 }
 
-// CompleteLogByName completes the log stream by resource name
+// CompleteLogByName completes the log stream by resource name.
 func (s *resourceLoggerService) CompleteLogByName(resourceName string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -19399,7 +19399,7 @@ func newResourceNotificationServiceFromHandle(h *handle, c *client) ResourceNoti
 	return &resourceNotificationService{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// PublishResourceUpdate publishes an update for a resource's state
+// PublishResourceUpdate publishes an update for a resource's state.
 func (s *resourceNotificationService) PublishResourceUpdate(resource Resource, options ...*PublishResourceUpdateOptions) error {
 	if s.err != nil { return s.err }
 	if resource != nil { if err := resource.Err(); err != nil { return err } }
@@ -19419,7 +19419,7 @@ func (s *resourceNotificationService) PublishResourceUpdate(resource Resource, o
 	return err
 }
 
-// TryGetResourceState tries to get the current state of a resource
+// TryGetResourceState tries to get the current state of a resource.
 func (s *resourceNotificationService) TryGetResourceState(resourceName string) (*ResourceEventDto, error) {
 	if s.err != nil { var zero *ResourceEventDto; return zero, s.err }
 	ctx := context.Background()
@@ -19435,7 +19435,7 @@ func (s *resourceNotificationService) TryGetResourceState(resourceName string) (
 	return decodeAs[*ResourceEventDto](result)
 }
 
-// WaitForDependencies waits for all dependencies of a resource to be ready
+// WaitForDependencies waits for all dependencies of a resource to be ready.
 func (s *resourceNotificationService) WaitForDependencies(resource Resource) error {
 	if s.err != nil { return s.err }
 	if resource != nil { if err := resource.Err(); err != nil { return err } }
@@ -19448,7 +19448,7 @@ func (s *resourceNotificationService) WaitForDependencies(resource Resource) err
 	return err
 }
 
-// WaitForResourceHealthy waits for a resource to become healthy
+// WaitForResourceHealthy waits for a resource to become healthy.
 func (s *resourceNotificationService) WaitForResourceHealthy(resourceName string) (*ResourceEventDto, error) {
 	if s.err != nil { var zero *ResourceEventDto; return zero, s.err }
 	ctx := context.Background()
@@ -19464,7 +19464,7 @@ func (s *resourceNotificationService) WaitForResourceHealthy(resourceName string
 	return decodeAs[*ResourceEventDto](result)
 }
 
-// WaitForResourceState waits for a resource to reach a specified state
+// WaitForResourceState waits for a resource to reach a specified state.
 func (s *resourceNotificationService) WaitForResourceState(resourceName string, options ...*WaitForResourceStateOptions) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -19483,7 +19483,7 @@ func (s *resourceNotificationService) WaitForResourceState(resourceName string, 
 	return err
 }
 
-// WaitForResourceStates waits for a resource to reach one of the specified states
+// WaitForResourceStates waits for a resource to reach one of the specified states.
 func (s *resourceNotificationService) WaitForResourceStates(resourceName string, targetStates []string) (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -19518,7 +19518,7 @@ func newResourceReadyEventFromHandle(h *handle, c *client) ResourceReadyEvent {
 	return &resourceReadyEvent{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Resource gets the Resource property
+// Resource the resource that is in a healthy state.
 func (s *resourceReadyEvent) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -19629,7 +19629,7 @@ func newResourceUrlsCallbackContextFromHandle(h *handle, c *client) ResourceUrls
 	return &resourceUrlsCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// ExecutionContext gets the execution context for this callback invocation
+// ExecutionContext gets the execution context associated with this invocation of the AppHost.
 func (s *resourceUrlsCallbackContext) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19668,7 +19668,7 @@ func (s *resourceUrlsCallbackContext) GetEndpoint(name string) EndpointReference
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Log gets the callback logger facade
+// Log gets the logger facade used by polyglot callbacks.
 func (s *resourceUrlsCallbackContext) Log() LogFacade {
 	if s.err != nil { return &logFacade{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19687,7 +19687,7 @@ func (s *resourceUrlsCallbackContext) Log() LogFacade {
 	return &logFacade{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// Resource gets the resource associated with these URLs
+// Resource gets the resource this the URLs are associated with.
 func (s *resourceUrlsCallbackContext) Resource() Resource {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -19704,7 +19704,7 @@ func (s *resourceUrlsCallbackContext) Resource() Resource {
 	return typed
 }
 
-// Urls gets the URL editor
+// Urls gets the editor used to manipulate displayed URLs in polyglot callbacks.
 func (s *resourceUrlsCallbackContext) Urls() ResourceUrlsEditor {
 	if s.err != nil { return &resourceUrlsEditor{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19742,7 +19742,7 @@ func newResourceUrlsEditorFromHandle(h *handle, c *client) ResourceUrlsEditor {
 	return &resourceUrlsEditor{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Add adds a displayed URL
+// Add adds a displayed URL.
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *resourceUrlsEditor) Add(url any, options ...*AddOptions) error {
 	if s.err != nil { return s.err }
@@ -19768,7 +19768,7 @@ func (s *resourceUrlsEditor) Add(url any, options ...*AddOptions) error {
 	return err
 }
 
-// AddForEndpoint adds a displayed URL for a specific endpoint
+// AddForEndpoint adds a displayed URL for a specific endpoint.
 // Allowed types for parameter url: string, *ReferenceExpression.
 func (s *resourceUrlsEditor) AddForEndpoint(endpoint EndpointReference, url any, options ...*AddForEndpointOptions) error {
 	if s.err != nil { return s.err }
@@ -19796,7 +19796,7 @@ func (s *resourceUrlsEditor) AddForEndpoint(endpoint EndpointReference, url any,
 	return err
 }
 
-// ExecutionContext gets the execution context for this URL editor
+// ExecutionContext gets the execution context associated with this editor.
 func (s *resourceUrlsEditor) ExecutionContext() DistributedApplicationExecutionContext {
 	if s.err != nil { return &distributedApplicationExecutionContext{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19833,7 +19833,7 @@ func newResourceWithContainerFilesFromHandle(h *handle, c *client) ResourceWithC
 	return &resourceWithContainerFiles{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// ClearContainerFilesSources clears all container file sources
+// ClearContainerFilesSources removes any container files source annotation from the resource being built.
 func (s *resourceWithContainerFiles) ClearContainerFilesSources() ResourceWithContainerFiles {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -19844,7 +19844,7 @@ func (s *resourceWithContainerFiles) ClearContainerFilesSources() ResourceWithCo
 	return s
 }
 
-// WithContainerFilesSource sets the source directory for container files
+// WithContainerFilesSource adds a container files source annotation to the resource being built, specifying the path to the container files source.
 func (s *resourceWithContainerFiles) WithContainerFilesSource(sourcePath string) ResourceWithContainerFiles {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -19879,7 +19879,7 @@ func newServiceProviderFromHandle(h *handle, c *client) ServiceProvider {
 	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// GetAspireStore gets the Aspire store from the service provider
+// GetAspireStore gets the Aspire store from the service provider.
 func (s *serviceProvider) GetAspireStore() AspireStore {
 	if s.err != nil { return &aspireStore{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19898,7 +19898,7 @@ func (s *serviceProvider) GetAspireStore() AspireStore {
 	return &aspireStore{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetDistributedApplicationModel gets the distributed application model from the service provider
+// GetDistributedApplicationModel gets the distributed application model from the service provider.
 func (s *serviceProvider) GetDistributedApplicationModel() DistributedApplicationModel {
 	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19917,7 +19917,7 @@ func (s *serviceProvider) GetDistributedApplicationModel() DistributedApplicatio
 	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetEventing gets the distributed application eventing service from the service provider
+// GetEventing gets the distributed application eventing service from the service provider.
 func (s *serviceProvider) GetEventing() DistributedApplicationEventing {
 	if s.err != nil { return &distributedApplicationEventing{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19936,7 +19936,7 @@ func (s *serviceProvider) GetEventing() DistributedApplicationEventing {
 	return &distributedApplicationEventing{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetLoggerFactory gets the logger factory from the service provider
+// GetLoggerFactory gets the logger factory from the service provider.
 func (s *serviceProvider) GetLoggerFactory() LoggerFactory {
 	if s.err != nil { return &loggerFactory{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19955,7 +19955,7 @@ func (s *serviceProvider) GetLoggerFactory() LoggerFactory {
 	return &loggerFactory{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetResourceLoggerService gets the resource logger service from the service provider
+// GetResourceLoggerService gets the resource logger service from the service provider.
 func (s *serviceProvider) GetResourceLoggerService() ResourceLoggerService {
 	if s.err != nil { return &resourceLoggerService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19974,7 +19974,7 @@ func (s *serviceProvider) GetResourceLoggerService() ResourceLoggerService {
 	return &resourceLoggerService{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetResourceNotificationService gets the resource notification service from the service provider
+// GetResourceNotificationService gets the resource notification service from the service provider.
 func (s *serviceProvider) GetResourceNotificationService() ResourceNotificationService {
 	if s.err != nil { return &resourceNotificationService{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -19993,7 +19993,7 @@ func (s *serviceProvider) GetResourceNotificationService() ResourceNotificationS
 	return &resourceNotificationService{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetUserSecretsManager gets the user secrets manager from the service provider
+// GetUserSecretsManager gets the user secrets manager from the service provider.
 func (s *serviceProvider) GetUserSecretsManager() UserSecretsManager {
 	if s.err != nil { return &userSecretsManager{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -20034,7 +20034,7 @@ func newTestCallbackContextFromHandle(h *handle, c *client) TestCallbackContext 
 	return &testCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken gets the CancellationToken property
+// CancellationToken cancellationToken is supported by ATS.
 func (s *testCallbackContext) CancellationToken() (*CancellationToken, error) {
 	if s.err != nil { var zero *CancellationToken; return zero, s.err }
 	ctx := context.Background()
@@ -20147,7 +20147,7 @@ func newTestCollectionContextFromHandle(h *handle, c *client) TestCollectionCont
 	return &testCollectionContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Items gets the Items property
+// Items list property - should generate AspireList getter like Dictionary properties.
 func (s *testCollectionContext) Items() *List[string] {
 	if s.items == nil {
 		s.items = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items")
@@ -20155,7 +20155,7 @@ func (s *testCollectionContext) Items() *List[string] {
 	return s.items
 }
 
-// Metadata gets the Metadata property
+// Metadata dictionary property - already works with AspireDict getter.
 func (s *testCollectionContext) Metadata() *Dict[string, string] {
 	if s.metadata == nil {
 		s.metadata = newDictWithGetter[string, string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata")
@@ -20284,7 +20284,7 @@ func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResourc
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AsHttp2Service configures resource for HTTP/2
+// AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *testDatabaseResource) AsHttp2Service() TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20295,7 +20295,7 @@ func (s *testDatabaseResource) AsHttp2Service() TestDatabaseResource {
 	return s
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *testDatabaseResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -20314,7 +20314,7 @@ func (s *testDatabaseResource) CreateExecutionConfiguration() ExecutionConfigura
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *testDatabaseResource) ExcludeFromManifest() TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20325,7 +20325,7 @@ func (s *testDatabaseResource) ExcludeFromManifest() TestDatabaseResource {
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *testDatabaseResource) ExcludeFromMcp() TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20356,7 +20356,7 @@ func (s *testDatabaseResource) GetEndpoint(name string) EndpointReference {
 	return &endpointReference{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *testDatabaseResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -20371,7 +20371,7 @@ func (s *testDatabaseResource) GetResourceName() (string, error) {
 	return decodeAs[string](result)
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *testDatabaseResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20390,7 +20390,7 @@ func (s *testDatabaseResource) OnBeforeResourceStarted(callback func(arg BeforeR
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *testDatabaseResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20409,7 +20409,7 @@ func (s *testDatabaseResource) OnInitializeResource(callback func(arg Initialize
 	return s
 }
 
-// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event.
 func (s *testDatabaseResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20428,7 +20428,7 @@ func (s *testDatabaseResource) OnResourceEndpointsAllocated(callback func(arg Re
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *testDatabaseResource) OnResourceReady(callback func(arg ResourceReadyEvent)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20447,7 +20447,7 @@ func (s *testDatabaseResource) OnResourceReady(callback func(arg ResourceReadyEv
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *testDatabaseResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20466,7 +20466,7 @@ func (s *testDatabaseResource) OnResourceStopped(callback func(arg ResourceStopp
 	return s
 }
 
-// PublishAsConnectionString publishes the resource as a connection string
+// PublishAsConnectionString changes the resource to be published as a connection string reference in the manifest.
 func (s *testDatabaseResource) PublishAsConnectionString() TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20477,7 +20477,7 @@ func (s *testDatabaseResource) PublishAsConnectionString() TestDatabaseResource 
 	return s
 }
 
-// PublishAsContainer configures the resource to be published as a container
+// PublishAsContainer changes the resource to be published as a container in the manifest.
 func (s *testDatabaseResource) PublishAsContainer() TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20540,7 +20540,7 @@ func (s *testDatabaseResource) WaitFor(dependency Resource, options ...*WaitForO
 	return s
 }
 
-// WaitForCompletion waits for resource completion
+// WaitForCompletion waits for the dependency resource to enter the Exited or Finished state before starting the resource.
 func (s *testDatabaseResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -20580,7 +20580,7 @@ func (s *testDatabaseResource) WaitForStart(dependency Resource, options ...*Wai
 	return s
 }
 
-// WithArgs adds arguments
+// WithArgs adds arguments to be passed to a resource that supports arguments when it is launched.
 func (s *testDatabaseResource) WithArgs(args []string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20592,7 +20592,7 @@ func (s *testDatabaseResource) WithArgs(args []string) TestDatabaseResource {
 	return s
 }
 
-// WithArgsCallback sets command-line arguments via callback
+// WithArgsCallback adds a callback to be executed with a list of command-line arguments when a resource is started.
 func (s *testDatabaseResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20611,7 +20611,7 @@ func (s *testDatabaseResource) WithArgsCallback(callback func(obj CommandLineArg
 	return s
 }
 
-// WithBindMount adds a bind mount
+// WithBindMount adds a bind mount to a container resource.
 func (s *testDatabaseResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20631,7 +20631,7 @@ func (s *testDatabaseResource) WithBindMount(source string, target string, optio
 	return s
 }
 
-// WithBuildArg adds a build argument from a string value or parameter resource
+// WithBuildArg adds a build argument when the container is built from a Dockerfile.
 // Allowed types for parameter value: string, ParameterResource.
 func (s *testDatabaseResource) WithBuildArg(name string, value any) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -20651,7 +20651,7 @@ func (s *testDatabaseResource) WithBuildArg(name string, value any) TestDatabase
 	return s
 }
 
-// WithBuildSecret adds a build secret from a parameter resource
+// WithBuildSecret adds a secret build argument when the container is built from a Dockerfile.
 func (s *testDatabaseResource) WithBuildSecret(name string, value ParameterResource) TestDatabaseResource {
 	if s.err != nil { return s }
 	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
@@ -20736,7 +20736,7 @@ func (s *testDatabaseResource) WithCommand(name string, displayName string, exec
 	return s
 }
 
-// WithComputeEnvironment configures the compute environment for the compute resource
+// WithComputeEnvironment configures the compute environment for the compute resource.
 func (s *testDatabaseResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestDatabaseResource {
 	if s.err != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
@@ -20761,7 +20761,7 @@ func (s *testDatabaseResource) WithConfig(config *TestConfigDto) TestDatabaseRes
 	return s
 }
 
-// WithContainerCertificatePaths overrides container certificate bundle and directory paths used for trust configuration
+// WithContainerCertificatePaths adds container certificate path overrides used for certificate trust at run time.
 func (s *testDatabaseResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20779,7 +20779,7 @@ func (s *testDatabaseResource) WithContainerCertificatePaths(options ...*WithCon
 	return s
 }
 
-// WithContainerName sets the container name
+// WithContainerName overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
 func (s *testDatabaseResource) WithContainerName(name string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20791,7 +20791,7 @@ func (s *testDatabaseResource) WithContainerName(name string) TestDatabaseResour
 	return s
 }
 
-// WithContainerNetworkAlias adds a network alias for the container
+// WithContainerNetworkAlias adds a network alias to container resource.
 func (s *testDatabaseResource) WithContainerNetworkAlias(alias string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20803,7 +20803,7 @@ func (s *testDatabaseResource) WithContainerNetworkAlias(alias string) TestDatab
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *testDatabaseResource) WithContainerRegistry(registry Resource) TestDatabaseResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -20816,7 +20816,7 @@ func (s *testDatabaseResource) WithContainerRegistry(registry Resource) TestData
 	return s
 }
 
-// WithContainerRuntimeArgs adds runtime arguments for the container
+// WithContainerRuntimeArgs adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started.
 func (s *testDatabaseResource) WithContainerRuntimeArgs(args []string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20865,7 +20865,7 @@ func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionS
 	return s
 }
 
-// WithDeveloperCertificateTrust configures developer certificate trust
+// WithDeveloperCertificateTrust indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
 func (s *testDatabaseResource) WithDeveloperCertificateTrust(trust bool) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20877,7 +20877,7 @@ func (s *testDatabaseResource) WithDeveloperCertificateTrust(trust bool) TestDat
 	return s
 }
 
-// WithDockerfile configures the resource to use a Dockerfile
+// WithDockerfile causes Aspire to build the specified container image from a Dockerfile.
 func (s *testDatabaseResource) WithDockerfile(contextPath string, options ...*WithDockerfileOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20896,7 +20896,7 @@ func (s *testDatabaseResource) WithDockerfile(contextPath string, options ...*Wi
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *testDatabaseResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20986,7 +20986,7 @@ func (s *testDatabaseResource) WithEndpointCallback(endpointName string, callbac
 	return s
 }
 
-// WithEndpointProxySupport configures endpoint proxy support
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *testDatabaseResource) WithEndpointProxySupport(proxyEnabled bool) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21010,7 +21010,7 @@ func (s *testDatabaseResource) WithEndpoints(endpoints []string) TestDatabaseRes
 	return s
 }
 
-// WithEntrypoint sets the container entrypoint
+// WithEntrypoint sets the Entrypoint for the container.
 func (s *testDatabaseResource) WithEntrypoint(entrypoint string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21042,7 +21042,7 @@ func (s *testDatabaseResource) WithEnvironment(name string, value any) TestDatab
 	return s
 }
 
-// WithEnvironmentCallback sets environment variables via callback
+// WithEnvironmentCallback allows for the population of environment variables on a resource.
 func (s *testDatabaseResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21084,7 +21084,7 @@ func (s *testDatabaseResource) WithExplicitStart() TestDatabaseResource {
 	return s
 }
 
-// WithExternalHttpEndpoints makes HTTP endpoints externally accessible
+// WithExternalHttpEndpoints marks existing http or https endpoints on a resource as external.
 func (s *testDatabaseResource) WithExternalHttpEndpoints() TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21171,7 +21171,7 @@ func (s *testDatabaseResource) WithHttpEndpointCallback(callback func(obj Endpoi
 	return s
 }
 
-// WithHttpHealthCheck adds an HTTP health check
+// WithHttpHealthCheck adds a health check to the resource which is mapped to a specific endpoint.
 func (s *testDatabaseResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21208,7 +21208,7 @@ func (s *testDatabaseResource) WithHttpProbe(probeType ProbeType, options ...*Wi
 	return s
 }
 
-// WithHttpsDeveloperCertificate configures HTTPS with a developer certificate
+// WithHttpsDeveloperCertificate indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
 func (s *testDatabaseResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21270,7 +21270,7 @@ func (s *testDatabaseResource) WithHttpsEndpointCallback(callback func(obj Endpo
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *testDatabaseResource) WithIconName(iconName string, options ...*WithIconNameOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21289,7 +21289,7 @@ func (s *testDatabaseResource) WithIconName(iconName string, options ...*WithIco
 	return s
 }
 
-// WithImage sets the container image
+// WithImage allows overriding the image on a container.
 func (s *testDatabaseResource) WithImage(image string, options ...*WithImageOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21308,7 +21308,7 @@ func (s *testDatabaseResource) WithImage(image string, options ...*WithImageOpti
 	return s
 }
 
-// WithImagePullPolicy sets the container image pull policy
+// WithImagePullPolicy sets the pull policy for the container resource.
 func (s *testDatabaseResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21320,7 +21320,7 @@ func (s *testDatabaseResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) T
 	return s
 }
 
-// WithImagePushOptions sets image push options via callback
+// WithImagePushOptions adds an asynchronous callback to configure container image push options for the resource.
 func (s *testDatabaseResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21339,7 +21339,7 @@ func (s *testDatabaseResource) WithImagePushOptions(callback func(arg ContainerI
 	return s
 }
 
-// WithImageRegistry sets the container image registry
+// WithImageRegistry allows overriding the image registry on a container.
 func (s *testDatabaseResource) WithImageRegistry(registry string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21351,7 +21351,7 @@ func (s *testDatabaseResource) WithImageRegistry(registry string) TestDatabaseRe
 	return s
 }
 
-// WithImageSHA256 sets the image SHA256 digest
+// WithImageSHA256 allows setting the image to a specific sha256 on a container.
 func (s *testDatabaseResource) WithImageSHA256(sha256 string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21363,7 +21363,7 @@ func (s *testDatabaseResource) WithImageSHA256(sha256 string) TestDatabaseResour
 	return s
 }
 
-// WithImageTag sets the container image tag
+// WithImageTag allows overriding the image tag on a container.
 func (s *testDatabaseResource) WithImageTag(tag string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21375,7 +21375,7 @@ func (s *testDatabaseResource) WithImageTag(tag string) TestDatabaseResource {
 	return s
 }
 
-// WithLifetime sets the lifetime behavior of the container resource
+// WithLifetime sets the lifetime behavior of the container resource.
 func (s *testDatabaseResource) WithLifetime(lifetime ContainerLifetime) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21387,7 +21387,7 @@ func (s *testDatabaseResource) WithLifetime(lifetime ContainerLifetime) TestData
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *testDatabaseResource) WithLifetimeOf(sourceBuilder Resource) TestDatabaseResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -21400,7 +21400,7 @@ func (s *testDatabaseResource) WithLifetimeOf(sourceBuilder Resource) TestDataba
 	return s
 }
 
-// WithMcpServer configures an MCP server endpoint on the resource
+// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *testDatabaseResource) WithMcpServer(options ...*WithMcpServerOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21626,7 +21626,7 @@ func (s *testDatabaseResource) WithOtlpExporter(options ...*WithOtlpExporterOpti
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *testDatabaseResource) WithParentProcessLifetime(parentProcessId float64) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21651,7 +21651,7 @@ func (s *testDatabaseResource) WithParentRelationship(parent Resource) TestDatab
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *testDatabaseResource) WithPersistentLifetime() TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21662,7 +21662,7 @@ func (s *testDatabaseResource) WithPersistentLifetime() TestDatabaseResource {
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *testDatabaseResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21681,7 +21681,7 @@ func (s *testDatabaseResource) WithPipelineConfiguration(callback func(obj Pipel
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *testDatabaseResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21708,7 +21708,7 @@ func (s *testDatabaseResource) WithPipelineStepFactory(stepName string, callback
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *testDatabaseResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21722,7 +21722,7 @@ func (s *testDatabaseResource) WithProcessCommand(commandName string, displayNam
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *testDatabaseResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21775,7 +21775,7 @@ func (s *testDatabaseResource) WithReference(source any, options ...*WithReferen
 	return s
 }
 
-// WithReferenceEnvironment configures which reference values are injected into environment variables
+// WithReferenceEnvironment configures how information is injected into environment variables when the resource references other resources.
 func (s *testDatabaseResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21787,7 +21787,7 @@ func (s *testDatabaseResource) WithReferenceEnvironment(options *ReferenceEnviro
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *testDatabaseResource) WithRelationship(resourceBuilder Resource, type_ string) TestDatabaseResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -21801,7 +21801,7 @@ func (s *testDatabaseResource) WithRelationship(resourceBuilder Resource, type_ 
 	return s
 }
 
-// WithRemoteImageName sets the remote image name for publishing
+// WithRemoteImageName sets the remote image name (without registry endpoint or tag) for container push operations.
 func (s *testDatabaseResource) WithRemoteImageName(remoteImageName string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21813,7 +21813,7 @@ func (s *testDatabaseResource) WithRemoteImageName(remoteImageName string) TestD
 	return s
 }
 
-// WithRemoteImageTag sets the remote image tag for publishing
+// WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *testDatabaseResource) WithRemoteImageTag(remoteImageTag string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21825,7 +21825,7 @@ func (s *testDatabaseResource) WithRemoteImageTag(remoteImageTag string) TestDat
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *testDatabaseResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21844,7 +21844,7 @@ func (s *testDatabaseResource) WithRequiredCommand(command string, options ...*W
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *testDatabaseResource) WithSessionLifetime() TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21912,7 +21912,7 @@ func (s *testDatabaseResource) WithUrl(url any, options ...*WithUrlOptions) Test
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *testDatabaseResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21935,7 +21935,7 @@ func (s *testDatabaseResource) WithUrlForEndpoint(endpointName string, callback 
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *testDatabaseResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21972,7 +21972,7 @@ func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceCont
 	return s
 }
 
-// WithVolume adds a volume
+// WithVolume adds a volume to a container resource.
 func (s *testDatabaseResource) WithVolume(target string, options ...*WithVolumeOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -21991,7 +21991,7 @@ func (s *testDatabaseResource) WithVolume(target string, options ...*WithVolumeO
 	return s
 }
 
-// WithoutHttpsCertificate removes HTTPS certificate configuration
+// WithoutHttpsCertificate disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *testDatabaseResource) WithoutHttpsCertificate() TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22332,7 +22332,7 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// AsHttp2Service configures resource for HTTP/2
+// AsHttp2Service configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
 func (s *testRedisResource) AsHttp2Service() TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22343,7 +22343,7 @@ func (s *testRedisResource) AsHttp2Service() TestRedisResource {
 	return s
 }
 
-// CreateExecutionConfiguration creates an execution configuration builder
+// CreateExecutionConfiguration creates an execution configuration builder for the specified resource.
 func (s *testRedisResource) CreateExecutionConfiguration() ExecutionConfigurationBuilder {
 	if s.err != nil { return &executionConfigurationBuilder{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -22362,7 +22362,7 @@ func (s *testRedisResource) CreateExecutionConfiguration() ExecutionConfiguratio
 	return &executionConfigurationBuilder{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
-// ExcludeFromManifest excludes the resource from the deployment manifest
+// ExcludeFromManifest excludes a resource from being published to the manifest.
 func (s *testRedisResource) ExcludeFromManifest() TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22373,7 +22373,7 @@ func (s *testRedisResource) ExcludeFromManifest() TestRedisResource {
 	return s
 }
 
-// ExcludeFromMcp excludes the resource from MCP server exposure
+// ExcludeFromMcp exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
 func (s *testRedisResource) ExcludeFromMcp() TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22384,7 +22384,7 @@ func (s *testRedisResource) ExcludeFromMcp() TestRedisResource {
 	return s
 }
 
-// GetConnectionProperty gets a connection property by key
+// GetConnectionProperty retrieves the value of a specified connection property from the resource's connection properties.
 func (s *testRedisResource) GetConnectionProperty(key string) *ReferenceExpression {
 	if s.err != nil { return nil }
 	ctx := context.Background()
@@ -22445,7 +22445,7 @@ func (s *testRedisResource) GetMetadata() *Dict[string, string] {
 	return s.getMetadata
 }
 
-// GetResourceName gets the resource name
+// GetResourceName gets the name of the resource from a builder.
 func (s *testRedisResource) GetResourceName() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -22496,7 +22496,7 @@ func (s *testRedisResource) GetTags() *List[string] {
 	return s.getTags
 }
 
-// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event
+// OnBeforeResourceStarted subscribes to the BeforeResourceStarted event.
 func (s *testRedisResource) OnBeforeResourceStarted(callback func(arg BeforeResourceStartedEvent)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22515,7 +22515,7 @@ func (s *testRedisResource) OnBeforeResourceStarted(callback func(arg BeforeReso
 	return s
 }
 
-// OnConnectionStringAvailable subscribes to the ConnectionStringAvailable event
+// OnConnectionStringAvailable subscribes to the ConnectionStringAvailable event.
 func (s *testRedisResource) OnConnectionStringAvailable(callback func(arg ConnectionStringAvailableEvent)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22534,7 +22534,7 @@ func (s *testRedisResource) OnConnectionStringAvailable(callback func(arg Connec
 	return s
 }
 
-// OnInitializeResource subscribes to the InitializeResource event
+// OnInitializeResource subscribes to the InitializeResource event.
 func (s *testRedisResource) OnInitializeResource(callback func(arg InitializeResourceEvent)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22553,7 +22553,7 @@ func (s *testRedisResource) OnInitializeResource(callback func(arg InitializeRes
 	return s
 }
 
-// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event
+// OnResourceEndpointsAllocated subscribes to the ResourceEndpointsAllocated event.
 func (s *testRedisResource) OnResourceEndpointsAllocated(callback func(arg ResourceEndpointsAllocatedEvent)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22572,7 +22572,7 @@ func (s *testRedisResource) OnResourceEndpointsAllocated(callback func(arg Resou
 	return s
 }
 
-// OnResourceReady subscribes to the ResourceReady event
+// OnResourceReady subscribes to the ResourceReady event.
 func (s *testRedisResource) OnResourceReady(callback func(arg ResourceReadyEvent)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22591,7 +22591,7 @@ func (s *testRedisResource) OnResourceReady(callback func(arg ResourceReadyEvent
 	return s
 }
 
-// OnResourceStopped subscribes to the ResourceStopped event
+// OnResourceStopped subscribes to the ResourceStopped event.
 func (s *testRedisResource) OnResourceStopped(callback func(arg ResourceStoppedEvent)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22610,7 +22610,7 @@ func (s *testRedisResource) OnResourceStopped(callback func(arg ResourceStoppedE
 	return s
 }
 
-// PublishAsConnectionString publishes the resource as a connection string
+// PublishAsConnectionString changes the resource to be published as a connection string reference in the manifest.
 func (s *testRedisResource) PublishAsConnectionString() TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22621,7 +22621,7 @@ func (s *testRedisResource) PublishAsConnectionString() TestRedisResource {
 	return s
 }
 
-// PublishAsContainer configures the resource to be published as a container
+// PublishAsContainer changes the resource to be published as a container in the manifest.
 func (s *testRedisResource) PublishAsContainer() TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22684,7 +22684,7 @@ func (s *testRedisResource) WaitFor(dependency Resource, options ...*WaitForOpti
 	return s
 }
 
-// WaitForCompletion waits for resource completion
+// WaitForCompletion waits for the dependency resource to enter the Exited or Finished state before starting the resource.
 func (s *testRedisResource) WaitForCompletion(dependency Resource, options ...*WaitForCompletionOptions) TestRedisResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -22753,7 +22753,7 @@ func (s *testRedisResource) WaitForStart(dependency Resource, options ...*WaitFo
 	return s
 }
 
-// WithArgs adds arguments
+// WithArgs adds arguments to be passed to a resource that supports arguments when it is launched.
 func (s *testRedisResource) WithArgs(args []string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22765,7 +22765,7 @@ func (s *testRedisResource) WithArgs(args []string) TestRedisResource {
 	return s
 }
 
-// WithArgsCallback sets command-line arguments via callback
+// WithArgsCallback adds a callback to be executed with a list of command-line arguments when a resource is started.
 func (s *testRedisResource) WithArgsCallback(callback func(obj CommandLineArgsCallbackContext)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22784,7 +22784,7 @@ func (s *testRedisResource) WithArgsCallback(callback func(obj CommandLineArgsCa
 	return s
 }
 
-// WithBindMount adds a bind mount
+// WithBindMount adds a bind mount to a container resource.
 func (s *testRedisResource) WithBindMount(source string, target string, options ...*WithBindMountOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22804,7 +22804,7 @@ func (s *testRedisResource) WithBindMount(source string, target string, options 
 	return s
 }
 
-// WithBuildArg adds a build argument from a string value or parameter resource
+// WithBuildArg adds a build argument when the container is built from a Dockerfile.
 // Allowed types for parameter value: string, ParameterResource.
 func (s *testRedisResource) WithBuildArg(name string, value any) TestRedisResource {
 	if s.err != nil { return s }
@@ -22824,7 +22824,7 @@ func (s *testRedisResource) WithBuildArg(name string, value any) TestRedisResour
 	return s
 }
 
-// WithBuildSecret adds a build secret from a parameter resource
+// WithBuildSecret adds a secret build argument when the container is built from a Dockerfile.
 func (s *testRedisResource) WithBuildSecret(name string, value ParameterResource) TestRedisResource {
 	if s.err != nil { return s }
 	if value != nil { if err := value.Err(); err != nil { s.setErr(err); return s } }
@@ -22909,7 +22909,7 @@ func (s *testRedisResource) WithCommand(name string, displayName string, execute
 	return s
 }
 
-// WithComputeEnvironment configures the compute environment for the compute resource
+// WithComputeEnvironment configures the compute environment for the compute resource.
 func (s *testRedisResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestRedisResource {
 	if s.err != nil { return s }
 	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
@@ -22934,7 +22934,7 @@ func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource 
 	return s
 }
 
-// WithConnectionProperty adds a connection property with a string or reference expression value
+// WithConnectionProperty adds a connection property annotation to the resource being built.
 // Allowed types for parameter value: string, *ReferenceExpression.
 func (s *testRedisResource) WithConnectionProperty(name string, value any) TestRedisResource {
 	if s.err != nil { return s }
@@ -22979,7 +22979,7 @@ func (s *testRedisResource) WithConnectionStringDirect(connectionString string) 
 	return s
 }
 
-// WithContainerCertificatePaths overrides container certificate bundle and directory paths used for trust configuration
+// WithContainerCertificatePaths adds container certificate path overrides used for certificate trust at run time.
 func (s *testRedisResource) WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -22997,7 +22997,7 @@ func (s *testRedisResource) WithContainerCertificatePaths(options ...*WithContai
 	return s
 }
 
-// WithContainerName sets the container name
+// WithContainerName overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
 func (s *testRedisResource) WithContainerName(name string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23009,7 +23009,7 @@ func (s *testRedisResource) WithContainerName(name string) TestRedisResource {
 	return s
 }
 
-// WithContainerNetworkAlias adds a network alias for the container
+// WithContainerNetworkAlias adds a network alias to container resource.
 func (s *testRedisResource) WithContainerNetworkAlias(alias string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23021,7 +23021,7 @@ func (s *testRedisResource) WithContainerNetworkAlias(alias string) TestRedisRes
 	return s
 }
 
-// WithContainerRegistry configures a resource to use a container registry
+// WithContainerRegistry configures the resource to use the specified container registry for container image operations.
 func (s *testRedisResource) WithContainerRegistry(registry Resource) TestRedisResource {
 	if s.err != nil { return s }
 	if registry != nil { if err := registry.Err(); err != nil { s.setErr(err); return s } }
@@ -23034,7 +23034,7 @@ func (s *testRedisResource) WithContainerRegistry(registry Resource) TestRedisRe
 	return s
 }
 
-// WithContainerRuntimeArgs adds runtime arguments for the container
+// WithContainerRuntimeArgs adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started.
 func (s *testRedisResource) WithContainerRuntimeArgs(args []string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23101,7 +23101,7 @@ func (s *testRedisResource) WithDependency(dependency ResourceWithConnectionStri
 	return s
 }
 
-// WithDeveloperCertificateTrust configures developer certificate trust
+// WithDeveloperCertificateTrust indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
 func (s *testRedisResource) WithDeveloperCertificateTrust(trust bool) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23113,7 +23113,7 @@ func (s *testRedisResource) WithDeveloperCertificateTrust(trust bool) TestRedisR
 	return s
 }
 
-// WithDockerfile configures the resource to use a Dockerfile
+// WithDockerfile causes Aspire to build the specified container image from a Dockerfile.
 func (s *testRedisResource) WithDockerfile(contextPath string, options ...*WithDockerfileOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23132,7 +23132,7 @@ func (s *testRedisResource) WithDockerfile(contextPath string, options ...*WithD
 	return s
 }
 
-// WithDockerfileBaseImage sets the base image for a Dockerfile build
+// WithDockerfileBaseImage configures custom base images for generated Dockerfiles.
 func (s *testRedisResource) WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23222,7 +23222,7 @@ func (s *testRedisResource) WithEndpointCallback(endpointName string, callback f
 	return s
 }
 
-// WithEndpointProxySupport configures endpoint proxy support
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *testRedisResource) WithEndpointProxySupport(proxyEnabled bool) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23246,7 +23246,7 @@ func (s *testRedisResource) WithEndpoints(endpoints []string) TestRedisResource 
 	return s
 }
 
-// WithEntrypoint sets the container entrypoint
+// WithEntrypoint sets the Entrypoint for the container.
 func (s *testRedisResource) WithEntrypoint(entrypoint string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23278,7 +23278,7 @@ func (s *testRedisResource) WithEnvironment(name string, value any) TestRedisRes
 	return s
 }
 
-// WithEnvironmentCallback sets environment variables via callback
+// WithEnvironmentCallback allows for the population of environment variables on a resource.
 func (s *testRedisResource) WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23320,7 +23320,7 @@ func (s *testRedisResource) WithExplicitStart() TestRedisResource {
 	return s
 }
 
-// WithExternalHttpEndpoints makes HTTP endpoints externally accessible
+// WithExternalHttpEndpoints marks existing http or https endpoints on a resource as external.
 func (s *testRedisResource) WithExternalHttpEndpoints() TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23407,7 +23407,7 @@ func (s *testRedisResource) WithHttpEndpointCallback(callback func(obj EndpointU
 	return s
 }
 
-// WithHttpHealthCheck adds an HTTP health check
+// WithHttpHealthCheck adds a health check to the resource which is mapped to a specific endpoint.
 func (s *testRedisResource) WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23444,7 +23444,7 @@ func (s *testRedisResource) WithHttpProbe(probeType ProbeType, options ...*WithH
 	return s
 }
 
-// WithHttpsDeveloperCertificate configures HTTPS with a developer certificate
+// WithHttpsDeveloperCertificate indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
 func (s *testRedisResource) WithHttpsDeveloperCertificate(options ...*WithHttpsDeveloperCertificateOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23506,7 +23506,7 @@ func (s *testRedisResource) WithHttpsEndpointCallback(callback func(obj Endpoint
 	return s
 }
 
-// WithIconName sets the icon for the resource
+// WithIconName specifies the icon to use when displaying the resource in the dashboard.
 func (s *testRedisResource) WithIconName(iconName string, options ...*WithIconNameOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23525,7 +23525,7 @@ func (s *testRedisResource) WithIconName(iconName string, options ...*WithIconNa
 	return s
 }
 
-// WithImage sets the container image
+// WithImage allows overriding the image on a container.
 func (s *testRedisResource) WithImage(image string, options ...*WithImageOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23544,7 +23544,7 @@ func (s *testRedisResource) WithImage(image string, options ...*WithImageOptions
 	return s
 }
 
-// WithImagePullPolicy sets the container image pull policy
+// WithImagePullPolicy sets the pull policy for the container resource.
 func (s *testRedisResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23556,7 +23556,7 @@ func (s *testRedisResource) WithImagePullPolicy(pullPolicy ImagePullPolicy) Test
 	return s
 }
 
-// WithImagePushOptions sets image push options via callback
+// WithImagePushOptions adds an asynchronous callback to configure container image push options for the resource.
 func (s *testRedisResource) WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23575,7 +23575,7 @@ func (s *testRedisResource) WithImagePushOptions(callback func(arg ContainerImag
 	return s
 }
 
-// WithImageRegistry sets the container image registry
+// WithImageRegistry allows overriding the image registry on a container.
 func (s *testRedisResource) WithImageRegistry(registry string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23587,7 +23587,7 @@ func (s *testRedisResource) WithImageRegistry(registry string) TestRedisResource
 	return s
 }
 
-// WithImageSHA256 sets the image SHA256 digest
+// WithImageSHA256 allows setting the image to a specific sha256 on a container.
 func (s *testRedisResource) WithImageSHA256(sha256 string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23599,7 +23599,7 @@ func (s *testRedisResource) WithImageSHA256(sha256 string) TestRedisResource {
 	return s
 }
 
-// WithImageTag sets the container image tag
+// WithImageTag allows overriding the image tag on a container.
 func (s *testRedisResource) WithImageTag(tag string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23611,7 +23611,7 @@ func (s *testRedisResource) WithImageTag(tag string) TestRedisResource {
 	return s
 }
 
-// WithLifetime sets the lifetime behavior of the container resource
+// WithLifetime sets the lifetime behavior of the container resource.
 func (s *testRedisResource) WithLifetime(lifetime ContainerLifetime) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23623,7 +23623,7 @@ func (s *testRedisResource) WithLifetime(lifetime ContainerLifetime) TestRedisRe
 	return s
 }
 
-// WithLifetimeOf sets resource lifetime behavior to match another resource
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
 func (s *testRedisResource) WithLifetimeOf(sourceBuilder Resource) TestRedisResource {
 	if s.err != nil { return s }
 	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -23636,7 +23636,7 @@ func (s *testRedisResource) WithLifetimeOf(sourceBuilder Resource) TestRedisReso
 	return s
 }
 
-// WithMcpServer configures an MCP server endpoint on the resource
+// WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *testRedisResource) WithMcpServer(options ...*WithMcpServerOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23881,7 +23881,7 @@ func (s *testRedisResource) WithOtlpExporter(options ...*WithOtlpExporterOptions
 	return s
 }
 
-// WithParentProcessLifetime sets persistent lifetime behavior tied to a parent process
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
 func (s *testRedisResource) WithParentProcessLifetime(parentProcessId float64) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23924,7 +23924,7 @@ func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) 
 	return s
 }
 
-// WithPersistentLifetime sets persistent lifetime behavior for the resource
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
 func (s *testRedisResource) WithPersistentLifetime() TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23935,7 +23935,7 @@ func (s *testRedisResource) WithPersistentLifetime() TestRedisResource {
 	return s
 }
 
-// WithPipelineConfiguration configures pipeline step dependencies via a callback
+// WithPipelineConfiguration registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
 func (s *testRedisResource) WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23954,7 +23954,7 @@ func (s *testRedisResource) WithPipelineConfiguration(callback func(obj Pipeline
 	return s
 }
 
-// WithPipelineStepFactory adds a pipeline step to the resource
+// WithPipelineStepFactory adds a pipeline step to the resource that will be executed during deployment.
 func (s *testRedisResource) WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23981,7 +23981,7 @@ func (s *testRedisResource) WithPipelineStepFactory(stepName string, callback fu
 	return s
 }
 
-// WithProcessCommand adds a process resource command
+// WithProcessCommand adds a command to the resource that starts a local process when invoked.
 func (s *testRedisResource) WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23995,7 +23995,7 @@ func (s *testRedisResource) WithProcessCommand(commandName string, displayName s
 	return s
 }
 
-// WithProcessCommandFactory adds a process resource command via callback
+// WithProcessCommandFactory adds a command to the resource that starts a local process created by a callback when invoked.
 func (s *testRedisResource) WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -24060,7 +24060,7 @@ func (s *testRedisResource) WithReference(source any, options ...*WithReferenceO
 	return s
 }
 
-// WithReferenceEnvironment configures which reference values are injected into environment variables
+// WithReferenceEnvironment configures how information is injected into environment variables when the resource references other resources.
 func (s *testRedisResource) WithReferenceEnvironment(options *ReferenceEnvironmentInjectionOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -24072,7 +24072,7 @@ func (s *testRedisResource) WithReferenceEnvironment(options *ReferenceEnvironme
 	return s
 }
 
-// WithRelationship adds a relationship to another resource
+// WithRelationship adds a relationship to another resource using its builder.
 func (s *testRedisResource) WithRelationship(resourceBuilder Resource, type_ string) TestRedisResource {
 	if s.err != nil { return s }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { s.setErr(err); return s } }
@@ -24086,7 +24086,7 @@ func (s *testRedisResource) WithRelationship(resourceBuilder Resource, type_ str
 	return s
 }
 
-// WithRemoteImageName sets the remote image name for publishing
+// WithRemoteImageName sets the remote image name (without registry endpoint or tag) for container push operations.
 func (s *testRedisResource) WithRemoteImageName(remoteImageName string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -24098,7 +24098,7 @@ func (s *testRedisResource) WithRemoteImageName(remoteImageName string) TestRedi
 	return s
 }
 
-// WithRemoteImageTag sets the remote image tag for publishing
+// WithRemoteImageTag sets the remote image tag for container push operations.
 func (s *testRedisResource) WithRemoteImageTag(remoteImageTag string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -24110,7 +24110,7 @@ func (s *testRedisResource) WithRemoteImageTag(remoteImageTag string) TestRedisR
 	return s
 }
 
-// WithRequiredCommand adds a required command dependency
+// WithRequiredCommand declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
 func (s *testRedisResource) WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -24129,7 +24129,7 @@ func (s *testRedisResource) WithRequiredCommand(command string, options ...*With
 	return s
 }
 
-// WithSessionLifetime sets session lifetime behavior for the resource
+// WithSessionLifetime configures a resource to use a session lifetime.
 func (s *testRedisResource) WithSessionLifetime() TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -24197,7 +24197,7 @@ func (s *testRedisResource) WithUrl(url any, options ...*WithUrlOptions) TestRed
 	return s
 }
 
-// WithUrlForEndpoint customizes the URL for a specific endpoint via callback
+// WithUrlForEndpoint registers a callback to update the URL displayed for the endpoint with the specified name.
 func (s *testRedisResource) WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -24220,7 +24220,7 @@ func (s *testRedisResource) WithUrlForEndpoint(endpointName string, callback fun
 	return s
 }
 
-// WithUrls customizes displayed URLs via callback
+// WithUrls registers a callback to customize the URLs displayed for the resource.
 func (s *testRedisResource) WithUrls(callback func(obj ResourceUrlsCallbackContext)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -24257,7 +24257,7 @@ func (s *testRedisResource) WithValidator(validator func(arg TestResourceContext
 	return s
 }
 
-// WithVolume adds a volume
+// WithVolume adds a volume to a container resource.
 func (s *testRedisResource) WithVolume(target string, options ...*WithVolumeOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -24276,7 +24276,7 @@ func (s *testRedisResource) WithVolume(target string, options ...*WithVolumeOpti
 	return s
 }
 
-// WithoutHttpsCertificate removes HTTPS certificate configuration
+// WithoutHttpsCertificate disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
 func (s *testRedisResource) WithoutHttpsCertificate() TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -24310,7 +24310,7 @@ func newTestResourceContextFromHandle(h *handle, c *client) TestResourceContext 
 	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// GetValueAsync invokes the GetValueAsync method
+// GetValueAsync instance method that should be exposed as async method.
 func (s *testResourceContext) GetValueAsync() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -24364,7 +24364,7 @@ func (s *testResourceContext) SetValue(value float64) TestResourceContext {
 	return s
 }
 
-// SetValueAsync invokes the SetValueAsync method
+// SetValueAsync instance method with parameter.
 func (s *testResourceContext) SetValueAsync(value string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -24376,7 +24376,7 @@ func (s *testResourceContext) SetValueAsync(value string) error {
 	return err
 }
 
-// ValidateAsync invokes the ValidateAsync method
+// ValidateAsync instance method with return type.
 func (s *testResourceContext) ValidateAsync() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -24423,7 +24423,7 @@ func newUpdateCommandStateContextFromHandle(h *handle, c *client) UpdateCommandS
 	return &updateCommandStateContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// ServiceProvider gets the ServiceProvider property
+// ServiceProvider the service provider.
 func (s *updateCommandStateContext) ServiceProvider() ServiceProvider {
 	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -24464,7 +24464,7 @@ func newUserSecretsManagerFromHandle(h *handle, c *client) UserSecretsManager {
 	return &userSecretsManager{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// FilePath gets the FilePath property
+// FilePath gets the path to the user secrets file.
 func (s *userSecretsManager) FilePath() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -24479,7 +24479,7 @@ func (s *userSecretsManager) FilePath() (string, error) {
 	return decodeAs[string](result)
 }
 
-// GetOrSetSecret gets a secret value if it exists, or sets it to the provided value if it does not
+// GetOrSetSecret gets a secret value if it exists in configuration, or sets it to the provided value if it does not.
 func (s *userSecretsManager) GetOrSetSecret(resourceBuilder Resource, name string, value string) error {
 	if s.err != nil { return s.err }
 	if resourceBuilder != nil { if err := resourceBuilder.Err(); err != nil { return err } }
@@ -24494,7 +24494,7 @@ func (s *userSecretsManager) GetOrSetSecret(resourceBuilder Resource, name strin
 	return err
 }
 
-// IsAvailable gets the IsAvailable property
+// IsAvailable gets a value indicating whether user secrets are available.
 func (s *userSecretsManager) IsAvailable() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -24509,7 +24509,7 @@ func (s *userSecretsManager) IsAvailable() (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// SaveStateJson saves state to user secrets from a JSON string
+// SaveStateJson saves state to user secrets from a JSON string.
 func (s *userSecretsManager) SaveStateJson(json string, options ...*SaveStateJsonOptions) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -24534,7 +24534,7 @@ func (s *userSecretsManager) SaveStateJson(json string, options ...*SaveStateJso
 	return err
 }
 
-// TryDeleteSecret attempts to delete a user secret value
+// TryDeleteSecret attempts to delete a user secret value synchronously.
 func (s *userSecretsManager) TryDeleteSecret(name string) (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -24550,7 +24550,7 @@ func (s *userSecretsManager) TryDeleteSecret(name string) (bool, error) {
 	return decodeAs[bool](result)
 }
 
-// TrySetSecret attempts to set a user secret value
+// TrySetSecret attempts to set a user secret value synchronously.
 func (s *userSecretsManager) TrySetSecret(name string, value string) (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()

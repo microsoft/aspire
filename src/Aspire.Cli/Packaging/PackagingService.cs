@@ -5,6 +5,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -84,18 +85,18 @@ internal class PackagingService : IPackagingService
 
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null)
     {
-        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _logger);
+        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _features, _logger);
         
         var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
         {
             new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
-        }, _nuGetPackageCache, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: _logger);
+        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: _logger);
 
         var dailyChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, new[]
         {
             new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"),
             new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
-        }, _nuGetPackageCache, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", logger: _logger);
+        }, _nuGetPackageCache, _features, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", logger: _logger);
 
         var prPackageChannels = new List<PackageChannel>();
 
@@ -165,12 +166,12 @@ internal class PackagingService : IPackagingService
         var pinnedVersion = GetLocalHivePinnedVersion(packagesDirectory);
 
         // Use forward slashes for cross-platform NuGet config compatibility
-        var packagesPath = packagesDirectory.FullName.Replace('\\', '/');
+        var packagesPath = PathNormalizer.NormalizePathForStorage(packagesDirectory.FullName);
         return PackageChannel.CreateExplicitChannel(name, PackageChannelQuality.Both, new[]
         {
             new PackageMapping("Aspire*", packagesPath),
             new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
-        }, _nuGetPackageCache, pinnedVersion: pinnedVersion, logger: _logger);
+        }, _nuGetPackageCache, _features, pinnedVersion: pinnedVersion, logger: _logger);
     }
 
     internal static DirectoryInfo? TryResolvePrInstallPackagesDirectory(string? processPath, string identityChannel)
@@ -255,7 +256,7 @@ internal class PackagingService : IPackagingService
         {
             new PackageMapping("Aspire*", stagingFeedUrl),
             new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
-        }, _nuGetPackageCache, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: _logger);
+        }, _nuGetPackageCache, _features, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: _logger);
 
         // Surface the resolved staging routing so users can see what `--channel staging` actually
         // picked (the "show what was resolved" suggestion from the issue RCA). Pinned version is

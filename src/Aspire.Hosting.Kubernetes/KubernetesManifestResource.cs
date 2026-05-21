@@ -27,7 +27,7 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
     /// </summary>
     /// <param name="namespace">The Kubernetes namespace.</param>
     /// <returns>This manifest resource.</returns>
-    [AspireExport(Description = "Sets the Kubernetes namespace for this manifest")]
+    [AspireExport]
     public KubernetesManifestResource WithNamespace(string @namespace)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(@namespace);
@@ -43,7 +43,7 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
     /// <param name="key">The label key.</param>
     /// <param name="value">The label value.</param>
     /// <returns>This manifest resource.</returns>
-    [AspireExport(Description = "Adds or updates a Kubernetes label on this manifest")]
+    [AspireExport]
     public KubernetesManifestResource WithLabel(string key, string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
@@ -60,7 +60,7 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
     /// <param name="key">The annotation key.</param>
     /// <param name="value">The annotation value.</param>
     /// <returns>This manifest resource.</returns>
-    [AspireExport(Description = "Adds or updates a Kubernetes annotation on this manifest")]
+    [AspireExport]
     public KubernetesManifestResource WithAnnotation(string key, string value)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
@@ -81,7 +81,7 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
     /// <param name="path">The dot-separated manifest field path, for example <c>spec.replicas</c> or <c>data.username</c>.</param>
     /// <param name="value">The field value.</param>
     /// <returns>This manifest resource.</returns>
-    [AspireExport(Description = "Adds or updates a manifest field using a dot-separated path")]
+    [AspireExport]
     public KubernetesManifestResource WithField(
         string path,
         [AspireUnion(typeof(string), typeof(double), typeof(bool))] object value)

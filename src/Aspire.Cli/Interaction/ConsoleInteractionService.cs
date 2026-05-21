@@ -86,11 +86,15 @@ internal class ConsoleInteractionService : IInteractionService
         // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
         // Spectre.Console throws if multiple interactive operations run concurrently.
         // If already in a status, or in debug/non-interactive mode, fall back to subtle message.
-        // Also skip status display if statusText is empty (e.g., when outputting JSON)
-        if (Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0 ||
-            _executionContext.DebugMode ||
+        // Also skip status display if statusText is empty (e.g., when outputting JSON).
+        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation
+        // skips the swap when an earlier condition forces the fallback path. Otherwise the
+        // swap would set _inStatus to 1 but the try/finally that resets it would never run,
+        // permanently disabling interactive status for the lifetime of the service.
+        if (_executionContext.DebugMode ||
             !_hostEnvironment.SupportsInteractiveOutput ||
-            string.IsNullOrEmpty(statusText))
+            string.IsNullOrEmpty(statusText) ||
+            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
         {
             // Skip displaying if status text is empty (e.g., when outputting JSON)
             if (!string.IsNullOrEmpty(statusText))
@@ -117,6 +121,51 @@ internal class ConsoleInteractionService : IInteractionService
         }
     }
 
+    public async Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
+    {
+        var emojiPrefix = emoji is { } e ? ConsoleHelpers.FormatEmojiPrefix(e, MessageConsole) : string.Empty;
+        var initialDisplayText = emojiPrefix + initialStatusText.EscapeMarkup();
+
+        // Mirrors ShowStatusAsync: prevent nested Spectre.Console Status operations, skip when debug/non-interactive,
+        // and treat empty text as "no status UI". The fallback path still drives the action so progress logic runs;
+        // we just hand it an updater that emits subtle messages instead of mutating a live spinner.
+        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation skips the swap when
+        // an earlier condition forces the fallback path; otherwise _inStatus would be left set to 1.
+        if (_executionContext.DebugMode ||
+            !_hostEnvironment.SupportsInteractiveOutput ||
+            string.IsNullOrEmpty(initialStatusText) ||
+            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
+        {
+            if (!string.IsNullOrEmpty(initialStatusText))
+            {
+                DisplaySubtleMessage(initialDisplayText, allowMarkup: true);
+            }
+            else
+            {
+                MessageLogger.LogInformation("Status: {StatusText}", initialStatusText);
+            }
+
+            return await action(text =>
+            {
+                if (!string.IsNullOrEmpty(text))
+                {
+                    DisplaySubtleMessage(emojiPrefix + text.EscapeMarkup(), allowMarkup: true);
+                }
+            });
+        }
+
+        try
+        {
+            return await MessageConsole.Status()
+                .Spinner(Spinner.Known.Dots3)
+                .StartAsync(initialDisplayText, context => action(text => context.Status = emojiPrefix + text.EscapeMarkup()));
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _inStatus, 0);
+        }
+    }
+
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         MessageLogger.LogInformation("Status: {StatusText}", statusText);
@@ -134,11 +183,13 @@ internal class ConsoleInteractionService : IInteractionService
         // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
         // Spectre.Console throws if multiple interactive operations run concurrently.
         // If already in a status, or in debug/non-interactive mode, fall back to subtle message.
-        // Also skip status display if statusText is empty (e.g., when outputting JSON)
-        if (Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0 ||
-            _executionContext.DebugMode ||
+        // Also skip status display if statusText is empty (e.g., when outputting JSON).
+        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation skips the swap when
+        // an earlier condition forces the fallback path; otherwise _inStatus would be left set to 1.
+        if (_executionContext.DebugMode ||
             !_hostEnvironment.SupportsInteractiveOutput ||
-            string.IsNullOrEmpty(statusText))
+            string.IsNullOrEmpty(statusText) ||
+            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
         {
             if (!string.IsNullOrEmpty(statusText))
             {

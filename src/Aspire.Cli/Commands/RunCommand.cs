@@ -29,6 +29,8 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// Represents information about a detached AppHost for JSON serialization.
 /// </summary>
+// `aspire start --format json` and `aspire run --detach --format json` use this shape;
+// keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed record DetachOutputInfo(
     string AppHostPath,
     int AppHostPid,

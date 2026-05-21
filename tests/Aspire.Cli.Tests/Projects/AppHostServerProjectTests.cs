@@ -299,15 +299,15 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
                 {
                     new PackageMapping("Aspire*", prOldHivePath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, nugetCache);
+                }, nugetCache, new TestFeatures());
 
                 var prNewChannel = PackageChannel.CreateExplicitChannel("pr-new", PackageChannelQuality.Prerelease, new[]
                 {
                     new PackageMapping("Aspire*", prNewHivePath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, nugetCache);
+                }, nugetCache, new TestFeatures());
 
-                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache);
+                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache, new TestFeatures());
 
                 return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, prOldChannel, prNewChannel });
             }
@@ -392,7 +392,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         {
             new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/fake/v3/index.json"),
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-        }, nugetCache);
+        }, nugetCache, new TestFeatures());
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
@@ -444,7 +444,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
         {
             new PackageMapping("Aspire*", channelFeed)
-        }, nugetCache);
+        }, nugetCache, new TestFeatures());
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })

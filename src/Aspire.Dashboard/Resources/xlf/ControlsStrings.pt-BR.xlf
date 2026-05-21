@@ -512,10 +512,10 @@
         <target state="translated">Detalhes</target>
         <note />
       </trans-unit>
-      <trans-unit id="SpanDetailsDuration">
-        <source>Duration &lt;strong&gt;{0}&lt;/strong&gt;</source>
-        <target state="translated">Duração &lt;strong&gt;{0}&lt;/strong&gt;</target>
-        <note>{0} is a duration. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
+      <trans-unit id="SpanDetailsDurationLabel">
+        <source>Duration</source>
+        <target state="new">Duration</target>
+        <note />
       </trans-unit>
       <trans-unit id="SpanDetailsEventsHeader">
         <source>Events</source>
@@ -527,14 +527,14 @@
         <target state="translated">Links</target>
         <note />
       </trans-unit>
-      <trans-unit id="SpanDetailsResource">
-        <source>Resource &lt;strong&gt;{0}&lt;/strong&gt;</source>
-        <target state="translated">Recurso &lt;strong&gt;{0}&lt;/strong&gt;</target>
-        <note>{0} is the application name. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
-      </trans-unit>
       <trans-unit id="SpanDetailsResourceHeader">
         <source>Resource</source>
         <target state="translated">Recurso</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SpanDetailsResourceLabel">
+        <source>Resource</source>
+        <target state="new">Resource</target>
         <note />
       </trans-unit>
       <trans-unit id="SpanDetailsSpanColumnHeader">
@@ -552,10 +552,10 @@
         <target state="translated">Intervalo</target>
         <note />
       </trans-unit>
-      <trans-unit id="SpanDetailsStartTime">
-        <source>Start time &lt;strong&gt;{0}&lt;/strong&gt;</source>
-        <target state="translated">Horário de início &lt;strong&gt;{0}&lt;/strong&gt;</target>
-        <note>{0} is a duration. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
+      <trans-unit id="SpanDetailsStartTimeLabel">
+        <source>Start time</source>
+        <target state="new">Start time</target>
+        <note />
       </trans-unit>
       <trans-unit id="SpanTypeCloud">
         <source>Cloud</source>
@@ -607,20 +607,20 @@
         <target state="translated">Entrada de log</target>
         <note />
       </trans-unit>
-      <trans-unit id="StructuredLogsDetailsResource">
-        <source>Resource &lt;strong&gt;{0}&lt;/strong&gt;</source>
-        <target state="translated">Recurso &lt;strong&gt;{0}&lt;/strong&gt;</target>
-        <note>{0} is the application name. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
-      </trans-unit>
       <trans-unit id="StructuredLogsDetailsResourceHeader">
         <source>Resource</source>
         <target state="translated">Recurso</target>
         <note />
       </trans-unit>
-      <trans-unit id="StructuredLogsDetailsTimestamp">
-        <source>Timestamp &lt;strong&gt;{0}&lt;/strong&gt;</source>
-        <target state="translated">Carimbo de data &lt;strong&gt;{0}&lt;/strong&gt;</target>
-        <note>{0} is a date. This is raw markup, so &lt;strong&gt; and &lt;/strong&gt; should not be modified</note>
+      <trans-unit id="StructuredLogsDetailsResourceLabel">
+        <source>Resource</source>
+        <target state="new">Resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StructuredLogsDetailsTimestampLabel">
+        <source>Timestamp</source>
+        <target state="new">Timestamp</target>
+        <note />
       </trans-unit>
       <trans-unit id="TimeOffsetColumnHeader">
         <source>Time offset</source>

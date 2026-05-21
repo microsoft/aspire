@@ -26,7 +26,8 @@ public static class RabbitMQBuilderExtensions
     /// <param name="password">The parameter used to provide the password for the RabbitMQ resource. If <see langword="null"/> a random password will be generated.</param>
     /// <param name="port">The host port that the underlying container is bound to when running locally.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a RabbitMQ container resource")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<RabbitMQServerResource> AddRabbitMQ(this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
         IResourceBuilder<ParameterResource>? userName = null,
@@ -93,7 +94,8 @@ public static class RabbitMQBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a data volume to the RabbitMQ container")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<RabbitMQServerResource> WithDataVolume(this IResourceBuilder<RabbitMQServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -109,7 +111,8 @@ public static class RabbitMQBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a data bind mount to the RabbitMQ container")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<RabbitMQServerResource> WithDataBindMount(this IResourceBuilder<RabbitMQServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -138,7 +141,10 @@ public static class RabbitMQBuilderExtensions
         return builder.WithManagementPlugin(port: null);
     }
 
-    [AspireExport("withManagementPlugin", Description = "Enables the RabbitMQ management plugin")]
+    /// <summary>
+    /// Enables the RabbitMQ management plugin
+    /// </summary>
+    [AspireExport("withManagementPlugin")]
     internal static IResourceBuilder<RabbitMQServerResource> WithManagementPluginForPolyglot(
         this IResourceBuilder<RabbitMQServerResource> builder,
         int? port = null)

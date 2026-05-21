@@ -153,7 +153,18 @@ internal partial class AspireExportAnalyzer
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DuplicateGeneratedMethodNameId}",
             customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
-        private const string DtoMutableCollectionPropertyMustBeInitSettableId = "ASPIREEXPORT015";
+        private const string DescriptionShouldUseXmlDocsId = "ASPIREEXPORT015";
+        internal static readonly DiagnosticDescriptor s_descriptionShouldUseXmlDocs = new(
+            id: DescriptionShouldUseXmlDocsId,
+            title: "AspireExport description should use XML documentation",
+            messageFormat: "AspireExport Description is compatibility metadata. Use XML documentation with ATS tags such as <ats-summary> for generated polyglot SDK documentation.",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DescriptionShouldUseXmlDocsId}",
+            customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+        private const string DtoMutableCollectionPropertyMustBeInitSettableId = "ASPIREEXPORT016";
         internal static readonly DiagnosticDescriptor s_dtoMutableCollectionPropertyMustBeInitSettable = new(
             id: DtoMutableCollectionPropertyMustBeInitSettableId,
             title: "AspireDto mutable collection property should be init-settable",
@@ -178,6 +189,7 @@ internal partial class AspireExportAnalyzer
             s_callbackContextTypeMissingExport,
             s_duplicatePolyglotCapabilityId,
             s_duplicateGeneratedMethodName,
+            s_descriptionShouldUseXmlDocs,
             s_dtoMutableCollectionPropertyMustBeInitSettable
         );
     }

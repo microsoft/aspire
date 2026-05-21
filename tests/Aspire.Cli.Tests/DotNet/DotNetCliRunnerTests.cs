@@ -161,7 +161,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task BuildAsyncAlwaysInjectsDotnetCliUseMsBuildServerEnvironmentVariable()
+    public async Task BuildAsyncDoesNotInjectDotnetCliUseMsBuildServerEnvironmentVariable()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -179,8 +179,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             (args, env, _, _) =>
             {
                 Assert.NotNull(env);
-                Assert.True(env.ContainsKey("DOTNET_CLI_USE_MSBUILD_SERVER"));
-                Assert.Equal("true", env["DOTNET_CLI_USE_MSBUILD_SERVER"]);
+                Assert.False(env.ContainsKey("DOTNET_CLI_USE_MSBUILD_SERVER"));
             },
             0);
 
@@ -218,14 +217,13 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task BuildAsyncUsesConfigurationValueForDotnetCliUseMsBuildServer()
+    public async Task BuildAsyncDoesNotInjectConfiguredDotnetCliUseMsBuildServer()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        // Add a configuration value that overrides the default
         services.AddSingleton<IConfiguration>(sp =>
         {
             var configBuilder = new ConfigurationBuilder();
@@ -246,8 +244,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             (args, env, _, _) =>
             {
                 Assert.NotNull(env);
-                Assert.True(env.ContainsKey("DOTNET_CLI_USE_MSBUILD_SERVER"));
-                Assert.Equal("false", env["DOTNET_CLI_USE_MSBUILD_SERVER"]);
+                Assert.False(env.ContainsKey("DOTNET_CLI_USE_MSBUILD_SERVER"));
             },
             0);
 
@@ -388,7 +385,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunAsyncInjectsDotnetCliUseMsBuildServerWhenNoBuildIsFalse()
+    public async Task RunAsyncDoesNotInjectDotnetCliUseMsBuildServerWhenNoBuildIsFalse()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -406,15 +403,14 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             (args, env, _, _) =>
             {
                 Assert.NotNull(env);
-                Assert.True(env.ContainsKey("DOTNET_CLI_USE_MSBUILD_SERVER"));
-                Assert.Equal("true", env["DOTNET_CLI_USE_MSBUILD_SERVER"]);
+                Assert.False(env.ContainsKey("DOTNET_CLI_USE_MSBUILD_SERVER"));
             },
             0);
 
         var exitCode = await runner.RunAsync(
             projectFile: projectFile,
             watch: false,
-            noBuild: false, // This should inject the environment variable
+            noBuild: false,
             noRestore: false,
             args: ["--operation", "inspect"],
             env: new Dictionary<string, string>(),
@@ -485,8 +481,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             (args, env, _, _) =>
             {
                 Assert.NotNull(env);
-                Assert.True(env.ContainsKey("DOTNET_CLI_USE_MSBUILD_SERVER"));
-                Assert.Equal("true", env["DOTNET_CLI_USE_MSBUILD_SERVER"]);
+                Assert.False(env.ContainsKey("DOTNET_CLI_USE_MSBUILD_SERVER"));
                 // Verify existing environment variable is preserved
                 Assert.True(env.ContainsKey("EXISTING_VAR"));
                 Assert.Equal("existing_value", env["EXISTING_VAR"]);
