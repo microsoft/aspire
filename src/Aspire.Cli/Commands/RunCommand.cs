@@ -190,8 +190,6 @@ internal sealed class RunCommand : BaseCommand
 
         AppHostProjectContext? context = null;
         Activity? runActivity = null;
-        Task? pendingLogCapture = null;
-        using var logCaptureCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         try
         {
@@ -319,179 +317,200 @@ internal sealed class RunCommand : BaseCommand
             }
 
             // Set up log capture - writes to unified CLI log file
-            pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, logCaptureCancellationSource.Token);
+            using var logCaptureCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, logCaptureCancellationSource.Token);
 
-            // Get dashboard URLs
-            DashboardUrlsState dashboardUrls;
-            using (var getDashboardUrlsActivity = _profilingTelemetry.StartRunAppHostGetDashboardUrls())
+            try
             {
-                dashboardUrls = await InteractionService.ShowStatusAsync(
-                    RunCommandStrings.StartingDashboard,
-                    async () => await WaitForStartupOperationOrAppHostExitAsync(
-                        ct => backchannel.GetDashboardUrlsAsync(ct),
-                        pendingRun,
-                        cancellationToken));
-                getDashboardUrlsActivity.SetAppHostDashboardHealthy(dashboardUrls.DashboardHealthy);
-            }
-
-            if (dashboardUrls.DashboardHealthy is false)
-            {
-                InteractionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.DashboardFailedToStart);
-            }
-
-            if (IsDetachedStartChild())
-            {
-                var observedExitCode = await ObserveEarlyDetachedStartupExitAsync(pendingRun, cancellationToken).ConfigureAwait(false);
-                if (observedExitCode is { } exitCode)
+                // Get dashboard URLs
+                DashboardUrlsState dashboardUrls;
+                using (var getDashboardUrlsActivity = _profilingTelemetry.StartRunAppHostGetDashboardUrls())
                 {
-                    return CreateRunExitResult(exitCode);
+                    dashboardUrls = await InteractionService.ShowStatusAsync(
+                        RunCommandStrings.StartingDashboard,
+                        async () => await WaitForStartupOperationOrAppHostExitAsync(
+                            ct => backchannel.GetDashboardUrlsAsync(ct),
+                            pendingRun,
+                            cancellationToken));
+                    getDashboardUrlsActivity.SetAppHostDashboardHealthy(dashboardUrls.DashboardHealthy);
                 }
 
-            }
-
-            await WaitForStartupOperationOrAppHostExitAsync(
-                ct => backchannel.NotifyAppHostReadyAsync(ct),
-                pendingRun,
-                cancellationToken).ConfigureAwait(false);
-
-            // Display the UX
-            var appHostRelativePath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, effectiveAppHostFile.FullName);
-            var longestLocalizedLengthWithColon = RenderAppHostSummary(
-                InteractionService,
-                appHostRelativePath,
-                dashboardUrls.BaseUrlWithLoginToken,
-                dashboardUrls.CodespacesUrlWithLoginToken,
-                _fileLoggerProvider.LogFilePath,
-                isExtensionHost);
-
-            // Handle remote environments (Codespaces, Remote Containers, SSH)
-            var isCodespaces = dashboardUrls.CodespacesUrlWithLoginToken is not null;
-            var isRemoteContainers = string.Equals(_configuration["REMOTE_CONTAINERS"], "true", StringComparison.OrdinalIgnoreCase);
-            var isSshRemote = _configuration["VSCODE_IPC_HOOK_CLI"] is not null
-                              && _configuration["SSH_CONNECTION"] is not null;
-            var isRemoteEnvironment = isCodespaces || isRemoteContainers || isSshRemote;
-
-            var profileStopRequested = false;
-            if (captureProfile)
-            {
-                profileStopRequested = await RequestAppHostStopForProfileAsync(backchannel, pendingRun, captureProfileDelay, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
-            }
-            else if (!isRemoteEnvironment)
-            {
-                AppendCtrlCMessage(longestLocalizedLengthWithColon);
-            }
-            else
-            {
-                // We want to display resource information in remote environments.
-                // Resources update over time so we'll use a live display.
-                // It is used to show discovered endpoints as they come in over the backchannel.
-                var discoveredEndpoints = new List<(string Resource, string Endpoint)>();
-                var endpointsLocalizedString = RunCommandStrings.Endpoints;
-                var showCtrlC = !ExtensionHelper.IsExtensionHost(_interactionService, out _, out _);
-
-                IRenderable BuildLiveRenderable()
+                if (dashboardUrls.DashboardHealthy is false)
                 {
-                    var rows = new List<IRenderable>();
-
-                    if (discoveredEndpoints.Count > 0)
-                    {
-                        var endpointsGrid = new Grid();
-                        endpointsGrid.AddColumn();
-                        endpointsGrid.AddColumn();
-                        endpointsGrid.Columns[0].Width = longestLocalizedLengthWithColon;
-                        endpointsGrid.AddRow(Text.Empty, Text.Empty);
-
-                        for (var i = 0; i < discoveredEndpoints.Count; i++)
-                        {
-                            var (resource, endpoint) = discoveredEndpoints[i];
-                            endpointsGrid.AddRow(
-                                i == 0
-                                    ? new Align(new Markup($"[bold green]{endpointsLocalizedString}[/]:"), HorizontalAlignment.Right)
-                                    : Text.Empty,
-                                new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(_interactionService, endpoint)}")
-                            );
-                        }
-
-                        rows.Add(new Padder(endpointsGrid, new Padding(3, 0)));
-                    }
-
-                    if (showCtrlC)
-                    {
-                        rows.Add(BuildCtrlCRenderable(longestLocalizedLengthWithColon));
-                    }
-
-                    return rows.Count > 0 ? new Rows(rows) : Text.Empty;
+                    InteractionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.DashboardFailedToStart);
                 }
 
-                try
+                if (IsDetachedStartChild())
                 {
-                    await InteractionService.DisplayLiveAsync(BuildLiveRenderable(), async updateTarget =>
+                    var observedExitCode = await ObserveEarlyDetachedStartupExitAsync(pendingRun, cancellationToken).ConfigureAwait(false);
+                    if (observedExitCode is { } exitCode)
                     {
-                        var resourceStates = backchannel.GetResourceStatesAsync(cancellationToken);
-                        await foreach (var resourceState in resourceStates.WithCancellation(cancellationToken))
+                        return CreateRunExitResult(exitCode);
+                    }
+
+                }
+
+                await WaitForStartupOperationOrAppHostExitAsync(
+                    ct => backchannel.NotifyAppHostReadyAsync(ct),
+                    pendingRun,
+                    cancellationToken).ConfigureAwait(false);
+
+                // Display the UX
+                var appHostRelativePath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, effectiveAppHostFile.FullName);
+                var longestLocalizedLengthWithColon = RenderAppHostSummary(
+                    InteractionService,
+                    appHostRelativePath,
+                    dashboardUrls.BaseUrlWithLoginToken,
+                    dashboardUrls.CodespacesUrlWithLoginToken,
+                    _fileLoggerProvider.LogFilePath,
+                    isExtensionHost);
+
+                // Handle remote environments (Codespaces, Remote Containers, SSH)
+                var isCodespaces = dashboardUrls.CodespacesUrlWithLoginToken is not null;
+                var isRemoteContainers = string.Equals(_configuration["REMOTE_CONTAINERS"], "true", StringComparison.OrdinalIgnoreCase);
+                var isSshRemote = _configuration["VSCODE_IPC_HOOK_CLI"] is not null
+                                  && _configuration["SSH_CONNECTION"] is not null;
+                var isRemoteEnvironment = isCodespaces || isRemoteContainers || isSshRemote;
+
+                var profileStopRequested = false;
+                if (captureProfile)
+                {
+                    profileStopRequested = await RequestAppHostStopForProfileAsync(backchannel, pendingRun, captureProfileDelay, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
+                }
+                else if (!isRemoteEnvironment)
+                {
+                    AppendCtrlCMessage(longestLocalizedLengthWithColon);
+                }
+                else
+                {
+                    // We want to display resource information in remote environments.
+                    // Resources update over time so we'll use a live display.
+                    // It is used to show discovered endpoints as they come in over the backchannel.
+                    var discoveredEndpoints = new List<(string Resource, string Endpoint)>();
+                    var endpointsLocalizedString = RunCommandStrings.Endpoints;
+                    var showCtrlC = !ExtensionHelper.IsExtensionHost(_interactionService, out _, out _);
+
+                    IRenderable BuildLiveRenderable()
+                    {
+                        var rows = new List<IRenderable>();
+
+                        if (discoveredEndpoints.Count > 0)
                         {
-                            ProcessResourceState(resourceState, (resource, endpoint) =>
+                            var endpointsGrid = new Grid();
+                            endpointsGrid.AddColumn();
+                            endpointsGrid.AddColumn();
+                            endpointsGrid.Columns[0].Width = longestLocalizedLengthWithColon;
+                            endpointsGrid.AddRow(Text.Empty, Text.Empty);
+
+                            for (var i = 0; i < discoveredEndpoints.Count; i++)
                             {
-                                discoveredEndpoints.Add((resource, endpoint));
-                                updateTarget(BuildLiveRenderable());
-                            });
+                                var (resource, endpoint) = discoveredEndpoints[i];
+                                endpointsGrid.AddRow(
+                                    i == 0
+                                        ? new Align(new Markup($"[bold green]{endpointsLocalizedString}[/]:"), HorizontalAlignment.Right)
+                                        : Text.Empty,
+                                    new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(_interactionService, endpoint)}")
+                                );
+                            }
+
+                            rows.Add(new Padder(endpointsGrid, new Padding(3, 0)));
                         }
-                    });
+
+                        if (showCtrlC)
+                        {
+                            rows.Add(BuildCtrlCRenderable(longestLocalizedLengthWithColon));
+                        }
+
+                        return rows.Count > 0 ? new Rows(rows) : Text.Empty;
+                    }
+
+                    try
+                    {
+                        await InteractionService.DisplayLiveAsync(BuildLiveRenderable(), async updateTarget =>
+                        {
+                            var resourceStates = backchannel.GetResourceStatesAsync(cancellationToken);
+                            await foreach (var resourceState in resourceStates.WithCancellation(cancellationToken))
+                            {
+                                ProcessResourceState(resourceState, (resource, endpoint) =>
+                                {
+                                    discoveredEndpoints.Add((resource, endpoint));
+                                    updateTarget(BuildLiveRenderable());
+                                });
+                            }
+                        });
+                    }
+                    catch (ConnectionLostException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        // Orderly shutdown
+                    }
                 }
-                catch (ConnectionLostException) when (cancellationToken.IsCancellationRequested)
+
+                if (ExtensionHelper.IsExtensionHost(InteractionService, out var extInteractionService, out _))
                 {
-                    // Orderly shutdown
+                    if (dashboardUrls.DashboardHealthy is true)
+                    {
+                        extInteractionService.DisplayDashboardUrls(dashboardUrls);
+                    }
+
+                    extInteractionService.NotifyAppHostStartupCompleted();
+                }
+
+                using (var lifetimeActivity = _profilingTelemetry.StartRunAppHostLifetime())
+                {
+                    runActivity?.Stop();
+
+                    try
+                    {
+                        await pendingLogCapture;
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to capture logs from AppHost");
+                        InteractionService.DisplayMessage(KnownEmojis.Warning, "No longer receiving logs from AppHost.");
+                    }
+                    finally
+                    {
+                        pendingLogCapture = Task.CompletedTask;
+                    }
+
+                    var exitCode = await pendingRun;
+                    lifetimeActivity.SetProcessExitCode(exitCode);
+
+                    // Capture mode intentionally turns a long-running AppHost startup into a finite command.
+                    // Some AppHost implementations, including guest AppHosts, report the teardown exit code
+                    // from a helper process that the CLI stops after the AppHost has already started; on
+                    // Unix-like systems that surfaces as 128 + signal (e.g., 130 SIGINT, 137 SIGKILL, 143
+                    // SIGTERM). These are AppHost process exit codes (not CLI exit codes), so use the raw
+                    // signal-based literals here instead of CLI exit-code constants. Treat the known teardown
+                    // codes as a successful capture, but propagate any other non-zero exit code so a
+                    // genuine AppHost crash during shutdown is not masked.
+                    if (profileStopRequested)
+                    {
+                        return exitCode is 0 or 130 or 137 or 143
+                            ? CommandResult.Success()
+                            : CommandResult.FromExitCode(exitCode);
+                    }
+
+                    // Cancelled by user (e.g., Ctrl+C) - treat as successful exit since the user intentionally stopped the AppHost.
+                    return exitCode == CliExitCodes.Cancelled
+                        ? CommandResult.Cancelled(CliExitCodes.Success)
+                        : CommandResult.FromExitCode(exitCode);
                 }
             }
-
-            if (ExtensionHelper.IsExtensionHost(InteractionService, out var extInteractionService, out _))
+            finally
             {
-                if (dashboardUrls.DashboardHealthy is true)
-                {
-                    extInteractionService.DisplayDashboardUrls(dashboardUrls);
-                }
-
-                extInteractionService.NotifyAppHostStartupCompleted();
-            }
-
-            using (var lifetimeActivity = _profilingTelemetry.StartRunAppHostLifetime())
-            {
-                runActivity?.Stop();
-
+                logCaptureCancellationSource.Cancel();
                 try
                 {
-                    await pendingLogCapture;
-                    pendingLogCapture = null;
+                    await pendingLogCapture.ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
                 }
                 catch (Exception ex)
                 {
-                    pendingLogCapture = null;
-                    _logger.LogWarning(ex, "Failed to capture logs from AppHost");
-                    InteractionService.DisplayMessage(KnownEmojis.Warning, "No longer receiving logs from AppHost.");
+                    _logger.LogDebug(ex, "AppHost log capture ended while the run command was exiting early.");
                 }
-
-                var exitCode = await pendingRun;
-                lifetimeActivity.SetProcessExitCode(exitCode);
-
-                // Capture mode intentionally turns a long-running AppHost startup into a finite command.
-                // Some AppHost implementations, including guest AppHosts, report the teardown exit code
-                // from a helper process that the CLI stops after the AppHost has already started; on
-                // Unix-like systems that surfaces as 128 + signal (e.g., 130 SIGINT, 137 SIGKILL, 143
-                // SIGTERM). These are AppHost process exit codes (not CLI exit codes), so use the raw
-                // signal-based literals here instead of CLI exit-code constants. Treat the known teardown
-                // codes as a successful capture, but propagate any other non-zero exit code so a
-                // genuine AppHost crash during shutdown is not masked.
-                if (profileStopRequested)
-                {
-                    return exitCode is 0 or 130 or 137 or 143
-                        ? CommandResult.Success()
-                        : CommandResult.FromExitCode(exitCode);
-                }
-
-                // Cancelled by user (e.g., Ctrl+C) - treat as successful exit since the user intentionally stopped the AppHost.
-                return exitCode == CliExitCodes.Cancelled
-                    ? CommandResult.Cancelled(CliExitCodes.Success)
-                    : CommandResult.FromExitCode(exitCode);
             }
         }
         catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested || ex is ExtensionOperationCanceledException)
@@ -547,23 +566,6 @@ internal sealed class RunCommand : BaseCommand
         }
         finally
         {
-            logCaptureCancellationSource.Cancel();
-
-            if (pendingLogCapture is not null)
-            {
-                try
-                {
-                    await pendingLogCapture.ConfigureAwait(false);
-                }
-                catch (OperationCanceledException)
-                {
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "AppHost log capture ended while the run command was exiting early.");
-                }
-            }
-
             runActivity?.Dispose();
         }
     }
