@@ -15,6 +15,8 @@ internal sealed class AspireSkillsBundle
 {
     private const string ManifestFileName = "skill-manifest.json";
     private const string SkillsDirectoryName = "skills";
+    private const string SkillFileName = "SKILL.md";
+    private const int MaxSkillDescriptionLength = 1024;
 
     private readonly DirectoryInfo _bundleDirectory;
     private readonly SkillBundleManifest _manifest;
@@ -169,12 +171,81 @@ internal sealed class AspireSkillsBundle
         }
 
         var expectedHash = NormalizeSha256(file.Sha256);
-        using var stream = File.OpenRead(fullPath);
-        var actualHash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        string actualHash;
+        using (var stream = File.OpenRead(fullPath))
+        {
+            actualHash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        }
+
         if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle file '{0}' in skill '{1}' failed SHA-256 verification.", relativePath, skillName));
         }
+
+        if (string.Equals(relativePath, SkillFileName, StringComparison.Ordinal))
+        {
+            ValidateSkillFileFrontmatter(skillName, fullPath);
+        }
+    }
+
+    private static void ValidateSkillFileFrontmatter(string skillName, string skillFilePath)
+    {
+        var content = File.ReadAllText(skillFilePath);
+        var description = GetFrontmatterValue(content, "description");
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must define a frontmatter description in SKILL.md.", skillName));
+        }
+
+        if (description.Length > MaxSkillDescriptionLength)
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture,
+                "Aspire skills bundle skill '{0}' SKILL.md description is {1} characters; agent hosts accept at most {2}.",
+                skillName,
+                description.Length,
+                MaxSkillDescriptionLength));
+        }
+    }
+
+    private static string? GetFrontmatterValue(string content, string key)
+    {
+        var normalizedContent = content.ReplaceLineEndings("\n");
+        if (!normalizedContent.StartsWith("---\n", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var frontmatterEndIndex = normalizedContent.IndexOf("\n---\n", 4, StringComparison.Ordinal);
+        if (frontmatterEndIndex < 0)
+        {
+            return null;
+        }
+
+        // Skill files use simple YAML frontmatter:
+        //   ---
+        //   name: aspire
+        //   description: "Use when working with an Aspire distributed application"
+        //   ---
+        // The agent hosts read this field directly and reject descriptions longer
+        // than 1024 characters, so validate the bundled SKILL.md before caching it.
+        var frontmatter = normalizedContent[4..frontmatterEndIndex];
+        var keyPrefix = $"{key}:";
+        foreach (var line in frontmatter.Split('\n'))
+        {
+            if (!line.StartsWith(keyPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var value = line[keyPrefix.Length..].Trim();
+            return value.Length >= 2 &&
+                   ((value[0] == '"' && value[^1] == '"') || (value[0] == '\'' && value[^1] == '\''))
+                ? value[1..^1]
+                : value;
+        }
+
+        return null;
     }
 
     private static bool ShouldInstallFile(SkillBundleSkill skill, string relativePath)

@@ -160,7 +160,7 @@
     <value>Installing Aspire skills...</value>
   </data>
   <data name="AspireSkillsInstaller_NpmUnavailable" xml:space="preserve">
-    <value>Aspire skills could not be downloaded from GitHub, and npm fallback is not available on PATH.</value>
+    <value>Aspire skills require npm for first-time installation, and npm is not available on PATH.</value>
   </data>
   <data name="AspireSkillsInstaller_InvalidBundle" xml:space="preserve">
     <value>The Aspire skills bundle is invalid: {0}</value>

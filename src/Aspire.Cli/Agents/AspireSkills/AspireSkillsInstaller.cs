@@ -5,7 +5,6 @@ using System.Diagnostics;
 using System.Formats.Tar;
 using System.Globalization;
 using System.IO.Compression;
-using System.Net;
 using System.Security.Cryptography;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
@@ -22,7 +21,6 @@ namespace Aspire.Cli.Agents.AspireSkills;
 internal sealed class AspireSkillsInstaller(
     INpmRunner npmRunner,
     INpmProvenanceChecker provenanceChecker,
-    IHttpClientFactory httpClientFactory,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
     IConfiguration configuration,
@@ -31,8 +29,7 @@ internal sealed class AspireSkillsInstaller(
 {
     internal const string PackageName = "@microsoft/aspire-skills";
     internal const string Version = "0.0.1";
-    internal const string GitHubRepository = "microsoft/aspire-skills";
-    internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
+    internal const string ExpectedSourceRepository = "https://github.com/microsoft/aspire-skills";
     internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";
     internal const string ExpectedBuildType = "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1";
     internal const string DisablePackageValidationKey = "disableAspireSkillsPackageValidation";
@@ -73,22 +70,9 @@ internal sealed class AspireSkillsInstaller(
 
         var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
 
-        var githubResult = await InstallFromGitHubAsync(cacheRoot, effectiveVersion, activity, cancellationToken).ConfigureAwait(false);
-        if (githubResult.Status == AcquisitionStatus.Installed)
-        {
-            CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
-            return AspireSkillsInstallResult.Installed(githubResult.Bundle!);
-        }
-
-        if (githubResult.Status == AcquisitionStatus.Failed)
-        {
-            activity?.SetStatus(ActivityStatusCode.Error, githubResult.Message);
-            return AspireSkillsInstallResult.Failed(githubResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_InvalidBundle);
-        }
-
         if (!npmRunner.IsAvailable)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "GitHub acquisition is unavailable and npm is unavailable.");
+            activity?.SetStatus(ActivityStatusCode.Error, "npm is unavailable.");
             return AspireSkillsInstallResult.Failed(AgentCommandStrings.AspireSkillsInstaller_NpmUnavailable);
         }
 
@@ -101,55 +85,6 @@ internal sealed class AspireSkillsInstaller(
 
         activity?.SetStatus(ActivityStatusCode.Error, npmResult.Message);
         return AspireSkillsInstallResult.Failed(npmResult.Message ?? string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveVersion)));
-    }
-
-    private async Task<AcquisitionResult> InstallFromGitHubAsync(
-        string cacheRoot,
-        string version,
-        Activity? activity,
-        CancellationToken cancellationToken)
-    {
-        var tempDir = Path.Combine(cacheRoot, $".github-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-
-        try
-        {
-            foreach (var tag in GetGitHubTagCandidates(version))
-            {
-                var archiveUrl = GetGitHubTagArchiveUrl(tag);
-                var archivePath = Path.Combine(tempDir, $"{GetSafeFileName(tag)}.tar.gz");
-                var downloaded = await TryDownloadGitHubArchiveAsync(archiveUrl, archivePath, cancellationToken).ConfigureAwait(false);
-                if (!downloaded)
-                {
-                    continue;
-                }
-
-                try
-                {
-                    var bundle = await CacheArchiveAsync(cacheRoot, archivePath, version, cancellationToken).ConfigureAwait(false);
-                    activity?.SetTag("aspire.skills.source", "github");
-                    activity?.SetTag("aspire.skills.cache_hit", false);
-                    return AcquisitionResult.Installed(bundle);
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
-                {
-                    logger.LogWarning(ex, "Downloaded Aspire skills archive from {ArchiveUrl} is invalid.", archiveUrl);
-                    return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
-                }
-            }
-
-            logger.LogDebug("Aspire skills GitHub archive was unavailable for version {Version}.", version);
-            return AcquisitionResult.Unavailable();
-        }
-        catch (HttpRequestException ex)
-        {
-            logger.LogDebug(ex, "Aspire skills GitHub archive download failed for version {Version}. Falling back to npm if available.", version);
-            return AcquisitionResult.Unavailable();
-        }
-        finally
-        {
-            TryDeleteDirectory(tempDir);
-        }
     }
 
     private async Task<AcquisitionResult> InstallFromNpmAsync(
@@ -282,56 +217,6 @@ internal sealed class AspireSkillsInstaller(
             TryDeleteDirectory(extractDir);
             TryDeleteDirectory(stageDir);
         }
-    }
-
-    private async Task<bool> TryDownloadGitHubArchiveAsync(string archiveUrl, string archivePath, CancellationToken cancellationToken)
-    {
-        var httpClient = httpClientFactory.CreateClient(nameof(AspireSkillsInstaller));
-        using var request = new HttpRequestMessage(HttpMethod.Get, archiveUrl);
-        request.Headers.UserAgent.ParseAdd("Aspire-Cli");
-
-        using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-        if (response.StatusCode == HttpStatusCode.NotFound)
-        {
-            return false;
-        }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            logger.LogDebug("Aspire skills GitHub archive request to {ArchiveUrl} returned HTTP {StatusCode}.", archiveUrl, response.StatusCode);
-            return false;
-        }
-
-        await using var responseStream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        await using var fileStream = File.Create(archivePath);
-        await responseStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
-
-        return true;
-    }
-
-    private static string GetGitHubTagArchiveUrl(string tag)
-    {
-        return $"https://github.com/{GitHubRepository}/archive/refs/tags/{Uri.EscapeDataString(tag)}.tar.gz";
-    }
-
-    private static IEnumerable<string> GetGitHubTagCandidates(string version)
-    {
-        yield return $"v{version}";
-
-        if (!version.StartsWith('v'))
-        {
-            yield return version;
-        }
-    }
-
-    private static string GetSafeFileName(string value)
-    {
-        foreach (var invalidCharacter in Path.GetInvalidFileNameChars())
-        {
-            value = value.Replace(invalidCharacter, '-');
-        }
-
-        return value;
     }
 
     private static void ValidateBundleVersion(AspireSkillsBundle bundle, string expectedVersion)
@@ -539,7 +424,6 @@ internal sealed class AspireSkillsInstaller(
     private enum AcquisitionStatus
     {
         Installed,
-        Unavailable,
         Failed
     }
 
@@ -548,11 +432,6 @@ internal sealed class AspireSkillsInstaller(
         public static AcquisitionResult Installed(AspireSkillsBundle bundle)
         {
             return new AcquisitionResult(AcquisitionStatus.Installed, bundle, null);
-        }
-
-        public static AcquisitionResult Unavailable()
-        {
-            return new AcquisitionResult(AcquisitionStatus.Unavailable, null, null);
         }
 
         public static AcquisitionResult Failed(string message)

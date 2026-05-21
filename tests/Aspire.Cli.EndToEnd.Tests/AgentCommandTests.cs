@@ -248,13 +248,14 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
     private static async Task SeedAspireSkillsBundleCacheAsync(Hex1bTerminalAutomator auto, TemporaryWorkspace workspace, SequenceCounter counter)
     {
+        const string aspireSkillsVersion = "0.0.1";
         var scriptPath = Path.Combine(workspace.WorkspaceRoot.FullName, "seed-aspire-skills-cache.sh");
         var script =
-            """
+            $$"""
             #!/usr/bin/env bash
             set -euo pipefail
 
-            cache="$HOME/.aspire/cache/aspire-skills/0.0.1"
+            cache="$HOME/.aspire/cache/aspire-skills/{{aspireSkillsVersion}}"
             rm -rf "$cache"
             mkdir -p \
               "$cache/skills/aspire/references" \
@@ -303,7 +304,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
             cat > "$cache/skill-manifest.json" <<JSON
             {
-              "version": "0.0.1",
+              "version": "{{aspireSkillsVersion}}",
               "supports": {
                 "aspireCli": ">=0.0.0 <999.0.0",
                 "aspireSdk": ">=0.0.0 <999.0.0"
@@ -346,5 +347,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         var containerScriptPath = CliE2ETestHelpers.ToContainerPath(scriptPath, workspace);
         await auto.RunCommandAsync($"bash {AspireCliShellCommandHelpers.QuoteBashArg(containerScriptPath)}", counter, TimeSpan.FromSeconds(30));
+        await auto.RunCommandAsync($"export aspireSkillsVersion={AspireCliShellCommandHelpers.QuoteBashArg(aspireSkillsVersion)}", counter, TimeSpan.FromSeconds(30));
     }
 }

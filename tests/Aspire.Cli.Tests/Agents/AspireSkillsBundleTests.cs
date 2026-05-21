@@ -19,7 +19,7 @@ public class AspireSkillsBundleTests
         {
             await CreateBundleAsync(bundleDirectory, new Dictionary<string, string>
             {
-                ["SKILL.md"] = "# Aspire",
+                ["SKILL.md"] = CreateSkillFileContent(),
                 ["references/app-commands.md"] = "# App commands",
                 ["evals/evals.json"] = "{}"
             });
@@ -47,7 +47,7 @@ public class AspireSkillsBundleTests
         {
             await CreateBundleAsync(bundleDirectory, new Dictionary<string, string>
             {
-                ["SKILL.md"] = "# Aspire"
+                ["SKILL.md"] = CreateSkillFileContent()
             }, hashOverride: "0000000000000000000000000000000000000000000000000000000000000000");
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
@@ -61,11 +61,34 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
+    public async Task LoadAsync_ThrowsWhenSkillDescriptionExceedsAgentHostLimit()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            await CreateBundleAsync(bundleDirectory, new Dictionary<string, string>
+            {
+                ["SKILL.md"] = CreateSkillFileContent(description: new string('a', 1025))
+            });
+
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
+
+            Assert.Contains("description", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("1024", exception.Message, StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task LoadAsync_ThrowsWhenFilePathEscapesSkillRoot()
     {
         var bundleDirectory = CreateTempDirectory();
         Directory.CreateDirectory(Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name));
-        await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name, "SKILL.md"), "# Aspire");
+        await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name, "SKILL.md"), CreateSkillFileContent());
 
         try
         {
@@ -111,7 +134,8 @@ public class AspireSkillsBundleTests
         var skillDirectory = Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspireify.Name);
         Directory.CreateDirectory(skillDirectory);
         var skillPath = Path.Combine(skillDirectory, "SKILL.md");
-        await File.WriteAllTextAsync(skillPath, "# Aspireify");
+        var skillContent = CreateSkillFileContent(SkillDefinition.Aspireify.Name, SkillDefinition.Aspireify.Description, "# Aspireify");
+        await File.WriteAllTextAsync(skillPath, skillContent);
 
         try
         {
@@ -142,7 +166,7 @@ public class AspireSkillsBundleTests
 
             var skillFile = Assert.Single(files);
             Assert.Equal("SKILL.md", skillFile.RelativePath);
-            Assert.Equal("# Aspireify", skillFile.Content);
+            Assert.Equal(skillContent, skillFile.Content);
         }
         finally
         {
@@ -157,7 +181,7 @@ public class AspireSkillsBundleTests
         var skillDirectory = Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name);
         Directory.CreateDirectory(skillDirectory);
         var skillPath = Path.Combine(skillDirectory, "SKILL.md");
-        await File.WriteAllTextAsync(skillPath, "# Aspire");
+        await File.WriteAllTextAsync(skillPath, CreateSkillFileContent());
 
         try
         {
@@ -204,7 +228,7 @@ public class AspireSkillsBundleTests
         {
             await CreateBundleAsync(
                 bundleDirectory,
-                new Dictionary<string, string> { ["SKILL.md"] = "# Aspire" },
+                new Dictionary<string, string> { ["SKILL.md"] = CreateSkillFileContent() },
                 supports: new SkillBundleSupports { AspireCli = ">=99.0.0 <100.0.0" });
 
             var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(
@@ -230,7 +254,7 @@ public class AspireSkillsBundleTests
         {
             await CreateBundleAsync(
                 bundleDirectory,
-                new Dictionary<string, string> { ["SKILL.md"] = "# Aspire" },
+                new Dictionary<string, string> { ["SKILL.md"] = CreateSkillFileContent() },
                 supports: new SkillBundleSupports { AspireCli = ">=13.4.0 <13.5.0" });
 
             var bundle = await AspireSkillsBundle.LoadAsync(
@@ -310,10 +334,23 @@ public class AspireSkillsBundleTests
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
+    private static string CreateSkillFileContent(
+        string name = "aspire",
+        string description = "Aspire CLI commands and workflows for distributed apps",
+        string body = "# Aspire")
+    {
+        return $$"""
+            ---
+            name: {{name}}
+            description: "{{description}}"
+            ---
+
+            {{body}}
+            """;
+    }
+
     private static string CreateTempDirectory()
     {
-        var directory = Path.Combine(Path.GetTempPath(), $"aspire-skills-bundle-test-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(directory);
-        return directory;
+        return Directory.CreateTempSubdirectory("aspire-skills-bundle-test-").FullName;
     }
 }
