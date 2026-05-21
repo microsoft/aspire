@@ -198,6 +198,8 @@ tools/ReleaseNotes/release-notes-*.md
 extension/dist/
 extension/.localization/
 extension/out/
+extension/.yarn/
+extension/.yarnrc.yml
 extension/node_modules/
 **/.vscode-test/
 extension/.version

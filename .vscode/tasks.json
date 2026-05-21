@@ -4,6 +4,31 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "npm: install extension dependencies",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"scripts/ensure-extension-dependencies.js"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/extension"
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated"
+			}
+		},
+		{
+			"label": "tasks: watch extension",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"npm: install extension dependencies",
+				"npm: watch extension"
+			],
+			"problemMatcher": []
+		},
+		{
 			"type": "npm",
 			"script": "watch",
 			"problemMatcher": "$ts-webpack-watch",
@@ -17,7 +42,7 @@
 				"isDefault": true
 			},
 			"label": "npm: watch extension",
-      "path": "extension",
+			"path": "extension",
 		},
 		{
 			"type": "npm",
@@ -30,7 +55,7 @@
 			},
 			"group": "build",
 			"label": "npm: watch-tests extension",
-      "path": "extension",
+			"path": "extension",
 		},
 		{
 			"label": "tasks: watch-tests extension",
@@ -39,7 +64,7 @@
 				"npm: watch-tests"
 			],
 			"problemMatcher": [],
-      "path": "extension"
+			"path": "extension"
 		}
 	]
 }
