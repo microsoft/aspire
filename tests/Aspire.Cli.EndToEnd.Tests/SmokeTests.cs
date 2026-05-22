@@ -115,10 +115,6 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
     [CaptureWorkspaceOnFailure]
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/17143")]
-    // The latest CLI now writes the generated SDK to `.aspire/modules/`, but the stable channel
-    // SDK still scaffolds an `apphost.ts` that imports from `./.modules/aspire.js`. Re-enable
-    // once the stable channel SDK ships the consolidated `.aspire/modules/` layout.
     public async Task LatestCliCanStartStableChannelTypeScriptAppHost()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();

@@ -1412,13 +1412,18 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Use the typed RPC method
         var files = await rpcClient.GenerateCodeAsync(codeGenerator, cancellationToken);
+        var outputPath = Path.Combine(appPath, LanguageInfo.GeneratedFolderName);
+        // Legacy TypeScript AppHosts (`apphost.ts`) still import generated files from
+        // `./.modules/aspire.js`. When that scaffold shape is detected, convert the
+        // generated `.mts/.mjs` outputs back to `.ts/.js` AND write them to the legacy
+        // `.modules/` folder so the existing import paths resolve.
         if (ShouldEmitLegacyTypeScriptGeneratedFiles(appPath, appHostFile))
         {
             files = ConvertGeneratedFilesForLegacyTypeScriptAppHost(files);
+            outputPath = Path.Combine(appPath, LanguageInfo.LegacyGeneratedFolderName);
         }
 
         // Write generated files to the output directory
-        var outputPath = Path.Combine(appPath, LanguageInfo.GeneratedFolderName);
         Directory.CreateDirectory(outputPath);
 
         foreach (var (fileName, content) in files)

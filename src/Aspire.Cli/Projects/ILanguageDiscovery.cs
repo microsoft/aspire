@@ -52,6 +52,13 @@ internal sealed record LanguageInfo(
     internal static string GeneratedFolderName { get; } = Path.Combine(".aspire", "modules");
 
     /// <summary>
+    /// The legacy folder path where generated code was placed prior to consolidating
+    /// generated artifacts under <c>.aspire/</c>. Used by the legacy TypeScript
+    /// <c>apphost.ts</c> compatibility path which still imports from <c>./.modules/</c>.
+    /// </summary>
+    internal const string LegacyGeneratedFolderName = ".modules";
+
+    /// <summary>
     /// Maximum directory depth used when scanning the file system for language
     /// detection patterns. Keeps the scan fast in large workspaces while still
     /// finding AppHost files in typical nested project layouts.
