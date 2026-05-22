@@ -79,7 +79,7 @@ foreach (var appConfig in appConfigs.Values)
 {
     if (!string.IsNullOrEmpty(appConfig.ConfigEndpointPath) && !string.IsNullOrEmpty(appConfig.ConfigResponse))
     {
-        app.MapGet(appConfig.ConfigEndpointPath, () => Results.Content(appConfig.ConfigResponse, "application/json"))
+        app.MapGet(appConfig.ConfigEndpointPath, () => Results.Content(appConfig.ConfigResponse!, "application/json"))
             .WithMetadata(new ContentEncodingMetadata("identity", 1.0));
     }
 
