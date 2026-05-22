@@ -97,7 +97,7 @@ internal sealed class DotNetCliRunner(
     {
         var dotnetCommand = commandOverride is null
             ? args.Length > 0 ? args[0] : "execute"
-            : Path.GetFileNameWithoutExtension(NormalizeCommand(commandOverride));
+            : Path.GetFileNameWithoutExtension(CommandPathResolver.NormalizeRunCommand(commandOverride));
         var backchannelParentContext = Activity.Current?.Context ?? default;
         using var processActivity = profilingTelemetry.StartDotNetProcess(dotnetCommand, projectFile, workingDirectory, options);
 
@@ -106,7 +106,7 @@ internal sealed class DotNetCliRunner(
         ConfigureDotNetEnvironment(finalEnv);
         processActivity.AddContextToEnvironment(finalEnv);
 
-        var command = commandOverride is null ? null : NormalizeCommand(commandOverride);
+        var command = commandOverride is null ? null : CommandPathResolver.NormalizeRunCommand(commandOverride);
         string processFileName;
         string[] effectiveArgs;
 
@@ -186,16 +186,8 @@ internal sealed class DotNetCliRunner(
         return exitCode;
     }
 
-    // This is a local normalization helper, not copied from the SDK. RunCommand comes from MSBuild
-    // as a command string, not a ProcessStartInfo executable path.
-    // For the default SDK targets it is either the literal "dotnet" or a generated apphost path,
-    // but custom targets can quote the path. Normalize only enough to decide whether to replace a
-    // dotnet muxer command with the CLI's resolved SDK muxer.
-    private static string NormalizeCommand(string command)
-        => command.Trim().Trim('"');
-
     private static bool IsDotNetMuxerCommand(string command)
-        => string.Equals(Path.GetFileNameWithoutExtension(command), "dotnet", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(Path.GetFileNameWithoutExtension(CommandPathResolver.NormalizeRunCommand(command)), "dotnet", StringComparison.OrdinalIgnoreCase);
 
     private string[] AddBinlogArgumentIfConfigured(
         string[] args,

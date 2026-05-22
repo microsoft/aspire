@@ -548,6 +548,13 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return null;
         }
 
+        // Direct launch intentionally uses the same cached AppHost inspection as validation. The
+        // disk cache fingerprint includes the project file and conventional imported build files
+        // (Directory.Build.*, Directory.Packages.*, global.json, and project.assets.json), so edits
+        // that change AssemblyName/OutputPath/UseAppHost through those inputs force a fresh
+        // ComputeRunArguments probe before RunCommand is used. If a project relies on custom
+        // imports outside that tracked set, the cache can be disabled with
+        // dotnetAppHostInfoCacheDisabled rather than paying an extra MSBuild evaluation on every run.
         var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken).ConfigureAwait(false);
         var arguments = ParseArguments(info.RunArguments);
         var hasRunArguments = arguments.Count > 0;
@@ -614,7 +621,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
 
         var projectDirectory = effectiveAppHostFile.Directory!;
-        var runCommand = NormalizeCommand(info.RunCommand);
+        var runCommand = CommandPathResolver.NormalizeRunCommand(info.RunCommand);
 
         // The SDK emits RunCommand="dotnet" for executable .NETCoreApp projects without an apphost,
         // with RunArguments shaped as:
@@ -684,11 +691,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private static string ResolvePath(string path, DirectoryInfo baseDirectory)
         => Path.IsPathFullyQualified(path) ? path : Path.GetFullPath(Path.Combine(baseDirectory.FullName, path));
 
-    private static string NormalizeCommand(string command)
-        => command.Trim().Trim('"');
-
     private static bool IsDotNetMuxerCommand(string command)
-        => string.Equals(Path.GetFileNameWithoutExtension(command), "dotnet", StringComparison.OrdinalIgnoreCase);
+        => string.Equals(Path.GetFileNameWithoutExtension(CommandPathResolver.NormalizeRunCommand(command)), "dotnet", StringComparison.OrdinalIgnoreCase);
 
     private bool TryApplyProjectLaunchSettings(
         FileInfo effectiveAppHostFile,

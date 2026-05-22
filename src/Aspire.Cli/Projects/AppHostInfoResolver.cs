@@ -127,7 +127,12 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         // request that target here. This matches the property values `dotnet run` would
         // resolve before launching the AppHost. TargetFrameworks is also cached so
         // DotNetAppHostProject can detect multi-targeted AppHosts and fall back to
-        // `dotnet run`, which already handles target framework selection. See:
+        // `dotnet run`, which already handles target framework selection.
+        //
+        // In the .NET SDK, ComputeRunArguments is intentionally a placeholder target with no
+        // DependsOnTargets; it exists so projects can override RunCommand/RunArguments after
+        // evaluation. Requesting it preserves that extension point without causing the default
+        // probe to build the AppHost. See:
         // https://github.com/dotnet/sdk/blob/main/src/Tasks/Microsoft.NET.Build.Tasks/targets/Microsoft.NET.Sdk.targets
         var (exitCode, jsonDocument) = await runner.GetProjectItemsAndPropertiesAsync(
             projectFile,
