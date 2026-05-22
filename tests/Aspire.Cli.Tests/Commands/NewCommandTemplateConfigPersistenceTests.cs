@@ -39,17 +39,18 @@ namespace Aspire.Cli.Tests.Commands;
 /// <item>
 /// <description>
 /// Templates that pin a channel (TS starter, all empty templates + polyglot init):
-/// the value is persisted iff <see cref="NewCommand"/> resolved one (Explicit
-/// <c>--channel</c>, or an identity-match against a registered Explicit channel) —
-/// never as a silent fallback to <see cref="CliExecutionContext.IdentityChannel"/>.
+/// the value is persisted as the CLI's <see cref="CliExecutionContext.IdentityChannel"/>
+/// when it matches a registered Explicit channel; otherwise no channel is written. The
+/// resolver has no per-invocation override (the removed <c>--channel</c> flag used to be
+/// the only one) so a silent fallback to identity is impossible.
 /// </description>
 /// </item>
 /// <item>
 /// <description>
 /// Templates that never pin a channel (Go starter, Python starter): the persisted
-/// <c>channel</c> stays <see langword="null"/> regardless of CLI identity or
-/// <c>--channel</c>. This is the tripwire that catches anyone re-introducing the
-/// dead channel-write code that the PR #17120 fix removed.
+/// <c>channel</c> stays <see langword="null"/> regardless of CLI identity. This is the
+/// tripwire that catches anyone re-introducing the dead channel-write code that the
+/// PR #17120 fix removed.
 /// </description>
 /// </item>
 /// </list>
@@ -126,43 +127,9 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         var persisted = await ScaffoldAndReadPersistedChannelAsync(
             templateId: templateId,
             identityChannel: PackageChannelNames.Daily,
-            registerIdentityChannel: true,
-            explicitChannelArg: null);
+            registerIdentityChannel: true);
 
         Assert.Equal(PackageChannelNames.Daily, persisted);
-    }
-
-    /// <summary>
-    /// The hidden <c>--channel</c> option on <c>aspire new</c> is no longer honored — the
-    /// template channel is pinned to <see cref="CliExecutionContext.IdentityChannel"/>.
-    /// Supplying it must hard-fail before any persistence side-effect runs, so the
-    /// project's <c>aspire.config.json</c> is never written and the user is told to drop
-    /// the deprecated flag.
-    /// </summary>
-    [Fact]
-    public async Task ChannelPinningTemplate_ExplicitChannelArg_FailsWithDeprecationError()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.CliExecutionContextFactory = _ => BuildExecutionContextWithIdentity(workspace, PackageChannelNames.Daily);
-            options.PackagingServiceFactory = _ => BuildPackagingService(PackageChannelNames.Daily, registerIdentityChannel: true);
-        });
-
-        using var serviceProvider = services.BuildServiceProvider();
-        var newCommand = serviceProvider.GetRequiredService<NewCommand>();
-
-        const string outputDirectoryName = "TemplateOut";
-        var parseResult = newCommand.Parse(
-            $"new {KnownTemplateId.TypeScriptEmptyAppHost} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false --channel {PackageChannelNames.Stable}");
-        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
-
-        Assert.NotEqual(CliExitCodes.Success, exitCode);
-
-        var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, outputDirectoryName);
-        var config = AspireConfigFile.Load(outputDirectory);
-        Assert.Null(config);
     }
 
     /// <summary>
@@ -179,8 +146,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         var persisted = await ScaffoldAndReadPersistedChannelAsync(
             templateId: templateId,
             identityChannel: PackageChannelNames.Staging,
-            registerIdentityChannel: true,
-            explicitChannelArg: null);
+            registerIdentityChannel: true);
 
         Assert.Equal(PackageChannelNames.Staging, persisted);
     }
@@ -328,8 +294,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     private async Task<string?> ScaffoldAndReadPersistedChannelAsync(
         string templateId,
         string identityChannel,
-        bool registerIdentityChannel,
-        string? explicitChannelArg)
+        bool registerIdentityChannel)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -366,12 +331,11 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         var newCommand = serviceProvider.GetRequiredService<NewCommand>();
 
         const string outputDirectoryName = "TemplateOut";
-        var channelArg = string.IsNullOrEmpty(explicitChannelArg) ? "" : $" --channel {explicitChannelArg}";
 
         // `--localhost-tld false` short-circuits the bool? confirmation prompt so the
         // test is non-interactive. The value doesn't affect channel persistence.
         var parseResult = newCommand.Parse(
-            $"new {templateId} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false{channelArg}");
+            $"new {templateId} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false");
         _ = await parseResult.InvokeAsync().DefaultTimeout();
 
         // We don't assert the exit code — the fake AppHostServerProject deliberately
