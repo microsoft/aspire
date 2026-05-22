@@ -366,11 +366,14 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var otlpHttpEndpointUrl = options.OtlpHttpEndpointUrl;
         var allowUnsecureTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
 
+        // Build endpoint generation context from dashboard URLs so OTLP endpoints
+        // use the same target host as the frontend when no explicit URL is configured.
+        var endpointContext = new EndpointGenerationContext { Scheme = allowUnsecureTransport ? "http" : "https" };
+
         if (string.IsNullOrWhiteSpace(dashboardUrls))
         {
-            var uriScheme = allowUnsecureTransport ? "http" : "https";
             var endpointName = allowUnsecureTransport ? "http" : "https";
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: uriScheme, isProxied: true));
+            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: endpointContext.Scheme, isProxied: true));
 
             eventing.Subscribe<BeforeResourceStartedEvent>(dashboardResource, (@event, _) =>
             {
@@ -381,7 +384,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                 }
                 return Task.CompletedTask;
             });
-
         }
         else
         {
@@ -393,6 +395,11 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                 {
                     TargetHost = address.Host
                 });
+
+                if (string.Equals(address.Scheme, endpointContext.Scheme, StringComparison.OrdinalIgnoreCase))
+                {
+                    endpointContext.TargetHost = address.Host;
+                }
             }
         }
 
@@ -400,12 +407,12 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         // and browser telemetry work without requiring explicit launch profile configuration.
         if (otlpHttpEndpointUrl is not null || otlpGrpcEndpointUrl is null)
         {
-            dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName, allowUnsecureTransport));
+            dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName, endpointContext));
         }
 
         if (otlpGrpcEndpointUrl is not null || otlpHttpEndpointUrl is null)
         {
-            dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, allowUnsecureTransport, transport: "http2"));
+            dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, endpointContext, transport: "http2"));
         }
 
         // Determine whether any HTTPS endpoints are configured
@@ -695,12 +702,20 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
     }
 
-    private static EndpointAnnotation CreateDashboardOtlpEndpointAnnotation(string? endpointUrl, string endpointName, bool allowUnsecureTransport, string? transport = null)
+    private class EndpointGenerationContext
+    {
+        public required string Scheme { get; init; }
+        public string TargetHost { get; set; } = "localhost";
+    }
+
+    private static EndpointAnnotation CreateDashboardOtlpEndpointAnnotation(string? endpointUrl, string endpointName, EndpointGenerationContext context, string? transport = null)
     {
         if (string.IsNullOrWhiteSpace(endpointUrl))
         {
-            var uriScheme = allowUnsecureTransport ? "http" : "https";
-            return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: uriScheme, isProxied: true, transport: transport);
+            return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: context.Scheme, isProxied: true, transport: transport)
+            {
+                TargetHost = context.TargetHost
+            };
         }
 
         var address = BindingAddress.Parse(endpointUrl);

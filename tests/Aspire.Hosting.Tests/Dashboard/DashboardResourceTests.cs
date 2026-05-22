@@ -248,6 +248,45 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
+    [InlineData("https://myhost:18888", null, "myhost")]
+    [InlineData("http://customhost:5000", true, "customhost")]
+    [InlineData("https://10.0.0.1:443;http://10.0.0.1:80", null, "10.0.0.1")]
+    [InlineData("http://frontend:80;https://frontend:443", null, "frontend")]
+    [InlineData("http://otherhost:80", null, "localhost")]
+    public async Task DashboardWithDashboardUrls_OtlpEndpointsInheritTargetHost(string dashboardUrls, bool? allowUnsecuredTransport, string expectedTargetHost)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = false,
+            testOutputHelper: testOutputHelper);
+
+        builder.Configuration.Sources.Clear();
+
+        var config = new Dictionary<string, string?>
+        {
+            [KnownConfigNames.AspNetCoreUrls] = dashboardUrls,
+        };
+
+        if (allowUnsecuredTransport is not null)
+        {
+            config[KnownConfigNames.AllowUnsecuredTransport] = allowUnsecuredTransport.Value.ToString();
+        }
+
+        builder.Configuration.AddInMemoryCollection(config);
+
+        using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources);
+        var otlpGrpcEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        var otlpHttpEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+
+        Assert.Equal(expectedTargetHost, otlpGrpcEndpoint.TargetHost);
+        Assert.Equal(expectedTargetHost, otlpHttpEndpoint.TargetHost);
+    }
+
+    [Theory]
     [InlineData(false, "https")]
     [InlineData(true, "http")]
     public async Task DashboardWithNoApplicationUrl_UsesDynamicFrontendEndpointWithExpectedScheme(bool allowUnsecuredTransport, string expectedEndpointName)
