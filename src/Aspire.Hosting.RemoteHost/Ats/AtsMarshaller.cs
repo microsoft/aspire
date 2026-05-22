@@ -617,6 +617,12 @@ internal sealed class AtsMarshaller
                         capabilityId, paramName,
                         $"Parameter type '{targetType.Name}' must have [AspireDto] attribute to be deserialized from JSON");
                 }
+
+                if (IsIAtsConvertable(targetType))
+                {
+                    return targetType.GetMethod("Deserialize")?.Invoke(null, [jsonObj]);
+                }
+                
                 return DeserializeDto(jsonObj, targetType, context);
             }
 
@@ -636,6 +642,11 @@ internal sealed class AtsMarshaller
             throw CapabilityException.InvalidArgument(
                 capabilityId, paramName, $"Failed to deserialize '{paramName}' as {DescribeType(targetType)}: {ex.Message}");
         }
+    }
+
+    private static bool IsIAtsConvertable(Type type)
+    {
+        return type.GetInterfaces().Any(x => x.FullName == "Aspire.Hosting.Ats.IAtsConvertable");
     }
 
     /// <summary>

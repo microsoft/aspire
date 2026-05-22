@@ -7,6 +7,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Ats;
 using Xunit;
+using Aspire.Hosting.Ats;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
 
@@ -710,6 +711,60 @@ public class AtsMarshallerTests
         var dto = Assert.IsType<TestDto>(result);
         Assert.Equal("test", dto.Name);
         Assert.Equal(5, dto.Count);
+    }
+
+    [Fact]
+    public void UnmarshalFromJson_UnmarshalsCustomAtsObjectDto()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var jsonContent = """
+        {
+            "name": "test",
+            "count": 5,
+            "complex": {
+                "nestedProperty": true
+            }
+        }
+        """;
+
+        var json = JsonNode.Parse(jsonContent);
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(CustomAtsObjectDto), context);
+
+        Assert.NotNull(result);
+        var dto = (CustomAtsObjectDto)result;
+        Assert.Equal("test", dto.Object!["name"]);
+        Assert.Equal(5L, dto.Object!["count"]);
+        Assert.True((bool)(dto.Object!["complex"] as Dictionary<string, object?>)!["nestedProperty"]!);
+    }
+
+    [Fact]
+    public async Task UnmarshalFromJson_UnmarshalsDtoInitListProperties()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["name"] = "test",
+            ["addressPrefixes"] = new JsonArray("203.0.113.0/24", "198.51.100.0/24"),
+            ["addressPrefixReferences"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = "10.0.0.0/24"
+                    }
+                }
+            }
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithInitListProperties), context);
+
+        var dto = Assert.IsType<DtoWithInitListProperties>(result);
+        Assert.Equal("test", dto.Name);
+        Assert.Equal(["203.0.113.0/24", "198.51.100.0/24"], dto.AddressPrefixes);
+        var reference = Assert.Single(dto.AddressPrefixReferences);
+        Assert.Equal("10.0.0.0/24", await reference.GetValueAsync(default));
     }
 
     [Fact]
