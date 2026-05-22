@@ -99,7 +99,6 @@ public static class BlazorHostedExtensions
                 annotation.Services,
                 annotation.ProxyBlazorTelemetry,
                 httpOtlpEndpointUrl,
-                context.Logger,
                 annotation.OtlpPrefix);
         });
     }
