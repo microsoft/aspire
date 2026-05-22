@@ -18,8 +18,6 @@ internal sealed class LsCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
-    protected override bool UpdateNotificationsEnabled => true;
-
     private readonly IInteractionService _interactionService;
     private readonly IProjectLocator _projectLocator;
     private readonly CliExecutionContext _executionContext;
