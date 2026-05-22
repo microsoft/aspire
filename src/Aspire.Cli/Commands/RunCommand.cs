@@ -189,6 +189,7 @@ internal sealed class RunCommand : BaseCommand
         }
 
         AppHostProjectContext? context = null;
+        var appHostStartupOutputStartIndex = 0;
         Activity? runActivity = null;
 
         try
@@ -299,6 +300,7 @@ internal sealed class RunCommand : BaseCommand
                 }
                 return CommandResult.Failure(await pendingRun, InteractionServiceStrings.ProjectCouldNotBeBuilt);
             }
+            appHostStartupOutputStartIndex = context.OutputCollector?.GetLines().Count() ?? 0;
 
             // If --wait-for-debugger, display a message so the user knows the AppHost is paused.
             if (waitForDebugger)
@@ -515,7 +517,7 @@ internal sealed class RunCommand : BaseCommand
                 }
             }
         }
-        catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested || ex is ExtensionOperationCanceledException)
+        catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
 
@@ -556,7 +558,7 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (AppHostExitedDuringStartupException ex)
         {
-            DisplayRecentAppHostStartupOutput(InteractionService, context?.OutputCollector);
+            DisplayRecentAppHostStartupOutput(InteractionService, context?.OutputCollector, appHostStartupOutputStartIndex);
             return CreateRunExitResult(ex.ExitCode);
         }
         catch (Exception ex)
@@ -574,9 +576,10 @@ internal sealed class RunCommand : BaseCommand
 
     private bool IsDetachedStartChild() => _configuration.GetBool(KnownConfigNames.CliRunDetached) is true;
 
-    private static void DisplayRecentAppHostStartupOutput(IInteractionService interactionService, OutputCollector? outputCollector)
+    private static void DisplayRecentAppHostStartupOutput(IInteractionService interactionService, OutputCollector? outputCollector, int startupOutputStartIndex)
     {
         var outputLines = outputCollector?.GetLines()
+            .Skip(startupOutputStartIndex)
             .Where(static line => line.Stream == OutputLineStream.StdErr)
             .TakeLast(MaxDisplayedAppHostStartupOutputLines)
             .ToArray();
@@ -632,6 +635,10 @@ internal sealed class RunCommand : BaseCommand
         try
         {
             return await startupOperation.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException ex) when (ex.CancellationToken == operationCts.Token && cancellationToken.IsCancellationRequested)
+        {
+            throw new OperationCanceledException(ex.Message, ex, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

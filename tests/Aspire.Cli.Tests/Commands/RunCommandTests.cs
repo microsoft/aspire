@@ -359,6 +359,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             {
                 var outputCollector = new OutputCollector();
                 context.OutputCollector = outputCollector;
+                outputCollector.AppendError("MSB3277: Found conflicts between different versions of a dependency.");
                 context.BuildCompletionSource?.TrySetResult(true);
                 context.BackchannelCompletionSource?.TrySetResult(new TestAppHostBackchannel
                 {
@@ -392,6 +393,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
         Assert.Contains(interactionService.DisplayedLines, line => line.Line.Contains("AppHost failed before returning an exit code", StringComparison.Ordinal));
+        Assert.DoesNotContain(interactionService.DisplayedLines, line => line.Line.Contains("MSB3277", StringComparison.Ordinal));
         Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("Unexpected error", StringComparison.Ordinal));
     }
 
@@ -457,6 +459,69 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WhenStartupRpcThrowsUnrelatedCancellationAfterUserCancellation_DoesNotTreatRunAsSuccessful()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cts = new CancellationTokenSource();
+        using var unrelatedCts = new CancellationTokenSource();
+        var runCanExit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var interactionService = new TestInteractionService();
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, _) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(true);
+                context.BackchannelCompletionSource?.TrySetResult(new TestAppHostBackchannel
+                {
+                    GetDashboardUrlsAsyncCallback = _ =>
+                    {
+                        cts.Cancel();
+                        unrelatedCts.Cancel();
+                        return Task.FromCanceled<DashboardUrlsState>(unrelatedCts.Token);
+                    }
+                });
+
+                await runCanExit.Task;
+                return CliExitCodes.Success;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        try
+        {
+            var exitCode = await result.InvokeAsync(cancellationToken: cts.Token).DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+            Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("unexpected error", StringComparison.OrdinalIgnoreCase));
+        }
+        finally
+        {
+            runCanExit.TrySetResult();
+        }
+    }
+
+    [Fact]
     public async Task RunCommand_WhenAppHostExitsDuringStartup_DisplaysCapturedAppHostOutput()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -479,6 +544,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             {
                 var outputCollector = new OutputCollector();
                 context.OutputCollector = outputCollector;
+                outputCollector.AppendError("MSB3277: Found conflicts between different versions of a dependency.");
                 context.BuildCompletionSource?.TrySetResult(true);
                 context.BackchannelCompletionSource?.TrySetResult(new TestAppHostBackchannel
                 {
@@ -515,6 +581,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(interactionService.DisplayedMessages, message => message.Message == $"{RunCommandStrings.RecentAppHostStartupOutput}:");
         Assert.Contains(interactionService.DisplayedLines, line => line.Line.Contains("Service 'frontend' needs to specify a port", StringComparison.Ordinal));
         Assert.DoesNotContain(interactionService.DisplayedLines, line => line.Line.Contains("Build succeeded", StringComparison.Ordinal));
+        Assert.DoesNotContain(interactionService.DisplayedLines, line => line.Line.Contains("MSB3277", StringComparison.Ordinal));
     }
 
     [Fact]
