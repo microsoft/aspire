@@ -710,7 +710,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 return true;
             }
 
-            var launchSettings = LaunchSettingsJsonReader.ReadLaunchSettingsFile(
+            var launchSettings = LaunchSettingsReader.ReadLaunchSettingsFile(
                 launchSettingsPath,
                 $"AppHost project '{effectiveAppHostFile.FullName}'",
                 AppHostLaunchSettingsSerializerContext.Default.AppHostLaunchSettings);

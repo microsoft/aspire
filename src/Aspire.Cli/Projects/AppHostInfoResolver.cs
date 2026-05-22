@@ -125,7 +125,9 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         // The Run* properties (RunCommand, RunArguments, RunWorkingDirectory) are only
         // populated for the direct-launch contract after ComputeRunArguments has run, so
         // request that target here. This matches the property values `dotnet run` would
-        // resolve before launching the AppHost. See:
+        // resolve before launching the AppHost. TargetFrameworks is also cached so
+        // DotNetAppHostProject can detect multi-targeted AppHosts and fall back to
+        // `dotnet run`, which already handles target framework selection. See:
         // https://github.com/dotnet/sdk/blob/main/src/Tasks/Microsoft.NET.Build.Tasks/targets/Microsoft.NET.Sdk.targets
         var (exitCode, jsonDocument) = await runner.GetProjectItemsAndPropertiesAsync(
             projectFile,

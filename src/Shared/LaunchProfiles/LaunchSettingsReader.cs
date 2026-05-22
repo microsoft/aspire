@@ -1,10 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
+
 namespace Aspire.Hosting;
 
 internal static class LaunchSettingsReader
 {
+#if !CLI
     /// <summary>
     /// Reads launch settings from the <c>Properties/launchSettings.json</c> file within the specified directory.
     /// </summary>
@@ -33,7 +37,7 @@ internal static class LaunchSettingsReader
     /// <returns>The deserialized <see cref="LaunchSettings"/>.</returns>
     /// <exception cref="DistributedApplicationException">Thrown when the file is empty or contains malformed JSON.</exception>
     internal static LaunchSettings? ReadLaunchSettingsFile(string launchSettingsFilePath, string resourceIdentifier)
-        => ReadWithDistributedApplicationException(() => LaunchSettingsJsonReader.ReadLaunchSettingsFile(
+        => ReadWithDistributedApplicationException(() => ReadLaunchSettingsFile(
             launchSettingsFilePath,
             resourceIdentifier,
             LaunchSettingsSerializerContext.Default.LaunchSettings));
@@ -47,6 +51,25 @@ internal static class LaunchSettingsReader
         catch (InvalidDataException ex)
         {
             throw new DistributedApplicationException(ex.Message, ex.InnerException ?? ex);
+        }
+    }
+#endif
+
+    internal static TLaunchSettings? ReadLaunchSettingsFile<TLaunchSettings>(
+        string launchSettingsFilePath,
+        string resourceIdentifier,
+        JsonTypeInfo<TLaunchSettings> jsonTypeInfo)
+    {
+        using var stream = File.OpenRead(launchSettingsFilePath);
+
+        try
+        {
+            return JsonSerializer.Deserialize(stream, jsonTypeInfo);
+        }
+        catch (JsonException ex)
+        {
+            var message = $"Failed to get effective launch profile for {resourceIdentifier}. There is malformed JSON in the project's launch settings file at '{launchSettingsFilePath}'.";
+            throw new InvalidDataException(message, ex);
         }
     }
 }
