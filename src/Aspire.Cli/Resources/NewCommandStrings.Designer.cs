@@ -81,6 +81,30 @@ namespace Aspire.Cli.Resources {
             }
         }
         
+        public static string VersionOptionNoLongerSupported {
+            get {
+                return ResourceManager.GetString("VersionOptionNoLongerSupported", resourceCulture);
+            }
+        }
+        
+        public static string ChannelOptionNoLongerSupported {
+            get {
+                return ResourceManager.GetString("ChannelOptionNoLongerSupported", resourceCulture);
+            }
+        }
+        
+        public static string TemplatePackageVersionNotFoundInChannel {
+            get {
+                return ResourceManager.GetString("TemplatePackageVersionNotFoundInChannel", resourceCulture);
+            }
+        }
+        
+        public static string TemplatePackageVersionNotFoundInChannelNoVersions {
+            get {
+                return ResourceManager.GetString("TemplatePackageVersionNotFoundInChannelNoVersions", resourceCulture);
+            }
+        }
+        
         public static string SelectATemplateVersion {
             get {
                 return ResourceManager.GetString("SelectATemplateVersion", resourceCulture);

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
@@ -18,9 +17,7 @@ namespace Aspire.Cli.Templating;
 internal sealed class TemplateNuGetConfigService(
     IInteractionService interactionService,
     CliExecutionContext executionContext,
-    IPackagingService packagingService,
-    ITemplateVersionPrompter templateVersionPrompter,
-    ICliHostEnvironment hostEnvironment)
+    IPackagingService packagingService)
 {
     /// <summary>
     /// The name of the NuGet package that ships the Aspire project templates.
@@ -259,11 +256,38 @@ internal sealed class TemplateNuGetConfigService(
 
         if (query.VersionOverride is { } version)
         {
+            // Always treat VersionOverride as a hard pin. `aspire new` and `aspire init`
+            // both pass VersionHelper.GetDefaultTemplateVersion() here so the installed
+            // templates package matches the running CLI build. If that exact version is
+            // not available in the requested channel we fail loudly rather than silently
+            // falling back to a different version — the alternative produces hard-to-
+            // diagnose mismatches between the CLI, the AppHost SDK, and Aspire.Hosting.
             var explicitMatch = orderedPackagesFromChannels.FirstOrDefault(p => p.Package.Version == version);
             if (explicitMatch.Package is not null)
             {
                 return new TemplatePackageSelection(explicitMatch.Package, explicitMatch.Channel);
             }
+
+            var channelName = query.RequestedChannel ?? orderedPackagesFromChannels.First().Channel.Name;
+            var availableVersions = orderedPackagesFromChannels
+                .Select(p => p.Package.Version)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var errorMessage = availableVersions.Length == 0
+                ? string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    Resources.NewCommandStrings.TemplatePackageVersionNotFoundInChannelNoVersions,
+                    version,
+                    channelName)
+                : string.Format(
+                    System.Globalization.CultureInfo.CurrentCulture,
+                    Resources.NewCommandStrings.TemplatePackageVersionNotFoundInChannel,
+                    version,
+                    channelName,
+                    string.Join(", ", availableVersions));
+
+            throw new EmptyChoicesException(errorMessage);
         }
 
         if (VersionHelper.TryGetCurrentCliVersionMatch(
@@ -276,24 +300,22 @@ internal sealed class TemplateNuGetConfigService(
             return new TemplatePackageSelection(cliVersionMatch.Package, cliVersionMatch.Channel);
         }
 
-        // If channel was specified via --channel option or per-project aspire.config.json
-        // (but no --version), automatically select the highest version from that channel
-        // without prompting.
+        // If channel was specified via per-project aspire.config.json (but no
+        // VersionOverride), automatically select the highest version from that channel
+        // without prompting. `aspire new` and `aspire init` always pin VersionOverride,
+        // so this branch is reached only by callers that explicitly request the channel
+        // listing behavior.
         if (!string.IsNullOrEmpty(query.RequestedChannel))
         {
             var first = orderedPackagesFromChannels.First();
             return new TemplatePackageSelection(first.Package, first.Channel);
         }
 
-        // In non-interactive mode, automatically select the highest version.
-        if (!hostEnvironment.SupportsInteractiveInput)
-        {
-            var first = orderedPackagesFromChannels.First();
-            return new TemplatePackageSelection(first.Package, first.Channel);
-        }
-
-        var prompted = await templateVersionPrompter.PromptForTemplatesVersionAsync(orderedPackagesFromChannels, cancellationToken);
-        return new TemplatePackageSelection(prompted.Package, prompted.Channel);
+        // No version pin and no channel pin: pick the highest version across the
+        // candidate channels. (Interactive disambiguation was removed when both `new`
+        // and `init` switched to a CLI-version-pinned resolution.)
+        var top = orderedPackagesFromChannels.First();
+        return new TemplatePackageSelection(top.Package, top.Channel);
     }
 
     private static bool HasInstalledLocalBuildPackageSource(PackageChannel channel)

@@ -466,7 +466,22 @@ internal class DotNetTemplateFactory(
                 SourceOverride: inputs.Source,
                 IncludePrHives: true);
 
-            var selectedTemplateDetails = await templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+            TemplatePackageSelection selectedTemplateDetails;
+            try
+            {
+                selectedTemplateDetails = await templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+            }
+            catch (Exceptions.ChannelNotFoundException) when
+                (string.Equals(inputs.Channel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+            {
+                // Locally-built CLI (identity=local) on a machine where ~/.aspire/hives/local
+                // isn't installed. The PackagingService produces no "local" channel in that
+                // case, but the contract is that the identity channel is implicit — fall back
+                // to the implicit channel (ambient NuGet) instead of failing. Mirrors
+                // InitCommand's behavior so `aspire new` and `aspire init` are consistent.
+                var fallbackQuery = query with { RequestedChannel = null };
+                selectedTemplateDetails = await templateNuGetConfigService.ResolveTemplatePackageAsync(fallbackQuery, cancellationToken);
+            }
 
             // Some templates have additional arguments that need to be applied to the `dotnet new` command
             // when it is executed. This callback will get those arguments and potentially prompt for them.

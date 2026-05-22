@@ -6,7 +6,6 @@ using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 using System.Xml.Linq;
 
 namespace Aspire.Cli.Tests.Templating;
@@ -451,26 +450,6 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         return new TemplateNuGetConfigService(
             new TestInteractionService(),
             executionContext ?? TestExecutionContextFactory.CreateTestContext(),
-            packagingService ?? MockPackagingServiceFactory.Create(),
-            new StubTemplateVersionPrompter(),
-            new StubCliHostEnvironment());
-    }
-
-    private sealed class StubTemplateVersionPrompter : Aspire.Cli.Commands.ITemplateVersionPrompter
-    {
-        public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(
-            IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> candidatePackages,
-            CancellationToken cancellationToken)
-        {
-            throw new InvalidOperationException(
-                "TemplateNuGetConfigService unexpectedly entered the version-prompt path; this stub is wired in tests where the prompt should never be reached.");
-        }
-    }
-
-    private sealed class StubCliHostEnvironment : ICliHostEnvironment
-    {
-        public bool SupportsInteractiveInput => false;
-        public bool SupportsInteractiveOutput => false;
-        public bool SupportsAnsi => false;
+            packagingService ?? MockPackagingServiceFactory.Create());
     }
 }

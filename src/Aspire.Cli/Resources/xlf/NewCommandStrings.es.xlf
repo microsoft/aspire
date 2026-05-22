@@ -3,13 +3,18 @@
   <file datatype="xml" source-language="en" target-language="es" original="../NewCommandStrings.resx">
     <body>
       <trans-unit id="ChannelOptionDescription">
-        <source>Channel to use for templates (stable, daily)</source>
-        <target state="translated">Canal que se va a usar para plantillas (estable, diaria)</target>
+        <source>Deprecated. `aspire new` now derives the package channel from the running CLI's identity channel. Passing this option causes the command to fail.</source>
+        <target state="needs-review-translation">Canal que se va a usar para plantillas (estable, diaria)</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelOptionDescriptionWithStaging">
-        <source>Channel to use for templates (stable, staging, daily)</source>
-        <target state="translated">Canal que se va a usar para plantillas (estable, de ensayo, diariamente)</target>
+        <source>Deprecated. `aspire new` now derives the package channel from the running CLI's identity channel. Passing this option causes the command to fail.</source>
+        <target state="needs-review-translation">Canal que se va a usar para plantillas (estable, de ensayo, diariamente)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ChannelOptionNoLongerSupported">
+        <source>The --channel option is no longer supported by `aspire new`. The package channel is now pinned to the running CLI's identity channel ('{0}').</source>
+        <target state="new">The --channel option is no longer supported by `aspire new`. The package channel is now pinned to the running CLI's identity channel ('{0}').</target>
         <note />
       </trans-unit>
       <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
@@ -117,14 +122,29 @@
         <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
         <note />
       </trans-unit>
+      <trans-unit id="TemplatePackageVersionNotFoundInChannel">
+        <source>The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. Available versions: {2}.</source>
+        <target state="new">The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. Available versions: {2}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TemplatePackageVersionNotFoundInChannelNoVersions">
+        <source>The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. No template package versions were found in this channel.</source>
+        <target state="new">The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. No template package versions were found in this channel.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">
         <source>(use pre-release templates)</source>
         <target state="translated">(usar plantillas de versión preliminar)</target>
         <note />
       </trans-unit>
       <trans-unit id="VersionArgumentDescription">
-        <source>The version of the project templates to use</source>
+        <source>Deprecated. `aspire new` now always installs the project templates package that matches the running CLI build. Passing this option causes the command to fail.</source>
         <target state="needs-review-translation">La versión de las plantillas de proyecto que se van a usar.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VersionOptionNoLongerSupported">
+        <source>The --version option is no longer supported by `aspire new`. The project templates package version is now pinned to the running CLI build ({0}).</source>
+        <target state="new">The --version option is no longer supported by `aspire new`. The project templates package version is now pinned to the running CLI build ({0}).</target>
         <note />
       </trans-unit>
     </body>

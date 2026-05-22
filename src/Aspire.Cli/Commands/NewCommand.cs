@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Configuration;
@@ -16,7 +15,6 @@ using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Spectre.Console;
-using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Commands;
 
@@ -30,7 +28,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     private readonly ITemplateProvider _templateProvider;
     private readonly ITemplate[] _templates;
     private readonly IFeatures _features;
-    private readonly IPackagingService _packagingService;
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
 
@@ -52,7 +49,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     private static readonly Option<string?> s_versionOption = new("--version")
     {
         Description = NewCommandStrings.VersionArgumentDescription,
-        Recursive = true
+        Recursive = true,
+        Hidden = true
     };
 
     internal static readonly Option<bool?> s_suppressAgentInitOption = new("--suppress-agent-init")
@@ -82,7 +80,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
-        IPackagingService packagingService,
         AgentInitCommand agentInitCommand,
         ICliHostEnvironment hostEnvironment,
         IConfiguration configuration)
@@ -91,7 +88,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         _prompter = prompter;
         _templateProvider = templateProvider;
         _features = features;
-        _packagingService = packagingService;
         _agentInitCommand = agentInitCommand;
         _hostEnvironment = hostEnvironment;
 
@@ -101,7 +97,9 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_versionOption);
         Options.Add(s_suppressAgentInitOption);
 
-        // Customize description based on whether staging channel is enabled
+        // --channel is hidden and rejected at runtime; description text mentions
+        // the staging variant to preserve compatibility with any docs that referenced
+        // the prior wording while the option still parses.
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration)
             || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
         _channelOption = new Option<string?>("--channel")
@@ -109,7 +107,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             Description = isStagingEnabled
                 ? NewCommandStrings.ChannelOptionDescriptionWithStaging
                 : NewCommandStrings.ChannelOptionDescription,
-            Recursive = true
+            Recursive = true,
+            Hidden = true
         };
         Options.Add(_channelOption);
 
@@ -293,126 +292,33 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return result;
     }
 
-    private sealed class ResolveTemplateVersionResult
-    {
-        public string? Version { get; init; }
-
-        public string? ChannelName { get; init; }
-
-        [MemberNotNullWhen(true, nameof(Version))]
-        [MemberNotNullWhen(false, nameof(ErrorMessage))]
-        public bool Success => Version is not null;
-
-        public string? ErrorMessage { get; init; }
-    }
-
-    private async Task<ResolveTemplateVersionResult> ResolveCliTemplateVersionAsync(ParseResult parseResult, CancellationToken cancellationToken)
-    {
-        return await InteractionService.ShowStatusAsync(
-            NewCommandStrings.ResolvingTemplateVersion,
-            async () =>
-            {
-                var configuredChannelName = parseResult.GetValue(_channelOption);
-                var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
-
-                // When no --channel was passed, prefer the channel whose name matches the running
-                // CLI's identity (CliExecutionContext.IdentityChannel — stable, staging, daily,
-                // local, or pr-<N>) over the Implicit (nuget.org) channel. This keeps the
-                // resolved template package and the channel pinned into aspire.config.json
-                // mutually satisfiable: a daily CLI scaffolds a daily-channel project whose
-                // prerelease SDK version is reachable through the daily channel's Package Source
-                // Mapping (Aspire.* → dnceng), a stable CLI scaffolds a stable project whose
-                // stable SDK version is reachable through nuget.org, and so on. The opposite
-                // outcome — resolving against Implicit while pinning channel to the identity —
-                // makes restore reject the prerelease/stable mismatch with "Unable to find a
-                // stable package Aspire.Hosting with version (>= …)".
-                //
-                // Falls back to the Implicit channel when the identity doesn't match any
-                // registered channel (e.g. typoed override, future identity name) so the
-                // command stays useful while surfacing a deterministic version.
-                PackageChannel? identityChannelMatch = null;
-                if (string.IsNullOrWhiteSpace(configuredChannelName) &&
-                    !string.IsNullOrWhiteSpace(ExecutionContext.IdentityChannel))
-                {
-                    identityChannelMatch = channels.FirstOrDefault(c =>
-                        string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparisons.ChannelName));
-                }
-
-                var selectedChannel = string.IsNullOrWhiteSpace(configuredChannelName)
-                    ? identityChannelMatch
-                        ?? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
-                        ?? channels.FirstOrDefault()
-                    : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparisons.ChannelName));
-
-                if (selectedChannel is null)
-                {
-                    string errorMessage;
-                    if (string.IsNullOrWhiteSpace(configuredChannelName))
-                    {
-                        errorMessage = NewCommandStrings.NoPackageChannelsAvailable;
-                    }
-                    else if (string.Equals(configuredChannelName, PackageChannelNames.Staging, StringComparisons.ChannelName)
-                        && _packagingService.GetStagingChannelUnavailableReason() is { } stagingReason)
-                    {
-                        // Surface the actionable packaging-service reason (e.g. "daily CLI cannot
-                        // synthesize a staging channel; set overrideStagingFeed") instead of the
-                        // generic channel list, mirroring UpdateCommand's behavior.
-                        // See https://github.com/microsoft/aspire/issues/16652.
-                        errorMessage = stagingReason;
-                    }
-                    else
-                    {
-                        errorMessage = string.Format(
-                            CultureInfo.CurrentCulture,
-                            NewCommandStrings.NoChannelFoundMatching,
-                            configuredChannelName,
-                            string.Join(", ", channels.Select(c => c.Name)));
-                    }
-
-                    return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
-                }
-
-                try
-                {
-                    var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
-                        .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
-                        .ToArray();
-                    var hasPrHives = ExecutionContext.GetHiveCount() > 0;
-
-                    NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
-                        packages,
-                        p => p.Version,
-                        out var cliVersionPackage,
-                        channelName: selectedChannel.Name,
-                        hasPrHives: hasPrHives)
-                        ? cliVersionPackage
-                        : null;
-
-                    package ??= packages
-                        .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
-                        .FirstOrDefault();
-
-                    if (package is null)
-                    {
-                        return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
-                    }
-
-                    // Only persist explicit channel names (e.g. local, daily) — implicit channels
-                    // (stable/nuget.org) should not be written so aspire add uses its default behavior.
-                    var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
-
-                    return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
-                }
-                catch (NuGetPackageCacheException ex)
-                {
-                    return new ResolveTemplateVersionResult { ErrorMessage = ex.Message };
-                }
-            });
-    }
-
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
+
+        // --version and --channel are accepted for back-compat parsing but are no longer
+        // honored. `aspire new` now always installs the project templates package whose
+        // version matches the running CLI build, sourced from the CLI's identity channel
+        // (CliExecutionContext.IdentityChannel). Surfacing a hard error here — rather than
+        // silently ignoring the options — avoids users believing they have overridden the
+        // pinned version/channel when in fact they have not.
+        if (parseResult.GetValue(s_versionOption) is { } providedVersion && !string.IsNullOrWhiteSpace(providedVersion))
+        {
+            InteractionService.DisplayError(string.Format(
+                CultureInfo.CurrentCulture,
+                NewCommandStrings.VersionOptionNoLongerSupported,
+                VersionHelper.GetDefaultTemplateVersion()));
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
+        }
+
+        if (parseResult.GetValue(_channelOption) is { } providedChannel && !string.IsNullOrWhiteSpace(providedChannel))
+        {
+            InteractionService.DisplayError(string.Format(
+                CultureInfo.CurrentCulture,
+                NewCommandStrings.ChannelOptionNoLongerSupported,
+                ExecutionContext.IdentityChannel));
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
+        }
 
         var source = parseResult.GetValue(s_sourceOption);
         if (!string.IsNullOrWhiteSpace(source) && PackageSourceOverrideMappings.HasCredentialMaterial(source))
@@ -438,28 +344,16 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
-        var version = parseResult.GetValue(s_versionOption);
-        string? resolvedChannelName = null;
-        if (ShouldResolveCliTemplateVersion(template) &&
-            string.IsNullOrWhiteSpace(version))
-        {
-            var resolveResult = await ResolveCliTemplateVersionAsync(parseResult, cancellationToken);
-            if (!resolveResult.Success)
-            {
-                return CommandResult.Failure(CliExitCodes.InvalidCommand, resolveResult.ErrorMessage);
-            }
-
-            version = resolveResult.Version;
-            resolvedChannelName = resolveResult.ChannelName;
-        }
-
+        // Pin the templates package version to the running CLI build and route resolution
+        // through the CLI's identity channel. Identical pattern to InitCommand; the
+        // resolver hard-fails when this version is not present in the identity channel.
         var inputs = new TemplateInputs
         {
             Name = parseResult.GetValue(s_nameOption),
             Output = parseResult.GetValue(s_outputOption),
             Source = source,
-            Version = version,
-            Channel = parseResult.GetValue(_channelOption) ?? resolvedChannelName,
+            Version = VersionHelper.GetDefaultTemplateVersion(),
+            Channel = ExecutionContext.IdentityChannel,
             Language = selectedLanguageId
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
@@ -475,12 +369,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         return CommandResult.FromExitCode(agentInitResult.ExitCode);
     }
-
-    private static bool ShouldResolveCliTemplateVersion(ITemplate template)
-    {
-        return template.Runtime is TemplateRuntime.Cli;
-    }
-
 }
 
 internal interface INewCommandPrompter
@@ -490,116 +378,8 @@ internal interface INewCommandPrompter
     Task<string> PromptForOutputPath(string v, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null);
 }
 
-internal interface ITemplateVersionPrompter
+internal class NewCommandPrompter(IInteractionService interactionService) : INewCommandPrompter
 {
-    /// <summary>
-    /// Prompts the user to select a templates package version.
-    /// </summary>
-    /// <param name="candidatePackages">The available templates package candidates grouped across channels.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>The selected templates package and channel.</returns>
-    Task<(NuGetPackage Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(NuGetPackage Package, PackageChannel Channel)> candidatePackages, CancellationToken cancellationToken);
-}
-
-internal class NewCommandPrompter(IInteractionService interactionService) : INewCommandPrompter, ITemplateVersionPrompter
-{
-    public virtual async Task<(NuGetPackage Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(NuGetPackage Package, PackageChannel Channel)> candidatePackages, CancellationToken cancellationToken)
-    {
-        // Check if we should skip the channel selection prompt
-        // Skip prompt if there are no explicit channels (only the implicit/default channel)
-        var byChannel = candidatePackages
-            .GroupBy(cp => cp.Channel)
-            .ToArray();
-
-        var implicitGroup = byChannel.FirstOrDefault(g => g.Key.Type is Packaging.PackageChannelType.Implicit);
-        var explicitGroups = byChannel
-            .Where(g => g.Key.Type is Packaging.PackageChannelType.Explicit)
-            .ToArray();
-
-        // If there are no explicit channels, automatically select from the implicit channel
-        if (explicitGroups.Length == 0 && implicitGroup is not null)
-        {
-            // Return the highest version from the implicit channel
-            return implicitGroup.OrderByDescending(p => Semver.SemVersion.Parse(p.Package.Version), Semver.SemVersion.PrecedenceComparer).First();
-        }
-
-        // Create a hierarchical selection experience:
-        // - Top-level: all packages from the implicit channel (if any)
-        // - Then: one entry per remaining channel that opens a sub-menu with that channel's packages
-
-        // Local helpers
-        static string FormatPackageLabel((NuGetPackage Package, PackageChannel Channel) item)
-        {
-            // Keep it concise: "Version (source)"
-            return $"{item.Package.Version.EscapeMarkup()} ({item.Channel.SourceDetails.EscapeMarkup()})";
-        }
-
-        async Task<(NuGetPackage Package, PackageChannel Channel)> PromptForChannelPackagesAsync(
-            PackageChannel channel,
-            IEnumerable<(NuGetPackage Package, PackageChannel Channel)> items,
-            CancellationToken ct)
-        {
-            // Show a sub-menu for this channel's packages
-            var packageChoices = items
-                .Select(i => (
-                    Label: FormatPackageLabel(i),
-                    Result: i
-                ))
-                .ToArray();
-
-            var selection = await interactionService.PromptForSelectionAsync(
-                NewCommandStrings.SelectATemplateVersion,
-                packageChoices,
-                c => c.Label,
-                cancellationToken: ct);
-
-            return selection.Result;
-        }
-
-        // Build the root menu as tuples of (label, action)
-        var rootChoices = new List<(string Label, Func<CancellationToken, Task<(NuGetPackage, PackageChannel)>> Action)>();
-
-        if (implicitGroup is not null)
-        {
-            // Add each implicit package directly to the root
-            foreach (var item in implicitGroup)
-            {
-                var captured = item; // avoid modified-closure issues
-                rootChoices.Add((
-                    Label: FormatPackageLabel((captured.Package, captured.Channel)),
-                    Action: ct => Task.FromResult((captured.Package, captured.Channel))
-                ));
-            }
-        }
-
-        // Add a submenu entry for each explicit channel
-        foreach (var channelGroup in explicitGroups)
-        {
-            var channel = channelGroup.Key;
-            var items = channelGroup.ToArray();
-
-            rootChoices.Add((
-                Label: channel.Name.EscapeMarkup(),
-                Action: ct => PromptForChannelPackagesAsync(channel, items, ct)
-            ));
-        }
-
-        // If for some reason we have no choices, fall back to the first candidate
-        if (rootChoices.Count == 0)
-        {
-            return candidatePackages.First();
-        }
-
-        // Prompt user for the top-level selection
-        var topSelection = await interactionService.PromptForSelectionAsync(
-            NewCommandStrings.SelectATemplateVersion,
-            rootChoices,
-            c => c.Label,
-            cancellationToken: cancellationToken);
-
-        return await topSelection.Action(cancellationToken);
-    }
-
     public virtual async Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
     {
         var resolvedValidator = validator;

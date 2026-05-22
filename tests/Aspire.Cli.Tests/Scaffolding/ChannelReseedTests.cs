@@ -32,7 +32,7 @@ namespace Aspire.Cli.Tests.Scaffolding;
 /// The three CLI starter template factories
 /// (<c>CliTemplateFactory.{TypeScript,Python,Go}StarterTemplate</c>) have the same semantic — they
 /// only persist <c>aspire.config.json#channel</c> when their <c>TemplateInputs.Channel</c> input
-/// is set. Channel selection for those paths is covered by <c>NewCommandChannelResolutionTests</c>;
+/// is set. Channel selection for those paths is covered by <c>NewCommandTemplateConfigPersistenceTests</c>;
 /// the end-to-end consistency between resolved channel and persisted SDK version is covered by
 /// <c>TypeScriptStarterSmokeTests</c> on the daily smoke workflow.
 /// </para>

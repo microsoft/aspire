@@ -351,7 +351,7 @@ public class DotNetTemplateFactoryTests
         sdkInstaller ??= new TestDotNetSdkInstaller();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
-        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment);
+        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService);
 
         return new DotNetTemplateFactory(
             interactionService,
@@ -471,15 +471,12 @@ public class DotNetTemplateFactoryTests
             });
     }
 
-    private sealed class TestNewCommandPrompter : INewCommandPrompter, ITemplateVersionPrompter
+    private sealed class TestNewCommandPrompter : INewCommandPrompter
     {
         public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
-            => throw new NotImplementedException();
-
-        public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<ITemplate> PromptForTemplateAsync(ITemplate[] templates, CancellationToken cancellationToken)

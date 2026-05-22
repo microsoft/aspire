@@ -367,7 +367,6 @@ public class Program
         builder.Services.AddSingleton<FallbackProjectParser>();
         builder.Services.AddSingleton<IProjectUpdater, ProjectUpdater>();
         builder.Services.AddSingleton<INewCommandPrompter, NewCommandPrompter>();
-        builder.Services.AddSingleton<ITemplateVersionPrompter>(sp => (ITemplateVersionPrompter)sp.GetRequiredService<INewCommandPrompter>());
         builder.Services.AddSingleton<IAddCommandPrompter, AddCommandPrompter>();
         builder.Services.AddSingleton<IPublishCommandPrompter, PublishCommandPrompter>();
         builder.Services.AddSingleton<ICertificateService, CertificateService>();

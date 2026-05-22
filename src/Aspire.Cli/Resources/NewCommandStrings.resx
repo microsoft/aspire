@@ -122,7 +122,19 @@
     <value>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</value>
   </data>
   <data name="VersionArgumentDescription" xml:space="preserve">
-    <value>The version of the project templates to use</value>
+    <value>Deprecated. `aspire new` now always installs the project templates package that matches the running CLI build. Passing this option causes the command to fail.</value>
+  </data>
+  <data name="VersionOptionNoLongerSupported" xml:space="preserve">
+    <value>The --version option is no longer supported by `aspire new`. The project templates package version is now pinned to the running CLI build ({0}).</value>
+  </data>
+  <data name="ChannelOptionNoLongerSupported" xml:space="preserve">
+    <value>The --channel option is no longer supported by `aspire new`. The package channel is now pinned to the running CLI's identity channel ('{0}').</value>
+  </data>
+  <data name="TemplatePackageVersionNotFoundInChannel" xml:space="preserve">
+    <value>The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. Available versions: {2}.</value>
+  </data>
+  <data name="TemplatePackageVersionNotFoundInChannelNoVersions" xml:space="preserve">
+    <value>The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. No template package versions were found in this channel.</value>
   </data>
   <data name="SelectATemplateVersion" xml:space="preserve">
     <value>Select a template version:</value>
@@ -152,10 +164,10 @@
     <value>Select a template:</value>
   </data>
   <data name="ChannelOptionDescription" xml:space="preserve">
-    <value>Channel to use for templates (stable, daily)</value>
+    <value>Deprecated. `aspire new` now derives the package channel from the running CLI's identity channel. Passing this option causes the command to fail.</value>
   </data>
   <data name="ChannelOptionDescriptionWithStaging" xml:space="preserve">
-    <value>Channel to use for templates (stable, staging, daily)</value>
+    <value>Deprecated. `aspire new` now derives the package channel from the running CLI's identity channel. Passing this option causes the command to fail.</value>
   </data>
   <data name="LanguageOptionDescription" xml:space="preserve">
     <value>The programming language for the AppHost</value>

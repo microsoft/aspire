@@ -112,7 +112,6 @@ internal static class CliTestHelper
         services.AddSingleton(options.CertificateToolRunnerFactory);
         services.AddSingleton(options.CertificateServiceFactory);
         services.AddSingleton(options.NewCommandPrompterFactory);
-        services.AddSingleton<ITemplateVersionPrompter>(sp => (ITemplateVersionPrompter)sp.GetRequiredService<INewCommandPrompter>());
         services.AddSingleton(options.AddCommandPrompterFactory);
         services.AddSingleton(options.PublishCommandPrompterFactory);
         services.AddTransient(options.DotNetCliExecutionFactoryFactory);
@@ -553,7 +552,6 @@ internal sealed class CliServiceCollectionTestOptions
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
         var sdkInstaller = serviceProvider.GetRequiredService<IDotNetSdkInstaller>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-        var templateVersionPrompter = serviceProvider.GetRequiredService<ITemplateVersionPrompter>();
         var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
         var scaffoldingService = serviceProvider.GetRequiredService<IScaffoldingService>();
         var cliTemplateLogger = serviceProvider.GetRequiredService<ILogger<CliTemplateFactory>>();

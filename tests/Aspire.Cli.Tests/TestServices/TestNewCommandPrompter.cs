@@ -4,16 +4,13 @@
 using System.CommandLine;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Packaging;
 using Aspire.Cli.Templating;
 using Spectre.Console;
-using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestNewCommandPrompter(IInteractionService interactionService) : NewCommandPrompter(interactionService)
 {
-    public Func<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>, (NuGetPackage Package, PackageChannel Channel)>? PromptForTemplatesVersionCallback { get; set; }
     public Func<ITemplate[], ITemplate>? PromptForTemplateCallback { get; set; }
     public Func<string, string>? PromptForProjectNameCallback { get; set; }
     public Func<string, string>? PromptForOutputPathCallback { get; set; }
@@ -56,14 +53,5 @@ internal sealed class TestNewCommandPrompter(IInteractionService interactionServ
         };
 
         return Task.FromResult(outputPathResolver?.Invoke(outputPath) ?? outputPath);
-    }
-
-    public override Task<(NuGetPackage Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(NuGetPackage Package, PackageChannel Channel)> candidatePackages, CancellationToken cancellationToken)
-    {
-        return PromptForTemplatesVersionCallback switch
-        {
-            { } callback => Task.FromResult(callback(candidatePackages)),
-            _ => Task.FromResult(candidatePackages.First()) // If no callback is provided just accept the first package.
-        };
     }
 }

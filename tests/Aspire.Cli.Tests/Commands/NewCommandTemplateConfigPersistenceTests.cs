@@ -54,8 +54,7 @@ namespace Aspire.Cli.Tests.Commands;
 /// </item>
 /// </list>
 /// <para>
-/// Companion to <c>NewCommandChannelResolutionTests</c> (verifies the value
-/// <see cref="NewCommand"/> hands to template factories via <c>TemplateInputs.Channel</c>),
+/// Pin acquired by <see cref="NewCommand"/> directly from <see cref="CliExecutionContext.IdentityChannel"/>),
 /// <c>ChannelReseedTests</c> (verifies <see cref="Aspire.Cli.Scaffolding.ScaffoldingService"/>
 /// persists <c>ScaffoldContext.Channel</c> verbatim), and
 /// <c>TypeScriptStarterSmokeTests</c> (end-to-end coverage on the daily smoke workflow).
@@ -106,41 +105,13 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     }
 
     /// <summary>
-    /// Templates that pin <c>aspire.config.json#channel</c> when <see cref="NewCommand"/>
-    /// resolves an Explicit channel. Covers both writer code paths:
+    /// Templates that pin <c>aspire.config.json#channel</c> to the CLI's identity channel.
+    /// Covers both writer code paths:
     /// <see cref="Aspire.Cli.Scaffolding.ScaffoldingService"/> (the empty templates + polyglot init)
     /// and <c>CliTemplateFactory.TypeScriptStarterTemplate</c> (the TS starter's own write).
-    /// Direct regression for the bug class fixed by PR #17120 + davidfowl follow-up:
-    /// when the CLI's identity isn't a registered Explicit channel, no channel must be
-    /// persisted — otherwise <c>aspire add</c> / <c>aspire restore</c> route
-    /// <c>Aspire.*</c> through a PSM that can't satisfy the SDK version.
-    /// </summary>
-    [Theory]
-    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.mts")]
-    [InlineData(KnownTemplateId.PythonEmptyAppHost, "apphost.py")]
-    [InlineData(KnownTemplateId.GoEmptyAppHost, "apphost.go")]
-    [InlineData(KnownTemplateId.JavaEmptyAppHost, "AppHost.java")]
-    [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.mts")]
-    [InlineData(KnownTemplateId.PythonStarter, "apphost.mts")]
-    [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
-    public async Task ChannelPinningTemplate_IdentityNotRegistered_DoesNotPinChannel(string templateId, string _)
-    {
-        var persisted = await ScaffoldAndReadPersistedChannelAsync(
-            templateId: templateId,
-            identityChannel: PackageChannelNames.Daily,
-            registerIdentityChannel: false,
-            explicitChannelArg: null);
-
-        // No channel pin → PrebuiltAppHostServer aggregates sources from every registered
-        // channel when aspire add / aspire restore run later.
-        Assert.Null(persisted);
-    }
-
-    /// <summary>
-    /// Happy path: when the identity matches a registered Explicit channel,
-    /// <see cref="NewCommand"/> resolves it and every channel-pinning template persists
-    /// the name into <c>aspire.config.json#channel</c>. This is the pin that lets
-    /// <c>aspire add</c> route <c>Aspire.*</c> through the matching feed via PSM.
+    /// Since <see cref="NewCommand"/> now always pins the channel to <see cref="CliExecutionContext.IdentityChannel"/>
+    /// (no <c>--channel</c> override, no resolver fall-through), every channel-pinning
+    /// template persists the identity channel name.
     /// </summary>
     [Theory]
     [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.mts")]
@@ -162,29 +133,36 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     }
 
     /// <summary>
-    /// Explicit <c>--channel</c> overrides identity at the resolution layer and propagates
-    /// through to the persisted pin for every channel-pinning template — covered at the
-    /// resolution layer by <c>NewCommand_ExplicitChannelArg_OverridesIdentityChannel</c>
-    /// and asserted here at the persistence layer so a future drift between the two is
-    /// caught.
+    /// The hidden <c>--channel</c> option on <c>aspire new</c> is no longer honored — the
+    /// template channel is pinned to <see cref="CliExecutionContext.IdentityChannel"/>.
+    /// Supplying it must hard-fail before any persistence side-effect runs, so the
+    /// project's <c>aspire.config.json</c> is never written and the user is told to drop
+    /// the deprecated flag.
     /// </summary>
-    [Theory]
-    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.mts")]
-    [InlineData(KnownTemplateId.PythonEmptyAppHost, "apphost.py")]
-    [InlineData(KnownTemplateId.GoEmptyAppHost, "apphost.go")]
-    [InlineData(KnownTemplateId.JavaEmptyAppHost, "AppHost.java")]
-    [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.mts")]
-    [InlineData(KnownTemplateId.PythonStarter, "apphost.mts")]
-    [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
-    public async Task ChannelPinningTemplate_ExplicitChannelArg_OverridesIdentityAndPersists(string templateId, string _)
+    [Fact]
+    public async Task ChannelPinningTemplate_ExplicitChannelArg_FailsWithDeprecationError()
     {
-        var persisted = await ScaffoldAndReadPersistedChannelAsync(
-            templateId: templateId,
-            identityChannel: PackageChannelNames.Daily,
-            registerIdentityChannel: true,
-            explicitChannelArg: PackageChannelNames.Stable);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        Assert.Equal(PackageChannelNames.Stable, persisted);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => BuildExecutionContextWithIdentity(workspace, PackageChannelNames.Daily);
+            options.PackagingServiceFactory = _ => BuildPackagingService(PackageChannelNames.Daily, registerIdentityChannel: true);
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var newCommand = serviceProvider.GetRequiredService<NewCommand>();
+
+        const string outputDirectoryName = "TemplateOut";
+        var parseResult = newCommand.Parse(
+            $"new {KnownTemplateId.TypeScriptEmptyAppHost} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false --channel {PackageChannelNames.Stable}");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
+
+        var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, outputDirectoryName);
+        var config = AspireConfigFile.Load(outputDirectory);
+        Assert.Null(config);
     }
 
     /// <summary>

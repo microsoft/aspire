@@ -81,22 +81,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void NewCommand_WhenIdentityChannelIsStaging_DescribesStagingChannelOption()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CreateServiceCollection(workspace, options =>
-        {
-            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Staging);
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<NewCommand>();
-
-        var channelOption = command.Options.Single(option => option.Name == "--channel");
-        Assert.Equal(NewCommandStrings.ChannelOptionDescriptionWithStaging, channelOption.Description);
-    }
-
-    [Fact]
     public async Task NewCommand_CSharpEmptyTemplateUnderStagingIdentity_WritesStagingNuGetConfig()
     {
         const string stagingFeed = "https://example.com/staging/v3/index.json";
@@ -274,240 +258,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandWithChannelOptionUsesSpecifiedChannel()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        
-        string? channelNameUsed = null;
-        bool promptedForVersion = false;
-
-        var services = CreateServiceCollection(workspace, options =>
-        {
-            options.NewCommandPrompterFactory = (sp) =>
-            {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestNewCommandPrompter(interactionService);
-                
-                prompter.PromptForTemplatesVersionCallback = (packages) =>
-                {
-                    promptedForVersion = true;
-                    throw new InvalidOperationException("Should not prompt for version when --channel is specified");
-                };
-                
-                return prompter;
-            };
-
-            options.PackagingServiceFactory = (sp) =>
-            {
-                var packagingService = new TestPackagingService();
-                packagingService.GetChannelsAsyncCallback = (ct) =>
-                {
-                    var stableCache = new FakeNuGetPackageCache();
-                    stableCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
-                    {
-                        channelNameUsed = "stable";
-                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
-                        return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
-                    };
-                    
-                    var dailyCache = new FakeNuGetPackageCache();
-                    dailyCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
-                    {
-                        channelNameUsed = "daily";
-                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "10.0.0-dev" };
-                        return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
-                    };
-                    
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], stableCache, new TestFeatures());
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache, new TestFeatures());
-                    
-                    return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
-                };
-                
-                return packagingService;
-            };
-
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
-                {
-                    return (0, version);
-                };
-                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
-                {
-                    return 0;
-                };
-                return runner;
-            };
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        
-        // Assert
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal("stable", channelNameUsed); // Verify the stable channel was used
-        Assert.False(promptedForVersion); // Should not prompt when --channel is specified
-    }
-
-    [Fact]
-    public async Task NewCommandWithChannelOptionAutoSelectsHighestVersion()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        
-        string? selectedVersion = null;
-        bool promptedForVersion = false;
-
-        var services = CreateServiceCollection(workspace, options =>
-        {
-            options.NewCommandPrompterFactory = (sp) =>
-            {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestNewCommandPrompter(interactionService);
-                
-                prompter.PromptForTemplatesVersionCallback = (packages) =>
-                {
-                    promptedForVersion = true;
-                    throw new InvalidOperationException("Should not prompt for version when --channel is specified");
-                };
-                
-                return prompter;
-            };
-
-            options.PackagingServiceFactory = (sp) =>
-            {
-                var packagingService = new TestPackagingService();
-                packagingService.GetChannelsAsyncCallback = (ct) =>
-                {
-                    var fakeCache = new FakeNuGetPackageCache();
-                    fakeCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
-                    {
-                        // Return multiple versions to test auto-selection of highest
-                        var packages = new[]
-                        {
-                            new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.0.0" },
-                            new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" },
-                            new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.1.0" },
-                        };
-                        return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
-                    };
-                    
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Both, [], fakeCache, new TestFeatures());
-                    return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel]);
-                };
-                
-                return packagingService;
-            };
-            
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
-                {
-                    selectedVersion = version;
-                    return (0, version);
-                };
-                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
-                {
-                    return 0; // Success
-                };
-                return runner;
-            };
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        
-        // Assert
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal("9.2.0", selectedVersion); // Should auto-select highest version (9.2.0)
-        Assert.False(promptedForVersion); // Should not prompt when --channel is specified
-    }
-
-    [Fact]
-    public async Task NewCommandWithPrChannelPrefersCurrentCliVersion()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var cliVersion = VersionHelper.GetDefaultSdkVersion();
-        string? selectedVersion = null;
-        bool promptedForVersion = false;
-
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
-        {
-            options.NewCommandPrompterFactory = (sp) =>
-            {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestNewCommandPrompter(interactionService);
-
-                prompter.PromptForTemplatesVersionCallback = (packages) =>
-                {
-                    promptedForVersion = true;
-                    throw new InvalidOperationException("Should not prompt for version when a PR channel contains the current CLI version.");
-                };
-
-                return prompter;
-            };
-
-            options.PackagingServiceFactory = (sp) =>
-            {
-                var packagingService = new TestPackagingService();
-                packagingService.GetChannelsAsyncCallback = (ct) =>
-                {
-                    var fakeCache = new FakeNuGetPackageCache();
-                    fakeCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
-                    {
-                        var packages = new[]
-                        {
-                            new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = cliVersion },
-                            new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = "99.0.0" },
-                        };
-
-                        return Task.FromResult<IEnumerable<NuGetPackage>>(packages);
-                    };
-
-                    var prChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, [], fakeCache, new TestFeatures());
-                    return Task.FromResult<IEnumerable<PackageChannel>>([prChannel]);
-                };
-
-                return packagingService;
-            };
-
-            options.DotNetCliRunnerFactory = (sp) =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, ct) =>
-                {
-                    selectedVersion = version;
-                    return (0, version);
-                };
-                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, ct) =>
-                {
-                    return 0;
-                };
-                return runner;
-            };
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --channel pr-12345 --use-redis-cache --test-framework None");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(0, exitCode);
-        Assert.Equal(cliVersion, selectedVersion);
-        Assert.False(promptedForVersion);
-    }
-
-    [Fact]
     // Quarantined due to flakiness. See linked issue for details.
     public async Task NewCommandDoesNotPromptForTemplateIfSpecifiedOnCommandLine()
     {
@@ -538,38 +288,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptedForTemplate);
-    }
-
-    [Fact]
-    public async Task NewCommandDoesNotPromptForTemplateVersionIfSpecifiedOnCommandLine()
-    {
-        bool promptedForTemplateVersion = false;
-
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CreateServiceCollection(workspace, options =>
-        {
-            options.NewCommandPrompterFactory = (sp) =>
-            {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestNewCommandPrompter(interactionService);
-
-                prompter.PromptForTemplatesVersionCallback = (packages) =>
-                {
-                    promptedForTemplateVersion = true;
-                    throw new InvalidOperationException("This should not be called");
-                };
-
-                return prompter;
-            };
-        });
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --name MyApp --output ./output --use-redis-cache --test-framework None --version 9.2.0");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
-        Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.False(promptedForTemplateVersion);
     }
 
     [Fact]
@@ -703,7 +421,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 Id = "Aspire.ProjectTemplates",
                 Source = "nuget",
-                Version = "9.2.0"
+                // Pin to the CLI build's template version so the resolver's hard-fail
+                // requirement (template package must match CLI build) is satisfied.
+                Version = Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion()
             };
 
             return (0, new NuGetPackage[] { package });
@@ -746,71 +466,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         public Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
         {
             throw new CertificateServiceException("Failed to trust certificates");
-        }
-    }
-
-    [Fact]
-    public async Task NewCommandPromptsForTemplateVersionBeforeTemplateOptions()
-    {
-        var operationOrder = new List<string>();
-
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CreateServiceCollection(workspace, options =>
-        {
-            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
-            options.NewCommandPrompterFactory = (sp) =>
-            {
-                var interactionService = sp.GetRequiredService<IInteractionService>();
-                var prompter = new TestNewCommandPrompter(interactionService);
-
-                prompter.PromptForTemplatesVersionCallback = (packages) =>
-                {
-                    operationOrder.Add("TemplateVersion");
-                    return packages.First();
-                };
-
-                return prompter;
-            };
-
-            options.InteractionServiceFactory = (sp) =>
-            {
-                var testInteractionService = new TestInteractionService();
-                testInteractionService.PromptForSelectionCallback = (promptText, choices, formatter, ct) =>
-                {
-                    // Track template option prompts
-                    if (promptText?.Contains("Redis") == true ||
-                        promptText?.Contains("test framework") == true ||
-                        promptText?.Contains("Create a test project") == true ||
-                        promptText?.Contains("xUnit") == true)
-                    {
-                        operationOrder.Add("TemplateOption");
-                    }
-
-                    return choices.Cast<object>().First();
-                };
-                return testInteractionService;
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --name TestApp --output ./output");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(CliExitCodes.Success, exitCode);
-
-        // Verify that template version was prompted before template options
-        Assert.Contains("TemplateVersion", operationOrder);
-
-        // If template options were prompted, they should come after version selection
-        var versionIndex = operationOrder.IndexOf("TemplateVersion");
-        var optionIndex = operationOrder.IndexOf("TemplateOption");
-
-        if (optionIndex >= 0)
-        {
-            Assert.True(versionIndex < optionIndex,
-                $"Template version should be prompted before template options. Order: {string.Join(", ", operationOrder)}");
         }
     }
 
@@ -1573,6 +1228,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var services = CreateServiceCollection(workspace, options =>
         {
+            // Identity now pins the persisted channel for `aspire new`. The test asserts
+            // "stable" is persisted, so the CLI identity must be stable.
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: "stable");
             options.PackagingServiceFactory = (sp) =>
             {
                 var packagingService = new TestPackagingService();
@@ -1581,7 +1239,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     var stableCache = new FakeNuGetPackageCache();
                     stableCache.GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
                     {
-                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                        var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion() };
                         return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                     };
 
@@ -1605,11 +1263,11 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-ts-empty --name TestApp --output ./output --channel stable --localhost-tld false");
+        var result = command.Parse("new aspire-ts-empty --name TestApp --output ./output --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal("9.2.0", scaffoldSdkVersion);
+        Assert.Equal(Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion(), scaffoldSdkVersion);
         Assert.Equal("stable", scaffoldChannel);
     }
 
@@ -1748,6 +1406,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var services = CreateServiceCollection(workspace, options =>
         {
+            // Identity is what now pins the channel for `aspire new` — the test asserts
+            // the daily channel is persisted, so the CLI identity must be daily.
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: "daily");
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
             {
                 SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, runnerOptions, cancellationToken) =>
@@ -1756,7 +1417,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     {
                         Id = "Aspire.ProjectTemplates",
                         Source = "nuget",
-                        Version = "9.2.0"
+                        Version = Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion()
                     };
 
                     return (0, new NuGetPackage[] { package });
@@ -1775,7 +1436,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                             {
                                 Id = "Aspire.ProjectTemplates",
                                 Source = "nuget",
-                                Version = "9.2.0"
+                                Version = Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion()
                             };
 
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
@@ -1803,14 +1464,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false");
+        var result = command.Parse("new aspire-ts-starter --name TestApp --output ./output --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(buildAndGenerateCalled);
         Assert.Equal("daily", channelSeenByProject);
-        Assert.Equal("9.2.0", sdkVersionSeenByProject);
+        Assert.Equal(Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion(), sdkVersionSeenByProject);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", LanguageInfo.GeneratedFolderName, "aspire.mts")));
     }
 
@@ -1831,7 +1492,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     {
                         Id = "Aspire.ProjectTemplates",
                         Source = "nuget",
-                        Version = "9.2.0"
+                        Version = Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion()
                     };
 
                     return (0, new NuGetPackage[] { package });
@@ -1850,7 +1511,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                             {
                                 Id = "Aspire.ProjectTemplates",
                                 Source = "nuget",
-                                Version = "9.2.0"
+                                Version = Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion()
                             };
 
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
@@ -1868,7 +1529,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false");
+        var result = command.Parse("new aspire-ts-starter --name TestApp --output ./output --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1891,7 +1552,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, runnerOptions, cancellationToken) =>
                 {
-                    var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                    var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion() };
                     return (0, new NuGetPackage[] { package });
                 }
             };
@@ -1904,7 +1565,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     {
                         GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
                         {
-                            var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                            var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion() };
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                         }
                     };
@@ -1924,7 +1585,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false --source {sourceOverride}");
+        var result = command.Parse($"new aspire-ts-starter --name TestApp --output ./output --localhost-tld false --source {sourceOverride}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -1987,7 +1648,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             {
                 SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, runnerOptions, cancellationToken) =>
                 {
-                    var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                    var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion() };
                     return (0, new NuGetPackage[] { package });
                 }
             };
@@ -2000,7 +1661,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
                     {
                         GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
                         {
-                            var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                            var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = Aspire.Cli.Utils.VersionHelper.GetDefaultTemplateVersion() };
                             return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
                         }
                     };
@@ -2014,7 +1675,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false --source {sourceOverride}");
+        var result = command.Parse($"new aspire-ts-starter --name TestApp --output ./output --localhost-tld false --source {sourceOverride}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2600,7 +2261,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2663,7 +2324,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2735,7 +2396,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2804,7 +2465,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2858,7 +2519,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --version 9.2.0 --localhost-tld false");
+        var result = command.Parse($"new {KnownTemplateId.TypeScriptEmptyAppHost} --name {projectName} --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
