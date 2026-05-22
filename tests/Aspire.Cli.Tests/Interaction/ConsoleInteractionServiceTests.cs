@@ -426,6 +426,70 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public async Task ShowStatusAsync_FallbackPath_DoesNotLeaveInStatusFlagSet()
+    {
+        // Regression test: when ShowStatusAsync takes the fallback path due to debug/non-interactive
+        // mode or empty status text, the _inStatus flag must not be set to 1 (and left there).
+        // Previously the CompareExchange ran first in the || chain, so the swap happened before the
+        // other conditions short-circuited, leaving _inStatus=1 with no try/finally to reset it.
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        // Debug mode forces the fallback path even though host environment supports interactive output.
+        var executionContext = CreateExecutionContext(debugMode: true);
+        var interactionService = CreateInteractionService(console, executionContext);
+
+        await interactionService.ShowStatusAsync("Working...", () => Task.FromResult(0)).DefaultTimeout();
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    [Fact]
+    public async Task ShowStatusAsync_FallbackPathWithEmptyText_DoesNotLeaveInStatusFlagSet()
+    {
+        // Regression test: empty status text triggers the fallback path. The flag must not be left set.
+        var interactionService = CreateInteractionService(AnsiConsole.Console);
+
+        await interactionService.ShowStatusAsync(string.Empty, () => Task.FromResult(0)).DefaultTimeout();
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    [Fact]
+    public async Task ShowDynamicStatusAsync_FallbackPath_DoesNotLeaveInStatusFlagSet()
+    {
+        var executionContext = CreateExecutionContext(debugMode: true);
+        var interactionService = CreateInteractionService(AnsiConsole.Console, executionContext);
+
+        await interactionService.ShowDynamicStatusAsync<int>("Working...", _ => Task.FromResult(0)).DefaultTimeout();
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    [Fact]
+    public void ShowStatus_FallbackPath_DoesNotLeaveInStatusFlagSet()
+    {
+        var executionContext = CreateExecutionContext(debugMode: true);
+        var interactionService = CreateInteractionService(AnsiConsole.Console, executionContext);
+
+        interactionService.ShowStatus("Working...", () => { });
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    private static int GetInStatus(ConsoleInteractionService service)
+    {
+        var field = typeof(ConsoleInteractionService).GetField("_inStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        return (int)field!.GetValue(service)!;
+    }
+
+    [Fact]
     public void DisplayIncompatibleVersionError_WithMarkupCharactersInVersion_DoesNotThrow()
     {
         // Arrange

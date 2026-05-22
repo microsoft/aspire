@@ -142,7 +142,7 @@
     <value>Resource '{0}' was not found.</value>
   </data>
   <data name="ResourceEnteredFailedState" xml:space="preserve">
-    <value>Resource '{0}' entered a failed state: {1}.</value>
+    <value>Resource '{0}' entered a failed state: {1}</value>
   </data>
   <data name="InvalidStatusValue" xml:space="preserve">
     <value>Invalid status value '{0}'. Valid values are: healthy, up, down.</value>

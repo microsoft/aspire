@@ -8,7 +8,10 @@ namespace Aspire.Hosting;
 
 internal static class AzureAppServicePolyglotCustomization
 {
-    [AspireExport("configureWebSiteSiteConfig", MethodName = "configureSiteConfig", Description = "Configures supported Azure App Service site settings.")]
+    /// <summary>
+    /// Configures supported Azure App Service site settings.
+    /// </summary>
+    [AspireExport("configureWebSiteSiteConfig", MethodName = "configureSiteConfig")]
     internal static void ConfigureSiteConfig(WebSite webSite, AzureAppServiceSiteConfig siteConfig)
     {
         ArgumentNullException.ThrowIfNull(webSite);
@@ -18,7 +21,10 @@ internal static class AzureAppServicePolyglotCustomization
         ApplySiteConfig(webSite.SiteConfig, siteConfig);
     }
 
-    [AspireExport("configureWebSiteSlotSiteConfig", MethodName = "configureSlotSiteConfig", Description = "Configures supported Azure App Service deployment slot site settings.")]
+    /// <summary>
+    /// Configures supported Azure App Service deployment slot site settings.
+    /// </summary>
+    [AspireExport("configureWebSiteSlotSiteConfig", MethodName = "configureSlotSiteConfig")]
     internal static void ConfigureSiteConfig(WebSiteSlot webSiteSlot, AzureAppServiceSiteConfig siteConfig)
     {
         ArgumentNullException.ThrowIfNull(webSiteSlot);

@@ -266,4 +266,8 @@
   <data name="RunAspireRun" xml:space="preserve">
     <value>Run 'aspire run' to start your AppHost.</value>
   </data>
+  <data name="SourceOverrideNotPersistedWarning" xml:space="preserve">
+    <value>[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</value>
+    <comment>Do not translate [yellow] or [/]. Displayed after 'aspire new' (aspire-empty or aspire-starter) when --source was supplied for a non-C# language.</comment>
+  </data>
 </root>

@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -56,6 +58,28 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Fact]
+    public void AddDevTunnel_WithPersistentLifetime_AddsPersistenceAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var tunnel = builder.AddDevTunnel("tunnel", "custom-id")
+            .WithPersistentLifetime();
+
+        var annotation = Assert.Single(tunnel.Resource.Annotations.OfType<PersistenceAnnotation>());
+        Assert.Equal(PersistenceMode.Persistent, annotation.Mode);
+    }
+
+    [Fact]
+    public void AddDevTunnel_DefaultLifetimeDoesNotAddPersistenceAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var tunnel = builder.AddDevTunnel("tunnel", "custom-id");
+
+        Assert.Empty(tunnel.Resource.Annotations.OfType<PersistenceAnnotation>());
+    }
+
+    [Fact]
     public void WithReference_WithAnonymousAccess_SetsPortAllowAnonymousOption()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -68,6 +92,79 @@ public class DevTunnelResourceBuilderExtensionsTests
         Assert.Single(tunnel.Resource.Ports);
         var port = tunnel.Resource.Ports.First();
         Assert.True(port.Options.AllowAnonymous);
+    }
+
+    [Fact]
+    public async Task WithReference_UsesTargetPortForDevTunnelPortWhenAvailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var target = builder.AddProject<ProjectA>("target")
+            .WithHttpEndpoint(port: 5000, targetPort: 5001, name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel")
+            .WithReference(target);
+
+        var tunnelPort = Assert.Single(tunnel.Resource.Ports);
+
+        Assert.Equal(5001, await tunnelPort.GetTunnelPortAsync());
+    }
+
+    [Fact]
+    public async Task WithReference_UsesAllocatedPortForContainerDevTunnelPort()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var target = builder.AddContainer("target", "image")
+            .WithHttpEndpoint(port: 5000, targetPort: 8080, name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel")
+            .WithReference(target);
+
+        var tunnelPort = Assert.Single(tunnel.Resource.Ports);
+        tunnelPort.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(
+            tunnelPort.TargetEndpoint.EndpointAnnotation,
+            "localhost",
+            5000);
+
+        Assert.Equal(5000, await tunnelPort.GetTunnelPortAsync());
+    }
+
+    [Fact]
+    public async Task WithReference_ResolvesDynamicTargetPortForDevTunnelPortWhenAvailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var target = builder.AddProject<ProjectA>("target")
+            .WithHttpEndpoint(port: 5000, name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel")
+            .WithReference(target);
+
+        var tunnelPort = Assert.Single(tunnel.Resource.Ports);
+        tunnelPort.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(
+            tunnelPort.TargetEndpoint.EndpointAnnotation,
+            "localhost",
+            5000,
+            targetPortExpression: "5001");
+
+        Assert.Equal(5001, await tunnelPort.GetTunnelPortAsync());
+    }
+
+    [Fact]
+    public async Task WithReference_UsesAllocatedPortForDevTunnelPortWhenTargetPortIsUnavailable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var target = builder.AddProject<ProjectA>("target")
+            .WithHttpEndpoint(port: 5000, name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel")
+            .WithReference(target);
+
+        var tunnelPort = Assert.Single(tunnel.Resource.Ports);
+        tunnelPort.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(
+            tunnelPort.TargetEndpoint.EndpointAnnotation,
+            "localhost",
+            5000);
+
+        Assert.Equal(5000, await tunnelPort.GetTunnelPortAsync());
     }
 
     [Fact]

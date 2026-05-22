@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import { getParserForDocument } from './parsers/AppHostResourceParser';
+import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostResourceParser';
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
@@ -47,17 +47,28 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         );
     }
 
-    provideCodeLenses(document: vscode.TextDocument, _token: vscode.CancellationToken): vscode.CodeLens[] {
+    provideCodeLenses(document: vscode.TextDocument, token: vscode.CancellationToken): vscode.ProviderResult<vscode.CodeLens[]> {
+        return this._provideCodeLensesAsync(document, token);
+    }
+
+    private async _provideCodeLensesAsync(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.CodeLens[] | undefined> {
         if (!vscode.workspace.getConfiguration('aspire').get<boolean>('enableCodeLens', true)) {
             return [];
         }
 
-        const parser = getParserForDocument(document);
+        const parser = await getParserForDocument(document);
+        if (token.isCancellationRequested) {
+            return undefined;
+        }
+
         if (!parser) {
             return [];
         }
 
-        const resources = parser.parseResources(document);
+        const resources = await parser.parseResources(document);
+        if (token.isCancellationRequested) {
+            return undefined;
+        }
 
         const appHosts = this._treeProvider.appHosts;
         const workspaceResources = this._treeProvider.workspaceResources;
@@ -71,7 +82,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         // Builder-statement lenses (Open Dashboard + View Logs) appear only when this
         // document maps to a concretely-running AppHost — independent of whether any
         // Add* resource calls were found in the file.
-        this._addBuilderStatementLenses(lenses, document, parser, workspaceAppHostPath, workspaceResources);
+        await this._addBuilderStatementLenses(lenses, document, parser, workspaceAppHostPath, workspaceResources);
 
         if (resources.length === 0) {
             return lenses;
@@ -130,14 +141,14 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         }));
     }
 
-    private _addBuilderStatementLenses(
+    private async _addBuilderStatementLenses(
         lenses: vscode.CodeLens[],
         document: vscode.TextDocument,
-        parser: { findBuilderStatementLine?(document: vscode.TextDocument): number | undefined },
+        parser: AppHostResourceParser,
         workspaceAppHostPath: string,
         workspaceResources: readonly ResourceJson[],
-    ): void {
-        const builderLine = parser.findBuilderStatementLine?.(document);
+    ): Promise<void> {
+        const builderLine = await parser.findBuilderStatementLine?.(document);
         if (builderLine === undefined) {
             return;
         }

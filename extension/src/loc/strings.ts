@@ -108,6 +108,7 @@ export const openCliInstallInstructions = vscode.l10n.t('See CLI installation in
 export const cliNotAvailable = vscode.l10n.t('Aspire CLI is not available on PATH. Please install it and restart VS Code.');
 export const cliFoundAtDefaultPath = (path: string) => vscode.l10n.t('Aspire CLI found at {0}. The extension will use this path.', path);
 export const selectDirectoryTitle = vscode.l10n.t('Select directory');
+export const unableToAddFolderToWorkspace = (path: string) => vscode.l10n.t('Unable to add folder to workspace: {0}', path);
 export const runningAspireRestore = (configPath: string) => vscode.l10n.t('Running aspire restore on {0} ...', configPath);
 export const runningAspireRestoreProgress = (completed: number, total: number) => vscode.l10n.t('Running aspire restore ({0}/{1} projects) ...', completed, total);
 export const aspireRestoreCompleted = (configPath: string) => vscode.l10n.t('Aspire restore completed for {0}.', configPath);

@@ -52,6 +52,8 @@ namespace Aspire.Hosting;
 /// </code>
 /// </example>
 /// </remarks>
+/// <ats-remarks />
+/// <ats-summary>Represents a distributed application that implements the <ats-see cref="!:type:IHost" /> and <ats-see cref="!:type:IAsyncDisposable" /> interfaces.</ats-summary>
 [DebuggerDisplay("{_host}")]
 [DebuggerTypeProxy(typeof(DistributedApplicationDebuggerProxy))]
 [AspireExport]
@@ -250,7 +252,10 @@ public class DistributedApplication : IHost, IAsyncDisposable
         return new DistributedApplicationBuilder(realOptions);
     }
 
-    [AspireExport("createBuilder", Description = "Creates a new distributed application builder")]
+    /// <summary>
+    /// Creates a new distributed application builder
+    /// </summary>
+    [AspireExport("createBuilder")]
     internal static IDistributedApplicationBuilder CreateBuilderForPolyglot(
         [AspireUnion(typeof(string[]), typeof(CreateBuilderOptions))] object? argsOrOptions = null)
     {
@@ -489,6 +494,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// Runs an application and returns a Task that only completes when the token is triggered or shutdown is
     /// triggered and all <see cref="IHostedService" /> instances are stopped.
     /// </summary>
+    /// <ats-summary>Runs the distributed application</ats-summary>
     /// <param name="cancellationToken">The token to trigger shutdown.</param>
     /// <returns>The <see cref="Task"/> that represents the asynchronous operation.</returns>
     /// <remarks>
@@ -510,7 +516,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// in refer to <see cref="DistributedApplicationExecutionContext" />.
     /// </para>
     /// </remarks>
-    [AspireExport("run", Description = "Runs the distributed application")]
+    [AspireExport("run")]
     public virtual async Task RunAsync(CancellationToken cancellationToken = default)
     {
         ProfilingTelemetry.EnsureInitialized(_host.Services);
@@ -611,6 +617,14 @@ public class DistributedApplication : IHost, IAsyncDisposable
                 }
             }
 
+            var logger = _host.Services.GetRequiredService<ILogger<DistributedApplication>>();
+#pragma warning disable CS0618 // Type or member is obsolete
+            if (eventing is DistributedApplicationEventing { } eventingImpl && eventingImpl.HasSubscriptions<AfterEndpointsAllocatedEvent>())
+            {
+                logger.LogWarning("{EventName} is obsolete and is no longer raised by the DCP executor. Use {ResourceEventName} to observe per-resource endpoint allocation.", nameof(AfterEndpointsAllocatedEvent), nameof(ResourceEndpointsAllocatedEvent));
+            }
+#pragma warning restore CS0618 // Type or member is obsolete
+
             var beforeStartEvent = new BeforeStartEvent(_host.Services, _host.Services.GetRequiredService<DistributedApplicationModel>());
             using (var publishEventActivity = ProfilingTelemetry.StartAppHostPublishEvent(configuration, typeof(BeforeStartEvent)))
             {
@@ -653,8 +667,6 @@ public class DistributedApplication : IHost, IAsyncDisposable
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
             // Execute the before-start pipeline step
             var pipeline = _host.Services.GetRequiredService<IDistributedApplicationPipeline>();
-            var logger = _host.Services.GetRequiredService<ILogger<DistributedApplication>>();
-
             // Cast to internal implementation to access ExecuteStepSequentiallyAsync
             if (pipeline is not DistributedApplicationPipeline pipelineImpl)
             {

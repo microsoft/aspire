@@ -1,4 +1,4 @@
-import { createBuilder, ContainerLifetime } from './.modules/aspire.js';
+import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -17,7 +17,7 @@ const pgContainer = await builder.addAzurePostgresFlexibleServer("pg-container")
 await pgContainer.runAsContainer({
     configureContainer: async (container) => {
         // Exercise PostgresServerResource builder methods within the callback
-        await container.withLifetime(ContainerLifetime.Persistent);
+        await container.withPersistentLifetime();
     },
 });
 

@@ -540,7 +540,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var propertyName = ToPascalCase(property.Name);
-                var propertyType = MapTypeRefToGo(property.Type, property.IsOptional);
+                var propertyType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
                 var jsonTag = $"`json:\"{property.Name},omitempty\"`";
                 WriteLine($"\t{propertyName} {propertyType} {jsonTag}");
             }
@@ -553,7 +553,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var propertyName = ToPascalCase(property.Name);
-                var propertyType = MapTypeRefToGo(property.Type, property.IsOptional);
+                var propertyType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
                 if (IsNilableGoType(propertyType))
                 {
                     WriteLine($"\tif d.{propertyName} != nil {{ m[\"{property.Name}\"] = serializeValue(d.{propertyName}) }}");
@@ -1934,6 +1934,33 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             AtsTypeCategory.Union => "any",
             AtsTypeCategory.Unknown => "any",
             _ => "any"
+        };
+
+        if (isOptional && !IsNilableGoType(baseType))
+        {
+            return $"*{baseType}";
+        }
+        return baseType;
+    }
+
+    private string MapDtoPropertyTypeToGo(AtsTypeRef? typeRef, bool isOptional)
+    {
+        if (typeRef is null)
+        {
+            return "any";
+        }
+
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
+        {
+            return "*ReferenceExpression";
+        }
+
+        var baseType = typeRef.Category switch
+        {
+            AtsTypeCategory.Array or AtsTypeCategory.List => $"[]{MapDtoPropertyTypeToGo(typeRef.ElementType, false)}",
+            AtsTypeCategory.Dict => $"map[{MapDtoPropertyTypeToGo(typeRef.KeyType, false)}]{MapDtoPropertyTypeToGo(typeRef.ValueType, false)}",
+            AtsTypeCategory.Union => "any",
+            _ => MapTypeRefToGo(typeRef, isOptional: false)
         };
 
         if (isOptional && !IsNilableGoType(baseType))

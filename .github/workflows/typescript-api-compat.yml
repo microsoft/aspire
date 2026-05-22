@@ -34,6 +34,8 @@ jobs:
 
           BASE_WORKTREE="${RUNNER_TEMP}/base-worktree"
           BASELINE_DIR="${RUNNER_TEMP}/ats-baseline"
+          EXCLUDED_PACKAGES_FILE="${RUNNER_TEMP}/typescript-api-compat-excluded-packages.txt"
+          : > "$EXCLUDED_PACKAGES_FILE"
 
           git fetch --no-tags --depth=1 origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
           git worktree add --detach "$BASE_WORKTREE" "origin/${BASE_BRANCH}"
@@ -56,7 +58,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.Integration.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
                 continue
                 ;;
             esac
@@ -70,7 +72,7 @@ jobs:
 
               dir=$(dirname "$dir")
             done
-          done < <(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' || true)
+          done < <(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' || true)
 
           sort -u "$PROJECTS_FILE" > "$SORTED_PROJECTS_FILE"
 
@@ -80,6 +82,11 @@ jobs:
             csproj="$proj/$proj_name.csproj"
             if [ -f "$csproj" ]; then
               echo "::group::Base $proj_name"
+              disable_package_baseline_validation=$(./dotnet.sh msbuild "$csproj" -nologo -getProperty:DisablePackageBaselineValidation | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+              if [ "$disable_package_baseline_validation" = "true" ]; then
+                echo "$proj_name" >> "$EXCLUDED_PACKAGES_FILE"
+              fi
+
               mkdir -p "$BASELINE_DIR/$proj/api"
               $ASPIRE_CLI sdk dump --format ci "$csproj" -o "$BASELINE_DIR/$proj/api/$proj_name.ats.txt"
               echo "::endgroup::"
@@ -87,8 +94,18 @@ jobs:
           done < "$SORTED_PROJECTS_FILE"
           popd
 
+          echo "::group::Overlay PR-updated ATS baselines"
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            mkdir -p "$BASELINE_DIR/$(dirname "$file")"
+            cp "$file" "$BASELINE_DIR/$file"
+            echo "$file"
+          done < <(git diff --name-only --diff-filter=ACMRT "origin/${BASE_BRANCH}...HEAD" -- 'src/**/api/*.ats.txt')
+          echo "::endgroup::"
+
           echo "BASELINE_DIR=$BASELINE_DIR" >> "$GITHUB_ENV"
           echo "BASE_SUPPRESSIONS_ROOT=$BASE_WORKTREE" >> "$GITHUB_ENV"
+          echo "TYPESCRIPT_API_COMPAT_EXCLUDED_PACKAGES_FILE=$EXCLUDED_PACKAGES_FILE" >> "$GITHUB_ENV"
 
       - name: Generate current ATS surface
         shell: bash
@@ -98,6 +115,7 @@ jobs:
           set -euo pipefail
 
           CURRENT_DIR="${RUNNER_TEMP}/ats-current"
+          EXCLUDED_PACKAGES_FILE="$TYPESCRIPT_API_COMPAT_EXCLUDED_PACKAGES_FILE"
           PROJECTS_FILE="${RUNNER_TEMP}/ats-projects.txt"
           SORTED_PROJECTS_FILE="${RUNNER_TEMP}/ats-projects-sorted.txt"
           ASPIRE_CLI="./dotnet.sh run --no-build --project src/Aspire.Cli/Aspire.Cli.csproj --configuration Release -- --nologo"
@@ -111,7 +129,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.Integration.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
                 continue
                 ;;
             esac
@@ -125,7 +143,7 @@ jobs:
 
               dir=$(dirname "$dir")
             done
-          done < <(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' || true)
+          done < <(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' || true)
 
           sort -u "$PROJECTS_FILE" > "$SORTED_PROJECTS_FILE"
 
@@ -135,11 +153,23 @@ jobs:
             csproj="$proj/$proj_name.csproj"
             if [ -f "$csproj" ]; then
               echo "::group::$proj_name"
+              disable_package_baseline_validation=$(./dotnet.sh msbuild "$csproj" -nologo -getProperty:DisablePackageBaselineValidation | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+              if [ "$disable_package_baseline_validation" = "true" ]; then
+                echo "$proj_name" >> "$EXCLUDED_PACKAGES_FILE"
+              fi
+
               mkdir -p "$CURRENT_DIR/$proj/api"
               $ASPIRE_CLI sdk dump --format ci "$csproj" -o "$CURRENT_DIR/$proj/api/$proj_name.ats.txt"
               echo "::endgroup::"
             fi
           done < "$SORTED_PROJECTS_FILE"
+
+          sort -u "$EXCLUDED_PACKAGES_FILE" -o "$EXCLUDED_PACKAGES_FILE"
+          if [ -s "$EXCLUDED_PACKAGES_FILE" ]; then
+            echo "::group::TypeScript API compatibility excluded packages"
+            sed 's/^/- /' "$EXCLUDED_PACKAGES_FILE"
+            echo "::endgroup::"
+          fi
 
           echo "CURRENT_DIR=$CURRENT_DIR" >> "$GITHUB_ENV"
 
@@ -157,6 +187,7 @@ jobs:
             --current "$CURRENT_DIR" \
             --suppressions-root "${{ github.workspace }}" \
             --baseline-suppressions-root "$BASE_SUPPRESSIONS_ROOT" \
+            --excluded-packages-file "$TYPESCRIPT_API_COMPAT_EXCLUDED_PACKAGES_FILE" \
             --report "${RUNNER_TEMP}/typescript-api-compat-report.md" \
             --github-annotations
 

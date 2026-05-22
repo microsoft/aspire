@@ -76,7 +76,7 @@ internal sealed class DoCommand : PipelineCommandBase
         }
 
         // Add --log-level and --environment flags if specified
-        var logLevel = parseResult.GetValue(s_logLevelOption);
+        var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
         if (!string.IsNullOrEmpty(logLevel))
         {
             baseArgs.AddRange(["--log-level", logLevel!]);

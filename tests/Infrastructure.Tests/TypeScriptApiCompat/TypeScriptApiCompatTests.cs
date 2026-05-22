@@ -208,6 +208,7 @@ public sealed class TypeScriptApiCompatTests
             currentRoot,
             tempDirectory.Path,
             BaselineSuppressionsRoot: null,
+            ExcludedPackagesFile: null,
             ReportPath: reportPath,
             GitHubAnnotations: false));
 
@@ -215,6 +216,47 @@ public sealed class TypeScriptApiCompatTests
         var report = File.ReadAllText(reportPath);
         Assert.Contains("capability-removed", report, StringComparison.Ordinal);
         Assert.Contains("Pkg/removeMe", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RunnerIgnoresExcludedPackagesAndSuppressions()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var baselineRoot = Path.Combine(tempDirectory.Path, "baseline");
+        var currentRoot = Path.Combine(tempDirectory.Path, "current");
+        var reportPath = Path.Combine(tempDirectory.Path, "report.md");
+        var excludedPackagesPath = Path.Combine(tempDirectory.Path, "excluded-packages.txt");
+        var suppressionPath = Path.Combine(tempDirectory.Path, "Excluded.tscompat.suppression.txt");
+
+        WriteSurface(baselineRoot, "Excluded", """
+            # Capabilities
+            Excluded/removeMe() -> void
+            """);
+        Directory.CreateDirectory(currentRoot);
+
+        File.WriteAllText(excludedPackagesPath, """
+            # Excluded because DisablePackageBaselineValidation=true
+            Excluded
+            """);
+        File.WriteAllText(suppressionPath, """
+            BREAK capability-removed Excluded Excluded/stale -- https://github.com/microsoft/aspire/issues/16961 -- Excluded package suppression
+            """);
+
+        var exitCode = TypeScriptApiCompatRunner.Run(new CommandLineOptions(
+            baselineRoot,
+            currentRoot,
+            tempDirectory.Path,
+            BaselineSuppressionsRoot: null,
+            ExcludedPackagesFile: excludedPackagesPath,
+            ReportPath: reportPath,
+            GitHubAnnotations: false));
+
+        Assert.Equal(0, exitCode);
+        var report = File.ReadAllText(reportPath);
+        Assert.Contains("Excluded packages", report, StringComparison.Ordinal);
+        Assert.Contains("`Excluded`", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("package-removed", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("Unused suppressions", report, StringComparison.Ordinal);
     }
 
     private static void WriteSurface(string rootPath, string packageName, string content)

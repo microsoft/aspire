@@ -368,22 +368,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         foreach (var fixtureDir in Directory.GetDirectories(s_fixturesDir))
         {
             var targetDir = Path.Combine(workspace.WorkspaceRoot.FullName, Path.GetFileName(fixtureDir));
-            CopyDirectory(fixtureDir, targetDir);
-        }
-    }
-
-    private static void CopyDirectory(string source, string destination)
-    {
-        Directory.CreateDirectory(destination);
-
-        foreach (var file in Directory.GetFiles(source))
-        {
-            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
-        }
-
-        foreach (var dir in Directory.GetDirectories(source))
-        {
-            CopyDirectory(dir, Path.Combine(destination, Path.GetFileName(dir)));
+            TestDirectoryHelpers.CopyDirectory(fixtureDir, targetDir);
         }
     }
 }

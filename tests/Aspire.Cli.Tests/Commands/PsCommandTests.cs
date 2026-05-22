@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -473,6 +474,88 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         var document = JsonDocument.Parse(json);
         Assert.Equal(JsonValueKind.Array, document.RootElement.ValueKind);
         Assert.Equal(0, document.RootElement.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task PsCommand_JsonFormat_OnlyJsonOnStdout_StatusMessagesOnStderr()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+        var errorWriter = new StringWriter();
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj"),
+                ProcessId = 1234,
+                CliProcessId = 5678
+            },
+            DashboardUrlsState = new DashboardUrlsState
+            {
+                BaseUrlWithLoginToken = "http://localhost:18888/login?t=abc123"
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.ErrorTextWriter = errorWriter;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // Stdout must contain only valid JSON (parseable without error)
+        var stdoutText = string.Join(string.Empty, textWriter.Logs);
+        using var document = JsonDocument.Parse(stdoutText);
+        Assert.Equal(JsonValueKind.Array, document.RootElement.ValueKind);
+        Assert.Equal(1, document.RootElement.GetArrayLength());
+
+        // Status messages should be routed to stderr
+        var stderrText = errorWriter.ToString();
+        Assert.Contains(SharedCommandStrings.ScanningForRunningAppHosts, stderrText);
+    }
+
+    [Fact]
+    public async Task PsCommand_JsonFormat_NoResults_OnlyJsonOnStdout_StatusMessagesOnStderr()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+        var errorWriter = new StringWriter();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.ErrorTextWriter = errorWriter;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // Stdout must contain only valid JSON (empty array)
+        var stdoutText = string.Join(string.Empty, textWriter.Logs);
+        using var document = JsonDocument.Parse(stdoutText);
+        Assert.Equal(JsonValueKind.Array, document.RootElement.ValueKind);
+        Assert.Equal(0, document.RootElement.GetArrayLength());
+
+        // Status messages should be routed to stderr
+        var stderrText = errorWriter.ToString();
+        Assert.Contains(SharedCommandStrings.ScanningForRunningAppHosts, stderrText);
     }
 
     [Fact]

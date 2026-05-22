@@ -27,6 +27,11 @@ var baselineSuppressionsRootOption = new Option<string?>("--baseline-suppression
     Description = "Target-branch repository root containing inherited suppression files."
 };
 
+var excludedPackagesFileOption = new Option<string?>("--excluded-packages-file")
+{
+    Description = "Newline-delimited package names to exclude from TypeScript API compatibility."
+};
+
 var reportOption = new Option<string?>("--report")
 {
     Description = "Write a Markdown report."
@@ -42,6 +47,7 @@ rootCommand.Options.Add(baselineOption);
 rootCommand.Options.Add(currentOption);
 rootCommand.Options.Add(suppressionsRootOption);
 rootCommand.Options.Add(baselineSuppressionsRootOption);
+rootCommand.Options.Add(excludedPackagesFileOption);
 rootCommand.Options.Add(reportOption);
 rootCommand.Options.Add(githubAnnotationsOption);
 
@@ -52,6 +58,7 @@ rootCommand.SetAction(parseResult =>
         parseResult.GetValue(currentOption)!,
         parseResult.GetValue(suppressionsRootOption)!,
         parseResult.GetValue(baselineSuppressionsRootOption),
+        parseResult.GetValue(excludedPackagesFileOption),
         parseResult.GetValue(reportOption),
         parseResult.GetValue(githubAnnotationsOption));
 

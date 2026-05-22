@@ -104,15 +104,16 @@ public class AtsTypeScriptCodeGeneratorTests
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
 
-        Assert.DoesNotContain("export class ReferenceExpression {", files["aspire.ts"]);
+        Assert.DoesNotContain("export class ReferenceExpression {", aspireTs);
         Assert.Contains("export class ReferenceExpression {", files["base.ts"]);
         Assert.Contains("registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression'", files["base.ts"]);
         Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.ts"]);
         Assert.Contains("('$handle' in json || '$expr' in json)", files["base.ts"]);
         Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.ts"]);
-        Assert.Contains("arguments(): Promise<InteractionInputCollection>", files["aspire.ts"]);
-        Assert.DoesNotContain("setArguments", files["aspire.ts"]);
+        Assert.Contains("arguments(): Promise<InteractionInputCollection>", aspireTs);
+        Assert.DoesNotContain("setArguments", aspireTs);
     }
 
     [Fact]
@@ -166,7 +167,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var context = CreateContextFromTestAssembly();
 
         var addTestRedis = context.Capabilities.First(c => c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestRedis");
-        Assert.Equal("Adds a test Redis resource", addTestRedis.Description);
+        Assert.Equal("Adds a test Redis resource from ATS documentation.", addTestRedis.Description);
         Assert.Equal("Adds a test Redis resource from ATS documentation.", addTestRedis.Documentation?.Summary);
         Assert.Null(addTestRedis.Documentation?.Remarks);
         Assert.Equal("The ATS test Redis resource builder.", addTestRedis.Documentation?.Returns);
@@ -1277,6 +1278,9 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("getLoggerFactory", aspireTs);
         Assert.Contains("createLogger", aspireTs);
         Assert.Contains("getResourceLoggerService", aspireTs);
+        Assert.Contains("getResourceCommandService", aspireTs);
+        Assert.Contains("executeCommandAsync", aspireTs);
+        Assert.Contains("ExecuteCommandResult", aspireTs);
         Assert.Contains("getResourceNotificationService", aspireTs);
         Assert.Contains("getDistributedApplicationModel", aspireTs);
         Assert.Contains("subscribeBeforeStart", aspireTs);
@@ -1560,6 +1564,8 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // TestNestedDto should generate an interface with nested types
         Assert.Contains("interface TestNestedDto", code);
+        Assert.Contains("tags?: string[];", code);
+        Assert.Contains("counts?: Record<string, number>;", code);
     }
 
     [Fact]

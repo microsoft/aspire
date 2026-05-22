@@ -546,7 +546,10 @@ internal class DotNetTemplateFactory(
 
             // For explicit channels, optionally create or update a NuGet.config. If none exists in the current
             // working directory, create one in the newly created project's output directory.
-            await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
+            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selectedTemplateDetails.Channel, outputPath, cancellationToken))
+            {
+                await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
+            }
 
             interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
 
@@ -595,50 +598,24 @@ internal class DotNetTemplateFactory(
 
     private async Task<string?> GetOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var outputPath = await OutputPathHelper.ResolveOutputPathAsync(
+        var isExtensionHost = ExtensionHelper.IsExtensionHost(interactionService, out _, out _);
+        var createProjectNameSubdirectory = await OutputPathHelper.PromptExtensionCreateProjectNameSubdirectoryAsync(
+            interactionService,
+            isExtensionHost,
+            inputs.Output is not null,
+            projectName,
+            cancellationToken);
+
+        var outputPathResolver = OutputPathHelper.CreateProjectNameSubdirectoryOutputPathResolver(createProjectNameSubdirectory, projectName);
+        return await OutputPathHelper.ResolveOutputPathAsync(
             inputs.Output,
             executionContext.WorkingDirectory.FullName,
             async () =>
             {
                 var defaultPath = pathDeriver(executionContext, projectName);
                 var validator = OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
-                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, cancellationToken);
+                return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, cancellationToken, outputPathResolver);
             },
             interactionService);
-
-        if (outputPath is null)
-        {
-            return null;
-        }
-
-        // When running in extension mode (VS Code), the folder picker returns the parent
-        // directory the user selected. Append the project name as a subdirectory so the
-        // project gets its own clean folder, matching the git-clone convention.
-        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _)
-            && !projectName.Equals(".", StringComparison.Ordinal)
-            && !projectName.Equals("..", StringComparison.Ordinal))
-        {
-            var normalizedOutputPath = Path.TrimEndingDirectorySeparator(outputPath);
-
-            if (!string.Equals(Path.GetFileName(normalizedOutputPath), projectName, StringComparison.OrdinalIgnoreCase))
-            {
-                outputPath = Path.Combine(normalizedOutputPath, projectName);
-            }
-            else
-            {
-                outputPath = normalizedOutputPath;
-            }
-
-            // Re-validate the adjusted path for non-empty directory since appending the
-            // project name may target a different directory than the one already validated.
-            var validationError = OutputPathHelper.ValidateOutputPath(outputPath, executionContext.WorkingDirectory.FullName, isExplicitOutput: inputs.Output is not null);
-            if (validationError is not null)
-            {
-                interactionService.DisplayError(validationError);
-                return null;
-            }
-        }
-
-        return outputPath;
     }
 }

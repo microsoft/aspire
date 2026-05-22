@@ -56,11 +56,11 @@ public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         File.WriteAllText(appHostPath, """
-            import { createBuilder, ContainerLifetime } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.js';
 
             const builder = await createBuilder();
             const sql = await builder.addSqlServer('sql')
-                .withLifetime(ContainerLifetime.Persistent)
+                .withPersistentLifetime()
                 .withDataVolume();
 
             await sql.addDatabase('mydb');

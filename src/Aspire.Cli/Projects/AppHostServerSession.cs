@@ -22,6 +22,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly string _socketPath;
     private readonly ProfilingTelemetry.ActivityScope _activity;
     private readonly ProfilingTelemetry? _profilingTelemetry;
+    private readonly IDisposable? _projectLifetime;
     private IAppHostRpcClient? _rpcClient;
     private bool _disposed;
 
@@ -32,7 +33,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         string authenticationToken,
         ILogger logger,
         ProfilingTelemetry.ActivityScope activity = default,
-        ProfilingTelemetry? profilingTelemetry = null)
+        ProfilingTelemetry? profilingTelemetry = null,
+        IDisposable? projectLifetime = null)
     {
         _serverProcess = serverProcess;
         _output = output;
@@ -41,6 +43,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _logger = logger;
         _activity = activity;
         _profilingTelemetry = profilingTelemetry;
+        _projectLifetime = projectLifetime;
     }
 
     /// <inheritdoc />
@@ -109,6 +112,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         {
             activity.SetError(ex.Message);
             activity.Dispose();
+            (appHostServerProject as IDisposable)?.Dispose();
             throw;
         }
 
@@ -122,7 +126,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             authenticationToken,
             logger,
             activity,
-            profilingTelemetry);
+            profilingTelemetry,
+            appHostServerProject as IDisposable);
     }
 
     /// <inheritdoc />
@@ -168,6 +173,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         }
 
         _serverProcess.Dispose();
+        _projectLifetime?.Dispose();
         _activity.Dispose();
     }
 }
@@ -203,9 +209,21 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         var appHostServerProject = await _projectFactory.CreateAsync(appHostPath, cancellationToken);
 
         // Prepare the server (create files + build for dev mode, restore packages for prebuilt mode)
-        var prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken);
+        AppHostServerPrepareResult prepareResult;
+        try
+        {
+            prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            (appHostServerProject as IDisposable)?.Dispose();
+            throw;
+        }
+
         if (!prepareResult.Success)
         {
+            (appHostServerProject as IDisposable)?.Dispose();
+
             return new AppHostServerSessionResult(
                 Success: false,
                 Session: null,

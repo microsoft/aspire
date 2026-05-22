@@ -60,9 +60,11 @@ internal sealed class ProfileCaptureService(
         ArgumentNullException.ThrowIfNull(options);
 
         var managedPath = ResolveManagedPathOverride(configuration);
+        BundleLayoutLease? layoutLease = null;
         if (managedPath is null)
         {
-            var layout = await bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
+            layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "profile-dashboard", cancellationToken).ConfigureAwait(false);
+            var layout = layoutLease?.Layout;
             managedPath = layout?.GetManagedPath();
         }
 
@@ -73,6 +75,7 @@ internal sealed class ProfileCaptureService(
 
         if (managedPath is null || !File.Exists(managedPath))
         {
+            layoutLease?.Dispose();
             throw new InvalidOperationException(DashboardCommandStrings.ManagedBinaryNotFound);
         }
 
@@ -96,17 +99,21 @@ internal sealed class ProfileCaptureService(
         IProcessExecution dashboardProcess;
         try
         {
+            var environmentVariables = CreateDashboardEnvironment();
+            layoutLease?.AddEnvironment(environmentVariables);
+
             // Launch aspire-managed directly instead of calling `aspire dashboard run`. Calling
             // back through the CLI being profiled would recursively apply --capture-profile and
             // make the collector part of the measurement.
             dashboardProcess = layoutProcessRunner.Start(
                 managedPath,
                 dashboardArgs,
-                environmentVariables: CreateDashboardEnvironment(),
+                environmentVariables: environmentVariables,
                 options: processOptions);
         }
         catch (Exception ex)
         {
+            layoutLease?.Dispose();
             throw new InvalidOperationException(string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, ex.Message), ex);
         }
 
@@ -119,7 +126,8 @@ internal sealed class ProfileCaptureService(
             logger,
             s_profileDataTimeout,
             s_pollInterval,
-            ProfileDataQuietPolls);
+            ProfileDataQuietPolls,
+            layoutLease);
         try
         {
             await session.WaitForDashboardAsync(dashboardStartTimeout, pollInterval, cancellationToken).ConfigureAwait(false);
@@ -216,6 +224,7 @@ internal sealed class ProfileCaptureService(
         private readonly TimeSpan _profileDataTimeout;
         private readonly TimeSpan _profileDataPollInterval;
         private readonly int _profileDataQuietPolls;
+        private readonly BundleLayoutLease? _layoutLease;
 
         public ProfileCaptureSession(
             ProfileCaptureOptions options,
@@ -236,7 +245,8 @@ internal sealed class ProfileCaptureService(
             ILogger logger,
             TimeSpan profileDataTimeout,
             TimeSpan profileDataPollInterval,
-            int profileDataQuietPolls)
+            int profileDataQuietPolls,
+            BundleLayoutLease? layoutLease = null)
         {
             _options = options;
             _dashboardProcess = dashboardProcess;
@@ -248,6 +258,7 @@ internal sealed class ProfileCaptureService(
             _profileDataTimeout = profileDataTimeout;
             _profileDataPollInterval = profileDataPollInterval;
             _profileDataQuietPolls = profileDataQuietPolls;
+            _layoutLease = layoutLease;
         }
 
         public async Task WaitForDashboardAsync(TimeSpan timeout, TimeSpan pollInterval, CancellationToken cancellationToken)
@@ -367,6 +378,7 @@ internal sealed class ProfileCaptureService(
             finally
             {
                 _dashboardProcess.Dispose();
+                _layoutLease?.Dispose();
             }
         }
 

@@ -23,7 +23,7 @@ internal static class MockPackagingServiceFactory
                     GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
                         Task.FromResult<IEnumerable<NuGetPackageCli>>(packages)
                 };
-                return Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)]);
+                return Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache, new TestFeatures())]);
             }
         };
     }

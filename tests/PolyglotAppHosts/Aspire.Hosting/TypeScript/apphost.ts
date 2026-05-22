@@ -6,9 +6,12 @@ import {
     createBuilder,
     CertificateTrustScope,
     EndpointProperty,
+    HealthStatus,
     IconVariant,
+    InputType,
     OtlpProtocol,
     ProbeType,
+    ResourceCommandState,
     refExpr,
 } from './.modules/aspire.js';
 import type { DockerfileBuilderCallbackContext } from './.modules/aspire.js';
@@ -101,6 +104,16 @@ const generatedParam = await builder.addParameterWithGeneratedValue("generated-s
 }, {
     secret: true,
     persist: true,
+});
+const customInputParam = await builder.addParameter("custom-input");
+await customInputParam.withCustomInput({
+    inputType: InputType.Number,
+    label: "Worker Count",
+    placeholder: "Enter number (1-10)",
+    options: {
+        one: "One",
+        two: "Two",
+    },
 });
 
 // ===================================================================
@@ -377,6 +390,9 @@ await container.withPipelineConfiguration(async (configContext) => {
 
     const _stepName: string = await allSteps[0].name();
     const _description: string | null = await allSteps[0].description();
+    const _dependsOnSteps = await allSteps[0].dependsOnSteps();
+    const _requiredBySteps = await taggedSteps[0].requiredBySteps();
+    const _tags = await taggedSteps[0].tags();
 
     await allSteps[0].addTag("validated");
     await allSteps[0].dependsOn("restore");
@@ -411,6 +427,7 @@ const _configExists: boolean = await builderConfiguration.exists("MyConfig:Key")
 const builderExecutionContext = await builder.executionContext();
 const executionContextServiceProvider = await builderExecutionContext.serviceProvider();
 const _distributedApplicationModelFromExecutionContext = await executionContextServiceProvider.getDistributedApplicationModel();
+const resourceCommandService = await executionContextServiceProvider.getResourceCommandService();
 
 await builder.addEventingSubscriber(async (registrationContext) => {
     const subscriberExecutionContext = await registrationContext.executionContext();
@@ -673,8 +690,41 @@ await container.withUrl(refExpr`http://${endpoint}`);
 await container.withHealthCheck("http");
 
 // withCommand
-await container.withCommand("restart", "Restart", async (_ctx) => {
+await container.withCommand("noop", "Noop", async () => {
     return { success: true };
+}, {
+    commandOptions: {
+        updateState: async (ctx) => {
+            const snapshot = await ctx.resourceSnapshot();
+
+            return snapshot.healthStatus === HealthStatus.Healthy
+                ? ResourceCommandState.Enabled
+                : ResourceCommandState.Disabled;
+        },
+    },
+});
+await container.withCommand("echo", "Echo", async (ctx) => {
+    const commandArguments = await (await ctx.arguments()).toArray();
+
+    return { success: commandArguments[0]?.value === "hello" };
+}, {
+    commandOptions: {
+        arguments: [
+            {
+                name: "message",
+                inputType: InputType.Text,
+                required: true
+            }
+        ]
+    }
+});
+await container.withCommand("restart", "Restart", async (ctx) => {
+    const cancellationToken = await ctx.cancellationToken();
+
+    return await resourceCommandService.executeCommandAsync(container, "echo", {
+        arguments: { message: "hello" },
+        cancellationToken
+    });
 });
 
 // withProcessCommand

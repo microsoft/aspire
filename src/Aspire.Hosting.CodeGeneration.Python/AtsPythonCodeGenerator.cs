@@ -198,7 +198,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     /// </summary>
     private string MapTypeRefToPython(AtsTypeRef? typeRef)
     {
-        if (typeRef == null)
+        if (typeRef is null)
         {
             return "typing.Any";
         }
@@ -510,13 +510,43 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
     /// </summary>
     private string MapUnionTypeToPython(AtsTypeRef typeRef)
     {
-        if (typeRef.UnionTypes == null || typeRef.UnionTypes.Count == 0)
+        if (typeRef.UnionTypes is null || typeRef.UnionTypes.Count == 0)
         {
             return "typing.Any";
         }
 
         var memberTypes = typeRef.UnionTypes
             .Select(MapTypeRefToPython)
+            .Distinct();
+
+        return string.Join(" | ", memberTypes);
+    }
+
+    private string MapDtoPropertyTypeToPython(AtsTypeRef? typeRef)
+    {
+        if (typeRef is null)
+        {
+            return "typing.Any";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Array or AtsTypeCategory.List => $"typing.Iterable[{MapDtoPropertyTypeToPython(typeRef.ElementType)}]",
+            AtsTypeCategory.Dict => $"typing.Mapping[{MapDtoPropertyTypeToPython(typeRef.KeyType)}, {MapDtoPropertyTypeToPython(typeRef.ValueType)}]",
+            AtsTypeCategory.Union => MapDtoUnionTypeToPython(typeRef),
+            _ => MapTypeRefToPython(typeRef)
+        };
+    }
+
+    private string MapDtoUnionTypeToPython(AtsTypeRef typeRef)
+    {
+        if (typeRef.UnionTypes is null || typeRef.UnionTypes.Count == 0)
+        {
+            return "typing.Any";
+        }
+
+        var memberTypes = typeRef.UnionTypes
+            .Select(MapDtoPropertyTypeToPython)
             .Distinct();
 
         return string.Join(" | ", memberTypes);
@@ -802,7 +832,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             sb.AppendLine(CultureInfo.InvariantCulture, $"class {className}(typing.TypedDict, total=False):");
             foreach (var prop in dtoType.Properties)
             {
-                var propType = MapTypeRefToPython(prop.Type);
+                var propType = MapDtoPropertyTypeToPython(prop.Type);
                 sb.AppendLine(CultureInfo.InvariantCulture, $"    {prop.Name}: {propType}");
             }
             sb.AppendLine();

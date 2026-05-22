@@ -151,14 +151,21 @@
   <data name="LsAllOptionDescription" xml:space="preserve">
     <value>Include all candidate AppHosts, ignoring .gitignore and built-in directory filters</value>
   </data>
+  <data name="LsStreamOptionDescription" xml:space="preserve">
+    <value>Stream newline-delimited JSON discovery events. Requires --format json</value>
+  </data>
+  <data name="LsStreamRequiresJson" xml:space="preserve">
+    <value>The --stream option requires --format json.</value>
+  </data>
   <data name="LsNoCandidateAppHostsFound" xml:space="preserve">
     <value>No candidate AppHosts found.</value>
   </data>
+  <data name="LsSearchingForAppHostsStatus" xml:space="preserve">
+    <value>Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found...</value>
+    <comment>{0} is the number of directories searched so far. {1} is the number of AppHost candidates found so far.</comment>
+  </data>
   <data name="HeaderPath" xml:space="preserve">
     <value>Path</value>
-  </data>
-  <data name="HeaderRelativePath" xml:space="preserve">
-    <value>Relative Path</value>
   </data>
   <data name="HeaderLanguage" xml:space="preserve">
     <value>Language</value>

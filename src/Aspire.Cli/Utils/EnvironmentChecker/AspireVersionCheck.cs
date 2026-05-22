@@ -3,6 +3,8 @@
 
 using System.Globalization;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Acquisition;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
@@ -17,6 +19,7 @@ internal sealed class AspireVersionCheck(
     ICliUpdateNotifier updateNotifier,
     IProjectLocator projectLocator,
     IAppHostProjectFactory projectFactory,
+    IIdentityChannelReader identityChannelReader,
     CliExecutionContext executionContext,
     ILogger<AspireVersionCheck> logger) : IEnvironmentCheck
 {
@@ -64,6 +67,15 @@ internal sealed class AspireVersionCheck(
 
     private async Task<EnvironmentCheckResult> GetCliVersionCheckAsync(CancellationToken cancellationToken)
     {
+        // Read the identity channel up front so it can be attached to every
+        // CLI-version result (pass / out-of-date / update-check-failed).
+        // Identity channel is best-effort: misconfigured dev builds may have
+        // missing metadata, and we don't want to fail doctor over a labelling
+        // gap. ReadChannel() throws InvalidOperationException in that case;
+        // logging at debug keeps the diagnostic available without surfacing
+        // a scary warning in the human-readable output.
+        var identityChannel = TryReadIdentityChannel();
+
         try
         {
             var status = await updateNotifier.GetVersionStatusAsync(executionContext.WorkingDirectory, cancellationToken);
@@ -79,9 +91,9 @@ internal sealed class AspireVersionCheck(
                     Category = "aspire",
                     Name = "cli-version",
                     Status = EnvironmentCheckStatus.Warning,
-                    Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.CliVersionMessageFormat, currentVersion),
+                    Message = FormatCliVersionMessage(currentVersion, identityChannel),
                     Details = $"{DoctorCommandStrings.CliVersionUpdateCheckFailedMessage}: {updateCheckError}",
-                    Metadata = BuildCliVersionMetadata(currentVersion, latestVersion: null, status.UpdateCommand, updateCheckError)
+                    Metadata = BuildCliVersionMetadata(currentVersion, latestVersion: null, status.UpdateCommand, updateCheckError, identityChannel, latestVersionChannel: null)
                 };
             }
 
@@ -92,9 +104,21 @@ internal sealed class AspireVersionCheck(
                     Category = "aspire",
                     Name = "cli-version",
                     Status = EnvironmentCheckStatus.Warning,
-                    Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.CliVersionOutOfDateMessageFormat, currentVersion, latestVersion),
+                    // Both versions get their channel inline next to them so
+                    // the message is unambiguous:
+                    //   "...version 13.4.0-dev (channel: local) is out of
+                    //    date. Latest version is X (channel: prerelease)"
+                    // The current-version channel comes from the running
+                    // CLI's baked AspireCliChannel; the latest-version
+                    // channel comes from the update notifier's recommendation
+                    // lane (stable vs prerelease).
+                    Message = string.Format(
+                        CultureInfo.CurrentCulture,
+                        DoctorCommandStrings.CliVersionOutOfDateMessageFormat,
+                        WithChannelSuffix(currentVersion, identityChannel),
+                        WithChannelSuffix(latestVersion, status.LatestVersionChannel)),
                     Fix = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.CliVersionOutOfDateFixFormat, status.UpdateCommand ?? "aspire update"),
-                    Metadata = BuildCliVersionMetadata(currentVersion, latestVersion, status.UpdateCommand, updateCheckError: null)
+                    Metadata = BuildCliVersionMetadata(currentVersion, latestVersion, status.UpdateCommand, updateCheckError: null, identityChannel, status.LatestVersionChannel)
                 };
             }
 
@@ -103,8 +127,8 @@ internal sealed class AspireVersionCheck(
                 Category = "aspire",
                 Name = "cli-version",
                 Status = EnvironmentCheckStatus.Pass,
-                Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.CliVersionMessageFormat, currentVersion),
-                Metadata = BuildCliVersionMetadata(currentVersion, latestVersion: null, status.UpdateCommand, updateCheckError: null)
+                Message = FormatCliVersionMessage(currentVersion, identityChannel),
+                Metadata = BuildCliVersionMetadata(currentVersion, latestVersion: null, status.UpdateCommand, updateCheckError: null, identityChannel, latestVersionChannel: null)
             };
         }
         catch (OperationCanceledException)
@@ -121,8 +145,65 @@ internal sealed class AspireVersionCheck(
                 Name = "cli-version",
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.CliVersionUpdateCheckFailedMessage,
-                Details = ex.Message
+                Details = ex.Message,
+                Metadata = BuildCliVersionMetadata(currentVersion: null, latestVersion: null, updateCommand: null, updateCheckError: ex.Message, identityChannel, latestVersionChannel: null)
             };
+        }
+    }
+
+    private static string FormatCliVersionMessage(string currentVersion, string? identityChannel)
+    {
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            DoctorCommandStrings.CliVersionMessageFormat,
+            WithChannelSuffix(currentVersion, identityChannel));
+    }
+
+    /// <summary>
+    /// Returns <paramref name="version"/> with the channel suffix appended
+    /// inline (e.g. <c>"13.0.0 (channel: stable)"</c>) so the channel is
+    /// unambiguously attached to that specific version in any message
+    /// template that mentions multiple versions.
+    /// </summary>
+    private static string WithChannelSuffix(string version, string? channel)
+    {
+        if (string.IsNullOrEmpty(channel))
+        {
+            return version;
+        }
+
+        return version + string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ChannelSuffixFormat, channel);
+    }
+
+    /// <summary>
+    /// Appends the channel suffix to an arbitrary message. Used only for
+    /// message templates that mention exactly one version (so there's no
+    /// ambiguity about which version the channel qualifies). For templates
+    /// with multiple versions, use <see cref="WithChannelSuffix"/> inline
+    /// on the relevant version slot instead.
+    /// </summary>
+    private static string AppendChannelSuffix(string message, string? channel)
+    {
+        if (string.IsNullOrEmpty(channel))
+        {
+            return message;
+        }
+
+        return message + string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.ChannelSuffixFormat, channel);
+    }
+
+    private string? TryReadIdentityChannel()
+    {
+        try
+        {
+            return identityChannelReader.ReadChannel();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Identity channel is informational; a misconfigured dev build
+            // (no AspireCliChannel assembly metadata) must not break doctor.
+            logger.LogDebug(ex, "Could not read identity channel for doctor output.");
+            return null;
         }
     }
 
@@ -168,9 +249,20 @@ internal sealed class AspireVersionCheck(
             };
         }
 
+        // Pinned channel is best-effort and informational: AppHost discovery already
+        // succeeded, so an unreadable / malformed aspire.config.json must not flip
+        // doctor into a failure state. A null pinnedChannel simply omits the field
+        // from the JSON metadata and the channel suffix from the human-readable
+        // message — same behavior as a project that has not pinned a channel.
+        // Hoisted above the loop because the source directory is loop-invariant;
+        // re-reading per-AppHost would do redundant I/O and duplicate log lines
+        // on a misconfigured file.
+        var pinnedChannel = TryReadPinnedChannel(executionContext.WorkingDirectory);
+
         foreach (var appHostFile in appHostFiles)
         {
             var relativePath = GetRelativePath(appHostFile);
+
             try
             {
                 var (isAppHost, version) = await ResolveAppHostVersionAsync(appHostFile, cancellationToken);
@@ -186,8 +278,10 @@ internal sealed class AspireVersionCheck(
                         Category = "apphost",
                         Name = "apphost-version",
                         Status = EnvironmentCheckStatus.Warning,
-                        Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.AppHostVersionUnknownMessageFormat, relativePath),
-                        Metadata = BuildAppHostVersionMetadata(relativePath, version: null)
+                        Message = AppendChannelSuffix(
+                            string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.AppHostVersionUnknownMessageFormat, relativePath),
+                            pinnedChannel),
+                        Metadata = BuildAppHostVersionMetadata(relativePath, version: null, pinnedChannel)
                     };
                 }
 
@@ -196,8 +290,18 @@ internal sealed class AspireVersionCheck(
                     Category = "apphost",
                     Name = "apphost-version",
                     Status = EnvironmentCheckStatus.Pass,
-                    Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.AppHostVersionMessageFormat, version, relativePath),
-                    Metadata = BuildAppHostVersionMetadata(relativePath, version)
+                    // Channel goes inline next to the version, not at the
+                    // end of the message: "AppHost version 13.0.0 (channel: stable) (path/to/AppHost.csproj)"
+                    // rather than "AppHost version 13.0.0 (path/to/AppHost.csproj) (channel: stable)"
+                    // — the format trails the version with the AppHost
+                    // path, so a tail-appended channel would attach to the
+                    // path instead.
+                    Message = string.Format(
+                        CultureInfo.CurrentCulture,
+                        DoctorCommandStrings.AppHostVersionMessageFormat,
+                        WithChannelSuffix(version, pinnedChannel),
+                        relativePath),
+                    Metadata = BuildAppHostVersionMetadata(relativePath, version, pinnedChannel)
                 };
             }
             catch (OperationCanceledException)
@@ -215,12 +319,41 @@ internal sealed class AspireVersionCheck(
                     Status = EnvironmentCheckStatus.Warning,
                     Message = DoctorCommandStrings.AppHostVersionCheckFailedMessage,
                     Details = ex.Message,
-                    Metadata = BuildAppHostVersionMetadata(relativePath, version: null)
+                    Metadata = BuildAppHostVersionMetadata(relativePath, version: null, pinnedChannel)
                 };
             }
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Reads the pinned channel from <c>aspire.config.json</c> sitting in
+    /// <paramref name="configDirectory"/> (the CLI's current working directory —
+    /// the same anchor used by AppHost discovery). Returns <see langword="null"/>
+    /// when the file is absent, malformed, or has no <c>channel</c> field. The
+    /// lookup is best effort and never throws — doctor uses this only to enrich the
+    /// AppHost-version line.
+    /// </summary>
+    private string? TryReadPinnedChannel(DirectoryInfo configDirectory)
+    {
+        var directory = configDirectory.FullName;
+        if (string.IsNullOrEmpty(directory))
+        {
+            return null;
+        }
+
+        try
+        {
+            var config = AspireConfigFile.Load(directory);
+            var channel = config?.Channel;
+            return string.IsNullOrWhiteSpace(channel) ? null : channel;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogDebug(ex, "Could not read pinned channel from aspire.config.json in {Directory}.", directory);
+            return null;
+        }
     }
 
     private async Task<IReadOnlyList<FileInfo>> ResolveAppHostFilesAsync(CancellationToken cancellationToken)
@@ -278,12 +411,14 @@ internal sealed class AspireVersionCheck(
         return Path.GetRelativePath(executionContext.WorkingDirectory.FullName, file.FullName);
     }
 
-    private static JsonObject BuildCliVersionMetadata(string currentVersion, string? latestVersion, string? updateCommand, string? updateCheckError)
+    private static JsonObject BuildCliVersionMetadata(string? currentVersion, string? latestVersion, string? updateCommand, string? updateCheckError, string? identityChannel, string? latestVersionChannel)
     {
-        var metadata = new JsonObject
+        var metadata = new JsonObject();
+
+        if (!string.IsNullOrWhiteSpace(currentVersion))
         {
-            ["currentVersion"] = currentVersion
-        };
+            metadata["currentVersion"] = currentVersion;
+        }
 
         if (!string.IsNullOrWhiteSpace(latestVersion))
         {
@@ -300,10 +435,20 @@ internal sealed class AspireVersionCheck(
             metadata["updateCheckError"] = updateCheckError;
         }
 
+        if (!string.IsNullOrWhiteSpace(identityChannel))
+        {
+            metadata["identityChannel"] = identityChannel;
+        }
+
+        if (!string.IsNullOrWhiteSpace(latestVersionChannel))
+        {
+            metadata["latestVersionChannel"] = latestVersionChannel;
+        }
+
         return metadata;
     }
 
-    private static JsonObject BuildAppHostVersionMetadata(string relativePath, string? version)
+    private static JsonObject BuildAppHostVersionMetadata(string relativePath, string? version, string? pinnedChannel)
     {
         var metadata = new JsonObject
         {
@@ -313,6 +458,11 @@ internal sealed class AspireVersionCheck(
         if (!string.IsNullOrWhiteSpace(version))
         {
             metadata["version"] = version;
+        }
+
+        if (!string.IsNullOrWhiteSpace(pinnedChannel))
+        {
+            metadata["pinnedChannel"] = pinnedChannel;
         }
 
         return metadata;

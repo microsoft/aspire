@@ -42,7 +42,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                         [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = version }])
             };
 
-            var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+            var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
 
             var packagingService = new TestPackagingService
             {
@@ -673,12 +673,13 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                             [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = "99.0.0-pr.12345" }])
                 };
 
-                var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache);
+                var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures());
                 var prHiveChannel = PackageChannel.CreateExplicitChannel(
                     "pr-12345",
                     PackageChannelQuality.Both,
                     [new PackageMapping("Aspire*", hivesDir.FullName + "/pr-12345/packages")],
-                    prHiveCache);
+                    prHiveCache,
+                    features: new TestFeatures());
 
                 return new TestPackagingService
                 {
@@ -738,7 +739,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                     GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
                         throw new NuGetPackageCacheException("Package search failed: simulated network failure")
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
@@ -1029,7 +1030,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                         Task.FromResult<IEnumerable<NuGetPackageCli>>(
                             [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "13.3.0" }])
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
@@ -1415,7 +1416,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                         Task.FromResult<IEnumerable<NuGetPackageCli>>(
                             [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "13.3.0" }])
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
@@ -1538,7 +1539,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 channelName,
                 PackageChannelQuality.Both,
                 [new PackageMapping("Aspire*", channelSource), new PackageMapping(PackageMapping.AllPackages, fallbackSource)],
-                fakeCache);
+                fakeCache,
+                features: new TestFeatures());
         }).ToArray();
 
         return new TestPackagingService

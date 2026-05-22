@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost — NATS integration validation
 // Exercises all [AspireExport] methods for Aspire.Hosting.Nats
 
-import { createBuilder, ContainerLifetime } from './.modules/aspire.js';
+import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -18,7 +18,7 @@ await nats.withDataVolume();
 const nats2 = await builder.addNats("messaging2", { port: 4223 })
     .withJetStream()
     .withDataVolume({ name: "nats-data", isReadOnly: false })
-    .withLifetime(ContainerLifetime.Persistent);
+    .withPersistentLifetime();
 
 // withDataBindMount — bind mount a host directory
 const nats3 = await builder.addNats("messaging3");

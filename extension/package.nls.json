@@ -121,6 +121,7 @@
   "aspire-vscode.strings.openCliInstallInstructions": "See CLI installation instructions",
   "aspire-vscode.strings.dismissLabel": "Dismiss",
   "aspire-vscode.strings.selectDirectoryTitle": "Select directory",
+  "aspire-vscode.strings.unableToAddFolderToWorkspace": "Unable to add folder to workspace: {0}",
   "aspire-vscode.strings.selectFileTitle": "Select file",
   "aspire-vscode.strings.enterPipelineStep": "Enter the pipeline step to execute",
   "aspire-vscode.strings.runningAspireRestore": "Running aspire restore on {0} ...",

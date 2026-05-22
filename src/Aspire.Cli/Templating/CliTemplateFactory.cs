@@ -229,6 +229,15 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
     private async Task<string?> ResolveOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
+        var isExtensionHost = ExtensionHelper.IsExtensionHost(_interactionService, out _, out _);
+        var createProjectNameSubdirectory = await OutputPathHelper.PromptExtensionCreateProjectNameSubdirectoryAsync(
+            _interactionService,
+            isExtensionHost,
+            inputs.Output is not null,
+            projectName,
+            cancellationToken);
+
+        var outputPathResolver = OutputPathHelper.CreateProjectNameSubdirectoryOutputPathResolver(createProjectNameSubdirectory, projectName);
         return await OutputPathHelper.ResolveOutputPathAsync(
             inputs.Output,
             _executionContext.WorkingDirectory.FullName,
@@ -236,7 +245,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
             {
                 var defaultOutputPath = pathDeriver(_executionContext, projectName);
                 var outputPathValidator = OutputPathHelper.CreateOutputPathValidator(_executionContext.WorkingDirectory.FullName);
-                return await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, cancellationToken);
+                return await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, cancellationToken, outputPathResolver);
             },
             _interactionService);
     }

@@ -5,12 +5,20 @@ namespace TypeScriptApiCompat;
 
 internal static class AtsCompatibilityComparer
 {
-    public static IReadOnlyList<ApiCompatDiagnostic> Compare(AtsSurfaceSet baselineSet, AtsSurfaceSet currentSet)
+    public static IReadOnlyList<ApiCompatDiagnostic> Compare(
+        AtsSurfaceSet baselineSet,
+        AtsSurfaceSet currentSet,
+        IReadOnlySet<string>? excludedPackages = null)
     {
         var diagnostics = new List<ApiCompatDiagnostic>();
 
         foreach (var (packageName, baseline) in baselineSet.Surfaces.OrderBy(static pair => pair.Key, StringComparer.Ordinal))
         {
+            if (excludedPackages?.Contains(packageName) == true)
+            {
+                continue;
+            }
+
             if (!currentSet.Surfaces.TryGetValue(packageName, out var current))
             {
                 diagnostics.Add(new ApiCompatDiagnostic(
