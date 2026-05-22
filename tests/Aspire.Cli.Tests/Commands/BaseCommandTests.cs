@@ -79,7 +79,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("ps");
+        var result = command.Parse("stop");
 
         await result.InvokeAsync().DefaultTimeout();
 
@@ -105,7 +105,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("ps");
+        var result = command.Parse("stop");
 
         await result.InvokeAsync().DefaultTimeout();
 
@@ -113,8 +113,8 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("ps --format json", false)]
-    [InlineData("ps", true)]
+    [InlineData("run --format json", false)]
+    [InlineData("run", true)]
     [InlineData("docs", false)]
     public async Task BaseCommand_UpdateNotification_RespectJsonFormat(string args, bool expectNotifyCalled)
     {
