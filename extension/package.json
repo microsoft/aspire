@@ -911,7 +911,7 @@
     "tree-sitter-c-sharp": "0.23.5",
     "vscode-jsonrpc": "8.2.1",
     "web-tree-sitter": "0.26.9",
-    "ws": "8.20.0"
+    "ws": "8.20.1"
   },
   "resolutions": {
     "braces": "3.0.3",
@@ -924,7 +924,9 @@
     "picomatch": "2.3.2",
     "underscore": "1.13.8",
     "postcss": "8.5.10",
-    "uuid": "14.0.0"
+    "uuid": "14.0.0",
+    "fast-uri": "3.1.2",
+    "@nevware21/ts-utils": "0.14.0"
   },
   "overrides": {
     "serialize-javascript": "7.0.5",
@@ -936,6 +938,8 @@
     "picomatch": "2.3.2",
     "underscore": "1.13.8",
     "postcss": "8.5.10",
-    "uuid": "14.0.0"
+    "uuid": "14.0.0",
+    "fast-uri": "3.1.2",
+    "@nevware21/ts-utils": "0.14.0"
   }
 }
