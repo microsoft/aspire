@@ -277,6 +277,31 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_HostingAssembly_ExportsResourceCommandWithResourceUnionAndArguments()
+    {
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            capability => capability.CapabilityId == "Aspire.Hosting/executeResourceCommand");
+
+        Assert.Equal("executeCommandAsync", capability.MethodName);
+        Assert.Equal("resourceCommandService", capability.TargetParameterName);
+        Assert.Equal(4, capability.Parameters.Count);
+
+        var resourceParameter = capability.Parameters[0];
+        Assert.Equal("resource", resourceParameter.Name);
+        Assert.Equal(AtsTypeCategory.Union, resourceParameter.Type?.Category);
+        Assert.Contains(resourceParameter.Type!.UnionTypes!, type => type.TypeId == "string");
+        Assert.Contains(resourceParameter.Type.UnionTypes!, type => type.TypeId == "Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource");
+
+        var argumentsParameter = capability.Parameters.Single(parameter => parameter.Name == "arguments");
+        Assert.True(argumentsParameter.IsOptional);
+        Assert.Equal(AtsTypeCategory.Dict, argumentsParameter.Type?.Category);
+        Assert.True(argumentsParameter.Type?.IsReadOnly);
+    }
+
+    [Fact]
     public void ScanAssembly_HostingAssembly_ExportsExpectedHandleTypesAndInstanceMembers()
     {
         var hostingAssembly = typeof(DistributedApplication).Assembly;

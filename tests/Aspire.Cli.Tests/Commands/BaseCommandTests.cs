@@ -79,7 +79,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("ps");
+        var result = command.Parse("stop");
 
         await result.InvokeAsync().DefaultTimeout();
 
@@ -105,11 +105,39 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("ps");
+        var result = command.Parse("stop");
 
         await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, testInteractionService.DisplayEmptyLineCount);
+    }
+
+    [Theory]
+    [InlineData("run --format json", false)]
+    [InlineData("run", true)]
+    [InlineData("docs", false)]
+    public async Task BaseCommand_UpdateNotification_RespectJsonFormat(string args, bool expectNotifyCalled)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var testNotifier = new TestCliUpdateNotifier
+        {
+            IsUpdateAvailableCallback = () => true,
+            NotifyIfUpdateAvailableCallback = () => testInteractionService.DisplayVersionUpdateNotification("13.3.0-preview.1", "aspire update")
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.CliUpdateNotifierFactory = _ => testNotifier;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(args);
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(expectNotifyCalled, testNotifier.NotifyWasCalled);
     }
 
     [Fact]

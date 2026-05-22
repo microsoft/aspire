@@ -10,12 +10,15 @@ public static class KnownTraceFields
     public const string StatusField = "trace.status";
     public const string TraceIdField = "trace.traceid";
     public const string SpanIdField = "trace.spanid";
+    public const string DurationField = "trace.duration";
 
     // Not used in search.
     public const string StatusMessageField = "trace.statusmessage";
     public const string ParentIdField = "trace.parentid";
     public const string DestinationField = "trace.destination";
 
+    // Duration filtering is currently exposed by Trace Detail only. Do not include it
+    // here unless the Traces list also gets explicit trace-level duration semantics.
     public static readonly List<string> AllFields = [
         NameField,
         KindField,

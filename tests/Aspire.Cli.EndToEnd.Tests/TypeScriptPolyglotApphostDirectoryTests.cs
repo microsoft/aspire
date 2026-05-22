@@ -56,7 +56,7 @@ public sealed class TypeScriptPolyglotApphostDirectoryTests(ITestOutputHelper ou
 
         await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "tsapp");
@@ -78,12 +78,12 @@ public sealed class TypeScriptPolyglotApphostDirectoryTests(ITestOutputHelper ou
         await auto.EnterAsync();
         await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
 
-        var appHostPath = Path.Combine(projectRoot, "apphost.ts");
+        var appHostPath = Path.Combine(projectRoot, "apphost.mts");
         var newContent = """
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.mjs';
 
             const builder = await createBuilder();
 

@@ -244,7 +244,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 "nodemon",
                 "--signal", "SIGTERM",
                 "--watch", ".",
-                "--ext", "ts",
+                "--ext", "ts,mts",
                 "--ignore", "node_modules/",
                 "--ignore", ".modules/",
                 "--exec", "bun run tsc --noEmit -p tsconfig.apphost.json && bun run \"{appHostFile}\""
@@ -276,6 +276,9 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Pnpm);
 
+        var installDependencies = Assert.IsType<CommandSpec>(runtimeSpec.InstallDependencies);
+        Assert.Equal("pnpm", installDependencies.Command);
+        Assert.Equal(["install", "--ignore-workspace"], installDependencies.Args);
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("pnpm", preExecute.Command);
         Assert.Equal(["exec", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);
@@ -292,7 +295,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
             Language = KnownLanguageId.TypeScript,
             DisplayName = "TypeScript (Node.js)",
             CodeGenLanguage = "TypeScript",
-            DetectionPatterns = ["apphost.ts"],
+            DetectionPatterns = ["apphost.mts"],
             InstallDependencies = new CommandSpec
             {
                 Command = "npm",

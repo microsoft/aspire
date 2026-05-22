@@ -41,8 +41,6 @@ internal sealed class ConfigCommand : BaseCommand
         Subcommands.Add(infoCommand);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (_configuration[KnownConfigNames.ExtensionPromptEnabled] is not "true")
@@ -76,8 +74,6 @@ internal sealed class ConfigCommand : BaseCommand
         {
             Arguments.Add(s_keyArgument);
         }
-
-        protected override bool UpdateNotificationsEnabled => false;
 
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
@@ -135,8 +131,6 @@ internal sealed class ConfigCommand : BaseCommand
             Arguments.Add(s_valueArgument);
             Options.Add(s_globalOption);
         }
-
-        protected override bool UpdateNotificationsEnabled => false;
 
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
@@ -217,8 +211,6 @@ internal sealed class ConfigCommand : BaseCommand
         {
             Options.Add(s_allOption);
         }
-
-        protected override bool UpdateNotificationsEnabled => false;
 
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
@@ -376,8 +368,6 @@ internal sealed class ConfigCommand : BaseCommand
             Options.Add(s_globalOption);
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var key = parseResult.GetValue(s_keyArgument);
@@ -460,8 +450,6 @@ internal sealed class ConfigCommand : BaseCommand
             };
             Options.Add(jsonOption);
         }
-
-        protected override bool UpdateNotificationsEnabled => false;
 
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {

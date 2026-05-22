@@ -70,8 +70,8 @@ for app_dir in "${APP_DIRS[@]}"; do
     }
     echo "$npm_output" | tail -3
 
-    echo "  → aspire restore --apphost apphost.ts..."
-    if ! aspire restore --non-interactive --apphost apphost.ts 2>&1; then
+    echo "  → aspire restore --apphost apphost.mts..."
+    if ! aspire restore --non-interactive --apphost apphost.mts 2>&1; then
         echo "  ❌ aspire restore failed for $integration_name"
         FAILED+=("$integration_name (aspire restore)")
         echo ""

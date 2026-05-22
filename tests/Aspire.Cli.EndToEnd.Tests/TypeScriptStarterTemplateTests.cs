@@ -45,7 +45,7 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
             throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
         }
 
-        var aspireModulePath = Path.Combine(modulesDir, "aspire.ts");
+        var aspireModulePath = Path.Combine(modulesDir, "aspire.mts");
         if (!File.Exists(aspireModulePath))
         {
             throw new InvalidOperationException($"Expected generated file not found: {aspireModulePath}");

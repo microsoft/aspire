@@ -114,6 +114,8 @@
   "aspire-vscode.strings.authorizationHeaderMustStartWithBearer": "Authorization header must start with 'Bearer '.",
   "aspire-vscode.strings.authorizationAndDcpHeadersRequired": "Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.",
   "aspire-vscode.strings.buildFailedForProjectWithError": "Build failed for project {0} with error: {1}.",
+  "aspire-vscode.strings.failedToInspectRuntimeConfig": "Failed to inspect runtimeconfig for {0}: {1}",
+  "aspire-vscode.strings.dotNetRunFallbackDisablesDebugger": "Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.",
   "aspire-vscode.strings.lookingForDevkitBuildTask": "C# Dev Kit is installed, looking for C# Dev Kit build task...",
   "aspire-vscode.strings.csharpDevKitNotInstalled": "C# Dev Kit is not installed, building using dotnet CLI...",
   "aspire-vscode.strings.cliNotAvailable": "Aspire CLI is not available on PATH. Please install it and restart VS Code.",

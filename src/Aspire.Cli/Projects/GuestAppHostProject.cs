@@ -29,6 +29,9 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGenerator
 {
+    private const string TypeScriptAppHostFileName = "apphost.ts";
+    private const string TypeScriptMtsAppHostFileName = "apphost.mts";
+
     private readonly IInteractionService _interactionService;
     private readonly IAppHostCliBackchannel _backchannel;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
@@ -140,7 +143,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     // ═══════════════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public string? AppHostFileName => _resolvedLanguage.DetectionPatterns.FirstOrDefault();
+    public string? AppHostFileName => _resolvedLanguage.AppHostFileName;
 
     /// <inheritdoc />
     public bool IsUsingProjectReferences(FileInfo appHostFile)
@@ -276,9 +279,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Step 4: Generate SDK code via RPC
         // This must happen before dependency installation because the generated
-        // code directory (.modules) may not exist yet and dependency files reference it.
+        // language-specific generated code directory may not exist yet and dependency files reference it.
         await GenerateCodeViaRpcAsync(
             directory.FullName,
+            appHostFile: null,
             rpcClient,
             integrations,
             cancellationToken);
@@ -449,6 +453,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     {
                         await GenerateCodeViaRpcAsync(
                             directory.FullName,
+                            appHostFile,
                             rpcClient,
                             integrations,
                             cancellationToken);
@@ -963,6 +968,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     {
                         await GenerateCodeViaRpcAsync(
                             directory.FullName,
+                            appHostFile,
                             rpcClient,
                             integrations,
                             cancellationToken);
@@ -1391,6 +1397,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// </summary>
     private async Task GenerateCodeViaRpcAsync(
         string appPath,
+        FileInfo? appHostFile,
         IAppHostRpcClient rpcClient,
         IEnumerable<IntegrationReference> integrations,
         CancellationToken cancellationToken)
@@ -1405,6 +1412,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Use the typed RPC method
         var files = await rpcClient.GenerateCodeAsync(codeGenerator, cancellationToken);
+        if (ShouldEmitLegacyTypeScriptGeneratedFiles(appPath, appHostFile))
+        {
+            files = ConvertGeneratedFilesForLegacyTypeScriptAppHost(files);
+        }
 
         // Write generated files to the output directory
         var outputPath = Path.Combine(appPath, LanguageInfo.GeneratedFolderName);
@@ -1426,6 +1437,45 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         _logger.LogInformation("Generated {Count} {CodeGenerator} files in {Path}",
             files.Count, codeGenerator, outputPath);
+    }
+
+    internal static Dictionary<string, string> ConvertGeneratedFilesForLegacyTypeScriptAppHost(Dictionary<string, string> files)
+    {
+        var convertedFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (fileName, content) in files)
+        {
+            var convertedFileName = fileName switch
+            {
+                "aspire.mts" => "aspire.ts",
+                "base.mts" => "base.ts",
+                "transport.mts" => "transport.ts",
+                _ => fileName
+            };
+
+            convertedFiles[convertedFileName] = convertedFileName.EndsWith(".ts", StringComparison.Ordinal)
+                ? content
+                    .Replace(".mjs", ".js", StringComparison.Ordinal)
+                    .Replace("aspire.mts", "aspire.ts", StringComparison.Ordinal)
+                    .Replace("base.mts", "base.ts", StringComparison.Ordinal)
+                    .Replace("transport.mts", "transport.ts", StringComparison.Ordinal)
+                : content;
+        }
+
+        return convertedFiles;
+    }
+
+    private bool ShouldEmitLegacyTypeScriptGeneratedFiles(string appPath, FileInfo? appHostFile)
+    {
+        if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_resolvedLanguage))
+        {
+            return false;
+        }
+
+        return appHostFile is not null
+            ? appHostFile.Name.Equals(TypeScriptAppHostFileName, StringComparison.OrdinalIgnoreCase)
+            : File.Exists(Path.Combine(appPath, TypeScriptAppHostFileName)) &&
+                !File.Exists(Path.Combine(appPath, TypeScriptMtsAppHostFileName));
     }
 
     /// <summary>

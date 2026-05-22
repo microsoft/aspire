@@ -1,4 +1,4 @@
-﻿// aspire.go - Capability-based Aspire SDK
+// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -192,6 +192,15 @@ const (
 	CommandResultFormatText CommandResultFormat = "Text"
 	CommandResultFormatJson CommandResultFormat = "Json"
 	CommandResultFormatMarkdown CommandResultFormat = "Markdown"
+)
+
+// HealthStatus represents HealthStatus.
+type HealthStatus string
+
+const (
+	HealthStatusUnhealthy HealthStatus = "Unhealthy"
+	HealthStatusDegraded HealthStatus = "Degraded"
+	HealthStatusHealthy HealthStatus = "Healthy"
 )
 
 // UrlDisplayLocation represents UrlDisplayLocation.
@@ -654,6 +663,26 @@ func (d *CommandResultData) ToMap() map[string]any {
 	m["Value"] = serializeValue(d.Value)
 	if d.Format != nil { m["Format"] = serializeValue(d.Format) }
 	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
+	return m
+}
+
+// UpdateCommandStateResourceSnapshot represents UpdateCommandStateResourceSnapshot.
+type UpdateCommandStateResourceSnapshot struct {
+	ResourceType string `json:"ResourceType,omitempty"`
+	State *string `json:"State,omitempty"`
+	StateStyle *string `json:"StateStyle,omitempty"`
+	HealthStatus *HealthStatus `json:"HealthStatus,omitempty"`
+	ExitCode *float64 `json:"ExitCode,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *UpdateCommandStateResourceSnapshot) ToMap() map[string]any {
+	m := map[string]any{}
+	m["ResourceType"] = serializeValue(d.ResourceType)
+	if d.State != nil { m["State"] = serializeValue(d.State) }
+	if d.StateStyle != nil { m["StateStyle"] = serializeValue(d.StateStyle) }
+	if d.HealthStatus != nil { m["HealthStatus"] = serializeValue(d.HealthStatus) }
+	if d.ExitCode != nil { m["ExitCode"] = serializeValue(d.ExitCode) }
 	return m
 }
 
@@ -14013,7 +14042,6 @@ type ExecuteCommandContext interface {
 	CancellationToken() (*CancellationToken, error)
 	Logger() Logger
 	ResourceName() (string, error)
-	ServiceProvider() ServiceProvider
 	Err() error
 }
 
@@ -14093,25 +14121,6 @@ func (s *executeCommandContext) ResourceName() (string, error) {
 		return zero, err
 	}
 	return decodeAs[string](result)
-}
-
-// ServiceProvider the service provider.
-func (s *executeCommandContext) ServiceProvider() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
-	ctx := context.Background()
-	reqArgs := map[string]any{
-		"context": s.handle.ToJSON(),
-	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider", reqArgs)
-	if err != nil {
-		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider returned unexpected type %T", result)
-		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // ExecutionConfigurationBuilder is the public interface for handle type ExecutionConfigurationBuilder.
@@ -19562,7 +19571,7 @@ func (s *reportingTask) UpdateTaskMarkdown(markdownString string, options ...*Up
 // ResourceCommandService is the public interface for handle type ResourceCommandService.
 type ResourceCommandService interface {
 	handleReference
-	ExecuteCommandAsync(resourceId string, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error)
+	ExecuteCommandAsync(resource any, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error)
 	Err() error
 }
 
@@ -19577,13 +19586,21 @@ func newResourceCommandServiceFromHandle(h *handle, c *client) ResourceCommandSe
 }
 
 // ExecuteCommandAsync executes a command for the specified resource.
-func (s *resourceCommandService) ExecuteCommandAsync(resourceId string, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error) {
+// Allowed types for parameter resource: string, Resource.
+func (s *resourceCommandService) ExecuteCommandAsync(resource any, commandName string, options ...*ExecuteCommandAsyncOptions) (*ExecuteCommandResult, error) {
 	if s.err != nil { var zero *ExecuteCommandResult; return zero, s.err }
+	switch resource.(type) {
+	case string, Resource:
+	default:
+		err := fmt.Errorf("aspire: ExecuteCommandAsync: parameter %q must be one of [string, Resource], got %T", "resource", resource)
+		var zero *ExecuteCommandResult
+		return zero, err
+	}
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"resourceCommandService": s.handle.ToJSON(),
 	}
-	reqArgs["resourceId"] = serializeValue(resourceId)
+	if resource != nil { reqArgs["resource"] = serializeValue(resource) }
 	reqArgs["commandName"] = serializeValue(commandName)
 	if len(options) > 0 {
 		merged := &ExecuteCommandAsyncOptions{}
@@ -24817,7 +24834,7 @@ func (s *testResourceContext) Value() (float64, error) {
 // UpdateCommandStateContext is the public interface for handle type UpdateCommandStateContext.
 type UpdateCommandStateContext interface {
 	handleReference
-	ServiceProvider() ServiceProvider
+	ResourceSnapshot() (*UpdateCommandStateResourceSnapshot, error)
 	Err() error
 }
 
@@ -24831,23 +24848,19 @@ func newUpdateCommandStateContextFromHandle(h *handle, c *client) UpdateCommandS
 	return &updateCommandStateContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// ServiceProvider the service provider.
-func (s *updateCommandStateContext) ServiceProvider() ServiceProvider {
-	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+// ResourceSnapshot gets the resource snapshot data available to polyglot command state callbacks.
+func (s *updateCommandStateContext) ResourceSnapshot() (*UpdateCommandStateResourceSnapshot, error) {
+	if s.err != nil { var zero *UpdateCommandStateResourceSnapshot; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider", reqArgs)
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot", reqArgs)
 	if err != nil {
-		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+		var zero *UpdateCommandStateResourceSnapshot
+		return zero, err
 	}
-	href, ok := result.(handleReference)
-	if !ok {
-		err := fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider returned unexpected type %T", result)
-		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
-	}
-	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+	return decodeAs[*UpdateCommandStateResourceSnapshot](result)
 }
 
 // UserSecretsManager is the public interface for handle type UserSecretsManager.
@@ -25799,12 +25812,14 @@ func (o *CompleteTaskMarkdownOptions) ToMap() map[string]any {
 
 // ExecuteCommandAsyncOptions carries optional parameters for ExecuteCommandAsync.
 type ExecuteCommandAsyncOptions struct {
+	Arguments map[string]string `json:"arguments,omitempty"`
 	CancellationToken *CancellationToken `json:"-"`
 }
 
 func (o *ExecuteCommandAsyncOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	if o == nil { return m }
+	if o.Arguments != nil { m["arguments"] = serializeValue(o.Arguments) }
 	return m
 }
 

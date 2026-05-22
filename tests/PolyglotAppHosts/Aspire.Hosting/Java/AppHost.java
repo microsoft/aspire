@@ -1,5 +1,6 @@
 import aspire.*;
 import java.util.Map;
+import java.util.function.Function;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
@@ -128,6 +129,7 @@ void main() throws Exception {
         var builderExecutionContext = builder.executionContext();
         var executionContextServiceProvider = builderExecutionContext.serviceProvider();
         var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
+        var resourceCommandService = executionContextServiceProvider.getResourceCommandService();
         builder.addEventingSubscriber((registrationContext) -> {
             var subscriberExecutionContext = registrationContext.executionContext();
             var _subscriberIsRunMode = subscriberExecutionContext.isRunMode();
@@ -218,16 +220,36 @@ void main() throws Exception {
         container.withUrl(ReferenceExpression.refExpr("http://%s", endpoint), null);
         container.withHttpHealthCheck();
         container.withHttpHealthCheck();
+        var commandOptions = new CommandOptions();
+        commandOptions.setUpdateState((Function<UpdateCommandStateContext, ResourceCommandState>) (ctx) -> {
+            var snapshot = ctx.resourceSnapshot();
+            return snapshot.getHealthStatus() == HealthStatus.HEALTHY ? ResourceCommandState.ENABLED : ResourceCommandState.DISABLED;
+        });
         container.withCommand("noop", "Noop", (_ctx) -> {
             var result = new ExecuteCommandResult();
             result.setSuccess(true);
             return result;
-        });
+        }, commandOptions);
+        var echoCommandOptions = new CommandOptions();
+        var messageArgument = new InteractionInput();
+        messageArgument.setName("message");
+        messageArgument.setInputType(InputType.TEXT);
+        messageArgument.setRequired(true);
+        echoCommandOptions.setArguments(new InteractionInput[] { messageArgument });
+        container.withCommand("echo", "Echo", (ctx) -> {
+            var commandArguments = ctx.arguments().toArray();
+            var result = new ExecuteCommandResult();
+            result.setSuccess("hello".equals(commandArguments[0].getValue()));
+            return result;
+        }, echoCommandOptions);
         container.withCommand("restart", "Restart", (ctx) -> {
-            var serviceProvider = ctx.serviceProvider();
-            var commandService = serviceProvider.getResourceCommandService();
             var cancellationToken = ctx.cancellationToken();
-            return commandService.executeCommandAsync("mycontainer", "noop", cancellationToken);
+            return resourceCommandService.executeCommandAsync(
+                container,
+                "echo",
+                new ExecuteCommandAsyncOptions()
+                    .arguments(Map.of("message", "hello"))
+                    .cancellationToken(cancellationToken));
         });
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();

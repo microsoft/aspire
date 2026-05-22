@@ -18,8 +18,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Resources\transport.ts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.transport.ts" />
-    <EmbeddedResource Include="Resources\base.ts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.base.ts" />
+    <EmbeddedResource Include="Resources\transport.mts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.transport.mts" />
+    <EmbeddedResource Include="Resources\base.mts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.base.mts" />
     <EmbeddedResource Include="Resources\package.json" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.package.json" />
     <!--
       eslint.config.mjs and tsconfig.apphost.json are sourced from the ts-starter

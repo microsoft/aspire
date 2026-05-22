@@ -348,6 +348,7 @@ func main() {
 	builderExecutionContext := builder.ExecutionContext()
 	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
 	_ = executionContextServiceProvider.GetDistributedApplicationModel()
+	resourceCommandService := executionContextServiceProvider.GetResourceCommandService()
 
 	// Subscriptions (typed callbacks)
 	beforeStartSub := builder.SubscribeBeforeStart(func(e aspire.BeforeStartEvent) {
@@ -487,17 +488,53 @@ func main() {
 	_ = container.WithUrl(expr)
 	_ = container.WithHttpHealthCheck()
 	_ = container.WithHttpHealthCheck()
+	updateCommandState := func(args ...any) any {
+		if len(args) == 0 {
+			return aspire.ResourceCommandStateDisabled
+		}
+		ctx, ok := args[0].(aspire.UpdateCommandStateContext)
+		if !ok {
+			return aspire.ResourceCommandStateDisabled
+		}
+		snapshot, err := ctx.ResourceSnapshot()
+		if err != nil || snapshot.HealthStatus == nil {
+			return aspire.ResourceCommandStateDisabled
+		}
+		if *snapshot.HealthStatus == aspire.HealthStatusHealthy {
+			return aspire.ResourceCommandStateEnabled
+		}
+		return aspire.ResourceCommandStateDisabled
+	}
 	_ = container.WithCommand("noop", "Noop", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
 		return &aspire.ExecuteCommandResult{Success: true}
+	}, &aspire.WithCommandOptions{
+		CommandOptions: &aspire.CommandOptions{
+			UpdateState: updateCommandState,
+		},
+	})
+	_ = container.WithCommand("echo", "Echo", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		commandArguments, err := ctx.Arguments().ToArray()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		return &aspire.ExecuteCommandResult{Success: commandArguments[0].Value == "hello"}
+	}, &aspire.WithCommandOptions{
+		CommandOptions: &aspire.CommandOptions{
+			Arguments: []*aspire.InteractionInput{
+				{
+					Name:      "message",
+					InputType: aspire.InputTypeText,
+					Required:  aspire.BoolPtr(true),
+				},
+			},
+		},
 	})
 	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		serviceProvider := ctx.ServiceProvider()
-		commandService := serviceProvider.GetResourceCommandService()
 		cancellationToken, err := ctx.CancellationToken()
 		if err != nil {
 			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
 		}
-		result, err := commandService.ExecuteCommandAsync("mycontainer", "noop", &aspire.ExecuteCommandAsyncOptions{CancellationToken: cancellationToken})
+		result, err := resourceCommandService.ExecuteCommandAsync(container, "echo", &aspire.ExecuteCommandAsyncOptions{Arguments: map[string]string{"message": "hello"}, CancellationToken: cancellationToken})
 		if err != nil {
 			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
 		}

@@ -105,8 +105,6 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(_qualityOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     private static string? GetDotNetToolUpdateCommand()
     {
         return DotNetToolDetection.GetDotNetToolUpdateCommand();

@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -449,6 +449,28 @@ impl std::fmt::Display for CommandResultFormat {
             Self::Text => write!(f, "Text"),
             Self::Json => write!(f, "Json"),
             Self::Markdown => write!(f, "Markdown"),
+        }
+    }
+}
+
+/// HealthStatus
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HealthStatus {
+    #[default]
+    #[serde(rename = "Unhealthy")]
+    Unhealthy,
+    #[serde(rename = "Degraded")]
+    Degraded,
+    #[serde(rename = "Healthy")]
+    Healthy,
+}
+
+impl std::fmt::Display for HealthStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unhealthy => write!(f, "Unhealthy"),
+            Self::Degraded => write!(f, "Degraded"),
+            Self::Healthy => write!(f, "Healthy"),
         }
     }
 }
@@ -1185,6 +1207,41 @@ impl CommandResultData {
         }
         if let Some(ref v) = self.display_immediately {
             map.insert("DisplayImmediately".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
+/// UpdateCommandStateResourceSnapshot
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct UpdateCommandStateResourceSnapshot {
+    #[serde(rename = "ResourceType")]
+    pub resource_type: String,
+    #[serde(rename = "State", skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(rename = "StateStyle", skip_serializing_if = "Option::is_none")]
+    pub state_style: Option<String>,
+    #[serde(rename = "HealthStatus", skip_serializing_if = "Option::is_none")]
+    pub health_status: Option<HealthStatus>,
+    #[serde(rename = "ExitCode", skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<f64>,
+}
+
+impl UpdateCommandStateResourceSnapshot {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("ResourceType".to_string(), serde_json::to_value(&self.resource_type).unwrap_or(Value::Null));
+        if let Some(ref v) = self.state {
+            map.insert("State".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.state_style {
+            map.insert("StateStyle".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.health_status {
+            map.insert("HealthStatus".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.exit_code {
+            map.insert("ExitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map
     }
@@ -8732,15 +8789,6 @@ impl ExecuteCommandContext {
         &self.client
     }
 
-    /// The service provider.
-    pub fn service_provider(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IServiceProvider::new(handle, self.client.clone()))
-    }
-
     /// The resource name.
     pub fn resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -13884,11 +13932,14 @@ impl ResourceCommandService {
     }
 
     /// Executes a command for the specified resource.
-    pub fn execute_command_async(&self, resource_id: &str, command_name: &str, cancellation_token: Option<&CancellationToken>) -> Result<ExecuteCommandResult, Box<dyn std::error::Error>> {
+    pub fn execute_command_async(&self, resource: Value, command_name: &str, arguments: Option<HashMap<String, String>>, cancellation_token: Option<&CancellationToken>) -> Result<ExecuteCommandResult, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resourceCommandService".to_string(), self.handle.to_json());
-        args.insert("resourceId".to_string(), serde_json::to_value(&resource_id).unwrap_or(Value::Null));
+        args.insert("resource".to_string(), serde_json::to_value(&resource).unwrap_or(Value::Null));
         args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        if let Some(ref v) = arguments {
+            args.insert("arguments".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(token) = cancellation_token {
             let token_id = register_cancellation(token, self.client.clone());
             args.insert("cancellationToken".to_string(), Value::String(token_id));
@@ -18849,13 +18900,12 @@ impl UpdateCommandStateContext {
         &self.client
     }
 
-    /// The service provider.
-    pub fn service_provider(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
+    /// Gets the resource snapshot data available to polyglot command state callbacks.
+    pub fn resource_snapshot(&self) -> Result<UpdateCommandStateResourceSnapshot, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IServiceProvider::new(handle, self.client.clone()))
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot", args)?;
+        Ok(serde_json::from_value(result)?)
     }
 }
 

@@ -1,4 +1,4 @@
-// aspire.ts - Capability-based Aspire SDK
+// aspire.mts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -15,10 +15,10 @@ import {
     wrapIfHandle,
     registerHandleWrapper,
     isPromiseLike
-} from './transport.js';
-import type { AspireClientRpc } from './transport.js';
+} from './transport.mjs';
+import type { AspireClientRpc } from './transport.mjs';
 
-import type { HandleReference } from './base.js';
+import type { HandleReference } from './base.mjs';
 
 import {
     ResourceBuilderBase,
@@ -26,24 +26,24 @@ import {
     refExpr,
     AspireDict,
     AspireList
-} from './base.js';
+} from './base.mjs';
 
 export {
     InputType,
     InteractionInputCollection
-} from './base.js';
+} from './base.mjs';
 
 export type {
     InteractionInput,
     InteractionInputOption
-} from './base.js';
+} from './base.mjs';
 
 import type {
     Awaitable,
     InteractionInput,
     InteractionInputCollection,
     InputType
-} from './base.js';
+} from './base.mjs';
 
 // ============================================================================
 // Handle Type Aliases (Internal - not exported to users)
@@ -486,6 +486,13 @@ export enum EndpointProperty {
     HostAndPort = "HostAndPort",
     /** Whether TLS is enabled on the endpoint. Returns `TrueString` or `FalseString`. */
     TlsEnabled = "TlsEnabled",
+}
+
+/** Enum type for HealthStatus */
+export enum HealthStatus {
+    Unhealthy = "Unhealthy",
+    Degraded = "Degraded",
+    Healthy = "Healthy",
 }
 
 /** Specifies how an HTTP command should surface the HTTP response body as command result data. */
@@ -1003,6 +1010,20 @@ export interface TestNestedDto {
     counts?: Record<string, number>;
 }
 
+/** Resource snapshot data exposed to polyglot command state callbacks. */
+export interface UpdateCommandStateResourceSnapshot {
+    /** The type of the resource. */
+    resourceType?: string;
+    /** The current lifecycle state text for the resource. */
+    state?: string | null;
+    /** The display style for the current lifecycle state. */
+    stateStyle?: string | null;
+    /** The current health status for the resource. */
+    healthStatus?: HealthStatus | null;
+    /** The exit code of the resource. */
+    exitCode?: number | null;
+}
+
 // ============================================================================
 // Exported Values
 // ============================================================================
@@ -1225,6 +1246,8 @@ export interface CreateTaskOptions {
 }
 
 export interface ExecuteCommandAsyncOptions {
+    /** The optional invocation arguments supplied to the command callback. */
+    arguments?: Record<string, string>;
     /** The cancellation token. */
     cancellationToken?: AbortSignal | CancellationToken;
 }
@@ -4224,8 +4247,6 @@ class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscr
 /** Context for {@link ResourceCommandAnnotation.ExecuteCommand}. */
 export interface ExecuteCommandContext {
     toJSON(): MarshalledHandle;
-    /** The service provider. */
-    serviceProvider(): ServiceProviderPromise;
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -4252,17 +4273,6 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
-
-    serviceProvider(): ServiceProviderPromise {
-        const promise = (async () => {
-            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
-                'Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider',
-                { context: this._handle }
-            );
-            return new ServiceProviderImpl(handle, this._client);
-        })();
-        return new ServiceProviderPromiseImpl(promise, this._client, false);
-    }
 
     async resourceName(): Promise<string> {
         return await this._client.invokeCapability<string>(
@@ -5813,23 +5823,23 @@ export interface ResourceCommandService {
     toJSON(): MarshalledHandle;
     /**
      * Executes a command for the specified resource.
-     * @param resourceId The resource id. This id can either exactly match the unique id of the resource or the displayed resource name if the resource name doesn't have duplicates.
+     * @param resource The resource id or resource handle. A resource id can either exactly match the unique id of the resource or the displayed resource name if the resource name doesn't have duplicates.
      * @param commandName The command name.
      * @param options Additional options.
      * @returns The command execution result.
      */
-    executeCommandAsync(resourceId: string, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult>;
+    executeCommandAsync(resource: string | CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult>;
 }
 
 export interface ResourceCommandServicePromise extends PromiseLike<ResourceCommandService> {
     /**
      * Executes a command for the specified resource.
-     * @param resourceId The resource id. This id can either exactly match the unique id of the resource or the displayed resource name if the resource name doesn't have duplicates.
+     * @param resource The resource id or resource handle. A resource id can either exactly match the unique id of the resource or the displayed resource name if the resource name doesn't have duplicates.
      * @param commandName The command name.
      * @param options Additional options.
      * @returns The command execution result.
      */
-    executeCommandAsync(resourceId: string, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult>;
+    executeCommandAsync(resource: string | CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult>;
 }
 
 // ============================================================================
@@ -5845,14 +5855,17 @@ class ResourceCommandServiceImpl implements ResourceCommandService {
 
     /**
      * Executes a command for the specified resource.
-     * @param resourceId The resource id. This id can either exactly match the unique id of the resource or the displayed resource name if the resource name doesn't have duplicates.
+     * @param resource The resource id or resource handle. A resource id can either exactly match the unique id of the resource or the displayed resource name if the resource name doesn't have duplicates.
      * @param commandName The command name.
      * @param options Additional options.
      * @returns The command execution result.
      */
-    async executeCommandAsync(resourceId: string, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult> {
+    async executeCommandAsync(resource: string | CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult> {
+        const argumentsValue = options?.arguments;
         const cancellationToken = options?.cancellationToken;
-        const rpcArgs: Record<string, unknown> = { resourceCommandService: this._handle, resourceId, commandName };
+        resource = isPromiseLike(resource) ? await resource : resource;
+        const rpcArgs: Record<string, unknown> = { resourceCommandService: this._handle, resource, commandName };
+        if (argumentsValue !== undefined) rpcArgs.arguments = argumentsValue;
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<ExecuteCommandResult>(
             'Aspire.Hosting/executeResourceCommand',
@@ -5877,8 +5890,8 @@ class ResourceCommandServicePromiseImpl implements ResourceCommandServicePromise
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    executeCommandAsync(resourceId: string, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult> {
-        return this._promise.then(obj => obj.executeCommandAsync(resourceId, commandName, options));
+    executeCommandAsync(resource: string | CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, commandName: string, options?: ExecuteCommandAsyncOptions): Promise<ExecuteCommandResult> {
+        return this._promise.then(obj => obj.executeCommandAsync(resource, commandName, options));
     }
 
 }
@@ -7025,8 +7038,8 @@ class TestResourceContextPromiseImpl implements TestResourceContextPromise {
 /** Context for {@link ResourceCommandAnnotation.UpdateState}. */
 export interface UpdateCommandStateContext {
     toJSON(): MarshalledHandle;
-    /** The service provider. */
-    serviceProvider(): ServiceProviderPromise;
+    /** Gets the resource snapshot data available to polyglot command state callbacks. */
+    resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot>;
 }
 
 // ============================================================================
@@ -7040,15 +7053,11 @@ class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    serviceProvider(): ServiceProviderPromise {
-        const promise = (async () => {
-            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
-                'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider',
-                { context: this._handle }
-            );
-            return new ServiceProviderImpl(handle, this._client);
-        })();
-        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    async resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot> {
+        return await this._client.invokeCapability<UpdateCommandStateResourceSnapshot>(
+            'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot',
+            { context: this._handle }
+        );
     }
 
 }
@@ -51729,9 +51738,9 @@ export async function createBuilder(options?: CreateBuilderOptions): Promise<Dis
 }
 
 // Re-export commonly used types
-export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.js';
-export { refExpr, ReferenceExpression } from './base.js';
-export type { HandleReference, Awaitable } from './base.js';
+export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.mjs';
+export { refExpr, ReferenceExpression } from './base.mjs';
+export type { HandleReference, Awaitable } from './base.mjs';
 
 // ============================================================================
 // Global Error Handling

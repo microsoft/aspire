@@ -162,6 +162,11 @@
         <target state="needs-review-translation">查看仪表板遥测 API 中的结构化日志。</target>
         <note />
       </trans-unit>
+      <trans-unit id="MinimumDurationOptionDescription">
+        <source>Filter by minimum span duration in milliseconds</source>
+        <target state="new">Filter by minimum span duration in milliseconds</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>Filter by resource name</source>
         <target state="needs-review-translation">按资源名称筛选。</target>
