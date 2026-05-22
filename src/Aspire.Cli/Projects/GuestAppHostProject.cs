@@ -644,8 +644,17 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     _interactionService.DisplayLines(guestOutput.GetLines());
                 }
 
+                // Emit a one-line narrative summary so the user sees *why* the run failed in
+                // addition to the technical guest output above. RunCommand's startup catch
+                // path cannot reliably surface this message itself: the AppHost task returns
+                // a clean exit code (not a fault) so its Faulted-based fallback is skipped,
+                // and the guest output was routed through DisplayLines rather than the output
+                // collector that DisplayRecentAppHostStartupOutput inspects.
+                var failureNarrative = $"The {DisplayName} apphost failed.";
+                _interactionService.DisplayError(failureNarrative);
+
                 // Signal failure to RunCommand so it doesn't hang waiting for the backchannel
-                var error = new InvalidOperationException($"The {DisplayName} apphost failed.");
+                var error = new InvalidOperationException(failureNarrative);
                 context.BackchannelCompletionSource?.TrySetException(error);
 
                 // Kill the AppHost server since the apphost failed
@@ -1107,8 +1116,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     _interactionService.DisplayLines(guestOutput.GetLines());
                 }
 
+                // Emit a one-line narrative summary so callers see *why* publish failed in
+                // addition to the technical guest output above. Mirrors the run-mode path
+                // and ensures CLI consumers don't get just a bare non-zero exit code.
+                var failureNarrative = $"The {DisplayName} apphost failed.";
+                _interactionService.DisplayError(failureNarrative);
+
                 // Signal failure so callers don't hang waiting for the backchannel
-                var error = new InvalidOperationException($"The {DisplayName} apphost failed.");
+                var error = new InvalidOperationException(failureNarrative);
                 context.BackchannelCompletionSource?.TrySetException(error);
 
                 // Kill the AppHost server since the apphost failed
