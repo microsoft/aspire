@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "New minimum span duration filtering in Dashboard trace detail and --min-duration flag for CLI telemetry commands",
+  "mergedAt": "2026-05-22T14:33:06Z",
+  "number": 17299,
+  "runDate": "2026-05-22T15:11:06Z",
+  "status": "included",
+  "title": "Add minimum span duration filtering"
+}

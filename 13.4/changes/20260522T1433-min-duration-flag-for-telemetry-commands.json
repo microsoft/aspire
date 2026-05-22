@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The aspire telemetry spans and aspire telemetry traces commands now accept --min-duration (or --min-duration-ms) to filter output to spans that meet a minimum millisecond duration threshold, making it easy to cut noise from large traces when profiling.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-05-22T14:33:06Z",
+  "lastMergedAt": "2026-05-22T14:33:06Z",
+  "name": "--min-duration flag for CLI telemetry commands",
+  "owner": "davidfowl",
+  "prs": [
+    17299
+  ]
+}

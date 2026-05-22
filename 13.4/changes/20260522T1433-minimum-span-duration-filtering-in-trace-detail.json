@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "A new Duration (ms) field with numeric comparison operators (>=, >, <=, <) is available in the trace detail filter dialog, letting you hide short-lived spans that add noise to large traces. Ancestor spans are preserved so the trace tree stays navigable, and the underlying trace query gained major performance improvements — a no-match duration filter on 10k spans now completes in ~67 µs instead of ~1 ms.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-05-22T14:33:06Z",
+  "lastMergedAt": "2026-05-22T14:33:06Z",
+  "name": "Minimum span duration filtering in trace detail",
+  "owner": "davidfowl",
+  "prs": [
+    17299
+  ]
+}
