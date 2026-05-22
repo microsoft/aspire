@@ -117,6 +117,9 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             _ => throw new ArgumentOutOfRangeException(nameof(toolchain), toolchain, "Unsupported TypeScript AppHost toolchain.")
         };
 
+    internal static bool UsesCorepack(string toolchain) =>
+        NormalizeToolchain(toolchain) is "pnpm" or "yarn";
+
     /// <summary>
     /// Gets the display name for a toolchain.
     /// </summary>

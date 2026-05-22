@@ -180,7 +180,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             return "unknown";
         }
 
-        // ReferenceExpression is a value type defined in base.ts, not a handle-based wrapper
+        // ReferenceExpression is a value type defined in base.mts, not a handle-based wrapper
         if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
         {
             return GetReferenceExpressionInterfaceName();
@@ -784,12 +784,12 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     {
         var files = new Dictionary<string, string>();
 
-        // Add embedded resource files (transport.ts, base.ts)
-        files["transport.ts"] = EmbeddedResources.Read("transport.ts");
-        files["base.ts"] = EmbeddedResources.Read("base.ts");
+        // Add embedded resource files (transport.mts, base.mts)
+        files["transport.mts"] = EmbeddedResources.Read("transport.mts");
+        files["base.mts"] = EmbeddedResources.Read("base.mts");
 
-        // Generate the capability-based aspire.ts SDK
-        files["aspire.ts"] = GenerateAspireSdk(context);
+        // Generate the capability-based aspire.mts SDK
+        files["aspire.mts"] = GenerateAspireSdk(context);
 
         return files;
     }
@@ -805,7 +805,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     }
 
     /// <summary>
-    /// Generates the aspire.ts SDK file with capability-based API.
+    /// Generates the aspire.mts SDK file with capability-based API.
     /// </summary>
     private string GenerateAspireSdk(AtsContext context)
     {
@@ -814,7 +814,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         // Header
         WriteLine("""
-            // aspire.ts - Capability-based Aspire SDK
+            // aspire.mts - Capability-based Aspire SDK
             // This SDK uses the ATS (Aspire Type System) capability API.
             // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
             //
@@ -831,10 +831,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 wrapIfHandle,
                 registerHandleWrapper,
                 isPromiseLike
-            } from './transport.js';
-            import type { AspireClientRpc } from './transport.js';
+            } from './transport.mjs';
+            import type { AspireClientRpc } from './transport.mjs';
 
-            import type { HandleReference } from './base.js';
+            import type { HandleReference } from './base.mjs';
 
             import {
                 ResourceBuilderBase,
@@ -842,24 +842,24 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 refExpr,
                 AspireDict,
                 AspireList
-            } from './base.js';
+            } from './base.mjs';
 
             export {
                 InputType,
                 InteractionInputCollection
-            } from './base.js';
+            } from './base.mjs';
 
             export type {
                 InteractionInput,
                 InteractionInputOption
-            } from './base.js';
+            } from './base.mjs';
 
             import type {
                 Awaitable,
                 InteractionInput,
                 InteractionInputCollection,
                 InputType
-            } from './base.js';
+            } from './base.mjs';
             """);
         WriteLine();
 
@@ -952,7 +952,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             }
         }
         // Note: ReferenceExpression is intentionally NOT added to _wrapperClassNames.
-        // It is a value type defined in base.ts with a private constructor and static factory,
+        // It is a value type defined in base.mts with a private constructor and static factory,
         // not a handle-based wrapper. It is handled via MapTypeRefToTypeScript instead.
 
         // Generate handle type aliases
@@ -2860,9 +2860,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             }
 
             // Re-export commonly used types
-            export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.js';
-            export { refExpr, ReferenceExpression } from './base.js';
-            export type { HandleReference, Awaitable } from './base.js';
+            export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.mjs';
+            export { refExpr, ReferenceExpression } from './base.mjs';
+            export type { HandleReference, Awaitable } from './base.mjs';
             """);
         WriteLine();
     }
@@ -4043,8 +4043,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
                 continue;
             }
 
-            // These types are implemented manually in base.ts, including handle wrapper
-            // registrations, so they must not also generate duplicate wrappers in aspire.ts.
+            // These types are implemented manually in base.mts, including handle wrapper
+            // registrations, so they must not also generate duplicate wrappers in aspire.mts.
             if (targetTypeId is AtsConstants.ReferenceExpressionTypeId or InteractionInputCollectionTypeId)
             {
                 continue;
