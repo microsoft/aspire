@@ -374,6 +374,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         {
             var endpointName = allowUnsecureTransport ? "http" : "https";
             dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: endpointContext.Scheme, isProxied: true));
+            LogEndpointAdded(endpointName, scheme: endpointContext.Scheme, host: "localhost", port: null);
 
             eventing.Subscribe<BeforeResourceStartedEvent>(dashboardResource, (@event, _) =>
             {
@@ -395,6 +396,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                 {
                     TargetHost = address.Host
                 });
+                LogEndpointAdded(address.Scheme, scheme: address.Scheme, host: address.Host, port: address.Port);
 
                 if (string.Equals(address.Scheme, endpointContext.Scheme, StringComparison.OrdinalIgnoreCase))
                 {
@@ -407,12 +409,12 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         // and browser telemetry work without requiring explicit launch profile configuration.
         if (otlpHttpEndpointUrl is not null || otlpGrpcEndpointUrl is null)
         {
-            dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName, endpointContext));
+            AddDashboardOtlpEndpoint(dashboardResource, otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName, endpointContext);
         }
 
         if (otlpGrpcEndpointUrl is not null || otlpHttpEndpointUrl is null)
         {
-            dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, endpointContext, transport: "http2"));
+            AddDashboardOtlpEndpoint(dashboardResource, otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, endpointContext, transport: "http2");
         }
 
         // Determine whether any HTTPS endpoints are configured
@@ -708,21 +710,45 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         public string TargetHost { get; set; } = "localhost";
     }
 
-    private static EndpointAnnotation CreateDashboardOtlpEndpointAnnotation(string? endpointUrl, string endpointName, EndpointGenerationContext context, string? transport = null)
+    private void AddDashboardOtlpEndpoint(IResource dashboardResource, string? endpointUrl, string endpointName, EndpointGenerationContext context, string? transport = null)
     {
+        EndpointAnnotation annotation;
+
         if (string.IsNullOrWhiteSpace(endpointUrl))
         {
-            return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: context.Scheme, isProxied: true, transport: transport)
+            annotation = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: context.Scheme, isProxied: true, transport: transport)
             {
                 TargetHost = context.TargetHost
             };
+            LogEndpointAdded(endpointName, scheme: context.Scheme, host: context.TargetHost, port: null);
+        }
+        else
+        {
+            var address = BindingAddress.Parse(endpointUrl);
+            annotation = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true, transport: transport)
+            {
+                TargetHost = address.Host
+            };
+            LogEndpointAdded(endpointName, scheme: address.Scheme, host: address.Host, port: address.Port);
         }
 
-        var address = BindingAddress.Parse(endpointUrl);
-        return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true, transport: transport)
+        dashboardResource.Annotations.Add(annotation);
+    }
+
+    /// <summary>
+    /// Logs a debug message when a dashboard endpoint is added, indicating whether it was
+    /// configured from an explicit URL or generated dynamically with a random port.
+    /// </summary>
+    private void LogEndpointAdded(string endpointName, string scheme, string host, int? port)
+    {
+        if (port is not null)
         {
-            TargetHost = address.Host
-        };
+            distributedApplicationLogger.LogDebug("Dashboard endpoint '{EndpointName}' configured: {Scheme}://{Host}:{Port}", endpointName, scheme, host, port);
+        }
+        else
+        {
+            distributedApplicationLogger.LogDebug("Dashboard endpoint '{EndpointName}' generated dynamically: {Scheme}://{Host}:<random> (no configured URL).", endpointName, scheme, host);
+        }
     }
 
     private static void PopulateDashboardUrls(EnvironmentCallbackContext context)
