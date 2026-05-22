@@ -294,6 +294,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             {
                 aspireSkillsBundle = result.Bundle;
             }
+            else if (result.Status is AspireSkillsInstallStatus.PluginDetected)
+            {
+                _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, result.Message!);
+            }
             else
             {
                 if (errorMode is AgentInitErrorMode.Strict)

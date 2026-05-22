@@ -2,6 +2,11 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ja" original="../AgentCommandStrings.resx">
     <body>
+      <trans-unit id="AspireSkillsInstaller_PluginFallbackDetected">
+        <source>Aspire skills are already installed through {0}; skipping local Aspire skills bundle installation.</source>
+        <target state="new">Aspire skills are already installed through {0}; skipping local Aspire skills bundle installation.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">
         <source>The following agent configurations use the deprecated 'mcp start' command. Update them?</source>
         <target state="translated">次のエージェント構成で非推奨の 'mcp start' コマンドが使用されています。これらを更新しますか?</target>
@@ -88,8 +93,8 @@
         <note />
       </trans-unit>
       <trans-unit id="AspireSkillsInstaller_NpmUnavailable">
-        <source>Aspire skills require npm for first-time installation, and npm is not available on PATH.</source>
-        <target state="new">Aspire skills require npm for first-time installation, and npm is not available on PATH.</target>
+        <source>Aspire skills could not be downloaded from GitHub, npm fallback is not available on PATH, and no installed Aspire skills plugin was detected.</source>
+        <target state="new">Aspire skills could not be downloaded from GitHub, npm fallback is not available on PATH, and no installed Aspire skills plugin was detected.</target>
         <note />
       </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">

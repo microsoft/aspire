@@ -14,6 +14,11 @@ internal enum AspireSkillsInstallStatus
     Installed,
 
     /// <summary>
+    /// An agent-native plugin manager already provides the Aspire skills.
+    /// </summary>
+    PluginDetected,
+
+    /// <summary>
     /// The bundle could not be resolved, verified, or cached.
     /// </summary>
     Failed
@@ -25,6 +30,8 @@ internal enum AspireSkillsInstallStatus
 internal sealed record AspireSkillsInstallResult(AspireSkillsInstallStatus Status, AspireSkillsBundle? Bundle, string? Message)
 {
     public static AspireSkillsInstallResult Installed(AspireSkillsBundle bundle) => new(AspireSkillsInstallStatus.Installed, bundle, Message: null);
+
+    public static AspireSkillsInstallResult PluginDetected(string message) => new(AspireSkillsInstallStatus.PluginDetected, Bundle: null, message);
 
     public static AspireSkillsInstallResult Failed(string message) => new(AspireSkillsInstallStatus.Failed, Bundle: null, message);
 }

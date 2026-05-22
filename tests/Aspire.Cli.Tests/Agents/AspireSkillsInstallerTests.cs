@@ -3,6 +3,7 @@
 
 using System.Formats.Tar;
 using System.IO.Compression;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Aspire.Cli.Agents;
@@ -45,6 +46,32 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
+    public async Task InstallAsync_WhenCachedBundleLastUsedCannotBeTouched_UsesCacheWithoutNpm()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var cachedBundleDirectory = Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills", AspireSkillsInstaller.Version);
+            await CreateCachedBundleAsync(cachedBundleDirectory);
+            Directory.CreateDirectory(Path.Combine(cachedBundleDirectory, ".lastused"));
+            var npmRunner = new TestNpmRunner { IsAvailable = false };
+            var installer = CreateInstaller(npmRunner, executionContext);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.False(npmRunner.ResolveCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task InstallAsync_WhenNpmIsUnavailableAndNoCache_ReturnsFailure()
     {
         var rootDirectory = CreateTempDirectory();
@@ -59,6 +86,163 @@ public class AspireSkillsInstallerTests
 
             Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
             Assert.Contains("npm", result.Message);
+            Assert.False(npmRunner.ResolveCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenGitHubReleaseAssetIsAvailable_UsesGitHubWithoutNpm()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var archiveBytes = await CreateBundleArchiveBytesAsync();
+            Uri? releaseRequestUri = null;
+            Uri? assetRequestUri = null;
+            var handler = new MockHttpMessageHandler(request =>
+            {
+                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                {
+                    releaseRequestUri = request.RequestUri;
+                    return CreateJsonResponse(CreateGitHubReleaseJson("aspire-skills-v0.0.1.tgz", "https://downloads.example.test/aspire-skills-v0.0.1.tgz"));
+                }
+
+                assetRequestUri = request.RequestUri;
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(archiveBytes)
+                };
+            });
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var npmRunner = new TestNpmRunner { IsAvailable = false };
+            var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
+            var installer = CreateInstaller(npmRunner, executionContext, httpMessageHandler: handler, githubArtifactAttestationVerifier: attestationVerifier);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.False(npmRunner.ResolveCalled);
+            Assert.True(attestationVerifier.VerifyCalled);
+            Assert.NotNull(releaseRequestUri);
+            Assert.NotNull(assetRequestUri);
+            Assert.Contains("/microsoft/aspire-skills/releases/tags/v0.0.1", releaseRequestUri.AbsolutePath);
+            Assert.Equal("https://downloads.example.test/aspire-skills-v0.0.1.tgz", assetRequestUri.AbsoluteUri);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenGitHubReleaseIsUnavailable_FallsBackToNpm()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var tarballPath = await CreateBundleArchiveFileAsync(rootDirectory);
+            var npmRunner = new TestNpmRunner
+            {
+                PackageInfo = new NpmPackageInfo
+                {
+                    Version = SemVersion.Parse(AspireSkillsInstaller.Version),
+                    Integrity = ComputeSriSha512(tarballPath)
+                },
+                TarballPath = tarballPath
+            };
+            var installer = CreateInstaller(npmRunner, executionContext);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.True(npmRunner.ResolveCalled);
+            Assert.True(npmRunner.PackCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenGitHubAttestationFails_DoesNotFallbackToNpm()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var archiveBytes = await CreateBundleArchiveBytesAsync();
+            var handler = new MockHttpMessageHandler(request =>
+            {
+                if (request.RequestUri!.AbsolutePath.EndsWith("/releases/tags/v0.0.1", StringComparison.Ordinal))
+                {
+                    return CreateJsonResponse(CreateGitHubReleaseJson("aspire-skills-v0.0.1.tgz", "https://downloads.example.test/aspire-skills-v0.0.1.tgz"));
+                }
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(archiveBytes)
+                };
+            });
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var npmRunner = new TestNpmRunner
+            {
+                PackageInfo = new NpmPackageInfo
+                {
+                    Version = SemVersion.Parse(AspireSkillsInstaller.Version),
+                    Integrity = "sha512-invalid"
+                }
+            };
+            var attestationVerifier = new TestGitHubArtifactAttestationVerifier
+            {
+                Result = new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.WorkflowMismatch }
+            };
+            var installer = CreateInstaller(npmRunner, executionContext, httpMessageHandler: handler, githubArtifactAttestationVerifier: attestationVerifier);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
+            Assert.NotNull(result.Message);
+            Assert.Contains("Provenance", result.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.False(npmRunner.ResolveCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenPluginIsAlreadyInstalled_UsesPluginFallback()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var npmRunner = new TestNpmRunner { IsAvailable = false };
+            var pluginDetector = new TestAspireSkillsPluginDetector
+            {
+                Result = AspireSkillsPluginDetectionResult.Installed("GitHub Copilot CLI")
+            };
+            var installer = CreateInstaller(npmRunner, executionContext, pluginDetector: pluginDetector);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.PluginDetected, result.Status);
+            Assert.Null(result.Bundle);
+            Assert.NotNull(result.Message);
+            Assert.Contains("GitHub Copilot CLI", result.Message, StringComparison.Ordinal);
+            Assert.True(pluginDetector.DetectCalled);
             Assert.False(npmRunner.ResolveCalled);
         }
         finally
@@ -147,11 +331,17 @@ public class AspireSkillsInstallerTests
     private static AspireSkillsInstaller CreateInstaller(
         TestNpmRunner npmRunner,
         CliExecutionContext executionContext,
-        TestNpmProvenanceChecker? provenanceChecker = null)
+        TestNpmProvenanceChecker? provenanceChecker = null,
+        HttpMessageHandler? httpMessageHandler = null,
+        TestGitHubArtifactAttestationVerifier? githubArtifactAttestationVerifier = null,
+        TestAspireSkillsPluginDetector? pluginDetector = null)
     {
         return new AspireSkillsInstaller(
             npmRunner,
             provenanceChecker ?? new TestNpmProvenanceChecker(),
+            githubArtifactAttestationVerifier ?? new TestGitHubArtifactAttestationVerifier(),
+            pluginDetector ?? new TestAspireSkillsPluginDetector(),
+            new MockHttpClientFactory(httpMessageHandler ?? new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))),
             new TestInteractionService(),
             executionContext,
             new ConfigurationBuilder().Build(),
@@ -253,6 +443,29 @@ public class AspireSkillsInstallerTests
         return $"sha512-{Convert.ToBase64String(SHA512.HashData(stream))}";
     }
 
+    private static HttpResponseMessage CreateJsonResponse(string json)
+    {
+        return new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(json)
+        };
+    }
+
+    private static string CreateGitHubReleaseJson(string assetName, string downloadUrl)
+    {
+        return $$"""
+            {
+              "tag_name": "v{{AspireSkillsInstaller.Version}}",
+              "assets": [
+                {
+                  "name": "{{assetName}}",
+                  "browser_download_url": "{{downloadUrl}}"
+                }
+              ]
+            }
+            """;
+    }
+
     private static string CreateTempDirectory()
     {
         return Directory.CreateTempSubdirectory("aspire-skills-installer-test-").FullName;
@@ -314,6 +527,43 @@ public class AspireSkillsInstallerTests
             VerifyCalled = true;
             SriIntegrity = sriIntegrity;
 
+            return Task.FromResult(Result);
+        }
+    }
+
+    private sealed class TestGitHubArtifactAttestationVerifier : IGitHubArtifactAttestationVerifier
+    {
+        public bool VerifyCalled { get; private set; }
+
+        public ProvenanceVerificationResult Result { get; init; } = new()
+        {
+            Outcome = ProvenanceVerificationOutcome.Verified,
+            Provenance = new NpmProvenanceData { SourceRepository = AspireSkillsInstaller.ExpectedSourceRepository }
+        };
+
+        public Task<ProvenanceVerificationResult> VerifyAsync(
+            string repository,
+            string artifactPath,
+            string expectedSourceRepository,
+            string expectedWorkflowPath,
+            string expectedBuildType,
+            Func<WorkflowRefInfo, bool>? validateWorkflowRef,
+            CancellationToken cancellationToken)
+        {
+            VerifyCalled = true;
+            return Task.FromResult(Result);
+        }
+    }
+
+    private sealed class TestAspireSkillsPluginDetector : IAspireSkillsPluginDetector
+    {
+        public bool DetectCalled { get; private set; }
+
+        public AspireSkillsPluginDetectionResult Result { get; init; } = AspireSkillsPluginDetectionResult.NotInstalled;
+
+        public Task<AspireSkillsPluginDetectionResult> DetectInstalledAsync(CancellationToken cancellationToken)
+        {
+            DetectCalled = true;
             return Task.FromResult(Result);
         }
     }

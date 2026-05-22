@@ -5,7 +5,9 @@ using System.Diagnostics;
 using System.Formats.Tar;
 using System.Globalization;
 using System.IO.Compression;
+using System.Net;
 using System.Security.Cryptography;
+using System.Text.Json;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Resources;
@@ -21,6 +23,9 @@ namespace Aspire.Cli.Agents.AspireSkills;
 internal sealed class AspireSkillsInstaller(
     INpmRunner npmRunner,
     INpmProvenanceChecker provenanceChecker,
+    IGitHubArtifactAttestationVerifier githubArtifactAttestationVerifier,
+    IAspireSkillsPluginDetector pluginDetector,
+    IHttpClientFactory httpClientFactory,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
     IConfiguration configuration,
@@ -29,12 +34,15 @@ internal sealed class AspireSkillsInstaller(
 {
     internal const string PackageName = "@microsoft/aspire-skills";
     internal const string Version = "0.0.1";
-    internal const string ExpectedSourceRepository = "https://github.com/microsoft/aspire-skills";
+    internal const string GitHubRepository = "microsoft/aspire-skills";
+    internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
     internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";
     internal const string ExpectedBuildType = "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1";
     internal const string DisablePackageValidationKey = "disableAspireSkillsPackageValidation";
     internal const string VersionOverrideKey = "aspireSkillsVersion";
     internal const string MaxCacheAgeKey = "AspireSkillsMaxCacheAgeSeconds";
+
+    private const string GitHubApiBaseUrl = "https://api.github.com";
 
     private static readonly TimeSpan s_defaultMaxCacheAge = TimeSpan.FromDays(7);
 
@@ -70,21 +78,129 @@ internal sealed class AspireSkillsInstaller(
 
         var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
 
+        var githubResult = await InstallFromGitHubAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
+        if (githubResult.Status == AcquisitionStatus.Installed)
+        {
+            CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
+            return AspireSkillsInstallResult.Installed(githubResult.Bundle!);
+        }
+
+        if (githubResult.Status == AcquisitionStatus.Failed)
+        {
+            activity?.SetStatus(ActivityStatusCode.Error, githubResult.Message);
+            return AspireSkillsInstallResult.Failed(githubResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_InvalidBundle);
+        }
+
+        AcquisitionResult? npmResult = null;
+        if (npmRunner.IsAvailable)
+        {
+            npmResult = await InstallFromNpmAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
+            if (npmResult.Status == AcquisitionStatus.Installed)
+            {
+                CleanupStaleCacheEntries(cacheRoot, npmResult.Bundle!.Version);
+                return AspireSkillsInstallResult.Installed(npmResult.Bundle);
+            }
+        }
+        else
+        {
+            logger.LogDebug("npm is not available for Aspire skills fallback acquisition.");
+        }
+
+        var pluginResult = await pluginDetector.DetectInstalledAsync(cancellationToken).ConfigureAwait(false);
+        if (pluginResult.IsInstalled)
+        {
+            activity?.SetTag("aspire.skills.source", "plugin");
+            return AspireSkillsInstallResult.PluginDetected(
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_PluginFallbackDetected, pluginResult.HostName));
+        }
+
         if (!npmRunner.IsAvailable)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, "npm is unavailable.");
+            activity?.SetStatus(ActivityStatusCode.Error, "GitHub acquisition is unavailable, npm is unavailable, and no agent plugin was detected.");
             return AspireSkillsInstallResult.Failed(AgentCommandStrings.AspireSkillsInstaller_NpmUnavailable);
         }
 
-        var npmResult = await InstallFromNpmAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
-        if (npmResult.Status == AcquisitionStatus.Installed)
-        {
-            CleanupStaleCacheEntries(cacheRoot, npmResult.Bundle!.Version);
-            return AspireSkillsInstallResult.Installed(npmResult.Bundle);
-        }
+        activity?.SetStatus(ActivityStatusCode.Error, npmResult?.Message);
+        return AspireSkillsInstallResult.Failed(npmResult?.Message ?? string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveVersion)));
+    }
 
-        activity?.SetStatus(ActivityStatusCode.Error, npmResult.Message);
-        return AspireSkillsInstallResult.Failed(npmResult.Message ?? string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveVersion)));
+    private async Task<AcquisitionResult> InstallFromGitHubAsync(
+        string cacheRoot,
+        string version,
+        bool validationDisabled,
+        Activity? activity,
+        CancellationToken cancellationToken)
+    {
+        var tempDir = Path.Combine(cacheRoot, $".github-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var httpClient = httpClientFactory.CreateClient();
+            var release = await TryGetGitHubReleaseAsync(httpClient, version, cancellationToken).ConfigureAwait(false);
+            if (release is null)
+            {
+                logger.LogDebug("Aspire skills GitHub release was unavailable for version {Version}.", version);
+                return AcquisitionResult.Unavailable();
+            }
+
+            var asset = FindGitHubReleaseAsset(release, version);
+            if (asset is null)
+            {
+                logger.LogDebug("Aspire skills GitHub release {TagName} does not contain a supported bundle asset for version {Version}.", release.TagName, version);
+                return AcquisitionResult.Unavailable();
+            }
+
+            var archivePath = Path.Combine(tempDir, GetSafeFileName(asset.Name));
+            if (!await TryDownloadGitHubAssetAsync(httpClient, asset.DownloadUrl, archivePath, cancellationToken).ConfigureAwait(false))
+            {
+                logger.LogDebug("Aspire skills GitHub release asset {AssetName} was unavailable for version {Version}.", asset.Name, version);
+                return AcquisitionResult.Unavailable();
+            }
+
+            if (!validationDisabled)
+            {
+                var provenanceResult = await githubArtifactAttestationVerifier.VerifyAsync(
+                    GitHubRepository,
+                    archivePath,
+                    ExpectedSourceRepository,
+                    ExpectedWorkflowPath,
+                    ExpectedBuildType,
+                    refInfo => IsExpectedTagRef(refInfo, version),
+                    cancellationToken).ConfigureAwait(false);
+
+                if (!provenanceResult.IsVerified)
+                {
+                    return AcquisitionResult.Failed(string.Format(
+                        CultureInfo.CurrentCulture,
+                        AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed,
+                        $"GitHub release asset '{asset.Name}'",
+                        provenanceResult.Outcome));
+                }
+            }
+
+            try
+            {
+                var bundle = await CacheArchiveAsync(cacheRoot, archivePath, version, cancellationToken).ConfigureAwait(false);
+                activity?.SetTag("aspire.skills.source", "github");
+                activity?.SetTag("aspire.skills.cache_hit", false);
+                return AcquisitionResult.Installed(bundle);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+            {
+                logger.LogWarning(ex, "Downloaded Aspire skills GitHub release asset {AssetName} is invalid.", asset.Name);
+                return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            logger.LogDebug(ex, "Aspire skills GitHub release acquisition failed for version {Version}. Falling back to npm if available.", version);
+            return AcquisitionResult.Unavailable();
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
     }
 
     private async Task<AcquisitionResult> InstallFromNpmAsync(
@@ -109,9 +225,7 @@ internal sealed class AspireSkillsInstaller(
                 ExpectedSourceRepository,
                 ExpectedWorkflowPath,
                 ExpectedBuildType,
-                refInfo => string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
-                           (string.Equals(refInfo.Name, $"{packageInfo.Version}", StringComparison.Ordinal) ||
-                            string.Equals(refInfo.Name, $"v{packageInfo.Version}", StringComparison.Ordinal)),
+                refInfo => IsExpectedTagRef(refInfo, packageInfo.Version.ToString()),
                 cancellationToken,
                 sriIntegrity: packageInfo.Integrity).ConfigureAwait(false);
 
@@ -153,6 +267,134 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
+    private async Task<GitHubReleaseInfo?> TryGetGitHubReleaseAsync(HttpClient httpClient, string version, CancellationToken cancellationToken)
+    {
+        foreach (var tag in GetGitHubTagCandidates(version))
+        {
+            var releaseUrl = $"{GitHubApiBaseUrl}/repos/{GitHubRepository}/releases/tags/{Uri.EscapeDataString(tag)}";
+            using var request = CreateGitHubRequest(releaseUrl);
+            using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                continue;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogDebug("Failed to fetch Aspire skills GitHub release {Tag}: HTTP {StatusCode}.", tag, response.StatusCode);
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            return ParseGitHubReleaseInfo(json);
+        }
+
+        return null;
+    }
+
+    private static GitHubReleaseInfo ParseGitHubReleaseInfo(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        var tagName = root.TryGetProperty("tag_name", out var tagNameElement) && tagNameElement.ValueKind == JsonValueKind.String
+            ? tagNameElement.GetString() ?? string.Empty
+            : string.Empty;
+
+        List<GitHubReleaseAsset> assets = [];
+        if (root.TryGetProperty("assets", out var assetsElement) && assetsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var assetElement in assetsElement.EnumerateArray())
+            {
+                if (!assetElement.TryGetProperty("name", out var nameElement) ||
+                    nameElement.ValueKind != JsonValueKind.String ||
+                    !assetElement.TryGetProperty("browser_download_url", out var downloadUrlElement) ||
+                    downloadUrlElement.ValueKind != JsonValueKind.String)
+                {
+                    continue;
+                }
+
+                var name = nameElement.GetString();
+                var downloadUrl = downloadUrlElement.GetString();
+                if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(downloadUrl))
+                {
+                    assets.Add(new GitHubReleaseAsset(name, downloadUrl));
+                }
+            }
+        }
+
+        return new GitHubReleaseInfo(tagName, assets);
+    }
+
+    private static GitHubReleaseAsset? FindGitHubReleaseAsset(GitHubReleaseInfo release, string version)
+    {
+        foreach (var assetName in GetGitHubReleaseAssetNameCandidates(version))
+        {
+            var asset = release.Assets.FirstOrDefault(asset => string.Equals(asset.Name, assetName, StringComparison.OrdinalIgnoreCase));
+            if (asset is not null)
+            {
+                return asset;
+            }
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<string> GetGitHubTagCandidates(string version)
+    {
+        if (version.StartsWith('v') || version.StartsWith('V'))
+        {
+            yield return version;
+            yield return version[1..];
+            yield break;
+        }
+
+        yield return $"v{version}";
+        yield return version;
+    }
+
+    private static IEnumerable<string> GetGitHubReleaseAssetNameCandidates(string version)
+    {
+        var unprefixedVersion = version.StartsWith('v') || version.StartsWith('V') ? version[1..] : version;
+        var prefixedVersion = $"v{unprefixedVersion}";
+
+        foreach (var archiveExtension in new[] { ".zip", ".tar.gz", ".tgz" })
+        {
+            yield return $"aspire-skills-{prefixedVersion}{archiveExtension}";
+            yield return $"aspire-skills-{unprefixedVersion}{archiveExtension}";
+        }
+    }
+
+    private static async Task<bool> TryDownloadGitHubAssetAsync(HttpClient httpClient, string downloadUrl, string archivePath, CancellationToken cancellationToken)
+    {
+        using var request = CreateGitHubRequest(downloadUrl);
+        using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        if (!response.IsSuccessStatusCode)
+        {
+            return false;
+        }
+
+        await using var fileStream = File.Create(archivePath);
+        await response.Content.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    private static HttpRequestMessage CreateGitHubRequest(string url)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.UserAgent.ParseAdd("aspire-cli");
+        request.Headers.Accept.ParseAdd("application/vnd.github+json");
+        request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
+        return request;
+    }
+
+    private static bool IsExpectedTagRef(WorkflowRefInfo refInfo, string version)
+    {
+        return string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
+               GetGitHubTagCandidates(version).Any(tag => string.Equals(refInfo.Name, tag, StringComparison.Ordinal));
+    }
+
     private async Task<AspireSkillsBundle?> TryLoadCachedBundleAsync(string cacheRoot, string version, Activity? activity, CancellationToken cancellationToken)
     {
         var cacheDirectory = GetVersionCacheDirectory(cacheRoot, version);
@@ -190,7 +432,7 @@ internal sealed class AspireSkillsInstaller(
 
         try
         {
-            ExtractTarball(archivePath, extractDir);
+            ExtractArchive(archivePath, extractDir);
 
             var bundleRoot = FindBundleRoot(extractDir);
             CopyDirectory(bundleRoot.FullName, stageDir);
@@ -198,10 +440,26 @@ internal sealed class AspireSkillsInstaller(
             var stagedBundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(stageDir), cancellationToken).ConfigureAwait(false);
             ValidateBundleVersion(stagedBundle, version);
 
+            await using var cacheLock = await AcquireCacheLockAsync(cacheRoot, version, cancellationToken).ConfigureAwait(false);
             var targetDir = GetVersionCacheDirectory(cacheRoot, version);
             if (Directory.Exists(targetDir))
             {
-                Directory.Delete(targetDir, recursive: true);
+                try
+                {
+                    var existingBundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(targetDir), cancellationToken).ConfigureAwait(false);
+                    ValidateBundleVersion(existingBundle, version);
+                    TouchLastUsed(targetDir);
+                    return existingBundle;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    logger.LogDebug(ex, "Replacing invalid Aspire skills cache directory {CacheDirectory}.", targetDir);
+                    TryDeleteDirectory(targetDir);
+                    if (Directory.Exists(targetDir))
+                    {
+                        throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Could not replace invalid Aspire skills cache directory '{0}'.", targetDir), ex);
+                    }
+                }
             }
 
             Directory.Move(stageDir, targetDir);
@@ -216,6 +474,28 @@ internal sealed class AspireSkillsInstaller(
         {
             TryDeleteDirectory(extractDir);
             TryDeleteDirectory(stageDir);
+        }
+    }
+
+    private static async Task<FileStream> AcquireCacheLockAsync(string cacheRoot, string version, CancellationToken cancellationToken)
+    {
+        var lockPath = Path.Combine(cacheRoot, $".{GetSafeFileName(version)}.lock");
+        while (true)
+        {
+            try
+            {
+                return new FileStream(
+                    lockPath,
+                    FileMode.OpenOrCreate,
+                    FileAccess.ReadWrite,
+                    FileShare.None,
+                    bufferSize: 1,
+                    FileOptions.Asynchronous | FileOptions.DeleteOnClose);
+            }
+            catch (IOException) when (!cancellationToken.IsCancellationRequested)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 
@@ -253,19 +533,26 @@ internal sealed class AspireSkillsInstaller(
 
         foreach (var directory in Directory.GetDirectories(cacheRoot))
         {
-            var name = Path.GetFileName(directory);
-            if (name.StartsWith(".", StringComparison.Ordinal) || string.Equals(name, currentVersion, StringComparison.Ordinal))
+            try
             {
-                continue;
-            }
+                var name = Path.GetFileName(directory);
+                if (name.StartsWith(".", StringComparison.Ordinal) || string.Equals(name, currentVersion, StringComparison.Ordinal))
+                {
+                    continue;
+                }
 
-            var lastUsed = GetLastUsed(directory);
-            if (now - lastUsed <= maxAge)
+                var lastUsed = GetLastUsed(directory);
+                if (now - lastUsed <= maxAge)
+                {
+                    continue;
+                }
+
+                TryDeleteDirectory(directory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                continue;
+                logger.LogDebug(ex, "Failed to evaluate Aspire skills cache directory {Directory} for cleanup.", directory);
             }
-
-            TryDeleteDirectory(directory);
         }
     }
 
@@ -279,9 +566,16 @@ internal sealed class AspireSkillsInstaller(
         return fallback;
     }
 
-    private static void TouchLastUsed(string directory)
+    private void TouchLastUsed(string directory)
     {
-        File.WriteAllText(Path.Combine(directory, ".lastused"), DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, ".lastused"), DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Failed to update Aspire skills cache last-used marker for {Directory}.", directory);
+        }
     }
 
     private static DateTimeOffset GetLastUsed(string directory)
@@ -294,6 +588,17 @@ internal sealed class AspireSkillsInstaller(
         }
 
         return Directory.GetLastWriteTimeUtc(directory);
+    }
+
+    private static void ExtractArchive(string archivePath, string destinationDirectory)
+    {
+        if (archivePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+        {
+            ExtractZipArchive(archivePath, destinationDirectory);
+            return;
+        }
+
+        ExtractTarball(archivePath, destinationDirectory);
     }
 
     private static void ExtractTarball(string tarballPath, string destinationDirectory)
@@ -312,19 +617,7 @@ internal sealed class AspireSkillsInstaller(
                 continue;
             }
 
-            var entryName = entry.Name.Replace('\\', '/');
-            if (Path.IsPathRooted(entryName) ||
-                entryName.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or ".."))
-            {
-                throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' is not safe.", entry.Name));
-            }
-
-            var destinationPath = Path.GetFullPath(Path.Combine(destinationRoot, entryName.Replace('/', Path.DirectorySeparatorChar)));
-            if (!destinationPath.StartsWith(destinationRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
-                !string.Equals(destinationPath, destinationRoot, StringComparison.Ordinal))
-            {
-                throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' escapes the extraction directory.", entry.Name));
-            }
+            var destinationPath = GetSafeArchiveDestinationPath(destinationRoot, entry.Name);
 
             switch (entry.EntryType)
             {
@@ -340,7 +633,7 @@ internal sealed class AspireSkillsInstaller(
                         Directory.CreateDirectory(destinationFileDirectory);
                     }
 
-                    entry.ExtractToFile(destinationPath, overwrite: true);
+                    entry.ExtractToFile(destinationPath, overwrite: false);
                     break;
 
                 case TarEntryType.GlobalExtendedAttributes:
@@ -351,6 +644,55 @@ internal sealed class AspireSkillsInstaller(
                     throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' has unsupported type '{1}'.", entry.Name, entry.EntryType));
             }
         }
+    }
+
+    private static void ExtractZipArchive(string archivePath, string destinationDirectory)
+    {
+        var destinationRoot = Path.GetFullPath(destinationDirectory);
+        Directory.CreateDirectory(destinationRoot);
+
+        using var archive = ZipFile.OpenRead(archivePath);
+        foreach (var entry in archive.Entries)
+        {
+            if (string.IsNullOrWhiteSpace(entry.FullName))
+            {
+                continue;
+            }
+
+            var destinationPath = GetSafeArchiveDestinationPath(destinationRoot, entry.FullName);
+            if (entry.FullName.EndsWith("/", StringComparison.Ordinal) || entry.FullName.EndsWith("\\", StringComparison.Ordinal))
+            {
+                Directory.CreateDirectory(destinationPath);
+                continue;
+            }
+
+            var destinationFileDirectory = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrEmpty(destinationFileDirectory))
+            {
+                Directory.CreateDirectory(destinationFileDirectory);
+            }
+
+            entry.ExtractToFile(destinationPath, overwrite: false);
+        }
+    }
+
+    private static string GetSafeArchiveDestinationPath(string destinationRoot, string entryName)
+    {
+        var normalizedEntryName = entryName.Replace('\\', '/');
+        if (Path.IsPathRooted(normalizedEntryName) ||
+            normalizedEntryName.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or ".."))
+        {
+            throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' is not safe.", entryName));
+        }
+
+        var destinationPath = Path.GetFullPath(Path.Combine(destinationRoot, normalizedEntryName.Replace('/', Path.DirectorySeparatorChar)));
+        if (!destinationPath.StartsWith(destinationRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
+            !string.Equals(destinationPath, destinationRoot, StringComparison.Ordinal))
+        {
+            throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Aspire skills archive entry '{0}' escapes the extraction directory.", entryName));
+        }
+
+        return destinationPath;
     }
 
     private static DirectoryInfo FindBundleRoot(string extractionDirectory)
@@ -421,9 +763,21 @@ internal sealed class AspireSkillsInstaller(
         return string.Equals(expectedHash, actualHash, StringComparison.Ordinal);
     }
 
+    private static string GetSafeFileName(string fileName)
+    {
+        var safeName = Path.GetFileName(fileName);
+        foreach (var invalidCharacter in Path.GetInvalidFileNameChars())
+        {
+            safeName = safeName.Replace(invalidCharacter, '_');
+        }
+
+        return string.IsNullOrWhiteSpace(safeName) ? $"aspire-skills-{Guid.NewGuid():N}.archive" : safeName;
+    }
+
     private enum AcquisitionStatus
     {
         Installed,
+        Unavailable,
         Failed
     }
 
@@ -434,11 +788,20 @@ internal sealed class AspireSkillsInstaller(
             return new AcquisitionResult(AcquisitionStatus.Installed, bundle, null);
         }
 
+        public static AcquisitionResult Unavailable()
+        {
+            return new AcquisitionResult(AcquisitionStatus.Unavailable, null, null);
+        }
+
         public static AcquisitionResult Failed(string message)
         {
             return new AcquisitionResult(AcquisitionStatus.Failed, null, message);
         }
     }
+
+    private sealed record GitHubReleaseInfo(string TagName, IReadOnlyList<GitHubReleaseAsset> Assets);
+
+    private sealed record GitHubReleaseAsset(string Name, string DownloadUrl);
 
     private void TryDeleteDirectory(string directory)
     {

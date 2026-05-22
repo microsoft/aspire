@@ -358,7 +358,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire skills require npm for first-time installation, and npm is not available on PATH..
+        ///   Looks up a localized string similar to Aspire skills could not be downloaded from GitHub, npm fallback is not available on PATH, and no installed Aspire skills plugin was detected..
         /// </summary>
         internal static string AspireSkillsInstaller_NpmUnavailable {
             get {
@@ -372,6 +372,15 @@ namespace Aspire.Cli.Resources {
         internal static string AspireSkillsInstaller_InvalidBundle {
             get {
                 return ResourceManager.GetString("AspireSkillsInstaller_InvalidBundle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire skills are already installed through {0}; skipping local Aspire skills bundle installation..
+        /// </summary>
+        internal static string AspireSkillsInstaller_PluginFallbackDetected {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_PluginFallbackDetected", resourceCulture);
             }
         }
 
