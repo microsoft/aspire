@@ -327,12 +327,17 @@ if [[ "$VALIDATION_MODE" == "Offline" ]]; then
 fi
 
 echo ""
-echo "Determining whether $CASK_NAME is a new upstream cask..."
-IS_NEW_CASK="$(detect_upstream_cask_is_new "$CASK_NAME")"
-if [[ "$IS_NEW_CASK" == "true" ]]; then
-  echo "Detected new upstream cask; running new-cask audit."
+if [[ "$VALIDATION_MODE" == "Offline" ]]; then
+  echo "Skipping upstream cask probe because validation mode is Offline; running standard audit."
+  IS_NEW_CASK="false"
 else
-  echo "Detected existing upstream cask; running standard audit."
+  echo "Determining whether $CASK_NAME is a new upstream cask..."
+  IS_NEW_CASK="$(detect_upstream_cask_is_new "$CASK_NAME")"
+  if [[ "$IS_NEW_CASK" == "true" ]]; then
+    echo "Detected new upstream cask; running new-cask audit."
+  else
+    echo "Detected existing upstream cask; running standard audit."
+  fi
 fi
 
 echo ""

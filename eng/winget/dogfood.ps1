@@ -98,19 +98,19 @@ function Find-Archive {
         [string]$ArchiveName
     )
 
-    $matches = @(Get-ChildItem -Path $Root -File -Recurse -Filter $ArchiveName -ErrorAction SilentlyContinue | Sort-Object FullName)
-    if ($matches.Count -eq 0) {
+    $matchedItems = @(Get-ChildItem -Path $Root -File -Recurse -Filter $ArchiveName -ErrorAction SilentlyContinue | Sort-Object FullName)
+    if ($matchedItems.Count -eq 0) {
         Write-Error "Could not find $ArchiveName under $Root."
         exit 1
     }
 
-    if ($matches.Count -gt 1) {
-        $matchList = $matches | ForEach-Object { "  $($_.FullName)" }
+    if ($matchedItems.Count -gt 1) {
+        $matchList = $matchedItems | ForEach-Object { "  $($_.FullName)" }
         Write-Error "Found multiple $ArchiveName archives under ${Root}:`n$($matchList -join "`n")"
         exit 1
     }
 
-    return $matches[0].FullName
+    return $matchedItems[0].FullName
 }
 
 function Get-DefaultArchiveRoot {

@@ -1439,7 +1439,7 @@ function Find-InstallerDogfoodScript {
         default { throw "Install mode '$InstallMode' does not use a dogfood script." }
     }
 
-    $matches = @(
+    $matchedItems = @(
         Get-ChildItem -Path $ArtifactDir -File -Recurse -Filter $scriptName -ErrorAction SilentlyContinue |
             Where-Object {
                 Get-ChildItem -Path $_.Directory.FullName -File -Filter $companionPattern -ErrorAction SilentlyContinue |
@@ -1448,16 +1448,16 @@ function Find-InstallerDogfoodScript {
             Sort-Object FullName
     )
 
-    if ($matches.Count -eq 0) {
+    if ($matchedItems.Count -eq 0) {
         throw "Could not find $scriptName co-located with $companionPattern under: $ArtifactDir"
     }
 
-    if ($matches.Count -gt 1) {
-        $matchList = ($matches | ForEach-Object { "  $($_.FullName)" }) -join [Environment]::NewLine
+    if ($matchedItems.Count -gt 1) {
+        $matchList = ($matchedItems | ForEach-Object { "  $($_.FullName)" }) -join [Environment]::NewLine
         throw "Found multiple $scriptName files co-located with $companionPattern under ${ArtifactDir}:$([Environment]::NewLine)$matchList"
     }
 
-    return $matches[0].FullName
+    return $matchedItems[0].FullName
 }
 
 function Install-AspireCliWithInstallerArtifact {

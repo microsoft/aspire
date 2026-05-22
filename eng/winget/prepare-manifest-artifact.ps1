@@ -58,20 +58,20 @@ function Get-ArchiveVersion {
 
     $prefix = "aspire-cli-$Rid-"
     $suffix = ".zip"
-    $matches = @(Get-ChildItem -Path $ArchiveRoot -File -Recurse -Filter "$prefix*$suffix" | Sort-Object FullName)
+    $matchedItems = @(Get-ChildItem -Path $ArchiveRoot -File -Recurse -Filter "$prefix*$suffix" | Sort-Object FullName)
 
-    if ($matches.Count -eq 0) {
+    if ($matchedItems.Count -eq 0) {
         Write-Error "Could not find archive '$prefix*$suffix' under '$ArchiveRoot' to infer the Aspire CLI version."
         exit 1
     }
 
-    if ($matches.Count -gt 1) {
-        $matchList = $matches | ForEach-Object { "  $($_.FullName)" }
+    if ($matchedItems.Count -gt 1) {
+        $matchList = $matchedItems | ForEach-Object { "  $($_.FullName)" }
         Write-Error "Found multiple archives matching '$prefix*$suffix' under '$ArchiveRoot':`n$($matchList -join "`n")"
         exit 1
     }
 
-    $fileName = $matches[0].Name
+    $fileName = $matchedItems[0].Name
     return $fileName.Substring($prefix.Length, $fileName.Length - $prefix.Length - $suffix.Length)
 }
 
