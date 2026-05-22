@@ -117,7 +117,16 @@
     <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(IsCliToolProject)' != 'true'">
+  <!-- Skip the templates dependency when SkipManagedBuild=true. In that mode the outer
+       build only restores/builds Aspire.Cli to satisfy the restore graph; the actual
+       shipped CLI binary is produced by the inner clipack publish (which calls Aspire.Cli
+       via <MSBuild> with explicit Properties= that drop SkipManagedBuild). If we leave
+       the templates ProjectReference active in the outer pass, the outer Debug Aspire.Cli
+       build and the inner Release+RID Aspire.Cli build both trigger Aspire.ProjectTemplates
+       Build+Pack in parallel processes; the two parallel `dotnet replace-text.cs`
+       invocations then race on the shared file-based-program cache under ~/.dotnet and one
+       exits with code 1 (MSB3073). See PR #17372 for the original failure log. -->
+  <ItemGroup Condition="'$(IsCliToolProject)' != 'true' and '$(SkipManagedBuild)' != 'true'">
     <!-- Build ordering only. Aspire.ProjectTemplates is a template package, not a code
          dependency. We need its nupkg to exist before our EmbeddedResource step (below)
          resolves; the templates project has GeneratePackageOnBuild=true so a normal Build
@@ -137,7 +146,7 @@
        Aspire.Cli.Templating.EmbeddedTemplatePackageProvider. -->
   <Target Name="_ResolveEmbeddedTemplatesNupkg"
           BeforeTargets="AssignTargetPaths;PrepareResources"
-          Condition="'$(SkipEmbeddedTemplatesNupkg)' != 'true' and '$(IsCliToolProject)' != 'true'">
+          Condition="'$(SkipEmbeddedTemplatesNupkg)' != 'true' and '$(IsCliToolProject)' != 'true' and '$(SkipManagedBuild)' != 'true'">
     <PropertyGroup>
       <_EmbeddedTemplatesNupkgPath>$(ArtifactsShippingPackagesDir)Aspire.ProjectTemplates.$(PackageVersion).nupkg</_EmbeddedTemplatesNupkgPath>
     </PropertyGroup>
