@@ -491,8 +491,26 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <para>
     /// This is commonly combined with <c>AsExisting</c> on the App Service environment (App Service Plan) and on
     /// the container registry to deploy websites into a pre-provisioned set of Azure resources without Aspire
-    /// emitting any new ACR-pull identity or ACR-pull role-assignment resources.
+    /// emitting any new ACR-pull identity or ACR-pull role-assignment resources. See
+    /// <see href="https://github.com/microsoft/aspire/issues/14382"/> for the scenario this addresses.
     /// </para>
+    /// <para>
+    /// Only the combination of an existing App Service Plan, an existing container registry, and this method
+    /// avoids emitting any new identity or role-assignment resources in the env module. Other combinations still
+    /// work but will emit additional resources:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><description>
+    ///   If the App Service Plan is marked <c>AsExisting</c> but no identity is supplied here, Aspire still emits
+    ///   a new <c>UserAssignedIdentity</c> and an <c>AcrPull</c> role assignment on the configured registry.
+    ///   </description></item>
+    ///   <item><description>
+    ///   If this method is used but the container registry is not existing (either the Aspire-generated default
+    ///   registry or a user-added registry without <c>AsExisting</c>), the registry itself is still provisioned.
+    ///   To wire the supplied identity to that newly-created registry, chain
+    ///   <c>.WithRoleAssignments(acr, ContainerRegistryBuiltInRole.AcrPull)</c> on the identity.
+    ///   </description></item>
+    /// </list>
     /// <para>
     /// If the Aspire dashboard is enabled, Aspire still provisions the dashboard website and its contributor
     /// identity. Use <see cref="WithDashboard(IResourceBuilder{AzureAppServiceEnvironmentResource}, bool)"/> with
