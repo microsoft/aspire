@@ -505,7 +505,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         var dashboardUrl = await ResolveUrlAsync(async () =>
         {
-
             // Try HTTPS first, then HTTP
             var httpsEndpoint = dashboardResource.GetEndpoint("https");
             var httpEndpoint = dashboardResource.GetEndpoint("http");
