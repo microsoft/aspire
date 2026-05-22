@@ -161,20 +161,25 @@
       <_EmbeddedTemplatesNupkgCandidate Include="$(_AllPackagesDir)**/Shipping/Aspire.ProjectTemplates.$(PackageVersion).nupkg" />
     </ItemGroup>
 
-    <!-- Fallback: if no outer build produced the nupkg, build it now in the current
-         Configuration. This covers (a) inner-loop `dotnet build src/Aspire.Cli/...` from
-         a clean tree and (b) the per-RID NativeAOT clipack flow where the outer build
-         skipped Aspire.ProjectTemplates via SkipManagedBuild.
+    <!-- Fallback: if no outer build produced the nupkg, build and pack it now in the
+         current Configuration. This covers (a) inner-loop `dotnet build src/Aspire.Cli/...`
+         from a clean tree, (b) the per-RID NativeAOT clipack flow where the outer build
+         skipped Aspire.ProjectTemplates via SkipManagedBuild, and (c) Arcade's full
+         `build.sh -build -pack` flow where the build phase and pack phase are separate
+         MSBuild invocations and the build phase doesn't pack (so the templates package
+         isn't on disk yet when Aspire.Cli's build runs, even though the templates
+         project has technically been "built").
 
-         IMPORTANT: Targets must include Build (not just Pack) because Aspire.ProjectTemplates
-         adds its template files to the Content item group via a target with
-         AfterTargets="Build". Running Pack alone produces an empty package (the package is
-         created but contains no template content, which surfaces at runtime as
-         "No templates were found in the package Aspire.ProjectTemplates@<ver>"). With
-         GeneratePackageOnBuild=true on Aspire.ProjectTemplates, Build chains into Pack
-         automatically. -->
+         IMPORTANT: Targets must be Restore;Build;Pack (in that order).
+           * Build is required because Aspire.ProjectTemplates populates its Content item
+             group via a target with AfterTargets="Build". Skipping Build produces an
+             empty package — surfaces at runtime as "No templates were found in the
+             package Aspire.ProjectTemplates@<ver>".
+           * Pack is required because Arcade's build phase suppresses
+             GeneratePackageOnBuild, so we cannot rely on Build alone to produce the
+             nupkg on disk. -->
     <MSBuild Projects="..\Aspire.ProjectTemplates\Aspire.ProjectTemplates.csproj"
-             Targets="Restore;Build"
+             Targets="Restore;Build;Pack"
              Properties="Configuration=$(Configuration)"
              Condition="'@(_EmbeddedTemplatesNupkgCandidate)' == ''" />
 
