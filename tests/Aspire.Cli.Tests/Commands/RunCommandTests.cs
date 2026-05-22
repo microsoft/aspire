@@ -335,6 +335,88 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WhenDashboardRpcFailsButAppHostStaysAlive_ShowsConnectionLostStatusUntilAppHostExits()
+    {
+        // Covers the case where a post-connection RPC (here, GetDashboardUrlsAsync) faults but
+        // the AppHost itself doesn't crash immediately. BackchannelCompletionSource is already
+        // in RanToCompletion at this point, so the project's escalation hook does not fire and
+        // pendingRun won't resolve on its own. We give the AppHost a chance to surface the
+        // real failure rather than auto-killing it, and the user gets a visible status with
+        // Ctrl+C guidance while we wait.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var dashboardRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var connectionLostStatusDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var appHostCanExit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        interactionService.ShowStatusCallback = status =>
+        {
+            if (status == RunCommandStrings.AppHostConnectionLostWaitingForExit)
+            {
+                connectionLostStatusDisplayed.TrySetResult();
+            }
+        };
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(true);
+                context.BackchannelCompletionSource?.TrySetResult(new TestAppHostBackchannel
+                {
+                    GetDashboardUrlsAsyncCallback = _ =>
+                    {
+                        dashboardRequested.TrySetResult();
+                        throw new IOException("RPC connection closed before the startup failure was observed.");
+                    }
+                });
+
+                await appHostCanExit.Task.WaitAsync(cancellationToken);
+                return CliExitCodes.FailedToDotnetRunAppHost;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var pendingCommand = result.InvokeAsync();
+
+        await dashboardRequested.Task.DefaultTimeout();
+        await connectionLostStatusDisplayed.Task.DefaultTimeout();
+
+        // The command must still be waiting for the AppHost to surface its exit code - we
+        // explicitly do not auto-tear-down the AppHost just because the RPC dropped.
+        Assert.False(pendingCommand.IsCompleted);
+
+        appHostCanExit.SetResult();
+        var exitCode = await pendingCommand.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Contains(RunCommandStrings.AppHostConnectionLostWaitingForExit, interactionService.ShownStatuses);
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("An unexpected error occurred", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("RPC connection closed", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task RunCommand_WhenAppHostRunFaultsDuringStartup_ReturnsFailureExitCode()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -692,23 +692,15 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Happy path threw before the AppHost system task completed. A
-            // backchannel-originated failure has already signalled
-            // BackchannelCompletionSource, which the project's escalation hook uses to tear
-            // down the guest/server - so pendingRun should resolve promptly. Wait for it
-            // (with the outer cancellation token plumbed through so user Ctrl+C still
-            // breaks out) and surface a single coherent AppHostExitedDuringStartupException
-            // carrying the real AppHost exit code, any captured output, and the CLI-side
-            // failure reason wrapped with the localized UnexpectedErrorOccurred template.
-            //
-            // The wrapper is applied to every unexpected startup failure so the user always
-            // sees a consistent "An unexpected error occurred: <reason>" line, with the
-            // inner reason varying by source (e.g. polyglot guest narrative, dashboard RPC
-            // fault, or a .NET AppHost exception). This mirrors the pre-PR behavior where
-            // the same exceptions fell through to RunCommand's generic exception handler
-            // (which uses the same wrapper), so the user-visible output stays identical
-            // for both .NET and polyglot AppHosts.
-            var resolution = await ResolveAppHostExitCodeAsync(pendingRun, cancellationToken).ConfigureAwait(false);
+            // Happy path threw. For post-backchannel RPC faults (e.g. GetDashboardUrlsAsync),
+            // BackchannelCompletionSource is already in RanToCompletion so the project's
+            // escalation hook can't tear things down - the AppHost may keep running until it
+            // surfaces the failure itself, or until the user breaks out. Show a status with
+            // that guidance while we wait, then wrap whatever the AppHost reports with the
+            // standard UnexpectedErrorOccurred template.
+            var resolution = await InteractionService.ShowStatusAsync(
+                RunCommandStrings.AppHostConnectionLostWaitingForExit,
+                () => ResolveAppHostExitCodeAsync(pendingRun, cancellationToken)).ConfigureAwait(false);
             DisplayRecentAppHostStartupOutput(InteractionService, outputCollector, appHostStartupOutputStartIndex);
             var failureMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             throw new AppHostExitedDuringStartupException(resolution.ExitCode, ex, failureMessage);
