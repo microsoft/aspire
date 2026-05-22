@@ -596,24 +596,25 @@ internal sealed class RunCommand : BaseCommand
             var exitCode = await (cancellationToken.CanBeCanceled
                 ? appHostFailureTask.WaitAsync(cancellationToken)
                 : appHostFailureTask).ConfigureAwait(false);
-            return new AppHostExitResolution(exitCode, Faulted: false);
+            return new AppHostExitResolution(exitCode, FaultException: null);
         }
         catch (OperationCanceledException)
         {
             // Honor user-initiated cancellation by propagating; callers expect to see it.
             throw;
         }
-        catch
+        catch (Exception ex)
         {
             // appHostFailureTask faulted instead of returning a clean exit code (e.g. an unexpected
             // exception bubbled out of project.RunAsync). Treat that as a generic AppHost failure
             // so the caller can still display captured output and surface the failure uniformly,
-            // and signal Faulted so the caller knows the AppHost itself produced no narrative.
-            return new AppHostExitResolution(CliExitCodes.FailedToDotnetRunAppHost, Faulted: true);
+            // and carry the fault exception forward so the caller can wrap it with the localized
+            // UnexpectedErrorOccurred template for display alongside any captured output.
+            return new AppHostExitResolution(CliExitCodes.FailedToDotnetRunAppHost, FaultException: ex);
         }
     }
 
-    private readonly record struct AppHostExitResolution(int ExitCode, bool Faulted);
+    private readonly record struct AppHostExitResolution(int ExitCode, Exception? FaultException);
 
     private static void ObserveFaults(Task task)
     {
@@ -659,7 +660,16 @@ internal sealed class RunCommand : BaseCommand
             // cancellation token to interrupt - pass CancellationToken.None explicitly.
             var resolution = await ResolveAppHostExitCodeAsync(pendingRun, CancellationToken.None).ConfigureAwait(false);
             DisplayRecentAppHostStartupOutput(InteractionService, outputCollector, appHostStartupOutputStartIndex);
-            throw new AppHostExitedDuringStartupException(resolution.ExitCode);
+            // If the AppHost faulted (e.g. an unexpected exception bubbled out of RunAsync
+            // before it could return an exit code), wrap the fault reason with the localized
+            // UnexpectedErrorOccurred template so the user sees a consistent
+            // "An unexpected error occurred: <reason>" line. When the AppHost returned a
+            // real exit code we already have whatever output it produced and don't need a
+            // generic wrapper - the captured output is the narrative.
+            var failureMessage = resolution.FaultException is { } faultException
+                ? string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, faultException.Message)
+                : null;
+            throw new AppHostExitedDuringStartupException(resolution.ExitCode, resolution.FaultException, failureMessage);
         }
 
         try
@@ -678,18 +688,19 @@ internal sealed class RunCommand : BaseCommand
             // down the guest/server - so pendingRun should resolve promptly. Wait for it
             // (with the outer cancellation token plumbed through so user Ctrl+C still
             // breaks out) and surface a single coherent AppHostExitedDuringStartupException
-            // carrying the real AppHost exit code, any captured output, and - only when the
-            // AppHost itself produced no narrative (it faulted instead of exiting cleanly) -
-            // the CLI-side failure reason. The failure message is critical for polyglot
-            // AppHosts where the CLI-side timeout/connection error never reaches stderr;
-            // without it the user sees only an exit code with no explanation. Conversely,
-            // when the AppHost returned a real exit code we already have whatever output it
-            // produced and should not double up with a generic backchannel message.
+            // carrying the real AppHost exit code, any captured output, and the CLI-side
+            // failure reason wrapped with the localized UnexpectedErrorOccurred template.
+            //
+            // The wrapper is applied to every unexpected startup failure so the user always
+            // sees a consistent "An unexpected error occurred: <reason>" line, with the
+            // inner reason varying by source (e.g. polyglot guest narrative, dashboard RPC
+            // fault, or a .NET AppHost exception). This mirrors the pre-PR behavior where
+            // the same exceptions fell through to RunCommand's generic exception handler
+            // (which uses the same wrapper), so the user-visible output stays identical
+            // for both .NET and polyglot AppHosts.
             var resolution = await ResolveAppHostExitCodeAsync(pendingRun, cancellationToken).ConfigureAwait(false);
             DisplayRecentAppHostStartupOutput(InteractionService, outputCollector, appHostStartupOutputStartIndex);
-            var failureMessage = resolution.Faulted
-                ? string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message)
-                : null;
+            var failureMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             throw new AppHostExitedDuringStartupException(resolution.ExitCode, ex, failureMessage);
         }
     }

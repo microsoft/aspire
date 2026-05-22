@@ -258,7 +258,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_PrefersAppHostStartupFailureOverDashboardRpcFailure()
+    public async Task RunCommand_WhenDashboardRpcFailsAndAppHostExits_SurfacesWrappedErrorWithCapturedOutput()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -316,9 +316,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         // Once the dashboard RPC has been requested, the happy-path task has thrown and the run is
         // waiting on the AppHost system task to surface its exit code. Releasing appHostCanExit
-        // lets the project's RunAsync return the real AppHost failure exit code, which the CLI
-        // should prefer over the transient RPC error and surface alongside the captured output
-        // (e.g. the DCP "must specify a port" message).
+        // lets the project's RunAsync return the real AppHost failure exit code, exercising the
+        // race-protection in WaitForAppHostStartupAsync. The CLI must not hang and must surface
+        // the underlying RPC failure through the localized UnexpectedErrorOccurred wrapper so
+        // every unexpected startup failure carries the same "An unexpected error occurred:"
+        // line, with the inner reason describing the actual source (here, the dashboard RPC
+        // IOException). The AppHost's own narrative (e.g. the DCP "must specify a port"
+        // message) is also preserved alongside the wrapped failure.
         await dashboardRequested.Task.DefaultTimeout();
         appHostCanExit.SetResult();
 
@@ -326,8 +330,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
         Assert.Contains(interactionService.DisplayedLines, line => line.Line == "Endpoint 'http' must specify a port when isProxied is false.");
-        Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("RPC connection closed", StringComparison.Ordinal));
-        Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("Unexpected error", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("An unexpected error occurred", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("RPC connection closed", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -388,7 +392,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
         Assert.Contains(interactionService.DisplayedLines, line => line.Line.Contains("AppHost failed before returning an exit code", StringComparison.Ordinal));
         Assert.DoesNotContain(interactionService.DisplayedLines, line => line.Line.Contains("MSB3277", StringComparison.Ordinal));
-        Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("Unexpected error", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("An unexpected error occurred", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("RunAsync failed before returning an exit code", StringComparison.Ordinal));
     }
 
     [Fact]
