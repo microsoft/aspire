@@ -79,6 +79,39 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
 
         await auto.WaitForSuccessPromptAsync(counter);
 
+        // When testing a PR-built CLI from a local nupkg directory, the scaffolded AppHost
+        // references Aspire.AppHost.Sdk@<PR-version> which is not on any public NuGet feed.
+        // Drop a NuGet.config in the working directory so `dotnet build` (invoked by
+        // `aspire run`) picks up the mounted /tmp/aspire-nupkg-source via directory
+        // traversal. The dotnet-tool-install --configfile only applies to the tool install
+        // itself, not to subsequent project builds.
+        if (strategy.NupkgSourcePath is not null)
+        {
+            await auto.TypeAsync("cat > NuGet.config <<'EOF'");
+            await auto.EnterAsync();
+            await auto.TypeAsync("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
+            await auto.EnterAsync();
+            await auto.TypeAsync("<configuration>");
+            await auto.EnterAsync();
+            await auto.TypeAsync("  <packageSources>");
+            await auto.EnterAsync();
+            await auto.TypeAsync("    <clear />");
+            await auto.EnterAsync();
+            await auto.TypeAsync("    <add key=\"local-pr\" value=\"/tmp/aspire-nupkg-source\" />");
+            await auto.EnterAsync();
+            await auto.TypeAsync("    <add key=\"dotnet9\" value=\"https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json\" />");
+            await auto.EnterAsync();
+            await auto.TypeAsync("    <add key=\"nuget.org\" value=\"https://api.nuget.org/v3/index.json\" />");
+            await auto.EnterAsync();
+            await auto.TypeAsync("  </packageSources>");
+            await auto.EnterAsync();
+            await auto.TypeAsync("</configuration>");
+            await auto.EnterAsync();
+            await auto.TypeAsync("EOF");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+        }
+
         // Create a new project using aspire new
         await auto.AspireNewAsync("AspireToolApp", counter);
 
