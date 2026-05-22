@@ -308,63 +308,62 @@ internal sealed class RunCommand : BaseCommand
                 InteractionService.DisplayMessage(KnownEmojis.Bug, InteractionServiceStrings.WaitingForDebuggerToAttachToAppHost);
             }
 
-            // Now wait for the backchannel to be established
-            IAppHostCliBackchannel backchannel;
-            using (var waitForBackchannelActivity = _profilingTelemetry.StartRunAppHostWaitForBackchannel())
-            {
-                backchannel = await InteractionService.ShowStatusAsync(
-                    RunCommandStrings.ConnectingToAppHost,
-                    async () => await WaitForStartupOperationOrAppHostExitAsync(
-                        ct => backchannelCompletionSource.Task.WaitAsync(ct),
-                        pendingRun,
-                        InteractionService,
-                        DisplayAppHostStartupOutput,
-                        cancellationToken));
-                waitForBackchannelActivity.SetAppHostBackchannelConnected(true);
-            }
-
-            // Set up log capture - writes to unified CLI log file
             using var logCaptureCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, logCaptureCancellationSource.Token);
+            var pendingLogCapture = Task.CompletedTask;
 
-            try
+            async Task<AppHostStartupResult> RunStartupHappyPathAsync(CancellationToken startupCancellationToken)
             {
-                // Get dashboard URLs
+                IAppHostCliBackchannel backchannel;
+                using (var waitForBackchannelActivity = _profilingTelemetry.StartRunAppHostWaitForBackchannel())
+                {
+                    backchannel = await InteractionService.ShowStatusAsync(
+                        RunCommandStrings.ConnectingToAppHost,
+                        async () => await backchannelCompletionSource.Task.WaitAsync(startupCancellationToken).ConfigureAwait(false));
+                    waitForBackchannelActivity.SetAppHostBackchannelConnected(true);
+                }
+
+                // Set up log capture - writes to unified CLI log file
+                pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, logCaptureCancellationSource.Token);
+
                 DashboardUrlsState dashboardUrls;
                 using (var getDashboardUrlsActivity = _profilingTelemetry.StartRunAppHostGetDashboardUrls())
                 {
                     dashboardUrls = await InteractionService.ShowStatusAsync(
                         RunCommandStrings.StartingDashboard,
-                        async () => await WaitForStartupOperationOrAppHostExitAsync(
-                            ct => backchannel.GetDashboardUrlsAsync(ct),
-                            pendingRun,
-                            InteractionService,
-                            DisplayAppHostStartupOutput,
-                            cancellationToken));
+                        async () => await backchannel.GetDashboardUrlsAsync(startupCancellationToken).ConfigureAwait(false));
                     getDashboardUrlsActivity.SetAppHostDashboardHealthy(dashboardUrls.DashboardHealthy);
                 }
+
+                if (IsDetachedStartChild())
+                {
+                    var observedExitCode = await ObserveEarlyDetachedStartupExitAsync(pendingRun, startupCancellationToken).ConfigureAwait(false);
+                    if (observedExitCode is { } exitCode)
+                    {
+                        throw new AppHostExitedDuringStartupException(exitCode);
+                    }
+                }
+
+                await backchannel.NotifyAppHostReadyAsync(startupCancellationToken).ConfigureAwait(false);
+
+                return new AppHostStartupResult(backchannel, dashboardUrls);
+            }
+
+            try
+            {
+                var startup = await WaitForAppHostStartupAsync(
+                    RunStartupHappyPathAsync,
+                    pendingRun,
+                    InteractionService,
+                    DisplayAppHostStartupOutput,
+                    cancellationToken).ConfigureAwait(false);
+
+                var backchannel = startup.Backchannel;
+                var dashboardUrls = startup.DashboardUrls;
 
                 if (dashboardUrls.DashboardHealthy is false)
                 {
                     InteractionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.DashboardFailedToStart);
                 }
-
-                if (IsDetachedStartChild())
-                {
-                    var observedExitCode = await ObserveEarlyDetachedStartupExitAsync(pendingRun, cancellationToken).ConfigureAwait(false);
-                    if (observedExitCode is { } exitCode)
-                    {
-                        return CreateRunExitResult(exitCode);
-                    }
-
-                }
-
-                await WaitForStartupOperationOrAppHostExitAsync(
-                    ct => backchannel.NotifyAppHostReadyAsync(ct),
-                    pendingRun,
-                    InteractionService,
-                    DisplayAppHostStartupOutput,
-                    cancellationToken).ConfigureAwait(false);
 
                 // Display the UX
                 var appHostRelativePath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, effectiveAppHostFile.FullName);
@@ -621,44 +620,44 @@ internal sealed class RunCommand : BaseCommand
         return null;
     }
 
-    private static async Task<T> WaitForStartupOperationOrAppHostExitAsync<T>(
-        Func<CancellationToken, Task<T>> operationFactory,
-        Task<int> pendingRun,
+    private static async Task<T> WaitForAppHostStartupAsync<T>(
+        Func<CancellationToken, Task<T>> startupFactory,
+        Task<int> appHostFailureTask,
         IInteractionService interactionService,
         Action displayAppHostStartupOutput,
         CancellationToken cancellationToken)
     {
-        using var operationCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var startupOperation = StartStartupOperation(operationFactory, operationCts.Token);
+        using var startupCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var happyPathTask = StartStartupTask(startupFactory, startupCts.Token);
 
-        var completedTask = await Task.WhenAny(startupOperation, pendingRun).ConfigureAwait(false);
-        if (completedTask == pendingRun)
+        var completedTask = await Task.WhenAny(happyPathTask, appHostFailureTask).ConfigureAwait(false);
+        if (completedTask == appHostFailureTask)
         {
-            ObserveFaults(startupOperation);
-            await operationCts.CancelAsync().ConfigureAwait(false);
-            throw new AppHostExitedDuringStartupException(await GetAppHostStartupExitCodeAndDisplayOutputAsync(pendingRun, displayAppHostStartupOutput).ConfigureAwait(false));
+            ObserveFaults(happyPathTask);
+            await startupCts.CancelAsync().ConfigureAwait(false);
+            throw new AppHostExitedDuringStartupException(await GetAppHostStartupExitCodeAndDisplayOutputAsync(appHostFailureTask, displayAppHostStartupOutput).ConfigureAwait(false));
         }
 
         try
         {
-            return await startupOperation.ConfigureAwait(false);
+            return await happyPathTask.ConfigureAwait(false);
         }
-        catch (OperationCanceledException ex) when (ex.CancellationToken == operationCts.Token && cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException ex) when (ex.CancellationToken == startupCts.Token && cancellationToken.IsCancellationRequested)
         {
             throw new OperationCanceledException(ex.Message, ex, cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            await WaitForAppHostExitAfterStartupOperationFailureAsync(pendingRun, interactionService, displayAppHostStartupOutput, cancellationToken).ConfigureAwait(false);
+            await WaitForAppHostExitAfterStartupFailureAsync(appHostFailureTask, interactionService, displayAppHostStartupOutput, cancellationToken).ConfigureAwait(false);
             throw;
         }
     }
 
-    private static Task<T> StartStartupOperation<T>(Func<CancellationToken, Task<T>> operationFactory, CancellationToken cancellationToken)
+    private static Task<T> StartStartupTask<T>(Func<CancellationToken, Task<T>> startupFactory, CancellationToken cancellationToken)
     {
         try
         {
-            return operationFactory(cancellationToken);
+            return startupFactory(cancellationToken);
         }
         catch (Exception ex)
         {
@@ -675,38 +674,19 @@ internal sealed class RunCommand : BaseCommand
             TaskScheduler.Default);
     }
 
-    private static async Task WaitForStartupOperationOrAppHostExitAsync(
-        Func<CancellationToken, Task> operationFactory,
-        Task<int> pendingRun,
+    private static async Task WaitForAppHostExitAfterStartupFailureAsync(
+        Task<int> appHostFailureTask,
         IInteractionService interactionService,
         Action displayAppHostStartupOutput,
         CancellationToken cancellationToken)
     {
-        await WaitForStartupOperationOrAppHostExitAsync(
-            async ct =>
-            {
-                await operationFactory(ct).ConfigureAwait(false);
-                return true;
-            },
-            pendingRun,
-            interactionService,
-            displayAppHostStartupOutput,
-            cancellationToken).ConfigureAwait(false);
-    }
-
-    private static async Task WaitForAppHostExitAfterStartupOperationFailureAsync(
-        Task<int> pendingRun,
-        IInteractionService interactionService,
-        Action displayAppHostStartupOutput,
-        CancellationToken cancellationToken)
-    {
-        if (pendingRun.IsCompleted)
+        if (appHostFailureTask.IsCompleted)
         {
-            throw new AppHostExitedDuringStartupException(await GetAppHostStartupExitCodeAndDisplayOutputAsync(pendingRun, displayAppHostStartupOutput).ConfigureAwait(false));
+            throw new AppHostExitedDuringStartupException(await GetAppHostStartupExitCodeAndDisplayOutputAsync(appHostFailureTask, displayAppHostStartupOutput).ConfigureAwait(false));
         }
 
         interactionService.DisplayMessage(KnownEmojis.Warning, RunCommandStrings.AppHostConnectionLostWaitingForExit);
-        var exitCode = await GetAppHostStartupExitCodeAndDisplayOutputAsync(pendingRun.WaitAsync(cancellationToken), displayAppHostStartupOutput).ConfigureAwait(false);
+        var exitCode = await GetAppHostStartupExitCodeAndDisplayOutputAsync(appHostFailureTask.WaitAsync(cancellationToken), displayAppHostStartupOutput).ConfigureAwait(false);
         throw new AppHostExitedDuringStartupException(exitCode);
     }
 
@@ -736,6 +716,8 @@ internal sealed class RunCommand : BaseCommand
             throw new AppHostExitedDuringStartupException(CliExitCodes.FailedToDotnetRunAppHost, ex);
         }
     }
+
+    private sealed record AppHostStartupResult(IAppHostCliBackchannel Backchannel, DashboardUrlsState DashboardUrls);
 
     private sealed class AppHostExitedDuringStartupException(int exitCode, Exception? innerException = null) : Exception("The AppHost exited during startup.", innerException)
     {
