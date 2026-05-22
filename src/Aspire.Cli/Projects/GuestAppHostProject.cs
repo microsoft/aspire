@@ -479,6 +479,39 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // We signal this when the backchannel is ready, RunCommand uses it for UX
             var backchannelCompletionSource = context.BackchannelCompletionSource ?? new TaskCompletionSource<IAppHostCliBackchannel>();
 
+            // Internal escalation CTS for the AppHost system. We cancel this when something fatal
+            // happens to either the server or the guest (e.g. backchannel polling fails after the
+            // 60s timeout, the server exits unexpectedly) so the remaining process gets torn down
+            // promptly. Without this, a hung guest can keep pendingRun alive forever after the CLI
+            // has already given up on the backchannel, causing aspire run/start to hang instead of
+            // surfacing the failure. Linked to the outer cancellationToken so user Ctrl+C still
+            // propagates.
+            using var appHostSystemCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var appHostSystemToken = appHostSystemCts.Token;
+
+            // When the backchannel polling task gives up (timeout, server process exit, or other
+            // fatal connection error), escalate to tearing down the whole AppHost system. The
+            // BackchannelCompletionSource only signals readiness/connectivity - it never causes the
+            // server or guest to be killed on its own, so we wire that here.
+            _ = backchannelCompletionSource.Task.ContinueWith(
+                t =>
+                {
+                    if (t.IsFaulted && !appHostSystemCts.IsCancellationRequested)
+                    {
+                        try
+                        {
+                            appHostSystemCts.Cancel();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // RunAsync already returned and disposed the CTS; nothing to do.
+                        }
+                    }
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
             int guestExitCode;
             OutputCollector? guestOutput;
             IGuestProcessLauncher? launcher = null;
@@ -557,22 +590,50 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     // the AppHost is invoked. Defer polling the server backchannel until the launcher has
                     // started or delegated the AppHost so those early failures don't leave the CLI waiting
                     // on an unused stream.
-                    _ = StartBackchannelConnectionAsync(appHostServerProcess, backchannelSocketPath, backchannelCompletionSource, enableHotReload, startProjectContext, cancellationToken);
+                    //
+                    // Use the AppHost system token so that a guest-side failure (which faults the
+                    // backchannel completion source and cancels appHostSystemCts) stops the polling loop
+                    // promptly.
+                    _ = StartBackchannelConnectionAsync(appHostServerProcess, backchannelSocketPath, backchannelCompletionSource, enableHotReload, startProjectContext, appHostSystemToken);
                     return Task.CompletedTask;
                 }
 
+                // Pass appHostSystemToken so a fatal backchannel failure (or user cancellation, since
+                // appHostSystemCts is linked to cancellationToken) tears down the guest process. The
+                // launcher will kill the guest's process tree when this token cancels.
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
-                    appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, cancellationToken);
+                    appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, appHostSystemToken);
             }
 
-            // A non-zero exit code at this point means the in-CLI portion of the guest run
-            // (typically a PreExecute step like `tsc --noEmit` for TypeScript) failed before
-            // the actual AppHost was launched. Surface the failure regardless of launcher
-            // type, otherwise the extension flow would silently hang in
-            // appHostServerProcess.WaitForExitAsync waiting for an apphost that was never started.
+            // If the user cancelled (Ctrl+C), surface that as cancellation instead of a "guest failed"
+            // run. ProcessGuestLauncher swallows the OperationCanceledException internally so the
+            // process exit code can flow back, so we re-derive cancellation from the outer token here.
+            if (cancellationToken.IsCancellationRequested)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+            }
+
+            // A non-zero exit code at this point means either:
+            //  - The in-CLI portion of the guest run (e.g. a TypeScript PreExecute `tsc --noEmit` step)
+            //    failed before the actual AppHost was launched.
+            //  - The guest AppHost itself failed (syntax error, unhandled exception, etc).
+            //  - The AppHost system escalation killed the guest because the server backchannel never
+            //    came up (appHostSystemCts was cancelled by a backchannel failure). In this case the
+            //    guest's own output may be empty - the relevant diagnostics are in the server output
+            //    (e.g. DCP model validation errors).
+            // Surface the failure regardless of launcher type, otherwise the extension flow would
+            // silently hang in appHostServerProcess.WaitForExitAsync waiting for an apphost that was
+            // never started.
             if (guestExitCode != 0)
             {
                 _logger.LogError("{Language} apphost exited with code {ExitCode}", DisplayName, guestExitCode);
+
+                // Merge any captured AppHost server output into context.OutputCollector so RunCommand's
+                // post-failure UX (DisplayRecentAppHostStartupOutput) surfaces it. This is especially
+                // important when the run failed because of a server-side issue like a DCP model
+                // validation error that the user would otherwise never see - the guest is just hung
+                // waiting on the RPC at that point and produces no output of its own.
+                MergeServerOutputIntoContextCollector(context, appHostServerOutputCollector);
 
                 // Surface the captured output (e.g. tsc errors from a TypeScript PreExecute step)
                 // so the user can see why the apphost failed. In the extension flow,
@@ -1104,6 +1165,33 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private static string GetBackchannelSocketPath()
     {
         return CliPathHelper.CreateUnixDomainSocketPath("cli.sock");
+    }
+
+    /// <summary>
+    /// Copies the AppHost server's captured output into <see cref="AppHostProjectContext.OutputCollector"/>
+    /// so RunCommand's post-failure UX (which only reads from context.OutputCollector) can surface
+    /// server-side diagnostics like DCP model validation errors. The build/run collector lives on the
+    /// context and is the canonical place for AppHost output; the server's collector is internal to
+    /// AppHostServerSession and isn't otherwise visible to commands.
+    /// </summary>
+    private static void MergeServerOutputIntoContextCollector(AppHostProjectContext context, OutputCollector serverOutput)
+    {
+        if (context.OutputCollector is not { } target || ReferenceEquals(target, serverOutput))
+        {
+            return;
+        }
+
+        foreach (var (stream, line) in serverOutput.GetLines())
+        {
+            if (stream == OutputLineStream.StdErr)
+            {
+                target.AppendError(line);
+            }
+            else
+            {
+                target.AppendOutput(line);
+            }
+        }
     }
 
     /// <summary>

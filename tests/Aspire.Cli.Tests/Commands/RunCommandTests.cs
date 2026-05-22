@@ -267,15 +267,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
 
-        var connectionLostMessageDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        interactionService.DisplayMessageCallback = (emoji, message, _) =>
-        {
-            if (emoji.Equals(KnownEmojis.Warning) && message == RunCommandStrings.AppHostConnectionLostWaitingForExit)
-            {
-                connectionLostMessageDisplayed.TrySetResult();
-            }
-        };
-
         var projectLocator = new TestProjectLocator
         {
             UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
@@ -322,15 +313,18 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"run --apphost {appHostFile.FullName}");
 
         var pendingCommand = result.InvokeAsync();
-        await connectionLostMessageDisplayed.Task.DefaultTimeout();
 
-        Assert.False(pendingCommand.IsCompleted);
-
+        // Once the dashboard RPC has been requested, the happy-path task has thrown and the run is
+        // waiting on the AppHost system task to surface its exit code. Releasing appHostCanExit
+        // lets the project's RunAsync return the real AppHost failure exit code, which the CLI
+        // should prefer over the transient RPC error and surface alongside the captured output
+        // (e.g. the DCP "must specify a port" message).
+        await dashboardRequested.Task.DefaultTimeout();
         appHostCanExit.SetResult();
+
         var exitCode = await pendingCommand.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
-        Assert.Contains(interactionService.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == RunCommandStrings.AppHostConnectionLostWaitingForExit);
         Assert.Contains(interactionService.DisplayedLines, line => line.Line == "Endpoint 'http' must specify a port when isProxied is false.");
         Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("RPC connection closed", StringComparison.Ordinal));
         Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("Unexpected error", StringComparison.Ordinal));

@@ -133,7 +133,38 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        await process.WaitForExitAsync(cancellationToken);
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // The guest process is the AppHost's primary process for this language. When the caller
+            // cancels - either because the user pressed Ctrl+C or because a fatal startup condition
+            // (e.g. the AppHost server backchannel timed out) escalated into a teardown - we must kill
+            // the process tree, otherwise the AppHost stays alive after the CLI returns and the run
+            // appears to hang from the user's perspective.
+            //
+            // We don't rethrow the OperationCanceledException because the caller in GuestAppHostProject
+            // uses the returned exit code to distinguish user cancellation from internal teardown
+            // (e.g. surfacing captured output when the guest was killed because the AppHost system
+            // failed). Wait without honoring cancellation so the OS reports the final exit code and
+            // the redirected output streams have time to drain.
+            if (!process.HasExited)
+            {
+                try
+                {
+                    process.Kill(entireProcessTree: true);
+                }
+                catch (Exception killEx)
+                {
+                    _logger.LogDebug(killEx, "Failed to kill guest process {ProcessId} after cancellation", process.Id);
+                }
+            }
+
+            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+
         activity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, process.ExitCode);
         AddEvent(activity, ProfilingTelemetry.Events.GuestProcessExited, TelemetryConstants.Tags.ProcessExitCode, process.ExitCode);
 
