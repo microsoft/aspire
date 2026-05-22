@@ -692,18 +692,27 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // Happy path threw. For post-backchannel RPC faults (e.g. GetDashboardUrlsAsync),
-            // BackchannelCompletionSource is already in RanToCompletion so the project's
-            // escalation hook can't tear things down - the AppHost may keep running until it
-            // surfaces the failure itself, or until the user breaks out. Show a status with
-            // that guidance while we wait, then wrap whatever the AppHost reports with the
-            // standard UnexpectedErrorOccurred template.
-            var resolution = await InteractionService.ShowStatusAsync(
-                RunCommandStrings.AppHostConnectionLostWaitingForExit,
-                () => ResolveAppHostExitCodeAsync(pendingRun, cancellationToken)).ConfigureAwait(false);
-            DisplayRecentAppHostStartupOutput(InteractionService, outputCollector, appHostStartupOutputStartIndex);
             var failureMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
-            throw new AppHostExitedDuringStartupException(resolution.ExitCode, ex, failureMessage);
+            DisplayRecentAppHostStartupOutput(InteractionService, outputCollector, appHostStartupOutputStartIndex);
+
+            if (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
+            {
+                // The backchannel connection itself died, so the AppHost is dying too. Wait for it
+                // to exit so we can surface its real exit code/captured output rather than a
+                // generic CLI-side failure. BackchannelCompletionSource is already RanToCompletion
+                // here so the project's escalation hook can't tear things down for us; show a
+                // status that tells the user how to break out of the wait.
+                var resolution = await InteractionService.ShowStatusAsync(
+                    RunCommandStrings.AppHostConnectionLostWaitingForExit,
+                    () => ResolveAppHostExitCodeAsync(pendingRun, cancellationToken)).ConfigureAwait(false);
+                throw new AppHostExitedDuringStartupException(resolution.ExitCode, ex, failureMessage);
+            }
+
+            // Server-side RPC handler faulted (e.g. GetDashboardUrlsAsync threw) but the channel
+            // is still alive and the AppHost may keep running indefinitely. The RPC fault payload
+            // is already the real cause, so surface it immediately and let normal command teardown
+            // shut the AppHost down. This mirrors pre-PR behavior for these failures.
+            throw new AppHostExitedDuringStartupException(CliExitCodes.FailedToDotnetRunAppHost, ex, failureMessage);
         }
     }
 

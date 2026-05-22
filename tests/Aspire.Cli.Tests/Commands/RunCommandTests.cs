@@ -24,6 +24,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
+using StreamJsonRpc;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -258,8 +259,13 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunCommand_WhenDashboardRpcFailsAndAppHostExits_SurfacesWrappedErrorWithCapturedOutput()
+    public async Task RunCommand_WhenBackchannelDisconnectsDuringStartup_WaitsForAppHostExitAndSurfacesWrappedError()
     {
+        // Covers the catastrophic-disconnect path: the backchannel itself died (e.g. AppHost
+        // crashed mid-startup) so the GetDashboardUrlsAsync call surfaces a ConnectionLostException.
+        // We want to give the dying AppHost a chance to write a final error to its own captured
+        // output before we surface the CLI-side wrapper, so the CLI waits on pendingRun (with a
+        // Ctrl+C-aware status) and then reports both the AppHost narrative and the wrapped fault.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
 
@@ -285,7 +291,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                     GetDashboardUrlsAsyncCallback = _ =>
                     {
                         dashboardRequested.TrySetResult();
-                        throw new IOException("RPC connection closed before the startup failure was observed.");
+                        throw new ConnectionLostException("Backchannel dropped while fetching dashboard URLs.");
                     }
                 });
 
@@ -314,35 +320,28 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var pendingCommand = result.InvokeAsync();
 
-        // Once the dashboard RPC has been requested, the happy-path task has thrown and the run is
-        // waiting on the AppHost system task to surface its exit code. Releasing appHostCanExit
-        // lets the project's RunAsync return the real AppHost failure exit code, exercising the
-        // race-protection in WaitForAppHostStartupAsync. The CLI must not hang and must surface
-        // the underlying RPC failure through the localized UnexpectedErrorOccurred wrapper so
-        // every unexpected startup failure carries the same "An unexpected error occurred:"
-        // line, with the inner reason describing the actual source (here, the dashboard RPC
-        // IOException). The AppHost's own narrative (e.g. the DCP "must specify a port"
-        // message) is also preserved alongside the wrapped failure.
+        // The backchannel connection died, so the CLI is waiting on pendingRun for the AppHost to
+        // surface its real exit code/output. The command must not complete until the AppHost does.
         await dashboardRequested.Task.DefaultTimeout();
         appHostCanExit.SetResult();
 
         var exitCode = await pendingCommand.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Contains(RunCommandStrings.AppHostConnectionLostWaitingForExit, interactionService.ShownStatuses);
         Assert.Contains(interactionService.DisplayedLines, line => line.Line == "Endpoint 'http' must specify a port when isProxied is false.");
         Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("An unexpected error occurred", StringComparison.Ordinal));
-        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("RPC connection closed", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("Backchannel dropped", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task RunCommand_WhenDashboardRpcFailsButAppHostStaysAlive_ShowsConnectionLostStatusUntilAppHostExits()
+    public async Task RunCommand_WhenDashboardRpcHandlerFaultsButConnectionStaysAlive_SurfacesImmediatelyWithoutWaiting()
     {
-        // Covers the case where a post-connection RPC (here, GetDashboardUrlsAsync) faults but
-        // the AppHost itself doesn't crash immediately. BackchannelCompletionSource is already
-        // in RanToCompletion at this point, so the project's escalation hook does not fire and
-        // pendingRun won't resolve on its own. We give the AppHost a chance to surface the
-        // real failure rather than auto-killing it, and the user gets a visible status with
-        // Ctrl+C guidance while we wait.
+        // Covers the server-side-handler-fault path: the RPC channel is alive and the AppHost is
+        // still running, but GetDashboardUrlsAsync's server-side handler threw. There is no
+        // catastrophic exit to wait for - the RPC payload is already the real cause, so the CLI
+        // must surface the wrapped error immediately rather than hanging on pendingRun. This
+        // preserves pre-PR behavior for this failure shape.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
 
@@ -357,16 +356,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         };
 
         var dashboardRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var connectionLostStatusDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var appHostCanExit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        interactionService.ShowStatusCallback = status =>
-        {
-            if (status == RunCommandStrings.AppHostConnectionLostWaitingForExit)
-            {
-                connectionLostStatusDisplayed.TrySetResult();
-            }
-        };
 
         var projectFactory = new TestAppHostProjectFactory
         {
@@ -378,7 +368,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                     GetDashboardUrlsAsyncCallback = _ =>
                     {
                         dashboardRequested.TrySetResult();
-                        throw new IOException("RPC connection closed before the startup failure was observed.");
+                        throw new IOException("Dashboard URL handler threw.");
                     }
                 });
 
@@ -400,20 +390,17 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var pendingCommand = result.InvokeAsync();
 
-        await dashboardRequested.Task.DefaultTimeout();
-        await connectionLostStatusDisplayed.Task.DefaultTimeout();
-
-        // The command must still be waiting for the AppHost to surface its exit code - we
-        // explicitly do not auto-tear-down the AppHost just because the RPC dropped.
-        Assert.False(pendingCommand.IsCompleted);
-
-        appHostCanExit.SetResult();
+        // The command must surface the wrapped error and return without waiting for the AppHost
+        // to exit, since the channel is still alive and the AppHost is not necessarily exiting.
         var exitCode = await pendingCommand.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
-        Assert.Contains(RunCommandStrings.AppHostConnectionLostWaitingForExit, interactionService.ShownStatuses);
+        Assert.DoesNotContain(RunCommandStrings.AppHostConnectionLostWaitingForExit, interactionService.ShownStatuses);
         Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("An unexpected error occurred", StringComparison.Ordinal));
-        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("RPC connection closed", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedErrors, error => error.Contains("Dashboard URL handler threw", StringComparison.Ordinal));
+
+        // Release the stub project task so the background callback can complete and not leak.
+        appHostCanExit.SetResult();
     }
 
     [Fact]
