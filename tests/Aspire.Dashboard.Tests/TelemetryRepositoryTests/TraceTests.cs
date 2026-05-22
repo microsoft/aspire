@@ -1361,6 +1361,68 @@ public class TraceTests
     }
 
     [Fact]
+    public void GetTraces_DurationFilter_AppliesTraceLevelDuration()
+    {
+        // Verifies that the duration filter uses the trace's overall duration (first span
+        // start to latest span end), not individual span durations. A trace with a 100ms
+        // root span containing a 5ms child span should match "> 50ms" (trace is 100ms)
+        // but NOT "< 10ms" (even though the child span is only 5ms).
+        var repository = CreateRepository();
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "resource1", instanceId: "123"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Root span: 100ms duration
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMilliseconds(0), endTime: s_testTime.AddMilliseconds(100)),
+                            // Child span: 5ms duration (well under any "short" threshold)
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMilliseconds(10), endTime: s_testTime.AddMilliseconds(15), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+
+        var resourceKey = new ResourceKey("resource1", InstanceId: null);
+
+        // Duration filter "> 50ms" should match because trace duration is 100ms.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = resourceKey,
+            FilterText = string.Empty,
+            StartIndex = 0,
+            Count = 10,
+            Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.GreaterThan, Value = "50" }]
+        });
+
+        Assert.Single(traces.PagedResult.Items);
+
+        // Duration filter "< 10ms" should NOT match because trace duration is 100ms,
+        // even though the child span is only 5ms.
+        traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = resourceKey,
+            FilterText = string.Empty,
+            StartIndex = 0,
+            Count = 10,
+            Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.LessThan, Value = "10" }]
+        });
+
+        Assert.Empty(traces.PagedResult.Items);
+    }
+
+    [Fact]
     public void GetTraces_NotEqualFilter_NonMatchingValue_ReturnsTrace()
     {
         // Arrange

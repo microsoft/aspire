@@ -802,7 +802,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             DialogService,
             DialogService.CreateDialogCallback(this, HandleFilterDialog),
             propertyKeys: GetTraceSpanPropertyKeys(),
-            knownKeys: [.. KnownTraceFields.AllFields, KnownTraceFields.DurationField],
+            knownKeys: KnownTraceFields.AllFields,
             getFieldValues: GetTraceSpanFieldValues,
             FilterLoc);
     }
