@@ -41,3 +41,24 @@ internal sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfigurati
     [JsonPropertyName("project_path")]
     public string ProjectPath { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Launch configuration for browser-based debugging (e.g., Blazor WebAssembly).
+/// The IDE receives this and launches a debug-enabled browser navigated to the app URL,
+/// then connects a debug proxy (e.g., BrowserDebugProxy for .NET WASM) via CDP.
+/// </summary>
+internal sealed class BrowserDebugLaunchConfiguration() : ExecutableLaunchConfiguration("browser-debug")
+{
+    /// <summary>
+    /// Absolute path to the WASM client .csproj file.
+    /// The IDE uses this to locate assemblies, PDBs, and source files for symbol resolution.
+    /// </summary>
+    [JsonPropertyName("project_path")]
+    public string ProjectPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// URL where the WASM application is served. The IDE navigates the debug browser here.
+    /// </summary>
+    [JsonPropertyName("app_url")]
+    public string AppUrl { get; set; } = string.Empty;
+}

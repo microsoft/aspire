@@ -605,6 +605,16 @@ internal sealed class ApplicationOrchestrator
         await _dcpExecutor.StopResourceAsync(resourceReference, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Signals DCP to start an IDE debug session by patching the IdeSession resource's
+    /// desired state to "Running". DCP then contacts the IDE via the IDE execution protocol.
+    /// </summary>
+    public async Task LaunchBrowserDebugSessionAsync(string ideSessionName, CancellationToken cancellationToken)
+    {
+        var resource = _dcpExecutor.GetResource(ideSessionName);
+        await _dcpExecutor.StartResourceAsync(resource, cancellationToken).ConfigureAwait(false);
+    }
+
     private async Task SetChildResourceAsync(IResource resource, string? state, DateTime? startTimeStamp, DateTime? stopTimeStamp)
     {
         foreach (var child in _parentChildLookup[resource].Where(c => c is IResourceWithParent))

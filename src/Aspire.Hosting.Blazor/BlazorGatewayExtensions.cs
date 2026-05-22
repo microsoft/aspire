@@ -5,6 +5,8 @@ using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
+using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Orchestrator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -170,6 +172,54 @@ public static class BlazorGatewayExtensions
         var services = BuildGatewayAppServices(referencedServices);
 
         gateway.WithBlazorApp(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
+
+        // Register browser debugging support: annotate the gateway with the WASM client's
+        // project path and register a "Debug in Browser" command on the WASM app resource.
+        // The IdeSession DCP resource is created at orchestration time; the command just
+        // transitions its desired state to "Running".
+        if (!gateway.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            var debugAnnotation = new BrowserDebugAnnotation(
+                wasmApp.Resource.ProjectPath,
+                relativePath: pathPrefix);
+
+            gateway.WithAnnotation(debugAnnotation);
+
+            wasmApp.WithCommand(
+                name: "debug-in-browser",
+                displayName: "Debug in Browser",
+                executeCommand: async context =>
+                {
+                    var sessionName = debugAnnotation.IdeSessionName;
+                    if (sessionName is null)
+                    {
+                        return new ExecuteCommandResult { Success = false, Message = "Debug session has not been initialized yet." };
+                    }
+
+                    var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
+                    await orchestrator.LaunchBrowserDebugSessionAsync(sessionName, context.CancellationToken).ConfigureAwait(false);
+                    return CommandResults.Success();
+                },
+                commandOptions: new()
+                {
+                    UpdateState = ctx =>
+                    {
+                        // Only show the debug command when an IDE is connected (DEBUG_SESSION_PORT is set by DCP
+                        // when an IDE protocol session is active).
+                        var configuration = ctx.ServiceProvider.GetRequiredService<IConfiguration>();
+                        if (string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar]))
+                        {
+                            return ResourceCommandState.Hidden;
+                        }
+
+                        return ctx.ResourceSnapshot.State?.Text == KnownResourceStates.Running
+                            ? ResourceCommandState.Enabled
+                            : ResourceCommandState.Disabled;
+                    },
+                    IconName = "BugArrowCounterclockwise",
+                    IsHighlighted = true
+                });
+        }
 
         return gateway;
     }
@@ -444,6 +494,14 @@ public static class BlazorGatewayExtensions
                         /app/output/{{pathPrefix}}.endpoints.json
                 """;
         });
+
+        // This container only produces build artifacts (no ENTRYPOINT/CMD), so mark it as
+        // build-only to exclude it from the compute resource pipeline and avoid duplicate
+        // DeploymentTargetAnnotation errors.
+        if (companion.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileAnnotation))
+        {
+            dockerfileAnnotation.HasEntrypoint = false;
+        }
 
         gateway.WithAnnotation(new ContainerFilesDestinationAnnotation
         {

@@ -369,6 +369,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             Container => KnownResourceTypes.Container,
             Executable => appModelResource is ProjectResource ? KnownResourceTypes.Project : KnownResourceTypes.Executable,
             ContainerExec => KnownResourceTypes.ContainerExec,
+            IdeSession => "IdeSession",
             _ => throw new InvalidOperationException($"Unknown resource type {resource.GetType().Name}")
         };
     }
@@ -1094,6 +1095,17 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     await PublishConnectionStringAvailableEventAsync(resourceReference.ModelResource, cancellationToken).ConfigureAwait(false);
                     await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
                     await _executableCreator.CreateObjectAsync(er, EmptyCreationContext.s_instance, resourceLogger, this, cancellationToken).ConfigureAwait(false);
+                    break;
+
+                case RenderedModelResource<IdeSession> ideSessionRef:
+                    // IdeSession is started by patching desired_state to "Running".
+                    // DCP then initiates the IDE debug session via the IDE protocol.
+                    var existing = await _kubernetesService.GetAsync<IdeSession>(resourceReference.DcpResourceName, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    var patch = CreatePatch(existing, s =>
+                    {
+                        s.Spec.DesiredState = IdeSessionState.Running;
+                    });
+                    await _kubernetesService.PatchAsync(existing, patch, cancellationToken).ConfigureAwait(false);
                     break;
 
                 default:

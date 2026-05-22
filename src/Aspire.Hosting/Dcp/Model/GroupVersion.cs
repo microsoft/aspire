@@ -30,6 +30,7 @@ internal static class Dcp
     public static string ExecutableReplicaSetKind { get; } = "ExecutableReplicaSet";
     public static string ContainerVolumeKind { get; } = "ContainerVolume";
     public static string ContainerNetworkTunnelProxyKind { get; } = "ContainerNetworkTunnelProxy";
+    public static string IdeSessionKind { get; } = "IdeSession";
 
     static Dcp()
     {
@@ -42,5 +43,6 @@ internal static class Dcp
         Schema.Add<ContainerVolume>(ContainerVolumeKind, "containervolumes");
         Schema.Add<ContainerExec>(ContainerExecKind, "containerexecs");
         Schema.Add<ContainerNetworkTunnelProxy>(ContainerNetworkTunnelProxyKind, "containernetworktunnelproxies");
+        Schema.Add<IdeSession>(IdeSessionKind, "idesessions");
     }
 }
