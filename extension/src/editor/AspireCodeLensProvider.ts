@@ -51,19 +51,23 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         return this._provideCodeLensesAsync(document, token);
     }
 
-    private async _provideCodeLensesAsync(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.CodeLens[]> {
+    private async _provideCodeLensesAsync(document: vscode.TextDocument, token: vscode.CancellationToken): Promise<vscode.CodeLens[] | undefined> {
         if (!vscode.workspace.getConfiguration('aspire').get<boolean>('enableCodeLens', true)) {
             return [];
         }
 
         const parser = await getParserForDocument(document);
-        if (!parser || token.isCancellationRequested) {
+        if (token.isCancellationRequested) {
+            return undefined;
+        }
+
+        if (!parser) {
             return [];
         }
 
         const resources = await parser.parseResources(document);
         if (token.isCancellationRequested) {
-            return [];
+            return undefined;
         }
 
         const appHosts = this._treeProvider.appHosts;

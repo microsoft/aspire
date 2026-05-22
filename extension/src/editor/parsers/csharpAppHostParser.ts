@@ -263,6 +263,10 @@ function decodeEscapeSequence(text: string): string {
 function findContainingStatementStartLine(node: TreeSitterNode): number {
     let current: TreeSitterNode | null = node;
     while (current) {
+        // Partially-typed code can make tree-sitter wrap a valid resource call in an
+        // incomplete earlier statement, e.g. `if (env) { ... }\nvar cache = builder\n    .AddRedis("cache")`.
+        // In that shape the statement's start points at stale malformed code rather
+        // than the resource declaration, so skip statements with preceding ERROR nodes.
         if (current.type.endsWith('_statement') && !hasErrorBeforeNode(current, node.startIndex)) {
             return current.startPosition.row;
         }

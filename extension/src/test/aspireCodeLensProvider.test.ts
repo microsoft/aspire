@@ -6,6 +6,8 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireCodeLensProvider } from '../editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from '../editor/AspireGutterDecorationProvider';
+import * as AppHostResourceParser from '../editor/parsers/AppHostResourceParser';
+import { ParsedResource } from '../editor/parsers/AppHostResourceParser';
 import { codeLensCommand } from '../loc/strings';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
@@ -152,16 +154,19 @@ const APP_HOST_NO_RESOURCES = 'var builder = DistributedApplication.CreateBuilde
 
 const cancellationToken = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => { } }) } as vscode.CancellationToken;
 
-function createMockEditor(document: vscode.TextDocument): { editor: vscode.TextEditor; decorationCalls: vscode.DecorationOptions[][] } {
+function createMockEditor(document: vscode.TextDocument): { editor: vscode.TextEditor; decorationCalls: vscode.DecorationOptions[][]; decorationState: Map<vscode.TextEditorDecorationType, vscode.DecorationOptions[]> } {
     const decorationCalls: vscode.DecorationOptions[][] = [];
+    const decorationState = new Map<vscode.TextEditorDecorationType, vscode.DecorationOptions[]>();
     const editor = {
         document,
-        setDecorations: (_decorationType: vscode.TextEditorDecorationType, options: readonly vscode.DecorationOptions[]) => {
-            decorationCalls.push([...options]);
+        setDecorations: (decorationType: vscode.TextEditorDecorationType, options: readonly vscode.DecorationOptions[]) => {
+            const copiedOptions = [...options];
+            decorationCalls.push(copiedOptions);
+            decorationState.set(decorationType, copiedOptions);
         },
     } as unknown as vscode.TextEditor;
 
-    return { editor, decorationCalls };
+    return { editor, decorationCalls, decorationState };
 }
 
 function getDecoratedLines(decorationCalls: readonly vscode.DecorationOptions[][]): number[] {
@@ -170,8 +175,22 @@ function getDecoratedLines(decorationCalls: readonly vscode.DecorationOptions[][
         .sort((left, right) => left - right);
 }
 
+function getCurrentDecoratedLines(decorationState: ReadonlyMap<vscode.TextEditorDecorationType, readonly vscode.DecorationOptions[]>): number[] {
+    return getDecoratedLines([...decorationState.values()].map(options => [...options]));
+}
+
 async function applyGutterDecorations(provider: AspireGutterDecorationProvider, editor: vscode.TextEditor): Promise<void> {
     await (provider as unknown as { _applyDecorations(editor: vscode.TextEditor): Promise<void> })._applyDecorations(editor);
+}
+
+function makeParsedResource(name: string, line: number): ParsedResource {
+    return {
+        name,
+        methodName: 'AddContainer',
+        range: new vscode.Range(line, 0, line, 0),
+        kind: 'resource',
+        statementStartLine: line,
+    };
 }
 
 suite('AspireCodeLensProvider builder lens', () => {
@@ -316,6 +335,17 @@ suite('AspireCodeLensProvider builder lens', () => {
         harness.dispose();
     });
 
+    test('returns undefined when cancellation is requested during CodeLens computation', async () => {
+        const harness = createHarness({ appHosts: [makeAppHost(p('repo', 'AppHost', 'AppHost.csproj'))] });
+
+        const doc = createMockDocument(APP_HOST_DOC, p('repo', 'AppHost', 'AppHost.cs'));
+        const cancelledToken = { isCancellationRequested: true, onCancellationRequested: () => ({ dispose: () => { } }) } as vscode.CancellationToken;
+        const lenses = await harness.provider.provideCodeLenses(doc, cancelledToken);
+
+        assert.strictEqual(lenses, undefined);
+        harness.dispose();
+    });
+
     test('builder lens points at the builder line, not the resource line', async () => {
         const docPath = p('repo', 'AppHost', 'AppHost.cs');
         const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
@@ -394,6 +424,97 @@ suite('AspireGutterDecorationProvider resource decoration filtering', () => {
             assert.deepStrictEqual(getDecoratedLines(csharpEditor.decorationCalls), [1]);
             assert.deepStrictEqual(getDecoratedLines(tsEditor.decorationCalls), [2]);
         } finally {
+            provider.dispose();
+            harness.dispose();
+        }
+    });
+
+    test('ignores stale gutter decoration results that complete after a newer update', async () => {
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [
+                makeResource('stale'),
+                makeResource('fresh'),
+            ],
+        });
+        const provider = new AspireGutterDecorationProvider(harness.treeProvider);
+        const doc = createMockDocument(APP_HOST_DOC, p('repo', 'AppHost', 'AppHost.cs'));
+        const editor = createMockEditor(doc);
+        let resolveStaleParse: ((resources: ParsedResource[]) => void) | undefined;
+        const staleParser = {
+            getSupportedExtensions: () => ['.cs'],
+            isAppHostFile: async () => true,
+            parseResources: () => new Promise<ParsedResource[]>(resolve => {
+                resolveStaleParse = resolve;
+            }),
+        } satisfies AppHostResourceParser.AppHostResourceParser;
+        const freshParser = {
+            getSupportedExtensions: () => ['.cs'],
+            isAppHostFile: async () => true,
+            parseResources: async () => [makeParsedResource('fresh', 0)],
+        } satisfies AppHostResourceParser.AppHostResourceParser;
+        const getParserStub = sinon.stub(AppHostResourceParser, 'getParserForDocument');
+        getParserStub.onFirstCall().resolves(staleParser);
+        getParserStub.onSecondCall().resolves(freshParser);
+
+        try {
+            const staleApply = applyGutterDecorations(provider, editor.editor);
+            await Promise.resolve();
+
+            await applyGutterDecorations(provider, editor.editor);
+            resolveStaleParse!([makeParsedResource('stale', 1)]);
+            await staleApply;
+
+            assert.deepStrictEqual(getCurrentDecoratedLines(editor.decorationState), [0]);
+        } finally {
+            getParserStub.restore();
+            provider.dispose();
+            harness.dispose();
+        }
+    });
+
+    test('allows concurrent gutter decoration updates for different editors to complete independently', async () => {
+        const hostPath = p('repo', 'AppHost', 'AppHost.csproj');
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [
+                makeResource('first-editor'),
+                makeResource('second-editor'),
+            ],
+        });
+        const provider = new AspireGutterDecorationProvider(harness.treeProvider);
+        const firstEditor = createMockEditor(createMockDocument(APP_HOST_DOC, p('repo', 'AppHost', 'First.cs')));
+        const secondEditor = createMockEditor(createMockDocument(APP_HOST_DOC, p('repo', 'AppHost', 'Second.cs')));
+        let resolveFirstParse: ((resources: ParsedResource[]) => void) | undefined;
+        const firstParser = {
+            getSupportedExtensions: () => ['.cs'],
+            isAppHostFile: async () => true,
+            parseResources: () => new Promise<ParsedResource[]>(resolve => {
+                resolveFirstParse = resolve;
+            }),
+        } satisfies AppHostResourceParser.AppHostResourceParser;
+        const secondParser = {
+            getSupportedExtensions: () => ['.cs'],
+            isAppHostFile: async () => true,
+            parseResources: async () => [makeParsedResource('second-editor', 1)],
+        } satisfies AppHostResourceParser.AppHostResourceParser;
+        const getParserStub = sinon.stub(AppHostResourceParser, 'getParserForDocument');
+        getParserStub.onFirstCall().resolves(firstParser);
+        getParserStub.onSecondCall().resolves(secondParser);
+
+        try {
+            const firstApply = applyGutterDecorations(provider, firstEditor.editor);
+            await Promise.resolve();
+
+            await applyGutterDecorations(provider, secondEditor.editor);
+            resolveFirstParse!([makeParsedResource('first-editor', 0)]);
+            await firstApply;
+
+            assert.deepStrictEqual(getCurrentDecoratedLines(firstEditor.decorationState), [0]);
+            assert.deepStrictEqual(getCurrentDecoratedLines(secondEditor.decorationState), [1]);
+        } finally {
+            getParserStub.restore();
             provider.dispose();
             harness.dispose();
         }
