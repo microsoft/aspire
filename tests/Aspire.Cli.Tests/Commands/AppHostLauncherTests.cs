@@ -16,7 +16,6 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -237,60 +236,6 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
         Assert.Contains(harness.InteractionService.DisplayedMessages, m => m.Message == $"{RunCommandStrings.RecentAppHostStartupOutput}:");
         Assert.Contains(harness.InteractionService.DisplayedLines, line => line.Line.Contains("AppHost failed after the backchannel was established.", StringComparison.Ordinal));
-    }
-
-    [Fact]
-    public async Task LaunchDetachedAsync_FallsThroughToShutdownWhenChildHangsAfterReadinessRpcFails()
-    {
-        // Reproduces the bug where, after the readiness RPC failed, the parent would wait for the
-        // child to exit indefinitely. The fix races that wait against the remaining startup-timeout
-        // budget so a hung child still triggers shutdown and the timed-out launch result.
-        var timeProvider = new FakeTimeProvider();
-        using var harness = AppHostLauncherHarness.Create(outputHelper, timeProvider);
-        var connectionLostStatusDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        harness.InteractionService.ShowDynamicStatusCallback = status =>
-        {
-            if (status == RunCommandStrings.AppHostConnectionLostWaitingForExit)
-            {
-                connectionLostStatusDisplayed.TrySetResult();
-            }
-        };
-        harness.AddConnection(new TestAppHostAuxiliaryBackchannel
-        {
-            SupportsV3 = true,
-            DashboardUrlsState = new DashboardUrlsState { BaseUrlWithLoginToken = "https://localhost:18888/login?t=test" },
-            WaitForAppHostReadyHandler = _ => throw new IOException("connection lost")
-        });
-        harness.ProcessLauncher.Mode = TestDetachedProcessLauncher.ChildProcessMode.StayAlive;
-
-        var launchTask = harness.Launcher.LaunchDetachedAsync(
-            harness.AppHostFile,
-            format: null,
-            isolated: false,
-            isExtensionHost: false,
-            waitForDebugger: false,
-            globalArgs: [],
-            additionalArgs: [],
-            stopAfterLaunchDelay: null,
-            CancellationToken.None);
-
-        await connectionLostStatusDisplayed.Task.WaitAsync(TimeSpan.FromSeconds(10));
-
-        // Advance past the 120s startup budget so the timeout side of the race wins. Step the clock
-        // in small increments with Task.Yield in between so continuations registered on the fake
-        // provider have a chance to run before the next advance.
-        for (var attempt = 0; attempt < 60 && !launchTask.IsCompleted; attempt++)
-        {
-            timeProvider.Advance(TimeSpan.FromSeconds(10));
-            await Task.Yield();
-        }
-
-        var result = await launchTask.WaitAsync(TimeSpan.FromSeconds(30));
-
-        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
-        Assert.Contains(RunCommandStrings.AppHostConnectionLostWaitingForExit, harness.InteractionService.DynamicStatusTexts);
-        Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
-        Assert.Contains(RunCommandStrings.TimeoutWaitingForAppHost, harness.InteractionService.DisplayedErrors);
     }
 
     [Fact]
@@ -725,9 +670,6 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         public TestDetachedProcessLauncher ProcessLauncher { get; }
 
         public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper)
-            => Create(outputHelper, TimeProvider.System);
-
-        public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper, TimeProvider timeProvider)
         {
             var workspace = TemporaryWorkspace.Create(outputHelper);
             var homeDirectory = workspace.WorkspaceRoot.CreateSubdirectory("home");
@@ -769,7 +711,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 processShutdownService,
                 processLauncher,
                 NullLogger<AppHostLauncher>.Instance,
-                timeProvider);
+                TimeProvider.System);
 
             return new AppHostLauncherHarness(
                 workspace,
