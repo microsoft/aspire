@@ -84,11 +84,11 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
         // TypeScript/JavaScript apphost detection
         const ext = path.extname(filePath).toLowerCase();
         if (['.ts', '.js', '.mts', '.mjs'].includes(ext)) {
-            if (lines.some(line => /import\s+.*createBuilder.*from\s+['"].*\.modules\/aspire/.test(line))) {
+            if (lines.some(line => /import\s+.*createBuilder.*from\s+['"].*\.aspire\/modules\/aspire/.test(line))) {
                 return true;
             }
 
-            if (lines.some(line => /require\s*\(['"].*\.modules\/aspire/.test(line))) {
+            if (lines.some(line => /require\s*\(['"].*\.aspire\/modules\/aspire/.test(line))) {
                 return true;
             }
         }

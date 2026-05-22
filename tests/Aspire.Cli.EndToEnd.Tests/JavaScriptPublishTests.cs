@@ -211,7 +211,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
     {
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         File.WriteAllText(appHostPath, $$"""
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.js';
 
             const builder = await createBuilder();
 

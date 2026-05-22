@@ -286,7 +286,7 @@ Analyze the repository to discover all projects and services that could be model
 **Ignore:**
 
 - The AppHost directory/file itself
-- `node_modules/`, `.modules/`, `dist/`, `build/`, `bin/`, `obj/`, `.git/`
+- `node_modules/`, `.aspire/modules/`, `dist/`, `build/`, `bin/`, `obj/`, `.git/`
 - Test projects (directories named `test`/`tests`/`__tests__`, projects referencing xUnit/NUnit/MSTest, or test-only package.json scripts)
 
 ### Step 2: Check prerequisites and smoke-test the skeleton
@@ -320,7 +320,7 @@ For full project mode, the AppHost was created from the `aspire-apphost` templat
 For single-file mode:
 
 - **Missing profiles in `aspire.config.json`**: The file must have a `profiles` section with `applicationUrl`. Re-run `aspire init` to regenerate.
-- **Missing dependencies**: For TypeScript, ensure the `.modules/aspire.js` SDK is available. Run `aspire restore` if needed.
+- **Missing dependencies**: For TypeScript, ensure the `.aspire/modules/aspire.js` SDK is available. Run `aspire restore` if needed.
 
 Once it boots, stop it (Ctrl+C) and continue.
 
@@ -380,7 +380,7 @@ Edit the skeleton AppHost file to add resource definitions for each selected pro
 #### TypeScript AppHost (`apphost.ts`)
 
 ```typescript
-import { createBuilder } from './.modules/aspire.js';
+import { createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -508,7 +508,7 @@ Always check `aspire list integrations` and `aspire docs search "<language>"` to
 See [references/javascript-apps.md](references/javascript-apps.md) for `package.json`, `tsconfig.json`, and ESLint configuration patterns. Key points:
 
 - Augment existing files, never overwrite
-- Run `aspire restore` to generate `.modules/`, then install deps with the repo's package manager
+- Run `aspire restore` to generate `.aspire/modules/`, then install deps with the repo's package manager
 - Do not manually add Aspire SDK packages — `aspire restore` handles those
 
 #### C# AppHost
