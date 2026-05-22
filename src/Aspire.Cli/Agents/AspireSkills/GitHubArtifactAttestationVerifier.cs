@@ -21,7 +21,7 @@ internal interface IGitHubArtifactAttestationVerifier
         string expectedSourceRepository,
         string expectedWorkflowPath,
         string expectedBuildType,
-        Func<WorkflowRefInfo, bool>? validateWorkflowRef,
+        string expectedVersion,
         CancellationToken cancellationToken);
 }
 
@@ -35,7 +35,7 @@ internal sealed class GitHubArtifactAttestationVerifier(HttpClient httpClient, I
         string expectedSourceRepository,
         string expectedWorkflowPath,
         string expectedBuildType,
-        Func<WorkflowRefInfo, bool>? validateWorkflowRef,
+        string expectedVersion,
         CancellationToken cancellationToken)
     {
         var digestBytes = ComputeSha256(artifactPath);
@@ -122,7 +122,7 @@ internal sealed class GitHubArtifactAttestationVerifier(HttpClient httpClient, I
                 expectedSourceRepository,
                 expectedWorkflowPath,
                 expectedBuildType,
-                validateWorkflowRef);
+                refInfo => IsExpectedTagRef(refInfo, expectedVersion));
         }
         catch (Exception ex)
         {
@@ -187,5 +187,24 @@ internal sealed class GitHubArtifactAttestationVerifier(HttpClient httpClient, I
     {
         using var stream = File.OpenRead(artifactPath);
         return SHA256.HashData(stream);
+    }
+
+    private static bool IsExpectedTagRef(WorkflowRefInfo refInfo, string version)
+    {
+        return string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
+               GetGitHubTagCandidates(version).Any(tag => string.Equals(refInfo.Name, tag, StringComparison.Ordinal));
+    }
+
+    private static IEnumerable<string> GetGitHubTagCandidates(string version)
+    {
+        if (version.StartsWith('v') || version.StartsWith('V'))
+        {
+            yield return version;
+            yield return version[1..];
+            yield break;
+        }
+
+        yield return $"v{version}";
+        yield return version;
     }
 }

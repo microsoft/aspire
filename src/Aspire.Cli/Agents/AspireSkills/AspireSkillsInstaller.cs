@@ -6,10 +6,8 @@ using System.Formats.Tar;
 using System.Globalization;
 using System.IO.Compression;
 using System.Net;
-using System.Security.Cryptography;
 using System.Text.Json;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Npm;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Configuration;
@@ -21,10 +19,7 @@ namespace Aspire.Cli.Agents.AspireSkills;
 /// Resolves, verifies, and caches Aspire workflow skills from the external Aspire skills package.
 /// </summary>
 internal sealed class AspireSkillsInstaller(
-    INpmRunner npmRunner,
-    INpmProvenanceChecker provenanceChecker,
     IGitHubArtifactAttestationVerifier githubArtifactAttestationVerifier,
-    IAspireSkillsPluginDetector pluginDetector,
     IHttpClientFactory httpClientFactory,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
@@ -32,7 +27,6 @@ internal sealed class AspireSkillsInstaller(
     AspireCliTelemetry telemetry,
     ILogger<AspireSkillsInstaller> logger) : IAspireSkillsInstaller
 {
-    internal const string PackageName = "@microsoft/aspire-skills";
     internal const string Version = "0.0.1";
     internal const string GitHubRepository = "microsoft/aspire-skills";
     internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
@@ -63,7 +57,6 @@ internal sealed class AspireSkillsInstaller(
             effectiveVersion = Version;
         }
 
-        activity?.SetTag("aspire.skills.package", PackageName);
         activity?.SetTag("aspire.skills.version", effectiveVersion);
 
         var cacheRoot = GetCacheRoot();
@@ -91,37 +84,8 @@ internal sealed class AspireSkillsInstaller(
             return AspireSkillsInstallResult.Failed(githubResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_InvalidBundle);
         }
 
-        AcquisitionResult? npmResult = null;
-        if (npmRunner.IsAvailable)
-        {
-            npmResult = await InstallFromNpmAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
-            if (npmResult.Status == AcquisitionStatus.Installed)
-            {
-                CleanupStaleCacheEntries(cacheRoot, npmResult.Bundle!.Version);
-                return AspireSkillsInstallResult.Installed(npmResult.Bundle);
-            }
-        }
-        else
-        {
-            logger.LogDebug("npm is not available for Aspire skills fallback acquisition.");
-        }
-
-        var pluginResult = await pluginDetector.DetectInstalledAsync(cancellationToken).ConfigureAwait(false);
-        if (pluginResult.IsInstalled)
-        {
-            activity?.SetTag("aspire.skills.source", "plugin");
-            return AspireSkillsInstallResult.PluginDetected(
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_PluginFallbackDetected, pluginResult.HostName));
-        }
-
-        if (!npmRunner.IsAvailable)
-        {
-            activity?.SetStatus(ActivityStatusCode.Error, "GitHub acquisition is unavailable, npm is unavailable, and no agent plugin was detected.");
-            return AspireSkillsInstallResult.Failed(AgentCommandStrings.AspireSkillsInstaller_NpmUnavailable);
-        }
-
-        activity?.SetStatus(ActivityStatusCode.Error, npmResult?.Message);
-        return AspireSkillsInstallResult.Failed(npmResult?.Message ?? string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, effectiveVersion)));
+        activity?.SetStatus(ActivityStatusCode.Error, "GitHub acquisition is unavailable.");
+        return AspireSkillsInstallResult.Failed(AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable);
     }
 
     private async Task<AcquisitionResult> InstallFromGitHubAsync(
@@ -166,7 +130,7 @@ internal sealed class AspireSkillsInstaller(
                     ExpectedSourceRepository,
                     ExpectedWorkflowPath,
                     ExpectedBuildType,
-                    refInfo => IsExpectedTagRef(refInfo, version),
+                    version,
                     cancellationToken).ConfigureAwait(false);
 
                 if (!provenanceResult.IsVerified)
@@ -194,72 +158,8 @@ internal sealed class AspireSkillsInstaller(
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
-            logger.LogDebug(ex, "Aspire skills GitHub release acquisition failed for version {Version}. Falling back to npm if available.", version);
+            logger.LogDebug(ex, "Aspire skills GitHub release acquisition failed for version {Version}.", version);
             return AcquisitionResult.Unavailable();
-        }
-        finally
-        {
-            TryDeleteDirectory(tempDir);
-        }
-    }
-
-    private async Task<AcquisitionResult> InstallFromNpmAsync(
-        string cacheRoot,
-        string version,
-        bool validationDisabled,
-        Activity? activity,
-        CancellationToken cancellationToken)
-    {
-        var packageInfo = await npmRunner.ResolvePackageAsync(PackageName, version, cancellationToken).ConfigureAwait(false);
-        if (packageInfo is null)
-        {
-            return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToResolvePackage, NpmPackageInfo.FormatPackageSpecifier(PackageName, version)));
-        }
-
-        var packageSpecifier = NpmPackageInfo.FormatPackageSpecifier(PackageName, packageInfo.Version);
-        if (!validationDisabled)
-        {
-            var provenanceResult = await provenanceChecker.VerifyProvenanceAsync(
-                PackageName,
-                packageInfo.Version.ToString(),
-                ExpectedSourceRepository,
-                ExpectedWorkflowPath,
-                ExpectedBuildType,
-                refInfo => IsExpectedTagRef(refInfo, packageInfo.Version.ToString()),
-                cancellationToken,
-                sriIntegrity: packageInfo.Integrity).ConfigureAwait(false);
-
-            if (!provenanceResult.IsVerified)
-            {
-                return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_ProvenanceVerificationFailed, packageSpecifier, provenanceResult.Outcome));
-            }
-        }
-
-        var tempDir = Path.Combine(cacheRoot, $".npm-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-
-        try
-        {
-            var tarballPath = await npmRunner.PackAsync(PackageName, packageInfo.Version.ToString(), tempDir, cancellationToken).ConfigureAwait(false);
-            if (tarballPath is null)
-            {
-                return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_FailedToDownload, packageSpecifier));
-            }
-
-            if (!validationDisabled && !VerifyIntegrity(tarballPath, packageInfo.Integrity))
-            {
-                return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.PlaywrightCliInstaller_IntegrityVerificationFailed, packageSpecifier));
-            }
-
-            var bundle = await CacheArchiveAsync(cacheRoot, tarballPath, packageInfo.Version.ToString(), cancellationToken).ConfigureAwait(false);
-            activity?.SetTag("aspire.skills.source", "npm");
-            activity?.SetTag("aspire.skills.cache_hit", false);
-            return AcquisitionResult.Installed(bundle);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
-        {
-            logger.LogWarning(ex, "Failed to install Aspire skills bundle.");
-            return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
         }
         finally
         {
@@ -387,12 +287,6 @@ internal sealed class AspireSkillsInstaller(
         request.Headers.Accept.ParseAdd("application/vnd.github+json");
         request.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2022-11-28");
         return request;
-    }
-
-    private static bool IsExpectedTagRef(WorkflowRefInfo refInfo, string version)
-    {
-        return string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
-               GetGitHubTagCandidates(version).Any(tag => string.Equals(refInfo.Name, tag, StringComparison.Ordinal));
     }
 
     private async Task<AspireSkillsBundle?> TryLoadCachedBundleAsync(string cacheRoot, string version, Activity? activity, CancellationToken cancellationToken)
@@ -744,23 +638,6 @@ internal sealed class AspireSkillsInstaller(
 
             File.Copy(sourceFile, targetFile, overwrite: true);
         }
-    }
-
-    private static bool VerifyIntegrity(string filePath, string sriIntegrity)
-    {
-        const string prefix = "sha512-";
-        if (!sriIntegrity.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var expectedHash = sriIntegrity[prefix.Length..];
-
-        using var stream = File.OpenRead(filePath);
-        var hashBytes = SHA512.HashData(stream);
-        var actualHash = Convert.ToBase64String(hashBytes);
-
-        return string.Equals(expectedHash, actualHash, StringComparison.Ordinal);
     }
 
     private static string GetSafeFileName(string fileName)

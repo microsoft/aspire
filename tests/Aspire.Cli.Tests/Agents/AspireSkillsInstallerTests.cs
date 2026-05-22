@@ -14,14 +14,13 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using Semver;
 
 namespace Aspire.Cli.Tests.Agents;
 
 public class AspireSkillsInstallerTests
 {
     [Fact]
-    public async Task InstallAsync_WhenValidBundleIsCached_UsesCacheWithoutNpm()
+    public async Task InstallAsync_WhenValidBundleIsCached_UsesCacheWithoutNetwork()
     {
         var rootDirectory = CreateTempDirectory();
 
@@ -30,14 +29,12 @@ public class AspireSkillsInstallerTests
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
             var cachedBundleDirectory = Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills", AspireSkillsInstaller.Version);
             await CreateCachedBundleAsync(cachedBundleDirectory);
-            var npmRunner = new TestNpmRunner { IsAvailable = false };
-            var installer = CreateInstaller(npmRunner, executionContext);
+            var installer = CreateInstaller(executionContext);
 
             var result = await installer.InstallAsync(CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
-            Assert.False(npmRunner.ResolveCalled);
         }
         finally
         {
@@ -46,7 +43,7 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task InstallAsync_WhenCachedBundleLastUsedCannotBeTouched_UsesCacheWithoutNpm()
+    public async Task InstallAsync_WhenCachedBundleLastUsedCannotBeTouched_UsesCacheWithoutNetwork()
     {
         var rootDirectory = CreateTempDirectory();
 
@@ -56,14 +53,12 @@ public class AspireSkillsInstallerTests
             var cachedBundleDirectory = Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills", AspireSkillsInstaller.Version);
             await CreateCachedBundleAsync(cachedBundleDirectory);
             Directory.CreateDirectory(Path.Combine(cachedBundleDirectory, ".lastused"));
-            var npmRunner = new TestNpmRunner { IsAvailable = false };
-            var installer = CreateInstaller(npmRunner, executionContext);
+            var installer = CreateInstaller(executionContext);
 
             var result = await installer.InstallAsync(CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
-            Assert.False(npmRunner.ResolveCalled);
         }
         finally
         {
@@ -72,21 +67,19 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task InstallAsync_WhenNpmIsUnavailableAndNoCache_ReturnsFailure()
+    public async Task InstallAsync_WhenGitHubReleaseIsUnavailableAndNoCache_ReturnsFailure()
     {
         var rootDirectory = CreateTempDirectory();
 
         try
         {
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var npmRunner = new TestNpmRunner { IsAvailable = false };
-            var installer = CreateInstaller(npmRunner, executionContext);
+            var installer = CreateInstaller(executionContext);
 
             var result = await installer.InstallAsync(CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
-            Assert.Contains("npm", result.Message);
-            Assert.False(npmRunner.ResolveCalled);
+            Assert.Contains("GitHub", result.Message);
         }
         finally
         {
@@ -95,7 +88,7 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task InstallAsync_WhenGitHubReleaseAssetIsAvailable_UsesGitHubWithoutNpm()
+    public async Task InstallAsync_WhenGitHubReleaseAssetIsAvailable_UsesGitHub()
     {
         var rootDirectory = CreateTempDirectory();
 
@@ -119,15 +112,13 @@ public class AspireSkillsInstallerTests
                 };
             });
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var npmRunner = new TestNpmRunner { IsAvailable = false };
             var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
-            var installer = CreateInstaller(npmRunner, executionContext, httpMessageHandler: handler, githubArtifactAttestationVerifier: attestationVerifier);
+            var installer = CreateInstaller(executionContext, httpMessageHandler: handler, githubArtifactAttestationVerifier: attestationVerifier);
 
             var result = await installer.InstallAsync(CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
-            Assert.False(npmRunner.ResolveCalled);
             Assert.True(attestationVerifier.VerifyCalled);
             Assert.NotNull(releaseRequestUri);
             Assert.NotNull(assetRequestUri);
@@ -141,40 +132,7 @@ public class AspireSkillsInstallerTests
     }
 
     [Fact]
-    public async Task InstallAsync_WhenGitHubReleaseIsUnavailable_FallsBackToNpm()
-    {
-        var rootDirectory = CreateTempDirectory();
-
-        try
-        {
-            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var tarballPath = await CreateBundleArchiveFileAsync(rootDirectory);
-            var npmRunner = new TestNpmRunner
-            {
-                PackageInfo = new NpmPackageInfo
-                {
-                    Version = SemVersion.Parse(AspireSkillsInstaller.Version),
-                    Integrity = ComputeSriSha512(tarballPath)
-                },
-                TarballPath = tarballPath
-            };
-            var installer = CreateInstaller(npmRunner, executionContext);
-
-            var result = await installer.InstallAsync(CancellationToken.None);
-
-            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
-            Assert.NotNull(result.Bundle);
-            Assert.True(npmRunner.ResolveCalled);
-            Assert.True(npmRunner.PackCalled);
-        }
-        finally
-        {
-            Directory.Delete(rootDirectory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task InstallAsync_WhenGitHubAttestationFails_DoesNotFallbackToNpm()
+    public async Task InstallAsync_WhenGitHubAttestationFails_ReturnsFailure()
     {
         var rootDirectory = CreateTempDirectory();
 
@@ -194,133 +152,17 @@ public class AspireSkillsInstallerTests
                 };
             });
             var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var npmRunner = new TestNpmRunner
-            {
-                PackageInfo = new NpmPackageInfo
-                {
-                    Version = SemVersion.Parse(AspireSkillsInstaller.Version),
-                    Integrity = "sha512-invalid"
-                }
-            };
             var attestationVerifier = new TestGitHubArtifactAttestationVerifier
             {
                 Result = new ProvenanceVerificationResult { Outcome = ProvenanceVerificationOutcome.WorkflowMismatch }
             };
-            var installer = CreateInstaller(npmRunner, executionContext, httpMessageHandler: handler, githubArtifactAttestationVerifier: attestationVerifier);
+            var installer = CreateInstaller(executionContext, httpMessageHandler: handler, githubArtifactAttestationVerifier: attestationVerifier);
 
             var result = await installer.InstallAsync(CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
             Assert.NotNull(result.Message);
             Assert.Contains("Provenance", result.Message, StringComparison.OrdinalIgnoreCase);
-            Assert.False(npmRunner.ResolveCalled);
-        }
-        finally
-        {
-            Directory.Delete(rootDirectory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task InstallAsync_WhenPluginIsAlreadyInstalled_UsesPluginFallback()
-    {
-        var rootDirectory = CreateTempDirectory();
-
-        try
-        {
-            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var npmRunner = new TestNpmRunner { IsAvailable = false };
-            var pluginDetector = new TestAspireSkillsPluginDetector
-            {
-                Result = AspireSkillsPluginDetectionResult.Installed("GitHub Copilot CLI")
-            };
-            var installer = CreateInstaller(npmRunner, executionContext, pluginDetector: pluginDetector);
-
-            var result = await installer.InstallAsync(CancellationToken.None);
-
-            Assert.Equal(AspireSkillsInstallStatus.PluginDetected, result.Status);
-            Assert.Null(result.Bundle);
-            Assert.NotNull(result.Message);
-            Assert.Contains("GitHub Copilot CLI", result.Message, StringComparison.Ordinal);
-            Assert.True(pluginDetector.DetectCalled);
-            Assert.False(npmRunner.ResolveCalled);
-        }
-        finally
-        {
-            Directory.Delete(rootDirectory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task InstallAsync_WhenNpmPackageIsAvailable_VerifiesProvenanceAndIntegrity()
-    {
-        var rootDirectory = CreateTempDirectory();
-
-        try
-        {
-            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var tarballPath = await CreateBundleArchiveFileAsync(rootDirectory);
-            var integrity = ComputeSriSha512(tarballPath);
-            var provenanceChecker = new TestNpmProvenanceChecker();
-            var npmRunner = new TestNpmRunner
-            {
-                PackageInfo = new NpmPackageInfo
-                {
-                    Version = SemVersion.Parse(AspireSkillsInstaller.Version),
-                    Integrity = integrity
-                },
-                TarballPath = tarballPath
-            };
-            var installer = CreateInstaller(npmRunner, executionContext, provenanceChecker);
-
-            var result = await installer.InstallAsync(CancellationToken.None);
-
-            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
-            Assert.NotNull(result.Bundle);
-            Assert.True(npmRunner.ResolveCalled);
-            Assert.True(npmRunner.PackCalled);
-            Assert.True(provenanceChecker.VerifyCalled);
-            Assert.Equal(integrity, provenanceChecker.SriIntegrity);
-        }
-        finally
-        {
-            Directory.Delete(rootDirectory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task InstallAsync_WhenProvenanceFails_ReturnsFailureWithoutPacking()
-    {
-        var rootDirectory = CreateTempDirectory();
-
-        try
-        {
-            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
-            var provenanceChecker = new TestNpmProvenanceChecker
-            {
-                Result = new ProvenanceVerificationResult
-                {
-                    Outcome = ProvenanceVerificationOutcome.AttestationFetchFailed
-                }
-            };
-            var npmRunner = new TestNpmRunner
-            {
-                PackageInfo = new NpmPackageInfo
-                {
-                    Version = SemVersion.Parse(AspireSkillsInstaller.Version),
-                    Integrity = "sha512-integrity"
-                }
-            };
-            var installer = CreateInstaller(npmRunner, executionContext, provenanceChecker);
-
-            var result = await installer.InstallAsync(CancellationToken.None);
-
-            Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
-            Assert.NotNull(result.Message);
-            Assert.Contains("provenance", result.Message, StringComparison.OrdinalIgnoreCase);
-            Assert.True(npmRunner.ResolveCalled);
-            Assert.False(npmRunner.PackCalled);
-            Assert.True(provenanceChecker.VerifyCalled);
         }
         finally
         {
@@ -329,18 +171,12 @@ public class AspireSkillsInstallerTests
     }
 
     private static AspireSkillsInstaller CreateInstaller(
-        TestNpmRunner npmRunner,
         CliExecutionContext executionContext,
-        TestNpmProvenanceChecker? provenanceChecker = null,
         HttpMessageHandler? httpMessageHandler = null,
-        TestGitHubArtifactAttestationVerifier? githubArtifactAttestationVerifier = null,
-        TestAspireSkillsPluginDetector? pluginDetector = null)
+        TestGitHubArtifactAttestationVerifier? githubArtifactAttestationVerifier = null)
     {
         return new AspireSkillsInstaller(
-            npmRunner,
-            provenanceChecker ?? new TestNpmProvenanceChecker(),
             githubArtifactAttestationVerifier ?? new TestGitHubArtifactAttestationVerifier(),
-            pluginDetector ?? new TestAspireSkillsPluginDetector(),
             new MockHttpClientFactory(httpMessageHandler ?? new MockHttpMessageHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound))),
             new TestInteractionService(),
             executionContext,
@@ -424,23 +260,10 @@ public class AspireSkillsInstallerTests
         }
     }
 
-    private static async Task<string> CreateBundleArchiveFileAsync(string outputDirectory)
-    {
-        var archivePath = Path.Combine(outputDirectory, "aspire-skills.tgz");
-        await File.WriteAllBytesAsync(archivePath, await CreateBundleArchiveBytesAsync());
-        return archivePath;
-    }
-
     private static string ComputeSha256(string path)
     {
         using var stream = File.OpenRead(path);
         return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
-    }
-
-    private static string ComputeSriSha512(string path)
-    {
-        using var stream = File.OpenRead(path);
-        return $"sha512-{Convert.ToBase64String(SHA512.HashData(stream))}";
     }
 
     private static HttpResponseMessage CreateJsonResponse(string json)
@@ -471,66 +294,6 @@ public class AspireSkillsInstallerTests
         return Directory.CreateTempSubdirectory("aspire-skills-installer-test-").FullName;
     }
 
-    private sealed class TestNpmRunner : INpmRunner
-    {
-        public bool IsAvailable { get; init; } = true;
-
-        public bool ResolveCalled { get; private set; }
-
-        public bool PackCalled { get; private set; }
-
-        public NpmPackageInfo? PackageInfo { get; init; }
-
-        public string? TarballPath { get; init; }
-
-        public Task<NpmPackageInfo?> ResolvePackageAsync(string packageName, string versionRange, CancellationToken cancellationToken)
-        {
-            ResolveCalled = true;
-            return Task.FromResult(PackageInfo);
-        }
-
-        public Task<string?> PackAsync(string packageName, string version, string outputDirectory, CancellationToken cancellationToken)
-        {
-            PackCalled = true;
-            return Task.FromResult(TarballPath);
-        }
-
-        public Task<bool> AuditSignaturesAsync(string packageName, string version, CancellationToken cancellationToken)
-            => Task.FromResult(true);
-
-        public Task<bool> InstallGlobalAsync(string tarballPath, CancellationToken cancellationToken)
-            => Task.FromResult(true);
-    }
-
-    private sealed class TestNpmProvenanceChecker : INpmProvenanceChecker
-    {
-        public bool VerifyCalled { get; private set; }
-
-        public string? SriIntegrity { get; private set; }
-
-        public ProvenanceVerificationResult Result { get; init; } = new()
-        {
-            Outcome = ProvenanceVerificationOutcome.Verified,
-            Provenance = new NpmProvenanceData { SourceRepository = AspireSkillsInstaller.ExpectedSourceRepository }
-        };
-
-        public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(
-            string packageName,
-            string version,
-            string expectedSourceRepository,
-            string expectedWorkflowPath,
-            string expectedBuildType,
-            Func<WorkflowRefInfo, bool>? validateWorkflowRef,
-            CancellationToken cancellationToken,
-            string? sriIntegrity = null)
-        {
-            VerifyCalled = true;
-            SriIntegrity = sriIntegrity;
-
-            return Task.FromResult(Result);
-        }
-    }
-
     private sealed class TestGitHubArtifactAttestationVerifier : IGitHubArtifactAttestationVerifier
     {
         public bool VerifyCalled { get; private set; }
@@ -547,7 +310,7 @@ public class AspireSkillsInstallerTests
             string expectedSourceRepository,
             string expectedWorkflowPath,
             string expectedBuildType,
-            Func<WorkflowRefInfo, bool>? validateWorkflowRef,
+            string expectedVersion,
             CancellationToken cancellationToken)
         {
             VerifyCalled = true;
@@ -555,16 +318,4 @@ public class AspireSkillsInstallerTests
         }
     }
 
-    private sealed class TestAspireSkillsPluginDetector : IAspireSkillsPluginDetector
-    {
-        public bool DetectCalled { get; private set; }
-
-        public AspireSkillsPluginDetectionResult Result { get; init; } = AspireSkillsPluginDetectionResult.NotInstalled;
-
-        public Task<AspireSkillsPluginDetectionResult> DetectInstalledAsync(CancellationToken cancellationToken)
-        {
-            DetectCalled = true;
-            return Task.FromResult(Result);
-        }
-    }
 }

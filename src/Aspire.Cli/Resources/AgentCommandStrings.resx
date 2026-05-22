@@ -159,14 +159,11 @@
   <data name="AspireSkillsInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Aspire skills...</value>
   </data>
-  <data name="AspireSkillsInstaller_NpmUnavailable" xml:space="preserve">
-    <value>Aspire skills could not be downloaded from GitHub, npm fallback is not available on PATH, and no installed Aspire skills plugin was detected.</value>
+  <data name="AspireSkillsInstaller_GitHubUnavailable" xml:space="preserve">
+    <value>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached bundle is available.</value>
   </data>
   <data name="AspireSkillsInstaller_InvalidBundle" xml:space="preserve">
     <value>The Aspire skills bundle is invalid: {0}</value>
-  </data>
-  <data name="AspireSkillsInstaller_PluginFallbackDetected" xml:space="preserve">
-    <value>Aspire skills are already installed through {0}; skipping local Aspire skills bundle installation.</value>
   </data>
   <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Playwright CLI...</value>
