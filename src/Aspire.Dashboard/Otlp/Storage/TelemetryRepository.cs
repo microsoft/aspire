@@ -835,7 +835,7 @@ public sealed partial class TelemetryRepository : IDisposable
                 return durationFilter.Apply(traceDurationMs);
             }
 
-            return Filter.IsTraceDurationFilter() && Filter.HasNumericMatch(traceDurationMs);
+            return Filter.HasNumericMatch(traceDurationMs);
         }
     }
 
