@@ -75,30 +75,6 @@ namespace Aspire.Cli.Resources {
             }
         }
         
-        public static string TemplatePackageVersionNotFoundInChannel {
-            get {
-                return ResourceManager.GetString("TemplatePackageVersionNotFoundInChannel", resourceCulture);
-            }
-        }
-        
-        public static string TemplatePackageVersionNotFoundInChannelNoVersions {
-            get {
-                return ResourceManager.GetString("TemplatePackageVersionNotFoundInChannelNoVersions", resourceCulture);
-            }
-        }
-        
-        public static string SelectATemplateVersion {
-            get {
-                return ResourceManager.GetString("SelectATemplateVersion", resourceCulture);
-            }
-        }
-        
-        public static string UsePrereleaseTemplates {
-            get {
-                return ResourceManager.GetString("UsePrereleaseTemplates", resourceCulture);
-            }
-        }
-        
         public static string EnterTheOutputPath
         {
             get

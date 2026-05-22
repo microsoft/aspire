@@ -223,12 +223,6 @@
     <value>An error occurred while trusting the certificates: {0}</value>
     <comment>{0} is an exception message</comment>
   </data>
-  <data name="SearchingForAvailableTemplateVersions" xml:space="preserve">
-    <value>Searching for available project template versions...</value>
-  </data>
-  <data name="NoTemplateVersionsFound" xml:space="preserve">
-    <value>No template versions were found. Please check your internet connection or NuGet source configuration.</value>
-  </data>
   <data name="ProjectAlreadyExists" xml:space="preserve">
     <value>The new project cannot be created because it would overwrite existing files in the output folder. Please remove or move the conflicting files, or choose a different location.</value>
   </data>

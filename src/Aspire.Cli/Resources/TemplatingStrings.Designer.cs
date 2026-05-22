@@ -250,15 +250,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to No template versions were found. Please check your internet connection or NuGet source configuration..
-        /// </summary>
-        public static string NoTemplateVersionsFound {
-            get {
-                return ResourceManager.GetString("NoTemplateVersionsFound", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Created NuGet.config for the selected package channel..
         /// </summary>
         public static string NuGetConfigCreatedConfirmationMessage {
@@ -354,15 +345,6 @@ namespace Aspire.Cli.Resources {
         public static string PromptForTFMOptions_Prompt {
             get {
                 return ResourceManager.GetString("PromptForTFMOptions_Prompt", resourceCulture);
-            }
-        }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Searching for available project template versions....
-        /// </summary>
-        public static string SearchingForAvailableTemplateVersions {
-            get {
-                return ResourceManager.GetString("SearchingForAvailableTemplateVersions", resourceCulture);
             }
         }
 

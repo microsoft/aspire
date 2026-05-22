@@ -87,11 +87,6 @@
         <target state="translated">Bir şablon seçin:</target>
         <note />
       </trans-unit>
-      <trans-unit id="SelectATemplateVersion">
-        <source>Select a template version:</source>
-        <target state="translated">Bir şablon sürümü seçin:</target>
-        <note />
-      </trans-unit>
       <trans-unit id="SelectProjectCreationLocation">
         <source>Where do you want the project to be created?</source>
         <target state="new">Where do you want the project to be created?</target>
@@ -105,21 +100,6 @@
       <trans-unit id="SourceWithCredentialsCannotBePersisted">
         <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
         <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TemplatePackageVersionNotFoundInChannel">
-        <source>The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. Available versions: {2}.</source>
-        <target state="new">The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. Available versions: {2}.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TemplatePackageVersionNotFoundInChannelNoVersions">
-        <source>The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. No template package versions were found in this channel.</source>
-        <target state="new">The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. No template package versions were found in this channel.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="UsePrereleaseTemplates">
-        <source>(use pre-release templates)</source>
-        <target state="translated">(ön sürüm şablonlarını kullanın)</target>
         <note />
       </trans-unit>
     </body>

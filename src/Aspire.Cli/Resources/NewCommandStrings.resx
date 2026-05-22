@@ -121,18 +121,6 @@
   <data name="SourceWithCredentialsCannotBePersisted" xml:space="preserve">
     <value>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</value>
   </data>
-  <data name="TemplatePackageVersionNotFoundInChannel" xml:space="preserve">
-    <value>The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. Available versions: {2}.</value>
-  </data>
-  <data name="TemplatePackageVersionNotFoundInChannelNoVersions" xml:space="preserve">
-    <value>The Aspire project templates package version '{0}' that matches the running CLI build was not found in the '{1}' channel. No template package versions were found in this channel.</value>
-  </data>
-  <data name="SelectATemplateVersion" xml:space="preserve">
-    <value>Select a template version:</value>
-  </data>
-  <data name="UsePrereleaseTemplates" xml:space="preserve">
-    <value>(use pre-release templates)</value>
-  </data>
   <data name="EnterTheOutputPath" xml:space="preserve">
     <value>Enter the output path</value>
   </data>

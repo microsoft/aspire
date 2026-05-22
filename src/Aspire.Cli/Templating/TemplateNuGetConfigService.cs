@@ -1,12 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.DotNet;
-using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
-using Aspire.Cli.Utils;
-using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Templating;
 
@@ -192,231 +188,22 @@ internal sealed class TemplateNuGetConfigService(
     }
 
     /// <summary>
-    /// Resolves the channel and template package version that should be used to install Aspire project templates.
+    /// Looks up a configured <see cref="PackageChannel"/> by name. Returns
+    /// <see langword="null"/> when <paramref name="channelName"/> is null/empty or does
+    /// not match any configured channel (e.g. identity=local on a machine without a
+    /// local hive). Used by post-install scaffolding to decide whether to write a
+    /// per-project channel pin into <c>aspire.config.json</c> and to look up channel
+    /// mappings for the scaffolded project's <c>NuGet.config</c>.
     /// </summary>
-    /// <param name="query">Inputs that control channel/version selection.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>The selected template package and the channel it was resolved from.</returns>
-    /// <exception cref="ChannelNotFoundException">Thrown when <paramref name="query"/> specifies a channel name that does not match any configured channel.</exception>
-    /// <exception cref="EmptyChoicesException">Thrown when no template package versions are available across the considered channels.</exception>
-    public async Task<TemplatePackageSelection> ResolveTemplatePackageAsync(TemplatePackageQuery query, CancellationToken cancellationToken)
+    public async Task<PackageChannel?> GetChannelByNameAsync(string? channelName, CancellationToken cancellationToken)
     {
-        var allChannels = await packagingService.GetChannelsAsync(cancellationToken, query.RequestedChannel);
-
-        // Honor PR hives only when the caller opts in. Init suppresses this so a developer
-        // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.
-        // PR dogfood installs can discover a matching local-build channel outside the default
-        // hives directory, so also treat an installed local-build source as a hive signal.
-        var hasPrHives = query.IncludePrHives &&
-            (executionContext.GetHiveCount() > 0 ||
-                allChannels.Any(static c => c.Type is PackageChannelType.Explicit && HasInstalledLocalBuildPackageSource(c)));
-
-        IEnumerable<PackageChannel> channels;
-        if (!string.IsNullOrEmpty(query.RequestedChannel))
+        if (string.IsNullOrWhiteSpace(channelName))
         {
-            var matchingChannel = allChannels.FirstOrDefault(c =>
-                    string.Equals(c.Name, query.RequestedChannel, StringComparison.OrdinalIgnoreCase))
-                ?? throw new ChannelNotFoundException(
-                    $"No channel found matching '{query.RequestedChannel}'. Valid options are: " +
-                    $"{string.Join(", ", allChannels.Select(c => c.Name))}");
-            channels = [matchingChannel];
-        }
-        else
-        {
-            // If there are hives (PR build directories), include all channels.
-            // Otherwise, only use the implicit/default channel to avoid prompting.
-            channels = hasPrHives
-                ? allChannels
-                : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
+            return null;
         }
 
-        var packagesFromChannels = await interactionService.ShowStatusAsync(Resources.TemplatingStrings.SearchingForAvailableTemplateVersions, async () =>
-        {
-            var results = new List<(NuGetPackage Package, PackageChannel Channel)>();
-            var resultsLock = new object();
-
-            await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
-            {
-                var templatePackages = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, ct);
-                lock (resultsLock)
-                {
-                    results.AddRange(templatePackages.Select(p => (p, channel)));
-                }
-            });
-
-            return results;
-        });
-
-        if (!packagesFromChannels.Any())
-        {
-            throw new EmptyChoicesException(Resources.TemplatingStrings.NoTemplateVersionsFound);
-        }
-
-        var orderedPackagesFromChannels = packagesFromChannels.OrderByDescending(p => Semver.SemVersion.Parse(p.Package.Version), Semver.SemVersion.PrecedenceComparer);
-
-        if (query.VersionOverride is { } version)
-        {
-            // Always treat VersionOverride as a hard pin. `aspire new` and `aspire init`
-            // both pass VersionHelper.GetDefaultTemplateVersion() here so the installed
-            // templates package matches the running CLI build. If that exact version is
-            // not available in the requested channel we fail loudly rather than silently
-            // falling back to a different version — the alternative produces hard-to-
-            // diagnose mismatches between the CLI, the AppHost SDK, and Aspire.Hosting.
-            var explicitMatch = orderedPackagesFromChannels.FirstOrDefault(p => p.Package.Version == version);
-            if (explicitMatch.Package is not null)
-            {
-                return new TemplatePackageSelection(explicitMatch.Package, explicitMatch.Channel);
-            }
-
-            var channelName = query.RequestedChannel ?? orderedPackagesFromChannels.First().Channel.Name;
-            var availableVersions = orderedPackagesFromChannels
-                .Select(p => p.Package.Version)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            var errorMessage = availableVersions.Length == 0
-                ? string.Format(
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    Resources.NewCommandStrings.TemplatePackageVersionNotFoundInChannelNoVersions,
-                    version,
-                    channelName)
-                : string.Format(
-                    System.Globalization.CultureInfo.CurrentCulture,
-                    Resources.NewCommandStrings.TemplatePackageVersionNotFoundInChannel,
-                    version,
-                    channelName,
-                    string.Join(", ", availableVersions));
-
-            throw new EmptyChoicesException(errorMessage);
-        }
-
-        if (VersionHelper.TryGetCurrentCliVersionMatch(
-            orderedPackagesFromChannels,
-            p => p.Package.Version,
-            out var cliVersionMatch,
-            channelName: query.RequestedChannel,
-            hasPrHives: hasPrHives))
-        {
-            return new TemplatePackageSelection(cliVersionMatch.Package, cliVersionMatch.Channel);
-        }
-
-        // If channel was specified via per-project aspire.config.json (but no
-        // VersionOverride), automatically select the highest version from that channel
-        // without prompting. `aspire new` and `aspire init` always pin VersionOverride,
-        // so this branch is reached only by callers that explicitly request the channel
-        // listing behavior.
-        if (!string.IsNullOrEmpty(query.RequestedChannel))
-        {
-            var first = orderedPackagesFromChannels.First();
-            return new TemplatePackageSelection(first.Package, first.Channel);
-        }
-
-        // No version pin and no channel pin: pick the highest version across the
-        // candidate channels. (Interactive disambiguation was removed when both `new`
-        // and `init` switched to a CLI-version-pinned resolution.)
-        var top = orderedPackagesFromChannels.First();
-        return new TemplatePackageSelection(top.Package, top.Channel);
-    }
-
-    private static bool HasInstalledLocalBuildPackageSource(PackageChannel channel)
-    {
-        return VersionHelper.IsLocalBuildChannel(channel.Name) &&
-            channel.Mappings?.Any(static mapping =>
-                mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
-                mapping.PackageFilter != PackageMapping.AllPackages &&
-                !UrlHelper.IsHttpUrl(mapping.Source) &&
-                Directory.Exists(mapping.Source)) == true;
-    }
-
-    /// <summary>
-    /// Installs the resolved Aspire project templates package, generating a temporary NuGet.config from the channel mappings when the channel is explicit.
-    /// </summary>
-    /// <param name="selection">The template package + channel returned by <see cref="ResolveTemplatePackageAsync"/>.</param>
-    /// <param name="runner">The .NET CLI runner used to invoke <c>dotnet new install</c>. Passed in (rather than injected) because the runner has a transient DI lifetime.</param>
-    /// <param name="statusMessage">Status text shown while the install runs.</param>
-    /// <param name="statusEmoji">Optional emoji prefix shown next to the status message.</param>
-    /// <param name="cancellationToken">A cancellation token.</param>
-    /// <returns>The install exit code, the parsed template version (if available), and the captured stdout/stderr lines.</returns>
-    public async Task<TemplateInstallOutcome> InstallTemplatePackageAsync(
-        TemplatePackageSelection selection,
-        IDotNetCliRunner runner,
-        string statusMessage,
-        KnownEmoji? statusEmoji,
-        CancellationToken cancellationToken)
-    {
-        // Whilst we install the templates - if we are using an explicit channel we need to
-        // generate a temporary NuGet.config file to make sure we install the right package
-        // from the right feed. If we are using an implicit channel then we just use the
-        // ambient configuration (although we should still specify the source) because
-        // the user would have selected it.
-        //
-        // The temporary config is disposed when this method returns. That is intentional —
-        // only `dotnet new install` consumes the config; the subsequent `dotnet new <template>`
-        // call (in DotNetTemplateFactory and InitCommand) operates against the already-installed
-        // template hive and uses the ambient NuGet configuration.
-        using var temporaryConfig = selection.Channel.Type == PackageChannelType.Explicit
-            ? await TemporaryNuGetConfig.CreateAsync(selection.Channel.Mappings!)
-            : null;
-
-        var collector = new OutputCollector();
-
-        var (exitCode, templateVersion) = await interactionService.ShowStatusAsync<(int ExitCode, string? TemplateVersion)>(
-            statusMessage,
-            async () =>
-            {
-                var options = new ProcessInvocationOptions
-                {
-                    StandardOutputCallback = collector.AppendOutput,
-                    StandardErrorCallback = collector.AppendOutput,
-                };
-
-                return await runner.InstallTemplateAsync(
-                    packageName: TemplatesPackageName,
-                    version: selection.Package.Version,
-                    nugetConfigFile: temporaryConfig?.ConfigFile,
-                    nugetSource: selection.Package.Source,
-                    force: true,
-                    options: options,
-                    cancellationToken: cancellationToken);
-            },
-            emoji: statusEmoji);
-
-        return new TemplateInstallOutcome(exitCode, templateVersion, collector.GetLines().ToArray());
+        var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
+        return channels.FirstOrDefault(c =>
+            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
     }
 }
-
-/// <summary>
-/// Inputs that control how <see cref="TemplateNuGetConfigService.ResolveTemplatePackageAsync"/> picks a channel and version.
-/// </summary>
-/// <param name="RequestedChannel">
-/// The user/project-side channel request — either from <c>--channel</c>, per-project
-/// <c>aspire.config.json#channel</c>, or (for <c>aspire init</c> only) the running CLI's
-/// <see cref="CliExecutionContext.IdentityChannel"/>. When null, channel selection falls
-/// back to PR-hive discovery or implicit-only depending on <paramref name="IncludePrHives"/>.
-/// </param>
-/// <param name="VersionOverride">Optional explicit template version (e.g. from <c>--version</c>).</param>
-/// <param name="SourceOverride">Optional source override carried for symmetry with <see cref="TemplateInputs"/>; not consulted by resolution today.</param>
-/// <param name="IncludePrHives">When true (e.g. for <c>aspire new</c>), local PR hive directories under <c>~/.aspire/hives</c> participate in channel discovery; when false (e.g. for <c>aspire init</c>), they are ignored.</param>
-internal sealed record TemplatePackageQuery(
-    string? RequestedChannel,
-    string? VersionOverride,
-    string? SourceOverride,
-    bool IncludePrHives);
-
-/// <summary>
-/// The template package and channel selected by <see cref="TemplateNuGetConfigService.ResolveTemplatePackageAsync"/>.
-/// </summary>
-/// <param name="Package">The selected template package (id, version, source).</param>
-/// <param name="Channel">The channel that produced <paramref name="Package"/>.</param>
-internal sealed record TemplatePackageSelection(NuGetPackage Package, PackageChannel Channel);
-
-/// <summary>
-/// Result of <see cref="TemplateNuGetConfigService.InstallTemplatePackageAsync"/>.
-/// </summary>
-/// <param name="ExitCode">Exit code from <c>dotnet new install</c>.</param>
-/// <param name="TemplateVersion">Parsed template version (when the install reported one).</param>
-/// <param name="OutputLines">Captured stdout/stderr lines from the install process for diagnostic display by the caller.</param>
-internal sealed record TemplateInstallOutcome(
-    int ExitCode,
-    string? TemplateVersion,
-    IReadOnlyList<(Aspire.Cli.Utils.OutputLineStream Stream, string Line)> OutputLines);

@@ -9,7 +9,6 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -28,7 +27,8 @@ internal class DotNetTemplateFactory(
     IFeatures features,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
-    TemplateNuGetConfigService templateNuGetConfigService)
+    TemplateNuGetConfigService templateNuGetConfigService,
+    EmbeddedTemplatePackageProvider embeddedTemplatePackageProvider)
     : ITemplateFactory
 {
     // Template-specific options
@@ -457,51 +457,53 @@ internal class DotNetTemplateFactory(
     {
         try
         {
-            // Resolve the template package first, matching the pre-extraction order in
-            // release/13.3. Surfacing channel/version errors before prompting for extra args
-            // avoids discarding answers the user just gave.
-            var query = new TemplatePackageQuery(
-                RequestedChannel: inputs.Channel,
-                VersionOverride: inputs.Version,
-                SourceOverride: inputs.Source,
-                IncludePrHives: true);
-
-            TemplatePackageSelection selectedTemplateDetails;
+            // The templates package is embedded in the CLI binary. Extract once per CLI
+            // version to a cache directory and install from the on-disk nupkg, so the
+            // installed templates always match the running CLI build and we never depend
+            // on NuGet feed reachability or local hive layout.
+            FileInfo extractedTemplatesNupkg;
             try
             {
-                selectedTemplateDetails = await templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+                extractedTemplatesNupkg = await embeddedTemplatePackageProvider.EnsureExtractedAsync(cancellationToken);
             }
-            catch (Exceptions.ChannelNotFoundException) when
-                (string.Equals(inputs.Channel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+            catch (InvalidOperationException ex)
             {
-                // Locally-built CLI (identity=local) on a machine where ~/.aspire/hives/local
-                // isn't installed. The PackagingService produces no "local" channel in that
-                // case, but the contract is that the identity channel is implicit — fall back
-                // to the implicit channel (ambient NuGet) instead of failing. Mirrors
-                // InitCommand's behavior so `aspire new` and `aspire init` are consistent.
-                var fallbackQuery = query with { RequestedChannel = null };
-                selectedTemplateDetails = await templateNuGetConfigService.ResolveTemplatePackageAsync(fallbackQuery, cancellationToken);
+                interactionService.DisplayError(ex.Message);
+                return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
             }
 
             // Some templates have additional arguments that need to be applied to the `dotnet new` command
             // when it is executed. This callback will get those arguments and potentially prompt for them.
             var extraArgs = await extraArgsCallback(parseResult, cancellationToken);
 
-            var installOutcome = await templateNuGetConfigService.InstallTemplatePackageAsync(
-                selectedTemplateDetails,
-                runner,
+            var installCollector = new OutputCollector();
+            var (installExitCode, installedVersion) = await interactionService.ShowStatusAsync<(int ExitCode, string? TemplateVersion)>(
                 TemplatingStrings.GettingTemplates,
-                statusEmoji: KnownEmojis.Ice,
-                cancellationToken);
+                async () =>
+                {
+                    return await runner.InstallTemplateAsync(
+                        packageName: TemplateNuGetConfigService.TemplatesPackageName,
+                        version: VersionHelper.GetDefaultSdkVersion(),
+                        nugetConfigFile: null,
+                        nugetSource: extractedTemplatesNupkg.FullName,
+                        force: true,
+                        options: new ProcessInvocationOptions
+                        {
+                            StandardOutputCallback = installCollector.AppendOutput,
+                            StandardErrorCallback = installCollector.AppendOutput,
+                        },
+                        cancellationToken: cancellationToken);
+                },
+                emoji: KnownEmojis.Ice);
 
-            if (installOutcome.ExitCode != 0)
+            if (installExitCode != 0)
             {
-                interactionService.DisplayLines(installOutcome.OutputLines);
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
+                interactionService.DisplayLines(installCollector.GetLines());
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installExitCode));
                 return new TemplateResult(CliExitCodes.FailedToInstallTemplates);
             }
 
-            interactionService.DisplayMessage(KnownEmojis.Package, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.UsingProjectTemplatesVersion, installOutcome.TemplateVersion));
+            interactionService.DisplayMessage(KnownEmojis.Package, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.UsingProjectTemplatesVersion, installedVersion ?? VersionHelper.GetDefaultSdkVersion()));
 
             var newProjectCollector = new OutputCollector();
             var newProjectExitCode = await interactionService.ShowStatusAsync(
@@ -552,18 +554,22 @@ internal class DotNetTemplateFactory(
             // not persisted so `aspire add`/`aspire restore` continue to use the ambient
             // NuGet config without a per-project pin. Mirrors the TypeScript starter behavior
             // in CliTemplateFactory.TypeScriptStarterTemplate.
-            if (selectedTemplateDetails.Channel.Type is PackageChannelType.Explicit)
+            var scaffoldedProjectChannel = await templateNuGetConfigService.GetChannelByNameAsync(inputs.Channel, cancellationToken);
+            if (scaffoldedProjectChannel is { Type: PackageChannelType.Explicit })
             {
                 var config = AspireConfigFile.LoadOrCreate(outputPath);
-                config.Channel = selectedTemplateDetails.Channel.Name;
+                config.Channel = scaffoldedProjectChannel.Name;
                 config.Save(outputPath);
             }
 
             // For explicit channels, optionally create or update a NuGet.config. If none exists in the current
             // working directory, create one in the newly created project's output directory.
-            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selectedTemplateDetails.Channel, outputPath, cancellationToken))
+            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, scaffoldedProjectChannel, outputPath, cancellationToken))
             {
-                await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selectedTemplateDetails.Channel, outputPath, cancellationToken);
+                if (scaffoldedProjectChannel is not null)
+                {
+                    await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(scaffoldedProjectChannel, outputPath, cancellationToken);
+                }
             }
 
             interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
@@ -578,25 +584,6 @@ internal class DotNetTemplateFactory(
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message));
             return new TemplateResult(CliExitCodes.FailedToTrustCertificates);
-        }
-        catch (Exceptions.ChannelNotFoundException ex)
-        {
-            interactionService.DisplayError(ex.Message);
-            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
-        }
-        catch (EmptyChoicesException ex)
-        {
-            interactionService.DisplayError(ex.Message);
-            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
-        }
-        catch (NuGetPackageCacheException ex)
-        {
-            // Surface NuGet feed search failures (offline, inaccessible feed, etc.) with a friendly error
-            // instead of letting them bubble up to the top-level "unexpected error" handler. The pre-extraction
-            // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
-            // restores parity with the prior init failure mode for these scenarios.
-            interactionService.DisplayError(ex.Message);
-            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
     }
 

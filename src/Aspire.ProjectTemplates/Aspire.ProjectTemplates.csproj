@@ -4,6 +4,12 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <OutputType>Library</OutputType>
     <IsPackable>true</IsPackable>
+    <!-- Pack on every Build so Aspire.Cli can EmbedAsResource the produced nupkg on
+         inner-loop builds (./build.sh without pack). The CLI requires the templates
+         package to be present at link time so the binary always ships templates that
+         match the CLI build by construction; see Aspire.Cli.csproj's EmbeddedResource
+         entry for Aspire.ProjectTemplates.nupkg. -->
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <IncludeContentInPack>true</IncludeContentInPack>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <ContentTargetFolders>content</ContentTargetFolders>

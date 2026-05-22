@@ -117,6 +117,37 @@
     <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
   </ItemGroup>
 
+  <ItemGroup Condition="'$(IsCliToolProject)' != 'true'">
+    <!-- Build ordering only. Aspire.ProjectTemplates is a template package, not a code
+         dependency. We need its nupkg to exist before our EmbeddedResource step (below)
+         resolves; the templates project has GeneratePackageOnBuild=true so a normal Build
+         produces the nupkg under $(ArtifactsShippingPackagesDir). Suppressed for the tool
+         packaging path (Aspire.Cli.Tool.csproj sets IsCliToolProject=true) because that
+         path packages prebuilt NativeAOT binaries and does not recompile the CLI. -->
+    <ProjectReference Include="..\Aspire.ProjectTemplates\Aspire.ProjectTemplates.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      Private="false" />
+  </ItemGroup>
+
+  <!-- Embed the Aspire.ProjectTemplates nupkg as a manifest resource so the CLI binary
+       always ships templates that match the CLI build by construction. At runtime the CLI
+       extracts this nupkg to a per-CLI-version cache dir and runs `dotnet new install
+       <path>`, eliminating all NuGet-based template resolution. See
+       Aspire.Cli.Templating.EmbeddedTemplatePackageProvider. -->
+  <Target Name="_ResolveEmbeddedTemplatesNupkg"
+          BeforeTargets="AssignTargetPaths;PrepareResources"
+          Condition="'$(SkipEmbeddedTemplatesNupkg)' != 'true' and '$(IsCliToolProject)' != 'true'">
+    <PropertyGroup>
+      <_EmbeddedTemplatesNupkgPath>$(ArtifactsShippingPackagesDir)Aspire.ProjectTemplates.$(PackageVersion).nupkg</_EmbeddedTemplatesNupkgPath>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_EmbeddedTemplatesNupkgPath)')"
+           Text="Could not find Aspire.ProjectTemplates nupkg at '$(_EmbeddedTemplatesNupkgPath)'. Build Aspire.ProjectTemplates first (it has GeneratePackageOnBuild=true) or set SkipEmbeddedTemplatesNupkg=true to opt out (CLI will fail at runtime when invoking 'aspire new' / 'aspire init')." />
+    <ItemGroup>
+      <EmbeddedResource Include="$(_EmbeddedTemplatesNupkgPath)" LogicalName="Aspire.ProjectTemplates.nupkg" />
+    </ItemGroup>
+  </Target>
+
   <!-- When BundlePayloadPath is set (by Bundle.proj), embed the tar.gz as a resource.
        Inner-loop builds without this property produce an unbundled CLI. -->
   <ItemGroup Condition="'$(BundlePayloadPath)' != '' and Exists('$(BundlePayloadPath)')">

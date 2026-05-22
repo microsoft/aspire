@@ -102,11 +102,6 @@
         <target state="translated">Нет</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoTemplateVersionsFound">
-        <source>No template versions were found. Please check your internet connection or NuGet source configuration.</source>
-        <target state="translated">Версии шаблонов не найдены. Проверьте подключение к Интернету и конфигурацию источника NuGet.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="None">
         <source>None</source>
         <target state="translated">Нет</target>
@@ -160,11 +155,6 @@
       <trans-unit id="PromptForTFM_UsingForTesting">
         <source>Using {0} for testing.</source>
         <target state="translated">Для тестирования используется {0}.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchingForAvailableTemplateVersions">
-        <source>Searching for available project template versions...</source>
-        <target state="translated">Производится поиск доступных версий шаблонов проекта...</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceOverrideNotPersistedWarning">

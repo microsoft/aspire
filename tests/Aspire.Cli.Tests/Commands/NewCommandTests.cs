@@ -9,7 +9,6 @@ using Aspire.Cli.Commands;
 using RootCommand = Aspire.Cli.Commands.RootCommand;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -288,40 +287,6 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptedForTemplate);
-    }
-
-    [Fact]
-    public async Task NewCommand_EmptyPackageList_DisplaysErrorMessage()
-    {
-        TestInteractionService? testInteractionService = null;
-
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var services = CreateServiceCollection(workspace, options => {
-            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
-            options.InteractionServiceFactory = (sp) => {
-                testInteractionService = new TestInteractionService();
-                return testInteractionService;
-            };
-
-            options.DotNetCliRunnerFactory = (sp) => {
-                var runner = new TestDotNetCliRunner();
-                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) => {
-                    return (0, Array.Empty<NuGetPackage>());
-                };
-                return runner;
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
-
-        var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
-        Assert.NotNull(testInteractionService);
-        Assert.Contains(testInteractionService.DisplayedErrors, e => e.Contains(TemplatingStrings.NoTemplateVersionsFound));
     }
 
     [Fact]
@@ -2774,52 +2739,5 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var expectedMessage = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputPathContainsInvalidCharacters, invalidPath);
         Assert.Equal(expectedMessage, validationResult.Message);
-    }
-
-    [Fact]
-    public async Task NewCommandWhenChannelTemplateSearchFailsDisplaysFriendlyError()
-    {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
-
-        var interactionService = new TestInteractionService();
-
-        var services = CreateServiceCollection(workspace, options =>
-        {
-            options.InteractionServiceFactory = _ => interactionService;
-
-            // Fake cache throws NuGetPackageCacheException to simulate offline / inaccessible feed.
-            options.PackagingServiceFactory = _ =>
-            {
-                var fakeCache = new FakeNuGetPackageCache
-                {
-                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
-                        throw new NuGetPackageCacheException("Package search failed: simulated network failure")
-                };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
-                return new TestPackagingService
-                {
-                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
-                };
-            };
-
-            options.DotNetCliRunnerFactory = _ =>
-            {
-                var runner = new TestDotNetCliRunner();
-                runner.InstallTemplateAsyncCallback = (_, _, _, _, _, _, _) =>
-                {
-                    throw new InvalidOperationException("InstallTemplateAsync should not run when channel search fails.");
-                };
-                return runner;
-            };
-        });
-
-        using var provider = services.BuildServiceProvider();
-        var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-starter");
-
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
-        Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("simulated network failure", StringComparison.Ordinal));
     }
 }

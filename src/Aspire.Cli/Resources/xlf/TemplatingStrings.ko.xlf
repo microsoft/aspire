@@ -102,11 +102,6 @@
         <target state="translated">아니요</target>
         <note />
       </trans-unit>
-      <trans-unit id="NoTemplateVersionsFound">
-        <source>No template versions were found. Please check your internet connection or NuGet source configuration.</source>
-        <target state="translated">템플릿 버전을 찾을 수 없습니다. 인터넷 연결 또는 NuGet 원본 구성을 확인하세요.</target>
-        <note />
-      </trans-unit>
       <trans-unit id="None">
         <source>None</source>
         <target state="translated">없음</target>
@@ -160,11 +155,6 @@
       <trans-unit id="PromptForTFM_UsingForTesting">
         <source>Using {0} for testing.</source>
         <target state="translated">테스트에 {0} 사용을 진행합니다.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SearchingForAvailableTemplateVersions">
-        <source>Searching for available project template versions...</source>
-        <target state="translated">사용 가능한 프로젝트 템플릿 버전을 검색하는 중...</target>
         <note />
       </trans-unit>
       <trans-unit id="SourceOverrideNotPersistedWarning">

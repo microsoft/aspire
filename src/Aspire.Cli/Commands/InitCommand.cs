@@ -9,10 +9,7 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.NuGet;
-using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
@@ -46,6 +43,7 @@ internal sealed class InitCommand : BaseCommand
     private readonly IScaffoldingService _scaffoldingService;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly TemplateNuGetConfigService _templateNuGetConfigService;
+    private readonly EmbeddedTemplatePackageProvider _embeddedTemplatePackageProvider;
 
     private static readonly Option<string?> s_sourceOption = new("--source", "-s")
     {
@@ -77,7 +75,8 @@ internal sealed class InitCommand : BaseCommand
         ICertificateService certificateService,
         IScaffoldingService scaffoldingService,
         ILanguageDiscovery languageDiscovery,
-        TemplateNuGetConfigService templateNuGetConfigService)
+        TemplateNuGetConfigService templateNuGetConfigService,
+        EmbeddedTemplatePackageProvider embeddedTemplatePackageProvider)
         : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _executionContext = executionContext;
@@ -89,6 +88,7 @@ internal sealed class InitCommand : BaseCommand
         _scaffoldingService = scaffoldingService;
         _languageDiscovery = languageDiscovery;
         _templateNuGetConfigService = templateNuGetConfigService;
+        _embeddedTemplatePackageProvider = embeddedTemplatePackageProvider;
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -348,74 +348,47 @@ internal sealed class InitCommand : BaseCommand
             return CliExitCodes.Success;
         }
 
-        // Resolve the channel-aware template package version + feed mapping. The running
-        // CLI binary's identity channel (CliExecutionContext.IdentityChannel — stable, staging,
-        // daily, pr-<N>, or local) drives the selection so a developer scaffolding with a
-        // pr-<N> CLI gets a project wired to the matching pr-<N> hive. PR hives are
-        // intentionally excluded — init should produce the same template on every machine
-        // for a given CLI build.
-        TemplatePackageSelection selection;
+        // Install the Aspire.ProjectTemplates package that is embedded in the CLI binary.
+        // The embedded payload is the templates package produced by this CLI's build, so
+        // the templates are by construction matched to the CLI — independent of the
+        // identity channel, the NuGet feed reachability, or any local hive layout.
+        // `dotnet new` does not install templates implicitly, so we install on every
+        // invocation (the runner uninstall-then-installs to keep the local file path
+        // entry fresh; this is fast and idempotent).
+        FileInfo extractedTemplatesNupkg;
         try
         {
-            var query = new TemplatePackageQuery(
-                RequestedChannel: _executionContext.IdentityChannel,
-                VersionOverride: null,
-                SourceOverride: null,
-                IncludePrHives: false);
-
-            selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+            extractedTemplatesNupkg = await _embeddedTemplatePackageProvider.EnsureExtractedAsync(cancellationToken);
         }
-        catch (ChannelNotFoundException) when
-            (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
-        {
-            // Locally-built CLI (identity=local) on a machine where ~/.aspire/hives/local
-            // isn't installed. The PackagingService produces no "local" channel in that
-            // case, but init's contract is that identity-as-request is implicit — so fall
-            // back to the implicit channel (ambient NuGet) instead of failing. This branch
-            // lives here, NOT in the resolver, so that an explicit `aspire new --channel local`
-            // without the hive correctly errors instead of silently switching feeds.
-            var fallbackQuery = new TemplatePackageQuery(
-                RequestedChannel: null,
-                VersionOverride: null,
-                SourceOverride: null,
-                IncludePrHives: false);
-
-            selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(fallbackQuery, cancellationToken);
-        }
-        catch (ChannelNotFoundException ex)
+        catch (InvalidOperationException ex)
         {
             InteractionService.DisplayError(ex.Message);
             return CliExitCodes.FailedToInstallTemplates;
         }
-        catch (EmptyChoicesException ex)
-        {
-            InteractionService.DisplayError(ex.Message);
-            return CliExitCodes.FailedToInstallTemplates;
-        }
-        catch (NuGetPackageCacheException ex)
-        {
-            // Surface NuGet feed search failures (offline, inaccessible feed, etc.) with a friendly error
-            // instead of letting them bubble up to the top-level "unexpected error" handler. The pre-extraction
-            // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
-            // restores parity with the prior init failure mode for these scenarios.
-            InteractionService.DisplayError(ex.Message);
-            return CliExitCodes.FailedToInstallTemplates;
-        }
 
-        // The aspire-apphost template ships in the Aspire.ProjectTemplates package.
-        // `dotnet new` does not install templates implicitly, so on a fresh machine
-        // (or after a CLI update) the template will be missing. Install first.
-        var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
-            selection,
-            _runner,
+        var installCollector = new OutputCollector();
+        var (installExitCode, _) = await InteractionService.ShowStatusAsync<(int ExitCode, string? TemplateVersion)>(
             InitCommandStrings.InstallingAspireProjectTemplates,
-            statusEmoji: null,
-            cancellationToken);
+            async () =>
+            {
+                return await _runner.InstallTemplateAsync(
+                    packageName: TemplateNuGetConfigService.TemplatesPackageName,
+                    version: VersionHelper.GetDefaultSdkVersion(),
+                    nugetConfigFile: null,
+                    nugetSource: extractedTemplatesNupkg.FullName,
+                    force: true,
+                    options: new ProcessInvocationOptions
+                    {
+                        StandardOutputCallback = installCollector.AppendOutput,
+                        StandardErrorCallback = installCollector.AppendOutput,
+                    },
+                    cancellationToken: cancellationToken);
+            });
 
-        if (installOutcome.ExitCode != 0)
+        if (installExitCode != 0)
         {
-            InteractionService.DisplayLines(installOutcome.OutputLines);
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
+            InteractionService.DisplayLines(installCollector.GetLines());
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installExitCode));
             return CliExitCodes.FailedToInstallTemplates;
         }
 

@@ -293,10 +293,12 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
 
             case PrDogfoodNewTemplateContract.DotNetTemplate:
                 Assert.Equal((int)CliExitCodes.Success, exitCode);
+                // Templates ship embedded in the CLI binary, so dotnet new install is invoked
+                // with the extracted nupkg path rather than the PR hive packages directory.
+                // What still must come from the PR channel is the *scaffolded project's*
+                // NuGet.config and aspire.config.json pin.
                 var install = Assert.Single(dotNetTemplateInstalls);
                 Assert.Equal(TemplateNuGetConfigService.TemplatesPackageName, install.PackageName);
-                Assert.Equal(s_prVersion, install.Version);
-                Assert.Equal(packagesDirectory.FullName.Replace('\\', '/'), install.NuGetSource);
 
                 var dotNetConfig = AspireConfigFile.Load(outputDirectory);
                 Assert.NotNull(dotNetConfig);
