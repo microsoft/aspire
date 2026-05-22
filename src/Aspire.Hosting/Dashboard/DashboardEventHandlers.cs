@@ -366,48 +366,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var otlpHttpEndpointUrl = options.OtlpHttpEndpointUrl;
         var allowUnsecureTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
 
-        eventing.Subscribe<ResourceReadyEvent>(dashboardResource, async (@event, cancellationToken) =>
-        {
-            var browserToken = options.DashboardToken;
-            var resourceWithEndpoints = @event.Resource as IResourceWithEndpoints;
-
-            // Get the actual allocated URL from the dashboard resource endpoint
-            string? dashboardUrl = null;
-
-            if (resourceWithEndpoints is not null)
-            {
-                // Try HTTPS first, then HTTP
-                var httpsEndpoint = resourceWithEndpoints.GetEndpoint("https");
-                var httpEndpoint = resourceWithEndpoints.GetEndpoint("http");
-
-                var endpoint = httpsEndpoint.Exists ? httpsEndpoint : httpEndpoint;
-                if (endpoint.Exists)
-                {
-                    dashboardUrl = await EndpointHostHelpers.GetUrlWithTargetHostAsync(endpoint, cancellationToken).ConfigureAwait(false);
-                }
-            }
-
-            // Fall back to configured URL if we couldn't get it from the resource
-            if (string.IsNullOrEmpty(dashboardUrl))
-            {
-                if (!StringUtils.TryGetUriFromDelimitedString(dashboardUrls, ";", out var firstDashboardUrl))
-                {
-                    return;
-                }
-
-                dashboardUrl = firstDashboardUrl.GetLeftPart(UriPartial.Authority);
-            }
-
-            dashboardUrl = codespaceUrlRewriter.RewriteUrl(dashboardUrl);
-
-            distributedApplicationLogger.LogInformation("Now listening on: {DashboardUrl}", dashboardUrl.TrimEnd('/'));
-
-            var otlpGrpcUrl = otlpGrpcEndpointUrl ?? await GetEndpointUrlAsync(resourceWithEndpoints, KnownEndpointNames.OtlpGrpcEndpointName, cancellationToken).ConfigureAwait(false);
-            var otlpHttpUrl = otlpHttpEndpointUrl ?? await GetEndpointUrlAsync(resourceWithEndpoints, KnownEndpointNames.OtlpHttpEndpointName, cancellationToken).ConfigureAwait(false);
-
-            LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, browserToken, isContainer: false);
-        });
-
         if (string.IsNullOrWhiteSpace(dashboardUrls))
         {
             var uriScheme = allowUnsecureTransport ? "http" : "https";
@@ -528,6 +486,70 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         }
 
         dashboardResource.Annotations.Add(new EnvironmentCallbackAnnotation(ConfigureEnvironmentVariables));
+
+        // Print dashboard URL details when started.
+        eventing.Subscribe<ResourceReadyEvent>(dashboardResource, DashboardStarted);
+    }
+
+    private async Task DashboardStarted(ResourceReadyEvent @event, CancellationToken cancellationToken)
+    {
+        var options = dashboardOptions.Value;
+        var browserToken = options.DashboardToken;
+        var dashboardResource = @event.Resource as IResourceWithEndpoints;
+
+        if (dashboardResource is null)
+        {
+            // Should never happen.
+            return;
+        }
+
+        var dashboardUrl = await ResolveUrlAsync(async () =>
+        {
+
+            // Try HTTPS first, then HTTP
+            var httpsEndpoint = dashboardResource.GetEndpoint("https");
+            var httpEndpoint = dashboardResource.GetEndpoint("http");
+
+            var endpoint = httpsEndpoint.Exists ? httpsEndpoint : httpEndpoint;
+            return endpoint.Exists
+                ? await EndpointHostHelpers.GetUrlWithTargetHostAsync(endpoint, cancellationToken).ConfigureAwait(false)
+                : null;
+        }, options.DashboardUrl).ConfigureAwait(false);
+
+        if (dashboardUrl is null)
+        {
+            // Should never happen.
+            return;
+        }
+
+        distributedApplicationLogger.LogInformation("Now listening on: {DashboardUrl}", dashboardUrl.TrimEnd('/'));
+
+        var otlpGrpcUrl = await ResolveUrlAsync(
+            () => GetEndpointUrlAsync(dashboardResource, KnownEndpointNames.OtlpGrpcEndpointName, cancellationToken),
+            options.OtlpGrpcEndpointUrl).ConfigureAwait(false);
+
+        var otlpHttpUrl = await ResolveUrlAsync(
+            () => GetEndpointUrlAsync(dashboardResource, KnownEndpointNames.OtlpHttpEndpointName, cancellationToken),
+            options.OtlpHttpEndpointUrl).ConfigureAwait(false);
+
+        LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, browserToken, isContainer: false);
+    }
+
+    private async ValueTask<string?> ResolveUrlAsync(Func<ValueTask<string?>> resolveCallback, string? configuredUrl)
+    {
+        var url = await resolveCallback().ConfigureAwait(false);
+
+        if (string.IsNullOrEmpty(url) && StringUtils.TryGetUriFromDelimitedString(configuredUrl, ";", out var firstUrl))
+        {
+            url = firstUrl.GetLeftPart(UriPartial.Authority);
+        }
+
+        if (string.IsNullOrEmpty(url))
+        {
+            return null;
+        }
+
+        return codespaceUrlRewriter.RewriteUrl(url);
     }
 
     private static async ValueTask<string?> GetEndpointUrlAsync(IResourceWithEndpoints? resourceWithEndpoints, string endpointName, CancellationToken cancellationToken)

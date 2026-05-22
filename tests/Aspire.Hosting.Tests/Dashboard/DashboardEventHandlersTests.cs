@@ -334,8 +334,9 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);
 
         Assert.NotNull(summaryLog);
-        Assert.Equal("http://otel-grpc.example.com:1234", LogTestHelpers.GetValue(summaryLog, "OtlpGrpcUrl"));
-        Assert.Equal("http://otel-http.example.com:5678", LogTestHelpers.GetValue(summaryLog, "OtlpHttpUrl"));
+        // Endpoint-resolved URLs take priority over configured URLs (consistent with frontend URL behavior)
+        Assert.Equal("http://localhost:4317", LogTestHelpers.GetValue(summaryLog, "OtlpGrpcUrl"));
+        Assert.Equal("http://localhost:4318", LogTestHelpers.GetValue(summaryLog, "OtlpHttpUrl"));
     }
 
     [Fact]
