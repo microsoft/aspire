@@ -121,10 +121,17 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         // bundle handoff, --isolated user-secrets clone, and post-build AppHost launch path do
         // not require their own MSBuild evaluations.
         // Adding extra -getProperty names is an evaluation-only cost.
+        //
+        // The Run* properties (RunCommand, RunArguments, RunWorkingDirectory) are only
+        // populated for the direct-launch contract after ComputeRunArguments has run, so
+        // request that target here. This matches the property values `dotnet run` would
+        // resolve before launching the AppHost. See:
+        // https://github.com/dotnet/sdk/blob/main/src/Tasks/Microsoft.NET.Build.Tasks/targets/Microsoft.NET.Sdk.targets
         var (exitCode, jsonDocument) = await runner.GetProjectItemsAndPropertiesAsync(
             projectFile,
             items: ["PackageReference", "AspireProjectOrPackageReference", "PackageVersion"],
             properties: ["IsAspireHost", "AspireHostingSDKVersion", "AspireUseCliBundle", "UserSecretsId", "RunCommand", "TargetPath", "RunWorkingDirectory", "RunArguments", "TargetFramework", "TargetFrameworks"],
+            targets: ["ComputeRunArguments"],
             new ProcessInvocationOptions(),
             cancellationToken).ConfigureAwait(false);
 

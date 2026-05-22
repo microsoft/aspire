@@ -29,7 +29,7 @@ namespace Aspire.Cli.DotNet;
 internal interface IDotNetCliRunner
 {
     Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken);
-    Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, ProcessInvocationOptions options, CancellationToken cancellationToken);
+    Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, string[] targets, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> RunAsync(FileInfo projectFile, bool watch, bool noBuild, bool noRestore, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<int> RunAppHostCommandAsync(FileInfo projectFile, string command, DirectoryInfo workingDirectory, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken);
     Task<(int ExitCode, string? TemplateVersion)> InstallTemplateAsync(string packageName, string version, FileInfo? nugetConfigFile, string? nugetSource, bool force, ProcessInvocationOptions options, CancellationToken cancellationToken);
@@ -502,6 +502,7 @@ internal sealed class DotNetCliRunner(
             projectFile,
             ["PackageReference", "AspireProjectOrPackageReference", "PackageVersion"],
             ["IsAspireHost", "AspireHostingSDKVersion"],
+            targets: [],
             options,
             cancellationToken);
 
@@ -582,7 +583,7 @@ internal sealed class DotNetCliRunner(
         return null;
     }
 
-    public async Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public async Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, string[] targets, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -605,6 +606,16 @@ internal sealed class DotNetCliRunner(
         if (items.Length > 0)
         {
             cliArgsList.Add($"-getItem:{string.Join(",", items)}");
+        }
+
+        if (targets.Length > 0)
+        {
+            // Request MSBuild to actually run these targets before evaluating -getProperty / -getItem.
+            // Some run-related properties (RunCommand, RunArguments, RunWorkingDirectory) are only
+            // populated after the ComputeRunArguments target executes, so the direct-launch path
+            // matches what `dotnet run` would have produced.
+            // https://learn.microsoft.com/visualstudio/msbuild/msbuild-command-line-reference#switches
+            cliArgsList.Add($"-t:{string.Join(";", targets)}");
         }
 
         cliArgsList.Add(projectFile.FullName);

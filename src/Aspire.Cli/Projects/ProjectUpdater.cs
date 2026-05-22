@@ -220,7 +220,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
         var (exitCode, document) = await cache.GetOrCreateAsync(cacheKey, async entry =>
         {
-            return await runner.GetProjectItemsAndPropertiesAsync(projectFile, items, properties, new(), cancellationToken);
+            return await runner.GetProjectItemsAndPropertiesAsync(projectFile, items, properties, targets: [], new(), cancellationToken);
         });
 
         if (exitCode != 0 || document is null)

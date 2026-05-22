@@ -1580,6 +1580,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             appHostFile,
             ["PackageReference"],
             ["AspireHostingSDKVersion"],
+            targets: [],
             options,
             CancellationToken.None
         );
@@ -1704,6 +1705,82 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             projectFile,
             ["PackageReference"],
             ["AspireHostingSDKVersion"],
+            targets: [],
+            options,
+            CancellationToken.None
+        );
+    }
+
+    [Fact]
+    public async Task GetProjectItemsAndPropertiesAsync_EmitsTargetSwitch_WhenTargetsRequested()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var options = new ProcessInvocationOptions();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, _, _, invocationOptions) =>
+            {
+                // The Run* properties need ComputeRunArguments to have executed before
+                // -getProperty reads them, so the runner must add -t:ComputeRunArguments.
+                Assert.Contains("-t:ComputeRunArguments;Build", args);
+
+                invocationOptions.StandardOutputCallback?.Invoke("{\"Properties\":{\"MSBuildVersion\":\"17.0.0\",\"RunCommand\":\"/bin/AppHost\"},\"Items\":{}}");
+            },
+            0);
+
+        var (exitCode, output) = await runner.GetProjectItemsAndPropertiesAsync(
+            projectFile,
+            items: [],
+            properties: ["RunCommand"],
+            targets: ["ComputeRunArguments", "Build"],
+            options,
+            CancellationToken.None
+        );
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(output);
+    }
+
+    [Fact]
+    public async Task GetProjectItemsAndPropertiesAsync_OmitsTargetSwitch_WhenNoTargetsRequested()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var options = new ProcessInvocationOptions();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, _, _, invocationOptions) =>
+            {
+                // No targets requested means no -t: switch should be added so MSBuild only
+                // evaluates the project (the existing fast property/item probe behavior).
+                Assert.DoesNotContain(args, a => a.StartsWith("-t:", StringComparison.Ordinal));
+
+                invocationOptions.StandardOutputCallback?.Invoke("{\"Properties\":{\"MSBuildVersion\":\"17.0.0\",\"AspireHostingSDKVersion\":\"9.0.0\"},\"Items\":{\"PackageReference\":[]}}");
+            },
+            0);
+
+        await runner.GetProjectItemsAndPropertiesAsync(
+            projectFile,
+            ["PackageReference"],
+            ["AspireHostingSDKVersion"],
+            targets: [],
             options,
             CancellationToken.None
         );

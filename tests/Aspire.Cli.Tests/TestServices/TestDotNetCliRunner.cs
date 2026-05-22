@@ -17,6 +17,8 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, int>? RestoreAsyncCallback { get; set; }
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, bool IsAspireHost, string? AspireHostingVersion)>? GetAppHostInformationAsyncCallback { get; set; }
     public Func<DirectoryInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, string[] ConfigPaths)>? GetNuGetConfigPathsAsyncCallback { get; set; }
+    public Func<FileInfo, string[], string[], string[], ProcessInvocationOptions, CancellationToken, Task<(int ExitCode, JsonDocument? Output)>>? GetProjectItemsAndPropertiesAsyncCallbackWithTargetsAsync { get; set; }
+    public Func<FileInfo, string[], string[], string[], ProcessInvocationOptions, CancellationToken, (int ExitCode, JsonDocument? Output)>? GetProjectItemsAndPropertiesAsyncCallbackWithTargets { get; set; }
     public Func<FileInfo, string[], string[], ProcessInvocationOptions, CancellationToken, Task<(int ExitCode, JsonDocument? Output)>>? GetProjectItemsAndPropertiesAsyncCallbackAsync { get; set; }
     public Func<FileInfo, string[], string[], ProcessInvocationOptions, CancellationToken, (int ExitCode, JsonDocument? Output)>? GetProjectItemsAndPropertiesAsyncCallback { get; set; }
     public Func<string, string, FileInfo?, string?, bool, ProcessInvocationOptions, CancellationToken, (int ExitCode, string? TemplateVersion)>? InstallTemplateAsyncCallback { get; set; }
@@ -80,8 +82,19 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
         };
     }
 
-    public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, ProcessInvocationOptions options, CancellationToken cancellationToken)
+    public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, string[] targets, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
+        // Prefer the targets-aware callbacks when tests need to assert on the targets argument.
+        if (GetProjectItemsAndPropertiesAsyncCallbackWithTargetsAsync != null)
+        {
+            return GetProjectItemsAndPropertiesAsyncCallbackWithTargetsAsync(projectFile, items, properties, targets, options, cancellationToken);
+        }
+
+        if (GetProjectItemsAndPropertiesAsyncCallbackWithTargets != null)
+        {
+            return Task.FromResult(GetProjectItemsAndPropertiesAsyncCallbackWithTargets(projectFile, items, properties, targets, options, cancellationToken));
+        }
+
         if (GetProjectItemsAndPropertiesAsyncCallbackAsync != null)
         {
             return GetProjectItemsAndPropertiesAsyncCallbackAsync(projectFile, items, properties, options, cancellationToken);
