@@ -680,6 +680,16 @@ internal sealed class RunCommand : BaseCommand
         {
             throw new OperationCanceledException(ex.Message, ex, cancellationToken);
         }
+        catch (AppHostExitedDuringStartupException)
+        {
+            // Intentional detached-startup signal from RunStartupHappyPathAsync: the AppHost
+            // exited cleanly during the detached-start early-exit observation window. The
+            // exit code and captured AppHost output already describe the outcome, so let it
+            // propagate as-is and avoid wrapping it with the generic "unexpected error"
+            // template (the AppHost exit isn't really unexpected at this point).
+            DisplayRecentAppHostStartupOutput(InteractionService, outputCollector, appHostStartupOutputStartIndex);
+            throw;
+        }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Happy path threw before the AppHost system task completed. A
