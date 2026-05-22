@@ -5,7 +5,7 @@ namespace Aspire.Dashboard.Model.Otlp;
 
 public static class TelemetryFilterExtensions
 {
-    public static bool IsDurationFilter(this TelemetryFilter filter)
+    public static bool IsTraceDurationFilter(this TelemetryFilter filter)
         => filter is FieldTelemetryFilter { Field: KnownTraceFields.DurationField };
 
     public static bool HasNumericMatch(this TelemetryFilter filter, double fieldValue)

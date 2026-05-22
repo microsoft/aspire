@@ -726,7 +726,7 @@ public sealed partial class TelemetryRepository : IDisposable
         // Duration filters apply to the trace's overall duration, not individual spans.
         foreach (var filter in filters)
         {
-            if (filter.IsDurationFilter() && !filter.HasNumericMatch(trace.Duration.TotalMilliseconds))
+            if (filter.IsTraceDurationFilter() && !filter.HasNumericMatch(trace.Duration.TotalMilliseconds))
             {
                 return false;
             }
@@ -738,7 +738,7 @@ public sealed partial class TelemetryRepository : IDisposable
             var match = true;
             foreach (var filter in filters)
             {
-                if (filter.IsDurationFilter())
+                if (filter.IsTraceDurationFilter())
                 {
                     continue;
                 }
@@ -801,7 +801,7 @@ public sealed partial class TelemetryRepository : IDisposable
     {
         public bool IsOptimized => OptimizedDurationFilter is not null || OptimizedStringFilter is not null;
 
-        public bool IsDurationFilter => OptimizedDurationFilter is not null || Filter.IsDurationFilter();
+        public bool IsDurationFilter => OptimizedDurationFilter is not null || Filter.IsTraceDurationFilter();
 
         public static TraceFilter Create(TelemetryFilter filter)
         {
@@ -835,7 +835,7 @@ public sealed partial class TelemetryRepository : IDisposable
                 return durationFilter.Apply(traceDurationMs);
             }
 
-            return Filter.IsDurationFilter() && Filter.HasNumericMatch(traceDurationMs);
+            return Filter.IsTraceDurationFilter() && Filter.HasNumericMatch(traceDurationMs);
         }
     }
 
