@@ -154,6 +154,7 @@ func main() {
 		&aspire.AddConnectionStringOptions{EnvironmentVariableNameOrExpression: expr})
 
 	envConnectionString := builder.AddConnectionString("envcs")
+	externalService := builder.AddExternalService("external-service", "https://example.com")
 
 	// ===================================================================
 	// ResourceBuilderExtensions on ContainerResource
@@ -173,6 +174,9 @@ func main() {
 
 	// WithEnvironment — with connection string resource
 	container.WithEnvironment("MY_CONN", envConnectionString)
+
+	// WithEnvironment — with external service resource
+	container.WithEnvironment("MY_EXTERNAL_SERVICE", externalService)
 
 	// ExcludeFromManifest
 	container.ExcludeFromManifest()
