@@ -17,5 +17,5 @@ cask "aspire" do
 
   binary "aspire"
 
-  zap trash: "~/.aspire"
+  # No zap stanza required
 end
