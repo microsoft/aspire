@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Ats;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Kubernetes.Resources;
 using YamlDotNet.Serialization;
@@ -103,7 +104,7 @@ public static class KubernetesCustomResourceExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Adds a spec file to a CRD resource.</ats-summary>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "CustomResourceSpecV1 is not supported by ATS.")]
     public static IResourceBuilder<KubernetesCustomResourceResource> WithSpec(
         this IResourceBuilder<KubernetesCustomResourceResource> builder,
         CustomResourceSpecV1 spec)
@@ -111,6 +112,28 @@ public static class KubernetesCustomResourceExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Resource.Spec = spec;
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Sets the spec to use on the custom resource from an arbitrary model object.
+    /// </summary>
+    /// <param name="builder">The custom resource builder.</param>
+    /// <param name="spec">The spec object to publish with the manifests. This can be any model-style object composed of properties and nested objects only.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesCustomResourceResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// This overload is intended for polyglot apphosts and accepts arbitrary object models that can be serialized to YAML.
+    /// </remarks>
+    [AspireExport]
+    internal static IResourceBuilder<KubernetesCustomResourceResource> WithSpec(
+        this IResourceBuilder<KubernetesCustomResourceResource> builder,
+        CustomAtsObjectDto spec)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(spec);
+
+        builder.Resource.Spec = spec.Object;
 
         return builder;
     }

@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -272,7 +273,7 @@ public class KubernetesCustomResourceExtensionsTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var resource = k8s.AddCustomResource("my-resource", "v1", "ConfigMap");
 
-        resource.WithSpec(null!);
+        resource.WithSpec((CustomResourceSpecV1)null!);
 
         Assert.Null(resource.Resource.Spec);
     }

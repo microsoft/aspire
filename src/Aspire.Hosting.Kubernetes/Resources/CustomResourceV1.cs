@@ -9,7 +9,6 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// This represents a spec for a custom resource. The class should be implemented by any model that wants to be
 /// used as a spec. Using an abstract class ensures primitives or other non-key-value types cannot be used as a spec.
 /// </summary>
-[AspireExport]
 public abstract class CustomResourceSpecV1;
 
 /// <summary>
@@ -24,5 +23,5 @@ public sealed class CustomResourceV1(string apiVersion, string kind) : BaseKuber
     /// Gets or sets the spec for a Kubernetes resource.
     /// </summary>
     [YamlMember(Alias = "spec")]
-    public CustomResourceSpecV1? Spec { get; set; }
+    public object? Spec { get; set; }
 }

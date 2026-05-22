@@ -18,10 +18,14 @@ public sealed class KubernetesCustomResourceResource(
     /// </summary>
     public KubernetesEnvironmentResource Parent { get; } = environment ?? throw new ArgumentNullException(nameof(environment));
 
-    /// <inheritdoc /> 
+    /// <summary>
+    /// Gets or sets the api version.
+    /// </summary>
     public ReferenceExpression ApiVersion { get; set; } = ReferenceExpression.Empty;
 
-    /// <inheritdoc /> 
+    /// <summary>
+    /// Gets or sets the "kind" value for the CRD manifest.
+    /// </summary>
     public ReferenceExpression Kind { get; set; } = ReferenceExpression.Empty;
 
     /// <summary>
@@ -29,9 +33,13 @@ public sealed class KubernetesCustomResourceResource(
     /// </summary>
     public ObjectMetaV1? Metadata { get; set; }
 
-    /// <inheritdoc /> 
-    public CustomResourceSpecV1? Spec { get; set; }
+    /// <summary>
+    /// Gets or sets the "spec" of a Kubernetes manifest.
+    /// </summary>
+    public object? Spec { get; set; }
     
-    /// <inheritdoc />
-    public CustomResourceV1? GeneratedResource { get; set; }
+    /// <summary>
+    /// Gets or sets a <see cref="CustomResourceV1"/> that is ready for publishing to the Kubernetes manifest.
+    /// </summary>
+    internal CustomResourceV1? GeneratedResource { get; set; }
 }
