@@ -402,8 +402,8 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
             distributedApplicationLogger.LogInformation("Now listening on: {DashboardUrl}", dashboardUrl.TrimEnd('/'));
 
-            var otlpGrpcUrl = await GetEndpointUrlAsync(resourceWithEndpoints, KnownEndpointNames.OtlpGrpcEndpointName, cancellationToken).ConfigureAwait(false) ?? otlpGrpcEndpointUrl;
-            var otlpHttpUrl = await GetEndpointUrlAsync(resourceWithEndpoints, KnownEndpointNames.OtlpHttpEndpointName, cancellationToken).ConfigureAwait(false) ?? otlpHttpEndpointUrl;
+            var otlpGrpcUrl = otlpGrpcEndpointUrl ?? await GetEndpointUrlAsync(resourceWithEndpoints, KnownEndpointNames.OtlpGrpcEndpointName, cancellationToken).ConfigureAwait(false);
+            var otlpHttpUrl = otlpHttpEndpointUrl ?? await GetEndpointUrlAsync(resourceWithEndpoints, KnownEndpointNames.OtlpHttpEndpointName, cancellationToken).ConfigureAwait(false);
 
             LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, browserToken, isContainer: false);
         });

@@ -280,6 +280,65 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ResourceReadyEvent_LogsConfiguredOtlpUrlsWhenConfigured()
+    {
+        var testSink = new TestSink();
+        var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Information);
+            b.AddProvider(new TestLoggerProvider(testSink));
+            b.AddXunit(testOutputHelper);
+        });
+        var distributedAppLogger = loggerFactory.CreateLogger<DistributedApplication>();
+
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:18888",
+            DashboardToken = "test-token",
+            OtlpGrpcEndpointUrl = "http://otel-grpc.example.com:1234",
+            OtlpHttpEndpointUrl = "http://otel-http.example.com:5678",
+        });
+
+        var eventing = new Hosting.Eventing.DistributedApplicationEventing();
+
+        var hook = CreateHook(
+            resourceLoggerService,
+            resourceNotificationService,
+            configuration,
+            dashboardOptions: dashboardOptions,
+            eventing: eventing,
+            distributedApplicationLogger: distributedAppLogger);
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+
+        var httpEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+        httpEndpointAnnotation.AllocatedEndpoint = new(httpEndpointAnnotation, "localhost", 18888, targetPortExpression: "18888");
+        var otlpGrpcEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        otlpGrpcEndpointAnnotation.AllocatedEndpoint = new(otlpGrpcEndpointAnnotation, "localhost", 4317, targetPortExpression: "4317");
+        var otlpHttpEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        otlpHttpEndpointAnnotation.AllocatedEndpoint = new(otlpHttpEndpointAnnotation, "localhost", 4318, targetPortExpression: "4318");
+
+        var readyEvent = new ResourceReadyEvent(dashboardResource, new TestServiceProvider());
+        await eventing.PublishAsync(readyEvent, CancellationToken.None).DefaultTimeout();
+
+        var summaryLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);
+
+        Assert.NotNull(summaryLog);
+        Assert.Equal("http://otel-grpc.example.com:1234", LogTestHelpers.GetValue(summaryLog, "OtlpGrpcUrl"));
+        Assert.Equal("http://otel-http.example.com:5678", LogTestHelpers.GetValue(summaryLog, "OtlpHttpUrl"));
+    }
+
+    [Fact]
     public async Task AddDashboardResource_CreatesExecutableResourceWithCustomRuntimeConfig()
     {
         // Arrange
