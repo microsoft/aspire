@@ -1820,6 +1820,10 @@ public class CSharpAppResource extends ProjectResource {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public CSharpAppResource withEnvironment(String name, ExternalServiceResource value) {
+        return withEnvironment(name, AspireUnion.of(value));
+    }
+
     public CSharpAppResource withEnvironment(String name, IResourceWithConnectionString value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
@@ -5232,6 +5236,10 @@ public class ContainerResource extends ResourceBuilderBase {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public ContainerResource withEnvironment(String name, ExternalServiceResource value) {
+        return withEnvironment(name, AspireUnion.of(value));
+    }
+
     public ContainerResource withEnvironment(String name, IResourceWithConnectionString value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
@@ -7476,6 +7484,10 @@ public class DotnetToolResource extends ExecutableResource {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public DotnetToolResource withEnvironment(String name, ExternalServiceResource value) {
+        return withEnvironment(name, AspireUnion.of(value));
+    }
+
     public DotnetToolResource withEnvironment(String name, IResourceWithConnectionString value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
@@ -9665,6 +9677,10 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     public ExecutableResource withEnvironment(String name, ParameterResource value) {
+        return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public ExecutableResource withEnvironment(String name, ExternalServiceResource value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
@@ -16179,6 +16195,10 @@ public class ProjectResource extends ResourceBuilderBase {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public ProjectResource withEnvironment(String name, ExternalServiceResource value) {
+        return withEnvironment(name, AspireUnion.of(value));
+    }
+
     public ProjectResource withEnvironment(String name, IResourceWithConnectionString value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
@@ -19128,6 +19148,10 @@ public class TestDatabaseResource extends ContainerResource {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
+    public TestDatabaseResource withEnvironment(String name, ExternalServiceResource value) {
+        return withEnvironment(name, AspireUnion.of(value));
+    }
+
     public TestDatabaseResource withEnvironment(String name, IResourceWithConnectionString value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
@@ -21139,6 +21163,10 @@ public class TestRedisResource extends ContainerResource {
     }
 
     public TestRedisResource withEnvironment(String name, ParameterResource value) {
+        return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public TestRedisResource withEnvironment(String name, ExternalServiceResource value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
@@ -23225,6 +23253,10 @@ public class TestVaultResource extends ContainerResource {
     }
 
     public TestVaultResource withEnvironment(String name, ParameterResource value) {
+        return withEnvironment(name, AspireUnion.of(value));
+    }
+
+    public TestVaultResource withEnvironment(String name, ExternalServiceResource value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
 
