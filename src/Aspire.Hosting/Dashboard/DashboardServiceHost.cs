@@ -145,7 +145,7 @@ internal sealed class DashboardServiceHost : IHostedService
             if (uri is null)
             {
                 // No URI available from the environment.
-                scheme = allowUnsecuredTransport ? "http" : "https";
+                scheme = null;
 
                 // Listen on a random port.
                 kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
