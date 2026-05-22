@@ -41,11 +41,6 @@ jobs:
       - name: Prepare Homebrew cask artifact
         if: ${{ inputs.installer == 'homebrew' }}
         shell: bash
-        env:
-          # Authenticate the upstream-cask existence check inside
-          # validate-cask-artifact.sh; unauthenticated requests hit the 60/hour
-          # shared rate limit and return 403.
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >
           eng/homebrew/prepare-cask-artifact.sh
           --channel prerelease
