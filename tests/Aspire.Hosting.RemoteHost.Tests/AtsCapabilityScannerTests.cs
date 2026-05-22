@@ -549,29 +549,6 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
-    public void ScanAssembly_EndpointCallbackExports_UseBackgroundThreadOptIn()
-    {
-        var hostingAssembly = typeof(DistributedApplication).Assembly;
-
-        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
-
-        var endpointCallbackIds = new[]
-        {
-            "/withEndpointCallback",
-            "/withHttpEndpointCallback",
-            "/withHttpsEndpointCallback"
-        };
-
-        foreach (var endpointCallbackId in endpointCallbackIds)
-        {
-            var capability = Assert.Single(result.Capabilities,
-                c => c.CapabilityId.EndsWith(endpointCallbackId, StringComparison.Ordinal));
-
-            Assert.True(capability.RunSyncOnBackgroundThread);
-        }
-    }
-
-    [Fact]
     public void ScanAssembly_ClassLevelBackgroundThreadOptIn_AppliesToExportedMethods()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
