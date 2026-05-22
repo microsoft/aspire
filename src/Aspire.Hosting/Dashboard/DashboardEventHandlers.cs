@@ -369,11 +369,12 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         eventing.Subscribe<ResourceReadyEvent>(dashboardResource, async (@event, cancellationToken) =>
         {
             var browserToken = options.DashboardToken;
+            var resourceWithEndpoints = @event.Resource as IResourceWithEndpoints;
 
             // Get the actual allocated URL from the dashboard resource endpoint
             string? dashboardUrl = null;
 
-            if (@event.Resource is IResourceWithEndpoints resourceWithEndpoints)
+            if (resourceWithEndpoints is not null)
             {
                 // Try HTTPS first, then HTTP
                 var httpsEndpoint = resourceWithEndpoints.GetEndpoint("https");
@@ -401,7 +402,10 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
             distributedApplicationLogger.LogInformation("Now listening on: {DashboardUrl}", dashboardUrl.TrimEnd('/'));
 
-            LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcEndpointUrl, otlpHttpEndpointUrl, browserToken, isContainer: false);
+            var otlpGrpcUrl = await GetEndpointUrlAsync(resourceWithEndpoints, KnownEndpointNames.OtlpGrpcEndpointName, cancellationToken).ConfigureAwait(false) ?? otlpGrpcEndpointUrl;
+            var otlpHttpUrl = await GetEndpointUrlAsync(resourceWithEndpoints, KnownEndpointNames.OtlpHttpEndpointName, cancellationToken).ConfigureAwait(false) ?? otlpHttpEndpointUrl;
+
+            LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, browserToken, isContainer: false);
         });
 
         if (string.IsNullOrWhiteSpace(dashboardUrls))
@@ -434,7 +438,9 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             }
         }
 
-        if (otlpHttpEndpointUrl is not null)
+        // When neither OTLP endpoint is configured, create both dynamic defaults so server-side
+        // and browser telemetry work without requiring explicit launch profile configuration.
+        if (otlpHttpEndpointUrl is not null || otlpGrpcEndpointUrl is null)
         {
             dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName, allowUnsecureTransport));
         }
@@ -518,6 +524,19 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         dashboardResource.Annotations.Add(new ResourceSnapshotAnnotation(snapshot));
 
         dashboardResource.Annotations.Add(new EnvironmentCallbackAnnotation(ConfigureEnvironmentVariables));
+    }
+
+    private static async ValueTask<string?> GetEndpointUrlAsync(IResourceWithEndpoints? resourceWithEndpoints, string endpointName, CancellationToken cancellationToken)
+    {
+        if (resourceWithEndpoints is null)
+        {
+            return null;
+        }
+
+        var endpoint = resourceWithEndpoints.GetEndpoint(endpointName);
+        return endpoint.Exists
+            ? await EndpointHostHelpers.GetUrlWithTargetHostAsync(endpoint, cancellationToken).ConfigureAwait(false)
+            : null;
     }
 
     internal async Task ConfigureEnvironmentVariables(EnvironmentCallbackContext context)

@@ -180,7 +180,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(KnownConfigNames.DashboardOtlpGrpcEndpointUrl)]
     [InlineData(KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl)]
-    public async Task DashboardWithBlankOtlpEndpoint_AutoConfiguresDynamicOtlpGrpcPort(string dashboardOtlpGrpcEndpointUrlKey)
+    public async Task DashboardWithBlankOtlpEndpoint_AutoConfiguresDynamicOtlpPorts(string dashboardOtlpGrpcEndpointUrlKey)
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = false,
@@ -201,13 +201,17 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var dashboard = Assert.Single(model.Resources);
         var otlpGrpcEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        var otlpHttpEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
         var dashboardOptions = app.Services.GetRequiredService<IOptions<DashboardOptions>>().Value;
 
         Assert.Null(dashboardOptions.OtlpGrpcEndpointUrl);
+        Assert.Null(dashboardOptions.OtlpHttpEndpointUrl);
         Assert.Equal("https", otlpGrpcEndpoint.UriScheme);
         Assert.Equal("localhost", otlpGrpcEndpoint.TargetHost);
         Assert.Null(otlpGrpcEndpoint.Port);
-        Assert.DoesNotContain(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        Assert.Equal("https", otlpHttpEndpoint.UriScheme);
+        Assert.Equal("localhost", otlpHttpEndpoint.TargetHost);
+        Assert.Null(otlpHttpEndpoint.Port);
     }
 
     [Fact]
@@ -231,11 +235,14 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var dashboard = Assert.Single(model.Resources);
         var otlpGrpcEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        var otlpHttpEndpoint = Assert.Single(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
 
         Assert.Equal("http", otlpGrpcEndpoint.UriScheme);
         Assert.Equal("localhost", otlpGrpcEndpoint.TargetHost);
         Assert.Null(otlpGrpcEndpoint.Port);
-        Assert.DoesNotContain(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        Assert.Equal("http", otlpHttpEndpoint.UriScheme);
+        Assert.Equal("localhost", otlpHttpEndpoint.TargetHost);
+        Assert.Null(otlpHttpEndpoint.Port);
     }
 
     [Theory]
@@ -454,6 +461,54 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(dashboard, DistributedApplicationOperation.Run, app.Services).DefaultTimeout();
 
         var expectedAllowedOrigins = !string.IsNullOrEmpty(explicitCorsAllowedOrigins) ? explicitCorsAllowedOrigins : "http://localhost:8081,http://localhost:58080";
+        Assert.Equal("http://localhost:5002", config.Single(e => e.Key == DashboardConfigNames.DashboardOtlpHttpUrlName.EnvVarName).Value);
+        Assert.Equal(expectedAllowedOrigins, config.Single(e => e.Key == DashboardConfigNames.DashboardOtlpCorsAllowedOriginsKeyName.EnvVarName).Value);
+        Assert.Equal("*", config.Single(e => e.Key == DashboardConfigNames.DashboardOtlpCorsAllowedHeadersKeyName.EnvVarName).Value);
+        Assert.DoesNotContain(config, e => e.Key == corsAllowedOriginsKey);
+    }
+
+    [Theory]
+    [InlineData("*", KnownConfigNames.DashboardCorsAllowedOrigins)]
+    [InlineData(null, KnownConfigNames.Legacy.DashboardCorsAllowedOrigins)]
+    public async Task DashboardResource_DynamicOtlpHttpEndpoint_CorsEnvVarSet(string? explicitCorsAllowedOrigins, string corsAllowedOriginsKey)
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = false,
+            testOutputHelper: testOutputHelper);
+
+        builder.AddContainer("my-container", "my-image").WithHttpEndpoint(port: 8080, targetPort: 58080);
+
+        builder.Services.AddSingleton<IDashboardEndpointProvider, MockDashboardEndpointProvider>();
+
+        builder.Configuration.Sources.Clear();
+
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [corsAllowedOriginsKey] = explicitCorsAllowedOrigins
+        });
+
+        using var app = builder.Build();
+
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Hack in an AllocatedEndpoint. This is what is used to build the list of CORS endpoints.
+        var container = Assert.Single(model.Resources, r => r.Name == "my-container");
+        var endpointAnnotation = Assert.Single(container.Annotations.OfType<EndpointAnnotation>());
+        endpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(endpointAnnotation, "localhost", 8081);
+
+        var dashboard = Assert.Single(model.Resources, r => r.Name == "aspire-dashboard");
+        Assert.Contains(dashboard.Annotations.OfType<EndpointAnnotation>(), e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+
+        SetDashboardAllocatedEndpoints(dashboard, otlpGrpcPort: 5001, otlpHttpPort: 5002, httpPort: 5003, httpsPort: 5005);
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(dashboard, DistributedApplicationOperation.Run, app.Services).DefaultTimeout();
+
+        var expectedAllowedOrigins = !string.IsNullOrEmpty(explicitCorsAllowedOrigins) ? explicitCorsAllowedOrigins : "http://localhost:8081,http://localhost:58080";
+        Assert.Equal("https://localhost:5001", config.Single(e => e.Key == DashboardConfigNames.DashboardOtlpGrpcUrlName.EnvVarName).Value);
+        Assert.Equal("https://localhost:5002", config.Single(e => e.Key == DashboardConfigNames.DashboardOtlpHttpUrlName.EnvVarName).Value);
         Assert.Equal(expectedAllowedOrigins, config.Single(e => e.Key == DashboardConfigNames.DashboardOtlpCorsAllowedOriginsKeyName.EnvVarName).Value);
         Assert.Equal("*", config.Single(e => e.Key == DashboardConfigNames.DashboardOtlpCorsAllowedHeadersKeyName.EnvVarName).Value);
         Assert.DoesNotContain(config, e => e.Key == corsAllowedOriginsKey);

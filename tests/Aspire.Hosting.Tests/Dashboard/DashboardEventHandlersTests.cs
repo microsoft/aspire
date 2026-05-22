@@ -224,7 +224,6 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             DashboardPath = "test.dll",
             DashboardUrl = configuredUrl,
             DashboardToken = "test-token",
-            OtlpGrpcEndpointUrl = "http://localhost:4317",
         });
 
         var eventing = new Hosting.Eventing.DistributedApplicationEventing();
@@ -247,6 +246,10 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         // Set up allocated endpoint - DCP allocates "localhost" as the address since localhost TLD binds to localhost
         var endpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == expectedScheme);
         endpointAnnotation.AllocatedEndpoint = new(endpointAnnotation, "localhost", allocatedPort, targetPortExpression: allocatedPort.ToString());
+        var otlpGrpcEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        otlpGrpcEndpointAnnotation.AllocatedEndpoint = new(otlpGrpcEndpointAnnotation, "localhost", 4317, targetPortExpression: "4317");
+        var otlpHttpEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        otlpHttpEndpointAnnotation.AllocatedEndpoint = new(otlpHttpEndpointAnnotation, "localhost", 4318, targetPortExpression: "4318");
 
         // Fire the ResourceReadyEvent
         var readyEvent = new ResourceReadyEvent(dashboardResource, new TestServiceProvider());
@@ -267,6 +270,13 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(expectedHost, uri.Host);
         Assert.Equal(allocatedPort, uri.Port);
         Assert.Equal(expectedScheme, uri.Scheme);
+
+        var summaryLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);
+
+        Assert.NotNull(summaryLog);
+        Assert.Equal("https://localhost:4317", LogTestHelpers.GetValue(summaryLog, "OtlpGrpcUrl"));
+        Assert.Equal("https://localhost:4318", LogTestHelpers.GetValue(summaryLog, "OtlpHttpUrl"));
     }
 
     [Fact]
