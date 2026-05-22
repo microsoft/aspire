@@ -314,7 +314,12 @@ internal sealed class RunCommand : BaseCommand
             {
                 backchannel = await InteractionService.ShowStatusAsync(
                     RunCommandStrings.ConnectingToAppHost,
-                    async () => await backchannelCompletionSource.Task.WaitAsync(cancellationToken));
+                    async () => await WaitForStartupOperationOrAppHostExitAsync(
+                        ct => backchannelCompletionSource.Task.WaitAsync(ct),
+                        pendingRun,
+                        InteractionService,
+                        DisplayAppHostStartupOutput,
+                        cancellationToken));
                 waitForBackchannelActivity.SetAppHostBackchannelConnected(true);
             }
 
