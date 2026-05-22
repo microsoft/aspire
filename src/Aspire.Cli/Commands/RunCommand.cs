@@ -75,9 +75,9 @@ internal sealed class RunCommand : BaseCommand
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
 
-    // Detached AppHosts can bring up the temporary server/backchannel and then fail immediately
+    // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation
-    // error. Keep detached startup waits alive briefly so those failures are reported instead of hidden.
+    // error. Keep guest AppHost startup waits alive briefly so those failures are reported instead of hidden.
     private static readonly TimeSpan s_startupFailureObservationWindow = TimeSpan.FromSeconds(2);
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
