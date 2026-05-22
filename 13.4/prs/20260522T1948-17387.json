@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Makes ITokenCredentialProvider public in Aspire.Hosting.Azure so external integrations can reuse Aspire's TokenCredential",
+  "mergedAt": "2026-05-22T19:48:58Z",
+  "number": 17387,
+  "runDate": "2026-05-22T20:41:09Z",
+  "status": "included",
+  "title": "Make ITokenCredentialProvider public"
+}
