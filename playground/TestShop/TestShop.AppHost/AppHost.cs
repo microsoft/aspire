@@ -84,8 +84,7 @@ var basketService = builder.AddProject("basketservice", @"..\BasketService\Baske
                            .WithReference(basketCache)
                            .WaitFor(basketCache)
                            .WithReference(messaging)
-                           .WaitFor(messaging)
-                           .WithHttpHealthCheck("/health", endpointName: "http");
+                           .WaitFor(messaging);
 
 var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
     .WithExternalHttpEndpoints()
