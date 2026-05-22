@@ -169,7 +169,11 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         AddEvent(activity, ProfilingTelemetry.Events.GuestProcessExited, TelemetryConstants.Tags.ProcessExitCode, process.ExitCode);
 
         // Wait for the redirected streams to finish draining so no trailing lines are lost.
-        if (!await WaitForDrainAsync(Task.WhenAll(stdoutCompleted.Task, stderrCompleted.Task), cancellationToken))
+        // Pass a fresh token rather than the outer cancellation token: when WaitForExitAsync
+        // above was canceled we deliberately killed the process and want to give the streams
+        // their full 5s grace period to flush trailing lines, otherwise drain would short-circuit
+        // immediately and we'd both drop output and log a misleading "drain timeout" warning.
+        if (!await WaitForDrainAsync(Task.WhenAll(stdoutCompleted.Task, stderrCompleted.Task)))
         {
             AddEvent(activity, ProfilingTelemetry.Events.GuestOutputDrainTimeout, TelemetryConstants.Tags.ProcessPid, process.Id);
             _logger.LogWarning("{Language}({ProcessId}): Timed out waiting for output streams to drain after process exit", _language, process.Id);
@@ -203,10 +207,13 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         }));
     }
 
-    private static async Task<bool> WaitForDrainAsync(Task drainTask, CancellationToken cancellationToken)
+    private static async Task<bool> WaitForDrainAsync(Task drainTask)
     {
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
+        // Bounded grace period for stdout/stderr to flush after the process exits. Intentionally
+        // does not honor any outer cancellation token: callers reach here after killing the
+        // process on cancellation and we want to give the streams their full budget to surface
+        // trailing output regardless of why we got here.
+        using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         try
         {
             await drainTask.WaitAsync(timeoutCts.Token);
@@ -214,9 +221,6 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         }
         catch (OperationCanceledException)
         {
-            // Return false (drain incomplete) for both the 5s timeout and outer cancellation. The
-            // LaunchAsync OCE catch deliberately swallows cancellation so the caller can read the
-            // killed process's exit code, so we must not let a second OCE escape from drain.
             return false;
         }
     }
