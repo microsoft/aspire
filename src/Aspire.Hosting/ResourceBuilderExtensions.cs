@@ -243,6 +243,7 @@ public static class ResourceBuilderExtensions
             typeof(ReferenceExpression),
             typeof(EndpointReference),
             typeof(IResourceBuilder<ParameterResource>),
+            typeof(IResourceBuilder<ExternalServiceResource>),
             typeof(IResourceBuilder<IResourceWithConnectionString>),
             typeof(IExpressionValue))]
         object value)
@@ -258,11 +259,12 @@ public static class ResourceBuilderExtensions
             ReferenceExpression expression => builder.WithEnvironment(name, expression),
             EndpointReference endpointReference => builder.WithEnvironment(name, endpointReference),
             IResourceBuilder<ParameterResource> parameter => builder.WithEnvironment(name, parameter),
+            IResourceBuilder<ExternalServiceResource> externalService => builder.WithEnvironment(name, externalService),
             IResourceBuilder<IResourceWithConnectionString> connectionStringResource => builder.WithEnvironment(name, connectionStringResource),
             IExpressionValue expressionValue => builder.WithEnvironmentExpressionValue(name, expressionValue),
             IValueProvider and IManifestExpressionProvider => builder.WithEnvironmentValueProvider(name, value),
             _ => throw new ArgumentException(
-                $"Unsupported value type '{value.GetType().Name}'. Expected string, ReferenceExpression, EndpointReference, ParameterResource, connection string resource, or an IExpressionValue.",
+                $"Unsupported value type '{value.GetType().Name}'. Expected string, ReferenceExpression, EndpointReference, ParameterResource, external service resource, connection string resource, or an IExpressionValue.",
                 nameof(value))
         };
     }
@@ -416,8 +418,8 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="externalService">The external service.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, IResourceBuilder{IResourceWithServiceDiscovery})"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "Specialized overload — withReference covers this use case.")]
+    /// <remarks>Polyglot app hosts use the internal withEnvironment dispatcher export.</remarks>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ExternalServiceResource> externalService)
         where T : IResourceWithEnvironment
     {
