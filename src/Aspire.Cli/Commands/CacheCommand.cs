@@ -30,8 +30,6 @@ internal sealed class CacheCommand : ParentCommand
         {
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
         protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             try

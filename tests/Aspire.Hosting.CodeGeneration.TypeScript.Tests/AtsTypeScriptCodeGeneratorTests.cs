@@ -103,15 +103,16 @@ public class AtsTypeScriptCodeGeneratorTests
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.mts"];
 
-        Assert.DoesNotContain("export class ReferenceExpression {", files["aspire.mts"]);
+        Assert.DoesNotContain("export class ReferenceExpression {", aspireTs);
         Assert.Contains("export class ReferenceExpression {", files["base.mts"]);
         Assert.Contains("registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression'", files["base.mts"]);
         Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.mts"]);
         Assert.Contains("('$handle' in json || '$expr' in json)", files["base.mts"]);
         Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.mts"]);
-        Assert.Contains("arguments(): Promise<InteractionInputCollection>", files["aspire.mts"]);
-        Assert.DoesNotContain("setArguments", files["aspire.mts"]);
+        Assert.Contains("arguments(): Promise<InteractionInputCollection>", aspireTs);
+        Assert.DoesNotContain("setArguments", aspireTs);
     }
 
     [Fact]
@@ -1276,6 +1277,9 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("getLoggerFactory", aspireTs);
         Assert.Contains("createLogger", aspireTs);
         Assert.Contains("getResourceLoggerService", aspireTs);
+        Assert.Contains("getResourceCommandService", aspireTs);
+        Assert.Contains("executeCommandAsync", aspireTs);
+        Assert.Contains("ExecuteCommandResult", aspireTs);
         Assert.Contains("getResourceNotificationService", aspireTs);
         Assert.Contains("getDistributedApplicationModel", aspireTs);
         Assert.Contains("subscribeBeforeStart", aspireTs);

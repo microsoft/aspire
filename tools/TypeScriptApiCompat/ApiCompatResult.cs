@@ -7,7 +7,8 @@ internal sealed record ApiCompatResult(
     IReadOnlyList<ApiCompatDiagnostic> UnsuppressedDiagnostics,
     IReadOnlyList<ApiCompatDiagnostic> SuppressedDiagnostics,
     IReadOnlyList<ApiCompatSuppression> UnusedSuppressions,
-    IReadOnlyList<string> SuppressionErrors)
+    IReadOnlyList<string> SuppressionErrors,
+    IReadOnlySet<string> ExcludedPackages)
 {
     public bool HasFailures =>
         UnsuppressedDiagnostics.Count > 0 ||
@@ -20,7 +21,8 @@ internal static class ApiCompatSuppressor
     public static ApiCompatResult ApplySuppressions(
         IReadOnlyList<ApiCompatDiagnostic> diagnostics,
         SuppressionLoadResult suppressionLoadResult,
-        SuppressionLoadResult? baselineSuppressionLoadResult = null)
+        SuppressionLoadResult? baselineSuppressionLoadResult = null,
+        IReadOnlySet<string>? excludedPackages = null)
     {
         var suppressionsByKey = suppressionLoadResult.Suppressions
             .GroupBy(static suppression => suppression.SuppressionKey, StringComparer.Ordinal)
@@ -48,14 +50,18 @@ internal static class ApiCompatSuppressor
         var unusedSuppressions = suppressionLoadResult.Suppressions
             .Where(suppression => !usedSuppressionKeys.Contains(suppression.SuppressionKey))
             .Where(suppression => baselineSuppressionKeys is null || !baselineSuppressionKeys.Contains(suppression.SuppressionKey))
+            .Where(suppression => excludedPackages?.Contains(suppression.PackageName) != true)
             .OrderBy(static suppression => suppression.FilePath, StringComparer.Ordinal)
             .ThenBy(static suppression => suppression.LineNumber)
             .ToArray();
+
+        excludedPackages ??= new HashSet<string>(StringComparer.Ordinal);
 
         return new ApiCompatResult(
             unsuppressedDiagnostics,
             suppressedDiagnostics,
             unusedSuppressions,
-            suppressionLoadResult.Errors);
+            suppressionLoadResult.Errors,
+            excludedPackages);
     }
 }

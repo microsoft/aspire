@@ -725,6 +725,14 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         return parameterName;
     }
 
+    private static string GetLocalParameterName(AtsParameterInfo parameter)
+    {
+        // ES modules are always strict mode, where "arguments" cannot be used as
+        // a local binding name. Keep the wire/API name unchanged and only rename
+        // the generated implementation variable.
+        return parameter.Name == "arguments" ? "argumentsValue" : parameter.Name;
+    }
+
     private static string GetRpcArgumentEntry(string parameterName, AtsTypeRef? typeRef)
     {
         var valueExpression = GetRpcArgumentValueExpression(parameterName, typeRef);
@@ -751,6 +759,16 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         }
 
         return GetRpcArgumentValueExpression(param.Name, param.Type);
+    }
+
+    private static string GetRpcArgumentExpression(AtsParameterInfo param, string localParameterName, bool useRegisteredCallback = true)
+    {
+        if (useRegisteredCallback && param.IsCallback)
+        {
+            return $"{localParameterName}Id";
+        }
+
+        return GetRpcArgumentValueExpression(localParameterName, param.Type);
     }
 
     /// <summary>
@@ -2034,7 +2052,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Extract optional params from options object
             foreach (var param in hasDirectOptionsParameter ? [] : optionalParams)
             {
-                WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {param.Name} = {publicOptionsParamName}?.{param.Name};");
+                var localParameterName = GetLocalParameterName(param);
+                WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {localParameterName} = {publicOptionsParamName}?.{param.Name};");
             }
 
             // Handle callback registration if any
@@ -2048,7 +2067,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             GeneratePromiseResolution(userParams);
 
             // Build args object with conditional inclusion
-            GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams);
+            GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams, useSafeOptionalLocalNames: true);
 
             if (capability.ReturnType?.TypeId == AtsConstants.CancellationToken)
             {
@@ -2121,11 +2140,12 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Extract optional params from options object and forward to internal method
         foreach (var param in hasDirectOptionsParameter ? [] : optionalParams)
         {
-            WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {param.Name} = {publicOptionsParamName}?.{param.Name};");
+            var localParameterName = GetLocalParameterName(param);
+            WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {localParameterName} = {publicOptionsParamName}?.{param.Name};");
         }
 
         // Forward all params to internal method
-        var allParamNames = userParams.Select(p => p.Name);
+        var allParamNames = userParams.Select(p => optionalParams.Contains(p) ? GetLocalParameterName(p) : p.Name);
         var internalCall = $"this.{internalMethodName}({string.Join(", ", allParamNames)})";
 
         // For build(), flush pending promises before invoking the internal method.
@@ -2252,6 +2272,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         IReadOnlyList<AtsParameterInfo> allParams,
         List<AtsParameterInfo> requiredParams,
         List<AtsParameterInfo> optionalParams,
+        bool useSafeOptionalLocalNames = false,
         string indent = "        ")
     {
         // Resolve any promise-like handle parameters
@@ -2269,8 +2290,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Conditionally add optional params
         foreach (var param in optionalParams)
         {
-            var rpcExpression = GetRpcArgumentExpression(param);
-            WriteLine($"{indent}if ({param.Name} !== undefined) rpcArgs.{param.Name} = {rpcExpression};");
+            var localParameterName = useSafeOptionalLocalNames ? GetLocalParameterName(param) : param.Name;
+            var rpcExpression = GetRpcArgumentExpression(param, localParameterName);
+            WriteLine($"{indent}if ({localParameterName} !== undefined) rpcArgs.{param.Name} = {rpcExpression};");
         }
     }
 
@@ -2281,6 +2303,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         string targetParamName,
         List<AtsParameterInfo> requiredParams,
         List<AtsParameterInfo> optionalParams,
+        bool useSafeOptionalLocalNames = false,
         string indent = "        ")
     {
         // Build the required args inline
@@ -2295,8 +2318,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Conditionally add optional params
         foreach (var param in optionalParams)
         {
-            var rpcExpression = GetRpcArgumentExpression(param);
-            WriteLine($"{indent}if ({param.Name} !== undefined) rpcArgs.{param.Name} = {rpcExpression};");
+            var localParameterName = useSafeOptionalLocalNames ? GetLocalParameterName(param) : param.Name;
+            var rpcExpression = GetRpcArgumentExpression(param, localParameterName);
+            WriteLine($"{indent}if ({localParameterName} !== undefined) rpcArgs.{param.Name} = {rpcExpression};");
         }
     }
 
@@ -3496,11 +3520,12 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Extract optional params from options object
         foreach (var param in hasDirectOptionsParameter ? [] : optionalParams)
         {
-            WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {param.Name} = {publicOptionsParamName}?.{param.Name};");
+            var localParameterName = GetLocalParameterName(param);
+            WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {localParameterName} = {publicOptionsParamName}?.{param.Name};");
         }
 
         // Resolve promise-like params and build args
-        GenerateResolveAndBuildArgs(targetParamName, userParams, requiredParams, optionalParams);
+        GenerateResolveAndBuildArgs(targetParamName, userParams, requiredParams, optionalParams, useSafeOptionalLocalNames: true);
 
         if (returnType == "void")
         {
@@ -3575,11 +3600,12 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // Extract optional params from options object
         foreach (var param in hasDirectOptionsParameter ? [] : optionalParams)
         {
-            WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {param.Name} = {publicOptionsParamName}?.{param.Name};");
+            var localParameterName = GetLocalParameterName(param);
+            WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {localParameterName} = {publicOptionsParamName}?.{param.Name};");
         }
 
         // Resolve promise-like params and build args
-        GenerateResolveAndBuildArgs(firstParamName, userParams, requiredParams, optionalParams);
+        GenerateResolveAndBuildArgs(firstParamName, userParams, requiredParams, optionalParams, useSafeOptionalLocalNames: true);
 
         if (returnType == "void")
         {
@@ -3707,10 +3733,12 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Extract optional params and forward
             foreach (var param in hasDirectOptionsParameter ? [] : optionalParams)
             {
-                WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {param.Name} = {publicOptionsParamName}?.{param.Name};");
+                var localParameterName = GetLocalParameterName(param);
+                WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {localParameterName} = {publicOptionsParamName}?.{param.Name};");
             }
 
-            var internalCall = $"this.{internalMethodName}({string.Join(", ", userParams.Select(p => p.Name))})";
+            var internalCallArgs = userParams.Select(p => optionalParams.Contains(p) ? GetLocalParameterName(p) : p.Name);
+            var internalCall = $"this.{internalMethodName}({string.Join(", ", internalCallArgs)})";
 
             // For build(), flush pending promises before invoking the internal method to avoid deadlock
             if (string.Equals(methodName, "build", StringComparison.OrdinalIgnoreCase))
@@ -3763,11 +3791,12 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Extract optional params and forward
             foreach (var param in optionalParams)
             {
-                WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {param.Name} = {publicOptionsParamName}?.{param.Name};");
+                var localParameterName = GetLocalParameterName(param);
+                WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {localParameterName} = {publicOptionsParamName}?.{param.Name};");
             }
 
             Write($"        return new {promiseImplementationClass}(this.{internalMethodName}(");
-            Write(string.Join(", ", userParams.Select(p => p.Name)));
+            Write(string.Join(", ", userParams.Select(p => optionalParams.Contains(p) ? GetLocalParameterName(p) : p.Name)));
             WriteLine("), this._client);");
             WriteLine("    }");
         }
@@ -3782,7 +3811,8 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             // Extract optional params from options object
             foreach (var param in optionalParams)
             {
-                WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {param.Name} = {publicOptionsParamName}?.{param.Name};");
+                var localParameterName = GetLocalParameterName(param);
+                WriteLine($"        {(IsWidenedHandleType(param.Type) ? "let" : "const")} {localParameterName} = {publicOptionsParamName}?.{param.Name};");
             }
 
             // Handle callback registration if any
@@ -3796,7 +3826,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             GeneratePromiseResolution(userParams);
 
             // Build args with conditional inclusion
-            GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams);
+            GenerateArgsObjectWithConditionals(targetParamName, requiredParams, optionalParams, useSafeOptionalLocalNames: true);
 
             if (capability.ReturnType?.TypeId == AtsConstants.CancellationToken)
             {

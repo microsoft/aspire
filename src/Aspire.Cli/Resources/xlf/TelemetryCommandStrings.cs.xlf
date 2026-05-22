@@ -162,6 +162,11 @@
         <target state="needs-review-translation">Umožňuje zobrazit strukturované protokoly z rozhraní API telemetrie řídicího panelu.</target>
         <note />
       </trans-unit>
+      <trans-unit id="MinimumDurationOptionDescription">
+        <source>Filter by minimum span duration in milliseconds</source>
+        <target state="new">Filter by minimum span duration in milliseconds</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>Filter by resource name</source>
         <target state="needs-review-translation">Filtrovat podle názvu prostředku.</target>

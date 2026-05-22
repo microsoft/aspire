@@ -102,8 +102,8 @@ internal static class AppHostHelper
     /// Computes the auxiliary backchannel socket path prefix for a given AppHost project file.
     /// </summary>
     /// <remarks>
-    /// Since socket names now include a randomized instance hash and the AppHost's PID
-    /// (e.g., <c>auxi.sock.{hash}.{instanceHash}.{pid}</c>),
+    /// Since socket names now include a randomized instance ID and the AppHost's PID
+    /// (e.g., <c>{appHostId}{instanceId}.{pid}</c>),
     /// the CLI cannot compute the exact socket path. Use this prefix with a glob pattern
     /// to find matching sockets, or use <see cref="FindMatchingSockets"/> instead.
     /// </remarks>
@@ -122,6 +122,14 @@ internal static class AppHostHelper
         => BackchannelConstants.ComputeLegacyHash(appHostPath);
 
     /// <summary>
+    /// Computes all legacy hashes for backward compatibility with older AppHosts.
+    /// </summary>
+    /// <param name="appHostPath">The full path to the AppHost project file or assembly.</param>
+    /// <returns>The legacy hashes to search.</returns>
+    internal static string[] ComputeLegacyHashes(string appHostPath)
+        => BackchannelConstants.ComputeLegacyHashes(appHostPath);
+
+    /// <summary>
     /// Finds all socket files matching the given AppHost path.
     /// </summary>
     /// <param name="appHostPath">The full path to the AppHost project file or assembly.</param>
@@ -134,8 +142,9 @@ internal static class AppHostHelper
     /// Extracts the hash portion from an auxiliary socket path.
     /// </summary>
     /// <remarks>
-    /// Works with old format (<c>auxi.sock.{hash}</c>), previous format (<c>auxi.sock.{hash}.{pid}</c>),
-    /// and current format (<c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
+    /// Works with compact format (<c>{appHostId}{instanceId}.{pid}</c>), old format (<c>auxi.sock.{hash}</c>),
+    /// previous format (<c>auxi.sock.{hash}.{pid}</c>), and legacy current format
+    /// (<c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
     /// </remarks>
     /// <param name="socketPath">The full socket path (e.g., "/path/to/auxi.sock.b67075ff12d56865.a1b2c3d4e5f6.12345").</param>
     /// <returns>The hash portion (e.g., "b67075ff12d56865"), or null if the format is unrecognized.</returns>

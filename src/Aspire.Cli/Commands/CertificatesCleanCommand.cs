@@ -25,8 +25,6 @@ internal sealed class CertificatesCleanCommand : BaseCommand
         _certificateToolRunner = certificateToolRunner;
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         InteractionService.DisplayMessage(KnownEmojis.Information, CertificatesCommandStrings.CleanProgress);

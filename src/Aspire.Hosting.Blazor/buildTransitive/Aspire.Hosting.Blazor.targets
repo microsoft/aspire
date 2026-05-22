@@ -1,0 +1,18 @@
+<Project>
+
+  <!--
+    Copy the Blazor gateway scripts to the consuming project's output directory
+    so they can be located at runtime by BlazorGatewayExtensions.GetScriptPath().
+  -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)Scripts\Gateway.cs"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="Scripts\Gateway.cs"
+          Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)Scripts\PrefixEndpoints.cs"
+          CopyToOutputDirectory="PreserveNewest"
+          Link="Scripts\PrefixEndpoints.cs"
+          Visible="false" />
+  </ItemGroup>
+
+</Project>

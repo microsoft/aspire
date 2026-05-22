@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <IsPackable>true</IsPackable>
+    <PackageTags>aspire integration hosting blazor webassembly gateway</PackageTags>
+    <Description>Blazor WebAssembly hosting support for Aspire.</Description>
+    <NoWarn>$(NoWarn);ASPIREBLAZOR001</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <MinCodeCoverage>0</MinCodeCoverage>
+    <EnablePackageValidation>false</EnablePackageValidation>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
+    <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Utils\KnownRelationshipTypes.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Aspire.Hosting.Blazor.Tests" />
+  </ItemGroup>
+
+  <!-- Scripts are file-based C# apps, not part of this library's compilation.
+       They are packed into the NuGet package and copied to the consumer's output
+       directory via a buildTransitive targets file. -->
+  <ItemGroup>
+    <Compile Remove="Scripts\**" />
+    <None Include="Scripts\Gateway.cs.in" />
+    <Content Include="Scripts\PrefixEndpoints.cs" CopyToOutputDirectory="PreserveNewest" Pack="true" PackagePath="buildTransitive\$(DefaultTargetFramework)\Scripts" />
+  </ItemGroup>
+
+  <!-- Pack the buildTransitive targets file so NuGet consumers get scripts copied to output -->
+  <ItemGroup>
+    <None Include="buildTransitive\Aspire.Hosting.Blazor.targets" Pack="true" PackagePath="buildTransitive\$(DefaultTargetFramework)" />
+  </ItemGroup>
+
+  <Import Project="targets\GenerateScripts.targets" />
+
+</Project>

@@ -106,6 +106,30 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnterTheProjectName", resourceCulture);
             }
         }
+
+        public static string SelectProjectCreationLocation
+        {
+            get
+            {
+                return ResourceManager.GetString("SelectProjectCreationLocation", resourceCulture);
+            }
+        }
+
+        public static string CreateProjectNameSubdirectoryChoice
+        {
+            get
+            {
+                return ResourceManager.GetString("CreateProjectNameSubdirectoryChoice", resourceCulture);
+            }
+        }
+
+        public static string CreateProjectDirectlyInSelectedFolderChoice
+        {
+            get
+            {
+                return ResourceManager.GetString("CreateProjectDirectlyInSelectedFolderChoice", resourceCulture);
+            }
+        }
         
         public static string InvalidProjectName {
             get {

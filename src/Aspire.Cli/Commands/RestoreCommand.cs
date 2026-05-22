@@ -24,6 +24,8 @@ internal sealed class RestoreCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly IProjectLocator _projectLocator;
     private readonly IAppHostProjectFactory _projectFactory;
     private readonly ILanguageDiscovery _languageDiscovery;

@@ -156,6 +156,9 @@
   <data name="SearchOptionDescription" xml:space="preserve">
     <value>Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</value>
   </data>
+  <data name="MinimumDurationOptionDescription" xml:space="preserve">
+    <value>Filter by minimum span duration in milliseconds</value>
+  </data>
   <data name="LimitMustBePositive" xml:space="preserve">
     <value>The --limit value must be a positive number.</value>
   </data>

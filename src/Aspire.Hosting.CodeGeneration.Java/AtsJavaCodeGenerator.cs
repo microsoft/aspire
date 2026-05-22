@@ -551,6 +551,21 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             }
             WriteLine();
 
+            WriteLine("    @SuppressWarnings(\"unchecked\")");
+            WriteLine($"    public static {dtoName} fromMap(Map<String, Object> map) {{");
+            WriteLine($"        var value = new {dtoName}();");
+            foreach (var property in dto.Properties)
+            {
+                var fieldName = ToCamelCase(property.Name);
+                var methodName = ToPascalCase(property.Name);
+                var transportValueName = $"{fieldName}Value";
+                WriteLine($"        var {transportValueName} = map.get(\"{property.Name}\");");
+                WriteLine($"        value.set{methodName}({RenderJavaDtoPropertyTransportValueConversion(property.Type, transportValueName, property.IsOptional)});");
+            }
+            WriteLine("        return value;");
+            WriteLine("    }");
+            WriteLine();
+
             // toMap method for serialization
             WriteLine("    public Map<String, Object> toMap() {");
             WriteLine("        Map<String, Object> map = new HashMap<>();");
@@ -1546,14 +1561,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
         else if (returnInfo.HasReturn)
         {
-            if (IsUnionType(capability.ReturnType))
-            {
-                WriteLine($"        return AspireUnion.of(getClient().invokeCapability(\"{capability.CapabilityId}\", reqArgs));");
-            }
-            else
-            {
-                WriteLine($"        return ({returnInfo.ReturnType}) getClient().invokeCapability(\"{capability.CapabilityId}\", reqArgs);");
-            }
+            WriteLine($"        var result = getClient().invokeCapability(\"{capability.CapabilityId}\", reqArgs);");
+            WriteLine($"        return {RenderJavaTransportValueConversion(capability.ReturnType, "result", capability.ReturnType?.IsNullable == true)};");
         }
         else
         {
@@ -1670,7 +1679,108 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             return $"AspireUnion.of(args[{index}])";
         }
 
-        return $"({MapCallbackTypeToJava(callbackParameter.Type)}) args[{index}]";
+        return RenderJavaTransportValueConversion(callbackParameter.Type, $"args[{index}]", callbackParameter.Type?.IsNullable == true);
+    }
+
+    private string RenderJavaTransportValueConversion(AtsTypeRef? typeRef, string valueExpression, bool isOptional, int depth = 0)
+    {
+        if (typeRef is null)
+        {
+            return valueExpression;
+        }
+
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
+        {
+            return $"(ReferenceExpression) {valueExpression}";
+        }
+
+        if (IsCancellationTokenTypeId(typeRef.TypeId))
+        {
+            return $"(CancellationToken) {valueExpression}";
+        }
+
+        var allowNull = isOptional || typeRef.IsNullable == true;
+        var converted = typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => RenderJavaPrimitiveTransportValueConversion(typeRef.TypeId, valueExpression, allowNull),
+            AtsTypeCategory.Enum => RenderJavaEnumTransportValueConversion(typeRef.TypeId, valueExpression, allowNull),
+            AtsTypeCategory.Dto => RenderJavaDtoTransportValueConversion(typeRef.TypeId, valueExpression, allowNull),
+            AtsTypeCategory.Handle => $"({MapTypeRefToJava(typeRef, allowNull)}) {valueExpression}",
+            AtsTypeCategory.Array => $"({MapTypeRefToJava(typeRef, allowNull)}) {valueExpression}",
+            AtsTypeCategory.List => RenderJavaListTransportValueConversion(typeRef, valueExpression, allowNull, depth),
+            AtsTypeCategory.Dict => $"({MapTypeRefToJava(typeRef, allowNull, useBoxedTypes: true)}) {valueExpression}",
+            AtsTypeCategory.Union => $"AspireUnion.of({valueExpression})",
+            _ => valueExpression
+        };
+
+        return converted;
+    }
+
+    private string RenderJavaDtoPropertyTransportValueConversion(AtsTypeRef? typeRef, string valueExpression, bool isOptional)
+    {
+        if (typeRef?.Category != AtsTypeCategory.Dict)
+        {
+            return RenderJavaTransportValueConversion(typeRef, valueExpression, isOptional);
+        }
+
+        var allowNull = isOptional || typeRef.IsNullable == true;
+        var converted = $"({MapDtoPropertyTypeToJava(typeRef, allowNull, useBoxedTypes: true)}) {valueExpression}";
+
+        return allowNull ? $"{valueExpression} == null ? null : {converted}" : converted;
+    }
+
+    private static string RenderJavaPrimitiveTransportValueConversion(string typeId, string valueExpression, bool allowNull)
+    {
+        var converted = typeId switch
+        {
+            AtsConstants.String or AtsConstants.Char or
+                AtsConstants.DateTime or AtsConstants.DateTimeOffset or
+                AtsConstants.DateOnly or AtsConstants.TimeOnly or
+                AtsConstants.Guid or AtsConstants.Uri => $"(String) {valueExpression}",
+            AtsConstants.Number or AtsConstants.TimeSpan => $"((Number) {valueExpression}).doubleValue()",
+            AtsConstants.Boolean => $"(Boolean) {valueExpression}",
+            AtsConstants.Void => "null",
+            _ => valueExpression
+        };
+
+        return allowNull && !string.Equals(converted, valueExpression, StringComparison.Ordinal)
+            ? $"{valueExpression} == null ? null : {converted}"
+            : converted;
+    }
+
+    private string RenderJavaEnumTransportValueConversion(string typeId, string valueExpression, bool allowNull)
+    {
+        if (!_enumNames.TryGetValue(typeId, out var enumName))
+        {
+            return $"(String) {valueExpression}";
+        }
+
+        var converted = $"{enumName}.fromValue((String) {valueExpression})";
+        return allowNull ? $"{valueExpression} == null ? null : {converted}" : converted;
+    }
+
+    private string RenderJavaDtoTransportValueConversion(string typeId, string valueExpression, bool allowNull)
+    {
+        if (!_dtoNames.TryGetValue(typeId, out var dtoName))
+        {
+            return $"(Map<String, Object>) {valueExpression}";
+        }
+
+        var converted = $"{dtoName}.fromMap((Map<String, Object>) {valueExpression})";
+        return allowNull ? $"{valueExpression} == null ? null : {converted}" : converted;
+    }
+
+    private string RenderJavaListTransportValueConversion(AtsTypeRef typeRef, string valueExpression, bool allowNull, int depth)
+    {
+        var itemName = $"item{depth}";
+        var convertedItem = RenderJavaTransportValueConversion(
+            typeRef.ElementType,
+            itemName,
+            typeRef.ElementType?.IsNullable == true,
+            depth + 1);
+        var converted = $"((List<Object>) {valueExpression}).stream().map({itemName} -> {convertedItem}).toList()";
+
+        return allowNull ? $"{valueExpression} == null ? null : {converted}" : converted;
     }
 
     private string MapCallbackTypeToJava(AtsTypeRef? typeRef)

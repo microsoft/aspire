@@ -109,8 +109,6 @@ internal sealed class RenderCommand : BaseCommand
         Hidden = true;
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (parseResult.GetValue(s_listScenariosOption))

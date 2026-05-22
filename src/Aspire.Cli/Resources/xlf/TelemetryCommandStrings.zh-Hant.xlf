@@ -162,6 +162,11 @@
         <target state="needs-review-translation">從儀表板遙測 API 檢視結構化記錄。</target>
         <note />
       </trans-unit>
+      <trans-unit id="MinimumDurationOptionDescription">
+        <source>Filter by minimum span duration in milliseconds</source>
+        <target state="new">Filter by minimum span duration in milliseconds</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>Filter by resource name</source>
         <target state="needs-review-translation">依資源名稱篩選。</target>

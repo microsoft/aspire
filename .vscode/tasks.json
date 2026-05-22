@@ -4,6 +4,15 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "yarn: install extension",
+			"type": "shell",
+			"command": "yarn install",
+			"options": {
+				"cwd": "${workspaceFolder}/extension"
+			},
+			"problemMatcher": []
+		},
+		{
 			"type": "npm",
 			"script": "watch",
 			"problemMatcher": "$ts-webpack-watch",
@@ -18,6 +27,15 @@
 			},
 			"label": "npm: watch extension",
       "path": "extension",
+		},
+		{
+			"label": "tasks: watch extension",
+			"dependsOrder": "sequence",
+			"dependsOn": [
+				"yarn: install extension",
+				"npm: watch extension"
+			],
+			"problemMatcher": []
 		},
 		{
 			"type": "npm",

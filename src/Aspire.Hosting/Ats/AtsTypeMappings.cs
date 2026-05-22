@@ -55,6 +55,7 @@ using Microsoft.Extensions.Logging;
 [assembly: AspireExport(typeof(IServiceProvider))]
 [assembly: AspireExport(typeof(ResourceNotificationService))]
 [assembly: AspireExport(typeof(ResourceLoggerService))]
+[assembly: AspireExport(typeof(ResourceCommandService))]
 
 // Additional framework and hosting types we reference
 [assembly: AspireExport(typeof(IConfiguration))]
