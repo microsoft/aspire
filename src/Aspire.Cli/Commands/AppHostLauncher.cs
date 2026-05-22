@@ -427,8 +427,19 @@ internal sealed class AppHostLauncher(
                             }
 
                             updateStatus(RunCommandStrings.AppHostConnectionLostWaitingForExit);
-                            await childProcess.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-                            return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
+                            // Bound this wait by the remaining startup-timeout budget so a hung child can't block
+                            // the parent indefinitely after the readiness RPC dropped. If the child exits first we
+                            // still report its exit code; otherwise we fall through to the existing post-loop
+                            // timeout path that requests shutdown and returns the timed-out result.
+                            var postFailureCompletedTask = await Task.WhenAny(childExitTask, timeoutTask).ConfigureAwait(false);
+                            cancellationToken.ThrowIfCancellationRequested();
+                            if (postFailureCompletedTask == childExitTask)
+                            {
+                                await childExitTask.ConfigureAwait(false);
+                                return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
+                            }
+
+                            break;
                         }
 
                         if (appHostReady is null)
