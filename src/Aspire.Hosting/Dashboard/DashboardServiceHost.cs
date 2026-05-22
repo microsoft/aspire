@@ -149,6 +149,7 @@ internal sealed class DashboardServiceHost : IHostedService
 
                 // Listen on a random port.
                 kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
+                _logger.LogDebug("Resource service endpoint not configured. Listening on {Scheme}://127.0.0.1:<random>.", scheme);
             }
             else if (uri.IsLoopback)
             {
@@ -156,6 +157,7 @@ internal sealed class DashboardServiceHost : IHostedService
 
                 // Listen on the requested localhost port.
                 kestrelOptions.ListenLocalhost(uri.Port, ConfigureListen);
+                _logger.LogDebug("Resource service endpoint configured: {Uri}", uri);
             }
             else
             {
