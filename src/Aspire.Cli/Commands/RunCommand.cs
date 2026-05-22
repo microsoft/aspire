@@ -713,6 +713,13 @@ internal sealed class RunCommand : BaseCommand
         // routed into the unified CLI log file. The task is returned to the caller so the run
         // command can await/cancel it during teardown.
         var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, logCaptureCancellationSource.Token);
+        // Observe faults in case the caller never gets to await it - e.g., if a subsequent
+        // step in this method throws, the local task goes out of scope without being returned
+        // through AppHostStartupResult. CaptureAppHostLogsAsync already handles OCE and
+        // ConnectionLostException-during-cancellation cleanly, but any other failure (or a
+        // ConnectionLostException that fires before the outer finally cancels log capture) would
+        // otherwise surface as an unobserved task exception.
+        ObserveFaults(pendingLogCapture);
 
         DashboardUrlsState dashboardUrls;
         using (var getDashboardUrlsActivity = _profilingTelemetry.StartRunAppHostGetDashboardUrls())

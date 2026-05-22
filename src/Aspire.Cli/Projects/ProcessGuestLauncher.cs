@@ -212,8 +212,11 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             await drainTask.WaitAsync(timeoutCts.Token);
             return true;
         }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException)
         {
+            // Return false (drain incomplete) for both the 5s timeout and outer cancellation. The
+            // LaunchAsync OCE catch deliberately swallows cancellation so the caller can read the
+            // killed process's exit code, so we must not let a second OCE escape from drain.
             return false;
         }
     }
