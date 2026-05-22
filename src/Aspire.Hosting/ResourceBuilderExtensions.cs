@@ -1495,7 +1495,7 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Updates a named endpoint via callback
     /// </summary>
-    [AspireExport]
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     internal static IResourceBuilder<T> WithEndpointCallback<T>(this IResourceBuilder<T> builder, [EndpointName] string endpointName, Action<EndpointUpdateContext> callback, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1508,7 +1508,7 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Updates an HTTP endpoint via callback
     /// </summary>
-    [AspireExport]
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     internal static IResourceBuilder<T> WithHttpEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, [EndpointName] string? name = null, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1520,7 +1520,7 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Updates an HTTPS endpoint via callback
     /// </summary>
-    [AspireExport]
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     internal static IResourceBuilder<T> WithHttpsEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, [EndpointName] string? name = null, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
