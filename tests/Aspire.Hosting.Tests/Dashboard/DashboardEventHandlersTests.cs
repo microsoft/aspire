@@ -198,10 +198,10 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData("https://localhost:17131", "localhost", 9999, "https")]
-    [InlineData("https://aspire-dashboard.dev.localhost:17131", "aspire-dashboard.dev.localhost", 9999, "https")]
-    [InlineData("http://myapp.localhost:8080", "myapp.localhost", 5555, "http")]
-    public async Task ResourceReadyEvent_LogsDashboardUrlFromAllocatedEndpoint(string configuredUrl, string expectedHost, int allocatedPort, string expectedScheme)
+    [InlineData("https://localhost:17131", "localhost", 9999, "https", "localhost")]
+    [InlineData("https://aspire-dashboard.dev.localhost:17131", "aspire-dashboard.dev.localhost", 9999, "https", "aspire-dashboard.dev.localhost")]
+    [InlineData("http://myapp.localhost:8080", "myapp.localhost", 5555, "http", "localhost")]
+    public async Task ResourceReadyEvent_LogsDashboardUrlFromAllocatedEndpoint(string configuredUrl, string expectedHost, int allocatedPort, string expectedScheme, string expectedOtlpHost)
     {
         // Arrange
         var testSink = new TestSink();
@@ -275,8 +275,8 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);
 
         Assert.NotNull(summaryLog);
-        Assert.Equal("https://localhost:4317", LogTestHelpers.GetValue(summaryLog, "OtlpGrpcUrl"));
-        Assert.Equal("https://localhost:4318", LogTestHelpers.GetValue(summaryLog, "OtlpHttpUrl"));
+        Assert.Equal($"https://{expectedOtlpHost}:4317", LogTestHelpers.GetValue(summaryLog, "OtlpGrpcUrl"));
+        Assert.Equal($"https://{expectedOtlpHost}:4318", LogTestHelpers.GetValue(summaryLog, "OtlpHttpUrl"));
     }
 
     [Fact]
