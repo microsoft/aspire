@@ -15,7 +15,8 @@ internal sealed class TestCliUpdateNotifier : ICliUpdateNotifier
 
     public Func<DirectoryInfo, CancellationToken, Task>? CheckForCliUpdatesAsyncCallback { get; set; }
 
-    public Action? NotifyIfUpdateAvailableCallback { get; set; }
+    public Action<bool>? NotifyIfUpdateAvailableCallback { get; set; }
+    public bool LastIncludeAppHostUpdateCommand { get; private set; }
 
     public Task CheckForCliUpdatesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
@@ -34,10 +35,11 @@ internal sealed class TestCliUpdateNotifier : ICliUpdateNotifier
             : Task.FromResult(new CliVersionStatus("13.0.0", null, null));
     }
 
-    public void NotifyIfUpdateAvailable()
+    public void NotifyIfUpdateAvailable(bool includeAppHostUpdateCommand = false)
     {
         NotifyWasCalled = true;
-        NotifyIfUpdateAvailableCallback?.Invoke();
+        LastIncludeAppHostUpdateCommand = includeAppHostUpdateCommand;
+        NotifyIfUpdateAvailableCallback?.Invoke(includeAppHostUpdateCommand);
     }
 
     public bool IsUpdateAvailable()

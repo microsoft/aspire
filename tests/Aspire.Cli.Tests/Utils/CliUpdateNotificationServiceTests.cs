@@ -291,7 +291,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NotifyIfUpdateAvailable_UsesAspireUpdateCommandForStandaloneArchivePath()
+    public async Task NotifyIfUpdateAvailable_UsesAspireUpdateSelfCommandForStandaloneArchivePath()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.aspire/bin/aspire");
@@ -328,7 +328,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
         notifier.NotifyIfUpdateAvailable();
 
         Assert.NotNull(interactionService);
-        Assert.Equal("aspire update", interactionService.LastVersionUpdateCommand);
+        Assert.Equal("aspire update --self", interactionService.LastVersionUpdateCommand);
     }
 
     [Fact]

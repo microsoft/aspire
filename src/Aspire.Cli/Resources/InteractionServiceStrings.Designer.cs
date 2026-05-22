@@ -277,6 +277,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to [yellow]A new version of Aspire is available: {0}[/] [dim](use {1} for this AppHost)[/].
+        /// </summary>
+        public static string NewCliVersionAvailableWithAppHostUpdateCommand {
+            get {
+                return ResourceManager.GetString("NewCliVersionAvailableWithAppHostUpdateCommand", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to No items available for selection: {0}.
         /// </summary>
         public static string NoItemsAvailableForSelection {
@@ -457,11 +466,11 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to [dim]To update, run: {0}[/].
+        ///   Looks up a localized string similar to [dim]To update the Aspire CLI, use: {0}[/].
         /// </summary>
-        public static string ToUpdateRunCommand {
+        public static string ToUpdateCliUseCommand {
             get {
-                return ResourceManager.GetString("ToUpdateRunCommand", resourceCulture);
+                return ResourceManager.GetString("ToUpdateCliUseCommand", resourceCulture);
             }
         }
     }

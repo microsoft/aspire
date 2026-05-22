@@ -73,6 +73,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private bool _isDetachMode;
+    private bool _hasAppHostContext;
 
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
     // afterward when the guest startup process hits a syntax or pre-execute error. Keep the
@@ -80,6 +81,7 @@ internal sealed class RunCommand : BaseCommand
     private static readonly TimeSpan s_detachedStartupStabilityWindow = TimeSpan.FromSeconds(2);
 
     protected override bool UpdateNotificationsEnabled => !_isDetachMode;
+    protected override bool IncludeAppHostUpdateCommandInUpdateNotification => _hasAppHostContext;
 
     private static readonly Option<bool> s_detachOption = new("--detach")
     {
@@ -132,6 +134,7 @@ internal sealed class RunCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        _hasAppHostContext = false;
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var detach = parseResult.GetValue(s_detachOption);
         _isDetachMode = detach;
@@ -220,6 +223,7 @@ internal sealed class RunCommand : BaseCommand
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
                 return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
+            _hasAppHostContext = true;
 
             // Resolve the language for this file and get the appropriate handler
             var project = _projectFactory.TryGetProject(effectiveAppHostFile);

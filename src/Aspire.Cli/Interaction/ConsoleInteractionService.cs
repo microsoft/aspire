@@ -693,15 +693,22 @@ internal class ConsoleInteractionService : IInteractionService
 
     private const string UpdateUrl = "https://aka.ms/aspire/update";
 
-    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null)
+    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null, bool includeAppHostUpdateCommand = false)
     {
         // Write to stderr to avoid corrupting stdout when JSON output is used
         _errorConsole.WriteLine();
-        _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NewCliVersionAvailable, newerVersion.EscapeMarkup()));
+        if (includeAppHostUpdateCommand)
+        {
+            _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NewCliVersionAvailableWithAppHostUpdateCommand, newerVersion.EscapeMarkup(), "aspire update"));
+        }
+        else
+        {
+            _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NewCliVersionAvailable, newerVersion.EscapeMarkup()));
+        }
 
         if (!string.IsNullOrEmpty(updateCommand))
         {
-            _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ToUpdateRunCommand, updateCommand.EscapeMarkup()));
+            _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ToUpdateCliUseCommand, updateCommand.EscapeMarkup()));
         }
 
         _errorConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.MoreInfoNewCliVersion, MarkupHelpers.SafeLink(this, UpdateUrl)));

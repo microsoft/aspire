@@ -54,7 +54,7 @@ internal interface IInteractionService
     /// </summary>
     bool SupportsLinks { get; }
 
-    void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null);
+    void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null, bool includeAppHostUpdateCommand = false);
     // The semantic type is stringly-typed because some values originate from backchannel payloads.
     // Use ConsoleLogTypes for CLI-defined values.
     void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false);

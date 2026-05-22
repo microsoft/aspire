@@ -488,9 +488,9 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         _consoleInteractionService.DisplayMarkupLine(markup);
     }
 
-    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null)
+    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null, bool includeAppHostUpdateCommand = false)
     {
-        _consoleInteractionService.DisplayVersionUpdateNotification(newerVersion, updateCommand);
+        _consoleInteractionService.DisplayVersionUpdateNotification(newerVersion, updateCommand, includeAppHostUpdateCommand);
     }
 
     public void DisplayRenderable(IRenderable renderable)

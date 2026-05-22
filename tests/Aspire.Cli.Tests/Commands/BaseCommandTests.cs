@@ -95,7 +95,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
         var testNotifier = new TestCliUpdateNotifier
         {
             IsUpdateAvailableCallback = () => true,
-            NotifyIfUpdateAvailableCallback = () => testInteractionService.DisplayVersionUpdateNotification("13.3.0-preview.1", "aspire update")
+            NotifyIfUpdateAvailableCallback = includeAppHostUpdateCommand => testInteractionService.DisplayVersionUpdateNotification("13.3.0-preview.1", "aspire update", includeAppHostUpdateCommand)
         };
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -109,6 +109,7 @@ public class BaseCommandTests(ITestOutputHelper outputHelper)
 
         await result.InvokeAsync().DefaultTimeout();
 
+        Assert.False(testNotifier.LastIncludeAppHostUpdateCommand);
         Assert.Equal(0, testInteractionService.DisplayEmptyLineCount);
     }
 

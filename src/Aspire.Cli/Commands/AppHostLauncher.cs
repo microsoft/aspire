@@ -87,6 +87,7 @@ internal sealed class AppHostLauncher(
     /// <param name="additionalArgs">Additional unmatched args to forward.</param>
     /// <param name="stopAfterLaunchDelay">Optional delay after launch before stopping the AppHost.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="appHostSelected">Callback invoked when an AppHost project file has been selected.</param>
     /// <returns>A <see cref="CommandResult"/> indicating success or failure.</returns>
     public async Task<CommandResult> LaunchDetachedAsync(
         FileInfo? passedAppHostProjectFile,
@@ -97,7 +98,8 @@ internal sealed class AppHostLauncher(
         IEnumerable<string> globalArgs,
         IEnumerable<string> additionalArgs,
         TimeSpan? stopAfterLaunchDelay,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<FileInfo>? appHostSelected = null)
     {
         // In JSON mode or non-interactive mode, avoid interactive prompts.
         var multipleAppHostBehavior = format == OutputFormat.Json || !hostEnvironment.SupportsInteractiveInput
@@ -125,6 +127,8 @@ internal sealed class AppHostLauncher(
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject);
         }
+
+        appHostSelected?.Invoke(effectiveAppHostFile);
 
         logger.LogDebug("Starting AppHost in background: {AppHostPath}", effectiveAppHostFile.FullName);
 

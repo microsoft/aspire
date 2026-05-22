@@ -97,6 +97,11 @@
         <target state="new">[yellow]A new version of Aspire is available: {0}[/]</target>
         <note>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</note>
       </trans-unit>
+      <trans-unit id="NewCliVersionAvailableWithAppHostUpdateCommand">
+        <source>[yellow]A new version of Aspire is available: {0}[/] [dim](use {1} for this AppHost)[/]</source>
+        <target state="new">[yellow]A new version of Aspire is available: {0}[/] [dim](use {1} for this AppHost)[/]</target>
+        <note>Do not translate [yellow], [dim], or [/] as-is. {0} is the version number. {1} is the command to use</note>
+      </trans-unit>
       <trans-unit id="NoItemsAvailableForSelection">
         <source>No items available for selection: {0}</source>
         <target state="translated">Нет элементов, доступных для выбора: {0}</target>
@@ -197,10 +202,10 @@
         <target state="translated">Производится остановка Aspire.</target>
         <note />
       </trans-unit>
-      <trans-unit id="ToUpdateRunCommand">
-        <source>[dim]To update, run: {0}[/]</source>
-        <target state="translated">[dim]Для обновления выполните: {0}[/]</target>
-        <note>Do not translate [dim]. Also leave [/] as-is. {0} is the command to run</note>
+      <trans-unit id="ToUpdateCliUseCommand">
+        <source>[dim]To update the Aspire CLI, use: {0}[/]</source>
+        <target state="new">[dim]To update the Aspire CLI, use: {0}[/]</target>
+        <note>Do not translate [dim]. Also leave [/] as-is. {0} is the command to use</note>
       </trans-unit>
       <trans-unit id="TrustingCertificates">
         <source>Trusting certificates...</source>

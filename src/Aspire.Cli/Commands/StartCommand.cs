@@ -20,6 +20,9 @@ internal sealed class StartCommand : BaseCommand
 
     private readonly AppHostLauncher _appHostLauncher;
     private readonly IConfiguration _configuration;
+    private bool _hasAppHostContext;
+
+    protected override bool IncludeAppHostUpdateCommandInUpdateNotification => _hasAppHostContext;
 
     private static readonly Option<bool> s_noBuildOption = new("--no-build")
     {
@@ -48,6 +51,7 @@ internal sealed class StartCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        _hasAppHostContext = false;
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);
@@ -75,6 +79,7 @@ internal sealed class StartCommand : BaseCommand
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
+            _hasAppHostContext = passedAppHostProjectFile is not null;
             var startDebugSession = parseResult.GetValue(RootCommand.StartDebugSessionOption);
             var debugSessionArgs = new List<string>();
             if (isolated)
@@ -140,6 +145,7 @@ internal sealed class StartCommand : BaseCommand
             globalArgs,
             additionalArgs,
             stopAfterLaunchDelay,
-            cancellationToken);
+            cancellationToken,
+            _ => _hasAppHostContext = true);
     }
 }

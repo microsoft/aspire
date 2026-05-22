@@ -18,6 +18,7 @@ internal abstract class BaseCommand : Command
     private static readonly int[] s_suppressErrorLogsMessageExitCodes = [CliExitCodes.Cancelled, CliExitCodes.MissingRequiredArgument];
 
     protected virtual bool UpdateNotificationsEnabled { get; } = true;
+    protected virtual bool IncludeAppHostUpdateCommandInUpdateNotification { get; }
 
     /// <summary>
     /// Gets the help group for this command.
@@ -118,7 +119,7 @@ internal abstract class BaseCommand : Command
             {
                 try
                 {
-                    updateNotifier.NotifyIfUpdateAvailable();
+                    updateNotifier.NotifyIfUpdateAvailable(IncludeAppHostUpdateCommandInUpdateNotification);
                 }
                 catch
                 {

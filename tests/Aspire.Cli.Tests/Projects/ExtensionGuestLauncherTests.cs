@@ -177,7 +177,7 @@ public class ExtensionGuestLauncherTests
         public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) => throw new NotImplementedException();
         public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null) => throw new NotImplementedException();
         public void DisplayMarkupLine(string markup) => throw new NotImplementedException();
-        public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null) => throw new NotImplementedException();
+        public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null, bool includeAppHostUpdateCommand = false) => throw new NotImplementedException();
         public void DisplayRenderable(Spectre.Console.Rendering.IRenderable renderable) => throw new NotImplementedException();
         public Task DisplayLiveAsync(Spectre.Console.Rendering.IRenderable initialRenderable, Func<Action<Spectre.Console.Rendering.IRenderable>, Task> callback) => throw new NotImplementedException();
     }

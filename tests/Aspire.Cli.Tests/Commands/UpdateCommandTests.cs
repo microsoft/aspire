@@ -2666,8 +2666,8 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
         _innerService.DisplayCancellationMessage(consoleOverride);
     }
     public void DisplayEmptyLine() => _innerService.DisplayEmptyLine();
-    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null) 
-        => _innerService.DisplayVersionUpdateNotification(newerVersion, updateCommand);
+    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null, bool includeAppHostUpdateCommand = false) 
+        => _innerService.DisplayVersionUpdateNotification(newerVersion, updateCommand, includeAppHostUpdateCommand);
     public void WriteConsoleLog(string message, int? lineNumber = null, string? type = null, bool isErrorMessage = false) 
         => _innerService.WriteConsoleLog(message, lineNumber, type, isErrorMessage);
     public void DisplayRenderable(IRenderable renderable) => _innerService.DisplayRenderable(renderable);

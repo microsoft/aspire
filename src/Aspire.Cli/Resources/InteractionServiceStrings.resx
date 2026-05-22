@@ -237,13 +237,17 @@
     <value>[yellow]A new version of Aspire is available: {0}[/]</value>
     <comment>Do not translate [yellow] and also leave [/] as-is. {0} is the version number</comment>
   </data>
+  <data name="NewCliVersionAvailableWithAppHostUpdateCommand" xml:space="preserve">
+    <value>[yellow]A new version of Aspire is available: {0}[/] [dim](use {1} for this AppHost)[/]</value>
+    <comment>Do not translate [yellow], [dim], or [/] as-is. {0} is the version number. {1} is the command to use</comment>
+  </data>
   <data name="MoreInfoNewCliVersion" xml:space="preserve">
     <value>[dim]For more information, see: {0}[/]</value>
     <comment>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</comment>
   </data>
-  <data name="ToUpdateRunCommand" xml:space="preserve">
-    <value>[dim]To update, run: {0}[/]</value>
-    <comment>Do not translate [dim]. Also leave [/] as-is. {0} is the command to run</comment>
+  <data name="ToUpdateCliUseCommand" xml:space="preserve">
+    <value>[dim]To update the Aspire CLI, use: {0}[/]</value>
+    <comment>Do not translate [dim]. Also leave [/] as-is. {0} is the command to use</comment>
   </data>
   <data name="UnbuildableAppHostsDetected" xml:space="preserve">
     <value>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</value>

@@ -13,7 +13,7 @@ internal interface ICliUpdateNotifier
 {
     Task CheckForCliUpdatesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken);
     Task<CliVersionStatus> GetVersionStatusAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken);
-    void NotifyIfUpdateAvailable();
+    void NotifyIfUpdateAvailable(bool includeAppHostUpdateCommand = false);
     bool IsUpdateAvailable();
 }
 
@@ -52,12 +52,12 @@ internal class CliUpdateNotifier(
         _availablePackages = await GetCliPackagesAsync(workingDirectory, cancellationToken);
     }
 
-    public void NotifyIfUpdateAvailable()
+    public void NotifyIfUpdateAvailable(bool includeAppHostUpdateCommand = false)
     {
         var status = GetCachedVersionStatus();
         if (status.LatestVersion is not null)
         {
-            interactionService.DisplayVersionUpdateNotification(status.LatestVersion, status.UpdateCommand);
+            interactionService.DisplayVersionUpdateNotification(status.LatestVersion, status.UpdateCommand, includeAppHostUpdateCommand);
         }
     }
 
@@ -116,7 +116,7 @@ internal class CliUpdateNotifier(
         }
 
         var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, _availablePackages);
-        var updateCommand = newerVersion is null ? null : DotNetToolDetection.GetDotNetToolUpdateCommand() ?? "aspire update";
+        var updateCommand = newerVersion is null ? null : DotNetToolDetection.GetDotNetToolUpdateCommand() ?? "aspire update --self";
         // Derive the lane the recommendation comes from so doctor can show
         // 'Latest version is X (channel: stable)' vs '(channel: prerelease)'.
         // GetNewerVersion picks between newestStable and newestPrerelease

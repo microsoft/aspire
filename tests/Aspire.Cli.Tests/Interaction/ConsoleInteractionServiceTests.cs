@@ -633,17 +633,39 @@ public class ConsoleInteractionServiceTests
 
         // Version strings are unlikely to have brackets, but the method should handle it
         var version = "13.2.0-preview [beta]";
-        var updateCommand = "aspire update --channel [stable]";
+        var updateCommand = "aspire update --self --channel [stable]";
 
         // Act - should not throw due to unescaped markup characters
-        var exception = Record.Exception(() => interactionService.DisplayVersionUpdateNotification(version, updateCommand));
+        var exception = Record.Exception(() => interactionService.DisplayVersionUpdateNotification(version, updateCommand, includeAppHostUpdateCommand: true));
 
         // Assert
         Assert.Null(exception);
         var outputString = output.ToString();
         Assert.Contains("A new version of Aspire is available:", outputString);
         Assert.Contains("13.2.0-preview [beta]", outputString);
-        Assert.Contains("aspire update --channel [stable]", outputString);
+        Assert.Contains("for this AppHost", outputString);
+        Assert.Contains("To update the Aspire CLI, use:", outputString);
+        Assert.Contains("aspire update --self --channel [stable]", outputString);
+    }
+
+    [Fact]
+    public void DisplayVersionUpdateNotification_WithoutAppHostContext_DoesNotShowAppHostUpdateCommand()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var interactionService = CreateInteractionService(console);
+
+        interactionService.DisplayVersionUpdateNotification("13.2.0", "aspire update --self");
+
+        var outputString = output.ToString();
+        Assert.Contains("To update the Aspire CLI, use: aspire update --self", outputString);
+        Assert.DoesNotContain("for this AppHost", outputString);
     }
 
     [Fact]

@@ -231,6 +231,44 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StartCommand_WithSelectedAppHost_IncludesAppHostUpdateCommandInNotification()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = CreateAppHostFile(workspace);
+        var updateNotifier = new TestCliUpdateNotifier();
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.CliUpdateNotifierFactory = _ => updateNotifier;
+            options.CliHostEnvironmentFactory = sp =>
+            {
+                var configuration = sp.GetRequiredService<IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+
+        services.Replace(ServiceDescriptor.Singleton<IDetachedProcessLauncher>(new TestDetachedProcessLauncher(() => { })));
+        services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new InstantTimeoutTimeProvider()));
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"start --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.True(updateNotifier.LastIncludeAppHostUpdateCommand);
+    }
+
+    [Fact]
     public async Task StartCommand_WhenRunningInExtensionWithoutDebugSession_StartsVsCodeRunSession()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

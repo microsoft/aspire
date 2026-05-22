@@ -78,7 +78,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
             options.ErrorTextWriter = errorWriter;
             options.CliUpdateNotifierFactory = sp => new TestCliUpdateNotifier
             {
-                NotifyIfUpdateAvailableCallback = () =>
+                NotifyIfUpdateAvailableCallback = _ =>
                 {
                     notifierInvoked = true;
                     var interactionService = sp.GetRequiredService<IInteractionService>();

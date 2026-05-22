@@ -28,6 +28,7 @@ internal sealed class TestInteractionService : IInteractionService
     public Action<string>? ShowDynamicStatusCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
     public string? LastVersionUpdateCommand { get; private set; }
+    public bool LastVersionUpdateIncludedAppHostCommand { get; private set; }
 
     /// <summary>
     /// Callback for capturing selection prompts in tests. Uses non-generic IEnumerable and object
@@ -329,9 +330,10 @@ internal sealed class TestInteractionService : IInteractionService
         DisplayConsoleWriteLineMessage?.Invoke(output);
     }
 
-    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null)
+    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null, bool includeAppHostUpdateCommand = false)
     {
         LastVersionUpdateCommand = updateCommand;
+        LastVersionUpdateIncludedAppHostCommand = includeAppHostUpdateCommand;
         DisplayVersionUpdateNotificationCallback?.Invoke(newerVersion);
     }
 

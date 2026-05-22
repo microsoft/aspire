@@ -962,7 +962,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null) { }
     public void DisplayMarkupLine(string markup) { }
 
-    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null) { }
+    public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null, bool includeAppHostUpdateCommand = false) { }
 
     public void DisplayRenderable(IRenderable renderable) { }
     public Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback) => callback(_ => { });
