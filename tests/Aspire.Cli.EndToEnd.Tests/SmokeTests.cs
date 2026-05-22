@@ -91,7 +91,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         const string projectName = "StableAppHost";
-        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter, channel: "stable");
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
         var appHostSdkVersion = GetAppHostSdkVersion(appHostPath);
@@ -133,7 +133,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         const string projectName = "StableTypeScriptAppHost";
-        await auto.AspireNewTypeScriptEmptyAppHostAsync(projectName, counter, channel: "stable");
+        await auto.AspireNewTypeScriptEmptyAppHostAsync(projectName, counter);
 
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
         var configPath = Path.Combine(projectPath, "aspire.config.json");

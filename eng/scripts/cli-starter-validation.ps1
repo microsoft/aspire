@@ -2,10 +2,6 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, HelpMessage = "Pull request number used to select the PR dogfood channel")]
-    [ValidateRange(1, [int]::MaxValue)]
-    [int]$PRNumber,
-
     [Parameter(HelpMessage = "Maximum number of seconds allowed for aspire start to complete")]
     [ValidateRange(1, [int]::MaxValue)]
     [int]$MaxStartupSeconds = 120,
@@ -114,7 +110,7 @@ foreach ($template in $templates)
     {
         try
         {
-            aspire new $templateId --name $projectName --output $projectRoot --channel "pr-$PRNumber" --non-interactive --nologo
+            aspire new $templateId --name $projectName --output $projectRoot --non-interactive --nologo
 
             try
             {

@@ -284,7 +284,6 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           & "$env:GITHUB_WORKSPACE/eng/scripts/cli-starter-validation.ps1" `
-            -PRNumber ${{ github.event.pull_request.number }} `
             -MaxStartupSeconds ${{ matrix.os.max_startup_seconds }} `
             -ResourceReadyTimeoutSeconds ${{ matrix.os.resource_ready_timeout_seconds }}
 

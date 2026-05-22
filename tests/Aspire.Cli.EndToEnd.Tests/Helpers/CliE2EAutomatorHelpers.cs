@@ -168,7 +168,6 @@ internal static class CliE2EAutomatorHelpers
         string projectName,
         SequenceCounter counter,
         string? outputPath = null,
-        string? channel = null,
         bool useLocalhostTld = false,
         TimeSpan? timeout = null)
     {
@@ -177,7 +176,6 @@ internal static class CliE2EAutomatorHelpers
             "aspire-empty",
             projectName,
             outputPath,
-            channel,
             useLocalhostTld);
 
         await auto.TypeAsync(command);
@@ -198,7 +196,6 @@ internal static class CliE2EAutomatorHelpers
         string projectName,
         SequenceCounter counter,
         string? outputPath = null,
-        string? channel = null,
         bool useLocalhostTld = false,
         TimeSpan? timeout = null)
     {
@@ -207,7 +204,6 @@ internal static class CliE2EAutomatorHelpers
             "aspire-ts-empty",
             projectName,
             outputPath,
-            channel,
             useLocalhostTld);
 
         await auto.TypeAsync(command);
@@ -224,20 +220,18 @@ internal static class CliE2EAutomatorHelpers
         string templateName,
         string projectName,
         string? outputPath,
-        string? channel,
         bool useLocalhostTld)
     {
         var output = string.IsNullOrWhiteSpace(outputPath) ? projectName : outputPath;
-        var channelArgument = string.IsNullOrWhiteSpace(channel)
-            ? string.Empty
-            : $" --channel {AspireCliShellCommandHelpers.QuoteBashArg(channel)}";
         var localhostTldValue = useLocalhostTld ? "true" : "false";
 
+        // `aspire new` no longer accepts --channel/--version — templates are embedded in the
+        // CLI binary, so the running CLI's build is the only template source by construction.
         return
             $"aspire new {AspireCliShellCommandHelpers.QuoteBashArg(templateName)} " +
             $"--name {AspireCliShellCommandHelpers.QuoteBashArg(projectName)} " +
-            $"--output {AspireCliShellCommandHelpers.QuoteBashArg(output)}" +
-            $"{channelArgument} --localhost-tld {localhostTldValue}";
+            $"--output {AspireCliShellCommandHelpers.QuoteBashArg(output)} " +
+            $"--localhost-tld {localhostTldValue}";
     }
 
     private static async Task WaitForAspireNewEmptyAppHostCompletionAsync(

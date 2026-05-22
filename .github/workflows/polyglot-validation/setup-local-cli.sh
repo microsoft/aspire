@@ -37,9 +37,25 @@ echo "=== Extracting bundle ==="
 # Set up NuGet hive
 echo "=== Setting up NuGet package hive ==="
 
-SHIPPING_DIR="$NUGETS_DIR/Release/Shipping"
-if [ ! -d "$SHIPPING_DIR" ]; then
-    SHIPPING_DIR="$NUGETS_DIR"
+# Pick the directory inside the built-nugets artifact that actually contains the canonical
+# Aspire NuGet packages. CI's build-packages.yml uploads `artifacts/packages` wholesale, so
+# both `Debug/Shipping/` (outer build config) and any inadvertent per-config sub-dirs may
+# be present. We anchor on Aspire.Hosting.AppHost being the package we need to derive the
+# PR identity from — checking dir existence alone is too loose because a single stray
+# nupkg landing in `Release/Shipping/` would otherwise mask the real `Debug/Shipping/`.
+# See PR #17372 for the failure mode this guard fixes.
+SHIPPING_DIR=""
+for candidate in "$NUGETS_DIR/Debug/Shipping" "$NUGETS_DIR/Release/Shipping" "$NUGETS_DIR"; do
+    if [ -d "$candidate" ] && find "$candidate" -maxdepth 4 -name "Aspire.Hosting.AppHost.*.nupkg" -print -quit 2>/dev/null | grep -q .; then
+        SHIPPING_DIR="$candidate"
+        break
+    fi
+done
+if [ -z "$SHIPPING_DIR" ]; then
+    echo "ERROR: Could not locate Aspire.Hosting.AppHost.*.nupkg under $NUGETS_DIR (checked Debug/Shipping, Release/Shipping, and $NUGETS_DIR itself)." >&2
+    echo "       Built artifact layout (top-level):" >&2
+    ls -la "$NUGETS_DIR" >&2 || true
+    exit 1
 fi
 
 # Auto-detect PR identity from .nupkg filenames (e.g. "Aspire.Hosting.AppHost.13.4.0-pr.16820.g3703c5c4.nupkg")

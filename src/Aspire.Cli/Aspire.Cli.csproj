@@ -132,34 +132,58 @@
     <_AspireCliIsOuterRestoreOnlyBuild Condition="'$(SkipManagedBuild)' == 'true' and '$(RuntimeIdentifier)' == ''">true</_AspireCliIsOuterRestoreOnlyBuild>
   </PropertyGroup>
 
-  <ItemGroup Condition="'$(IsCliToolProject)' != 'true' and '$(_AspireCliIsOuterRestoreOnlyBuild)' != 'true'">
-    <!-- Build ordering only. Aspire.ProjectTemplates is a template package, not a code
-         dependency. We need its nupkg to exist before our EmbeddedResource step (below)
-         resolves; the templates project has GeneratePackageOnBuild=true so a normal Build
-         produces the nupkg under $(ArtifactsShippingPackagesDir). Suppressed for the tool
-         packaging path (Aspire.Cli.Tool.csproj sets IsCliToolProject=true) because that
-         path packages prebuilt NativeAOT binaries and does not recompile the CLI. -->
-    <ProjectReference Include="..\Aspire.ProjectTemplates\Aspire.ProjectTemplates.csproj"
-                      ReferenceOutputAssembly="false"
-                      SkipGetTargetFrameworkProperties="true"
-                      Private="false" />
-  </ItemGroup>
-
   <!-- Embed the Aspire.ProjectTemplates nupkg as a manifest resource so the CLI binary
        always ships templates that match the CLI build by construction. At runtime the CLI
        extracts this nupkg to a per-CLI-version cache dir and runs `dotnet new install
        <path>`, eliminating all NuGet-based template resolution. See
-       Aspire.Cli.Templating.EmbeddedTemplatePackageProvider. -->
+       Aspire.Cli.Templating.EmbeddedTemplatePackageProvider.
+
+       Lookup strategy: glob across every config's Shipping/ folder under
+       $(ArtifactsPackagesDir). This deliberately tolerates a cross-config match —
+       in build-packages.yml CI the outer build runs Debug (producing
+       Debug/Shipping/Aspire.ProjectTemplates.<ver>.nupkg) and the clipack step then
+       builds Aspire.Cli with Configuration=Release+RuntimeIdentifier. We want that inner
+       Release build to *reuse* the Debug-config nupkg, not trigger a second pack of
+       Aspire.ProjectTemplates into Release/Shipping (which would pollute the
+       built-nugets artifact — see PR #17372 follow-up). Only if no nupkg exists anywhere
+       (e.g. inner-loop Aspire.Cli build in isolation, or the native-archive flow where
+       SkipManagedBuild=true skipped the templates project) do we fall back to an
+       explicit Pack call. -->
   <Target Name="_ResolveEmbeddedTemplatesNupkg"
           BeforeTargets="AssignTargetPaths;PrepareResources"
           Condition="'$(SkipEmbeddedTemplatesNupkg)' != 'true' and '$(IsCliToolProject)' != 'true' and '$(_AspireCliIsOuterRestoreOnlyBuild)' != 'true'">
     <PropertyGroup>
-      <_EmbeddedTemplatesNupkgPath>$(ArtifactsShippingPackagesDir)Aspire.ProjectTemplates.$(PackageVersion).nupkg</_EmbeddedTemplatesNupkgPath>
+      <!-- $(ArtifactsPackagesDir) is config-specific (e.g. artifacts/packages/Release/), so
+           we step up one level to scan all configs' Shipping/ subfolders. -->
+      <_AllPackagesDir>$([System.IO.Path]::GetFullPath('$(ArtifactsPackagesDir)..\'))</_AllPackagesDir>
     </PropertyGroup>
-    <Error Condition="!Exists('$(_EmbeddedTemplatesNupkgPath)')"
-           Text="Could not find Aspire.ProjectTemplates nupkg at '$(_EmbeddedTemplatesNupkgPath)'. Build Aspire.ProjectTemplates first (it has GeneratePackageOnBuild=true) or set SkipEmbeddedTemplatesNupkg=true to opt out (CLI will fail at runtime when invoking 'aspire new' / 'aspire init')." />
     <ItemGroup>
-      <EmbeddedResource Include="$(_EmbeddedTemplatesNupkgPath)" LogicalName="Aspire.ProjectTemplates.nupkg" />
+      <_EmbeddedTemplatesNupkgCandidate Include="$(_AllPackagesDir)**/Shipping/Aspire.ProjectTemplates.$(PackageVersion).nupkg" />
+    </ItemGroup>
+
+    <!-- Fallback: if no outer build produced the nupkg, pack it now in the current
+         Configuration. This covers (a) inner-loop `dotnet build src/Aspire.Cli/...` from
+         a clean tree and (b) the per-RID NativeAOT clipack flow where the outer build
+         skipped Aspire.ProjectTemplates via SkipManagedBuild. -->
+    <MSBuild Projects="..\Aspire.ProjectTemplates\Aspire.ProjectTemplates.csproj"
+             Targets="Restore;Pack"
+             Properties="Configuration=$(Configuration)"
+             Condition="'@(_EmbeddedTemplatesNupkgCandidate)' == ''" />
+
+    <ItemGroup Condition="'@(_EmbeddedTemplatesNupkgCandidate)' == ''">
+      <_EmbeddedTemplatesNupkgCandidate Include="$(_AllPackagesDir)**/Shipping/Aspire.ProjectTemplates.$(PackageVersion).nupkg" />
+    </ItemGroup>
+
+    <Error Condition="'@(_EmbeddedTemplatesNupkgCandidate)' == ''"
+           Text="Could not find Aspire.ProjectTemplates.$(PackageVersion).nupkg under '$(ArtifactsPackagesDir)*/Shipping/'. Build Aspire.ProjectTemplates first (it has GeneratePackageOnBuild=true), or set SkipEmbeddedTemplatesNupkg=true to opt out (CLI will fail at runtime when invoking 'aspire new' / 'aspire init')." />
+
+    <PropertyGroup>
+      <!-- Prefer the first match. When the outer build packed in one config and this inner
+           build runs in another, taking the first match avoids re-packing. -->
+      <_EmbeddedTemplatesNupkgPath>@(_EmbeddedTemplatesNupkgCandidate->'%(Identity)', ';')</_EmbeddedTemplatesNupkgPath>
+    </PropertyGroup>
+    <ItemGroup>
+      <EmbeddedResource Include="@(_EmbeddedTemplatesNupkgCandidate->'%(Identity)')" LogicalName="Aspire.ProjectTemplates.nupkg" KeepDuplicates="false" />
     </ItemGroup>
   </Target>
 
