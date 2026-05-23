@@ -756,7 +756,7 @@ public static class AzureContainerAppExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(identityBuilder);
 
-        builder.WithAnnotation(new AzureContainerAppEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource), ResourceAnnotationMutationBehavior.Replace);
+        builder.WithAnnotation(new AzureContainerAppEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource));
 
         return builder;
     }

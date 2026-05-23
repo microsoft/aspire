@@ -477,8 +477,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// </summary>
     /// <param name="builder">The Azure App Service environment to configure.</param>
     /// <param name="identityBuilder">
-    /// The resource builder for the user-assigned identity that should be used for image pulls. This identity is
-    /// only used for the <c>AcrPull</c> role; it is not assigned as the app service runtime identity.
+    /// The resource builder for the user-assigned identity that should be used for image pulls. The supplied
+    /// identity must already have the <c>AcrPull</c> role on the configured container registry.
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
@@ -487,6 +487,13 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// container registry. The caller is responsible for ensuring the supplied identity already has the required
     /// <c>AcrPull</c> role assignment on the registry, for example by chaining
     /// <c>.WithRoleAssignments(acr, ContainerRegistryBuiltInRole.AcrPull)</c> when adding the identity.
+    /// </para>
+    /// <para>
+    /// Unlike the equivalent method on Azure Container Apps, App Service reuses this single identity for more than
+    /// just image pulls. The same identity is also attached to every generated App Service web app as a user-assigned
+    /// managed identity, and is used by the Aspire OTLP sidecar to authenticate telemetry to the Aspire dashboard
+    /// (it is added to the dashboard's <c>ALLOWED_MANAGED_IDENTITIES</c> and exposed to each app via the OTEL
+    /// client-id app setting). If you supply an existing identity here, it will take on all of these roles.
     /// </para>
     /// <para>
     /// This is commonly combined with <c>AsExisting</c> on the App Service environment (App Service Plan) and on
@@ -527,7 +534,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(identityBuilder);
 
-        builder.WithAnnotation(new AzureAppServiceEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource), ResourceAnnotationMutationBehavior.Replace);
+        builder.WithAnnotation(new AzureAppServiceEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource));
 
         return builder;
     }
