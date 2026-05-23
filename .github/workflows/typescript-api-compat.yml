@@ -25,7 +25,7 @@ jobs:
           ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
           ./dotnet.sh build tools/TypeScriptApiCompat/TypeScriptApiCompat.csproj --configuration Release
           test -f artifacts/bin/Aspire.Cli/Release/net10.0/aspire.dll
-          test -f artifacts/bin/TypeScriptApiCompat/Release/net10.0/TypeScriptApiCompat.dll
+          test -f artifacts/bin/TypeScriptApiCompat/Release/net8.0/TypeScriptApiCompat.dll
 
       - name: Prepare base ATS surface
         shell: bash
@@ -232,7 +232,7 @@ jobs:
           set -euo pipefail
 
           ./dotnet.sh exec \
-            artifacts/bin/TypeScriptApiCompat/Release/net10.0/TypeScriptApiCompat.dll \
+            artifacts/bin/TypeScriptApiCompat/Release/net8.0/TypeScriptApiCompat.dll \
             --baseline "$BASELINE_DIR" \
             --current "$CURRENT_DIR" \
             --suppressions-root "${{ github.workspace }}" \
