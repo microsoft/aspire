@@ -20,10 +20,6 @@ internal sealed class ConsoleLogBufferContext
     private readonly Queue<(TextWriter Writer, string Message)> _bufferedMessages = new();
     private int _interactivePromptDepth;
 
-    // When true, the buffer is being flushed. New writes arriving during flush are
-    // still buffered so they don't interleave with the drain or appear before it.
-    private bool _isFlushing;
-
     /// <summary>
     /// Begins an interactive prompt scope. Logs are buffered until the outermost scope ends.
     /// </summary>
@@ -46,9 +42,7 @@ internal sealed class ConsoleLogBufferContext
     {
         lock (_logBufferLock)
         {
-            // During an active prompt or an ongoing flush, queue log lines instead of
-            // writing immediately so output ordering is preserved.
-            if (_interactivePromptDepth > 0 || _isFlushing)
+            if (_interactivePromptDepth > 0)
             {
                 if (_bufferedMessages.Count >= MaxBufferedMessages)
                 {
@@ -60,76 +54,33 @@ internal sealed class ConsoleLogBufferContext
                 return;
             }
 
-            // No prompt active and not flushing — write directly under lock so the
-            // decision and I/O are atomic with respect to prompt scope changes.
             output.WriteLine(message);
         }
     }
 
     private void EndInteractivePromptScope()
     {
-        // Flush may need to loop because new messages can arrive during the drain.
-        // The decrement must only happen once per scope close, so track it separately
-        // from the loop iterations to avoid stealing depth from a concurrently opened scope.
-        // Cap iterations to prevent unbounded looping if messages arrive faster than
-        // we can drain (e.g., a very chatty logger on another thread).
-        const int maxFlushIterations = 3;
-        var decremented = false;
-        var remainingIterations = maxFlushIterations;
-        while (true)
+        lock (_logBufferLock)
         {
-            List<(TextWriter Writer, string Message)> messagesToFlush;
-
-            lock (_logBufferLock)
+            if (_interactivePromptDepth > 0)
             {
-                if (!decremented && _interactivePromptDepth > 0)
-                {
-                    _interactivePromptDepth--;
-                    decremented = true;
-                }
-
-                if (_interactivePromptDepth > 0)
-                {
-                    return;
-                }
-
-                if (_bufferedMessages.Count == 0)
-                {
-                    _isFlushing = false;
-                    return;
-                }
-
-                // Enter flushing state so concurrent WriteOrBuffer calls still buffer.
-                _isFlushing = true;
-
-                // Drain current buffer under lock to preserve ordering.
-                messagesToFlush = new List<(TextWriter, string)>(_bufferedMessages.Count);
-                while (_bufferedMessages.Count > 0)
-                {
-                    messagesToFlush.Add(_bufferedMessages.Dequeue());
-                }
-
-                // On the final iteration, clear flushing state before writing so new
-                // messages arriving during the last write go directly to output (the
-                // prompt is over). This prevents the loop from running indefinitely.
-                if (--remainingIterations <= 0)
-                {
-                    _isFlushing = false;
-                }
+                _interactivePromptDepth--;
             }
 
-            // Write outside the lock to avoid holding it during I/O.
-            foreach (var (writer, msg) in messagesToFlush)
-            {
-                writer.WriteLine(msg);
-            }
-
-            if (remainingIterations <= 0)
+            if (_interactivePromptDepth > 0)
             {
                 return;
             }
 
-            // Loop back to check whether new messages arrived while we were writing.
+            // Flush all buffered messages under the lock. This is acceptable because
+            // each message is a single short log line (sub-millisecond write) and
+            // Console.Error is already internally serialized. Writing under lock
+            // eliminates the need for a flush loop or _isFlushing flag entirely.
+            while (_bufferedMessages.Count > 0)
+            {
+                var (writer, msg) = _bufferedMessages.Dequeue();
+                writer.WriteLine(msg);
+            }
         }
     }
 
