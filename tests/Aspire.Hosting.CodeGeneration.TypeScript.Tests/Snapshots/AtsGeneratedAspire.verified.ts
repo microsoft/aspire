@@ -309,6 +309,13 @@ export interface TestCollectionContext {
     metadata(): Promise<AspireDict<string, string>>;
 }
 
+export interface TestCollectionContextPromise extends PromiseLike<TestCollectionContext> {
+    /** List property - should generate AspireList getter like Dictionary properties. */
+    items(): Promise<AspireList<string>>;
+    /** Dictionary property - already works with AspireDict getter. */
+    metadata(): Promise<AspireDict<string, string>>;
+}
+
 // ============================================================================
 // TestCollectionContextImpl
 // ============================================================================
@@ -344,6 +351,31 @@ class TestCollectionContextImpl implements TestCollectionContext {
             );
         }
         return this._metadata;
+    }
+
+}
+
+/**
+ * Thenable wrapper for TestCollectionContext that enables fluent chaining.
+ */
+class TestCollectionContextPromiseImpl implements TestCollectionContextPromise {
+    constructor(private _promise: Promise<TestCollectionContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = TestCollectionContext, TResult2 = never>(
+        onfulfilled?: ((value: TestCollectionContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    items(): Promise<AspireList<string>> {
+        return this._promise.then(obj => obj.items());
+    }
+
+    metadata(): Promise<AspireDict<string, string>> {
+        return this._promise.then(obj => obj.metadata());
     }
 
 }
@@ -4029,5 +4061,4 @@ registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hos
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource', (handle, client) => new ResourceImpl(handle as IResourceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString', (handle, client) => new ResourceWithConnectionStringImpl(handle as IResourceWithConnectionStringHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment', (handle, client) => new ResourceWithEnvironmentImpl(handle as IResourceWithEnvironmentHandle, client));
-
 
