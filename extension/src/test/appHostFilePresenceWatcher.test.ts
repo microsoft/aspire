@@ -95,7 +95,7 @@ suite('AppHostFilePresenceWatcher', () => {
         const terminalProvider = new AspireTerminalProvider([]);
         repository = new AppHostDataRepository(terminalProvider);
         setOpenSpy = sinon.spy(repository, 'setAppHostFileOpen');
-        clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        clock = sinon.useFakeTimers();
     });
 
     teardown(() => {
@@ -107,76 +107,67 @@ suite('AppHostFilePresenceWatcher', () => {
         visibleEditorsStub.restore();
     });
 
-    test('constructor evaluates visible editors and reports false when none are AppHost files', async () => {
+    test('constructor evaluates visible editors and reports false when none are AppHost files', () => {
         visibleEditors = [makeEditor('/test/Program.cs', nonAppHostCsContent)];
 
         const watcher = new AppHostFilePresenceWatcher(repository);
-        await waitForUpdate(watcher);
 
         // No call expected because the cached "_lastValue" starts at false.
         assert.strictEqual(setOpenSpy.called, false);
         watcher.dispose();
     });
 
-    test('constructor reports true when an AppHost file is already visible', async () => {
+    test('constructor reports true when an AppHost file is already visible', () => {
         visibleEditors = [makeEditor('/test/AppHost.cs', appHostCsContent)];
 
         const watcher = new AppHostFilePresenceWatcher(repository);
-        await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.strictEqual(setOpenSpy.firstCall.args[0], true);
         watcher.dispose();
     });
 
-    test('becoming-AppHost transition via visibility change reports true', async () => {
+    test('becoming-AppHost transition via visibility change reports true', () => {
         const watcher = new AppHostFilePresenceWatcher(repository);
-        await waitForUpdate(watcher);
         assert.strictEqual(setOpenSpy.called, false);
 
         visibleEditors = [makeEditor('/test/AppHost.cs', appHostCsContent)];
         captured.visibilityListeners.forEach(l => l(visibleEditors));
-        await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.strictEqual(setOpenSpy.firstCall.args[0], true);
         watcher.dispose();
     });
 
-    test('all-non-AppHost transition reports false', async () => {
+    test('all-non-AppHost transition reports false', () => {
         visibleEditors = [makeEditor('/test/AppHost.cs', appHostCsContent)];
         const watcher = new AppHostFilePresenceWatcher(repository);
-        await waitForUpdate(watcher);
         assert.strictEqual(setOpenSpy.lastCall.args[0], true);
 
         visibleEditors = [makeEditor('/test/Program.cs', nonAppHostCsContent)];
         captured.visibilityListeners.forEach(l => l(visibleEditors));
-        await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.callCount, 2);
         assert.strictEqual(setOpenSpy.secondCall.args[0], false);
         watcher.dispose();
     });
 
-    test('redundant visibility events with same value do not re-notify', async () => {
+    test('redundant visibility events with same value do not re-notify', () => {
         visibleEditors = [makeEditor('/test/AppHost.cs', appHostCsContent)];
         const watcher = new AppHostFilePresenceWatcher(repository);
-        await waitForUpdate(watcher);
         const initialCalls = setOpenSpy.callCount;
 
         captured.visibilityListeners.forEach(l => l(visibleEditors));
         captured.visibilityListeners.forEach(l => l(visibleEditors));
-        await waitForUpdate(watcher);
 
         assert.strictEqual(setOpenSpy.callCount, initialCalls);
         watcher.dispose();
     });
 
-    test('document edit on a visible non-AppHost file that becomes AppHost reports true after debounce', async () => {
+    test('document edit on a visible non-AppHost file that becomes AppHost reports true after debounce', () => {
         const editor = makeEditor('/test/Program.cs', nonAppHostCsContent);
         visibleEditors = [editor];
         const watcher = new AppHostFilePresenceWatcher(repository);
-        await waitForUpdate(watcher);
         assert.strictEqual(setOpenSpy.called, false);
 
         // Mutate the document content to look like an AppHost.
@@ -187,33 +178,30 @@ suite('AppHostFilePresenceWatcher', () => {
         // Listener is debounced; nothing fires yet.
         assert.strictEqual(setOpenSpy.called, false);
 
-        await clock.tickAsync(300);
-        await waitForUpdate(watcher);
+        clock.tick(300);
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.strictEqual(setOpenSpy.firstCall.args[0], true);
         watcher.dispose();
     });
 
-    test('document edit on a non-visible document is ignored', async () => {
+    test('document edit on a non-visible document is ignored', () => {
         const visible = makeEditor('/test/Program.cs', nonAppHostCsContent);
         visibleEditors = [visible];
         const watcher = new AppHostFilePresenceWatcher(repository);
-        await waitForUpdate(watcher);
 
         const offscreen = makeEditor('/elsewhere/AppHost.cs', appHostCsContent);
         captured.documentListeners.forEach(l => l({ document: offscreen.document, contentChanges: [], reason: undefined } as any));
-        await clock.tickAsync(500);
+        clock.tick(500);
 
         assert.strictEqual(setOpenSpy.called, false);
         watcher.dispose();
     });
 
-    test('rapid edits coalesce into a single update', async () => {
+    test('rapid edits coalesce into a single update', () => {
         const editor = makeEditor('/test/AppHost.cs', appHostCsContent);
         visibleEditors = [editor];
         const watcher = new AppHostFilePresenceWatcher(repository);
-        await waitForUpdate(watcher);
         const initial = setOpenSpy.callCount;
 
         // Switch to non-AppHost while firing several rapid edits.
@@ -221,10 +209,9 @@ suite('AppHostFilePresenceWatcher', () => {
         visibleEditors = [downgraded];
         for (let i = 0; i < 5; i++) {
             captured.documentListeners.forEach(l => l({ document: downgraded.document, contentChanges: [], reason: undefined } as any));
-            await clock.tickAsync(50);
+            clock.tick(50);
         }
-        await clock.tickAsync(300);
-        await waitForUpdate(watcher);
+        clock.tick(300);
 
         assert.strictEqual(setOpenSpy.callCount, initial + 1);
         assert.strictEqual(setOpenSpy.lastCall.args[0], false);
@@ -246,7 +233,3 @@ suite('AppHostFilePresenceWatcher', () => {
         assert.strictEqual(setOpenSpy.called, false);
     });
 });
-
-async function waitForUpdate(watcher: AppHostFilePresenceWatcher): Promise<void> {
-    await (watcher as unknown as { _updateTask: Promise<void> })._updateTask;
-}
