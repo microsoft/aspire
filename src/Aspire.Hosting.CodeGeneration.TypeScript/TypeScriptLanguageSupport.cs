@@ -66,7 +66,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.mjs';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
 
@@ -79,7 +79,6 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
 
         files[".gitignore"] = """
             node_modules/
-            .modules/
             dist/
             .aspire/
             """;
@@ -281,7 +280,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--watch", ".",
                     "--ext", "ts,mts",
                     "--ignore", "node_modules/",
-                    "--ignore", ".modules/",
+                    "--ignore", ".aspire/modules/",
                     "--exec", $"npx --no-install tsc --noEmit -p {AppHostTsConfigFileName} && npx --no-install tsx --tsconfig {AppHostTsConfigFileName} \"{{appHostFile}}\""
                 ]
             },

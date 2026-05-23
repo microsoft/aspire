@@ -1,4 +1,4 @@
-import { createBuilder, GitHubModelName } from './.modules/aspire.mjs';
+import { createBuilder, GitHubModelName } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 

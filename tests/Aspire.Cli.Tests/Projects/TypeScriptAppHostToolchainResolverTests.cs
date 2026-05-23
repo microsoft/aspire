@@ -246,7 +246,7 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
                 "--watch", ".",
                 "--ext", "ts,mts",
                 "--ignore", "node_modules/",
-                "--ignore", ".modules/",
+                "--ignore", ".aspire/modules/",
                 "--exec", "bun run tsc --noEmit -p tsconfig.apphost.json && bun run \"{appHostFile}\""
             ],
             runtimeSpec.WatchExecute!.Args);

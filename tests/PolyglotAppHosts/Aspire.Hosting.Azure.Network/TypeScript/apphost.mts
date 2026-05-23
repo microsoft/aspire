@@ -1,7 +1,7 @@
 import {
     createBuilder,
     NetworkSecurityPerimeterAccessRuleDirection
-} from './.modules/aspire.mjs';
+} from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 

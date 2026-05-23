@@ -13,8 +13,8 @@ import {
     ProbeType,
     ResourceCommandState,
     refExpr,
-} from './.modules/aspire.mjs';
-import type { DockerfileBuilderCallbackContext } from './.modules/aspire.mjs';
+} from './.aspire/modules/aspire.mjs';
+import type { DockerfileBuilderCallbackContext } from './.aspire/modules/aspire.mjs';
 import { fileURLToPath } from 'node:url';
 
 const builder = await createBuilder();
@@ -154,6 +154,7 @@ await builtConnectionString.withConnectionProperty("Host", expr);
 await builtConnectionString.withConnectionProperty("Mode", "Development");
 await container.withReference(endpoint);
 await container.withReference("https://example.com/", { name: "external-uri" });
+const externalService = await builder.addExternalService("external-service", "https://example.com");
 
 const envConnectionString = await builder.addConnectionString("envcs");
 const expressionConnectionString = await builder.addConnectionString("exprcs", { environmentVariableNameOrExpression: expr });
@@ -208,6 +209,9 @@ await container.withEnvironment("MY_GENERATED_PARAM", generatedParam);
 // withEnvironment — with connection string resource
 await container.withEnvironment("MY_CONN", envConnectionString);
 await container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
+
+// withEnvironment — with external service resource
+await container.withEnvironment("MY_EXTERNAL_SERVICE", externalService);
 
 // callback editors/facades
 await container.withEnvironmentCallback(async (context) => {

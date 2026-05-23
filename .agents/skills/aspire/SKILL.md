@@ -1,6 +1,6 @@
 ---
 name: aspire
-description: "Use when working with an Aspire distributed application: operate an AppHost or resources through the Aspire CLI; start, stop, restart, or wait for resources; inspect app state, logs, traces, docs, or health; add integrations; manage secrets/config; publish/deploy or run pipeline steps; initialize an existing app; recover TypeScript `.modules`; find frontend URLs for Playwright; expose custom dashboard/resource commands; or understand Aspire AppHost APIs in C# or TypeScript. Use even if the user says AppHost, resources, dashboard, bootstrap, Playwright URL, or local distributed app workflow without naming Aspire. Do not use for non-Aspire .NET apps, container-only repos without an AppHost, or ordinary build/test tasks."
+description: "Use when working with an Aspire distributed application: operate an AppHost or resources through the Aspire CLI; start, stop, restart, or wait for resources; inspect app state, logs, traces, docs, or health; add integrations; manage secrets/config; publish/deploy or run pipeline steps; initialize an existing app; recover TypeScript `.aspire/modules`; find frontend URLs for Playwright; expose custom dashboard/resource commands; or understand Aspire AppHost APIs in C# or TypeScript. Use even if the user says AppHost, resources, dashboard, bootstrap, Playwright URL, or local distributed app workflow without naming Aspire. Do not use for non-Aspire .NET apps, container-only repos without an AppHost, or ordinary build/test tasks."
 ---
 
 # Aspire Skill
@@ -49,12 +49,12 @@ When the AppHost is implemented in C# such as `AppHost.cs`, `apphost.cs`, or a `
 
 ## TypeScript AppHosts
 
-When the AppHost is `apphost.ts`, the `.modules/` folder at the project root contains generated TypeScript modules that expose the Aspire APIs available to the AppHost. Common files include `.modules/aspire.ts`, `base.ts`, and `transport.ts`.
+When the AppHost is `apphost.ts`, the `.aspire/modules/` folder at the project root contains generated TypeScript modules that expose the Aspire APIs available to the AppHost. Common files include `.aspire/modules/aspire.ts`, `base.ts`, and `transport.ts`.
 
-- Do not edit `.modules/` directly.
+- Do not edit `.aspire/modules/` directly.
 - Use `aspire integration search <query>` to find the integration package, then use `aspire add <package>` to add integrations and regenerate the available APIs.
-- Inspect `.modules/aspire.ts` after `aspire add` to see the refreshed API surface.
-- The local `tsconfig.json` often includes `.modules/**/*.ts` in its compilation scope.
+- Inspect `.aspire/modules/aspire.ts` after `aspire add` to see the refreshed API surface.
+- The local `tsconfig.json` often includes `.aspire/modules/**/*.ts` in its compilation scope.
 
 ## Key rules
 
@@ -70,7 +70,7 @@ When the AppHost is `apphost.ts`, the `.modules/` folder at the project root con
 - Do not guess the integration or command shape for unfamiliar AppHost changes. Use `aspire docs search` and `aspire docs get` for the documented pattern, then use `aspire docs api search` and `aspire docs api get` when you need the specific reference entry.
 - For unfamiliar C# AppHost APIs, use Aspire API docs as the primary reference and, if available, use `dotnet-inspect` only to inspect local symbols, overloads, and builder chains.
 - Never install the obsolete Aspire workload.
-- When a TypeScript AppHost uses `.modules/`, do not edit generated files directly. Use `aspire add` to regenerate APIs and inspect `.modules/aspire.ts` afterward.
+- When a TypeScript AppHost uses `.aspire/modules/`, do not edit generated files directly. Use `aspire add` to regenerate APIs and inspect `.aspire/modules/aspire.ts` afterward.
 - Prefer official docs from `aspire.dev`.
 
 ## Common capabilities

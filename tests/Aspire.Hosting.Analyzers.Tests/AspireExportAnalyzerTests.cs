@@ -441,6 +441,81 @@ public class AspireExportAnalyzerTests
     }
 
     [Fact]
+    public async Task ExportedBuilderMethod_PassesActionToHelperThatInvokesInline_ReportsASPIREEXPORT010()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_exportedSyncDelegateInvokedInline;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using System;
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public sealed class TestResource(string name) : Resource(name);
+            public sealed class TestContext;
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static IResourceBuilder<TestResource> WithHelperCallback(this IResourceBuilder<TestResource> builder, Action<TestContext> callback)
+                {
+                    InvokeCallback(callback);
+                    return builder;
+                }
+
+                private static void InvokeCallback(Action<TestContext> callback)
+                {
+                    callback(new TestContext());
+                }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(15, 9).WithArguments("WithHelperCallback", "callback")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportedBuilderMethod_PassesActionToTransitiveHelperThatInvokesInline_ReportsASPIREEXPORT010()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_exportedSyncDelegateInvokedInline;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using System;
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public sealed class TestResource(string name) : Resource(name);
+            public sealed class TestContext;
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static IResourceBuilder<TestResource> WithTransitiveHelperCallback(this IResourceBuilder<TestResource> builder, Action<TestContext> callback)
+                {
+                    InvokeOuter(callback);
+                    return builder;
+                }
+
+                private static void InvokeOuter(Action<TestContext> callback)
+                {
+                    InvokeInner(callback);
+                }
+
+                private static void InvokeInner(Action<TestContext> callback)
+                {
+                    callback(new TestContext());
+                }
+            }
+            """,
+            [new DiagnosticResult(diagnostic).WithLocation(15, 9).WithArguments("WithTransitiveHelperCallback", "callback")]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task ExportedBuilderMethod_PassesActionIntoDeferredLambda_NoDiagnostics()
     {
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
@@ -464,6 +539,42 @@ public class AspireExportAnalyzerTests
                 public static IResourceBuilder<TestResource> WithDeferredCallback(this IResourceBuilder<TestResource> builder, Action<TestContext> callback)
                 {
                     return builder.WithAnnotation(new TestAnnotation(ctx => callback(ctx)));
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportedBuilderMethod_PassesActionToHelperThatDefersCallback_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using System;
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public sealed class TestResource(string name) : Resource(name);
+            public sealed class TestContext;
+
+            public sealed class TestAnnotation : IResourceAnnotation
+            {
+                public TestAnnotation(Action<TestContext> callback) { }
+            }
+
+            public static class TestExports
+            {
+                [AspireExport]
+                public static IResourceBuilder<TestResource> WithDeferredHelperCallback(this IResourceBuilder<TestResource> builder, Action<TestContext> callback)
+                {
+                    return builder.WithAnnotation(CreateAnnotation(callback));
+                }
+
+                private static TestAnnotation CreateAnnotation(Action<TestContext> callback)
+                {
+                    return new TestAnnotation(ctx => callback(ctx));
                 }
             }
             """, []);
@@ -588,6 +699,38 @@ public class AspireExportAnalyzerTests
                 {
                     callback(new TestContext());
                     return builder;
+                }
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExportedBuilderMethod_WithBackgroundThreadOptInAndTransitiveHelperInvocation_NoASPIREEXPORT010()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using System;
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            public sealed class TestResource(string name) : Resource(name);
+            public sealed class TestContext;
+
+            public static class TestExports
+            {
+                [AspireExport(RunSyncOnBackgroundThread = true)]
+                public static IResourceBuilder<TestResource> WithHelperCallback(this IResourceBuilder<TestResource> builder, Action<TestContext> callback)
+                {
+                    InvokeCallback(callback);
+                    return builder;
+                }
+
+                private static void InvokeCallback(Action<TestContext> callback)
+                {
+                    callback(new TestContext());
                 }
             }
             """, []);

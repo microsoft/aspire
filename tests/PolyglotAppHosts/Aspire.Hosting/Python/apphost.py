@@ -142,6 +142,7 @@ with create_builder() as builder:
     built_connection_string.with_connection_property_value("Key", "Value")
     container.with_reference(endpoint)
     container.with_reference("https://example.com/", name="external-uri")
+    external_service = builder.add_external_service("external-service", "https://example.com")
     built_connection_string.with_connection_property("Host", expr)
     built_connection_string.with_connection_property("Mode", "Development")
     vnet = builder.add_azure_virtual_network("vnet", address_prefix="10.0.0.0/16")
@@ -199,6 +200,8 @@ with create_builder() as builder:
     # withEnvironment - connection string resource
     container.with_environment("MY_CONN", env_connection_string)
     container.with_environment("MY_EXPR_CONN", expression_connection_string)
+    # withEnvironment - external service resource
+    container.with_environment("MY_EXTERNAL_SERVICE", external_service)
     container.with_env_callback(configure_environment_callback)
     container.with_args_callback(configure_args_callback)
     container.with_urls_callback(configure_urls_callback)

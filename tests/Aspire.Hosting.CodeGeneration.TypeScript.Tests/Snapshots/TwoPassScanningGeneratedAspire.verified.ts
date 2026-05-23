@@ -12578,7 +12578,7 @@ export interface ContainerResource {
      */
     withParentProcessLifetime(parentProcessId: number): ContainerResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -13279,7 +13279,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withParentProcessLifetime(parentProcessId: number): ContainerResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -14377,7 +14377,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ContainerResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ContainerResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -14388,7 +14388,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -16227,7 +16227,7 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -16655,7 +16655,7 @@ export interface CSharpAppResource {
      */
     withParentProcessLifetime(parentProcessId: number): CSharpAppResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -17217,7 +17217,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withParentProcessLifetime(parentProcessId: number): CSharpAppResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -17964,7 +17964,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<CSharpAppResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<CSharpAppResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -17975,7 +17975,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -19743,7 +19743,7 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -20205,7 +20205,7 @@ export interface DotnetToolResource {
      */
     withParentProcessLifetime(parentProcessId: number): DotnetToolResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -20795,7 +20795,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withParentProcessLifetime(parentProcessId: number): DotnetToolResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -21646,7 +21646,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<DotnetToolResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<DotnetToolResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -21657,7 +21657,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -23429,7 +23429,7 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -23861,7 +23861,7 @@ export interface ExecutableResource {
      */
     withParentProcessLifetime(parentProcessId: number): ExecutableResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -24418,7 +24418,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withParentProcessLifetime(parentProcessId: number): ExecutableResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -25165,7 +25165,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ExecutableResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ExecutableResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -25176,7 +25176,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -26924,7 +26924,7 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -31194,7 +31194,7 @@ export interface ProjectResource {
      */
     withParentProcessLifetime(parentProcessId: number): ProjectResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -31756,7 +31756,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withParentProcessLifetime(parentProcessId: number): ProjectResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -32504,7 +32504,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ProjectResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ProjectResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -32515,7 +32515,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -34283,7 +34283,7 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -34842,7 +34842,7 @@ export interface TestDatabaseResource {
      */
     withParentProcessLifetime(parentProcessId: number): TestDatabaseResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -35543,7 +35543,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withParentProcessLifetime(parentProcessId: number): TestDatabaseResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -36640,7 +36640,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestDatabaseResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestDatabaseResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -36651,7 +36651,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -38490,7 +38490,7 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -39049,7 +39049,7 @@ export interface TestRedisResource {
      */
     withParentProcessLifetime(parentProcessId: number): TestRedisResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -39814,7 +39814,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withParentProcessLifetime(parentProcessId: number): TestRedisResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -40975,7 +40975,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestRedisResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestRedisResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -40986,7 +40986,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -43072,7 +43072,7 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -43691,7 +43691,7 @@ export interface TestVaultResource {
      */
     withParentProcessLifetime(parentProcessId: number): TestVaultResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -44394,7 +44394,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withParentProcessLifetime(parentProcessId: number): TestVaultResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -45493,7 +45493,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestVaultResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestVaultResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -45504,7 +45504,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -47358,7 +47358,7 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -50988,7 +50988,7 @@ export interface ResourceWithEnvironment {
      */
     withOtlpExporter(options?: WithOtlpExporterOptions): ResourceWithEnvironmentPromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -51086,7 +51086,7 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      */
     withOtlpExporter(options?: WithOtlpExporterOptions): ResourceWithEnvironmentPromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -51208,7 +51208,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ResourceWithEnvironment> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ResourceWithEnvironment> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
@@ -51219,7 +51219,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -51471,7 +51471,7 @@ class ResourceWithEnvironmentPromiseImpl implements ResourceWithEnvironmentPromi
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withOtlpExporter(options)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 

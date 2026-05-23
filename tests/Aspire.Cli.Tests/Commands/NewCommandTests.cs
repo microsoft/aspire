@@ -1916,7 +1916,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var projectFactory = new TestTypeScriptStarterProjectFactory((directory, cancellationToken, _) =>
         {
-            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, ".modules"));
+            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, ".aspire", "modules"));
             File.WriteAllText(Path.Combine(modulesDir.FullName, "aspire.ts"), "// generated sdk");
             return Task.FromResult(true);
         });

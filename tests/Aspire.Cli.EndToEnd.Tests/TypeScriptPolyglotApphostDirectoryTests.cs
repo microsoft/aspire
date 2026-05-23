@@ -83,7 +83,7 @@ public sealed class TypeScriptPolyglotApphostDirectoryTests(ITestOutputHelper ou
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.mjs';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
 

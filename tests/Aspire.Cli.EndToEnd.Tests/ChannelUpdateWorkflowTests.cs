@@ -107,8 +107,8 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         var appHostRelativePath = ReadAspireConfigAppHostPath(aspireConfigPath);
         var appHostPath = Path.GetFullPath(Path.Combine(projectPath, appHostRelativePath));
         var generatedModuleImport = appHostRelativePath.EndsWith(".mts", StringComparison.OrdinalIgnoreCase)
-            ? "./.modules/aspire.mjs"
-            : "./.modules/aspire.js";
+            ? "./.aspire/modules/aspire.mjs"
+            : "./.aspire/modules/aspire.js";
 
         await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
 

@@ -81,6 +81,7 @@ public sealed class TypeScriptApiCompatTests
 
             # Capabilities
             Pkg/addThing(name: string, port?: number) -> Pkg/Thing
+            Pkg/addInputType(name: string | Pkg/Thing) -> void
             Pkg/addInsertedOptionalBeforeExisting(name: string, suffix?: string) -> void
             Pkg/removeMe() -> void
             """);
@@ -105,6 +106,7 @@ public sealed class TypeScriptApiCompatTests
 
             # Capabilities
             Pkg/addThing(name: number, port: number, requiredName: string, optionalName?: string) -> void
+            Pkg/addInputType(name: string | Pkg/Thing | Pkg/NewThing) -> void
             Pkg/addInsertedOptionalBeforeExisting(name: string, inserted?: string, suffix?: string) -> void
             Pkg/newCapability() -> void
             """);
@@ -123,7 +125,7 @@ public sealed class TypeScriptApiCompatTests
         Assert.Contains(diagnostics, d => d.Kind == "capability-parameter-required" && d.Symbol == "Pkg/addThing(port)");
         Assert.Contains(diagnostics, d => d.Kind == "capability-parameter-added-required" && d.Symbol == "Pkg/addThing(requiredName)");
         Assert.Contains(diagnostics, d => d.Kind == "capability-parameter-order-changed" && d.Symbol == "Pkg/addInsertedOptionalBeforeExisting");
-        Assert.DoesNotContain(diagnostics, d => d.Symbol is "Pkg/NewThing" or "Pkg/newCapability" or "Pkg/addThing(optionalName)" or "Pkg/Options.newOptional");
+        Assert.DoesNotContain(diagnostics, d => d.Symbol is "Pkg/NewThing" or "Pkg/newCapability" or "Pkg/addThing(optionalName)" or "Pkg/Options.newOptional" or "Pkg/addInputType(name)");
     }
 
     [Fact]

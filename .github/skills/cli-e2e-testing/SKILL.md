@@ -683,13 +683,13 @@ testresults/
     └── TestClassName.MethodName/      # Full generated project for debugging
         ├── apphost.ts
         ├── aspire.config.json
-        ├── .modules/                  # Generated SDK - check aspire.js for exports
+        ├── .aspire/modules/                  # Generated SDK - check aspire.js for exports
         └── ...
 ```
 
 ### Workspace Capture
 
-Tests annotated with `[CaptureWorkspaceOnFailure]` automatically copy the generated project workspace into the test artifacts when a test fails. This is invaluable for debugging template generation or `aspire run` failures — you can inspect the exact generated files including the SDK output in `.modules/aspire.js`.
+Tests annotated with `[CaptureWorkspaceOnFailure]` automatically copy the generated project workspace into the test artifacts when a test fails. This is invaluable for debugging template generation or `aspire run` failures — you can inspect the exact generated files including the SDK output in `.aspire/modules/aspire.js`.
 
 To add workspace capture to a new test:
 ```csharp

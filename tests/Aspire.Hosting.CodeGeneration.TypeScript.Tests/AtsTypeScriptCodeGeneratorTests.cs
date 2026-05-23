@@ -1027,6 +1027,8 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.DoesNotContain("ResourceBuilderBase | ResourceBuilderBase", aspireTs);
         Assert.DoesNotContain("EndpointReference | EndpointReference", aspireTs);
         Assert.Contains(lines, line => line.StartsWith("withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains("withEnvironment(name: string, value:", StringComparison.Ordinal) &&
+                                      line.Contains("ExternalServiceResource", StringComparison.Ordinal));
         Assert.Contains("ResourceWithConnectionString", aspireTs);
         Assert.DoesNotContain("value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression", aspireTs);
     }

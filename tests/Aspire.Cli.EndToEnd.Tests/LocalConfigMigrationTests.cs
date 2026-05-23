@@ -30,7 +30,7 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
     /// without adjusting from .aspire/-relative to project-root-relative.
     /// </para>
     /// <para>
-    /// The test keeps the TS project intact (apphost.mts at root with .modules/) so that
+    /// The test keeps the TS project intact (apphost.mts at root with .aspire/modules/) so that
     /// aspire run can actually start successfully. The re-basing logic "../apphost.mts" →
     /// "apphost.mts" exercises the same code path as "../src/apphost.mts" → "src/apphost.mts".
     /// </para>
@@ -57,7 +57,7 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         // Step 1: Create a valid TypeScript AppHost using aspire init.
-        // This produces apphost.mts, .modules/, aspire.config.json, etc.
+        // This produces apphost.mts, .aspire/modules/, aspire.config.json, etc.
         await auto.TypeAsync("aspire init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));

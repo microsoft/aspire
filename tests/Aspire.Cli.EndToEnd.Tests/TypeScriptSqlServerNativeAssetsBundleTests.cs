@@ -56,7 +56,7 @@ public sealed class TypeScriptSqlServerNativeAssetsBundleTests(ITestOutputHelper
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         File.WriteAllText(appHostPath, """
-            import { createBuilder } from './.modules/aspire.mjs';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
             const sql = await builder.addSqlServer('sql')

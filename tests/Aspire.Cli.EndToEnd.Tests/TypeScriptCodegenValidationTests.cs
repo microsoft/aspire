@@ -93,10 +93,10 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 4: Verify generated SDK files exist.
-        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
+        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules");
         if (!Directory.Exists(modulesDir))
         {
-            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
+            throw new InvalidOperationException($".aspire/modules directory was not created at {modulesDir}");
         }
 
         var expectedFiles = new[] { "aspire.mts", "base.mts", "transport.mts" };
@@ -171,10 +171,10 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
+        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules");
         if (!Directory.Exists(modulesDir))
         {
-            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
+            throw new InvalidOperationException($".aspire/modules directory was not created at {modulesDir}");
         }
 
         var aspireModulePath = Path.Combine(modulesDir, "aspire.mts");
@@ -242,12 +242,12 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         var restoredCodegenHash = File.Exists(codegenHashPath) ? File.ReadAllText(codegenHashPath) : null;
         if (initialCodegenHash == restoredCodegenHash)
         {
-            throw new InvalidOperationException(".modules/.codegen-hash did not change after adding Aspire.Hosting.Redis and running aspire restore.");
+            throw new InvalidOperationException(".aspire/modules/.codegen-hash did not change after adding Aspire.Hosting.Redis and running aspire restore.");
         }
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         File.WriteAllText(appHostPath, """
-            import { createBuilder } from './.modules/aspire.mjs';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
             await builder.addRedis("cache");
@@ -304,7 +304,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         var newContent = """
-            import { createBuilder } from './.modules/aspire.mjs';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
 

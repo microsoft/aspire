@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, createBuilder } from './.modules/aspire.mjs';
+import { AzureContainerRegistryRole, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 

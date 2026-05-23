@@ -1,4 +1,4 @@
-import { createBuilder, OtlpProtocol } from './.modules/aspire.mjs';
+import { createBuilder, OtlpProtocol } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Polyglot SDK Validation - TypeScript validation AppHosts
 # Iterates all TypeScript validation AppHosts under tests/PolyglotAppHosts/*/TypeScript,
-# runs 'aspire restore --apphost' to regenerate the per-integration .modules/ SDK, and
+# runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
 # type-checks each AppHost against the generated API surface.
 set -euo pipefail
 

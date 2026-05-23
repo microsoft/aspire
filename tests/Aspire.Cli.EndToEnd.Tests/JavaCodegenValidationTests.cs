@@ -57,10 +57,10 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".modules");
+        var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire/modules");
         if (!Directory.Exists(modulesDir))
         {
-            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
+            throw new InvalidOperationException($".aspire/modules directory was not created at {modulesDir}");
         }
 
         var expectedFiles = new[]
