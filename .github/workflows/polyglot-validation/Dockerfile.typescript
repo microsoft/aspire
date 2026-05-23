@@ -13,6 +13,7 @@
 ARG NODE_VERSION=24
 FROM mcr.microsoft.com/devcontainers/typescript-node:${NODE_VERSION}
 ARG NODE_VERSION
+ARG TSGO_VERSION=7.0.0-dev.20260523.1
 
 # Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
 RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/yarn-archive-keyring.gpg > /dev/null
@@ -25,6 +26,9 @@ RUN case "$NODE_VERSION" in 22|24) ;; *) echo "Unsupported NODE_VERSION: $NODE_V
     jq \
     && node --version | grep -E "^v${NODE_VERSION}\\." \
     && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g "@typescript/native-preview@${TSGO_VERSION}" && \
+    tsgo --version
 
 # Pre-configure Aspire CLI path
 ENV PATH="/root/.aspire/bin:${PATH}"
