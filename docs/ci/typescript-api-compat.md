@@ -6,11 +6,11 @@ The TypeScript API compatibility check prevents pull requests from introducing u
 
 The checked-in `src/Aspire.Hosting*/api/*.ats.txt` files are the release compatibility baseline. The scheduled `.github/workflows/generate-ats-diffs.yml` workflow remains the review and release mechanism for updating the checked-in ATS files after API changes are accepted.
 
-In pull request CI, `.github/workflows/typescript-api-compat.yml` generates ATS output from the pull request target branch and compares it with fresh `aspire sdk dump --format ci` output generated from the pull request. This mergeable baseline avoids failing unrelated pull requests when the target branch contains accepted source changes that have not yet been rolled into the release baseline.
+In pull request CI, `.github/workflows/typescript-api-compat.yml` compares the checked-in ATS release baseline from the pull request target branch with fresh `aspire sdk dump --format ci` output generated from the pull request. The checked-in baseline is copied directly from the target branch, so the workflow does not regenerate the base ATS surface for every pull request.
 
-This intentionally differs from a plain git diff. A pull request cannot hide a breaking change by editing the checked-in ATS files in the same PR; the pull request check compares generated target-branch output with generated pull request output.
+This intentionally differs from a plain git diff. The pull request check compares the release baseline files with generated pull request output instead of only checking whether the committed ATS files changed.
 
-After a new version ships, reset the compatibility baseline by updating the checked-in ATS files to the shipped surface. Suppressions for breaks that are now part of that new baseline should be deleted in the same change; keep only suppressions that still describe intentional breaks relative to the release baseline. The compatibility checker fails on unused suppressions added by a pull request, but suppressions already present in the target branch are allowed to become unused against the generated target-branch baseline so merged intentional breaks do not block unrelated pull requests before the next release reset.
+After a new version ships, reset the compatibility baseline by updating the checked-in ATS files to the shipped surface. Suppressions for breaks that are now part of that new baseline should be deleted in the same change; keep only suppressions that still describe intentional breaks relative to the release baseline. The compatibility checker fails on unused suppressions added by a pull request, but suppressions already present in the target branch are allowed to become unused against the checked-in release baseline so merged intentional breaks do not block unrelated pull requests before the next release reset.
 
 ## Breaking changes
 
