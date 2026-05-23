@@ -71,7 +71,11 @@ internal sealed class ConsoleLogBufferContext
         // Flush may need to loop because new messages can arrive during the drain.
         // The decrement must only happen once per scope close, so track it separately
         // from the loop iterations to avoid stealing depth from a concurrently opened scope.
+        // Cap iterations to prevent unbounded looping if messages arrive faster than
+        // we can drain (e.g., a very chatty logger on another thread).
+        const int maxFlushIterations = 3;
         var decremented = false;
+        var remainingIterations = maxFlushIterations;
         while (true)
         {
             List<(TextWriter Writer, string Message)> messagesToFlush;
@@ -104,12 +108,25 @@ internal sealed class ConsoleLogBufferContext
                 {
                     messagesToFlush.Add(_bufferedMessages.Dequeue());
                 }
+
+                // On the final iteration, clear flushing state before writing so new
+                // messages arriving during the last write go directly to output (the
+                // prompt is over). This prevents the loop from running indefinitely.
+                if (--remainingIterations <= 0)
+                {
+                    _isFlushing = false;
+                }
             }
 
             // Write outside the lock to avoid holding it during I/O.
             foreach (var (writer, msg) in messagesToFlush)
             {
                 writer.WriteLine(msg);
+            }
+
+            if (remainingIterations <= 0)
+            {
+                return;
             }
 
             // Loop back to check whether new messages arrived while we were writing.
