@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PR #17393 - TypeScript withEnvironment ExternalServiceResource union type fix",
+  "mergedAt": "2026-05-23T01:39:58Z",
+  "number": 1048,
+  "runDate": "2026-05-23T03:08:50Z",
+  "status": "included",
+  "title": "[docs] TypeScript withEnvironment: add ExternalServiceResource to union type example"
+}

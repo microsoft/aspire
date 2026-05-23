@@ -6,7 +6,9 @@
   "changeType": "New features",
   "communityContributors": [],
   "description": "TypeScript AppHosts can now pass an ExternalServiceResource directly to withEnvironment, matching the existing C# WithEnvironment(name, externalService) behavior. Previously the TypeScript ATS signature omitted external service resources, causing type-check failures for valid usage patterns.",
-  "docsPrs": [],
+  "docsPrs": [
+    1048
+  ],
   "docsRequired": true,
   "emoji": "🔗",
   "firstMergedAt": "2026-05-23T00:04:02Z",
