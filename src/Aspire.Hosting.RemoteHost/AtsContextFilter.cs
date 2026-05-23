@@ -119,6 +119,8 @@ internal static class AtsContextFilter
             EnumTypes = context.EnumTypes.Where(type => includedEnumTypeIds.Contains(type.TypeId)).ToList(),
             ExportedValues = filteredExportedValues,
             Diagnostics = context.Diagnostics
+                .Where(diagnostic => IsDiagnosticOwnedBySelectedAssembly(diagnostic, normalizedAssemblyNames))
+                .ToList()
         };
 
         foreach (var capability in filteredCapabilities)
@@ -229,6 +231,21 @@ internal static class AtsContextFilter
     {
         var assemblyName = assembly?.GetName().Name;
         return assemblyName is not null && assemblyNames.Contains(assemblyName);
+    }
+
+    private static bool IsDiagnosticOwnedBySelectedAssembly(AtsDiagnostic diagnostic, HashSet<string> assemblyNames)
+    {
+        if (string.IsNullOrWhiteSpace(diagnostic.Location))
+        {
+            return true;
+        }
+
+        if (TryGetAssemblyNameFromId(diagnostic.Location, out var assemblyName))
+        {
+            return assemblyNames.Contains(assemblyName);
+        }
+
+        return assemblyNames.Any(assembly => diagnostic.Location.StartsWith($"{assembly}.", StringComparison.Ordinal));
     }
 
     private static bool TryGetAssemblyNameFromId(string id, out string assemblyName)

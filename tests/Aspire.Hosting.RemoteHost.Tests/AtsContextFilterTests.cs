@@ -41,6 +41,9 @@ public class AtsContextFilterTests
             value => Assert.Equal("Aspire.Hosting.RemoteHost.Tests.SelectedValues.Default", string.Join(".", value.PathSegments)),
             value => Assert.Equal("Aspire.Hosting.RemoteHost.Tests.SelectedValues.Metadata", string.Join(".", value.PathSegments)));
 
+        Assert.Contains(filteredContext.Diagnostics, diagnostic => diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.TestType.Method");
+        Assert.DoesNotContain(filteredContext.Diagnostics, diagnostic => diagnostic.Location == "Aspire.Hosting.UnrelatedType.Method");
+
         Assert.Contains("Aspire.Hosting.RemoteHost.Tests/addTestResource", filteredContext.Methods.Keys);
         Assert.DoesNotContain("Aspire.Hosting/createBuilder", filteredContext.Methods.Keys);
     }
@@ -336,7 +339,12 @@ public class AtsContextFilterTests
             HandleTypes = [selectedHandleType, referencedCoreHandleType, unrelatedCoreHandleType],
             DtoTypes = [selectedDtoType, referencedCoreDtoType, exportedValueOnlyDtoType],
             EnumTypes = [selectedEnumType, referencedCoreEnumType, exportedValueOnlyEnumType],
-            ExportedValues = [selectedPrimitiveExportedValue, selectedDtoExportedValue, unrelatedPrimitiveExportedValue]
+            ExportedValues = [selectedPrimitiveExportedValue, selectedDtoExportedValue, unrelatedPrimitiveExportedValue],
+            Diagnostics =
+            [
+                AtsDiagnostic.Warning("Selected warning", "Aspire.Hosting.RemoteHost.Tests.TestType.Method"),
+                AtsDiagnostic.Warning("Unrelated warning", "Aspire.Hosting.UnrelatedType.Method")
+            ]
         };
 
         var testMethod = typeof(AtsContextFilterTests).GetMethod(nameof(TestCapability), BindingFlags.Static | BindingFlags.NonPublic)!;

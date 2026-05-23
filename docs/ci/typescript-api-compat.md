@@ -8,6 +8,8 @@ The checked-in `src/Aspire.Hosting*/api/*.ats.txt` files are the release compati
 
 In pull request CI, `.github/workflows/typescript-api-compat.yml` compares the checked-in ATS release baseline from the pull request target branch with fresh `aspire sdk dump --format ci` output generated from the pull request. The checked-in baseline is copied directly from the target branch, so the workflow does not regenerate the base ATS surface for every pull request.
 
+The current pull request surface is generated with a single batched `aspire sdk dump --format ci --output-directory ...` invocation for integration projects. This lets the CLI build and start one capability-scanner AppHost for all integrations, then write one ATS file per integration assembly.
+
 This intentionally differs from a plain git diff. The pull request check compares the release baseline files with generated pull request output instead of only checking whether the committed ATS files changed.
 
 After a new version ships, reset the compatibility baseline by updating the checked-in ATS files to the shipped surface. Suppressions for breaks that are now part of that new baseline should be deleted in the same change; keep only suppressions that still describe intentional breaks relative to the release baseline. The compatibility checker fails on unused suppressions added by a pull request, but suppressions already present in the target branch are allowed to become unused against the checked-in release baseline so merged intentional breaks do not block unrelated pull requests before the next release reset.
