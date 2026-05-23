@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
@@ -20,8 +21,9 @@ public class TelemetryConfigurationTests
     {
         var loggingOptions = Program.ParseLoggingOptions([]);
         var errorWriter = new TestStartupErrorWriter();
-        var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter);
-        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, loggerFactory.CreateLogger(Program.RootLoggerName));
+        var logBufferContext = new ConsoleLogBufferContext();
+        var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
+        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName));
         return await Program.BuildApplicationAsync([], startupContext, config);
     }
 

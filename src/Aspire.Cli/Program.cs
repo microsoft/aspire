@@ -79,6 +79,7 @@ public class Program
         IStartupErrorWriter ErrorWriter,
         ILoggerFactory LoggerFactory,
         FileLoggerProvider FileLoggerProvider,
+        ConsoleLogBufferContext LogBufferContext,
         ILogger Logger) : IDisposable
     {
         public void Dispose()
@@ -210,7 +211,7 @@ public class Program
     /// and MCP console logging based on command-line arguments.
     /// </summary>
     /// <returns>A tuple containing the configured <see cref="ILoggerFactory"/> and the <see cref="FileLoggerProvider"/> used for file logging.</returns>
-    internal static (ILoggerFactory LoggerFactory, FileLoggerProvider FileLoggerProvider) CreateLoggerFactory(string[] args, CliLoggingOptions loggingOptions, IStartupErrorWriter errorWriter)
+    internal static (ILoggerFactory LoggerFactory, FileLoggerProvider FileLoggerProvider) CreateLoggerFactory(string[] args, CliLoggingOptions loggingOptions, IStartupErrorWriter errorWriter, ConsoleLogBufferContext logBufferContext)
     {
         var consoleLogLevel = loggingOptions.ConsoleLogLevel;
 
@@ -255,7 +256,7 @@ public class Program
             if (consoleLogLevel is not null && !isMcpStartCommand && extensionEndpoint is null)
             {
                 // Use custom Spectre Console logger for clean debug output to stderr
-                builder.AddProvider(new SpectreConsoleLoggerProvider(Console.Error));
+                builder.AddProvider(new SpectreConsoleLoggerProvider(Console.Error, logBufferContext));
             }
 
             // For MCP start command, configure console logger to route all logs to stderr
@@ -320,6 +321,9 @@ public class Program
 
         // Register file logger provider for components that write directly to the log file
         builder.Services.AddSingleton(startupContext.FileLoggerProvider);
+
+        // Register the log buffer context so the interaction service can pause logging during prompts
+        builder.Services.AddSingleton(startupContext.LogBufferContext);
 
         // Register logging options so components can read the user's chosen log level
         builder.Services.AddSingleton(startupContext.LoggingOptions);
@@ -786,9 +790,10 @@ public class Program
 
         var loggingOptions = ParseLoggingOptions(args);
         var errorWriter = new StartupErrorWriter(loggingOptions.LogFilePath);
-        var (loggerFactory, fileLoggerProvider) = CreateLoggerFactory(args, loggingOptions, errorWriter);
+        var logBufferContext = new ConsoleLogBufferContext();
+        var (loggerFactory, fileLoggerProvider) = CreateLoggerFactory(args, loggingOptions, errorWriter, logBufferContext);
         var logger = loggerFactory.CreateLogger(RootLoggerName);
-        using var startupContext = new CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logger);
+        using var startupContext = new CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, logger);
 
         logger.LogInformation("Aspire CLI version: {Version}", AspireCliTelemetry.GetCliVersion());
         logger.LogInformation("Aspire CLI build ID: {BuildId}", AspireCliTelemetry.GetCliBuildId());
@@ -994,7 +999,8 @@ public class Program
                 var executionContext = provider.GetRequiredService<CliExecutionContext>();
                 var hostEnvironment = provider.GetRequiredService<ICliHostEnvironment>();
                 var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory);
+                var logBufferCtx = provider.GetRequiredService<ConsoleLogBufferContext>();
+                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferCtx);
                 return new ExtensionInteractionService(consoleInteractionService,
                     provider.GetRequiredService<IExtensionBackchannel>(),
                     extensionPromptEnabled);
@@ -1008,7 +1014,8 @@ public class Program
                 var executionContext = provider.GetRequiredService<CliExecutionContext>();
                 var hostEnvironment = provider.GetRequiredService<ICliHostEnvironment>();
                 var loggerFactory = provider.GetRequiredService<ILoggerFactory>();
-                return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory);
+                var logBufferCtx = provider.GetRequiredService<ConsoleLogBufferContext>();
+                return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferCtx);
             });
         }
     }

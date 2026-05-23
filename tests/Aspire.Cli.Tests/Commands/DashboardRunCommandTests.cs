@@ -490,7 +490,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
             new ConsoleEnvironment(console, console),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLoggerFactory.Instance);
+            NullLoggerFactory.Instance,
+            new ConsoleLogBufferContext());
 
         var dashboardInfo = new DashboardRunCommand.DashboardInfo(
             DashboardUrl: "http://localhost:18888",

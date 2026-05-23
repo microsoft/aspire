@@ -28,7 +28,7 @@ public class ConsoleInteractionServiceTests
     {
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console);
-        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
     }
 
     [Fact]
@@ -694,7 +694,7 @@ public class ConsoleInteractionServiceTests
 
         var executionContext = CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
-        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
 
         // Console defaults to Standard (stdout), but errors should still go to stderr
         interactionService.DisplayError("Something went wrong");
@@ -723,7 +723,7 @@ public class ConsoleInteractionServiceTests
 
         var executionContext = CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
-        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
 
         interactionService.DisplayMessage(KnownEmojis.Information, "Status update");
 

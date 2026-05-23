@@ -99,6 +99,7 @@ internal static class CliTestHelper
 
         services.AddMemoryCache();
 
+        services.AddSingleton<ConsoleLogBufferContext>();
         services.AddSingleton(options.ConsoleEnvironmentFactory);
         services.AddSingleton(sp => sp.GetRequiredService<ConsoleEnvironment>().Out);
         services.AddSingleton(options.TimeProvider);
@@ -449,7 +450,8 @@ internal sealed class CliServiceCollectionTestOptions
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
         var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
-        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory);
+        var logBufferContext = serviceProvider.GetRequiredService<ConsoleLogBufferContext>();
+        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferContext);
     };
 
     public Func<IServiceProvider, ICertificateToolRunner> CertificateToolRunnerFactory { get; set; } = (IServiceProvider _) =>

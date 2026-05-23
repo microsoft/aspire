@@ -1260,7 +1260,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             new ConsoleEnvironment(console, console),
             executionContext,
             TestHelpers.CreateInteractiveHostEnvironment(),
-            NullLoggerFactory.Instance);
+            NullLoggerFactory.Instance,
+            new ConsoleLogBufferContext());
 
         RunCommand.RenderAppHostSummary(
             interactionService,
