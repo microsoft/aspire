@@ -457,13 +457,13 @@ if (-not $SkipCli) {
     $installedCliPath = Join-Path $cliBinDir $cliExeName
 
     try {
-      # Copy all files from the publish directory (CLI and its dependencies)
+      # Copy all files and satellite resource directories from the publish directory.
       # Capture individual copy failures so we can restore the previous CLI and avoid stamping
       # a sidecar onto a stale or partial install.
       $copyErrors = @()
-      Get-ChildItem -LiteralPath $cliPublishDir -File | ForEach-Object {
+      Get-ChildItem -LiteralPath $cliPublishDir | ForEach-Object {
         try {
-          Copy-Item $_.FullName -Destination $cliBinDir -Force -ErrorAction Stop
+          Copy-Item -LiteralPath $_.FullName -Destination $cliBinDir -Recurse -Force -ErrorAction Stop
         }
         catch {
           $copyErrors += $_.Exception.Message

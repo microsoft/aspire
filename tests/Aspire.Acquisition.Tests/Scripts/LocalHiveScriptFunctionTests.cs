@@ -95,6 +95,25 @@ public class LocalHiveScriptFunctionTests
         Assert.Contains("[System.IO.Compression.ZipFile]::CreateFromDirectory", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ShellSource_CopiesSatelliteResourceDirectories()
+    {
+        var source = File.ReadAllText(GetRepoPath(ScriptPaths.LocalHiveShell));
+
+        Assert.Contains("""cp -Rf "$CLI_PUBLISH_DIR"/. "$CLI_BIN_DIR"/""", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("""cp -f "$CLI_PUBLISH_DIR"/* "$CLI_BIN_DIR"/""", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PowerShellSource_CopiesSatelliteResourceDirectories()
+    {
+        var source = File.ReadAllText(GetRepoPath(ScriptPaths.LocalHivePowerShell));
+
+        Assert.Contains("Get-ChildItem -LiteralPath $cliPublishDir | ForEach-Object", source, StringComparison.Ordinal);
+        Assert.Contains("Copy-Item -LiteralPath $_.FullName -Destination $cliBinDir -Recurse -Force -ErrorAction Stop", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Get-ChildItem -LiteralPath $cliPublishDir -File", source, StringComparison.Ordinal);
+    }
+
     private static string GetScriptPath(string scriptPathName) => scriptPathName switch
     {
         nameof(ScriptPaths.LocalHiveShell) => ScriptPaths.LocalHiveShell,
