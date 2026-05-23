@@ -122,7 +122,7 @@ internal sealed class DoctorCommand : BaseCommand
                 Warnings = warnings,
                 Failed = failed
             },
-            Installations = installations.Count > 1 || includeSingleInstallation ? installations.ToList() : null
+            Installations = ShouldOutputInstallations(installations, includeSingleInstallation) ? installations.ToList() : null
         };
 
         var json = System.Text.Json.JsonSerializer.Serialize(response, JsonSourceGenerationContext.RelaxedEscaping.DoctorCheckResponse);
@@ -171,7 +171,7 @@ internal sealed class DoctorCommand : BaseCommand
             _ansiConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DetailedPrerequisitesLink, MarkupHelpers.SafeLink(InteractionService, prerequisitesUrl)));
         }
 
-        if (installations.Count > 1)
+        if (ShouldOutputInstallations(installations, includeSingleInstallation: false))
         {
             InstallationInfoOutput.OutputTable(_ansiConsole, installations);
         }
@@ -238,9 +238,22 @@ internal sealed class DoctorCommand : BaseCommand
 
     private static IReadOnlyList<EnvironmentCheckResult> AddInstallationCheck(IReadOnlyList<EnvironmentCheckResult> results, IReadOnlyList<InstallationInfo> installations)
     {
-        if (installations.Count == 0 || IsDiscoveryFailurePlaceholder(installations))
+        if (installations.Count == 0)
         {
             return results;
+        }
+
+        if (IsDiscoveryFailurePlaceholder(installations))
+        {
+            var failedDiscoveryCheck = new EnvironmentCheckResult
+            {
+                Category = "cli",
+                Name = "cli-installations",
+                Status = EnvironmentCheckStatus.Warning,
+                Message = DoctorCommandStrings.InstallationDiscoveryFailedReason,
+            };
+
+            return [.. results, failedDiscoveryCheck];
         }
 
         var installationCheck = new EnvironmentCheckResult
@@ -268,6 +281,11 @@ internal sealed class DoctorCommand : BaseCommand
                 StatusReason: var statusReason
             }
         ] && string.Equals(statusReason, DoctorCommandStrings.InstallationDiscoveryFailedReason, StringComparison.Ordinal);
+
+    private static bool ShouldOutputInstallations(IReadOnlyList<InstallationInfo> installations, bool includeSingleInstallation)
+        => includeSingleInstallation ||
+           installations.Count > 1 ||
+           installations.Any(static i => i.Status != InstallationInfoStatus.Ok || !string.IsNullOrEmpty(i.StatusReason));
 
     private static string GetCategoryHeader(string category)
     {

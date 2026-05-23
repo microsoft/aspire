@@ -5,6 +5,7 @@ using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -840,10 +841,10 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         ]);
 
         var rendered = output.ToString();
-        Assert.Contains("\u001b[1mPath\u001b[0m", rendered, StringComparison.Ordinal);
-        Assert.Contains("\u001b[1mSource\u001b[0m", rendered, StringComparison.Ordinal);
-        Assert.DoesNotContain("\u001b[1mRoute\u001b[0m", rendered, StringComparison.Ordinal);
-        Assert.Contains("\u001b[32mactive\u001b[0m", rendered, StringComparison.Ordinal);
+        Assert.Matches(@"\x1B\[[0-9;]*1mPath\x1B\[[0-9;]*(?:0|22)m", rendered);
+        Assert.Matches(@"\x1B\[[0-9;]*1mSource\x1B\[[0-9;]*(?:0|22)m", rendered);
+        Assert.DoesNotMatch(@"\x1B\[[0-9;]*1mRoute\x1B\[[0-9;]*(?:0|22)m", rendered);
+        Assert.Matches(@"\x1B\[[0-9;]*(?:32|92)mactive\x1B\[[0-9;]*(?:0|39)m", rendered);
         Assert.Matches(@"\x1B\[[0-9;]*(?:33|93)mshadowed\x1B\[[0-9;]*(?:0|39)m", rendered);
         Assert.Matches(@"\x1B\[[0-9;]*(?:33|93)mnot on PATH\x1B\[[0-9;]*(?:0|39)m", rendered);
     }
@@ -946,6 +947,49 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DoctorCommand_HumanReadable_WhenInstallDiscoveryFails_RendersFailureRow()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Interactive = InteractionSupport.No,
+            Out = new AnsiConsoleOutput(output),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false },
+        });
+        console.Profile.Width = int.MaxValue;
+
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+        });
+        services.RemoveAll<IAnsiConsole>();
+        services.AddSingleton<IAnsiConsole>(console);
+        UseFakeInstallationDiscovery(
+            services,
+            self: new InstallationInfo
+            {
+                Path = "/test/aspire",
+                Status = InstallationInfoStatus.Ok,
+            },
+            discoverAllException: new IOException("PATH lookup failed"));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("doctor");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var rendered = output.ToString();
+        Assert.Contains(DoctorCommandStrings.InstallationDiscoveryFailedReason, rendered, StringComparison.Ordinal);
+        Assert.Contains("Aspire CLI Installations", rendered, StringComparison.Ordinal);
+        Assert.DoesNotContain("One Aspire CLI installation found.", rendered, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void DoctorCommand_InfoCommandIsNotRegistered()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1009,8 +1053,13 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                 },
                 discoverAllException: new IOException("PATH lookup failed")));
 
-        Assert.NotEmpty(doc.RootElement.GetProperty("checks").EnumerateArray());
-        Assert.False(doc.RootElement.TryGetProperty("installations", out _));
+        var installationCheck = GetCheckByName(doc, "cli-installations");
+        Assert.Equal("warning", installationCheck.GetProperty("status").GetString());
+        Assert.Equal(DoctorCommandStrings.InstallationDiscoveryFailedReason, installationCheck.GetProperty("message").GetString());
+        var installations = doc.RootElement.GetProperty("installations").EnumerateArray().ToArray();
+        var row = Assert.Single(installations);
+        Assert.Equal(InstallationInfoStatus.Failed, row.GetProperty("status").GetString());
+        Assert.Equal(DoctorCommandStrings.InstallationDiscoveryFailedReason, row.GetProperty("statusReason").GetString());
     }
 
     [Theory]

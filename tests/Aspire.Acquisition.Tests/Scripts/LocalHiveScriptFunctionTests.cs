@@ -72,6 +72,16 @@ public class LocalHiveScriptFunctionTests
         Assert.DoesNotContain("aspire config set", source, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData(nameof(ScriptPaths.LocalHiveShell))]
+    [InlineData(nameof(ScriptPaths.LocalHivePowerShell))]
+    public void Source_DoesNotReferenceInfoCommand(string scriptPathName)
+    {
+        var source = File.ReadAllText(GetRepoPath(GetScriptPath(scriptPathName)));
+
+        Assert.DoesNotContain("aspire info", source, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void PowerShellSource_WindowsArchivePathDoesNotUseCompressArchive()
     {
