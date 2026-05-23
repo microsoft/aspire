@@ -118,13 +118,13 @@ If no root `package.json` exists, create a minimal one matching the canonical As
 
 Never overwrite existing `scripts`, `dependencies`, or `devDependencies` — merge only. Do not manually add Aspire SDK packages — `aspire restore` handles those.
 
-Run `aspire restore` to generate the `.modules/` directory with TypeScript SDK bindings, then install dependencies with the repo's package manager (`npm install`, `pnpm install`, or `yarn`).
+Run `aspire restore` to generate the `.aspire/modules/` directory with TypeScript SDK bindings, then install dependencies with the repo's package manager (`npm install`, `pnpm install`, or `yarn`).
 
 ### tsconfig.json
 
 Augment if it exists:
 
-- Ensure `".modules/**/*.ts"` and `"apphost.ts"` are in `include`
+- Ensure `".aspire/modules/**/*.ts"` and `"apphost.ts"` are in `include`
 - Ensure `"module"` is `"nodenext"` or `"node16"` (ESM required)
 - Ensure `"moduleResolution"` matches
 
@@ -141,7 +141,7 @@ If no `tsconfig.json` exists and `aspire restore` didn't create one, create a mi
     "outDir": "./dist",
     "rootDir": "."
   },
-  "include": ["apphost.ts", ".modules/**/*.ts"]
+  "include": ["apphost.ts", ".aspire/modules/**/*.ts"]
 }
 ```
 

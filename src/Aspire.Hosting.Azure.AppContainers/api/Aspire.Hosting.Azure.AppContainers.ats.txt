@@ -12,6 +12,7 @@ Aspire.Hosting.Azure.AppContainers/publishAsScheduledAzureContainerAppJob(cronEx
 Aspire.Hosting.Azure.AppContainers/publishContainerAsAzureContainerApp(configure: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting.Azure.AppContainers/publishExecutableAsAzureContainerApp(configure: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting.Azure.AppContainers/publishProjectAsAzureContainerApp(configure: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProjectResource
+Aspire.Hosting.Azure.AppContainers/withAcrPullIdentity(identityBuilder: Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureUserAssignedIdentityResource) -> Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.AzureContainerAppEnvironmentResource
 Aspire.Hosting.Azure.AppContainers/withAzdResourceNaming() -> Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.AzureContainerAppEnvironmentResource
 Aspire.Hosting.Azure.AppContainers/withAzureLogAnalyticsWorkspace(workspaceBuilder: Aspire.Hosting.Azure.OperationalInsights/Aspire.Hosting.Azure.AzureLogAnalyticsWorkspaceResource) -> Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.AzureContainerAppEnvironmentResource
 Aspire.Hosting.Azure.AppContainers/withCompactResourceNaming() -> Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.AzureContainerAppEnvironmentResource

@@ -45,7 +45,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         await auto.DownAsync();
         await auto.WaitUntilTextAsync("> TypeScript (Node.js)", timeout: TimeSpan.FromSeconds(5));
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
         if (localChannel is not null)
@@ -176,9 +176,9 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
     private static void WriteAppHost(TemporaryWorkspace workspace)
     {
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         File.WriteAllText(appHostPath, """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
             await builder.addDockerComposeEnvironment('compose');
@@ -209,9 +209,9 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
     private static void WriteRuntimeAppHost(TemporaryWorkspace workspace)
     {
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         File.WriteAllText(appHostPath, $$"""
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
 

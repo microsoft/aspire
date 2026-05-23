@@ -68,6 +68,12 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsLogsNotYetAvailable", resourceCulture);
             }
         }
+
+        public static string ConsoleLogsNoLogsFound {
+            get {
+                return ResourceManager.GetString("ConsoleLogsNoLogsFound", resourceCulture);
+            }
+        }
         
         public static string ConsoleLogsWatchingLogs {
             get {

@@ -1,5 +1,6 @@
 import aspire.*;
 import java.util.Map;
+import java.util.function.Function;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
@@ -64,6 +65,7 @@ void main() throws Exception {
         cache.withConnectionProperty("Mode", "Development");
         container.withReference(endpoint);
         container.withReference("https://example.com/", new WithReferenceOptions().name("external-uri"));
+        var externalService = builder.addExternalService("external-service", "https://example.com");
         var vnet = builder.addAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var subnet = vnet.addSubnet("web", "10.0.1.0/24", null);
         subnet.allowInbound(new AllowInboundOptions().port("443").from(AzureServiceTags.AzureLoadBalancer));
@@ -79,6 +81,7 @@ void main() throws Exception {
         container.withEnvironment("MY_BUILT_CONN", builtConnectionString);
         container.withEnvironment("MY_CONN", envConnectionString);
         container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
+        container.withEnvironment("MY_EXTERNAL_SERVICE", externalService);
         container.withEnvironmentCallback((environmentContext) -> { var environment = environmentContext.environment(); var environmentLog = environmentContext.log(); var _environmentResource = environmentContext.resource(); var environmentExecutionContext = environmentContext.executionContext(); var _environmentIsRunMode = environmentExecutionContext.isRunMode(); environmentLog.warning("Environment callback logger"); environment.set("MY_CALLBACK_ENDPOINT", endpoint); });
         container.withArgsCallback((argsContext) -> { var argsEditor = argsContext.args(); var argsLog = argsContext.log(); var _argsResource = argsContext.resource(); var argsExecutionContext = argsContext.executionContext(); var _argsIsRunMode = argsExecutionContext.isRunMode(); argsLog.error("Args callback logger"); argsEditor.add("--validation-callback"); argsEditor.add(expr); });
         container.withUrls((urlsContext) -> { var _urlsResource = urlsContext.resource(); var urlsLog = urlsContext.log(); var urlsExecutionContext = urlsContext.executionContext(); var _urlsIsRunMode = urlsExecutionContext.isRunMode(); var callbackEndpoint = urlsContext.getEndpoint("http"); var urlsEditor = urlsContext.urls(); urlsLog.debug("URLs callback logger"); urlsEditor.add(ReferenceExpression.refExpr("https://%s", callbackEndpoint), null); urlsEditor.addForEndpoint(callbackEndpoint, "/details", "Details"); });
@@ -128,6 +131,7 @@ void main() throws Exception {
         var builderExecutionContext = builder.executionContext();
         var executionContextServiceProvider = builderExecutionContext.serviceProvider();
         var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
+        var resourceCommandService = executionContextServiceProvider.getResourceCommandService();
         builder.addEventingSubscriber((registrationContext) -> {
             var subscriberExecutionContext = registrationContext.executionContext();
             var _subscriberIsRunMode = subscriberExecutionContext.isRunMode();
@@ -218,10 +222,36 @@ void main() throws Exception {
         container.withUrl(ReferenceExpression.refExpr("http://%s", endpoint), null);
         container.withHttpHealthCheck();
         container.withHttpHealthCheck();
-        container.withCommand("restart", "Restart", (_ctx) -> {
+        var commandOptions = new CommandOptions();
+        commandOptions.setUpdateState((Function<UpdateCommandStateContext, ResourceCommandState>) (ctx) -> {
+            var snapshot = ctx.resourceSnapshot();
+            return snapshot.getHealthStatus() == HealthStatus.HEALTHY ? ResourceCommandState.ENABLED : ResourceCommandState.DISABLED;
+        });
+        container.withCommand("noop", "Noop", (_ctx) -> {
             var result = new ExecuteCommandResult();
             result.setSuccess(true);
             return result;
+        }, commandOptions);
+        var echoCommandOptions = new CommandOptions();
+        var messageArgument = new InteractionInput();
+        messageArgument.setName("message");
+        messageArgument.setInputType(InputType.TEXT);
+        messageArgument.setRequired(true);
+        echoCommandOptions.setArguments(new InteractionInput[] { messageArgument });
+        container.withCommand("echo", "Echo", (ctx) -> {
+            var commandArguments = ctx.arguments().toArray();
+            var result = new ExecuteCommandResult();
+            result.setSuccess("hello".equals(commandArguments[0].getValue()));
+            return result;
+        }, echoCommandOptions);
+        container.withCommand("restart", "Restart", (ctx) -> {
+            var cancellationToken = ctx.cancellationToken();
+            return resourceCommandService.executeCommandAsync(
+                container,
+                "echo",
+                new ExecuteCommandAsyncOptions()
+                    .arguments(Map.of("message", "hello"))
+                    .cancellationToken(cancellationToken));
         });
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();

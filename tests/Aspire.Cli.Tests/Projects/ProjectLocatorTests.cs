@@ -612,6 +612,43 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFileUpdatesStaleConfigForExplicitProjectFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var legacyAppHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "// TypeScript AppHost");
+
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = legacyAppHostFile.Name,
+                language = KnownLanguageId.TypeScript
+            }
+        }));
+
+        var globalSettingsFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.global.json");
+        var globalSettingsFile = new FileInfo(globalSettingsFilePath);
+        var config = new ConfigurationBuilder().Build();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var configurationService = new ConfigurationService(config, executionContext, globalSettingsFile, NullLogger<ConfigurationService>.Instance);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            configurationService: configurationService,
+            projectFactory: new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+
+        var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(appHostFile, createSettingsFile: true).DefaultTimeout();
+
+        Assert.Equal(appHostFile.FullName, returnedProjectFile!.FullName);
+
+        var updatedConfig = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.Equal("apphost.mts", updatedConfig?.AppHost?.Path);
+        Assert.Equal(KnownLanguageId.TypeScript, updatedConfig?.AppHost?.Language);
+    }
+
+    [Fact]
     public async Task CreateSettingsFileIfNotExistsAsync_UsesForwardSlashPathSeparator()
     {
         // Arrange

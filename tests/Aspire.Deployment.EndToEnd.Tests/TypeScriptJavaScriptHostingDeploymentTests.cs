@@ -162,7 +162,7 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
             """);
 
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"), """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.js';
 
             const builder = await createBuilder();
 

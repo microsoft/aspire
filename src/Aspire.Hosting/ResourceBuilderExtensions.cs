@@ -243,6 +243,7 @@ public static class ResourceBuilderExtensions
             typeof(ReferenceExpression),
             typeof(EndpointReference),
             typeof(IResourceBuilder<ParameterResource>),
+            typeof(IResourceBuilder<ExternalServiceResource>),
             typeof(IResourceBuilder<IResourceWithConnectionString>),
             typeof(IExpressionValue))]
         object value)
@@ -258,11 +259,12 @@ public static class ResourceBuilderExtensions
             ReferenceExpression expression => builder.WithEnvironment(name, expression),
             EndpointReference endpointReference => builder.WithEnvironment(name, endpointReference),
             IResourceBuilder<ParameterResource> parameter => builder.WithEnvironment(name, parameter),
+            IResourceBuilder<ExternalServiceResource> externalService => builder.WithEnvironment(name, externalService),
             IResourceBuilder<IResourceWithConnectionString> connectionStringResource => builder.WithEnvironment(name, connectionStringResource),
             IExpressionValue expressionValue => builder.WithEnvironmentExpressionValue(name, expressionValue),
             IValueProvider and IManifestExpressionProvider => builder.WithEnvironmentValueProvider(name, value),
             _ => throw new ArgumentException(
-                $"Unsupported value type '{value.GetType().Name}'. Expected string, ReferenceExpression, EndpointReference, ParameterResource, connection string resource, or an IExpressionValue.",
+                $"Unsupported value type '{value.GetType().Name}'. Expected string, ReferenceExpression, EndpointReference, ParameterResource, external service resource, connection string resource, or an IExpressionValue.",
                 nameof(value))
         };
     }
@@ -416,8 +418,8 @@ public static class ResourceBuilderExtensions
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="externalService">The external service.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithReference{TDestination}(IResourceBuilder{TDestination}, IResourceBuilder{IResourceWithServiceDiscovery})"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "Specialized overload — withReference covers this use case.")]
+    /// <remarks>Polyglot app hosts use the internal withEnvironment dispatcher export.</remarks>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withEnvironment dispatcher export.")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ExternalServiceResource> externalService)
         where T : IResourceWithEnvironment
     {
@@ -1495,7 +1497,7 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Updates a named endpoint via callback
     /// </summary>
-    [AspireExport]
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     internal static IResourceBuilder<T> WithEndpointCallback<T>(this IResourceBuilder<T> builder, [EndpointName] string endpointName, Action<EndpointUpdateContext> callback, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1508,7 +1510,7 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Updates an HTTP endpoint via callback
     /// </summary>
-    [AspireExport]
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     internal static IResourceBuilder<T> WithHttpEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, [EndpointName] string? name = null, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1520,7 +1522,7 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Updates an HTTPS endpoint via callback
     /// </summary>
-    [AspireExport]
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     internal static IResourceBuilder<T> WithHttpsEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, [EndpointName] string? name = null, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
         ArgumentNullException.ThrowIfNull(builder);

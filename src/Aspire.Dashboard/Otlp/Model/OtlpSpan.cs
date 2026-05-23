@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model.Otlp;
@@ -239,6 +240,7 @@ public class OtlpSpan
             KnownTraceFields.StatusField => span.Status.ToString(),
             KnownSourceFields.NameField => span.Scope.Name,
             KnownTraceFields.NameField => span.Name,
+            KnownTraceFields.DurationField => span.Duration.TotalMilliseconds.ToString("R", CultureInfo.InvariantCulture),
             _ => span.Attributes.GetValue(field)
         };
     }

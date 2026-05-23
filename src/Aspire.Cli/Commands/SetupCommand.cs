@@ -15,6 +15,8 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class SetupCommand : BaseCommand
 {
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly IBundleService _bundleService;
 
     private static readonly Option<string?> s_installPathOption = new("--install-path")

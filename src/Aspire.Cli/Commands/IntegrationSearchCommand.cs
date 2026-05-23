@@ -42,8 +42,6 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         Options.Add(_formatOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     protected abstract string? GetSearchTerm(ParseResult parseResult);
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)

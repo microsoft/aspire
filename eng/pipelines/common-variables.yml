@@ -33,3 +33,11 @@ variables:
     - ${{ else }}:
       - name: PostBuildSign
         value: true
+
+  # Single source of truth for "this build is on a branch where Aspire signs,
+  # publishes archives to ci.dot.net, and submits to upstream installer
+  # repositories." Composed into _PackagesPublished (which adds non-PR/internal
+  # checks) and consumed directly by publish-homebrew.yml / publish-winget.yml
+  # to guard upstream submission.
+  - name: _IsProductionBranch
+    value: ${{ or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')) }}

@@ -25,6 +25,8 @@ namespace Aspire.Cli.Commands;
 
 internal abstract class PipelineCommandBase : BaseCommand
 {
+    protected override bool UpdateNotificationsEnabled => true;
+
     private const string CustomChoiceValue = "__CUSTOM_CHOICE";
 
     protected readonly IDotNetCliRunner _runner;

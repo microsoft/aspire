@@ -116,12 +116,12 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     /// <c>Aspire.*</c> through a PSM that can't satisfy the SDK version.
     /// </summary>
     [Theory]
-    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.ts")]
+    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.mts")]
     [InlineData(KnownTemplateId.PythonEmptyAppHost, "apphost.py")]
     [InlineData(KnownTemplateId.GoEmptyAppHost, "apphost.go")]
     [InlineData(KnownTemplateId.JavaEmptyAppHost, "AppHost.java")]
-    [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.ts")]
-    [InlineData(KnownTemplateId.PythonStarter, "apphost.ts")]
+    [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.mts")]
+    [InlineData(KnownTemplateId.PythonStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
     public async Task ChannelPinningTemplate_IdentityNotRegistered_DoesNotPinChannel(string templateId, string _)
     {
@@ -143,12 +143,12 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     /// <c>aspire add</c> route <c>Aspire.*</c> through the matching feed via PSM.
     /// </summary>
     [Theory]
-    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.ts")]
+    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.mts")]
     [InlineData(KnownTemplateId.PythonEmptyAppHost, "apphost.py")]
     [InlineData(KnownTemplateId.GoEmptyAppHost, "apphost.go")]
     [InlineData(KnownTemplateId.JavaEmptyAppHost, "AppHost.java")]
-    [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.ts")]
-    [InlineData(KnownTemplateId.PythonStarter, "apphost.ts")]
+    [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.mts")]
+    [InlineData(KnownTemplateId.PythonStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
     public async Task ChannelPinningTemplate_IdentityMatchesRegisteredChannel_PinsThatChannel(string templateId, string _)
     {
@@ -169,12 +169,12 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     /// caught.
     /// </summary>
     [Theory]
-    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.ts")]
+    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.mts")]
     [InlineData(KnownTemplateId.PythonEmptyAppHost, "apphost.py")]
     [InlineData(KnownTemplateId.GoEmptyAppHost, "apphost.go")]
     [InlineData(KnownTemplateId.JavaEmptyAppHost, "AppHost.java")]
-    [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.ts")]
-    [InlineData(KnownTemplateId.PythonStarter, "apphost.ts")]
+    [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.mts")]
+    [InlineData(KnownTemplateId.PythonStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
     public async Task ChannelPinningTemplate_ExplicitChannelArg_OverridesIdentityAndPersists(string templateId, string _)
     {

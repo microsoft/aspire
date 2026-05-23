@@ -1,7 +1,7 @@
 #!/bin/bash
 # Polyglot SDK Validation - TypeScript validation AppHosts
 # Iterates all TypeScript validation AppHosts under tests/PolyglotAppHosts/*/TypeScript,
-# runs 'aspire restore --apphost' to regenerate the per-integration .modules/ SDK, and
+# runs 'aspire restore --apphost' to regenerate the per-integration .aspire/modules/ SDK, and
 # type-checks each AppHost against the generated API surface.
 set -euo pipefail
 
@@ -70,8 +70,8 @@ for app_dir in "${APP_DIRS[@]}"; do
     }
     echo "$npm_output" | tail -3
 
-    echo "  → aspire restore --apphost apphost.ts..."
-    if ! aspire restore --non-interactive --apphost apphost.ts 2>&1; then
+    echo "  → aspire restore --apphost apphost.mts..."
+    if ! aspire restore --non-interactive --apphost apphost.mts 2>&1; then
         echo "  ❌ aspire restore failed for $integration_name"
         FAILED+=("$integration_name (aspire restore)")
         echo ""

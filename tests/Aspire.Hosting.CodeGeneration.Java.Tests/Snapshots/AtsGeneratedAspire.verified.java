@@ -1,4 +1,4 @@
-﻿// ===== Aspire.java =====
+// ===== Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -212,7 +212,7 @@ public class AspireClient {
         
         Map<String, Object> params = new HashMap<>();
         params.put("capabilityId", capabilityId);
-        params.put("args", args);
+        params.put("args", marshalTransportValue(args));
 
         Map<String, Object> request = new HashMap<>();
         request.put("jsonrpc", "2.0");
@@ -229,6 +229,45 @@ public class AspireClient {
             handleDisconnect();
             throw new RuntimeException("Failed to invoke capability: " + e.getMessage(), e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object marshalTransportValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof Function<?, ?> function) {
+            Function<Object, Object> typedFunction = (Function<Object, Object>) function;
+            return registerCallback(args -> typedFunction.apply(args.length > 0 ? args[0] : null));
+        }
+
+        Object serialized = serializeValue(value);
+        if (serialized instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) serialized;
+            Map<String, Object> result = new HashMap<>();
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                result.put(entry.getKey(), marshalTransportValue(entry.getValue()));
+            }
+            return result;
+        }
+        if (serialized instanceof List) {
+            List<Object> list = (List<Object>) serialized;
+            List<Object> result = new ArrayList<>();
+            for (Object item : list) {
+                result.add(marshalTransportValue(item));
+            }
+            return result;
+        }
+        if (serialized instanceof Object[] array) {
+            List<Object> result = new ArrayList<>();
+            for (Object item : array) {
+                result.add(marshalTransportValue(item));
+            }
+            return result;
+        }
+
+        return serialized;
     }
 
     public void authenticate(String token) {
@@ -1320,7 +1359,8 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         if (port != null) {
             reqArgs.put("port", AspireClient.serializeValue(port));
         }
-        return (TestRedisResource) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestRedis", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestRedis", reqArgs);
+        return (TestRedisResource) result;
     }
 
     /** Adds a test vault resource */
@@ -1328,7 +1368,8 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("name", AspireClient.serializeValue(name));
-        return (TestVaultResource) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestVault", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestVault", reqArgs);
+        return (TestVaultResource) result;
     }
 
 }
@@ -1576,7 +1617,8 @@ public class TestCallbackContext extends HandleWrapperBase {
     public String name() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name", reqArgs);
+        return result == null ? null : (String) result;
     }
 
     /** Sets the Name property */
@@ -1584,14 +1626,16 @@ public class TestCallbackContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
-        return (TestCallbackContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName", reqArgs);
+        return (TestCallbackContext) result;
     }
 
     /** Gets the Value property */
     public double value() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (double) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.value", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.value", reqArgs);
+        return ((Number) result).doubleValue();
     }
 
     /** Sets the Value property */
@@ -1599,14 +1643,16 @@ public class TestCallbackContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
-        return (TestCallbackContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setValue", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setValue", reqArgs);
+        return (TestCallbackContext) result;
     }
 
     /** CancellationToken is supported by ATS. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.cancellationToken", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
     }
 
     /** Sets the CancellationToken property */
@@ -1616,7 +1662,8 @@ public class TestCallbackContext extends HandleWrapperBase {
         if (value != null) {
             reqArgs.put("value", getClient().registerCancellation(value));
         }
-        return (TestCallbackContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setCancellationToken", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setCancellationToken", reqArgs);
+        return (TestCallbackContext) result;
     }
 
 }
@@ -1678,6 +1725,20 @@ public class TestConfigDto implements JsonSerializable {
     public void setEnabled(boolean value) { this.enabled = value; }
     public String getOptionalField() { return optionalField; }
     public void setOptionalField(String value) { this.optionalField = value; }
+
+    @SuppressWarnings("unchecked")
+    public static TestConfigDto fromMap(Map<String, Object> map) {
+        var value = new TestConfigDto();
+        var nameValue = map.get("Name");
+        value.setName((String) nameValue);
+        var portValue = map.get("Port");
+        value.setPort(((Number) portValue).doubleValue());
+        var enabledValue = map.get("Enabled");
+        value.setEnabled((Boolean) enabledValue);
+        var optionalFieldValue = map.get("OptionalField");
+        value.setOptionalField(optionalFieldValue == null ? null : (String) optionalFieldValue);
+        return value;
+    }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -2099,6 +2160,16 @@ public class TestDeeplyNestedDto implements JsonSerializable {
     public Map<String, String>[] getMetadataArray() { return metadataArray; }
     public void setMetadataArray(Map<String, String>[] value) { this.metadataArray = value; }
 
+    @SuppressWarnings("unchecked")
+    public static TestDeeplyNestedDto fromMap(Map<String, Object> map) {
+        var value = new TestDeeplyNestedDto();
+        var nestedDataValue = map.get("NestedData");
+        value.setNestedData((Map<String, List<TestConfigDto>>) nestedDataValue);
+        var metadataArrayValue = map.get("MetadataArray");
+        value.setMetadataArray((AspireDict<String, String>[]) metadataArrayValue);
+        return value;
+    }
+
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
         map.put("NestedData", AspireClient.serializeValue(nestedData));
@@ -2125,7 +2196,8 @@ public class TestEnvironmentContext extends HandleWrapperBase {
     public String name() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.name", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.name", reqArgs);
+        return (String) result;
     }
 
     /** Sets the Name property */
@@ -2133,14 +2205,16 @@ public class TestEnvironmentContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
-        return (TestEnvironmentContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setName", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setName", reqArgs);
+        return (TestEnvironmentContext) result;
     }
 
     /** Gets the Description property */
     public String description() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description", reqArgs);
+        return result == null ? null : (String) result;
     }
 
     /** Sets the Description property */
@@ -2148,14 +2222,16 @@ public class TestEnvironmentContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
-        return (TestEnvironmentContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription", reqArgs);
+        return (TestEnvironmentContext) result;
     }
 
     /** Gets the Priority property */
     public double priority() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (double) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.priority", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.priority", reqArgs);
+        return ((Number) result).doubleValue();
     }
 
     /** Sets the Priority property */
@@ -2163,7 +2239,8 @@ public class TestEnvironmentContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
-        return (TestEnvironmentContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setPriority", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setPriority", reqArgs);
+        return (TestEnvironmentContext) result;
     }
 
 }
@@ -2196,7 +2273,8 @@ public class TestMutableCollectionContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
-        return (TestMutableCollectionContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags", reqArgs);
+        return (TestMutableCollectionContext) result;
     }
 
     /** Gets the Counts property */
@@ -2213,7 +2291,8 @@ public class TestMutableCollectionContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
-        return (TestMutableCollectionContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts", reqArgs);
+        return (TestMutableCollectionContext) result;
     }
 
 }
@@ -2241,6 +2320,20 @@ public class TestNestedDto implements JsonSerializable {
     public void setTags(List<String> value) { this.tags = value; }
     public Map<String, Double> getCounts() { return counts; }
     public void setCounts(Map<String, Double> value) { this.counts = value; }
+
+    @SuppressWarnings("unchecked")
+    public static TestNestedDto fromMap(Map<String, Object> map) {
+        var value = new TestNestedDto();
+        var idValue = map.get("Id");
+        value.setId((String) idValue);
+        var configValue = map.get("Config");
+        value.setConfig(configValue == null ? null : TestConfigDto.fromMap((Map<String, Object>) configValue));
+        var tagsValue = map.get("Tags");
+        value.setTags(((List<Object>) tagsValue).stream().map(item0 -> (String) item0).toList());
+        var countsValue = map.get("Counts");
+        value.setCounts((Map<String, Double>) countsValue);
+        return value;
+    }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -2308,7 +2401,8 @@ public class TestRedisResource extends ResourceBuilderBase {
         if (databaseName != null) {
             reqArgs.put("databaseName", AspireClient.serializeValue(databaseName));
         }
-        return (TestDatabaseResource) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestChildDatabase", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestChildDatabase", reqArgs);
+        return (TestDatabaseResource) result;
     }
 
     public TestRedisResource withPersistence() {
@@ -2500,7 +2594,8 @@ public class TestRedisResource extends ResourceBuilderBase {
     public String[] getEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        return (String[]) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/getEndpoints", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/getEndpoints", reqArgs);
+        return (String[]) result;
     }
 
     /** Sets connection string using direct interface target */
@@ -2584,7 +2679,8 @@ public class TestRedisResource extends ResourceBuilderBase {
         if (cancellationToken != null) {
             reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
         }
-        return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/getStatusAsync", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/getStatusAsync", reqArgs);
+        return (String) result;
     }
 
     /** Performs a cancellable operation */
@@ -2615,7 +2711,8 @@ public class TestRedisResource extends ResourceBuilderBase {
         if (cancellationToken != null) {
             reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
         }
-        return (boolean) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/waitForReadyAsync", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/waitForReadyAsync", reqArgs);
+        return (Boolean) result;
     }
 
     /** Tests multi-param callback destructuring */
@@ -2798,7 +2895,8 @@ public class TestResourceContext extends HandleWrapperBase {
     public String name() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.name", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.name", reqArgs);
+        return (String) result;
     }
 
     /** Sets the Name property */
@@ -2806,14 +2904,16 @@ public class TestResourceContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
-        return (TestResourceContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setName", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setName", reqArgs);
+        return (TestResourceContext) result;
     }
 
     /** Gets the Value property */
     public double value() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (double) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.value", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.value", reqArgs);
+        return ((Number) result).doubleValue();
     }
 
     /** Sets the Value property */
@@ -2821,14 +2921,16 @@ public class TestResourceContext extends HandleWrapperBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         reqArgs.put("value", AspireClient.serializeValue(value));
-        return (TestResourceContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setValue", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setValue", reqArgs);
+        return (TestResourceContext) result;
     }
 
     /** Instance method that should be exposed as async method. */
     public String getValueAsync() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.getValueAsync", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.getValueAsync", reqArgs);
+        return (String) result;
     }
 
     /** Instance method with parameter. */
@@ -2843,7 +2945,8 @@ public class TestResourceContext extends HandleWrapperBase {
     public boolean validateAsync() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (boolean) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.validateAsync", reqArgs);
+        var result = getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.validateAsync", reqArgs);
+        return (Boolean) result;
     }
 
 }
@@ -3356,51 +3459,51 @@ public final class WithOptionalStringOptions {
 }
 
 // ===== sources.txt =====
-.modules/Aspire.java
-.modules/AspireAction0.java
-.modules/AspireAction1.java
-.modules/AspireAction2.java
-.modules/AspireAction3.java
-.modules/AspireAction4.java
-.modules/AspireClient.java
-.modules/AspireDict.java
-.modules/AspireFunc0.java
-.modules/AspireFunc1.java
-.modules/AspireFunc2.java
-.modules/AspireFunc3.java
-.modules/AspireFunc4.java
-.modules/AspireList.java
-.modules/AspireRegistrations.java
-.modules/AspireUnion.java
-.modules/BaseRegistrations.java
-.modules/CancellationToken.java
-.modules/CapabilityError.java
-.modules/Handle.java
-.modules/HandleWrapperBase.java
-.modules/IDistributedApplicationBuilder.java
-.modules/IResource.java
-.modules/IResourceWithConnectionString.java
-.modules/IResourceWithEnvironment.java
-.modules/ITestVaultResource.java
-.modules/JsonSerializable.java
-.modules/ReferenceExpression.java
-.modules/ResourceBuilderBase.java
-.modules/TestCallbackContext.java
-.modules/TestCollectionContext.java
-.modules/TestConfigDto.java
-.modules/TestConfigs.java
-.modules/TestDatabaseResource.java
-.modules/TestDeeplyNestedDto.java
-.modules/TestEnvironmentContext.java
-.modules/TestMutableCollectionContext.java
-.modules/TestNestedDto.java
-.modules/TestPersistenceMode.java
-.modules/TestRedisResource.java
-.modules/TestResourceContext.java
-.modules/TestResourceStatus.java
-.modules/TestVaultResource.java
-.modules/WireValueEnum.java
-.modules/WithDataVolumeOptions.java
-.modules/WithMergeLoggingOptions.java
-.modules/WithMergeLoggingPathOptions.java
-.modules/WithOptionalStringOptions.java
+.aspire/modules/Aspire.java
+.aspire/modules/AspireAction0.java
+.aspire/modules/AspireAction1.java
+.aspire/modules/AspireAction2.java
+.aspire/modules/AspireAction3.java
+.aspire/modules/AspireAction4.java
+.aspire/modules/AspireClient.java
+.aspire/modules/AspireDict.java
+.aspire/modules/AspireFunc0.java
+.aspire/modules/AspireFunc1.java
+.aspire/modules/AspireFunc2.java
+.aspire/modules/AspireFunc3.java
+.aspire/modules/AspireFunc4.java
+.aspire/modules/AspireList.java
+.aspire/modules/AspireRegistrations.java
+.aspire/modules/AspireUnion.java
+.aspire/modules/BaseRegistrations.java
+.aspire/modules/CancellationToken.java
+.aspire/modules/CapabilityError.java
+.aspire/modules/Handle.java
+.aspire/modules/HandleWrapperBase.java
+.aspire/modules/IDistributedApplicationBuilder.java
+.aspire/modules/IResource.java
+.aspire/modules/IResourceWithConnectionString.java
+.aspire/modules/IResourceWithEnvironment.java
+.aspire/modules/ITestVaultResource.java
+.aspire/modules/JsonSerializable.java
+.aspire/modules/ReferenceExpression.java
+.aspire/modules/ResourceBuilderBase.java
+.aspire/modules/TestCallbackContext.java
+.aspire/modules/TestCollectionContext.java
+.aspire/modules/TestConfigDto.java
+.aspire/modules/TestConfigs.java
+.aspire/modules/TestDatabaseResource.java
+.aspire/modules/TestDeeplyNestedDto.java
+.aspire/modules/TestEnvironmentContext.java
+.aspire/modules/TestMutableCollectionContext.java
+.aspire/modules/TestNestedDto.java
+.aspire/modules/TestPersistenceMode.java
+.aspire/modules/TestRedisResource.java
+.aspire/modules/TestResourceContext.java
+.aspire/modules/TestResourceStatus.java
+.aspire/modules/TestVaultResource.java
+.aspire/modules/WireValueEnum.java
+.aspire/modules/WithDataVolumeOptions.java
+.aspire/modules/WithMergeLoggingOptions.java
+.aspire/modules/WithMergeLoggingPathOptions.java
+.aspire/modules/WithOptionalStringOptions.java

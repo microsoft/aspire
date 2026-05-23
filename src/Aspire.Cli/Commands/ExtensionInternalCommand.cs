@@ -35,8 +35,6 @@ internal sealed class ExtensionInternalCommand : BaseCommand
             _projectLocator = projectLocator;
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             try

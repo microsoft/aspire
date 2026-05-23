@@ -47,11 +47,14 @@ public class FieldTelemetryFilter : TelemetryFilter
             KnownTraceFields.TraceIdField => "TraceId",
             KnownTraceFields.KindField => "Kind",
             KnownTraceFields.StatusField => "Status",
+            KnownTraceFields.DurationField => "Duration (ms)",
             KnownSourceFields.NameField => "Source",
             KnownResourceFields.ServiceNameField => "Resource",
             _ => name
         };
     }
+
+    public static bool IsNumericField(string name) => name is KnownTraceFields.DurationField;
 
     public static string ConditionToString(FilterCondition c, IStringLocalizer<StructuredFiltering>? loc) =>
         c switch
@@ -109,6 +112,25 @@ public class FieldTelemetryFilter : TelemetryFilter
             _ => throw new ArgumentOutOfRangeException(nameof(c), c, null)
         };
 
+    private static bool TryMatchNumber(string fieldValue, string filterValue, FilterCondition condition)
+    {
+        if (!double.TryParse(fieldValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var fieldNumber) ||
+            !double.TryParse(filterValue, NumberStyles.Float, CultureInfo.InvariantCulture, out var filterNumber) ||
+            !double.IsFinite(fieldNumber) ||
+            !double.IsFinite(filterNumber))
+        {
+            return false;
+        }
+
+        if (condition is not (FilterCondition.Equals or FilterCondition.GreaterThan or FilterCondition.LessThan or FilterCondition.GreaterThanOrEqual or FilterCondition.LessThanOrEqual or FilterCondition.NotEqual))
+        {
+            return false;
+        }
+
+        var func = ConditionToFuncNumber(condition);
+        return func(fieldNumber, filterNumber);
+    }
+
     public override IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input)
     {
         switch (Field)
@@ -145,15 +167,16 @@ public class FieldTelemetryFilter : TelemetryFilter
     {
         var fieldValue = OtlpSpan.GetFieldValue(span, Field);
         var isNot = Condition is FilterCondition.NotEqual or FilterCondition.NotContains;
+        var isNumeric = IsNumericField(Field);
 
         if (!isNot)
         {
             // Or
-            if (fieldValue.Value1 != null && IsMatch(fieldValue.Value1, Value, Condition))
+            if (fieldValue.Value1 != null && IsMatch(fieldValue.Value1, Value, Condition, isNumeric))
             {
                 return true;
             }
-            if (fieldValue.Value2 != null && IsMatch(fieldValue.Value2, Value, Condition))
+            if (fieldValue.Value2 != null && IsMatch(fieldValue.Value2, Value, Condition, isNumeric))
             {
                 return true;
             }
@@ -162,9 +185,9 @@ public class FieldTelemetryFilter : TelemetryFilter
         {
             // And — both values must satisfy the not-equal/not-contains condition.
             // When Value2 is null (most fields only have one value), Value1 alone is sufficient.
-            if (fieldValue.Value1 != null && IsMatch(fieldValue.Value1, Value, Condition))
+            if (fieldValue.Value1 != null && IsMatch(fieldValue.Value1, Value, Condition, isNumeric))
             {
-                if (fieldValue.Value2 is null || IsMatch(fieldValue.Value2, Value, Condition))
+                if (fieldValue.Value2 is null || IsMatch(fieldValue.Value2, Value, Condition, isNumeric))
                 {
                     return true;
                 }
@@ -173,8 +196,13 @@ public class FieldTelemetryFilter : TelemetryFilter
 
         return false;
 
-        static bool IsMatch(string fieldValue, string filterValue, FilterCondition condition)
+        static bool IsMatch(string fieldValue, string filterValue, FilterCondition condition, bool isNumeric)
         {
+            if (isNumeric)
+            {
+                return TryMatchNumber(fieldValue, filterValue, condition);
+            }
+
             var func = ConditionToFuncString(condition);
             return func(fieldValue, filterValue);
         }

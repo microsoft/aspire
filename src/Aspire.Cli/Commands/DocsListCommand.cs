@@ -44,8 +44,6 @@ internal sealed class DocsListCommand : BaseCommand
         Options.Add(s_formatOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);

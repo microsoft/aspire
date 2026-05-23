@@ -105,7 +105,7 @@ internal partial class AspireExportAnalyzer
         internal static readonly DiagnosticDescriptor s_exportedSyncDelegateInvokedInline = new(
             id: ExportedSyncDelegateInvokedInlineId,
             title: "Exported synchronous callback should not be invoked inline",
-            messageFormat: "Exported builder method '{0}' directly invokes synchronous delegate parameter '{1}'. Defer the callback, expose an async delegate, or set RunSyncOnBackgroundThread = true to avoid polyglot deadlocks.",
+            messageFormat: "Exported builder method '{0}' directly or transitively invokes synchronous delegate parameter '{1}'. Defer the callback, expose an async delegate, or set RunSyncOnBackgroundThread = true to avoid polyglot deadlocks.",
             category: "Design",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,

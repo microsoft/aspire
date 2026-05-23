@@ -81,6 +81,7 @@ public sealed class TypeScriptApiCompatTests
 
             # Capabilities
             Pkg/addThing(name: string, port?: number) -> Pkg/Thing
+            Pkg/addInputType(name: string | Pkg/Thing) -> void
             Pkg/addInsertedOptionalBeforeExisting(name: string, suffix?: string) -> void
             Pkg/removeMe() -> void
             """);
@@ -105,6 +106,7 @@ public sealed class TypeScriptApiCompatTests
 
             # Capabilities
             Pkg/addThing(name: number, port: number, requiredName: string, optionalName?: string) -> void
+            Pkg/addInputType(name: string | Pkg/Thing | Pkg/NewThing) -> void
             Pkg/addInsertedOptionalBeforeExisting(name: string, inserted?: string, suffix?: string) -> void
             Pkg/newCapability() -> void
             """);
@@ -123,7 +125,7 @@ public sealed class TypeScriptApiCompatTests
         Assert.Contains(diagnostics, d => d.Kind == "capability-parameter-required" && d.Symbol == "Pkg/addThing(port)");
         Assert.Contains(diagnostics, d => d.Kind == "capability-parameter-added-required" && d.Symbol == "Pkg/addThing(requiredName)");
         Assert.Contains(diagnostics, d => d.Kind == "capability-parameter-order-changed" && d.Symbol == "Pkg/addInsertedOptionalBeforeExisting");
-        Assert.DoesNotContain(diagnostics, d => d.Symbol is "Pkg/NewThing" or "Pkg/newCapability" or "Pkg/addThing(optionalName)" or "Pkg/Options.newOptional");
+        Assert.DoesNotContain(diagnostics, d => d.Symbol is "Pkg/NewThing" or "Pkg/newCapability" or "Pkg/addThing(optionalName)" or "Pkg/Options.newOptional" or "Pkg/addInputType(name)");
     }
 
     [Fact]
@@ -208,6 +210,7 @@ public sealed class TypeScriptApiCompatTests
             currentRoot,
             tempDirectory.Path,
             BaselineSuppressionsRoot: null,
+            ExcludedPackagesFile: null,
             ReportPath: reportPath,
             GitHubAnnotations: false));
 
@@ -215,6 +218,47 @@ public sealed class TypeScriptApiCompatTests
         var report = File.ReadAllText(reportPath);
         Assert.Contains("capability-removed", report, StringComparison.Ordinal);
         Assert.Contains("Pkg/removeMe", report, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RunnerIgnoresExcludedPackagesAndSuppressions()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var baselineRoot = Path.Combine(tempDirectory.Path, "baseline");
+        var currentRoot = Path.Combine(tempDirectory.Path, "current");
+        var reportPath = Path.Combine(tempDirectory.Path, "report.md");
+        var excludedPackagesPath = Path.Combine(tempDirectory.Path, "excluded-packages.txt");
+        var suppressionPath = Path.Combine(tempDirectory.Path, "Excluded.tscompat.suppression.txt");
+
+        WriteSurface(baselineRoot, "Excluded", """
+            # Capabilities
+            Excluded/removeMe() -> void
+            """);
+        Directory.CreateDirectory(currentRoot);
+
+        File.WriteAllText(excludedPackagesPath, """
+            # Excluded because DisablePackageBaselineValidation=true
+            Excluded
+            """);
+        File.WriteAllText(suppressionPath, """
+            BREAK capability-removed Excluded Excluded/stale -- https://github.com/microsoft/aspire/issues/16961 -- Excluded package suppression
+            """);
+
+        var exitCode = TypeScriptApiCompatRunner.Run(new CommandLineOptions(
+            baselineRoot,
+            currentRoot,
+            tempDirectory.Path,
+            BaselineSuppressionsRoot: null,
+            ExcludedPackagesFile: excludedPackagesPath,
+            ReportPath: reportPath,
+            GitHubAnnotations: false));
+
+        Assert.Equal(0, exitCode);
+        var report = File.ReadAllText(reportPath);
+        Assert.Contains("Excluded packages", report, StringComparison.Ordinal);
+        Assert.Contains("`Excluded`", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("package-removed", report, StringComparison.Ordinal);
+        Assert.DoesNotContain("Unused suppressions", report, StringComparison.Ordinal);
     }
 
     private static void WriteSurface(string rootPath, string packageName, string content)

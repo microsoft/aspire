@@ -1878,6 +1878,39 @@ public class CapabilityDispatcherTests
         Assert.DoesNotContain("on resource", capabilityException.Message);
     }
 
+    // Regression test for https://github.com/microsoft/aspire/issues/17273 — TypeScript
+    // and other polyglot app host users may not have the .NET SDK available, so the
+    // Kestrel-generated `dotnet dev-certs` guidance is replaced with `aspire certs trust`
+    // and the fwlink is replaced with an aspire.dev docs link when surfacing through the
+    // polyglot capability layer.
+    [Fact]
+    public void PolyglotFormatter_CreateInternalError_RewritesKestrelDevCertGuidanceForPolyglotHosts()
+    {
+        var handles = new HandleRegistry();
+
+        const string KestrelMessage =
+            "Unable to configure HTTPS endpoint. No server certificate was specified, " +
+            "and the default developer certificate could not be found or is out of date. " +
+            "To generate a developer certificate run 'dotnet dev-certs https'. " +
+            "To trust the certificate (Windows and macOS only) run 'dotnet dev-certs https --trust'. " +
+            "For more information on configuring HTTPS see https://go.microsoft.com/fwlink/?linkid=848054.";
+
+        var ex = PolyglotCapabilityErrorFormatter.CreateInternalError(
+            "Aspire.Hosting/run",
+            "run",
+            "RunAsync",
+            args: null,
+            handles,
+            new InvalidOperationException(KestrelMessage));
+
+        var capabilityException = ex.ToCapabilityException();
+
+        Assert.DoesNotContain("dotnet dev-certs", capabilityException.Message);
+        Assert.DoesNotContain("go.microsoft.com/fwlink", capabilityException.Message);
+        Assert.Contains("aspire certs trust", capabilityException.Message);
+        Assert.Contains("https://aspire.dev/docs/", capabilityException.Message);
+    }
+
     [Fact]
     public void Invoke_StaticMethodTakingRawResource_UnwrapsBuilderHandle()
     {

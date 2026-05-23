@@ -138,10 +138,12 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var textWriter = new TestOutputTextWriter(outputHelper);
+        var errorWriter = new StringWriter();
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.OutputTextWriter = textWriter;
+            options.ErrorTextWriter = errorWriter;
         });
         using var provider = services.BuildServiceProvider();
 
@@ -156,6 +158,85 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         using var document = JsonDocument.Parse(jsonOutput);
         Assert.Equal(JsonValueKind.Array, document.RootElement.ValueKind);
         Assert.Equal(0, document.RootElement.GetArrayLength());
+
+        // Stderr should not contain JSON data
+        var stderrText = errorWriter.ToString();
+        Assert.Equal("", stderrText);
+    }
+
+    [Fact]
+    public async Task LsCommand_JsonFormat_OnlyJsonOnStdout_StatusMessagesOnStderr()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+        var errorWriter = new StringWriter();
+        var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
+        var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
+        var projectLocator = new TestProjectLocator
+        {
+            FindAppHostProjectsAsyncCallback = (_, _, _) => Task.FromResult(new List<AppHostProjectCandidate>
+            {
+                new(new FileInfo(appHostPath1), KnownLanguageId.CSharp),
+                new(new FileInfo(appHostPath2), KnownLanguageId.TypeScript, AppHostProjectCandidateStatus.PossiblyUnbuildable)
+            })
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.ErrorTextWriter = errorWriter;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ls --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // Stdout must contain only valid JSON (parseable without error)
+        var stdoutText = string.Join(string.Empty, textWriter.Logs);
+        using var document = JsonDocument.Parse(stdoutText);
+        Assert.Equal(JsonValueKind.Array, document.RootElement.ValueKind);
+        Assert.Equal(2, document.RootElement.GetArrayLength());
+
+        // Stderr should not contain JSON data
+        var stderrText = errorWriter.ToString();
+        Assert.Equal("", stderrText);
+    }
+
+    [Fact]
+    public async Task LsCommand_JsonFormat_NoResults_OnlyJsonOnStdout_StatusMessagesOnStderr()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+        var errorWriter = new StringWriter();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.ErrorTextWriter = errorWriter;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ls --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // Stdout must contain only valid JSON (empty array)
+        var stdoutText = string.Join(string.Empty, textWriter.Logs);
+        using var document = JsonDocument.Parse(stdoutText);
+        Assert.Equal(JsonValueKind.Array, document.RootElement.ValueKind);
+        Assert.Equal(0, document.RootElement.GetArrayLength());
+
+        // Stderr should not contain JSON data
+        var stderrText = errorWriter.ToString();
+        Assert.Equal("", stderrText);
     }
 
     [Fact]

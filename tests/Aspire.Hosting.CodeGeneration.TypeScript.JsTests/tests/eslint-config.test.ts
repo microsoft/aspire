@@ -13,7 +13,7 @@
 //    project also embeds) into a per-test fixture directory located *inside*
 //    this test project so node_modules resolution can find `eslint` and
 //    `typescript-eslint`.
-// 2. Drop a fixture `apphost.ts` containing the scenario under test.
+// 2. Drop a fixture `apphost.mts` containing the scenario under test.
 // 3. Invoke `ESLint` programmatically with `cwd` set to the fixture dir so the
 //    flat config is loaded exactly as the scaffolded project would load it.
 // 4. Inspect the lint result for `@typescript-eslint/no-floating-promises`
@@ -69,12 +69,12 @@ function createFixtureDir(): string {
 }
 
 function writeAppHost(fixtureDir: string, source: string): void {
-    writeFileSync(join(fixtureDir, 'apphost.ts'), source, 'utf8');
+    writeFileSync(join(fixtureDir, 'apphost.mts'), source, 'utf8');
 }
 
 async function lintAppHost(fixtureDir: string): Promise<ESLint.LintResult[]> {
     const eslint = new ESLint({ cwd: fixtureDir });
-    return eslint.lintFiles(['apphost.ts']);
+    return eslint.lintFiles(['apphost.mts']);
 }
 
 function collectFloatingPromiseMessages(results: ESLint.LintResult[]): ESLint.LintMessage[] {
@@ -110,7 +110,7 @@ describe('scaffolded eslint.config.mjs', () => {
     it('flags an unawaited builder.build().run() chain as a floating promise', async () => {
         writeAppHost(
             fixtureDir,
-            `// Synthetic AppHost stand-in modelled on the scaffolded apphost.ts.
+            `// Synthetic AppHost stand-in modelled on the scaffolded apphost.mts.
 declare const builder: {
     build(): { run(): Promise<void> };
 };
@@ -162,7 +162,7 @@ await builder.build().run();
         expect(messages).toEqual([]);
     });
 
-    it('only lints apphost.ts (files glob is respected)', async () => {
+    it('only lints apphost.mts (files glob is respected)', async () => {
         writeAppHost(
             fixtureDir,
             `declare const builder: {
@@ -174,7 +174,7 @@ await builder.build().run();
         );
 
         // Sibling .ts file containing an obvious floating promise. The scaffolded
-        // config restricts the rule to apphost.ts so this file must lint clean.
+        // config restricts the rule to apphost.mts so this file must lint clean.
         writeFileSync(
             join(fixtureDir, 'other.ts'),
             `declare const work: () => Promise<void>;
@@ -184,10 +184,10 @@ work();
         );
 
         const eslint = new ESLint({ cwd: fixtureDir });
-        const results = await eslint.lintFiles(['apphost.ts', 'other.ts']);
+        const results = await eslint.lintFiles(['apphost.mts', 'other.ts']);
 
         const appHostFloats = collectFloatingPromiseMessages(
-            results.filter((r) => r.filePath.endsWith('apphost.ts'))
+            results.filter((r) => r.filePath.endsWith('apphost.mts'))
         );
         const otherFloats = collectFloatingPromiseMessages(
             results.filter((r) => r.filePath.endsWith('other.ts'))

@@ -162,6 +162,11 @@
         <target state="needs-review-translation">Ver los registros estructurados desde la API de telemetría del panel.</target>
         <note />
       </trans-unit>
+      <trans-unit id="MinimumDurationOptionDescription">
+        <source>Filter by minimum span duration in milliseconds</source>
+        <target state="new">Filter by minimum span duration in milliseconds</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>Filter by resource name</source>
         <target state="needs-review-translation">Filtrar por nombre de recurso.</target>

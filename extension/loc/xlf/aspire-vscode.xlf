@@ -235,6 +235,9 @@
     <trans-unit id="aspire-vscode.strings.failedToGetTargetPath">
       <source xml:lang="en">Failed to get TargetPath: {0}.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.failedToInspectRuntimeConfig">
+      <source xml:lang="en">Failed to inspect runtimeconfig for {0}: {1}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceOpenFailed">
       <source xml:lang="en">Failed to open AppHost source file: {0}</source>
     </trans-unit>
@@ -390,6 +393,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.processExitedWithCode">
       <source xml:lang="en">Process exited with code {0}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dotNetRunFallbackDisablesDebugger">
+      <source xml:lang="en">Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.</source>
     </trans-unit>
     <trans-unit id="command.publish">
       <source xml:lang="en">Publish deployment artifacts</source>

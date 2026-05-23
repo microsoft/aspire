@@ -17,6 +17,68 @@ namespace Aspire.Cli.Tests.LayoutTests;
 public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public void DiscoverLayout_ResolvesProcessPathSymlinkBeforeRelativeDiscovery()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var realLayoutRoot = Path.Combine(
+            workspace.WorkspaceRoot.FullName,
+            "WinGet",
+            "Packages",
+            "Microsoft.Aspire_Microsoft.Winget.Source_8wekyb3d8bbwe");
+        CreateValidBundleLayout(realLayoutRoot);
+
+        var realBinary = Path.Combine(realLayoutRoot, "aspire");
+        File.WriteAllText(realBinary, "stub");
+
+        var linksDir = Path.Combine(workspace.WorkspaceRoot.FullName, "WinGet", "Links");
+        Directory.CreateDirectory(linksDir);
+        var linkPath = Path.Combine(linksDir, "aspire");
+        File.CreateSymbolicLink(linkPath, realBinary);
+
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        {
+            ProcessPathOverride = linkPath
+        };
+
+        var layout = discovery.DiscoverLayout();
+
+        Assert.NotNull(layout);
+        Assert.Equal(realLayoutRoot, layout!.LayoutPath);
+    }
+
+    [Fact]
+    public void DiscoverLayout_FallsBackToRawProcessPathWhenResolvedPathHasNoLayout()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var rawLayoutRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "custom-layout");
+        CreateValidBundleLayout(rawLayoutRoot);
+
+        var realBinaryDir = Path.Combine(workspace.WorkspaceRoot.FullName, "real-binary");
+        Directory.CreateDirectory(realBinaryDir);
+        var realBinary = Path.Combine(realBinaryDir, "aspire");
+        File.WriteAllText(realBinary, "stub");
+
+        var linkPath = Path.Combine(rawLayoutRoot, "aspire");
+        File.CreateSymbolicLink(linkPath, realBinary);
+
+        var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        {
+            ProcessPathOverride = linkPath
+        };
+
+        var layout = discovery.DiscoverLayout();
+
+        Assert.NotNull(layout);
+        Assert.Equal(rawLayoutRoot, layout!.LayoutPath);
+    }
+
+    [Fact]
     public void DiscoverLayout_ResolvesThroughReparsePoints()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -53,5 +115,17 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
             Environment.SetEnvironmentVariable(BundleDiscovery.LayoutPathEnvVar, originalEnv);
             ReparsePoint.RemoveIfExists(bundleLink);
         }
+    }
+
+    private static void CreateValidBundleLayout(string layoutRoot)
+    {
+        var bundleDir = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
+        var managedDir = Path.Combine(bundleDir, BundleDiscovery.ManagedDirectoryName);
+        var dcpDir = Path.Combine(bundleDir, BundleDiscovery.DcpDirectoryName);
+        Directory.CreateDirectory(managedDir);
+        Directory.CreateDirectory(dcpDir);
+        File.WriteAllText(
+            Path.Combine(managedDir, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
+            "stub");
     }
 }

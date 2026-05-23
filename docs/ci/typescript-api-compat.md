@@ -21,9 +21,9 @@ The checker treats these ATS changes as breaking:
 - Removed DTO properties, optional-to-required DTO property changes, DTO property type changes, or newly added required DTO properties.
 - Removed enum values.
 - Exported value type or literal value changes.
-- Removed capability parameters, optional-to-required parameter changes, required parameter additions, parameter type changes, parameter order changes, optional parameter insertions before existing parameters, or return type changes.
+- Removed capability parameters, optional-to-required parameter changes, required parameter additions, narrowed parameter types, parameter order changes, optional parameter insertions before existing parameters, or return type changes.
 
-Additive changes such as new capabilities, optional capability parameters appended after all existing parameters, new optional DTO properties, new enum values, and new exported values do not require suppressions.
+Additive changes such as new capabilities, optional capability parameters appended after all existing parameters, widened capability parameter union types, new optional DTO properties, new enum values, and new exported values do not require suppressions.
 
 ## Suppressions
 

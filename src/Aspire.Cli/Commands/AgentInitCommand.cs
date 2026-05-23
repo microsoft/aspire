@@ -85,8 +85,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             ConsoleInteractionService.NoneChoice)
     };
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     /// <summary>
     /// Public entry point for executing the init command.
     /// This allows McpInitCommand to delegate to this implementation.
