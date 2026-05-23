@@ -603,6 +603,12 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var installations = doc.RootElement.GetProperty("installations").EnumerateArray().ToArray();
         Assert.Equal(2, installations.Length);
+        var installationCheck = GetCheckByName(doc, "cli-installations");
+        Assert.Equal("cli", installationCheck.GetProperty("category").GetString());
+        Assert.Equal("info", installationCheck.GetProperty("status").GetString());
+        Assert.Equal("Multiple Aspire CLI installations found (2). Install locations are listed below.", installationCheck.GetProperty("message").GetString());
+        Assert.Equal(2, installationCheck.GetProperty("metadata").GetProperty("installationCount").GetInt32());
+        Assert.Equal(1, doc.RootElement.GetProperty("summary").GetProperty("info").GetInt32());
 
         var self = installations[0];
         Assert.Equal("/home/test/.aspire/bin/aspire", self.GetProperty("path").GetString());
@@ -641,6 +647,12 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
                     Status = InstallationInfoStatus.Ok,
                 }));
 
+        var installationCheck = GetCheckByName(doc, "cli-installations");
+        Assert.Equal("cli", installationCheck.GetProperty("category").GetString());
+        Assert.Equal("pass", installationCheck.GetProperty("status").GetString());
+        Assert.Equal("One Aspire CLI installation found.", installationCheck.GetProperty("message").GetString());
+        Assert.Equal(1, installationCheck.GetProperty("metadata").GetProperty("installationCount").GetInt32());
+        Assert.Equal(0, doc.RootElement.GetProperty("summary").GetProperty("info").GetInt32());
         Assert.False(doc.RootElement.TryGetProperty("installations", out _));
     }
 
@@ -768,9 +780,12 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var rendered = output.ToString();
+        var cliCheckIndex = rendered.IndexOf("Multiple Aspire CLI installations found (2). Install locations are listed below.", StringComparison.Ordinal);
         var summaryIndex = rendered.IndexOf("Summary:", StringComparison.Ordinal);
         var installationsIndex = rendered.IndexOf("Aspire CLI Installations", StringComparison.Ordinal);
+        Assert.True(cliCheckIndex >= 0, $"Expected CLI installation check in output:{Environment.NewLine}{rendered}");
         Assert.True(summaryIndex >= 0, $"Expected doctor summary in output:{Environment.NewLine}{rendered}");
+        Assert.True(cliCheckIndex < summaryIndex, $"Expected CLI installation check before summary in output:{Environment.NewLine}{rendered}");
         Assert.True(installationsIndex > summaryIndex, $"Expected installations after summary in output:{Environment.NewLine}{rendered}");
         Assert.Contains("/peer/aspire", rendered, StringComparison.Ordinal);
         Assert.Contains("pr-1234", rendered, StringComparison.Ordinal);
@@ -926,6 +941,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         var rendered = output.ToString();
         Assert.Contains("Summary:", rendered, StringComparison.Ordinal);
+        Assert.Contains("One Aspire CLI installation found.", rendered, StringComparison.Ordinal);
         Assert.DoesNotContain("Aspire CLI Installations", rendered, StringComparison.Ordinal);
     }
 

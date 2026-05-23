@@ -83,6 +83,11 @@ internal enum EnvironmentCheckStatus
     Pass,
 
     /// <summary>
+    /// The check completed with informational output (non-blocking).
+    /// </summary>
+    Info,
+
+    /// <summary>
     /// The check completed with a warning (non-blocking).
     /// </summary>
     Warning,
@@ -104,6 +109,7 @@ internal sealed class LowercaseEnumConverter : JsonConverter<EnvironmentCheckSta
         return value?.ToLowerInvariant() switch
         {
             "pass" => EnvironmentCheckStatus.Pass,
+            "info" => EnvironmentCheckStatus.Info,
             "warning" => EnvironmentCheckStatus.Warning,
             "fail" => EnvironmentCheckStatus.Fail,
             _ => throw new JsonException($"Unknown status value: {value}")
@@ -152,6 +158,12 @@ internal sealed class DoctorCheckSummary
     /// </summary>
     [JsonPropertyName("passed")]
     public int Passed { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of informational checks.
+    /// </summary>
+    [JsonPropertyName("info")]
+    public int Info { get; set; }
 
     /// <summary>
     /// Gets or sets the number of warnings.

@@ -96,6 +96,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to CLI.
+        /// </summary>
+        public static string CliCategoryHeader {
+            get {
+                return ResourceManager.GetString("CliCategoryHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to AppHost.
         /// </summary>
         public static string AppHostCategoryHeader {
@@ -132,7 +141,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Summary: {0} passed, {1} warnings, {2} failed.
+        ///   Looks up a localized string similar to Summary: {0} passed, {1} info, {2} warnings, {3} failed.
         /// </summary>
         public static string SummaryFormat {
             get {
@@ -200,6 +209,24 @@ namespace Aspire.Cli.Resources {
         public static string CliVersionUpdateCheckFailedMessage {
             get {
                 return ResourceManager.GetString("CliVersionUpdateCheckFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to One Aspire CLI installation found..
+        /// </summary>
+        public static string CliInstallationsSingleMessage {
+            get {
+                return ResourceManager.GetString("CliInstallationsSingleMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Multiple Aspire CLI installations found ({0}). Install locations are listed below..
+        /// </summary>
+        public static string CliInstallationsMultipleMessageFormat {
+            get {
+                return ResourceManager.GetString("CliInstallationsMultipleMessageFormat", resourceCulture);
             }
         }
 

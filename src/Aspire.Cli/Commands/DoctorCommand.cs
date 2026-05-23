@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -89,6 +90,7 @@ internal sealed class DoctorCommand : BaseCommand
             DoctorCommandStrings.CheckingPrerequisites,
             async () => await _environmentChecker.CheckAllAsync(cancellationToken));
         var installations = await installationsTask;
+        results = AddInstallationCheck(results, installations);
 
         if (format == OutputFormat.Json)
         {
@@ -107,6 +109,7 @@ internal sealed class DoctorCommand : BaseCommand
     private void OutputJson(IReadOnlyList<EnvironmentCheckResult> results, IReadOnlyList<InstallationInfo> installations, bool includeSingleInstallation = false)
     {
         var passed = results.Count(r => r.Status == EnvironmentCheckStatus.Pass);
+        var info = results.Count(r => r.Status == EnvironmentCheckStatus.Info);
         var warnings = results.Count(r => r.Status == EnvironmentCheckStatus.Warning);
         var failed = results.Count(r => r.Status == EnvironmentCheckStatus.Fail);
 
@@ -116,6 +119,7 @@ internal sealed class DoctorCommand : BaseCommand
             Summary = new DoctorCheckSummary
             {
                 Passed = passed,
+                Info = info,
                 Warnings = warnings,
                 Failed = failed
             },
@@ -155,10 +159,11 @@ internal sealed class DoctorCommand : BaseCommand
 
         // Output summary
         var passed = results.Count(r => r.Status == EnvironmentCheckStatus.Pass);
+        var info = results.Count(r => r.Status == EnvironmentCheckStatus.Info);
         var warnings = results.Count(r => r.Status == EnvironmentCheckStatus.Warning);
         var failed = results.Count(r => r.Status == EnvironmentCheckStatus.Fail);
 
-        _ansiConsole.MarkupLine($"[bold]{string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.SummaryFormat, passed, warnings, failed)}[/]");
+        _ansiConsole.MarkupLine($"[bold]{string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.SummaryFormat, passed, info, warnings, failed)}[/]");
 
         // Show link to detailed prerequisites if there are warnings or failures
         if (warnings > 0 || failed > 0)
@@ -225,11 +230,45 @@ internal sealed class DoctorCommand : BaseCommand
         return status switch
         {
             EnvironmentCheckStatus.Pass => (KnownEmojis.CheckMarkButton, "green"),
+            EnvironmentCheckStatus.Info => (KnownEmojis.Information, "blue"),
             EnvironmentCheckStatus.Warning => (KnownEmojis.Warning, "yellow"),
             EnvironmentCheckStatus.Fail => (KnownEmojis.CrossMark, "red"),
             _ => (KnownEmojis.Information, "grey")
         };
     }
+
+    private static IReadOnlyList<EnvironmentCheckResult> AddInstallationCheck(IReadOnlyList<EnvironmentCheckResult> results, IReadOnlyList<InstallationInfo> installations)
+    {
+        if (installations.Count == 0 || IsDiscoveryFailurePlaceholder(installations))
+        {
+            return results;
+        }
+
+        var installationCheck = new EnvironmentCheckResult
+        {
+            Category = "cli",
+            Name = "cli-installations",
+            Status = installations.Count == 1 ? EnvironmentCheckStatus.Pass : EnvironmentCheckStatus.Info,
+            Message = installations.Count == 1
+                ? DoctorCommandStrings.CliInstallationsSingleMessage
+                : string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.CliInstallationsMultipleMessageFormat, installations.Count),
+            Metadata = new JsonObject
+            {
+                ["installationCount"] = installations.Count
+            }
+        };
+
+        return [.. results, installationCheck];
+    }
+
+    private static bool IsDiscoveryFailurePlaceholder(IReadOnlyList<InstallationInfo> installations)
+        => installations is
+        [
+            {
+                Status: InstallationInfoStatus.Failed,
+                StatusReason: var statusReason
+            }
+        ] && string.Equals(statusReason, DoctorCommandStrings.InstallationDiscoveryFailedReason, StringComparison.Ordinal);
 
     private static string GetCategoryHeader(string category)
     {
@@ -237,6 +276,7 @@ internal sealed class DoctorCommand : BaseCommand
         {
             "sdk" => DoctorCommandStrings.SdkCategoryHeader,
             "aspire" => DoctorCommandStrings.AspireCategoryHeader,
+            "cli" => DoctorCommandStrings.CliCategoryHeader,
             "apphost" => DoctorCommandStrings.AppHostCategoryHeader,
             "container" => DoctorCommandStrings.ContainerCategoryHeader,
             "environment" => DoctorCommandStrings.EnvironmentCategoryHeader,
@@ -249,10 +289,11 @@ internal sealed class DoctorCommand : BaseCommand
         return category switch
         {
             "aspire" => 0,
-            "apphost" => 1,
-            "sdk" => 2,
-            "container" => 3,
-            "environment" => 4,
+            "cli" => 1,
+            "apphost" => 2,
+            "sdk" => 3,
+            "container" => 4,
+            "environment" => 5,
             _ => 99
         };
     }

@@ -70,6 +70,9 @@
   <data name="AspireCategoryHeader" xml:space="preserve">
     <value>Aspire</value>
   </data>
+  <data name="CliCategoryHeader" xml:space="preserve">
+    <value>CLI</value>
+  </data>
   <data name="AppHostCategoryHeader" xml:space="preserve">
     <value>AppHost</value>
   </data>
@@ -83,7 +86,8 @@
     <value>Environment</value>
   </data>
   <data name="SummaryFormat" xml:space="preserve">
-    <value>Summary: {0} passed, {1} warnings, {2} failed</value>
+    <value>Summary: {0} passed, {1} info, {2} warnings, {3} failed</value>
+    <comment>{0} is the number of passed checks, {1} is the number of informational checks, {2} is the number of warning checks, and {3} is the number of failed checks.</comment>
   </data>
   <data name="DetailedPrerequisitesLink" xml:space="preserve">
     <value>For detailed prerequisites: {0}</value>
@@ -109,6 +113,13 @@
   </data>
   <data name="CliVersionUpdateCheckFailedMessage" xml:space="preserve">
     <value>Could not check for Aspire CLI updates</value>
+  </data>
+  <data name="CliInstallationsSingleMessage" xml:space="preserve">
+    <value>One Aspire CLI installation found.</value>
+  </data>
+  <data name="CliInstallationsMultipleMessageFormat" xml:space="preserve">
+    <value>Multiple Aspire CLI installations found ({0}). Install locations are listed below.</value>
+    <comment>{0} is the number of Aspire CLI installations discovered on the machine.</comment>
   </data>
   <data name="ChannelSuffixFormat" xml:space="preserve">
     <value> (channel: {0})</value>

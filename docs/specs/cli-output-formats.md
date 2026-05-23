@@ -453,10 +453,20 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
       "message": "Container runtime is not running.",
       "fix": "Start Docker Desktop.",
       "link": "https://learn.microsoft.com/dotnet/aspire/"
+    },
+    {
+      "category": "cli",
+      "name": "cli-installations",
+      "status": "info",
+      "message": "Multiple Aspire CLI installations found (2). Install locations are listed below.",
+      "metadata": {
+        "installationCount": 2
+      }
     }
   ],
   "summary": {
     "passed": 1,
+    "info": 1,
     "warnings": 1,
     "failed": 0
   },
@@ -483,9 +493,9 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 }
 ```
 
-`status` on a check is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
+`status` on a check is one of `pass`, `info`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
 
-The `installations` property is omitted when no install-listing information is available or when only the running Aspire CLI install is found. The hidden peer-probing form, `aspire doctor --self --format json`, still emits the running install as a single-item `installations` array so newer CLIs can inspect peer installs.
+The `cli-installations` check reports whether one or multiple Aspire CLI installs were found. The `installations` property is omitted when no install-listing information is available or when only the running Aspire CLI install is found. The hidden peer-probing form, `aspire doctor --self --format json`, still emits the running install as a single-item `installations` array so newer CLIs can inspect peer installs.
 
 #### Doctor installation fields
 

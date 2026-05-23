@@ -37,6 +37,21 @@
         <target state="translated">正在检查 Aspire 环境...</target>
         <note />
       </trans-unit>
+      <trans-unit id="CliCategoryHeader">
+        <source>CLI</source>
+        <target state="new">CLI</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CliInstallationsMultipleMessageFormat">
+        <source>Multiple Aspire CLI installations found ({0}). Install locations are listed below.</source>
+        <target state="new">Multiple Aspire CLI installations found ({0}). Install locations are listed below.</target>
+        <note>{0} is the number of Aspire CLI installations discovered on the machine.</note>
+      </trans-unit>
+      <trans-unit id="CliInstallationsSingleMessage">
+        <source>One Aspire CLI installation found.</source>
+        <target state="new">One Aspire CLI installation found.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CliVersionMessageFormat">
         <source>Aspire CLI version {0}</source>
         <target state="new">Aspire CLI version {0}</target>
@@ -218,9 +233,9 @@
         <note />
       </trans-unit>
       <trans-unit id="SummaryFormat">
-        <source>Summary: {0} passed, {1} warnings, {2} failed</source>
-        <target state="translated">摘要: {0} 通过,{1} 警告， {2} 失败</target>
-        <note />
+        <source>Summary: {0} passed, {1} info, {2} warnings, {3} failed</source>
+        <target state="new">Summary: {0} passed, {1} info, {2} warnings, {3} failed</target>
+        <note>{0} is the number of passed checks, {1} is the number of informational checks, {2} is the number of warning checks, and {3} is the number of failed checks.</note>
       </trans-unit>
       <trans-unit id="ValueCurrentMarker">
         <source>(current)</source>

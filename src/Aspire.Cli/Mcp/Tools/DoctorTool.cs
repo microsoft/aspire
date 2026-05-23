@@ -14,7 +14,7 @@ internal sealed class DoctorTool(IEnvironmentChecker environmentChecker) : CliMc
 {
     public override string Name => KnownMcpTools.Doctor;
 
-    public override string Description => "Diagnose Aspire environment issues by performing comprehensive checks. Returns detailed information about each check including status (pass/warning/fail), messages, and actionable fix suggestions. Use this to identify and resolve environment problems before running Aspire applications. This tool does not require a running AppHost.";
+    public override string Description => "Diagnose Aspire environment issues by performing comprehensive checks. Returns detailed information about each check including status (pass/info/warning/fail), messages, and actionable fix suggestions. Use this to identify and resolve environment problems before running Aspire applications. This tool does not require a running AppHost.";
 
     public override JsonElement GetInputSchema()
     {
@@ -37,6 +37,7 @@ internal sealed class DoctorTool(IEnvironmentChecker environmentChecker) : CliMc
 
             // Build response
             var passed = results.Count(r => r.Status == EnvironmentCheckStatus.Pass);
+            var info = results.Count(r => r.Status == EnvironmentCheckStatus.Info);
             var warnings = results.Count(r => r.Status == EnvironmentCheckStatus.Warning);
             var failed = results.Count(r => r.Status == EnvironmentCheckStatus.Fail);
 
@@ -46,6 +47,7 @@ internal sealed class DoctorTool(IEnvironmentChecker environmentChecker) : CliMc
                 Summary = new DoctorCheckSummary
                 {
                     Passed = passed,
+                    Info = info,
                     Warnings = warnings,
                     Failed = failed
                 }
