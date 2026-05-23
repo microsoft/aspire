@@ -158,6 +158,7 @@ public class ExtensionGuestLauncherTests
         public ConsoleOutput Console { get; set; }
         public bool SupportsLinks { get; set; }
         public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => throw new NotImplementedException();
+        public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => throw new NotImplementedException();
         public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => throw new NotImplementedException();
         public Task<string> PromptForStringAsync(string promptText, Func<string, Spectre.Console.ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
         public Task<string> PromptForFilePathAsync(string promptText, Func<string, Spectre.Console.ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();

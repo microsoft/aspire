@@ -254,7 +254,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var appHostFilePath = options.AppHostFilePath;
 
         var assemblyMetadata = AppHostAssembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
-        var aspireDir = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
+        var aspireDir = ResolveAspireStorePath(assemblyMetadata, AppHostDirectory);
 
         ConfigurePipelineOptions(options);
 
@@ -993,4 +993,19 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// <returns>The metadata value if found; otherwise, null.</returns>
     private static string? GetMetadataValue(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string key) =>
         assemblyMetadata?.FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase))?.Value;
+
+    private static string ResolveAspireStorePath(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string appHostDirectory)
+    {
+        var baseIntermediateOutputPath = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
+        if (!string.IsNullOrEmpty(baseIntermediateOutputPath))
+        {
+            return baseIntermediateOutputPath;
+        }
+
+        // File-based and dynamically loaded AppHosts do not have the MSBuild intermediate output
+        // metadata that normal project AppHosts get. Use the AppHost directory as the root so
+        // IAspireStore resolves to the workspace-local .aspire folder instead of creating a
+        // .NET-style obj directory for non-.NET AppHosts.
+        return Path.GetFullPath(appHostDirectory);
+    }
 }

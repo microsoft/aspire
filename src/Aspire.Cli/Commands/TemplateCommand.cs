@@ -24,6 +24,10 @@ internal sealed class TemplateCommand : BaseCommand
         _executeCallback = executeCallback;
     }
 
+    // Template commands are user-facing interactive commands (e.g., `aspire new aspire-starter`)
+    // and should show update notifications, just like the parent NewCommand.
+    protected override bool UpdateNotificationsEnabled => true;
+
     protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         return _executeCallback(parseResult, cancellationToken);

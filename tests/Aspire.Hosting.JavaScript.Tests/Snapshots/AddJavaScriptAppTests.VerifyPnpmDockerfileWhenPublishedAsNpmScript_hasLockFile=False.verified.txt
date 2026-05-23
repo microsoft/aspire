@@ -1,0 +1,21 @@
+﻿FROM node:22-slim AS build
+WORKDIR /app
+RUN corepack enable pnpm
+COPY package.json ./
+RUN --mount=type=cache,target=/pnpm/store pnpm install --prefer-frozen-lockfile
+COPY . .
+RUN pnpm run mybuild
+
+FROM node:22-slim AS prod-deps
+WORKDIR /app
+RUN corepack enable pnpm
+COPY package.json ./
+RUN --mount=type=cache,target=/pnpm/store pnpm install --prefer-frozen-lockfile --prod
+
+FROM node:22-alpine AS runtime
+WORKDIR /app
+COPY --from=build /app /app
+COPY --from=prod-deps /app/node_modules ./node_modules
+RUN corepack enable pnpm && pnpm --version
+ENV NODE_ENV=production
+ENTRYPOINT ["sh","-c","exec pnpm run start"]

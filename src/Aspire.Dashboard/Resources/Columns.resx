@@ -165,7 +165,7 @@ For more information, see https://aka.ms/aspire/container-runtime-unhealthy.</va
     <value>Resource is waiting for dependencies.</value>
   </data>
   <data name="StateColumnResourceWaitingFor" xml:space="preserve">
-    <value>Waiting for dependencies: {0}.</value>
+    <value>Waiting for dependencies: {0}</value>
     <comment>{0} is a comma-separated list of dependency resource names.</comment>
   </data>
 </root>

@@ -280,6 +280,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         PackageChannelQuality.Stable,
                         new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
                         null!,
+                        features: new TestFeatures(),
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
@@ -306,6 +307,178 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(confirmPrompt);
         Assert.Contains("An update is available for the Aspire CLI", confirmPrompt);
         Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_GuestProject_WhenTargetSdkNewerThanCli_PromptsForCliUpdateBeforeProjectUpdateAndSkipsWhenAccepted()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, "// test apphost");
+
+        var updateProjectInvoked = false;
+        string? confirmPrompt = null;
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (prompt, _) =>
+            {
+                confirmPrompt = prompt;
+                return true;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(new FileInfo(appHostPath))
+            };
+
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                CanHandleCallback = _ => true,
+                LanguageId = "typescript/nodejs",
+                DisplayName = "TypeScript (Node.js)",
+                DetectionPatterns = ["apphost.ts"],
+                UpdatePackagesAsyncCallback = (_, _) =>
+                {
+                    updateProjectInvoked = true;
+                    return Task.FromResult(new UpdatePackagesResult { UpdatesApplied = true });
+                }
+            };
+
+            options.InteractionServiceFactory = _ => interactionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                    [CreatePackageChannelWithGuestSdkVersion("99.0.0", cliDownloadBaseUrl: "https://example.test/aspire")])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost apphost.ts");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(updateProjectInvoked);
+        Assert.NotNull(confirmPrompt);
+        Assert.Contains("newer than this Aspire CLI", confirmPrompt);
+        Assert.Contains("re-run `aspire update`", confirmPrompt);
+        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update -g Aspire.Cli", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedMessages, message => message.Message.Contains("Project update skipped", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_GuestProject_WhenTargetSdkNewerThanCliAndCliUpdateDeclined_ContinuesProjectUpdate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, "// test apphost");
+
+        var updateProjectInvoked = false;
+        var confirmCallbackInvoked = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(new FileInfo(appHostPath))
+            };
+
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                CanHandleCallback = _ => true,
+                LanguageId = "typescript/nodejs",
+                DisplayName = "TypeScript (Node.js)",
+                DetectionPatterns = ["apphost.ts"],
+                UpdatePackagesAsyncCallback = (_, _) =>
+                {
+                    updateProjectInvoked = true;
+                    return Task.FromResult(new UpdatePackagesResult { UpdatesApplied = true });
+                }
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                ConfirmCallback = (_, _) =>
+                {
+                    confirmCallbackInvoked = true;
+                    return false;
+                }
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                    [CreatePackageChannelWithGuestSdkVersion("99.0.0", cliDownloadBaseUrl: "https://example.test/aspire")])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost apphost.ts");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(confirmCallbackInvoked);
+        Assert.True(updateProjectInvoked);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_GuestProject_WhenChannelCannotDownloadCli_DoesNotPromptBeforeProjectUpdate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, "// test apphost");
+
+        var updateProjectInvoked = false;
+        var confirmCallbackInvoked = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(new FileInfo(appHostPath))
+            };
+
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                CanHandleCallback = _ => true,
+                LanguageId = "typescript/nodejs",
+                DisplayName = "TypeScript (Node.js)",
+                DetectionPatterns = ["apphost.ts"],
+                UpdatePackagesAsyncCallback = (_, _) =>
+                {
+                    updateProjectInvoked = true;
+                    return Task.FromResult(new UpdatePackagesResult { UpdatesApplied = true });
+                }
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                ConfirmCallback = (_, _) =>
+                {
+                    confirmCallbackInvoked = true;
+                    return false;
+                }
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                    [CreatePackageChannelWithGuestSdkVersion("99.0.0", cliDownloadBaseUrl: null)])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost apphost.ts");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(confirmCallbackInvoked);
+        Assert.True(updateProjectInvoked);
     }
 
     [Fact]
@@ -349,6 +522,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         PackageChannelQuality.Stable,
                         new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
                         null!,
+                        features: new TestFeatures(),
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
@@ -424,6 +598,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         PackageChannelQuality.Stable,
                         new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
                         null!,
+                        features: new TestFeatures(),
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
@@ -587,6 +762,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         PackageChannelQuality.Prerelease,
                         new[] { new PackageMapping("Aspire*", "/path/to/pr/hive") },
                         null!,
+                        features: new TestFeatures(),
                         configureGlobalPackagesFolder: false,
                         cliDownloadBaseUrl: null); // No CLI download URL for PR channels
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { prChannel });
@@ -870,8 +1046,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -935,8 +1111,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -989,8 +1165,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     // Create test channels matching the expected names
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1056,8 +1232,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel, dailyChannel });
                 }
             };
@@ -1117,7 +1293,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
                 }
             };
@@ -1179,7 +1355,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     var fakeCache = new FakeNuGetPackageCache();
-                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel });
                 }
             };
@@ -1334,7 +1510,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                     var fakeCache = new FakeNuGetPackageCache();
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[]
                     {
-                        PackageChannel.CreateImplicitChannel(fakeCache),
+                        PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures()),
                     });
                 }
             };
@@ -1392,8 +1568,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                     var fakeCache = new FakeNuGetPackageCache();
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[]
                     {
-                        PackageChannel.CreateImplicitChannel(fakeCache),
-                        PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache),
+                        PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures()),
+                        PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures()),
                     });
                 },
                 GetStagingChannelUnavailableReasonCallback = () => unavailableReason
@@ -1435,6 +1611,31 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured locally to the project");
         Assert.Equal("staging", updatedWithChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_ProjectInOtherDirectory_UsesNearestParentConfiguredChannelWhenProjectDirectoryHasNoConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            """{ "channel": "daily" }""");
+
+        var globalDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        Directory.CreateDirectory(globalDir);
+        File.WriteAllText(Path.Combine(globalDir, "settings.global.json"), """{ "channel": "staging" }""");
+
+        var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere"));
+
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+            workspace,
+            updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
+            projectDirectory: projectDirectory);
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured in the nearest parent config");
+        Assert.Equal("daily", updatedWithChannel);
     }
 
     [Fact]
@@ -1595,10 +1796,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     var fakeCache = new FakeNuGetPackageCache();
-                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
-                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, mappings: null, fakeCache);
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache);
-                    var hiveChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, mappings: null, fakeCache);
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                    var stableChannel = PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, mappings: null, fakeCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures());
+                    var hiveChannel = PackageChannel.CreateExplicitChannel("pr-12345", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures());
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, stableChannel, dailyChannel, hiveChannel });
                 }
             };
@@ -1996,9 +2197,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 GetChannelsAsyncCallback = (ct) =>
                 {
                     var fakeCache = new FakeNuGetPackageCache();
-                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
-                    var stagingChannel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings: null, fakeCache);
-                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache);
+                    var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                    var stagingChannel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings: null, fakeCache, new TestFeatures());
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures());
                     var channels = new List<PackageChannel> { implicitChannel, stagingChannel, dailyChannel };
 
                     // Optional pr-* and local channels for identity-channel tests. Production
@@ -2011,14 +2212,14 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                         {
                             if (hive.Name.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
                             {
-                                channels.Add(PackageChannel.CreateExplicitChannel(hive.Name, PackageChannelQuality.Both, mappings: null, fakeCache));
+                                channels.Add(PackageChannel.CreateExplicitChannel(hive.Name, PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures()));
                             }
                         }
                     }
 
                     if (includeLocalInChannels)
                     {
-                        channels.Add(PackageChannel.CreateExplicitChannel(PackageChannelNames.Local, PackageChannelQuality.Both, mappings: null, fakeCache));
+                        channels.Add(PackageChannel.CreateExplicitChannel(PackageChannelNames.Local, PackageChannelQuality.Both, mappings: null, fakeCache, new TestFeatures()));
                     }
 
                     return Task.FromResult<IEnumerable<PackageChannel>>(channels);
@@ -2288,8 +2489,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 GetChannelsAsyncCallback = (ct) =>
                 {
-                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!);
-                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!);
+                    var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
+                    var dailyChannel = new PackageChannel("daily", PackageChannelQuality.Prerelease, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>([stableChannel, dailyChannel]);
                 }
             };
@@ -2392,6 +2593,27 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     // to roll back any prior write. That rollback path is covered by the stable row of
     // UpdateCommand_SelfUpdate_DoesNotWriteChannelToGlobalConfiguration above (asserts both
     // DoesNotContain set + DoesNotContain delete) — no standalone test required here.
+
+    private static PackageChannel CreatePackageChannelWithGuestSdkVersion(string sdkVersion, string? cliDownloadBaseUrl)
+    {
+        var fakeCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = sdkVersion, Source = "test" }
+                ])
+        };
+
+        return PackageChannel.CreateExplicitChannel(
+            "stable",
+            PackageChannelQuality.Stable,
+            [new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json")],
+            fakeCache,
+            features: new TestFeatures(),
+            configureGlobalPackagesFolder: false,
+            cliDownloadBaseUrl: cliDownloadBaseUrl);
+    }
 }
 
 // Helper class to track DisplayCancellationMessage calls
@@ -2415,6 +2637,7 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
     }
 
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => _innerService.ShowStatusAsync(statusText, action, emoji, allowMarkup);
+    public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => _innerService.ShowDynamicStatusAsync(initialStatusText, action, emoji);
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => _innerService.ShowStatus(statusText, action, emoji, allowMarkup);
     public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) 
         => _innerService.PromptForStringAsync(promptText, validator, isSecret, required, binding, cancellationToken);

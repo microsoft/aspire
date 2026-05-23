@@ -27,6 +27,8 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry, IAsyncDisposable, IPageWithSessionAndUrlState<ConsoleLogs.ConsoleLogsViewModel, ConsoleLogs.ConsoleLogsPageState>
 {
+    private static readonly TimeSpan s_noLogsMessageDelay = TimeSpan.FromSeconds(1.5);
+
     [DebuggerDisplay("Resource = {Resource.Name}, IsCancellationRequested = {CancellationToken.IsCancellationRequested}")]
     private sealed class ConsoleLogsSubscription
     {
@@ -156,6 +158,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _isSubscribedToAll;
     internal LogEntries _logEntries = null!;
     private readonly object _updateLogsLock = new object();
+    private CancellationTokenSource? _showNoLogsMessageCts;
+    private Task? _showNoLogsMessageDelayTask;
     private AIContext? _aiContext;
     private LogViewer? _logViewerRef;
 
@@ -171,6 +175,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _showTimestamp;
     private bool _isTimestampUtc;
     private bool _noWrapLogs;
+    private bool _showNoLogsMessage;
     public ConsoleLogsViewModel PageViewModel { get; set; } = null!;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
 
@@ -308,6 +313,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         await foreach (var batch in _logEntryChannel.GetBatchesAsync(minReadInterval: TimeSpan.FromMilliseconds(100), cancellationToken: _resourceSubscriptionToken))
         {
+            var hasNewLogEntry = false;
             lock (_updateLogsLock)
             {
                 foreach (var (resourceName, logEntry, lineNumber) in batch)
@@ -334,10 +340,19 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                     }
 
                     _logEntries.InsertSorted(logEntry);
+                    hasNewLogEntry = true;
                 }
             }
 
-            await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
+            await InvokeAsync(async () =>
+            {
+                if (hasNewLogEntry)
+                {
+                    _showNoLogsMessage = false;
+                }
+
+                await _logViewerRef.SafeRefreshDataAsync();
+            });
         }
     }
 
@@ -403,6 +418,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         {
             _logEntries.Clear(keepActivePauseEntries: false);
         }
+        ResetNoLogsMessage();
 
         await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
 
@@ -421,6 +437,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         else
         {
             Logger.LogDebug("Unexpected state. Unknown resource '{ResourceName}' selected.", selectedResourceName);
+        }
+
+        if (!_consoleLogsSubscriptions.IsEmpty)
+        {
+            StartNoLogsMessageDelay();
         }
     }
 
@@ -642,6 +663,50 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         }
 
         return Task.CompletedTask;
+    }
+
+    private void StartNoLogsMessageDelay()
+    {
+        ResetNoLogsMessage();
+
+        _showNoLogsMessageCts = new();
+        _showNoLogsMessageDelayTask = ShowNoLogsMessageAfterDelayAsync(_showNoLogsMessageCts.Token);
+    }
+
+    private void ResetNoLogsMessage()
+    {
+        _showNoLogsMessageCts?.Cancel();
+        _showNoLogsMessage = false;
+    }
+
+    private async Task ShowNoLogsMessageAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(s_noLogsMessageDelay, cancellationToken);
+
+            await InvokeAsync(() =>
+            {
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    var hasNoLogEntries = false;
+                    lock (_updateLogsLock)
+                    {
+                        hasNoLogEntries = _logEntries.EntriesCount == 0;
+                    }
+
+                    _showNoLogsMessage = hasNoLogEntries;
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to show the no logs message.");
+        }
     }
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
@@ -960,6 +1025,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public async ValueTask DisposeAsync()
     {
         _aiContext?.Dispose();
+        ResetNoLogsMessage();
+        _showNoLogsMessageCts?.Cancel();
+        await TaskHelpers.WaitIgnoreCancelAsync(_showNoLogsMessageDelayTask);
 
         _consoleLogsFiltersChangedSubscription?.Dispose();
 

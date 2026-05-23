@@ -18,6 +18,7 @@ public static class MauiProjectExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="projectPath">The path to the .NET MAUI project file (.csproj). This can be a relative or absolute path.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a parent MAUI project resource that serves as a container for platform-specific
     /// resources such as Windows, Android, iOS, and macOS. The actual platform instances are added using
@@ -42,7 +43,7 @@ public static class MauiProjectExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a .NET MAUI project to the application model.")]
+    [AspireExport]
     public static IResourceBuilder<MauiProjectResource> AddMauiProject(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,

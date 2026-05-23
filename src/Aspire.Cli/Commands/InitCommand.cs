@@ -20,6 +20,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 
 namespace Aspire.Cli.Commands;
@@ -33,6 +34,8 @@ namespace Aspire.Cli.Commands;
 internal sealed class InitCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
+
+    protected override bool UpdateNotificationsEnabled => true;
 
     private readonly CliExecutionContext _executionContext;
     private readonly ILanguageService _languageService;
@@ -175,8 +178,8 @@ internal sealed class InitCommand : BaseCommand
                 InteractionService.DisplayMessage(
                     KnownEmojis.Dizzy,
                     commands.Count == 1
-                        ? "Aspire AppHost created! To complete setup, run:"
-                        : "Aspire AppHost created! To complete setup, run one of:");
+                        ? InitCommandStrings.AppHostCreatedRunOne
+                        : InitCommandStrings.AppHostCreatedRunOneOf);
                 InteractionService.DisplayEmptyLine();
 
                 foreach (var command in commands)
@@ -202,7 +205,7 @@ internal sealed class InitCommand : BaseCommand
         {
             InteractionService.DisplayMessage(
                 KnownEmojis.Warning,
-                $"`aspire init {optionName}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.");
+                string.Format(CultureInfo.CurrentCulture, InitCommandStrings.DeprecatedOptionWarning, optionName));
         }
     }
 
@@ -259,7 +262,7 @@ internal sealed class InitCommand : BaseCommand
         var appHostPath = Path.Combine(workingDirectory.FullName, "apphost.cs");
         if (File.Exists(appHostPath))
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "apphost.cs already exists — skipping.");
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, "apphost.cs"));
             return CliExitCodes.Success;
         }
 
@@ -277,7 +280,7 @@ internal sealed class InitCommand : BaseCommand
             builder.Build().Run();
             """;
         File.WriteAllText(appHostPath, appHostContent);
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, "apphost.cs"));
 
         // Generate one set of ports so aspire.config.json (used by `aspire run`) and
         // apphost.run.json (used by `dotnet run apphost.cs`) agree on the dashboard /
@@ -341,7 +344,7 @@ internal sealed class InitCommand : BaseCommand
 
         if (Directory.Exists(appHostDirPath))
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostDirName}/ already exists — skipping.");
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, $"{appHostDirName}/"));
             return CliExitCodes.Success;
         }
 
@@ -405,7 +408,7 @@ internal sealed class InitCommand : BaseCommand
         var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
             selection,
             _runner,
-            "Installing Aspire project templates...",
+            InitCommandStrings.InstallingAspireProjectTemplates,
             statusEmoji: null,
             cancellationToken);
 
@@ -419,7 +422,7 @@ internal sealed class InitCommand : BaseCommand
         // Use the aspire-apphost template to generate a correct AppHost project
         // with proper launchSettings.json, .csproj, and Program.cs.
         var result = await InteractionService.ShowStatusAsync(
-            "Creating AppHost from template...",
+            InitCommandStrings.CreatingAppHostFromTemplate,
             async () =>
             {
                 return await _runner.NewProjectAsync(
@@ -433,11 +436,11 @@ internal sealed class InitCommand : BaseCommand
 
         if (result != 0)
         {
-            InteractionService.DisplayError($"Failed to create AppHost from template (exit code {result}).");
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToCreateAppHostFromTemplate, result));
             return CliExitCodes.FailedToCreateNewProject;
         }
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostDirName}/");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, $"{appHostDirName}/"));
 
         return CliExitCodes.Success;
     }
@@ -447,13 +450,20 @@ internal sealed class InitCommand : BaseCommand
         var language = _languageDiscovery.GetLanguageById(languageId)
             ?? throw new NotSupportedException($"Polyglot skeleton not yet supported for language: {languageId}");
 
-        var appHostFileName = language.AppHostFileName
-            ?? throw new NotSupportedException($"Polyglot skeleton not yet supported for language: {language.LanguageId}");
+        var existingAppHostFileName = language.DetectionPatterns
+            .Where(pattern => !pattern.Contains('*', StringComparison.Ordinal))
+            .FirstOrDefault(pattern => File.Exists(Path.Combine(workingDirectory.FullName, pattern)));
+        if (existingAppHostFileName is not null)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, existingAppHostFileName));
+            return CliExitCodes.Success;
+        }
 
-        var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
+        var appHostPath = ScaffoldingService.GetAppHostPath(workingDirectory, language);
+        var displayPath = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(workingDirectory.FullName, appHostPath));
         if (File.Exists(appHostPath))
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists — skipping.");
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, displayPath));
             return CliExitCodes.Success;
         }
 
@@ -464,7 +474,7 @@ internal sealed class InitCommand : BaseCommand
             return CliExitCodes.FailedToCreateNewProject;
         }
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostFileName}");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, displayPath));
         return CliExitCodes.Success;
     }
 
@@ -490,8 +500,8 @@ internal sealed class InitCommand : BaseCommand
                 }
                 catch (JsonException ex)
                 {
-                    InteractionService.DisplayError($"Failed to parse existing {AspireConfigFile.FileName} at '{configPath}': {ex.Message}");
-                    InteractionService.DisplayMessage(KnownEmojis.Warning, $"Fix or remove {AspireConfigFile.FileName} and re-run `aspire init`.");
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToParseExistingConfig, AspireConfigFile.FileName, configPath, ex.Message));
+                    InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FixOrRemoveConfigAndRerun, AspireConfigFile.FileName));
                     return (CliExitCodes.FailedToCreateNewProject, default);
                 }
             }
@@ -575,7 +585,7 @@ internal sealed class InitCommand : BaseCommand
 
         File.WriteAllText(configPath, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {AspireConfigFile.FileName}");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, AspireConfigFile.FileName));
         return (CliExitCodes.Success, effectivePorts);
     }
 
@@ -703,7 +713,7 @@ internal sealed class InitCommand : BaseCommand
 
         File.WriteAllText(path, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {fileName}");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, fileName));
     }
 
 }

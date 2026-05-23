@@ -25,6 +25,8 @@ internal sealed class DashboardRunCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly IInteractionService _interactionService;
     private readonly IBundleService _bundleService;
     private readonly LayoutProcessRunner _layoutProcessRunner;
@@ -84,7 +86,8 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
+        using var layoutLease = await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dashboard", cancellationToken).ConfigureAwait(false);
+        var layout = layoutLease?.Layout;
         if (layout is null)
         {
             return CommandResult.Failure(CliExitCodes.DashboardFailure, DashboardCommandStrings.BundleLayoutNotFound);
@@ -109,6 +112,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         // to avoid exposing them in process listings (e.g. ps, Task Manager).
         string? browserToken = null;
         var environmentVariables = new Dictionary<string, string>();
+        layoutLease?.AddEnvironment(environmentVariables);
         if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, ExecutionContext, KnownConfigNames.DashboardUnsecuredAllowAnonymous))
         {
             if (!ConfigSettingHasValue(unmatchedTokens, ExecutionContext, DashboardConfigNames.DashboardFrontendBrowserTokenName.EnvVarName))
@@ -369,10 +373,7 @@ internal sealed class DashboardRunCommand : BaseCommand
                     readyTcs.TrySetResult();
                 }
             },
-            StandardErrorCallback = line =>
-            {
-                outputCollector.AppendError(line);
-            },
+            StandardErrorCallback = outputCollector.AppendError,
         };
 
         IProcessExecution process;

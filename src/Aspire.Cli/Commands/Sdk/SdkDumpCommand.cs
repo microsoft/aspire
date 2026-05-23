@@ -147,7 +147,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             var prepareResult = await appHostServerProject.PrepareAsync(
                 VersionHelper.GetDefaultTemplateVersion(),
                 integrations,
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
             if (!prepareResult.Success)
             {
@@ -562,6 +562,9 @@ internal sealed class SdkDumpCommand : BaseCommand
 }
 
 #region Response DTOs (matching server response)
+
+// `aspire sdk dump --format json` uses these shapes; keep
+// docs/specs/cli-output-formats.md in sync when changing them.
 
 internal sealed class CapabilitiesInfo
 {

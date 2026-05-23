@@ -6,9 +6,11 @@ using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.TestServices;
 
-internal sealed class TestTypeScriptStarterProjectFactory(Func<DirectoryInfo, CancellationToken, Task<bool>> buildAndGenerateSdkAsync) : IAppHostProjectFactory
+internal sealed class TestTypeScriptStarterProjectFactory(Func<DirectoryInfo, CancellationToken, string?, Task<bool>> buildAndGenerateSdkAsync) : IAppHostProjectFactory
 {
     private readonly TestTypeScriptStarterProject _project = new(buildAndGenerateSdkAsync);
+
+    public TestTypeScriptStarterProject Project => _project;
 
     public IAppHostProject GetProject(LanguageInfo language)
     {
@@ -24,33 +26,41 @@ internal sealed class TestTypeScriptStarterProjectFactory(Func<DirectoryInfo, Ca
 
     public IAppHostProject? TryGetProject(FileInfo appHostFile)
     {
-        return appHostFile.Name.Equals("apphost.ts", StringComparison.OrdinalIgnoreCase) ? _project : null;
+        return IsTypeScriptAppHost(appHostFile) ? _project : null;
     }
 
     public IAppHostProject GetProject(FileInfo appHostFile)
     {
         return TryGetProject(appHostFile) ?? throw new NotSupportedException($"No handler available for AppHost file '{appHostFile.Name}'.");
     }
+
+    internal static bool IsTypeScriptAppHost(FileInfo appHostFile)
+    {
+        return appHostFile.Name.Equals("apphost.mts", StringComparison.OrdinalIgnoreCase) ||
+            appHostFile.Name.Equals("apphost.ts", StringComparison.OrdinalIgnoreCase);
+    }
 }
 
-internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, CancellationToken, Task<bool>> buildAndGenerateSdkAsync) : IAppHostProject, IGuestAppHostSdkGenerator
+internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, CancellationToken, string?, Task<bool>> buildAndGenerateSdkAsync) : IAppHostProject, IGuestAppHostSdkGenerator
 {
     public bool IsUnsupported { get; set; }
+
+    public string? LastPackageSourceOverride { get; private set; }
 
     public string LanguageId => KnownLanguageId.TypeScript;
 
     public string DisplayName => "TypeScript (Node.js)";
 
-    public string? AppHostFileName => "apphost.ts";
+    public string? AppHostFileName => "apphost.mts";
 
     public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<string[]>(["apphost.ts"]);
+        return Task.FromResult<string[]>(["apphost.mts", "apphost.ts"]);
     }
 
     public bool CanHandle(FileInfo appHostFile)
     {
-        return appHostFile.Name.Equals("apphost.ts", StringComparison.OrdinalIgnoreCase);
+        return TestTypeScriptStarterProjectFactory.IsTypeScriptAppHost(appHostFile);
     }
 
     public bool IsUsingProjectReferences(FileInfo appHostFile)
@@ -103,8 +113,10 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
         throw new NotImplementedException();
     }
 
-    public Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    public Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
-        return buildAndGenerateSdkAsync(directory, cancellationToken);
+        LastPackageSourceOverride = packageSourceOverride;
+        return buildAndGenerateSdkAsync(directory, cancellationToken, packageSourceOverride);
     }
+
 }

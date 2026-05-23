@@ -81,6 +81,28 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("--capture-profile", result.UnmatchedTokens);
     }
 
+    [Fact]
+    public void StartDebugSessionOption_IsOnlyAddedInExtensionContext()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var normalServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var normalProvider = normalServices.BuildServiceProvider();
+
+        var normalCommand = normalProvider.GetRequiredService<RootCommand>();
+        Assert.DoesNotContain(normalCommand.Options, option => ReferenceEquals(option, RootCommand.StartDebugSessionOption));
+
+        var extensionServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+        });
+        using var extensionProvider = extensionServices.BuildServiceProvider();
+
+        var extensionCommand = extensionProvider.GetRequiredService<RootCommand>();
+        Assert.Contains(extensionCommand.Options, option => ReferenceEquals(option, RootCommand.StartDebugSessionOption));
+    }
+
     [Theory]
     [InlineData("1", true)]
     [InlineData("true", true)]

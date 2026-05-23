@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
@@ -24,7 +26,36 @@ internal interface IProjectLocator
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
-    Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken);
+    Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Streams candidate AppHost projects as validation completes.
+    /// </summary>
+    /// <param name="searchDirectory">The directory to search recursively.</param>
+    /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
+    /// <param name="onDirectoryEnumerated">
+    /// Optional callback invoked synchronously on the discovery thread with the running total of directories
+    /// enumerated so callers can render progress before validation completes. See
+    /// <see cref="IAppHostCandidateFinder.FindCandidateFilesAsync"/> for caller obligations.
+    /// </param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>An async stream of candidate AppHost projects in validation-completion order.</returns>
+    async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        Action<int>? onDirectoryEnumerated = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken).ConfigureAwait(false);
+        foreach (var candidate in candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return candidate;
+        }
+    }
 
     /// <summary>
     /// Finds all candidate AppHost projects in the specified search directory up to the specified depth.
@@ -114,9 +145,12 @@ internal sealed class ProjectLocator(
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
-    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        CancellationToken cancellationToken)
     {
-        return await FindAppHostProjectsAsync(searchDirectory, scope, maxDepth: null, cancellationToken);
+        return await FindAppHostProjectsAsync(searchDirectory, scope, maxDepth: null, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -131,8 +165,68 @@ internal sealed class ProjectLocator(
     {
         var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth, cancellationToken);
         var candidates = allCandidates.BuildableAppHost.Concat(allCandidates.UnbuildableSuspectedAppHostProjects).ToList();
-        candidates.Sort((x, y) => x.AppHostFile.FullName.CompareTo(y.AppHostFile.FullName));
+        candidates.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
         return candidates;
+    }
+
+    public async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        Action<int>? onDirectoryEnumerated = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var channel = Channel.CreateUnbounded<AppHostProjectCandidate>(new UnboundedChannelOptions
+        {
+            SingleReader = true,
+            SingleWriter = false
+        });
+        using var discoveryCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var discoveryTask = CompleteFindAppHostProjectsStreamAsync(searchDirectory, scope, channel.Writer, onDirectoryEnumerated, discoveryCancellationTokenSource.Token);
+
+        try
+        {
+            await foreach (var candidate in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                yield return candidate;
+            }
+
+            await discoveryTask.ConfigureAwait(false);
+        }
+        finally
+        {
+            if (!discoveryTask.IsCompleted)
+            {
+                discoveryCancellationTokenSource.Cancel();
+            }
+
+            try
+            {
+                await discoveryTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (discoveryCancellationTokenSource.IsCancellationRequested)
+            {
+                // Enumeration can stop before discovery finishes (for example Ctrl+C). In that case
+                // cancellation is already being surfaced to the consumer through ReadAllAsync.
+            }
+        }
+    }
+
+    private async Task CompleteFindAppHostProjectsStreamAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        ChannelWriter<AppHostProjectCandidate> candidateWriter,
+        Action<int>? onDirectoryEnumerated,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth: null, cancellationToken, candidateWriter, onDirectoryEnumerated).ConfigureAwait(false);
+            candidateWriter.TryComplete();
+        }
+        catch (Exception ex)
+        {
+            candidateWriter.TryComplete(ex);
+        }
     }
 
     /// <summary>
@@ -181,7 +275,7 @@ internal sealed class ProjectLocator(
         return await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts, displayProgress: true, scope, maxDepth: null, cancellationToken);
     }
 
-    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
+    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -192,6 +286,19 @@ internal sealed class ProjectLocator(
             var hasUnsupportedProjects = false;
             var lockObject = new object();
             logger.LogDebug("Searching for project files in {SearchDirectory}", searchDirectory.FullName);
+
+            async ValueTask ReportCandidateFoundAsync(AppHostProjectCandidate appHostProject, CancellationToken cancellationToken)
+            {
+                if (candidateWriter is null)
+                {
+                    return;
+                }
+
+                // Candidate validation runs in parallel, but consumers want one async stream they can
+                // await in command code. A channel bridges those parallel workers to IAsyncEnumerable<T>
+                // without letting terminal or JSON rendering re-enter state protected by lockObject.
+                await candidateWriter.WriteAsync(appHostProject, cancellationToken).ConfigureAwait(false);
+            }
 
             using var validationCancellationTokenSource = stopAfterMultipleBuildableAppHosts
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
@@ -215,7 +322,7 @@ internal sealed class ProjectLocator(
 
             // Collect all candidates with their handlers across all patterns.
             var candidatesWithHandlers = new List<(FileInfo File, IAppHostProject Handler)>();
-            var candidateSearchResult = await appHostCandidateFinder.FindCandidateFilesAsync(searchDirectory, allPatterns, nugetCachePath, scope, cancellationToken, maxDepth);
+            var candidateSearchResult = await appHostCandidateFinder.FindCandidateFilesAsync(searchDirectory, allPatterns, nugetCachePath, scope, cancellationToken, maxDepth, onDirectoryEnumerated);
             var candidateFiles = candidateSearchResult.Files;
             var candidateCountsByPattern = candidateSearchResult.CountsByPattern;
 
@@ -271,19 +378,22 @@ internal sealed class ProjectLocator(
                     {
                         logger.LogDebug("Found {Language} apphost {CandidateFile}", handler.DisplayName, candidateFile.FullName);
                         var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
+                        AppHostProjectCandidate appHostProject;
                         if (displayProgress)
                         {
                             interactionService.DisplaySubtleMessage(relativePath);
                         }
                         lock (lockObject)
                         {
-                            appHostProjects.Add(new(candidateFile, handler.LanguageId));
+                            appHostProject = new AppHostProjectCandidate(candidateFile, handler.LanguageId);
+                            appHostProjects.Add(appHostProject);
 
                             if (stopAfterMultipleBuildableAppHosts && appHostProjects.Count >= 2)
                             {
                                 validationCancellationTokenSource?.Cancel();
                             }
                         }
+                        await ReportCandidateFoundAsync(appHostProject, ct).ConfigureAwait(false);
                     }
                     else if (validationResult.IsUnsupported)
                     {
@@ -301,14 +411,17 @@ internal sealed class ProjectLocator(
                     else if (validationResult.IsPossiblyUnbuildable)
                     {
                         var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
+                        AppHostProjectCandidate appHostProject;
                         if (displayProgress)
                         {
                             interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, relativePath));
                         }
                         lock (lockObject)
                         {
-                            unbuildableSuspectedAppHostProjects.Add(new(candidateFile, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable));
+                            appHostProject = new AppHostProjectCandidate(candidateFile, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable);
+                            unbuildableSuspectedAppHostProjects.Add(appHostProject);
                         }
+                        await ReportCandidateFoundAsync(appHostProject, ct).ConfigureAwait(false);
                     }
                     else
                     {
@@ -323,7 +436,7 @@ internal sealed class ProjectLocator(
 
             // This sort is done here to make results deterministic since we get all the app
             // host information in parallel and the order may vary.
-            appHostProjects.Sort((x, y) => x.AppHostFile.FullName.CompareTo(y.AppHostFile.FullName));
+            appHostProjects.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
 
             return (appHostProjects, unbuildableSuspectedAppHostProjects, hasUnsupportedProjects);
         }
@@ -579,6 +692,11 @@ internal sealed class ProjectLocator(
                     if (validationResult.IsValid)
                     {
                         logger.LogDebug("Using {Language} apphost {ProjectFile}", handler.DisplayName, projectFile.FullName);
+                        if (createSettingsFile)
+                        {
+                            await CreateSettingsFileAsync(projectFile, cancellationToken);
+                        }
+
                         return new AppHostProjectSearchResult(projectFile, [projectFile]);
                     }
                 }
@@ -707,6 +825,9 @@ internal sealed class ProjectLocator(
 
     private async Task CreateSettingsFileAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
+        FileInfo? settingsFile = null;
+        DirectoryInfo? appHostDirForScopedConfig = null;
+
         // Search from the apphost's directory upward for an existing config file.
         // This handles the case where "aspire new" created a project in a subdirectory
         // and the user runs "aspire run" from the parent without cd-ing first.
@@ -716,6 +837,8 @@ internal sealed class ProjectLocator(
             if (nearAppHost is not null)
             {
                 var configDir = Path.GetDirectoryName(nearAppHost)!;
+                var targetSettingsFilePath = nearAppHost;
+                AspireConfigFile? existingConfig;
 
                 // For legacy .aspire/settings.json, the config root is the parent of .aspire/
                 var trimmedConfigDir = configDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -726,9 +849,15 @@ internal sealed class ProjectLocator(
                     {
                         configDir = parentDir.FullName;
                     }
+
+                    targetSettingsFilePath = Path.Combine(configDir, AspireConfigFile.FileName);
+                    existingConfig = AspireConfigFile.LoadOrCreate(configDir);
+                }
+                else
+                {
+                    existingConfig = AspireConfigFile.Load(configDir);
                 }
 
-                var existingConfig = AspireConfigFile.Load(configDir);
                 if (existingConfig?.AppHost?.Path is { } existingPath)
                 {
                     // Resolve the stored path relative to the config file's directory.
@@ -745,10 +874,16 @@ internal sealed class ProjectLocator(
                         return;
                     }
                 }
+
+                settingsFile = new FileInfo(targetSettingsFilePath);
+                appHostDirForScopedConfig = appHostDir;
             }
         }
 
-        var settingsFile = GetOrCreateLocalAspireConfigFile();
+        // Only use the working-directory config after checking the selected AppHost's tree.
+        // GetOrCreateLocalAspireConfigFile can migrate legacy .aspire/settings.json into
+        // aspire.config.json, so calling it earlier would recreate the split-config bug.
+        settingsFile ??= GetOrCreateLocalAspireConfigFile();
         var fileExisted = settingsFile.Exists;
 
         logger.LogDebug("Creating settings file at {SettingsFilePath}", settingsFile.FullName);
@@ -756,20 +891,24 @@ internal sealed class ProjectLocator(
         var relativePathToProjectFile = Path.GetRelativePath(settingsFile.Directory!.FullName, projectFile.FullName).Replace(Path.DirectorySeparatorChar, '/');
 
         // Use the configuration writer to set the AppHost path, which will merge with any existing settings.
-        await configurationService.SetConfigurationAsync("appHost.path", relativePathToProjectFile, isGlobal: false, cancellationToken);
+        await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, "appHost.path", relativePathToProjectFile, cancellationToken);
 
         // For polyglot projects, also set language and inherit SDK version from parent/global config.
         var language = languageDiscovery.GetLanguageByFile(projectFile);
         if (language is not null && !language.LanguageId.Value.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase))
         {
-            await configurationService.SetConfigurationAsync("appHost.language", language.LanguageId.Value, isGlobal: false, cancellationToken);
+            await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, "appHost.language", language.LanguageId.Value, cancellationToken);
 
             // Inherit SDK version from parent/global config if available.
-            var inheritedSdkVersion = await configurationService.GetConfigurationAsync("sdk.version", cancellationToken)
-                ?? await configurationService.GetConfigurationAsync("sdkVersion", cancellationToken);
+            var inheritedSdkVersion = appHostDirForScopedConfig is not null
+                ? await configurationService.GetConfigurationFromDirectoryAsync("sdk.version", appHostDirForScopedConfig, continueSearchWhenKeyMissing: true, cancellationToken: cancellationToken)
+                    ?? await configurationService.GetConfigurationFromDirectoryAsync("sdkVersion", appHostDirForScopedConfig, continueSearchWhenKeyMissing: true, cancellationToken: cancellationToken)
+                : await configurationService.GetConfigurationAsync("sdk.version", cancellationToken)
+                    ?? await configurationService.GetConfigurationAsync("sdkVersion", cancellationToken);
+
             if (!string.IsNullOrEmpty(inheritedSdkVersion))
             {
-                await configurationService.SetConfigurationAsync("sdk.version", inheritedSdkVersion, isGlobal: false, cancellationToken);
+                await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, "sdk.version", inheritedSdkVersion, cancellationToken);
                 logger.LogDebug("Set SDK version {Version} in settings file (inherited from parent config)", inheritedSdkVersion);
             }
         }

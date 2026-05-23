@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
@@ -40,10 +40,10 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         // Step 1: Create a TypeScript AppHost (so we get the SDK version in aspire.config.json)
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 2: Create the integration project, update aspire.config.json, and modify apphost.ts
+        // Step 2: Create the integration project, update aspire.config.json, and modify apphost.mts
         {
             var workDir = workspace.WorkspaceRoot.FullName;
 
@@ -126,16 +126,16 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
             var updatedJson = config.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(configPath, updatedJson);
 
-            // Delete the generated .modules folder to force re-codegen with the new integration
-            var modulesDir = Path.Combine(workDir, ".modules");
+            // Delete the generated .aspire/modules folder to force re-codegen with the new integration
+            var modulesDir = Path.Combine(workDir, ".aspire", "modules");
             if (Directory.Exists(modulesDir))
             {
                 Directory.Delete(modulesDir, recursive: true);
             }
 
-            // Update apphost.ts to use the custom integration
-            File.WriteAllText(Path.Combine(workDir, "apphost.ts"), """
-                import { createBuilder } from './.modules/aspire.js';
+            // Update apphost.mts to use the custom integration
+            File.WriteAllText(Path.Combine(workDir, "apphost.mts"), """
+                import { createBuilder } from './.aspire/modules/aspire.mjs';
 
                 const builder = await createBuilder();
                 await builder.addMyService("my-svc");
@@ -163,7 +163,7 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
         // Step 4: Verify the custom integration was code-generated
-        await auto.TypeAsync("grep addMyService .modules/aspire.ts");
+        await auto.TypeAsync("grep addMyService .aspire/modules/aspire.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("addMyService", timeout: TimeSpan.FromSeconds(5));
         await auto.WaitForSuccessPromptAsync(counter);

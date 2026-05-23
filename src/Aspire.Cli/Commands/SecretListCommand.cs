@@ -56,6 +56,8 @@ internal sealed class SecretListCommand : BaseCommand
 
         if (format == OutputFormat.Json)
         {
+            // `aspire secret list --format json` uses a dynamic object keyed by secret name;
+            // keep docs/specs/cli-output-formats.md in sync when changing this shape.
             var obj = new JsonObject();
             foreach (var (key, value) in secrets.OrderBy(s => s.Key, StringComparer.OrdinalIgnoreCase))
             {

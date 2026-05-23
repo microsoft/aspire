@@ -54,6 +54,7 @@ public static class MauiMacCatalystExtensions
     /// <param name="builder">The MAUI project resource builder.</param>
     /// <param name="name">The name of the Mac Catalyst device resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new Mac Catalyst platform resource that will run the MAUI application
     /// targeting the Mac Catalyst platform using <c>dotnet run</c>. The resource does not auto-start 
@@ -74,7 +75,7 @@ public static class MauiMacCatalystExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Mac Catalyst platform resource for a .NET MAUI project.")]
+    [AspireExport]
     public static IResourceBuilder<MauiMacCatalystPlatformResource> AddMacCatalystDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name)

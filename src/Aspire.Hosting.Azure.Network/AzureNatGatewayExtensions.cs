@@ -20,6 +20,7 @@ public static class AzureNatGatewayExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the Azure NAT Gateway resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureNatGatewayResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The NAT Gateway is created with Standard SKU. If no Public IP Address is explicitly associated
     /// via <see cref="WithPublicIPAddress"/>, a Public IP Address is automatically created in the
@@ -35,7 +36,7 @@ public static class AzureNatGatewayExtensions
     ///     .WithNatGateway(natGateway);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an Azure NAT Gateway resource to the application model.")]
+    [AspireExport]
     public static IResourceBuilder<AzureNatGatewayResource> AddNatGateway(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -61,6 +62,7 @@ public static class AzureNatGatewayExtensions
     /// <param name="builder">The NAT Gateway resource builder.</param>
     /// <param name="publicIPAddress">The Public IP Address resource to associate.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureNatGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// When an explicit Public IP Address is provided, the NAT Gateway will not auto-create one.
     /// </remarks>
@@ -72,7 +74,7 @@ public static class AzureNatGatewayExtensions
     ///     .WithPublicIPAddress(pip);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Associates an Azure Public IP Address resource with an Azure NAT Gateway resource.")]
+    [AspireExport]
     public static IResourceBuilder<AzureNatGatewayResource> WithPublicIPAddress(
         this IResourceBuilder<AzureNatGatewayResource> builder,
         IResourceBuilder<AzurePublicIPAddressResource> publicIPAddress)

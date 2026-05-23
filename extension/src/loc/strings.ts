@@ -104,6 +104,8 @@ export const invalidTokenLength = vscode.l10n.t('Invalid token length in Authori
 export const authorizationHeaderMustStartWithBearer = vscode.l10n.t('Authorization header must start with \'Bearer \'.');
 export const authorizationAndDcpHeadersRequired = vscode.l10n.t('Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.');
 export const buildFailedForProjectWithError = (project: string, error: string) => vscode.l10n.t('Build failed for project {0} with error: {1}.', project, error);
+export const failedToInspectRuntimeConfig = (outputPath: string, error: string) => vscode.l10n.t('Failed to inspect runtimeconfig for {0}: {1}', outputPath, error);
+export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPath: string) => vscode.l10n.t('Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', outputPath, projectPath);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
 export const csharpDevKitNotInstalled = vscode.l10n.t('C# Dev Kit is not installed, building using dotnet CLI...');
 export const dismissLabel = vscode.l10n.t('Dismiss');
@@ -111,6 +113,7 @@ export const openCliInstallInstructions = vscode.l10n.t('See CLI installation in
 export const cliNotAvailable = vscode.l10n.t('Aspire CLI is not available on PATH. Please install it and restart VS Code.');
 export const cliFoundAtDefaultPath = (path: string) => vscode.l10n.t('Aspire CLI found at {0}. The extension will use this path.', path);
 export const selectDirectoryTitle = vscode.l10n.t('Select directory');
+export const unableToAddFolderToWorkspace = (path: string) => vscode.l10n.t('Unable to add folder to workspace: {0}', path);
 export const runningAspireRestore = (configPath: string) => vscode.l10n.t('Running aspire restore on {0} ...', configPath);
 export const runningAspireRestoreProgress = (completed: number, total: number) => vscode.l10n.t('Running aspire restore ({0}/{1} projects) ...', completed, total);
 export const aspireRestoreCompleted = (configPath: string) => vscode.l10n.t('Aspire restore completed for {0}.', configPath);

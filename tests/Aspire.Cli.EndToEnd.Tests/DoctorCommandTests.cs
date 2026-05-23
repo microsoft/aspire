@@ -91,12 +91,6 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilAsync(s =>
         {
-            // Wait for doctor to complete
-            if (!s.ContainsText("dev-certs"))
-            {
-                return false;
-            }
-
             // Fail if we see partial trust when SSL_CERT_DIR is configured
             if (s.ContainsText("partially trusted"))
             {
@@ -136,10 +130,17 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
+        if (TypeScriptAppHostToolchainTestHelpers.UsesCorepack(toolchain))
+        {
+            await auto.RunCommandFailFastAsync(
+                $"COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack prepare {TypeScriptAppHostToolchainTestHelpers.GetPackageManager(toolchain)} --activate",
+                counter,
+                TimeSpan.FromMinutes(2));
+        }
 
         // Verify the configured toolchain can start and stop the generated AppHost
         // before doctor is asked to report that the toolchain is missing from PATH.

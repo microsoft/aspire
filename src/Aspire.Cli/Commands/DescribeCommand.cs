@@ -24,6 +24,7 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// Output format for resources command (array wrapper).
 /// </summary>
+// `aspire describe --format json` uses this wrapper; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class ResourcesOutput
 {
     public required ResourceJson[] Resources { get; init; }

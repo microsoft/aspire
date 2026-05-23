@@ -56,9 +56,9 @@ public class Program
 {
     internal const string RootLoggerName = "Aspire.Cli";
 
-    private static string GetUsersAspirePath()
+    private static string GetUsersAspirePath(string? processPath = null)
     {
-        return CliPathHelper.GetAspireHomeDirectory();
+        return CliPathHelper.GetAspireHomeDirectory(processPath ?? Environment.ProcessPath);
     }
 
     /// <summary>
@@ -93,7 +93,7 @@ public class Program
     /// Parses logging options from command-line arguments.
     /// Returns all logging configuration including log level, debug mode, and file paths.
     /// </summary>
-    internal static CliLoggingOptions ParseLoggingOptions(string[]? args)
+    internal static CliLoggingOptions ParseLoggingOptions(string[]? args, string? processPath = null)
     {
         LogLevel? logLevel = null;
         var debugMode = false;
@@ -123,7 +123,7 @@ public class Program
             }
         }
 
-        var logsDirectory = Path.Combine(GetUsersAspirePath(), "logs");
+        var logsDirectory = Path.Combine(GetUsersAspirePath(processPath), "logs");
         var logFilePath = ParseLogFileOption(args) ?? FileLoggerProvider.GenerateLogFilePath(logsDirectory, TimeProvider.System);
 
         return new CliLoggingOptions(logLevel, debugMode, logsDirectory, logFilePath);
@@ -385,6 +385,8 @@ public class Program
 
         builder.Services.AddTransient<IDotNetCliRunner, DotNetCliRunner>();
         builder.Services.AddSingleton<IDiskCache, DiskCache>();
+        builder.Services.AddSingleton<IAppHostInfoDiskCache, AppHostInfoDiskCache>();
+        builder.Services.AddSingleton<IAppHostInfoResolver, AppHostInfoResolver>();
         builder.Services.AddSingleton<IDotNetSdkInstaller, DotNetSdkInstaller>();
         builder.Services.AddTransient<IAppHostCliBackchannel, AppHostCliBackchannel>();
 
@@ -410,6 +412,13 @@ public class Program
         builder.Services.AddSingleton<ICliUpdateNotifier, CliUpdateNotifier>();
         builder.Services.AddSingleton<IPackagingService, PackagingService>();
         builder.Services.AddSingleton<IBundlePayloadProvider, EmbeddedBundlePayloadProvider>();
+        builder.Services.AddSingleton<IInstallSidecarReader, InstallSidecarReader>();
+        builder.Services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
+        builder.Services.AddSingleton<IInstallationCandidateSource, PathInstallationCandidateSource>();
+        builder.Services.AddSingleton<IInstallationCandidateSource, ReleasePrefixInstallationCandidateSource>();
+        builder.Services.AddSingleton<IInstallationCandidateSource, DogfoodInstallationCandidateSource>();
+        builder.Services.AddSingleton<IInstallationCandidateSource, DotnetToolStoreInstallationCandidateSource>();
+        builder.Services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
         builder.Services.AddSingleton<IBundleService, BundleService>();
         builder.Services.AddSingleton<ProfileCaptureService>();
         builder.Services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
@@ -569,40 +578,41 @@ public class Program
         return app;
     }
 
-    private static DirectoryInfo GetHivesDirectory()
+    private static DirectoryInfo GetHivesDirectory(string? processPath = null)
     {
-        var homeDirectory = GetUsersAspirePath();
+        var homeDirectory = GetUsersAspirePath(processPath);
         var hivesDirectory = Path.Combine(homeDirectory, "hives");
         return new DirectoryInfo(hivesDirectory);
     }
 
-    private static DirectoryInfo GetSdksDirectory()
+    private static DirectoryInfo GetSdksDirectory(string? processPath = null)
     {
-        var homeDirectory = GetUsersAspirePath();
+        var homeDirectory = GetUsersAspirePath(processPath);
         var sdksPath = Path.Combine(homeDirectory, "sdks");
         return new DirectoryInfo(sdksPath);
     }
 
-    private static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, string channel)
+    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, string channel, string? processPath = null)
     {
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        var hivesDirectory = GetHivesDirectory();
-        var cacheDirectory = GetCacheDirectory();
-        var sdksDirectory = GetSdksDirectory();
-        var packagesDirectory = GetPackagesDirectory();
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel);
+        var hivesDirectory = GetHivesDirectory(processPath);
+        var cacheDirectory = GetCacheDirectory(processPath);
+        var sdksDirectory = GetSdksDirectory(processPath);
+        var packagesDirectory = GetPackagesDirectory(processPath);
+        var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel, aspireHomeDirectory: aspireHomeDirectory);
     }
 
-    private static DirectoryInfo GetCacheDirectory()
+    private static DirectoryInfo GetCacheDirectory(string? processPath = null)
     {
-        var homeDirectory = GetUsersAspirePath();
+        var homeDirectory = GetUsersAspirePath(processPath);
         var cacheDirectoryPath = Path.Combine(homeDirectory, "cache");
         return new DirectoryInfo(cacheDirectoryPath);
     }
 
-    private static DirectoryInfo GetPackagesDirectory()
+    private static DirectoryInfo GetPackagesDirectory(string? processPath = null)
     {
-        var homeDirectory = GetUsersAspirePath();
+        var homeDirectory = GetUsersAspirePath(processPath);
         var packagesDirectoryPath = Path.Combine(homeDirectory, "packages");
         return new DirectoryInfo(packagesDirectoryPath);
     }
@@ -646,7 +656,11 @@ public class Program
     {
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var isInformationalCommand = args.Any(a => CommonOptionNames.InformationalOptionNames.Contains(a));
-        var noLogo = args.Any(a => a == CommonOptionNames.NoLogo) || configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false) || isInformationalCommand;
+        var isMachineReadableOutput = HasMachineReadableOutputFormat(args);
+        var noLogo = args.Any(a => a == CommonOptionNames.NoLogo)
+            || configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false)
+            || isInformationalCommand
+            || isMachineReadableOutput;
         var showBanner = args.Any(a => a == CommonOptionNames.Banner);
 
         var sentinel = serviceProvider.GetRequiredService<IFirstTimeUseNoticeSentinel>();
@@ -678,12 +692,41 @@ public class Program
             }
 
             // Don't persist the sentinel for informational commands (--version, --help, etc.)
-            // so the first-run experience is shown on the next real command invocation.
-            if (!isInformationalCommand)
+            // or for machine-readable invocations (--format json, including the hidden
+            // `doctor --self --format json` peer probe). Otherwise an automation invocation
+            // or peer probe — which deliberately suppressed the user-facing notice — would
+            // silently consume the first-run slot, and the next interactive invocation by
+            // the same user would never see the telemetry notice.
+            if (!isInformationalCommand && !isMachineReadableOutput)
             {
                 sentinel.CreateIfNotExists();
             }
         }
+    }
+
+    // Machine-readable output flags should never have welcome/telemetry text
+    // interleaved with the structured payload. Today the only such flag is
+    // `--format json` (consumed by `aspire doctor`); extend this scan if new
+    // options are added.
+    private static bool HasMachineReadableOutputFormat(string[] args)
+    {
+        for (var i = 0; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (arg.Equals("--format=json", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (arg.Equals("--format", StringComparison.OrdinalIgnoreCase)
+                && i + 1 < args.Length
+                && args[i + 1].Equals("json", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static IAnsiConsole BuildAnsiConsole(IServiceProvider serviceProvider, TextWriter writer)
@@ -729,7 +772,7 @@ public class Program
         // Setup handling of CTRL-C and SIGTERM as early as possible so that if
         // we get a signal anywhere that is not handled by Spectre Console
         // already that we know to trigger cancellation.
-        using var cancellationManager = new ConsoleCancellationManager();
+        using var cancellationManager = new ConsoleCancellationManager(processTerminationTimeout: TimeSpan.FromSeconds(5));
 
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -788,7 +831,9 @@ public class Program
         var invokeConfig = new InvocationConfiguration()
         {
             // Disable default exception handler so we can log exceptions to telemetry.
-            EnableDefaultExceptionHandler = false
+            EnableDefaultExceptionHandler = false,
+            // Set timeout to null so that System.Commandline doesn't manage cancellation tokens or timeouts for us.
+            ProcessTerminationTimeout = null
         };
 
         app.Services.GetRequiredService<CliExecutionContext>();
@@ -833,7 +878,22 @@ public class Program
                         profileCommandActivity = profilingTelemetry.StartCommand(commandName);
                     }
 
-                    exitCode = await parseResult.InvokeAsync(invokeConfig, cancellationManager.Token);
+                    // Parse commandline and invoke the handler.
+                    var handlerTask = parseResult.InvokeAsync(invokeConfig, cancellationManager.Token);
+                    cancellationManager.SetStartedHandler(handlerTask);
+
+                    // Wait for either the handler to complete or a termination signal to trigger cancellation and timeout.
+                    var firstCompletedTask = await Task.WhenAny(handlerTask, cancellationManager.ProcessTerminationCompletionSource.Task);
+                    if (firstCompletedTask != handlerTask)
+                    {
+                        // The termination signal triggered cancellation and the timeout has completed. Kill the process.
+                        // handlerTask is not awaited because the process is shutting down and we assume the task is hung.
+                        logger.LogWarning("Timeout waiting for cancellation from termination signal.");
+                    }
+
+                    exitCode = await firstCompletedTask; // return the result or propagate the exception
+
+                    // Set telemetry tags based on how the command completed.
                     profileCommandActivity.SetProcessExitCode(exitCode);
                     if (exitCode != CliExitCodes.Success)
                     {
@@ -850,30 +910,18 @@ public class Program
             }
             catch (Exception ex)
             {
-                exitCode = 1;
-                // Catch block is used instead of System.Commandline's default handler behavior.
-                // Allows logging of exceptions to telemetry.
+                // Should never get here because RootCommand's handler should catch all exceptions, but log just in case.
+                exitCode = CliExitCodes.InvalidCommand;
 
-                // Don't log or display cancellation exceptions.
-                // Check both Ctrl+C cancellation (cancellationManager.IsCancellationRequested) and
-                // extension prompt cancellation (ExtensionOperationCanceledException).
-                if (!(ex is OperationCanceledException && cancellationManager.IsCancellationRequested) && ex is not ExtensionOperationCanceledException)
-                {
-                    logger.LogError(ex, "An unexpected error occurred.");
-
-                    telemetry.RecordError("An unexpected error occurred.", ex);
-
-                    errorWriter.WriteLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message));
-                }
-
-                // Log exit code for debugging
-                logger.LogError("Exit code: {ExitCode} (exception)", exitCode);
-
-                mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
+                logger.LogError(ex, "An unexpected error occurred.");
+                telemetry.RecordError("An unexpected error occurred.", ex);
+                errorWriter.WriteLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message));
             }
-
-            mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
-            mainActivity?.Stop();
+            finally
+            {
+                mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
+                mainActivity?.Stop();
+            }
 
             if (profileCaptureSession is not null)
             {

@@ -40,11 +40,15 @@ internal interface IAppHostServerProject
     /// </summary>
     /// <param name="sdkVersion">The Aspire SDK version to use.</param>
     /// <param name="integrations">The integration references (NuGet packages and/or project references) required by the app host.</param>
+    /// <param name="requestedChannel">The package channel to use for this prepare operation, or <see langword="null" /> to use the project configuration.</param>
+    /// <param name="packageSourceOverride">Optional package source to prefer for Aspire package restore.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The preparation result indicating success/failure and any output.</returns>
     Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
+        string? requestedChannel = null,
+        string? packageSourceOverride = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

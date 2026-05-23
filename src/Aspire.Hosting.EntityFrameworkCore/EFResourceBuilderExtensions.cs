@@ -114,7 +114,7 @@ public static class EFResourceBuilderExtensions
     /// <summary>
     /// Adds EF Core migration management for polyglot app hosts.
     /// </summary>
-    [AspireExport("addEFMigrations", Description = "Adds EF Core migration management for auto-detected DbContext types or for a specific DbContext type identified by name")]
+    [AspireExport("addEFMigrations")]
     internal static IResourceBuilder<EFMigrationResource> AddEFMigrationsForPolyglot(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,
@@ -209,7 +209,8 @@ public static class EFResourceBuilderExtensions
 
     internal static IEnumerable<PipelineStep> CreateMigrationPipelineStep(PipelineStepFactoryContext context)
     {
-        if (context.Resource is not EFMigrationResource migrationResource
+        if (context.PipelineContext.ExecutionContext.IsRunMode
+            || context.Resource is not EFMigrationResource migrationResource
             || (!migrationResource.PublishAsMigrationScript && !migrationResource.PublishAsMigrationBundle))
         {
             return [];
@@ -553,11 +554,11 @@ public static class EFResourceBuilderExtensions
             .WithParentRelationship(migrationBuilder)
             .WithWorkingDirectory(startupProjectDir)
             .WithExplicitStart()
+            .WithHidden()
             .WithInitialState(new CustomResourceSnapshot
             {
                 ResourceType = "Tool",
-                Properties = [],
-                IsHidden = true
+                Properties = []
             });
 
         // Register the EF-specific start command. The tool resource is captured by the closure

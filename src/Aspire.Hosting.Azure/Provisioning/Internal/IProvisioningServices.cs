@@ -244,14 +244,3 @@ internal interface IUserPrincipalProvider
     /// </summary>
     Task<UserPrincipal> GetUserPrincipalAsync(CancellationToken cancellationToken = default);
 }
-
-/// <summary>
-/// Provides access to Azure token credentials.
-/// </summary>
-internal interface ITokenCredentialProvider
-{
-    /// <summary>
-    /// Gets the token credential for Azure authentication.
-    /// </summary>
-    TokenCredential TokenCredential { get; }
-}

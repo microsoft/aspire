@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Text;
+using System.Xml.Linq;
 
 namespace Aspire.Hosting.Tests;
 
@@ -239,11 +241,48 @@ public class MSBuildTests
 
     private static (int ExitCode, string Output) BuildProjectCore(string workingDirectory)
     {
+        return RunDotNet(workingDirectory, "build --disable-build-servers", timeoutMilliseconds: 180_000);
+    }
+
+    private static string PackProject(string projectFile, string outputDirectory, string packageId)
+    {
+        var workingDirectory = Path.GetDirectoryName(projectFile);
+        Assert.NotNull(workingDirectory);
+
+        var result = RunDotNet(
+            workingDirectory,
+            $"pack \"{projectFile}\" --disable-build-servers -o \"{outputDirectory}\"",
+            timeoutMilliseconds: 300_000);
+
+        Assert.True(result.ExitCode == 0, $"Pack failed: {Environment.NewLine}{result.Output}");
+
+        return Directory.GetFiles(outputDirectory, $"{packageId}.*.nupkg")
+            .Single(path => !path.EndsWith(".snupkg", StringComparison.Ordinal));
+    }
+
+    private static string ReadPackageVersion(string packagePath)
+    {
+        using var archive = ZipFile.OpenRead(packagePath);
+        var nuspecEntry = archive.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal));
+        using var stream = nuspecEntry.Open();
+        var document = XDocument.Load(stream);
+        var version = document.Root?
+            .Descendants()
+            .FirstOrDefault(element => element.Name.LocalName == "version")?
+            .Value;
+
+        Assert.False(string.IsNullOrEmpty(version), $"Could not determine package version from {packagePath}.");
+
+        return version!;
+    }
+
+    private static (int ExitCode, string Output) RunDotNet(string workingDirectory, string arguments, int timeoutMilliseconds)
+    {
         var output = new StringBuilder();
         var outputDone = new ManualResetEvent(false);
         using var process = new Process();
         // set '--disable-build-servers' so the MSBuild and Roslyn server processes don't hang around, which may hang the test in CI
-        process.StartInfo = new ProcessStartInfo("dotnet", "build --disable-build-servers")
+        process.StartInfo = new ProcessStartInfo("dotnet", arguments)
         {
             RedirectStandardOutput = true,
             UseShellExecute = false,
@@ -264,7 +303,7 @@ public class MSBuildTests
         process.Start();
         process.BeginOutputReadLine();
 
-        Assert.True(process.WaitForExit(milliseconds: 180_000), "dotnet build command timed out after 3 minutes.");
+        Assert.True(process.WaitForExit(milliseconds: timeoutMilliseconds), $"dotnet {arguments} command timed out.");
         Assert.True(outputDone.WaitOne(millisecondsTimeout: 60_000), "Timed out waiting for output to complete.");
 
         return (process.ExitCode, output.ToString());
@@ -679,6 +718,136 @@ public class MSBuildTests
         var output = BuildProject(projectDirectory);
 
         Assert.Contains("warning ASPIREEXPORT008", output);
+    }
+
+    [Fact]
+    public void AspireIntegrationAnalyzerPackageContainsExpectedAssets()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var tempDirectory = new TestTempDirectory();
+
+        var packageOutputPath = Path.Combine(tempDirectory.Path, "packages");
+        Directory.CreateDirectory(packageOutputPath);
+
+        var packagePath = PackProject(
+            Path.Combine(repoRoot, "src", "Aspire.Hosting.Integration.Analyzers", "Aspire.Hosting.Integration.Analyzers.csproj"),
+            packageOutputPath,
+            "Aspire.Hosting.Integration.Analyzers");
+
+        using var archive = ZipFile.OpenRead(packagePath);
+
+        Assert.Contains(archive.Entries, entry => entry.FullName == "analyzers/dotnet/cs/Aspire.Hosting.Integration.Analyzers.dll");
+        Assert.Contains(archive.Entries, entry => entry.FullName == "README.md");
+        Assert.DoesNotContain(archive.Entries, entry => entry.FullName.StartsWith("lib/", StringComparison.Ordinal));
+
+        var nuspecEntry = archive.Entries.Single(entry => entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal));
+        using var nuspecReader = new StreamReader(nuspecEntry.Open());
+        var nuspec = nuspecReader.ReadToEnd();
+
+        Assert.DoesNotContain("<dependency", nuspec, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AspireIntegrationAnalyzerPackageCanBeConsumedFromLocalSource()
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var tempDirectory = new TestTempDirectory();
+
+        var packageOutputPath = Path.Combine(tempDirectory.Path, "packages");
+        Directory.CreateDirectory(packageOutputPath);
+
+        var analyzerPackagePath = PackProject(
+            Path.Combine(repoRoot, "src", "Aspire.Hosting.Integration.Analyzers", "Aspire.Hosting.Integration.Analyzers.csproj"),
+            packageOutputPath,
+            "Aspire.Hosting.Integration.Analyzers");
+
+        var analyzerVersion = ReadPackageVersion(analyzerPackagePath);
+
+        var projectDirectory = Path.Combine(tempDirectory.Path, "MyHostingExtension");
+        Directory.CreateDirectory(projectDirectory);
+        var nuGetConfigPath = Path.Combine(projectDirectory, "NuGet.config");
+
+        File.WriteAllText(nuGetConfigPath,
+            $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+              <packageSources>
+                <clear />
+                <add key="local" value="{packageOutputPath}" />
+                <add key="dotnet-public" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json" />
+                <add key="dotnet-eng" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json" />
+                <add key="dotnet9" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
+                <add key="dotnet10" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet10/nuget/v3/index.json" />
+                <add key="dotnet-libraries" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-libraries/nuget/v3/index.json" />
+                <add key="dotnet9-transport" value="https://dnceng.pkgs.visualstudio.com/public/_packaging/dotnet9-transport/nuget/v3/index.json" />
+              </packageSources>
+              <packageSourceMapping>
+                <packageSource key="local">
+                  <package pattern="Aspire.Hosting.Integration.Analyzers" />
+                </packageSource>
+                <packageSource key="dotnet9-transport">
+                  <package pattern="*WorkloadBuildTasks*" />
+                </packageSource>
+                <packageSource key="dotnet-public">
+                  <package pattern="*" />
+                  <package pattern="Microsoft.FluentUI.AspNetCore.Components" />
+                  <package pattern="Microsoft.FluentUI.AspNetCore.Components.Icons" />
+                </packageSource>
+                <packageSource key="dotnet9">
+                  <package pattern="*" />
+                </packageSource>
+                <packageSource key="dotnet10">
+                  <package pattern="*" />
+                </packageSource>
+                <packageSource key="dotnet-libraries">
+                  <package pattern="Microsoft.DeveloperControlPlane*" />
+                </packageSource>
+                <packageSource key="dotnet-eng">
+                  <package pattern="*" />
+                </packageSource>
+              </packageSourceMapping>
+            </configuration>
+            """);
+
+        File.WriteAllText(Path.Combine(projectDirectory, "MyHostingExtension.csproj"),
+            $"""
+            <Project Sdk="Microsoft.NET.Sdk">
+
+              <PropertyGroup>
+                <TargetFramework>net8.0</TargetFramework>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+                <RestoreConfigFile>{nuGetConfigPath}</RestoreConfigFile>
+              </PropertyGroup>
+
+              <ItemGroup>
+                <PackageReference Include="Aspire.Hosting.Integration.Analyzers" Version="{analyzerVersion}" PrivateAssets="all" />
+                <ProjectReference Include="{repoRoot}\src\Aspire.Hosting\Aspire.Hosting.csproj" />
+              </ItemGroup>
+
+            </Project>
+            """);
+
+        File.WriteAllText(Path.Combine(projectDirectory, "Extensions.cs"),
+            """
+            using Aspire.Hosting;
+            using Aspire.Hosting.ApplicationModel;
+
+            namespace MyHostingExtension;
+
+            public static class CustomResourceExtensions
+            {
+                public static IResourceBuilder<ContainerResource> AddCustomContainer(this IDistributedApplicationBuilder builder)
+                {
+                    return builder.AddContainer("custom", "custom-image");
+                }
+            }
+            """);
+
+        var output = BuildProject(projectDirectory);
+
+        Assert.Contains("warning ASPIREEXPORT008", output);
+        Assert.DoesNotContain("CS8032", output);
     }
 
     private static void CreateExportAnalyzerDirectoryBuildFiles(

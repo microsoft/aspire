@@ -87,6 +87,12 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation # A URL tha
   DisplayText: string # The name of the URL. When rendered as a link this will be used as the linked text.
   Endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference # The endpoint associated with this URL. Can be null if this URL is not associated with an endpoint.
   Url: string # The URL. When rendered as a link this will be used as the link target.
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateResourceSnapshot # Resource snapshot data exposed to polyglot command state callbacks.
+  ExitCode?: number # The exit code of the resource.
+  HealthStatus?: enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus # The current health status for the resource.
+  ResourceType: string # The type of the resource.
+  State?: string # The current lifecycle state text for the resource.
+  StateStyle?: string # The display style for the current lifecycle state.
 Aspire.Hosting/Aspire.Hosting.Ats.CreateBuilderOptions # Options for creating a distributed application builder from polyglot apphosts.
   AllowUnsecuredTransport: boolean # Allows the use of HTTP urls for the AppHost resource endpoint.
   AppHostFilePath: string # The full path to the AppHost file (e.g., apphost.ts, apphost.py). Used for consistent socket path computation across CLI and AppHost.
@@ -115,6 +121,7 @@ enum:Aspire.Hosting.ApplicationModel.UrlDisplayLocation = SummaryAndDetails | De
 enum:Aspire.Hosting.ApplicationModel.WaitBehavior = WaitOnResourceUnavailable | StopOnResourceUnavailable
 enum:Aspire.Hosting.DistributedApplicationOperation = Run | Publish
 enum:Aspire.Hosting.OtlpProtocol = Grpc | HttpProtobuf | HttpJson
+enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus = Unhealthy | Degraded | Healthy
 enum:System.Net.Sockets.ProtocolType = IP | IPv6HopByHopOptions | Unspecified | Icmp | Igmp | Ggp | IPv4 | Tcp | Pup | Udp | Idp | IPv6 | IPv6RoutingHeader | IPv6FragmentHeader | IPSecEncapsulatingSecurityPayload | IPSecAuthenticationHeader | IcmpV6 | IPv6NoNextHeader | IPv6DestinationOptions | ND | Raw | Ipx | Spx | SpxII | Unknown
 
 # Capabilities
@@ -164,10 +171,8 @@ Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.resource(context: Asp
 Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.setLogger(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext, value: Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentCallbackContext
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> cancellationToken
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.resourceName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> string
-Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setCancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext, value: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext
 Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setResourceName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext, value: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext
-Aspire.Hosting.ApplicationModel/ExecuteCommandContext.setServiceProvider(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext, value: System.ComponentModel/System.IServiceProvider) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext
 Aspire.Hosting.ApplicationModel/getValue(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression, cancellationToken: cancellationToken) -> string
 Aspire.Hosting.ApplicationModel/getValueAsync(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference, cancellationToken?: cancellationToken) -> string
 Aspire.Hosting.ApplicationModel/InitializeResourceEvent.eventing(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.InitializeResourceEvent) -> Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing
@@ -188,8 +193,7 @@ Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.logger(context: Aspi
 Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.setLogger(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext, value: Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext
 Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.urls(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlsCallbackContext) -> Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation>
-Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext) -> System.ComponentModel/System.IServiceProvider
-Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.setServiceProvider(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext, value: System.ComponentModel/System.IServiceProvider) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext
+Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateResourceSnapshot
 Aspire.Hosting.Eventing/IDistributedApplicationEventing.unsubscribe(context: Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing, subscription: Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription) -> void
 Aspire.Hosting.Pipelines/dependsOn(context: Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep, stepName: string) -> void
 Aspire.Hosting.Pipelines/getStepsByTag(context: Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext, tag: string) -> Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep[]

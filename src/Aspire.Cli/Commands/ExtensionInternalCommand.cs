@@ -35,8 +35,6 @@ internal sealed class ExtensionInternalCommand : BaseCommand
             _projectLocator = projectLocator;
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             try
@@ -60,6 +58,8 @@ internal sealed class ExtensionInternalCommand : BaseCommand
     }
 }
 
+// `aspire extension get-apphosts` is a hidden tooling output; keep
+// docs/specs/cli-output-formats.md in sync when changing this shape.
 internal class AppHostProjectSearchResultPoco
 {
     [JsonPropertyName("selected_project_file")]

@@ -34,6 +34,14 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
     /// </summary>
     public Func<FileInfo, CancellationToken, Task<AppHostValidationResult>>? ValidateAppHostAsyncCallback { get; set; }
 
+    public Func<AppHostProjectContext, CancellationToken, Task<int>>? RunAsyncCallback { get; set; }
+
+    public Func<UpdatePackagesContext, CancellationToken, Task<UpdatePackagesResult>>? UpdatePackagesAsyncCallback { get; set; }
+
+    public string LanguageId { get; set; } = "csharp";
+
+    public string DisplayName { get; set; } = "C# (.NET)";
+
     /// <summary>
     /// Optional detection patterns to advertise from the test project.
     /// </summary>
@@ -83,7 +91,7 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
 
     public IAppHostProject? GetProjectByLanguageId(string languageId)
     {
-        if (languageId.Equals("csharp", StringComparison.OrdinalIgnoreCase))
+        if (languageId.Equals(LanguageId, StringComparison.OrdinalIgnoreCase))
         {
             return _testProject;
         }
@@ -140,8 +148,8 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
         }
 
         public bool IsUnsupported { get; set; }
-        public string LanguageId => "csharp";
-        public string DisplayName => "C# (.NET)";
+        public string LanguageId => _factory.LanguageId;
+        public string DisplayName => _factory.DisplayName;
         public string? AppHostFileName => "AppHost.csproj";
 
         public bool IsUsingProjectReferences(FileInfo appHostFile)
@@ -175,7 +183,9 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
             => throw new NotImplementedException();
 
         public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken)
-            => throw new NotImplementedException();
+            => _factory.RunAsyncCallback is not null
+                ? _factory.RunAsyncCallback(context, cancellationToken)
+                : throw new NotImplementedException();
 
         public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
             => throw new NotImplementedException();
@@ -220,7 +230,9 @@ internal sealed class TestAppHostProjectFactory : IAppHostProjectFactory
             => throw new NotImplementedException();
 
         public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
-            => throw new NotImplementedException();
+            => _factory.UpdatePackagesAsyncCallback is not null
+                ? _factory.UpdatePackagesAsyncCallback(context, cancellationToken)
+                : throw new NotImplementedException();
 
         public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
             => Task.FromResult(RunningInstanceResult.NoRunningInstance);

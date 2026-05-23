@@ -21,6 +21,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// with auto-inferred listeners and one or more <c>HTTPRoute</c> resources in the Helm chart output.
 /// </para>
 /// </remarks>
+/// <ats-remarks />
 /// <example>
 /// <code>
 /// var k8s = builder.AddKubernetesEnvironment("k8s");

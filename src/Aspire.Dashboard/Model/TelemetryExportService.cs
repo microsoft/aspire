@@ -792,6 +792,16 @@ public sealed class TelemetryExportService
             return JsonValue.Create(stringValue);
         }
 
+        if (value.HasNumberValue)
+        {
+            return JsonValue.Create(value.NumberValue);
+        }
+
+        if (value.HasBoolValue)
+        {
+            return JsonValue.Create(value.BoolValue);
+        }
+
         if (value.ListValue is not null)
         {
             var array = new JsonArray();

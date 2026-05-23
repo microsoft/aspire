@@ -7,6 +7,14 @@ The app consists of two services:
 - **NodeFrontend**: This is a simple Express-based Node.js app that renders a table of weather forecasts retrieved from a backend API and utilizes a Redis cache.
 - **AspireWithNode.AspNetCoreApi**: This is an HTTP API that returns randomly generated weather forecast data.
 
+The frontend uses pnpm and Aspire's generated JavaScript Dockerfile support. The AppHost configures it with `WithPnpm()` and `PublishAsNpmScript("start")`, so publish mode builds a production container from the package metadata and runs the app through the package manager script.
+
+The AppHost also includes Docker Compose publishing support. To deploy this sample locally with Docker Compose, run:
+
+```shell
+aspire deploy
+```
+
 ## Pre-requisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)

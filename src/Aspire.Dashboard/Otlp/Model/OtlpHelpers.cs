@@ -4,7 +4,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -467,18 +466,23 @@ public static partial class OtlpHelpers
             // Semantically when InstrumentationScope isn't set, it is equivalent with
             // an empty instrumentation scope name (unknown).
             var name = scope?.Name ?? string.Empty;
-            ref var scopeRef = ref CollectionsMarshal.GetValueRefOrAddDefault(scopes, name, out _);
-            // Adds to dictionary if not present.
-            if (scopeRef == null)
+            if (scopes.TryGetValue(name, out s))
             {
-                scopeRef = (scope != null)
-                    ? new OtlpScope(scope.Name, scope.Version, scope.Attributes.ToKeyValuePairs(context))
-                    : OtlpScope.Empty;
-
-                context.Logger.LogTrace("Added scope '{ScopeName}' to {TelemetryType}.", scopeRef.Name, telemetryType);
+                return true;
             }
 
-            s = scopeRef;
+            if (scopes.Count >= TelemetryRepository.MaxScopeCount)
+            {
+                throw new InvalidOperationException($"Scope limit of {TelemetryRepository.MaxScopeCount} reached for {telemetryType}. Scope '{name}' will not be added.");
+            }
+
+            s = (scope != null)
+                ? new OtlpScope(scope.Name, scope.Version, scope.Attributes.ToKeyValuePairs(context))
+                : OtlpScope.Empty;
+
+            scopes.Add(name, s);
+
+            context.Logger.LogTrace("Added scope '{ScopeName}' to {TelemetryType}.", s.Name, telemetryType);
             return true;
         }
         catch (Exception ex)

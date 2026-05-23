@@ -76,7 +76,6 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
         const string projectName = "ChannelUpdateTsApp";
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-        var appHostPath = Path.Combine(projectPath, "apphost.ts");
         var aspireConfigPath = Path.Combine(projectPath, "aspire.config.json");
 
         // Step 1: Create the empty TypeScript AppHost. No --channel is passed so the CLI uses its
@@ -105,6 +104,11 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         }
 
         output.WriteLine($"Initial channel: {initialChannel}");
+        var appHostRelativePath = ReadAspireConfigAppHostPath(aspireConfigPath);
+        var appHostPath = Path.GetFullPath(Path.Combine(projectPath, appHostRelativePath));
+        var generatedModuleImport = appHostRelativePath.EndsWith(".mts", StringComparison.OrdinalIgnoreCase)
+            ? "./.aspire/modules/aspire.mjs"
+            : "./.aspire/modules/aspire.js";
 
         await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
 
@@ -123,12 +127,12 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             IsStableVersion(redisVersionBefore),
             $"Expected a non-stable Aspire.Hosting.Redis version before 'aspire update --channel stable', got '{redisVersionBefore}'.");
 
-        // Step 5: Wire the cache resource into apphost.ts so the project has an actual resource to
+        // Step 5: Wire the cache resource into the scaffolded AppHost so the project has an actual resource to
         // start and describe. Without this, the empty AppHost has no resources and `aspire describe`
         // would have nothing to assert against.
         await File.WriteAllTextAsync(appHostPath,
-            """
-            import { createBuilder } from './.modules/aspire.js';
+            $$"""
+            import { createBuilder } from '{{generatedModuleImport}}';
 
             const builder = await createBuilder();
             await builder.addRedis("cache");
@@ -182,8 +186,8 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
                 $"Expected the post-update 'aspire add' to resolve a stable Aspire.Hosting.PostgreSQL version, got '{postgresVersion}'.");
 
             // Step 11: Boot once more to confirm the project still runs after the channel switch.
-            // apphost.ts still wires only the cache resource — PostgreSQL was added to config but not
-            // wired in apphost.ts, which is sufficient for the user-facing "package can be added from
+            // The AppHost still wires only the cache resource — PostgreSQL was added to config but not
+            // wired in the AppHost, which is sufficient for the user-facing "package can be added from
             // stable channel" assertion.
             await auto.AspireStartAsync(counter);
             await auto.AssertResourcesExistAsync(counter, "cache");
@@ -232,6 +236,30 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
                channelElement.ValueKind == JsonValueKind.String
             ? channelElement.GetString()
             : null;
+    }
+
+    private static string ReadAspireConfigAppHostPath(string aspireConfigPath)
+    {
+        if (!File.Exists(aspireConfigPath))
+        {
+            throw new FileNotFoundException($"Expected aspire.config.json at: {aspireConfigPath}", aspireConfigPath);
+        }
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(aspireConfigPath));
+        if (!doc.RootElement.TryGetProperty("appHost", out var appHost) ||
+            appHost.ValueKind != JsonValueKind.Object)
+        {
+            throw new InvalidOperationException($"aspire.config.json has no 'appHost' object. Path: {aspireConfigPath}");
+        }
+
+        if (!appHost.TryGetProperty("path", out var pathElement) ||
+            pathElement.ValueKind != JsonValueKind.String)
+        {
+            throw new InvalidOperationException($"aspire.config.json#appHost does not contain a string 'path' entry. Path: {aspireConfigPath}");
+        }
+
+        return pathElement.GetString()
+            ?? throw new InvalidOperationException($"aspire.config.json#appHost.path was null. Path: {aspireConfigPath}");
     }
 
     private static string ReadAspireConfigPackageVersion(string aspireConfigPath, string packageId)

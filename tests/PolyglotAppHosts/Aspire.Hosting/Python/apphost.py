@@ -111,6 +111,18 @@ with create_builder() as builder:
     # addParameterFromConfiguration
     config_param = builder.add_parameter_from_config("parameter", "Config:Key")
     secret_param = builder.add_parameter_from_config("parameter", "Config:Key")
+    custom_input_param = builder.add_parameter("custom-input")
+    custom_input_param.with_custom_input(
+        {
+            "InputType": "Number",
+            "Label": "Worker Count",
+            "Placeholder": "Enter number (1-10)",
+            "Options": {
+                "one": "One",
+                "two": "Two",
+            },
+        }
+    )
     # withDockerfileBaseImage
     container.with_dockerfile_base_image()
     # withImageRegistry
@@ -130,6 +142,7 @@ with create_builder() as builder:
     built_connection_string.with_connection_property_value("Key", "Value")
     container.with_reference(endpoint)
     container.with_reference("https://example.com/", name="external-uri")
+    external_service = builder.add_external_service("external-service", "https://example.com")
     built_connection_string.with_connection_property("Host", expr)
     built_connection_string.with_connection_property("Mode", "Development")
     vnet = builder.add_azure_virtual_network("vnet", address_prefix="10.0.0.0/16")
@@ -166,6 +179,9 @@ with create_builder() as builder:
         tagged_steps = list(config_pipeline.steps_by_tag(WellKnownPipelineTags.BuildCompute))
         _step_name = all_steps[0].name
         _description = all_steps[0].description
+        _depends_on_steps = all_steps[0].depends_on_steps
+        _required_by_steps = tagged_steps[0].required_by_steps
+        _tags = tagged_steps[0].tags
         all_steps[0].add_tag("validated")
         all_steps[0].depends_on("restore")
         tagged_steps[0].required_by(WellKnownPipelineSteps.Publish)
@@ -184,6 +200,8 @@ with create_builder() as builder:
     # withEnvironment - connection string resource
     container.with_environment("MY_CONN", env_connection_string)
     container.with_environment("MY_EXPR_CONN", expression_connection_string)
+    # withEnvironment - external service resource
+    container.with_environment("MY_EXTERNAL_SERVICE", external_service)
     container.with_env_callback(configure_environment_callback)
     container.with_args_callback(configure_args_callback)
     container.with_urls_callback(configure_urls_callback)
@@ -267,6 +285,7 @@ with create_builder() as builder:
     builder_execution_context = builder.execution_context
     execution_context_service_provider = builder_execution_context.service_provider
     _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
+    resource_command_service = execution_context_service_provider.get_resource_command_service()
 
     def configure_eventing_subscriber(registration_context):
         _subscriber_execution_context = registration_context.execution_context
@@ -378,7 +397,31 @@ with create_builder() as builder:
     # withHttpHealthCheck
     container.with_http_health_check()
     # withCommand
-    container.with_command("command", "Command", lambda *_args, **_kwargs: {"success": True})
+    def update_command_state(ctx):
+        snapshot = ctx.resource_snapshot
+        return "Enabled" if snapshot.get("HealthStatus") == "Healthy" else "Disabled"
+
+    def echo_command(ctx):
+        command_arguments = list(ctx.arguments.to_array())
+        return {"success": command_arguments[0]["Value"] == "hello"}
+
+    container.with_command(
+        "noop",
+        "Noop",
+        lambda *_args, **_kwargs: {"success": True},
+        command_options={"UpdateState": update_command_state}
+    )
+
+    def restart_command(_ctx):
+        return resource_command_service.execute_command(container, "echo", arguments={"message": "hello"})
+
+    container.with_command(
+        "echo",
+        "Echo",
+        echo_command,
+        command_options={"Arguments": [{"Name": "message", "InputType": "Text", "Required": True}]}
+    )
+    container.with_command("restart", "Restart", restart_command)
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})

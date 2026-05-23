@@ -84,11 +84,15 @@ export class AspireEditorCommandProvider implements vscode.Disposable {
         // TypeScript/JavaScript apphost detection
         const ext = path.extname(filePath).toLowerCase();
         if (['.ts', '.js', '.mts', '.mjs'].includes(ext)) {
-            if (lines.some(line => /import\s+.*createBuilder.*from\s+['"].*\.modules\/aspire/.test(line))) {
+            // Match both the new `.aspire/modules/aspire` import path and the legacy
+            // `.modules/aspire` path so legacy stable-channel TypeScript AppHosts that
+            // still import from `./.modules/aspire.js` continue to expose Run/Debug
+            // commands via the `aspire.fileIsAppHost` context.
+            if (lines.some(line => /import\s+.*createBuilder.*from\s+['"].*(\.modules|\.aspire\/modules)\/aspire/.test(line))) {
                 return true;
             }
 
-            if (lines.some(line => /require\s*\(['"].*\.modules\/aspire/.test(line))) {
+            if (lines.some(line => /require\s*\(['"].*(\.modules|\.aspire\/modules)\/aspire/.test(line))) {
                 return true;
             }
         }

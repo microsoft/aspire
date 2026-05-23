@@ -63,6 +63,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     public const int ExitCodeAddressInUse = DashboardExitCodes.AddressInUse;
 
     private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
+    private const string DashboardHttpAuthCookieName = ".Aspire.Dashboard.Auth.Http";
     private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
     private readonly WebApplication _app;
     private readonly ILogger<DashboardWebApplication> _logger;
@@ -461,6 +462,13 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             _app.UseCors();
         }
 
+        // Use Forwarded Headers middleware if configured. This must run before token validation because sign-in cookie
+        // behavior depends on the normalized request scheme.
+        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
+        {
+            _app.UseForwardedHeaders();
+        }
+
         _app.UseMiddleware<ValidateTokenMiddleware>();
 
         // Configure the HTTP request pipeline.
@@ -496,12 +504,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 }
             }
         });
-
-        // Use Forwarded Headers middleware if configured.
-        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
-        {
-            _app.UseForwardedHeaders();
-        }
 
         _app.UseAuthorization();
 
@@ -798,6 +800,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 authentication.AddCookie(options =>
                 {
                     options.Cookie.Name = DashboardAuthCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
                 });
 
                 authentication.AddOpenIdConnect(options =>
@@ -857,6 +860,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                         return Task.CompletedTask;
                     };
                     options.Cookie.Name = DashboardAuthCookieName;
+                    options.CookieManager = new AspireDashboardCookieManager(DashboardHttpAuthCookieName);
                 });
                 break;
             case FrontendAuthMode.Unsecured:

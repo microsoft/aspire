@@ -45,11 +45,13 @@ namespace Aspire.Hosting;
 /// <example>
 /// <code>
 /// // Capability export on a method - capability ID is auto-derived as Aspire.Hosting.Redis/addRedis
-/// [AspireExport(Description = "Adds a Redis resource")]
+/// /// &lt;ats-summary&gt;Adds a Redis resource.&lt;/ats-summary&gt;
+/// [AspireExport]
 /// public static IResourceBuilder&lt;RedisResource&gt; AddRedis(...) { }
 ///
 /// // Capability export with explicit ID for disambiguation (e.g., multiple overloads)
-/// [AspireExport("addRedisWithPort", Description = "Adds a Redis resource with a specific port")]
+/// /// &lt;ats-summary&gt;Adds a Redis resource with a specific port.&lt;/ats-summary&gt;
+/// [AspireExport("addRedisWithPort")]
 /// public static IResourceBuilder&lt;RedisResource&gt; AddRedis(..., int port) { }
 ///
 /// // Type export - type ID derived as {AssemblyName}/{TypeName}
@@ -155,8 +157,12 @@ public sealed class AspireExportAttribute : Attribute
     public Type? Type { get; set; }
 
     /// <summary>
-    /// Gets or sets a description of what this export does.
+    /// Gets or sets a compatibility description for this export.
     /// </summary>
+    /// <remarks>
+    /// XML documentation is the primary source for generated polyglot SDK API documentation.
+    /// Use <c>ats-summary</c> and related ATS XML documentation tags for new exports.
+    /// </remarks>
     public string? Description { get; set; }
 
     /// <summary>

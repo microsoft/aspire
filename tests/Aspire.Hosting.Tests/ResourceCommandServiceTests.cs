@@ -531,6 +531,87 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_WithArgumentValuesAndResource_PassesArgumentsToCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    capturedArguments = e.Arguments;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "message",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            custom.Resource,
+            "mycommand",
+            new Dictionary<string, string?> { ["message"] = "hello" },
+            CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("hello", capturedArguments.GetString("message"));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_WithArgumentValuesAndResource_DoesNotRequirePublishedResourceState()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    capturedArguments = e.Arguments;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "message",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            custom.Resource,
+            "mycommand",
+            new Dictionary<string, string?> { ["message"] = "hello" },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("hello", capturedArguments.GetString("message"));
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_SecretTextArgument_PreservesWhitespace()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

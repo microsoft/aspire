@@ -146,6 +146,55 @@ internal sealed class TemplateNuGetConfigService(
     }
 
     /// <summary>
+    /// Creates or updates a project NuGet.config that maps Aspire packages to an explicit package source override.
+    /// </summary>
+    public async Task<bool> CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+        string? sourceOverride,
+        string? channelName,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return false;
+        }
+
+        PackageChannel? matchingChannel = null;
+
+        if (!string.IsNullOrWhiteSpace(channelName))
+        {
+            var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
+            matchingChannel = channels.FirstOrDefault(c =>
+                string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return await CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, matchingChannel, outputPath, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates or updates a project NuGet.config that maps Aspire packages to an explicit package source override.
+    /// </summary>
+    public static async Task<bool> CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+        string? sourceOverride,
+        PackageChannel? channel,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return false;
+        }
+
+        var mappings = PackageSourceOverrideMappings.Create(sourceOverride, channel);
+        await NuGetConfigMerger.CreateOrUpdateAsync(
+            new DirectoryInfo(outputPath),
+            mappings,
+            channel?.ConfigureGlobalPackagesFolder ?? false,
+            cancellationToken: cancellationToken);
+        return true;
+    }
+
+    /// <summary>
     /// Resolves the channel and template package version that should be used to install Aspire project templates.
     /// </summary>
     /// <param name="query">Inputs that control channel/version selection.</param>
@@ -159,7 +208,11 @@ internal sealed class TemplateNuGetConfigService(
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.
-        var hasPrHives = query.IncludePrHives && executionContext.GetHiveCount() > 0;
+        // PR dogfood installs can discover a matching local-build channel outside the default
+        // hives directory, so also treat an installed local-build source as a hive signal.
+        var hasPrHives = query.IncludePrHives &&
+            (executionContext.GetHiveCount() > 0 ||
+                allChannels.Any(static c => c.Type is PackageChannelType.Explicit && HasInstalledLocalBuildPackageSource(c)));
 
         IEnumerable<PackageChannel> channels;
         if (!string.IsNullOrEmpty(query.RequestedChannel))
@@ -241,6 +294,16 @@ internal sealed class TemplateNuGetConfigService(
 
         var prompted = await templateVersionPrompter.PromptForTemplatesVersionAsync(orderedPackagesFromChannels, cancellationToken);
         return new TemplatePackageSelection(prompted.Package, prompted.Channel);
+    }
+
+    private static bool HasInstalledLocalBuildPackageSource(PackageChannel channel)
+    {
+        return VersionHelper.IsLocalBuildChannel(channel.Name) &&
+            channel.Mappings?.Any(static mapping =>
+                mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
+                mapping.PackageFilter != PackageMapping.AllPackages &&
+                !UrlHelper.IsHttpUrl(mapping.Source) &&
+                Directory.Exists(mapping.Source)) == true;
     }
 
     /// <summary>

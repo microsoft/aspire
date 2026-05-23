@@ -476,7 +476,7 @@ artifact_0_TestName_os/
 │       └── TestClassName.MethodName/      # Full generated project for failed tests
 │           ├── apphost.ts
 │           ├── aspire.config.json
-│           ├── .modules/                  # Generated SDK (aspire.js) - key for debugging
+│           ├── .aspire/modules/                  # Generated SDK (aspire.js) - key for debugging
 │           └── ...
 ├── *.crash.dmp                            # Crash dump (if test crashed)
 └── test.binlog                            # MSBuild binary log
@@ -484,7 +484,7 @@ artifact_0_TestName_os/
 
 ### CLI E2E Workspace Capture
 
-CLI E2E tests annotated with `[CaptureWorkspaceOnFailure]` automatically capture the full generated project workspace when a test fails. This includes the generated SDK (`.modules/aspire.js`), template output, and config files — critical for debugging template generation or `aspire run` failures.
+CLI E2E tests annotated with `[CaptureWorkspaceOnFailure]` automatically capture the full generated project workspace when a test fails. This includes the generated SDK (`.aspire/modules/aspire.js`), template output, and config files — critical for debugging template generation or `aspire run` failures.
 
 Look in `testresults/workspaces/{TestClassName.MethodName}/` inside the downloaded artifact.
 

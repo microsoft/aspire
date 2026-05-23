@@ -11,6 +11,7 @@ using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using static Aspire.Hosting.Utils.AzureManifestUtils;
 
 namespace Aspire.Hosting.Azure.Tests;
@@ -345,7 +346,7 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         var nameParameter = builder.AddParameter("appServicePlanName", "existing-plan-name");
-        var resourceGroupParameter = builder.AddParameter("resourceGroup", "existing-rg");
+        var resourceGroupParameter = builder.AddParameter("appServicePlanResourceGroup", "existing-rg");
 
         builder.AddAzureAppServiceEnvironment("env")
             .PublishAsExisting(nameParameter, resourceGroupParameter);
@@ -366,6 +367,139 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AzureAppServiceEnvironmentCanPublishExistingAppServicePlan()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var nameParameter = builder.AddParameter("appServicePlanName", "existing-plan-name");
+        var resourceGroupParameter = builder.AddParameter("appServicePlanResourceGroup", "existing-rg");
+
+        builder.AddAzureAppServiceEnvironment("env")
+            .PublishAsExisting(nameParameter, resourceGroupParameter);
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+
+        await app.RunAsync();
+
+        var mainBicepPath = Path.Combine(tempDir.Path, "main.bicep");
+        Assert.True(File.Exists(mainBicepPath), $"Expected publish to produce '{mainBicepPath}'.");
+        var mainBicep = await File.ReadAllTextAsync(mainBicepPath);
+
+        var envBicepPath = Path.Combine(tempDir.Path, "env", "env.bicep");
+        Assert.True(File.Exists(envBicepPath), $"Expected publish to produce '{envBicepPath}'.");
+        var envBicep = await File.ReadAllTextAsync(envBicepPath);
+
+        var apiBicepPath = Path.Combine(tempDir.Path, "api", "api.bicep");
+        Assert.True(File.Exists(apiBicepPath), $"Expected publish to produce '{apiBicepPath}'.");
+        var apiBicep = await File.ReadAllTextAsync(apiBicepPath);
+
+        await Verify(mainBicep, "bicep")
+            .AppendContentAsFile(envBicep, "bicep")
+            .AppendContentAsFile(apiBicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AsExisting_WithExplicitContainerRegistry_PublishGeneratesEnvWithExistingPlanAndRegistry()
+    {
+        // Existing App Service Plan + existing ACR should reference both pre-provisioned resources.
+        // Without WithAcrPullIdentity, Aspire still emits a new identity and AcrPull role assignment
+        // for image pulls. Disable the dashboard so the snapshot focuses on plan/ACR behavior.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var planName = builder.AddParameter("appServicePlanName");
+        var registryName = builder.AddParameter("registryName");
+        var sharedResourceGroup = builder.AddParameter("sharedRg");
+
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .AsExisting(registryName, sharedResourceGroup);
+
+        var env = builder.AddAzureAppServiceEnvironment("env")
+            .AsExisting(planName, sharedResourceGroup)
+            .WithAzureContainerRegistry(acr)
+            .WithDashboard(false);
+
+        var (manifest, bicep) = await GetManifestWithBicep(env.Resource);
+
+        await Verify(bicep, extension: "bicep")
+            .AppendContentAsFile(manifest.ToString(), "json");
+    }
+
+    [Fact]
+    public async Task WithAcrPullIdentity_PublishGeneratesEnvWithSuppliedIdentity()
+    {
+        // Greenfield App Service Plan, but the user has BYO'd a managed identity. The generated
+        // Bicep should NOT declare an env_mi resource or an AcrPull role assignment - the
+        // identity id/client id should flow into the env module via parameters and be emitted as
+        // AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID/CLIENT_ID.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var mi = builder.AddAzureUserAssignedIdentity("shared-mi");
+
+        var env = builder.AddAzureAppServiceEnvironment("env")
+            .WithAcrPullIdentity(mi);
+
+        var (manifest, bicep) = await GetManifestWithBicep(env.Resource);
+
+        await Verify(bicep, extension: "bicep")
+            .AppendContentAsFile(manifest.ToString(), "json");
+    }
+
+    [Fact]
+    public async Task WithAcrPullIdentity_AsExisting_PublishGeneratesEnvWithSuppliedIdentity()
+    {
+        // Existing App Service Plan + existing ACR + BYO identity that already has AcrPull on the ACR.
+        // Disable the dashboard so the env module references the pre-provisioned resources without
+        // emitting a new ACR-pull identity, AcrPull role assignment, dashboard, or dashboard contributor identity.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var planName = builder.AddParameter("appServicePlanName");
+        var registryName = builder.AddParameter("registryName");
+        var identityName = builder.AddParameter("identityName");
+        var sharedResourceGroup = builder.AddParameter("sharedRg");
+
+        var acr = builder.AddAzureContainerRegistry("acr")
+            .AsExisting(registryName, sharedResourceGroup);
+
+        var mi = builder.AddAzureUserAssignedIdentity("shared-mi")
+            .AsExisting(identityName, sharedResourceGroup);
+
+        var env = builder.AddAzureAppServiceEnvironment("env")
+            .AsExisting(planName, sharedResourceGroup)
+            .WithAzureContainerRegistry(acr)
+            .WithAcrPullIdentity(mi)
+            .WithDashboard(false);
+
+        var (manifest, bicep) = await GetManifestWithBicep(env.Resource);
+
+        await Verify(bicep, extension: "bicep")
+            .AppendContentAsFile(manifest.ToString(), "json");
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task WithDashboardControlsDashboardUrlPrintStep(bool enableDashboard)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureAppServiceEnvironment("env")
+            .WithDashboard(enableDashboard);
+
+        using var app = builder.Build();
+
+        var steps = await CreateStepsAsync(app, env.Resource);
+        var hasPrintDashboardUrlStep = steps.Any(s => s.Name == "print-dashboard-url-env");
+
+        Assert.Equal(enableDashboard, hasPrintDashboardUrlStep);
     }
 
     [Fact]
@@ -1096,6 +1230,28 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
     private static Task<(JsonNode ManifestNode, string BicepText)> GetManifestWithBicep(IResource resource) =>
         AzureManifestUtils.GetManifestWithBicep(resource, skipPreparer: true);
+
+    private static async Task<List<PipelineStep>> CreateStepsAsync(DistributedApplication app, AzureAppServiceEnvironmentResource resource)
+    {
+        var pipelineContext = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        var results = new List<PipelineStep>();
+        foreach (var annotation in resource.Annotations.OfType<PipelineStepAnnotation>())
+        {
+            results.AddRange(await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+            {
+                PipelineContext = pipelineContext,
+                Resource = resource
+            }));
+        }
+
+        return results;
+    }
 
     private sealed class Project : IProjectMetadata
     {

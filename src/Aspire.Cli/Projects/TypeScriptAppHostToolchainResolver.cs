@@ -162,10 +162,18 @@ internal static class TypeScriptAppHostToolchainResolver
 
     private static CommandSpec CreateInstallCommand(TypeScriptAppHostToolchain toolchain)
     {
+        // pnpm resolves a parent pnpm-workspace.yaml when install runs in a nested package.
+        // The generated brownfield AppHost intentionally lives outside the user's workspace
+        // package graph, so install only that package instead of requiring edits to the
+        // user's workspace file. See https://pnpm.io/workspaces.
+        string[] args = toolchain == TypeScriptAppHostToolchain.Pnpm
+            ? ["install", "--ignore-workspace"]
+            : ["install"];
+
         return new CommandSpec
         {
             Command = GetCommandName(toolchain),
-            Args = ["install"]
+            Args = args
         };
     }
 
@@ -231,9 +239,9 @@ internal static class TypeScriptAppHostToolchainResolver
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
-                    "--ignore", ".modules/",
+                    "--ignore", ".aspire/modules/",
                     "--exec", $"bun run tsc --noEmit -p {tsConfigFileName} && bun run \"{{appHostFile}}\""
                 ]
             },
@@ -246,9 +254,9 @@ internal static class TypeScriptAppHostToolchainResolver
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
-                    "--ignore", ".modules/",
+                    "--ignore", ".aspire/modules/",
                     "--exec", $"yarn run tsc --noEmit -p {tsConfigFileName} && yarn run tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
@@ -261,9 +269,9 @@ internal static class TypeScriptAppHostToolchainResolver
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
-                    "--ignore", ".modules/",
+                    "--ignore", ".aspire/modules/",
                     "--exec", $"pnpm exec tsc --noEmit -p {tsConfigFileName} && pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
@@ -358,9 +366,9 @@ internal static class TypeScriptAppHostToolchainResolver
             (version.Length == 1 || !char.IsAsciiDigit(version[1]));
     }
 
-    private static InvalidOperationException CreateYarnClassicNotSupportedException(string upgradeTarget)
+    private static YarnClassicNotSupportedException CreateYarnClassicNotSupportedException(string upgradeTarget)
     {
-        return new InvalidOperationException(
+        return new YarnClassicNotSupportedException(
             $"Yarn Classic is not supported for TypeScript AppHosts. Upgrade {upgradeTarget} to Yarn 4 or later, or use npm, pnpm, or Bun.");
     }
 

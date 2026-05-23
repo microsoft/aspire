@@ -15,7 +15,9 @@ namespace Aspire.Cli.Commands;
 
 internal abstract class BaseCommand : Command
 {
-    protected virtual bool UpdateNotificationsEnabled { get; } = true;
+    private static readonly int[] s_suppressErrorLogsMessageExitCodes = [CliExitCodes.Cancelled, CliExitCodes.MissingRequiredArgument];
+
+    protected virtual bool UpdateNotificationsEnabled { get; }
 
     /// <summary>
     /// Gets the help group for this command.
@@ -58,7 +60,17 @@ internal abstract class BaseCommand : Command
             catch (NonInteractiveException)
             {
                 // Error messages have already been displayed by the interaction service.
-                result = CommandResult.Failure((int)CliExitCodes.MissingRequiredArgument);
+                result = CommandResult.Failure(CliExitCodes.MissingRequiredArgument);
+            }
+            catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested || ex is ExtensionOperationCanceledException)
+            {
+                result = CommandResult.Cancelled();
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
+                telemetry.RecordError(errorMessage, ex);
+                result = CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
             }
 
             var isErrorExitCode = result.ExitCode != CliExitCodes.Success;
@@ -82,7 +94,7 @@ internal abstract class BaseCommand : Command
             // Display the CLI log file path on non-zero exit codes so the user knows
             // where to find diagnostic details. Suppress for user-input errors where
             // the log wouldn't contain useful context (e.g., missing required arguments).
-            if (isErrorExitCode && result.ExitCode != CliExitCodes.MissingRequiredArgument)
+            if (isErrorExitCode && !s_suppressErrorLogsMessageExitCodes.Contains(result.ExitCode))
             {
                 interactionService.DisplayMessage(
                     KnownEmojis.PageFacingUp,
@@ -102,7 +114,7 @@ internal abstract class BaseCommand : Command
                 }
             }
 
-            if (UpdateNotificationsEnabled && features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
+            if (UpdateNotificationsEnabled && !IsJsonFormatRequested(parseResult) && features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
             {
                 try
                 {

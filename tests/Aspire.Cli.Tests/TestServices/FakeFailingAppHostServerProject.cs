@@ -15,15 +15,19 @@ namespace Aspire.Cli.Tests.TestServices;
 /// that exercise the channel/config write side-effects that happen BEFORE
 /// <c>AppHostServerProject.PrepareAsync</c>.
 /// </summary>
-internal sealed class FakeFailingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject
+internal sealed class FakeFailingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject, IDisposable
 {
     public string AppDirectoryPath { get; } = appDirectoryPath;
+
+    public bool Disposed { get; private set; }
 
     public string GetInstanceIdentifier() => AppDirectoryPath;
 
     public Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
+        string? requestedChannel = null,
+        string? packageSourceOverride = null,
         CancellationToken cancellationToken = default) =>
         Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
 
@@ -33,4 +37,9 @@ internal sealed class FakeFailingAppHostServerProject(string appDirectoryPath) :
         string[]? additionalArgs = null,
         bool debug = false) =>
         throw new NotSupportedException("Run should not be invoked when PrepareAsync fails.");
+
+    public void Dispose()
+    {
+        Disposed = true;
+    }
 }

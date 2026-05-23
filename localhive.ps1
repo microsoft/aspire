@@ -171,6 +171,22 @@ function Test-VersionSuffix {
   return $true
 }
 
+# Restrict hive names to a safe identifier set: this value is joined into
+# $hivesRoot\$Name and then passed to Remove-Item -Recurse, so any path
+# separator or '..' segment would let the removal escape the hives root.
+function Test-HiveName {
+  param([Parameter(Mandatory)][string]$HiveName)
+  if ([string]::IsNullOrEmpty($HiveName)) { return $false }
+  if ($HiveName -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]*$') { return $false }
+  if ($HiveName.Contains('..')) { return $false }
+  return $true
+}
+
+if (-not (Test-HiveName -HiveName $Name)) {
+  Write-Err "Invalid hive name '$Name'. Hive names must match [A-Za-z0-9][A-Za-z0-9._-]* and cannot contain path separators or '..'."
+  exit 1
+}
+
 # Auto-generate version suffix if not specified
 if (-not $VersionSuffix) {
   $utc = [DateTime]::UtcNow
@@ -272,15 +288,43 @@ if (Test-Path -LiteralPath $hiveRoot) {
 }
 
 function Copy-PackagesToHive {
-  param([string]$Source,[string]$Destination)
+  # When $VersionSuffix is non-empty, only .nupkg filenames containing the suffix are copied,
+  # and zero matches is treated as a hard failure. This mirrors localhive.sh's $USE_COPY path
+  # (localhive.sh:308-322) and exists because PackagingService.GetLocalHivePinnedVersion picks
+  # the *highest* SemVer-precedence package in the hive
+  # (src/Aspire.Cli/Packaging/PackagingService.cs:338-350). Without the filter, leftover packages
+  # from a prior localhive run with a higher-precedence suffix would silently pin this hive to
+  # that stale version.
+  # When $VersionSuffix is empty, all .nupkg files are copied — this is used only by the
+  # symlink/junction failure fallback below, where the user did not opt into copy mode and
+  # parity with the bash fallback (localhive.sh:329-342) takes priority over the staleness
+  # check.
+  param(
+    [string]$Source,
+    [string]$Destination,
+    [string]$VersionSuffix
+  )
   New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-  Get-ChildItem -LiteralPath $Source -Filter *.nupkg -File | Copy-Item -Destination $Destination -Force
+  $candidates = Get-ChildItem -LiteralPath $Source -Filter *.nupkg -File
+  if ($VersionSuffix) {
+    $candidates = $candidates | Where-Object { $_.Name -like "*$VersionSuffix*" }
+  }
+  $copied = 0
+  foreach ($pkg in $candidates) {
+    Copy-Item -LiteralPath $pkg.FullName -Destination $Destination -Force
+    $copied++
+  }
+  if ($VersionSuffix -and $copied -eq 0) {
+    Write-Err "No .nupkg files matching version suffix '$VersionSuffix' found in $Source."
+    exit 1
+  }
+  return $copied
 }
 
 if ($Copy) {
-  Write-Log "Populating hive '$Name' by copying .nupkg files"
-  Copy-PackagesToHive -Source $pkgDir -Destination $hivePath
-  Write-Log "Created/updated hive '$Name' at $hivePath (copied packages)."
+  Write-Log "Populating hive '$Name' by copying .nupkg files (version suffix: $VersionSuffix)"
+  $copied = Copy-PackagesToHive -Source $pkgDir -Destination $hivePath -VersionSuffix $VersionSuffix
+  Write-Log "Created/updated hive '$Name' at $hivePath (copied $copied packages)."
 }
 else {
   Write-Log "Linking hive '$Name/packages' to $pkgDir"
@@ -298,8 +342,10 @@ else {
     }
     catch {
       Write-Warn "Link creation failed; copying .nupkg files instead"
-      Copy-PackagesToHive -Source $pkgDir -Destination $hivePath
-      Write-Log "Created/updated hive '$Name' at $hivePath (copied packages)."
+      # Fallback path: user did not request -Copy, so mirror the unfiltered bash fallback
+      # (localhive.sh:329-342) and copy everything to maximize the chance the build succeeds.
+      $copied = Copy-PackagesToHive -Source $pkgDir -Destination $hivePath -VersionSuffix ''
+      Write-Log "Created/updated hive '$Name' at $hivePath (copied $copied packages)."
     }
   }
 }
@@ -365,18 +411,24 @@ if (-not $SkipCli) {
       exit 1
     }
   } else {
-    # Framework-dependent CLI with embedded bundle payload
     $cliProj = Join-Path $RepoRoot "src" "Aspire.Cli" "Aspire.Cli.Tool.csproj"
-    $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" "publish"
     if ($bundlePayloadArchive) {
-      Write-Log "Publishing Aspire CLI (dotnet tool) with embedded bundle payload..."
-      & dotnet publish $cliProj -c $effectiveConfig "/p:VersionSuffix=$VersionSuffix" "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
+      # NativeAOT CLI (Aspire.Cli.csproj sets PublishAot=true) with embedded bundle payload.
+      # Publish output is RID-specific when we pass -r, so the path includes $bundleRid.
+      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" $bundleRid "publish"
+      Write-Log "Publishing Aspire CLI (dotnet tool, native AOT) with embedded bundle payload..."
+      & dotnet publish $cliProj -c $effectiveConfig -r $bundleRid "/p:VersionSuffix=$VersionSuffix" "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
       if ($LASTEXITCODE -ne 0) {
         Write-Err "CLI publish with embedded bundle failed."
         exit 1
       }
-    } elseif (-not (Test-Path -LiteralPath $cliPublishDir)) {
-      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0"
+    } else {
+      # -SkipBundle builds Aspire.Cli.Tool with PublishAot=false, which keeps the
+      # historical framework-dependent, non-RID output layout.
+      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" "publish"
+      if (-not (Test-Path -LiteralPath $cliPublishDir)) {
+        $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0"
+      }
     }
   }
 
@@ -402,9 +454,12 @@ if (-not $SkipCli) {
       }
     }
 
+    $installedCliPath = Join-Path $cliBinDir $cliExeName
+
     try {
       # Copy all files from the publish directory (CLI and its dependencies)
-      # Use -ErrorAction SilentlyContinue for individual files that may be locked by running processes
+      # Capture individual copy failures so we can restore the previous CLI and avoid stamping
+      # a sidecar onto a stale or partial install.
       $copyErrors = @()
       Get-ChildItem -LiteralPath $cliPublishDir -File | ForEach-Object {
         try {
@@ -415,7 +470,11 @@ if (-not $SkipCli) {
         }
       }
       if ($copyErrors.Count -gt 0) {
-        Write-Warn "$($copyErrors.Count) file(s) could not be overwritten (likely locked by a running process). The CLI executable was updated successfully."
+        throw "Failed to copy $($copyErrors.Count) CLI file(s) from $cliPublishDir to $cliBinDir. First error: $($copyErrors[0])"
+      }
+
+      if (-not (Test-Path -LiteralPath $installedCliPath)) {
+        throw "Installed CLI executable was not found at $installedCliPath"
       }
 
       # Clean up old backup files
@@ -431,20 +490,23 @@ if (-not $SkipCli) {
       throw
     }
 
-    $installedCliPath = Join-Path $cliBinDir $cliExeName
+    # Stamp the install-route sidecar so `aspire info` / `aspire uninstall`
+    # can identify this binary as a locally-built (`localhive`) install.
+    # The format matches docs/specs/install-routes.md exactly; localhive
+    # shares the script-route layout (binary under <prefix>/bin/, bundle
+    # extracted at parent-of-bin).
+    $sidecarPath = Join-Path $cliBinDir ".aspire-install.json"
+    Set-Content -LiteralPath $sidecarPath -Value '{"source":"localhive"}' -Encoding UTF8 -NoNewline
+
     Write-Log "Aspire CLI installed to: $installedCliPath"
 
     if (-not $Output) {
-      # Set the channel to the local hive so templates and packages resolve from it
-      & $installedCliPath config set channel $Name -g 2>$null
-      Write-Log "Set global channel to '$Name'"
-
-      # Check if the bin directory is in PATH
       $pathSeparator = [System.IO.Path]::PathSeparator
-      $currentPathArray = $env:PATH.Split($pathSeparator, [StringSplitOptions]::RemoveEmptyEntries)
+      $currentPathArray = if ($env:PATH) { $env:PATH.Split($pathSeparator, [StringSplitOptions]::RemoveEmptyEntries) } else { @() }
+      Write-Log "Run Aspire directly with: $installedCliPath"
       if ($currentPathArray -notcontains $cliBinDir) {
-        Write-Warn "The CLI bin directory is not in your PATH."
-        Write-Log "Add it to your PATH with: `$env:PATH = '$cliBinDir' + '$pathSeparator' + `$env:PATH"
+        $env:PATH = (@($cliBinDir) + $currentPathArray) -join $pathSeparator
+        Write-Log "Added $cliBinDir to PATH for this PowerShell session."
       }
     }
   }
@@ -459,7 +521,47 @@ if ($Archive) {
   if ($bundleRid -like 'win-*') {
     $archivePath = "$Output.zip"
     Write-Log "Creating archive: $archivePath"
-    Compress-Archive -Path (Join-Path $Output '*') -DestinationPath $archivePath -Force
+
+    # Use System.IO.Compression.ZipFile::CreateFromDirectory rather than
+    # Compress-Archive. Compress-Archive enumerates inputs via the PowerShell
+    # provider, which on non-Windows hosts treats files whose name starts with
+    # '.' as hidden and excludes them from `<dir>/*` wildcard expansion. The
+    # portable layout includes bin/.aspire-install.json — the localhive route
+    # sidecar that `aspire doctor` and route-aware Aspire-home selection rely
+    # on (see docs/specs/install-routes.md) — and silently dropping it from
+    # win-* zips built on Linux/macOS would produce sidecar-less installs on
+    # the target machine. ZipFile walks the filesystem directly and includes
+    # dotfiles unconditionally.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    if (Test-Path -LiteralPath $archivePath) {
+      Remove-Item -LiteralPath $archivePath -Force
+    }
+    [System.IO.Compression.ZipFile]::CreateFromDirectory(
+      $Output,
+      $archivePath,
+      [System.IO.Compression.CompressionLevel]::Optimal,
+      $false)
+
+    # Belt-and-suspenders: if the portable layout has a sidecar on disk, the
+    # archive MUST also have it. Catches future regressions of the dotfile
+    # issue (e.g. a switch back to Compress-Archive or a wildcard-based copy).
+    $sidecarOnDisk = Join-Path $Output (Join-Path 'bin' '.aspire-install.json')
+    if (Test-Path -LiteralPath $sidecarOnDisk) {
+      $sidecarEntryName = 'bin/.aspire-install.json'
+      $zip = [System.IO.Compression.ZipFile]::OpenRead($archivePath)
+      try {
+        $hasSidecar = $false
+        foreach ($entry in $zip.Entries) {
+          if ($entry.FullName -eq $sidecarEntryName) { $hasSidecar = $true; break }
+        }
+      }
+      finally {
+        $zip.Dispose()
+      }
+      if (-not $hasSidecar) {
+        throw "Archive '$archivePath' is missing the install-route sidecar entry '$sidecarEntryName'. The zip creation path is dropping hidden files."
+      }
+    }
   } else {
     $archivePath = "$Output.tar.gz"
     Write-Log "Creating archive: $archivePath"
@@ -479,10 +581,11 @@ if ($Output) {
     Write-Log "To install on the target machine:"
     if ($bundleRid -like 'win-*') {
       Write-Log "  Expand-Archive -Path $(Split-Path $archivePath -Leaf) -DestinationPath `$HOME\.aspire"
+      Write-Log "  `$HOME\.aspire\bin\aspire.exe"
     } else {
       Write-Log "  mkdir -p ~/.aspire && tar -xzf $(Split-Path $archivePath -Leaf) -C ~/.aspire"
+      Write-Log "  ~/.aspire/bin/aspire"
     }
-    Write-Log "  ~/.aspire/bin/aspire config set channel '$Name' -g"
   }
 } else {
   Write-Log "Aspire CLI will discover a channel named '$Name' from:"

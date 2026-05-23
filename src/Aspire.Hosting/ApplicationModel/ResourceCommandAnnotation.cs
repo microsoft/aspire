@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
+using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -354,29 +355,84 @@ public sealed class CommandResultData
 /// <summary>
 /// Context for <see cref="ResourceCommandAnnotation.UpdateState"/>.
 /// </summary>
+/// <ats-summary>Context for <ats-see cref="!:method:ResourceCommandAnnotation.UpdateState" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public sealed class UpdateCommandStateContext
 {
     /// <summary>
     /// The resource snapshot.
     /// </summary>
+    [AspireExportIgnore(Reason = "CustomResourceSnapshot contains object-valued properties that are not statically representable in polyglot SDKs. Use ResourceSnapshotData for the curated ATS projection.")]
     public required CustomResourceSnapshot ResourceSnapshot { get; init; }
+
+    /// <summary>
+    /// Gets the resource snapshot data available to polyglot command state callbacks.
+    /// </summary>
+    [AspireExport(MethodName = "resourceSnapshot")]
+    internal UpdateCommandStateResourceSnapshot ResourceSnapshotData => UpdateCommandStateResourceSnapshot.FromSnapshot(ResourceSnapshot);
 
     /// <summary>
     /// The service provider.
     /// </summary>
+    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
     public required IServiceProvider ServiceProvider { get; init; }
+}
+
+/// <summary>
+/// Resource snapshot data exposed to polyglot command state callbacks.
+/// </summary>
+[AspireDto]
+internal sealed class UpdateCommandStateResourceSnapshot
+{
+    /// <summary>
+    /// The type of the resource.
+    /// </summary>
+    public required string ResourceType { get; init; }
+
+    /// <summary>
+    /// The current lifecycle state text for the resource.
+    /// </summary>
+    public string? State { get; init; }
+
+    /// <summary>
+    /// The display style for the current lifecycle state.
+    /// </summary>
+    public string? StateStyle { get; init; }
+
+    /// <summary>
+    /// The current health status for the resource.
+    /// </summary>
+    public HealthStatus? HealthStatus { get; init; }
+
+    /// <summary>
+    /// The exit code of the resource.
+    /// </summary>
+    public int? ExitCode { get; init; }
+
+    internal static UpdateCommandStateResourceSnapshot FromSnapshot(CustomResourceSnapshot snapshot)
+    {
+        return new()
+        {
+            ResourceType = snapshot.ResourceType,
+            State = snapshot.State?.Text,
+            StateStyle = snapshot.State?.Style,
+            HealthStatus = snapshot.HealthStatus,
+            ExitCode = snapshot.ExitCode
+        };
+    }
 }
 
 /// <summary>
 /// Context for <see cref="ResourceCommandAnnotation.ExecuteCommand"/>.
 /// </summary>
+/// <ats-summary>Context for <ats-see cref="!:method:ResourceCommandAnnotation.ExecuteCommand" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public sealed class ExecuteCommandContext
 {
     /// <summary>
     /// The service provider.
     /// </summary>
+    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command callbacks.")]
     public required IServiceProvider ServiceProvider { get; init; }
 
     /// <summary>
