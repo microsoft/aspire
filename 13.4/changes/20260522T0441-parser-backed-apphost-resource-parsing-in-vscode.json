@@ -1,19 +1,20 @@
 {
   "area": "Extensions",
-  "areaEmoji": "🧩",
+  "areaEmoji": "\ud83e\udde9",
   "backport": false,
   "breaking": false,
-  "changeType": "Improvements",
+  "changeType": "Bug fixes",
   "communityContributors": [],
-  "description": "Refactors VS Code extension AppHost resource detection to use parser-backed syntax analysis instead of regex scanning. This eliminates false positive CodeLens and gutter decoration entries that previously appeared for commented-out or string-embedded `Add*` calls.",
+  "description": "Parser-backed syntax analysis for AppHost resource detection was introduced in the VS Code extension, then reverted within the same milestone to unblock internal build pipelines where Tree-sitter npm packages could not be resolved through the approved Azure DevOps package mirror. The net state is unchanged \u2014 regex-based scanning remains active.",
   "docsPrs": [],
   "docsRequired": false,
-  "emoji": "🔬",
+  "emoji": "\u21a9\ufe0f",
   "firstMergedAt": "2026-05-22T04:41:18Z",
-  "lastMergedAt": "2026-05-22T04:41:18Z",
-  "name": "Parser-backed AppHost resource detection in VS Code",
+  "lastMergedAt": "2026-05-23T15:36:01Z",
+  "name": "Parser-backed AppHost resource detection (reverted)",
   "owner": "adamint",
   "prs": [
-    17361
+    17361,
+    17413
   ]
 }

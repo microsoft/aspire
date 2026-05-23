@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "TypeScript AppHost improvement: async method chaining support in code generation",
+  "mergedAt": "2026-05-23T16:13:27Z",
+  "number": 17400,
+  "runDate": "2026-05-23T16:22:54Z",
+  "status": "included",
+  "title": "Support async chaining in TypeScript AppHosts"
+}

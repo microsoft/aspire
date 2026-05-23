@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Reverts PR #17361 (parser-backed AppHost resource parsing); change file updated to reflect the revert",
+  "mergedAt": "2026-05-23T15:36:01Z",
+  "number": 17413,
+  "runDate": "2026-05-23T16:22:54Z",
+  "status": "included",
+  "title": "Revert parser-backed AppHost resource parsing"
+}

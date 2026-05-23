@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "TypeScript AppHost code generation now supports fluent async method chaining. Generated async methods that return chainable wrapper types expose the same thenable surface, so builders like builder.addContainer(...).withReference(...) work seamlessly even when async methods are in the chain \u2014 without requiring callers to split the chain or double-await.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u26d3\ufe0f",
+  "firstMergedAt": "2026-05-23T16:13:27Z",
+  "lastMergedAt": "2026-05-23T16:13:27Z",
+  "name": "Async method chaining in TypeScript AppHosts",
+  "owner": "sebastienros",
+  "prs": [
+    17400
+  ]
+}
