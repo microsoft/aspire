@@ -583,6 +583,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         arguments.AddRange(unmatchedTokens);
 
+        _logger.LogDebug(
+            "Launching AppHost directly via {Command} in {WorkingDirectory} with arguments {Arguments}.",
+            command,
+            workingDirectory.FullName,
+            string.Join(" ", arguments));
+
         return new DirectAppHostRunSpec(command, workingDirectory, [.. arguments], directEnv);
     }
 
@@ -762,12 +768,16 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                         continue;
                     }
 
+                    // Match Aspire project-resource launch-profile behavior rather than `dotnet run`:
+                    // Aspire expands environment-variable references before starting child resources.
                     env[name] = Environment.ExpandEnvironmentVariables(value);
                 }
             }
 
             if (!hasExplicitApplicationArgs && !hasRunArguments && !string.IsNullOrEmpty(profile.CommandLineArgs))
             {
+                // Keep command-line argument expansion aligned with the environment-variable
+                // handling above so direct-launch AppHosts behave like Aspire child resources.
                 AppendParsedArguments(Environment.ExpandEnvironmentVariables(profile.CommandLineArgs), arguments);
             }
 
