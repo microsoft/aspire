@@ -58,6 +58,43 @@ public sealed class TypeScriptApiCompatTests
     }
 
     [Fact]
+    public void ParserIgnoresSymbolsOwnedByOtherPackages()
+    {
+        var surface = AtsSurfaceParser.Parse("Pkg", """
+            # Handle Types
+            Pkg/Thing
+            Other/Thing
+
+            # DTO Types
+            Pkg/Options
+              name: string
+            Other/Options
+              ignored: string
+
+            # Enum Types
+            enum:Pkg.Mode = One
+            enum:Other.Mode = One
+
+            # Exported Values
+            Pkg.Configs.Default: string = "dev"
+            Other.Configs.Default: string = "dev"
+
+            # Capabilities
+            Pkg/addThing(name: Other/Thing) -> Pkg/Thing
+            Other/addThing() -> Other/Thing
+            """);
+
+        Assert.Equal(["Pkg/Thing"], surface.HandleTypes.Keys);
+        var dto = Assert.Single(surface.DtoTypes.Values);
+        Assert.Equal("Pkg/Options", dto.TypeId);
+        Assert.Equal(["Pkg.Mode"], surface.EnumTypes.Keys.Select(k => k["enum:".Length..]));
+        Assert.Equal(["Other.Configs.Default", "Pkg.Configs.Default"], surface.ExportedValues.Keys.Order(StringComparer.Ordinal));
+        var capability = Assert.Single(surface.Capabilities.Values);
+        Assert.Equal("Pkg/addThing", capability.CapabilityId);
+        Assert.Equal("Other/Thing", capability.Parameters[0].TypeId);
+    }
+
+    [Fact]
     public void ComparerClassifiesBreakingAndAdditiveChanges()
     {
         using var tempDirectory = new TestTempDirectory();
