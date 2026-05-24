@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix: race condition in ConsoleActivityLogger spinner causing ArgumentOutOfRangeException crash during aspire publish",
+  "mergedAt": "2026-05-24T11:07:26Z",
+  "number": 17422,
+  "runDate": "2026-05-24T12:22:52Z",
+  "status": "included",
+  "title": "Fix Spectre cursor crash in CLI activity spinner"
+}
