@@ -36,10 +36,12 @@ func main() {
 	if err = dockerContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	dockerfileFactory := func(_ ...any) string {
+	dockerfileFactory := func(factoryContext aspire.DockerfileFactoryContext) string {
+		_ = factoryContext.Resource()
 		return `FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
 WORKDIR /app
-ENTRYPOINT ["dotnet", "App.dll"]`
+ENTRYPOINT ["dotnet", "App.dll"]
+`
 	}
 	dockerFactoryContainer := builder.AddDockerfileFactory("dockerfactoryapp", "./app", dockerfileFactory,
 		&aspire.AddDockerfileFactoryOptions{Stage: aspire.StringPtr("runtime")})

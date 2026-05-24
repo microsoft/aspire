@@ -96,7 +96,7 @@ with create_builder() as builder:
     container.with_otlp_exporter(protocol="HttpJson")
     # addDockerfile
     docker_container = builder.add_dockerfile("resource", ".")
-    dockerfile_factory = lambda: """FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+    dockerfile_factory = lambda factory_context: """FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
 WORKDIR /app
 ENTRYPOINT ["dotnet", "App.dll"]"""
     docker_factory_container = builder.add_dockerfile_factory("dockerfactoryapp", ".", dockerfile_factory, stage="runtime")

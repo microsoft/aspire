@@ -7,11 +7,14 @@ void main() throws Exception {
         var container = builder.addContainer("mycontainer", "nginx");
         container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
-        var dockerfileFactory = (AspireFunc0<String>) () -> """
-            FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
-            WORKDIR /app
-            ENTRYPOINT ["dotnet", "App.dll"]
-            """;
+        var dockerfileFactory = (AspireFunc1<DockerfileFactoryContext, String>) (factoryContext) -> {
+            var _factoryResource = factoryContext.resource();
+            return """
+                FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+                WORKDIR /app
+                ENTRYPOINT ["dotnet", "App.dll"]
+                """;
+        };
         var dockerFactoryContainer = builder.addDockerfileFactory("dockerfactoryapp", "./app", dockerfileFactory, "runtime");
         var configureDockerfileBuilder = (AspireAction1<DockerfileBuilderCallbackContext>) (dockerfileContext) -> {
             var _dockerfileResource = dockerfileContext.resource();
