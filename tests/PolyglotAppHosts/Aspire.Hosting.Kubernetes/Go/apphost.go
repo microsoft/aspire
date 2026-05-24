@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -62,9 +62,19 @@ func main() {
 	ingress.WithTls("ingress-tls")
 
 	serviceContainer := builder.AddContainer("kube-service", "redis:alpine")
+	serviceContainer.WithComputeEnvironment(kubernetes)
 	_ = serviceContainer.PublishAsKubernetesService(func(service aspire.KubernetesResource) {
 		_, _ = service.Name()
 		_ = service.Parent()
+		_ = service.AddManifest("keda.sh/v1alpha1", "ScaledObject", "kube-service-scaler", &aspire.AddManifestOptions{
+			Configure: func(manifest aspire.KubernetesManifestResource) {
+				manifest.WithLabel("example.com/custom", "true")
+				manifest.WithAnnotation("example.com/source", "go")
+				manifest.WithField("spec.scaleTargetRef.kind", "Deployment")
+				manifest.WithField("spec.scaleTargetRef.name", "kube-service")
+				manifest.WithField("spec.maxReplicaCount", 3)
+			},
+		})
 	})
 	if err = serviceContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
@@ -74,7 +84,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

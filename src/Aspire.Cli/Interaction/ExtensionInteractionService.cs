@@ -81,6 +81,30 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
     }
 
+    public async Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
+    {
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(initialStatusText.RemoveSpectreFormatting(), _cancellationToken));
+        Debug.Assert(result);
+
+        try
+        {
+            return await _consoleInteractionService.ShowDynamicStatusAsync(
+                initialStatusText,
+                updateStatus => action(statusText =>
+                {
+                    var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(statusText.RemoveSpectreFormatting(), _cancellationToken));
+                    Debug.Assert(result);
+                    updateStatus(statusText);
+                }),
+                emoji).ConfigureAwait(false);
+        }
+        finally
+        {
+            result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(null, _cancellationToken));
+            Debug.Assert(result);
+        }
+    }
+
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(statusText.RemoveSpectreFormatting(), _cancellationToken));
@@ -252,7 +276,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
     }
 
     public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
-        PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+        PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
@@ -285,12 +309,12 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
         else
         {
-            return await _consoleInteractionService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, cancellationToken);
+            return await _consoleInteractionService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, echoSelected, cancellationToken);
         }
     }
 
     public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
-        IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+        IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
@@ -325,7 +349,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
         else
         {
-            return await _consoleInteractionService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, cancellationToken);
+            return await _consoleInteractionService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, echoSelected, cancellationToken);
         }
     }
 
@@ -337,7 +361,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         return _consoleInteractionService.DisplayIncompatibleVersionError(ex, appHostHostingSdkVersion);
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
         // Serialize the local console write onto the same channel as the backchannel call so
         // it stays ordered with prior queued operations (e.g. DisplayLines). Otherwise the
@@ -347,17 +371,17 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         var result = _extensionTaskChannel.Writer.TryWrite(async () =>
         {
             await Backchannel.DisplayErrorAsync(errorMessage.RemoveSpectreFormatting(), _cancellationToken);
-            _consoleInteractionService.DisplayError(errorMessage);
+            _consoleInteractionService.DisplayError(errorMessage, allowMarkup);
         });
         Debug.Assert(result);
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(async () =>
         {
             await Backchannel.DisplayMessageAsync(emoji.Name, message.RemoveSpectreFormatting(), _cancellationToken);
-            _consoleInteractionService.DisplayMessage(emoji, message, allowMarkup);
+            _consoleInteractionService.DisplayMessage(emoji, message, allowMarkup, consoleOverride);
         });
         Debug.Assert(result);
     }
@@ -405,11 +429,11 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         // here would surface every line twice.
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayCancellationMessageAsync(_cancellationToken));
         Debug.Assert(result);
-        _consoleInteractionService.DisplayCancellationMessage();
+        _consoleInteractionService.DisplayCancellationMessage(consoleOverride);
     }
 
     public void DisplayEmptyLine()

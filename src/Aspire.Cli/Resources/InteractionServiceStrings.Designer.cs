@@ -295,7 +295,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The project could not be built. See logs at {0}.
+        ///   Looks up a localized string similar to The project could not be built..
         /// </summary>
         public static string ProjectCouldNotBeBuilt {
             get {
@@ -304,7 +304,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The app could not be created. See logs at {0}.
+        ///   Looks up a localized string similar to The app could not be created..
         /// </summary>
         public static string ProjectCouldNotBeCreated {
             get {
@@ -435,6 +435,15 @@ namespace Aspire.Cli.Resources {
         public static string SeeLogsAt {
             get {
                 return ResourceManager.GetString("SeeLogsAt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to See app host logs at {0}.
+        /// </summary>
+        public static string SeeAppHostLogsAt {
+            get {
+                return ResourceManager.GetString("SeeAppHostLogsAt", resourceCulture);
             }
         }
 

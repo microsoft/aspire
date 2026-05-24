@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Text;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Hashing;
@@ -21,53 +22,40 @@ namespace Aspire.Hosting.Backchannel;
 /// The backchannel is a Unix domain socket that enables bidirectional communication:
 /// </para>
 /// <list type="bullet">
-/// <item>CLI → AppHost: Commands (stop, get info, etc.)</item>
-/// <item>AppHost → CLI: Status updates, events</item>
+/// <item>CLI -> AppHost: Commands (stop, get info, etc.)</item>
+/// <item>AppHost -> CLI: Status updates, events</item>
 /// </list>
 /// <para>
 /// <strong>Socket File Location</strong>
 /// </para>
 /// <para>
-/// Socket files are stored in: <c>~/.aspire/cli/backchannels/</c>
+/// Compact socket files are stored in: <c>~/.aspire/cli/bch/</c>
 /// </para>
 /// <para>
 /// <strong>Socket Naming Format</strong>
 /// </para>
 /// <para>
-/// New format: <c>auxi.sock.{appHostHash}.{instanceHash}.{pid}</c>
+/// Compact format: <c>{appHostId}{instanceId}.{pid}</c>
 /// </para>
 /// <list type="bullet">
-/// <item><c>auxi.sock</c> - Prefix (not "aux" because that's reserved on Windows)</item>
-/// <item><c>{appHostHash}</c> - xxHash(AppHost project path)[0:16] - identifies the AppHost project</item>
-/// <item><c>{instanceHash}</c> - random hex identifier[0:12] - makes each socket name non-deterministic</item>
+/// <item><c>{appHostId}</c> - xxHash(AppHost project path) encoded as 11 base64url chars - identifies the AppHost project</item>
+/// <item><c>{instanceId}</c> - 48-bit random identifier encoded as 8 base64url chars - makes each socket name non-deterministic</item>
 /// <item><c>{pid}</c> - Process ID of the AppHost - identifies the specific instance</item>
 /// </list>
 /// <para>
-/// Previous format (for backward compatibility): <c>auxi.sock.{appHostHash}.{pid}</c>
+/// Legacy current format: <c>auxi.sock.{appHostHash}.{instanceHash}.{pid}</c>
 /// </para>
 /// <para>
-/// Old format (for backward compatibility): <c>auxi.sock.{appHostHash}</c>
+/// Legacy previous format: <c>auxi.sock.{appHostHash}.{pid}</c>
 /// </para>
 /// <para>
-/// <strong>Why PID in the Filename?</strong>
-/// </para>
-/// <list type="bullet">
-/// <item>Multiple instances of the same AppHost can run simultaneously</item>
-/// <item>Orphan detection: if PID doesn't exist, socket is orphaned and can be deleted</item>
-/// <item>Fast cleanup without needing to attempt connection</item>
-/// </list>
-/// <para>
-/// <strong>Backward Compatibility</strong>
-/// </para>
-/// <para>
-/// Old CLI versions use glob pattern <c>aux*.sock.*</c> which matches the new format.
-/// Old CLIs will work with new AppHosts, they just won't benefit from PID-based orphan detection.
+/// Legacy old format: <c>auxi.sock.{appHostHash}</c>
 /// </para>
 /// </remarks>
 internal static class BackchannelConstants
 {
     /// <summary>
-    /// Prefix for auxiliary backchannel sockets.
+    /// Prefix for legacy auxiliary backchannel sockets.
     /// </summary>
     /// <remarks>
     /// Uses "auxi" instead of "aux" because "aux" is a reserved device name on Windows
@@ -77,46 +65,70 @@ internal static class BackchannelConstants
     public const string SocketPrefix = "auxi.sock";
 
     /// <summary>
-    /// Number of hex characters to use from the stable xxHash-based AppHost identifier.
+    /// Number of hex characters to use from the stable xxHash-based legacy AppHost identifier.
     /// </summary>
-    /// <remarks>
-    /// Using 16 chars (64 bits) balances uniqueness against path length constraints.
-    /// Unix socket paths are limited to ~104 characters on most systems.
-    /// Full path example: ~/.aspire/cli/backchannels/auxi.sock.bc43b855b6848166.a1b2c3d4e5f6.46730
-    /// = ~78 characters, well under the limit.
-    /// </remarks>
     public const int HashLength = 16;
 
     /// <summary>
-    /// Number of hex characters to use for compact local identifiers.
+    /// Number of hex characters to use for compact legacy local identifiers.
     /// </summary>
-    /// <remarks>
-    /// Using 12 chars (48 bits) keeps socket and package cache paths short while still providing
-    /// enough variation for local file names that are not part of a security boundary.
-    /// </remarks>
     public const int CompactIdentifierLength = 12;
 
     /// <summary>
-    /// Number of hex characters to use from the randomized instance identifier.
+    /// Number of hex characters to use from the randomized legacy instance identifier.
     /// </summary>
     public const int InstanceHashLength = CompactIdentifierLength;
 
     /// <summary>
-    /// Gets the backchannels directory path for the given home directory.
+    /// Number of base64url characters in a compact AppHost identifier.
+    /// </summary>
+    public const int CompactAppHostIdLength = 11;
+
+    /// <summary>
+    /// Number of base64url characters in a compact instance identifier.
+    /// </summary>
+    public const int CompactInstanceIdLength = 8;
+
+    private const int CompactAppHostIdByteCount = 8;
+    private const int CompactInstanceIdByteCount = 6;
+    private const int MacOSSocketPathBytesIncludingNull = 104;
+    private const int DefaultSocketPathBytesIncludingNull = 108;
+
+    /// <summary>
+    /// Gets the compact backchannels directory path for the given home directory.
     /// </summary>
     /// <param name="homeDirectory">The user's home directory.</param>
-    /// <returns>The full path to the backchannels directory.</returns>
+    /// <returns>The full path to the compact backchannels directory.</returns>
     public static string GetBackchannelsDirectory(string homeDirectory)
+        => Path.Combine(homeDirectory, ".aspire", "cli", "bch");
+
+    /// <summary>
+    /// Gets the legacy backchannels directory path for the given home directory.
+    /// </summary>
+    /// <param name="homeDirectory">The user's home directory.</param>
+    /// <returns>The full path to the legacy backchannels directory.</returns>
+    public static string GetLegacyBackchannelsDirectory(string homeDirectory)
         => Path.Combine(homeDirectory, ".aspire", "cli", "backchannels");
 
     /// <summary>
-    /// Computes the hash portion of the socket name from an AppHost path.
+    /// Computes the compact AppHost identifier from an AppHost path.
+    /// </summary>
+    /// <param name="appHostPath">The full path to the AppHost project file.</param>
+    /// <returns>An 11-character base64url string.</returns>
+    public static string ComputeAppHostId(string appHostPath)
+    {
+        return ComputeStableBase64UrlIdentifier(NormalizePath(appHostPath), CompactAppHostIdByteCount);
+    }
+
+    /// <summary>
+    /// Computes the legacy hash portion of the socket name from an AppHost path.
     /// </summary>
     /// <remarks>
-    /// On Windows the drive letter is normalized to uppercase before hashing so that
-    /// "C:\App\MyApp.csproj" and "c:\App\MyApp.csproj" produce the same hash.
-    /// Without this, the CLI and AppHost can derive different drive-letter casings
-    /// (e.g. <c>FileInfo.FullName</c> vs MSBuild metadata) and fail to match sockets.
+    /// On Windows the entire path is upper-cased before hashing so that paths differing
+    /// only in casing (for example, <c>FileInfo.FullName</c> on the CLI side vs. MSBuild
+    /// metadata on the AppHost side) produce the same hash. On other platforms the path
+    /// is hashed as-is because case-sensitive APFS exists on macOS and Linux file systems
+    /// are case-sensitive.
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <returns>A 16-character lowercase hex string.</returns>
@@ -135,7 +147,6 @@ internal static class BackchannelConstants
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <returns>A 16-character lowercase hex string, or <c>null</c> if it matches the current hash.</returns>
-    // TODO: Remove legacy hash support once all supported AppHost versions use normalized hashing.
     public static string? ComputeLegacyHash(string appHostPath)
     {
         if (!OperatingSystem.IsWindows())
@@ -172,26 +183,52 @@ internal static class BackchannelConstants
     }
 
     /// <summary>
-    /// Normalizes the path for consistent hashing by uppercasing the Windows drive letter.
+    /// Computes all legacy hashes that should be searched for an AppHost path.
     /// </summary>
-    private static string NormalizePath(string path)
+    /// <remarks>
+    /// Returns, in order: the current normalized hash, the drive-letter-only normalized hash
+    /// (produced by AppHost versions that only upper-cased the drive letter before hashing),
+    /// and any raw-path fallback returned by <see cref="ComputeLegacyHash"/>. Duplicates are
+    /// removed.
+    /// </remarks>
+    /// <param name="appHostPath">The full path to the AppHost project file.</param>
+    /// <returns>All hash variants that should be searched.</returns>
+    public static string[] ComputeLegacyHashes(string appHostPath)
     {
-        // On Windows, the drive letter casing can differ between callers
-        // (e.g. FileInfo.FullName produces "C:\..." while MSBuild metadata may produce "c:\...").
-        // Uppercase only the drive letter so both sides hash identically.
-        if (OperatingSystem.IsWindows() && path.Length >= 2 && path[1] == ':')
+        var currentHash = ComputeHash(appHostPath);
+        var rawLegacyHash = ComputeLegacyHash(appHostPath);
+
+        var results = new List<string>() { currentHash };
+        if (rawLegacyHash is not null && !results.Contains(rawLegacyHash, StringComparer.Ordinal))
         {
-            return char.ToUpperInvariant(path[0]) + path[1..];
+            results.Add(rawLegacyHash);
         }
 
-        return path;
+        return results.ToArray();
+    }
+
+    /// <summary>
+    /// Normalizes the path for consistent hashing.
+    /// </summary>
+    /// <remarks>
+    /// On Windows the entire path is upper-cased with <see cref="string.ToUpperInvariant"/>.
+    /// NTFS/ReFS treat paths as case-insensitive, but neither <c>FileInfo.FullName</c> (CLI side)
+    /// nor MSBuild metadata (AppHost side) canonicalizes casing against disk, so any segment
+    /// can differ between the two sides. <c>ToUpperInvariant</c> is deterministic across
+    /// machines and cultures, so both sides always agree on the same hash input.
+    /// On macOS and Linux the path is returned unchanged: case-sensitive APFS exists on macOS
+    /// and Linux file systems are case-sensitive by default.
+    /// </remarks>
+    private static string NormalizePath(string path)
+    {
+        return OperatingSystem.IsWindows() ? path.ToUpperInvariant() : path;
     }
 
     /// <summary>
     /// Computes the full socket path for an AppHost instance.
     /// </summary>
     /// <remarks>
-    /// Called by AppHost when creating the socket. Includes a randomized instance hash and the PID
+    /// Called by AppHost when creating the socket. Includes a randomized instance ID and the PID
     /// to ensure uniqueness across multiple instances of the same AppHost.
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
@@ -200,136 +237,130 @@ internal static class BackchannelConstants
     /// <returns>The full socket path including PID.</returns>
     public static string ComputeSocketPath(string appHostPath, string homeDirectory, int processId)
     {
-        var dir = GetBackchannelsDirectory(homeDirectory);
-        var hash = ComputeHash(appHostPath);
-        var instanceHash = CreateRandomIdentifier(InstanceHashLength);
-        return Path.Combine(dir, $"{SocketPrefix}.{hash}.{instanceHash}.{processId}");
+        var appHostId = ComputeAppHostId(appHostPath);
+        return ComputeSocketPathFromAppHostId(appHostId, homeDirectory, processId);
     }
 
     /// <summary>
-    /// Computes the socket path prefix for finding sockets (without PID).
+    /// Computes the full socket path for an AppHost identifier.
+    /// </summary>
+    /// <param name="appHostId">The compact AppHost identifier.</param>
+    /// <param name="homeDirectory">The user's home directory.</param>
+    /// <param name="processId">The process ID of the AppHost.</param>
+    /// <returns>The full socket path including PID.</returns>
+    public static string ComputeSocketPathFromAppHostId(string appHostId, string homeDirectory, int processId)
+    {
+        ValidateCompactAppHostId(appHostId);
+
+        var dir = GetBackchannelsDirectory(homeDirectory);
+        var instanceId = CreateRandomBase64UrlIdentifier();
+        var socketPath = Path.Combine(dir, $"{appHostId}{instanceId}.{processId.ToString(CultureInfo.InvariantCulture)}");
+        ValidateSocketPathLength(socketPath);
+
+        return socketPath;
+    }
+
+    /// <summary>
+    /// Computes a randomized CLI-managed Unix socket path.
+    /// </summary>
+    /// <param name="homeDirectory">The user's home directory.</param>
+    /// <param name="socketPrefix">The logical socket prefix requested by the caller.</param>
+    /// <returns>The full socket path.</returns>
+    public static string ComputeCliSocketPath(string homeDirectory, string socketPrefix)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(socketPrefix);
+
+        var dir = GetBackchannelsDirectory(homeDirectory);
+        var socketName = ComputeSocketFileName(socketPrefix);
+        var socketPath = Path.Combine(dir, socketName);
+        ValidateSocketPathLength(socketPath);
+
+        return socketPath;
+    }
+
+    public static string ComputeSocketFileName(string socketPrefix)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(socketPrefix);
+
+        return $"{GetCompactCliSocketPrefix(socketPrefix)}{CreateRandomBase64UrlIdentifier()}";
+    }
+
+    /// <summary>
+    /// Computes the socket path prefix for finding compact sockets.
     /// </summary>
     /// <remarks>
     /// Called by CLI when searching for sockets. Since the CLI doesn't know the
-    /// AppHost's PID, it uses this prefix with a glob pattern to find matching sockets.
+    /// AppHost's PID or instance ID, it uses this prefix with a glob pattern to find matching sockets.
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <param name="homeDirectory">The user's home directory.</param>
-    /// <returns>The socket path prefix (without PID suffix).</returns>
+    /// <returns>The socket path prefix.</returns>
     public static string ComputeSocketPrefix(string appHostPath, string homeDirectory)
     {
         var dir = GetBackchannelsDirectory(homeDirectory);
-        var hash = ComputeHash(appHostPath);
-        return Path.Combine(dir, $"{SocketPrefix}.{hash}");
+        var appHostId = ComputeAppHostId(appHostPath);
+        return Path.Combine(dir, appHostId);
     }
 
     /// <summary>
     /// Finds all socket files matching the given AppHost path.
     /// </summary>
     /// <remarks>
-    /// Returns all socket files for an AppHost, regardless of PID. This includes
-    /// old format (<c>auxi.sock.{hash}</c>), previous format (<c>auxi.sock.{hash}.{pid}</c>),
-    /// and current format (<c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
+    /// Returns all compact socket files for an AppHost and falls back to legacy
+    /// <c>auxi.sock.{hash}</c>, <c>auxi.sock.{hash}.{pid}</c>, and
+    /// <c>auxi.sock.{hash}.{instanceHash}.{pid}</c> names for older AppHosts.
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <param name="homeDirectory">The user's home directory.</param>
     /// <returns>An array of socket file paths, or empty if none found.</returns>
     public static string[] FindMatchingSockets(string appHostPath, string homeDirectory)
     {
-        var dir = GetBackchannelsDirectory(homeDirectory);
+        var results = new List<string>();
 
-        if (!Directory.Exists(dir))
+        var compactDir = GetBackchannelsDirectory(homeDirectory);
+        var appHostId = ComputeAppHostId(appHostPath);
+        results.AddRange(FindCompactSocketsByAppHostId(compactDir, appHostId));
+
+        var legacyDir = GetLegacyBackchannelsDirectory(homeDirectory);
+        foreach (var legacyHash in ComputeLegacyHashes(appHostPath))
         {
-            return [];
+            results.AddRange(FindLegacySocketsByPrefix(legacyDir, $"{SocketPrefix}.{legacyHash}"));
+            results.AddRange(FindLegacySocketsByPrefix(legacyDir, $"aux.sock.{legacyHash}"));
         }
 
-        var hash = ComputeHash(appHostPath);
-        var prefixFileName = $"{SocketPrefix}.{hash}";
-        var results = FindSocketsByPrefix(dir, prefixFileName);
-
-        // Also search for sockets created by older AppHosts that used the raw (unnormalized) path hash.
-        var legacyHash = ComputeLegacyHash(appHostPath);
-        if (legacyHash is not null)
-        {
-            var legacyPrefixFileName = $"{SocketPrefix}.{legacyHash}";
-            var legacyResults = FindSocketsByPrefix(dir, legacyPrefixFileName);
-            if (legacyResults.Length > 0)
-            {
-                results = [.. results, .. legacyResults];
-            }
-        }
-
-        return results;
+        return results.Distinct(StringComparer.Ordinal).ToArray();
     }
 
     /// <summary>
-    /// Finds socket files in <paramref name="directory"/> whose names match
-    /// <paramref name="prefixFileName"/> in any of the supported socket name formats.
-    /// </summary>
-    private static string[] FindSocketsByPrefix(string directory, string prefixFileName)
-    {
-        // Match old format (auxi.sock.{hash}), previous format (auxi.sock.{hash}.{pid}),
-        // and current format (auxi.sock.{hash}.{instanceHash}.{pid})
-        // Use pattern with "*" to match optional PID suffix
-        var allMatches = Directory.GetFiles(directory, prefixFileName + "*");
-
-        // Filter to only include exact match (old format), .{pid} suffix (previous format),
-        // or .{instanceHash}.{pid} suffix (current format). This avoids matching
-        // auxi.sock.{hash}abc (different hash that starts with same chars) and files
-        // like auxi.sock.{hash}.12345.bak.
-        return allMatches.Where(f =>
-        {
-            var fileName = Path.GetFileName(f);
-            if (fileName == prefixFileName)
-            {
-                return true; // Old format: exact match
-            }
-
-            if (!fileName.StartsWith(prefixFileName + ".", StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            var suffix = fileName[(prefixFileName.Length + 1)..];
-            var segments = suffix.Split('.');
-
-            if (segments.Length == 1 &&
-                int.TryParse(segments[0], NumberStyles.None, CultureInfo.InvariantCulture, out _))
-            {
-                return true; // Previous format: prefix followed by integer PID
-            }
-
-            return segments.Length == 2 &&
-                   IsHex(segments[0]) &&
-                   int.TryParse(segments[1], NumberStyles.None, CultureInfo.InvariantCulture, out _);
-        }).ToArray();
-    }
-
-    /// <summary>
-    /// Extracts the hash from a socket filename.
+    /// Extracts the AppHost identifier from a socket filename.
     /// </summary>
     /// <remarks>
-    /// Works with old format (<c>auxi.sock.{hash}</c>), previous format (<c>auxi.sock.{hash}.{pid}</c>),
-    /// and current format (<c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
+    /// Works with compact format (<c>{appHostId}{instanceId}.{pid}</c>) and legacy
+    /// formats (<c>auxi.sock.{hash}</c>, <c>auxi.sock.{hash}.{pid}</c>,
+    /// and <c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
     /// </remarks>
     /// <param name="socketPath">The full socket path or filename.</param>
-    /// <returns>The hash portion, or <c>null</c> if the format is unrecognized.</returns>
+    /// <returns>The AppHost identifier or hash portion, or <c>null</c> if the format is unrecognized.</returns>
     public static string? ExtractHash(string socketPath)
     {
         var fileName = Path.GetFileName(socketPath);
 
-        // Handle current format: auxi.sock.{hash}.{instanceHash}.{pid}
-        // Handle previous format: auxi.sock.{hash}.{pid}
-        // Handle old format: auxi.sock.{hash}
+        if (TryExtractCompactAppHostId(fileName, out var appHostId))
+        {
+            return appHostId;
+        }
+
+        // Handle legacy current format: auxi.sock.{hash}.{instanceHash}.{pid}
+        // Handle legacy previous format: auxi.sock.{hash}.{pid}
+        // Handle legacy old format: auxi.sock.{hash}
         if (fileName.StartsWith($"{SocketPrefix}.", StringComparison.Ordinal))
         {
-            var afterPrefix = fileName[($"{SocketPrefix}.".Length)..];
-            // If there's another dot, it's a multi-segment format - return just the AppHost hash part
+            var afterPrefix = fileName[$"{SocketPrefix}.".Length..];
             var dotIndex = afterPrefix.IndexOf('.');
             return dotIndex > 0 ? afterPrefix[..dotIndex] : afterPrefix;
         }
 
-        // Handle legacy format: aux.sock.{hash}
+        // Handle oldest legacy format: aux.sock.{hash}
         if (fileName.StartsWith("aux.sock.", StringComparison.Ordinal))
         {
             var afterPrefix = fileName["aux.sock.".Length..];
@@ -353,6 +384,7 @@ internal static class BackchannelConstants
         {
             return pid;
         }
+
         return null;
     }
 
@@ -385,26 +417,18 @@ internal static class BackchannelConstants
     }
 
     /// <summary>
-    /// Cleans up orphaned socket files for a specific AppHost hash.
+    /// Cleans up orphaned socket files for a specific AppHost identifier or legacy hash.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Called by AppHost on startup to clean up sockets from previous crashed instances.
-    /// This ensures orphan cleanup happens even if the user has an old CLI that doesn't
-    /// support PID-based orphan detection.
-    /// </para>
-    /// <para>
-    /// <strong>Limitation:</strong> This method only cleans up sockets that include a PID
-    /// (<c>auxi.sock.{hash}.{pid}</c> or <c>auxi.sock.{hash}.{instanceHash}.{pid}</c>)
-    /// because old format sockets (<c>auxi.sock.{hash}</c>) don't have a PID for orphan detection.
-    /// Old format sockets are cleaned up via connection-based detection in the CLI.
-    /// </para>
+    /// This method only cleans up sockets that include a PID because old format sockets
+    /// do not have a PID for orphan detection.
     /// </remarks>
     /// <param name="backchannelsDirectory">The backchannels directory path.</param>
-    /// <param name="hash">The AppHost hash to match.</param>
+    /// <param name="hash">The AppHost identifier or legacy hash to match.</param>
     /// <param name="currentPid">The current process ID (to avoid deleting own socket).</param>
+    /// <param name="prefixedFilesOnly">If true, only delete files that start with the expected prefix (e.g., "auxi.sock.{hash}"). This speeds up file detection, but the prefix is only used by legacy sockets.</param>
     /// <returns>The number of orphaned sockets deleted.</returns>
-    public static int CleanupOrphanedSockets(string backchannelsDirectory, string hash, int currentPid)
+    public static int CleanupOrphanedSockets(string backchannelsDirectory, string hash, int currentPid, bool prefixedFilesOnly = false)
     {
         var deleted = 0;
 
@@ -413,10 +437,16 @@ internal static class BackchannelConstants
             return deleted;
         }
 
-        // Find all sockets for this hash across all supported formats.
-        var pattern = $"{SocketPrefix}.{hash}*";
-        foreach (var socketPath in Directory.GetFiles(backchannelsDirectory, pattern))
+        var files = prefixedFilesOnly
+            ? Directory.GetFiles(backchannelsDirectory, $"{SocketPrefix}.{hash}*")
+            : Directory.GetFiles(backchannelsDirectory);
+        foreach (var socketPath in files)
         {
+            if (!string.Equals(ExtractHash(socketPath), hash, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
             var pid = ExtractPid(socketPath);
             if (pid.HasValue && pid.Value != currentPid && !ProcessExists(pid.Value))
             {
@@ -430,15 +460,15 @@ internal static class BackchannelConstants
                         deleted++;
                     }
                 }
-                catch
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
                 {
-                    // Ignore deletion failures
                 }
             }
         }
 
         return deleted;
     }
+
     /// <summary>
     /// Computes a compact stable identifier from a string value.
     /// </summary>
@@ -453,14 +483,12 @@ internal static class BackchannelConstants
     {
         ArgumentException.ThrowIfNullOrEmpty(value);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(length);
-        var xxHash = new XxHash3();
-        xxHash.Append(Encoding.UTF8.GetBytes(value));
-
-        return ToLowerHexIdentifier(xxHash.GetCurrentHash(), length);
+        var hashBytes = XxHash3.Hash(Encoding.UTF8.GetBytes(value));
+        return ToLowerHexIdentifier(hashBytes, length);
     }
 
     /// <summary>
-    /// Creates a compact randomized identifier.
+    /// Creates a compact randomized hex identifier.
     /// </summary>
     /// <param name="length">The number of lowercase hex characters to return.</param>
     /// <returns>A lowercase hex identifier truncated to <paramref name="length"/> characters.</returns>
@@ -474,12 +502,211 @@ internal static class BackchannelConstants
         return ToLowerHexIdentifier(randomBytes, length);
     }
 
+    /// <summary>
+    /// Creates a compact randomized base64url identifier.
+    /// </summary>
+    /// <param name="byteCount">The number of random bytes to encode.</param>
+    /// <returns>An unpadded base64url identifier.</returns>
+    public static string CreateRandomBase64UrlIdentifier(int byteCount = CompactInstanceIdByteCount)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(byteCount);
+
+        Span<byte> randomBytes = stackalloc byte[byteCount];
+        RandomNumberGenerator.Fill(randomBytes);
+
+        return ToBase64UrlIdentifier(randomBytes);
+    }
+
+    /// <summary>
+    /// Gets the Unix domain socket path byte limit for the current platform, including the trailing null byte.
+    /// </summary>
+    /// <returns>The maximum number of bytes including the trailing null byte.</returns>
+    public static int GetMaxSocketPathBytesIncludingNull()
+        => OperatingSystem.IsMacOS() ? MacOSSocketPathBytesIncludingNull : DefaultSocketPathBytesIncludingNull;
+
+    /// <summary>
+    /// Gets the UTF-8 byte count for a Unix domain socket path, including the trailing null byte.
+    /// </summary>
+    /// <param name="socketPath">The socket path.</param>
+    /// <returns>The byte count including the trailing null byte.</returns>
+    public static int GetSocketPathByteCountIncludingNull(string socketPath)
+    {
+        ArgumentNullException.ThrowIfNull(socketPath);
+
+        return Encoding.UTF8.GetByteCount(socketPath) + 1;
+    }
+
+    /// <summary>
+    /// Validates that a Unix domain socket path fits within the current platform's byte limit.
+    /// </summary>
+    /// <param name="socketPath">The socket path to validate.</param>
+    /// <exception cref="InvalidOperationException">Thrown when the path exceeds the platform byte limit.</exception>
+    public static void ValidateSocketPathLength(string socketPath)
+    {
+        var byteCount = GetSocketPathByteCountIncludingNull(socketPath);
+        var maxByteCount = GetMaxSocketPathBytesIncludingNull();
+
+        if (byteCount > maxByteCount)
+        {
+            throw new InvalidOperationException(
+                $"The Unix domain socket path '{socketPath}' is {byteCount.ToString(CultureInfo.InvariantCulture)} bytes including the trailing null byte, " +
+                $"which exceeds the {maxByteCount.ToString(CultureInfo.InvariantCulture)}-byte limit on this platform.");
+        }
+    }
+
+    private static string[] FindCompactSocketsByAppHostId(string directory, string appHostId)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return [];
+        }
+
+        return Directory.GetFiles(directory, appHostId + "*")
+            .Where(f =>
+            {
+                var fileName = Path.GetFileName(f);
+                return TryExtractCompactAppHostId(fileName, out var extractedAppHostId) &&
+                       string.Equals(extractedAppHostId, appHostId, StringComparison.Ordinal);
+            })
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Finds socket files in <paramref name="directory"/> whose names match
+    /// <paramref name="prefixFileName"/> in any of the supported legacy socket name formats.
+    /// </summary>
+    private static string[] FindLegacySocketsByPrefix(string directory, string prefixFileName)
+    {
+        if (!Directory.Exists(directory))
+        {
+            return [];
+        }
+
+        // Match old format (auxi.sock.{hash}), previous format (auxi.sock.{hash}.{pid}),
+        // and current legacy format (auxi.sock.{hash}.{instanceHash}.{pid}).
+        var allMatches = Directory.GetFiles(directory, prefixFileName + "*");
+
+        // Filter to only include exact match (old format), .{pid} suffix (previous format),
+        // or .{instanceHash}.{pid} suffix (current legacy format). This avoids matching
+        // auxi.sock.{hash}abc (different hash that starts with same chars) and files
+        // like auxi.sock.{hash}.12345.bak.
+        return allMatches.Where(f =>
+        {
+            var fileName = Path.GetFileName(f);
+            if (fileName == prefixFileName)
+            {
+                return true; // Old format: exact match
+            }
+
+            if (!fileName.StartsWith(prefixFileName + ".", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var suffix = fileName[(prefixFileName.Length + 1)..];
+            var segments = suffix.Split('.');
+
+            if (segments.Length == 1 &&
+                int.TryParse(segments[0], NumberStyles.None, CultureInfo.InvariantCulture, out _))
+            {
+                return true; // Previous format: prefix followed by integer PID
+            }
+
+            return segments.Length == 2 &&
+                   IsHex(segments[0]) &&
+                   int.TryParse(segments[1], NumberStyles.None, CultureInfo.InvariantCulture, out _);
+        }).ToArray();
+    }
+
+    private static bool TryExtractCompactAppHostId(string fileName, out string appHostId)
+    {
+        appHostId = string.Empty;
+
+        if (fileName.Length == CompactAppHostIdLength && IsBase64UrlIdentifier(fileName))
+        {
+            appHostId = fileName;
+            return true;
+        }
+
+        var pidSeparatorIndex = CompactAppHostIdLength + CompactInstanceIdLength;
+        if (fileName.Length <= pidSeparatorIndex ||
+            fileName[pidSeparatorIndex] != '.')
+        {
+            return false;
+        }
+
+        var candidateAppHostId = fileName[..CompactAppHostIdLength];
+        var instanceId = fileName[CompactAppHostIdLength..pidSeparatorIndex];
+        var pidText = fileName[(pidSeparatorIndex + 1)..];
+
+        if (IsBase64UrlIdentifier(candidateAppHostId) &&
+            IsBase64UrlIdentifier(instanceId) &&
+            int.TryParse(pidText, NumberStyles.None, CultureInfo.InvariantCulture, out _))
+        {
+            appHostId = candidateAppHostId;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void ValidateCompactAppHostId(string appHostId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(appHostId);
+
+        if (appHostId.Length != CompactAppHostIdLength || !IsBase64UrlIdentifier(appHostId))
+        {
+            throw new ArgumentException(
+                $"The compact AppHost identifier must be {CompactAppHostIdLength.ToString(CultureInfo.InvariantCulture)} base64url characters.",
+                nameof(appHostId));
+        }
+    }
+
+    private static string ComputeStableBase64UrlIdentifier(string value, int byteCount)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(value);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(byteCount);
+
+        var xxHash = new XxHash3();
+        xxHash.Append(Encoding.UTF8.GetBytes(value));
+        var hash = xxHash.GetCurrentHash();
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(byteCount, hash.Length);
+
+        return ToBase64UrlIdentifier(hash.AsSpan(0, byteCount));
+    }
+
+    private static string GetCompactCliSocketPrefix(string socketPrefix)
+    {
+        if (socketPrefix.StartsWith("cli", StringComparison.OrdinalIgnoreCase))
+        {
+            return "c";
+        }
+
+        if (socketPrefix.StartsWith("apphost", StringComparison.OrdinalIgnoreCase))
+        {
+            return "h";
+        }
+
+        return "s";
+    }
+
     private static bool IsHex(string value)
         => !string.IsNullOrEmpty(value) && value.All(static c => char.IsAsciiHexDigit(c));
+
+    private static bool IsBase64UrlIdentifier(string value)
+        => !string.IsNullOrEmpty(value) && value.All(static c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_');
 
     private static string ToLowerHexIdentifier(ReadOnlySpan<byte> bytes, int length)
     {
         var hex = Convert.ToHexString(bytes).ToLowerInvariant();
         return hex[..Math.Min(length, hex.Length)];
+    }
+
+    private static string ToBase64UrlIdentifier(ReadOnlySpan<byte> bytes)
+    {
+        return Convert.ToBase64String(bytes)
+            .TrimEnd('=')
+            .Replace('+', '-')
+            .Replace('/', '_');
     }
 }

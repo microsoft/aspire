@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Utils;
@@ -422,6 +423,40 @@ public class AddParameterTests
     }
 
     [Fact]
+    public void ParameterCreateInput_WithNameOverride_UsesOverrideAsInputName()
+    {
+        // Arrange
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithDescription("Test description");
+
+        // Act
+        var input = parameter.Resource.CreateInput("value");
+
+        // Assert
+        Assert.Equal("value", input.Name);
+        Assert.Equal("test", input.Label);
+        Assert.Equal("Test description", input.Description);
+        Assert.Equal(string.Format(InteractionStrings.ParametersInputsParameterPlaceholder, "test"), input.Placeholder);
+    }
+
+    [Fact]
+    public void ParameterCreateInput_WithDynamicLoading_SetsDynamicLoading()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test");
+        var dynamicLoading = new InputLoadOptions
+        {
+            AlwaysLoadOnStart = true,
+            LoadCallback = _ => Task.CompletedTask
+        };
+
+        var input = parameter.Resource.CreateInput(dynamicLoading: dynamicLoading);
+
+        Assert.Same(dynamicLoading, input.DynamicLoading);
+    }
+
+    [Fact]
     public void ParameterCreateInput_ForSecretParameter_ReturnsSecretTextInput()
     {
         // Arrange
@@ -469,6 +504,56 @@ public class AddParameterTests
     }
 
     [Fact]
+    public void ParameterCreateInput_WithCustomGeneratorAndNameOverride_UsesOverrideAsInputName()
+    {
+        // Arrange
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithCustomInput(_ => new InteractionInput
+            {
+                Name = "CustomInput",
+                InputType = InputType.Number,
+                Label = "Custom Label",
+                Description = "Custom description",
+                Placeholder = "Enter number",
+                Value = "5"
+            });
+
+        // Act
+        var input = parameter.Resource.CreateInput("value");
+
+        // Assert
+        Assert.Equal("value", input.Name);
+        Assert.Equal(InputType.Number, input.InputType);
+        Assert.Equal("Custom Label", input.Label);
+        Assert.Equal("Custom description", input.Description);
+        Assert.Equal("Enter number", input.Placeholder);
+        Assert.Equal("5", input.Value);
+    }
+
+    [Fact]
+    public void ParameterCreateInput_WithCustomGeneratorAndDynamicLoading_UsesDynamicLoading()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithCustomInput(_ => new InteractionInput
+            {
+                Name = "CustomInput",
+                InputType = InputType.Number,
+                Label = "Custom Label"
+            });
+        var dynamicLoading = new InputLoadOptions
+        {
+            AlwaysLoadOnStart = true,
+            LoadCallback = _ => Task.CompletedTask
+        };
+
+        var input = parameter.Resource.CreateInput(dynamicLoading: dynamicLoading);
+
+        Assert.Same(dynamicLoading, input.DynamicLoading);
+    }
+
+    [Fact]
     public void ParameterCreateInput_WithMarkdownDescription_SetsMarkupFlag()
     {
         // Arrange
@@ -510,7 +595,111 @@ public class AddParameterTests
         Assert.Equal("Custom description", input.Description);
         Assert.False(input.EnableDescriptionMarkdown);
     }
+
+    [Fact]
+    public void ParameterWithPolyglotCustomInput_AddsInputGeneratorAnnotation()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var parameter = appBuilder.AddParameter("worker-count")
+            .WithDescription("**Worker** count", enableMarkdown: true);
+
+        InvokeWithCustomInputForPolyglot(parameter, new Dictionary<string, object?>
+        {
+            [nameof(InteractionInput.InputType)] = InputType.Number,
+            [nameof(InteractionInput.Label)] = "Worker Count",
+            [nameof(InteractionInput.Placeholder)] = "Enter number (1-10)",
+            [nameof(InteractionInput.Options)] = new Dictionary<string, string>
+            {
+                ["one"] = "One",
+                ["two"] = "Two"
+            },
+            [nameof(InteractionInput.Value)] = "2",
+            [nameof(InteractionInput.MaxLength)] = 2
+        });
+
+        Assert.True(parameter.Resource.Annotations.OfType<InputGeneratorAnnotation>().Any());
+
+        var input = parameter.Resource.CreateInput("value", required: true);
+        Assert.Equal("value", input.Name);
+        Assert.Equal(InputType.Number, input.InputType);
+        Assert.Equal("Worker Count", input.Label);
+        Assert.Equal("**Worker** count", input.Description);
+        Assert.True(input.EnableDescriptionMarkdown);
+        Assert.Equal("Enter number (1-10)", input.Placeholder);
+        Assert.Equal("2", input.Value);
+        Assert.True(input.Required);
+        Assert.Equal(2, input.MaxLength);
+        Assert.Collection(input.Options!,
+            option =>
+            {
+                Assert.Equal("one", option.Key);
+                Assert.Equal("One", option.Value);
+            },
+            option =>
+            {
+                Assert.Equal("two", option.Key);
+                Assert.Equal("Two", option.Value);
+            });
+    }
+
+    [Fact]
+    public void ParameterWithPolyglotCustomInput_DefaultsToSecretTextForSecretParameter()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var parameter = appBuilder.AddParameter("api-key", secret: true);
+        InvokeWithCustomInputForPolyglot(parameter);
+
+        var input = parameter.Resource.CreateInput();
+        Assert.Equal(InputType.SecretText, input.InputType);
+        Assert.Equal("api-key", input.Label);
+        Assert.Equal(string.Format(InteractionStrings.ParametersInputsParameterPlaceholder, "api-key"), input.Placeholder);
+    }
+
+    [Fact]
+    public void ParameterWithPolyglotCustomInput_IgnoresEmptyOptionalValues()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var parameter = appBuilder.AddParameter("worker-count")
+            .WithDescription("**Worker** count", enableMarkdown: true);
+
+        InvokeWithCustomInputForPolyglot(parameter, new Dictionary<string, object?>
+        {
+            [nameof(InteractionInput.Label)] = "",
+            [nameof(InteractionInput.Description)] = "",
+            [nameof(InteractionInput.Placeholder)] = "",
+            [nameof(InteractionInput.Value)] = "",
+            [nameof(InteractionInput.Options)] = new Dictionary<string, string>()
+        });
+
+        var input = parameter.Resource.CreateInput();
+        Assert.Equal("worker-count", input.Label);
+        Assert.Equal("**Worker** count", input.Description);
+        Assert.True(input.EnableDescriptionMarkdown);
+        Assert.Equal(string.Format(InteractionStrings.ParametersInputsParameterPlaceholder, "worker-count"), input.Placeholder);
+        Assert.Null(input.Value);
+        Assert.Null(input.Options);
+    }
 #pragma warning restore ASPIREINTERACTION001
+
+    private static void InvokeWithCustomInputForPolyglot(IResourceBuilder<ParameterResource> parameter, IReadOnlyDictionary<string, object?>? properties = null)
+    {
+        var hostingAssembly = typeof(ParameterResourceBuilderExtensions).Assembly;
+        var optionsType = hostingAssembly.GetType("Aspire.Hosting.Ats.ParameterCustomInputOptions", throwOnError: true)!;
+        var options = Activator.CreateInstance(optionsType, nonPublic: true)!;
+
+        foreach (var (propertyName, value) in properties ?? new Dictionary<string, object?>())
+        {
+            optionsType.GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public)!.SetValue(options, value);
+        }
+
+        var method = typeof(ParameterResourceBuilderExtensions).GetMethod(
+            "WithCustomInputForPolyglot",
+            BindingFlags.Static | BindingFlags.NonPublic)!;
+        method.Invoke(null, [parameter, options]);
+    }
 
     [Fact]
     public async Task ParameterWithDashInName_CanBeResolvedWithUnderscoreInConfiguration()

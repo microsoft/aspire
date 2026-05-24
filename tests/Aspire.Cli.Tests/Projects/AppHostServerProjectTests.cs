@@ -32,7 +32,6 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         appPath ??= _workspace.WorkspaceRoot.FullName;
         var runner = new TestDotNetCliRunner();
         var packagingService = MockPackagingServiceFactory.Create();
-        var configurationService = new TestConfigurationService();
         var logger = NullLogger<DotNetBasedAppHostServerProject>.Instance;
 
         // Generate socket path same way as factory
@@ -41,7 +40,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         // Use workspace root as repo root for testing
         var repoRoot = _workspace.WorkspaceRoot.FullName;
 
-        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, configurationService, logger);
+        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, logger);
     }
 
     [Fact]
@@ -161,6 +160,24 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task CreateProjectFiles_SkipsAspireIntegrationAnalyzerReferences()
+    {
+        var project = CreateProject();
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(packages).DefaultTimeout();
+
+        var doc = XDocument.Load(projectPath);
+        var skipAnalyzersElement = doc.Descendants("SkipAspireIntegrationAnalyzersReference").SingleOrDefault();
+
+        Assert.NotNull(skipAnalyzersElement);
+        Assert.Equal("true", skipAnalyzersElement.Value);
+    }
+
+    [Fact]
     public void DefaultSdkVersion_ReturnsValidVersion()
     {
         // Act
@@ -269,13 +286,6 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
             }
             """);
 
-        // Configure global config to return "pr-old" (the WRONG channel)
-        // This simulates a stale global config that hasn't been updated
-        var configurationService = new TestConfigurationService
-        {
-            OnGetConfiguration = key => key == "channel" ? "pr-old" : null
-        };
-
         // Create a packaging service that returns explicit channels for both PR hives
         var prOldHivePath = prOldHive.FullName;
         var prNewHivePath = prNewHive.FullName;
@@ -289,22 +299,22 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
                 {
                     new PackageMapping("Aspire*", prOldHivePath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, nugetCache);
+                }, nugetCache, new TestFeatures());
 
                 var prNewChannel = PackageChannel.CreateExplicitChannel("pr-new", PackageChannelQuality.Prerelease, new[]
                 {
                     new PackageMapping("Aspire*", prNewHivePath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, nugetCache);
+                }, nugetCache, new TestFeatures());
 
-                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache);
+                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache, new TestFeatures());
 
                 return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, prOldChannel, prNewChannel });
             }
         };
 
         var runner = new TestDotNetCliRunner();
-        
+
         // Use a real logger to capture debug output for diagnostics
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
@@ -315,7 +325,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         // Use a workspace-local ProjectModelPath for test isolation
         var projectModelPath = Path.Combine(appPath, ".aspire_server");
-        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, configurationService, logger, projectModelPath);
+        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, logger, projectModelPath);
 
         var packages = new List<IntegrationReference>
         {
@@ -359,16 +369,120 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.DoesNotContain(prOldHive.FullName, restoreSources);
     }
 
+    [Fact]
+    public async Task CreateProjectFiles_WithPackageSourceOverride_PrependsOverrideToRestoreAdditionalProjectSources()
+    {
+        // Regression for finding #2 of the 2026-05-19 post-merge review: the DotNet-based
+        // (in-repo / dogfood) AppHost path previously declared a packageSourceOverride parameter
+        // on PrepareAsync but ignored it during restore, so `aspire new --source <pr-hive>` was
+        // silently dropped in dev mode. The override now threads through CreateProjectFilesAsync
+        // and prepends to the RestoreAdditionalProjectSources list so the dogfood hive is the
+        // first source NuGet evaluates for any PackageReference fallback in this path.
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        const string overrideSource = "/tmp/aspire-pr-hive/packages";
+        var aspireConfigPath = Path.Combine(appPath, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "daily"
+            }
+            """);
+
+        var nugetCache = new FakeNuGetPackageCache();
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/fake/v3/index.json"),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        }, nugetCache, new TestFeatures());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
+        };
+
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
+
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectFilePath, _) = await project.CreateProjectFilesAsync(packages, packageSourceOverride: overrideSource, cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.NotNull(restoreSources);
+        var sources = restoreSources!.Split(';');
+        // Override is prepended so the hive wins NuGet's source evaluation order when the same
+        // Aspire package version exists in both the hive and the channel feed.
+        Assert.Equal(overrideSource, sources[0]);
+        Assert.Contains("https://pkgs.dev.azure.com/fake/v3/index.json", sources);
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_WithoutPackageSourceOverride_DoesNotInjectExtraSource()
+    {
+        // Negative companion to the override regression: ensure the no-override path still emits
+        // only the channel sources (i.e., we are not accidentally introducing an empty/null
+        // source that breaks restore on the existing in-repo flow).
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        var aspireConfigPath = Path.Combine(appPath, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "daily"
+            }
+            """);
+
+        var nugetCache = new FakeNuGetPackageCache();
+        const string channelFeed = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", channelFeed)
+        }, nugetCache, new TestFeatures());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
+        };
+
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
+
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectFilePath, _) = await project.CreateProjectFilesAsync(packages).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.NotNull(restoreSources);
+        Assert.Equal(channelFeed, restoreSources);
+    }
+
     private static void DumpDirectoryTree(string path, ITestOutputHelper output, string indent = "")
     {
         var dirInfo = new DirectoryInfo(path);
         output.WriteLine($"{indent}{dirInfo.Name}/");
-        
+
         foreach (var file in dirInfo.GetFiles())
         {
             output.WriteLine($"{indent}  {file.Name}");
         }
-        
+
         foreach (var dir in dirInfo.GetDirectories())
         {
             DumpDirectoryTree(dir.FullName, output, indent + "  ");

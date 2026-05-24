@@ -15,7 +15,40 @@ export interface ResourceUrlJson {
 }
 
 export interface ResourceCommandJson {
+    displayName?: string | null;
     description: string | null;
+    visibility?: string | null;
+    argumentInputs?: ResourceCommandArgumentInputJson[] | null;
+}
+
+// Resource command argument input types. Values match the strings emitted by the CLI
+// JSON contract (ResourceCommandArgumentJson.InputType in
+// src/Shared/Model/Serialization/ResourceJson.cs).
+export const ResourceCommandInputType = {
+    Text: 'Text',
+    SecretText: 'SecretText',
+    Choice: 'Choice',
+    Boolean: 'Boolean',
+    Number: 'Number',
+} as const;
+
+export type ResourceCommandInputType = typeof ResourceCommandInputType[keyof typeof ResourceCommandInputType];
+
+// Mirrors the CLI JSON contract in src/Shared/Model/Serialization/ResourceJson.cs
+// (`ResourceCommandArgumentJson`), populated by Aspire.Cli's ResourceSnapshotMapper.
+export interface ResourceCommandArgumentInputJson {
+    name: string;
+    label: string | null;
+    description: string | null;
+    enableDescriptionMarkdown?: boolean;
+    inputType: ResourceCommandInputType;
+    required?: boolean;
+    placeholder: string | null;
+    value: string | null;
+    options: Record<string, string | null> | null;
+    allowCustomChoice?: boolean;
+    disabled?: boolean;
+    maxLength: number | null;
 }
 
 export interface ResourceHealthReportJson {
@@ -56,11 +89,13 @@ export type ViewMode = 'workspace' | 'global';
  *  - `aspire describe --follow` (workspace mode) — streams resource updates
  *    via NDJSON.  Only active while the tree-view panel is visible **and**
  *    workspace mode is selected.
- *  - `aspire ps` polling (global mode) — periodically fetches all running
- *    app hosts.  Only active while the tree-view panel is visible **and**
- *    global mode is selected.
+ *  - `aspire ps` polling — periodically fetches running app hosts. In global
+ *    mode this backs the full tree; in workspace mode it confirms whether the
+ *    selected workspace AppHost is running when the resource stream is empty.
  */
 export class AppHostDataRepository {
+    private static readonly _processShutdownGracePeriodMs = 5000;
+
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
 
@@ -80,7 +115,10 @@ export class AppHostDataRepository {
 
     // ── Global mode state (ps polling) ──
     private _appHosts: AppHostDisplayInfo[] = [];
+    private _workspaceAppHost: AppHostDisplayInfo | undefined;
     private _pollingInterval: ReturnType<typeof setInterval> | undefined;
+    private _psProcesses = new Set<ChildProcessWithoutNullStreams>();
+    private _psFetchVersion = 0;
     private _supportsResources = true;
     private _fetchInProgress = false;
 
@@ -120,6 +158,10 @@ export class AppHostDataRepository {
 
     get appHosts(): readonly AppHostDisplayInfo[] {
         return this._appHosts;
+    }
+
+    get workspaceAppHost(): AppHostDisplayInfo | undefined {
+        return this._workspaceAppHost;
     }
 
     get workspaceAppHostName(): string | undefined {
@@ -198,7 +240,11 @@ export class AppHostDataRepository {
         this._disposed = true;
         this._stopPolling();
         this._stopDescribeWatch();
-        this._getAppHostsProcess?.kill();
+        if (this._getAppHostsProcess) {
+            const getAppHostsProcess = this._getAppHostsProcess;
+            this._getAppHostsProcess = undefined;
+            this._terminateProcess(getAppHostsProcess, 'aspire extension get-apphosts');
+        }
         this._configChangeDisposable.dispose();
         this._onDidChangeData.dispose();
     }
@@ -211,7 +257,9 @@ export class AppHostDataRepository {
     }
 
     private get _shouldPoll(): boolean {
-        return this._dataActive && this._viewMode === 'global';
+        // Workspace mode still polls ps after the selected AppHost path is known so
+        // a running AppHost can be shown even when describe has no resources to emit.
+        return this._dataActive && (this._viewMode === 'global' || !!this._workspaceAppHostPath);
     }
 
     private get _shouldWatchWorkspace(): boolean {
@@ -227,6 +275,10 @@ export class AppHostDataRepository {
             this._startDescribeWatch();
         } else {
             this._stopDescribeWatch({ clearWorkspaceResources: true });
+        }
+
+        if (this._viewMode !== 'workspace' || !this._dataActive) {
+            this._clearWorkspaceAppHost();
         }
 
         if (this._shouldPoll) {
@@ -273,6 +325,7 @@ export class AppHostDataRepository {
                                 const candidateIndex = appHostCandidates.indexOf(appHostPath);
                                 this._workspaceAppHostName = candidateIndex >= 0 ? appHostLabels[candidateIndex] : shortenPath(appHostPath);
                                 extensionLogOutputChannel.info(`Workspace apphost resolved: ${appHostPath}`);
+                                this._syncPolling();
                                 this._onDidChangeData.fire();
                             }
                         }
@@ -346,7 +399,7 @@ export class AppHostDataRepository {
                     if (!this._describeReceivedData) {
                         extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
                         this._workspaceResources.clear();
-                        this._updateWorkspaceContext();
+                        this._updateWorkspaceContext({ clearLoading: true });
                         return;
                     }
 
@@ -408,7 +461,7 @@ export class AppHostDataRepository {
             const describeProcess = this._describeProcess;
             extensionLogOutputChannel.info('Stopping aspire describe --follow for workspace resources');
             this._describeProcess = undefined;
-            describeProcess.kill();
+            this._terminateProcess(describeProcess, 'aspire describe --follow');
         }
         if (options?.clearWorkspaceResources) {
             this._clearWorkspaceResources();
@@ -422,6 +475,19 @@ export class AppHostDataRepository {
 
         this._workspaceResources.clear();
         this._updateWorkspaceContext();
+    }
+
+    private _clearWorkspaceAppHost(): void {
+        if (this._workspaceAppHost === undefined) {
+            return;
+        }
+
+        this._workspaceAppHost = undefined;
+        if (this._viewMode === 'workspace') {
+            this._updateWorkspaceContext();
+        } else {
+            this._onDidChangeData.fire();
+        }
     }
 
     private _handleDescribeLine(line: string): void {
@@ -444,10 +510,12 @@ export class AppHostDataRepository {
         }
     }
 
-    private _updateWorkspaceContext(): void {
+    private _updateWorkspaceContext(options?: { clearLoading?: boolean }): void {
+        const hasWorkspaceAppHost = this._workspaceAppHost !== undefined;
         const hasResources = this._workspaceResources.size > 0;
-        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasResources);
-        if (this._loadingWorkspace) {
+        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasWorkspaceAppHost && !hasResources);
+        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost);
+        if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
             this._updateLoadingContext();
         }
@@ -468,11 +536,17 @@ export class AppHostDataRepository {
     }
 
     private _stopPolling(): void {
+        this._psFetchVersion++;
+        this._fetchInProgress = false;
         if (this._pollingInterval) {
             clearInterval(this._pollingInterval);
             this._pollingInterval = undefined;
             extensionLogOutputChannel.info(`aspire ps polling stopped`);
         }
+        for (const psProcess of this._psProcesses) {
+            this._terminateProcess(psProcess, 'aspire ps');
+        }
+        this._psProcesses.clear();
     }
 
     private _getPollingIntervalMs(): number {
@@ -482,16 +556,17 @@ export class AppHostDataRepository {
     }
 
     private _fetchAppHosts(): void {
-        if (this._fetchInProgress) {
+        if (this._fetchInProgress || this._disposed || !this._shouldPoll) {
             return;
         }
         this._fetchInProgress = true;
+        const fetchVersion = ++this._psFetchVersion;
 
         const args = ['ps', '--format', 'json'];
         if (this._supportsResources) {
             args.push('--resources');
         }
-        this._runPsCommand(args, (code, stdout, stderr) => {
+        this._runPsCommand(args, fetchVersion, (code, stdout, stderr) => {
             if (code === 0) {
                 this._setError(undefined);
                 this._handlePsOutput(stdout);
@@ -499,7 +574,7 @@ export class AppHostDataRepository {
             } else if (this._supportsResources) {
                 this._supportsResources = false;
                 extensionLogOutputChannel.info('aspire ps --resources failed, falling back to aspire ps without --resources');
-                this._runPsCommand(['ps', '--format', 'json'], (retryCode, retryStdout, retryStderr) => {
+                this._runPsCommand(['ps', '--format', 'json'], fetchVersion, (retryCode, retryStdout, retryStderr) => {
                     if (retryCode === 0) {
                         this._setError(undefined);
                         this._handlePsOutput(retryStdout);
@@ -517,6 +592,10 @@ export class AppHostDataRepository {
                 this._fetchInProgress = false;
             }
         });
+    }
+
+    private _isCurrentPsFetch(fetchVersion: number): boolean {
+        return !this._disposed && this._shouldPoll && fetchVersion === this._psFetchVersion;
     }
 
     private _updateLoadingContext(): void {
@@ -539,6 +618,11 @@ export class AppHostDataRepository {
     private _handlePsOutput(stdout: string): void {
         try {
             const parsed: AppHostDisplayInfo[] = JSON.parse(stdout);
+            if (this._viewMode === 'workspace') {
+                this._handleWorkspacePsOutput(parsed);
+                return;
+            }
+
             const changed = JSON.stringify(parsed) !== JSON.stringify(this._appHosts);
             this._appHosts = parsed;
 
@@ -556,31 +640,138 @@ export class AppHostDataRepository {
         }
     }
 
-    private async _runPsCommand(args: string[], callback: (code: number, stdout: string, stderr: string) => void): Promise<void> {
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
+    private _handleWorkspacePsOutput(appHosts: readonly AppHostDisplayInfo[]): void {
+        const workspaceAppHostPath = this._workspaceAppHostPath;
+        const workspaceAppHost = workspaceAppHostPath
+            ? appHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, workspaceAppHostPath))
+            : undefined;
+        const changed = JSON.stringify(workspaceAppHost) !== JSON.stringify(this._workspaceAppHost);
+
+        this._workspaceAppHost = workspaceAppHost;
+
+        if (changed) {
+            this._updateWorkspaceContext();
+        }
+    }
+
+    private async _runPsCommand(args: string[], fetchVersion: number, callback: (code: number, stdout: string, stderr: string) => void): Promise<void> {
+        let cliPath: string;
+        try {
+            cliPath = await this._terminalProvider.getAspireCliExecutablePath();
+        } catch (error) {
+            if (this._isCurrentPsFetch(fetchVersion)) {
+                const errorMessage = errorFetchingAppHosts(String(error));
+                extensionLogOutputChannel.warn(errorMessage);
+                this._setError(errorMessage);
+                this._fetchInProgress = false;
+                if (this._loadingGlobal) {
+                    this._loadingGlobal = false;
+                    this._updateLoadingContext();
+                }
+            }
+            return;
+        }
+
+        if (!this._isCurrentPsFetch(fetchVersion)) {
+            return;
+        }
 
         let stdout = '';
         let stderr = '';
         let callbackInvoked = false;
 
-        spawnCliProcess(this._terminalProvider, cliPath, args, {
+        let psProcess: ChildProcessWithoutNullStreams | undefined;
+        let psProcessCompletedSynchronously = false;
+        const removePsProcess = () => {
+            if (psProcess) {
+                this._psProcesses.delete(psProcess);
+            } else {
+                psProcessCompletedSynchronously = true;
+            }
+        };
+
+        psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
             noExtensionVariables: true,
             stdoutCallback: (data) => { stdout += data; },
             stderrCallback: (data) => { stderr += data; },
             exitCallback: (code) => {
+                removePsProcess();
                 if (!callbackInvoked) {
                     callbackInvoked = true;
-                    callback(code ?? 1, stdout, stderr);
+                    if (this._isCurrentPsFetch(fetchVersion)) {
+                        callback(code ?? 1, stdout, stderr);
+                    }
                 }
             },
             errorCallback: (error) => {
+                removePsProcess();
                 extensionLogOutputChannel.warn(errorFetchingAppHosts(error.message));
                 if (!callbackInvoked) {
                     callbackInvoked = true;
-                    callback(1, stdout, stderr || error.message);
+                    if (this._isCurrentPsFetch(fetchVersion)) {
+                        callback(1, stdout, stderr || error.message);
+                    }
                 }
             }
         });
+        if (!psProcessCompletedSynchronously) {
+            this._psProcesses.add(psProcess);
+        }
+    }
+
+    private _terminateProcess(childProcess: ChildProcessWithoutNullStreams, description: string): void {
+        let exited = childProcess.exitCode !== null || childProcess.signalCode !== null;
+        let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+        const cleanup = () => {
+            exited = true;
+            childProcess.off('close', cleanup);
+            childProcess.off('exit', cleanup);
+            if (forceKillTimer) {
+                clearTimeout(forceKillTimer);
+                forceKillTimer = undefined;
+            }
+        };
+
+        if (!exited) {
+            childProcess.once('close', cleanup);
+            childProcess.once('exit', cleanup);
+        } else {
+            return;
+        }
+
+        try {
+            if (!childProcess.killed) {
+                const signalSent = childProcess.kill();
+                if (!signalSent) {
+                    cleanup();
+                    return;
+                }
+            }
+        } catch (error) {
+            extensionLogOutputChannel.warn(`Failed to stop ${description}: ${error}`);
+            cleanup();
+            return;
+        }
+
+        if (!exited) {
+            forceKillTimer = setTimeout(() => {
+                if (exited) {
+                    return;
+                }
+
+                extensionLogOutputChannel.warn(`${description} did not exit within ${AppHostDataRepository._processShutdownGracePeriodMs}ms; forcing termination.`);
+                try {
+                    const signalSent = childProcess.kill('SIGKILL');
+                    if (!signalSent) {
+                        cleanup();
+                    }
+                } catch (error) {
+                    extensionLogOutputChannel.warn(`Failed to force stop ${description}: ${error}`);
+                    cleanup();
+                }
+            }, AppHostDataRepository._processShutdownGracePeriodMs);
+            forceKillTimer.unref();
+        }
     }
 }
 
@@ -682,4 +873,21 @@ function isWindowsDriveSegment(segment: string): boolean {
 
 function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
+}
+
+function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {
+    if (!left || !right) {
+        return false;
+    }
+
+    const normalizedLeft = getComparisonKey(path.normalize(left));
+    const normalizedRight = getComparisonKey(path.normalize(right));
+    if (normalizedLeft === normalizedRight) {
+        return true;
+    }
+
+    // `aspire extension get-apphosts` resolves a project file while `aspire ps`
+    // can report the AppHost source file. Match by directory as a fallback to
+    // mirror the CodeLens AppHost resolution strategy.
+    return getComparisonKey(path.dirname(normalizedLeft)) === getComparisonKey(path.dirname(normalizedRight));
 }

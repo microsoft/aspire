@@ -21,9 +21,9 @@ internal sealed class ExtensionInternalCommand : BaseCommand
         this.Subcommands.Add(new GetAppHostCandidatesCommand(features, updateNotifier, projectLocator, executionContext, interactionService, telemetry));
     }
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return Task.FromResult(ExitCodeConstants.Success);
+        return Task.FromResult(CommandResult.FromExitCode(CliExitCodes.Success));
     }
 
     private sealed class GetAppHostCandidatesCommand : BaseCommand
@@ -35,9 +35,7 @@ internal sealed class ExtensionInternalCommand : BaseCommand
             _projectLocator = projectLocator;
         }
 
-        protected override bool UpdateNotificationsEnabled => false;
-
-        protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             try
             {
@@ -50,16 +48,18 @@ internal sealed class ExtensionInternalCommand : BaseCommand
                 }, BackchannelJsonSerializerContext.Default.AppHostProjectSearchResultPoco);
                 // Structured output always goes to stdout.
                 InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
             catch
             {
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
         }
     }
 }
 
+// `aspire extension get-apphosts` is a hidden tooling output; keep
+// docs/specs/cli-output-formats.md in sync when changing this shape.
 internal class AppHostProjectSearchResultPoco
 {
     [JsonPropertyName("selected_project_file")]

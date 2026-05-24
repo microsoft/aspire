@@ -102,6 +102,11 @@
         <target state="translated">ASPIRE_EXTENSION_ENDPOINT가 설정된 경우 ASPIRE_EXTENSION_TOKEN도 설정해야 합니다. ASPIRE_EXTENSION_TOKEN이 설정되어 있는지 확인하세요.</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
       </trans-unit>
+      <trans-unit id="FailedToParsePackageSearchResults">
+        <source>Failed to parse package search results.</source>
+        <target state="new">Failed to parse package search results.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
         <source>Failed to parse template version from stdout.</source>
         <target state="translated">stdout에서 템플릿 버전을 구문 분석하지 못했습니다.</target>

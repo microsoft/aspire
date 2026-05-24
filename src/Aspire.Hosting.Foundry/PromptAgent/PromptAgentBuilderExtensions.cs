@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable OPENAI001 // Responses API is experimental
+#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -9,7 +10,6 @@ using Aspire.Hosting.Foundry;
 using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
 using Azure.Identity;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -33,10 +33,12 @@ public static class PromptAgentBuilderExtensions
     /// </para>
     /// </remarks>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry project resource.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="model">The model deployment to use for this agent.</param>
     /// <param name="name">The name of the prompt agent. This will be the agent name in Foundry.</param>
     /// <param name="instructions">Optional system instructions for the agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the prompt agent resource.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// var foundry = builder.AddFoundry("aif");
@@ -54,7 +56,7 @@ public static class PromptAgentBuilderExtensions
     ///     .WithTool(codeInterp);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a prompt agent to a Microsoft Foundry project.")]
+    [AspireExport]
     public static IResourceBuilder<AzurePromptAgentResource> AddPromptAgent(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         IResourceBuilder<FoundryDeploymentResource> model,
@@ -77,19 +79,7 @@ public static class PromptAgentBuilderExtensions
             displayName: "Send Message",
             executeCommand: async ctx =>
             {
-                var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
-                var inputResult = await interactionService.PromptInputAsync(
-                    title: "Prompt Agent",
-                    message: $"Enter a message to send to '{name}'.",
-                    inputLabel: "Message",
-                    placeHolder: "Hello, what can you do?",
-                    cancellationToken: ctx.CancellationToken
-                ).ConfigureAwait(false);
-
-                if (inputResult.Canceled || string.IsNullOrWhiteSpace(inputResult.Data.Value))
-                {
-                    return new ExecuteCommandResult { Success = true };
-                }
+                var message = ctx.Arguments.GetString("message")!;
 
                 try
                 {
@@ -102,36 +92,13 @@ public static class PromptAgentBuilderExtensions
                     var projectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());
                     var agentRef = new AgentReference(name: name);
                     var responseClient = projectClient.ProjectOpenAIClient.GetProjectResponsesClientForAgent(agentRef);
-                    var response = await responseClient.CreateResponseAsync(inputResult.Data.Value, cancellationToken: ctx.CancellationToken).ConfigureAwait(false);
-                    var outputText = response.Value.GetOutputText();
+                    var response = await responseClient.CreateResponseAsync(message, cancellationToken: ctx.CancellationToken).ConfigureAwait(false);
 
-                    await interactionService.PromptMessageBoxAsync(
-                        title: $"Response from '{name}'",
-                        message: outputText,
-                        options: new()
-                        {
-                            Intent = MessageIntent.Success,
-                            EnableMessageMarkdown = true,
-                            PrimaryButtonText = "OK"
-                        },
-                        cancellationToken: ctx.CancellationToken
-                    ).ConfigureAwait(false);
-
-                    return new ExecuteCommandResult { Success = true };
+                    return CommandResults.Success("Agent response received.", response.Value.GetOutputText(), CommandResultFormat.Markdown, displayImmediately: true);
                 }
                 catch (Exception ex)
                 {
-                    await interactionService.PromptMessageBoxAsync(
-                        title: "Error",
-                        message: $"Failed to invoke agent: {ex.Message}",
-                        options: new()
-                        {
-                            Intent = MessageIntent.Error,
-                            PrimaryButtonText = "OK"
-                        },
-                        cancellationToken: ctx.CancellationToken
-                    ).ConfigureAwait(false);
-                    return new ExecuteCommandResult { Success = false };
+                    return CommandResults.Failure($"Failed to invoke agent: {ex.Message}");
                 }
             },
             commandOptions: new()
@@ -139,6 +106,18 @@ public static class PromptAgentBuilderExtensions
                 IconName = "Agents",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = true,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "message",
+                        InputType = InputType.Text,
+                        Label = "Message",
+                        Required = true,
+                        Placeholder = "Hello, what can you do?",
+                        Description = $"Enter a message to send to '{name}'."
+                    }
+                ]
             }
         );
 
@@ -154,7 +133,8 @@ public static class PromptAgentBuilderExtensions
     /// <param name="agent">The prompt agent resource builder.</param>
     /// <param name="tool">The tool resource to attach to this agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Adds a tool to a prompt agent.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzurePromptAgentResource> WithTool(
         this IResourceBuilder<AzurePromptAgentResource> agent,
         IResourceBuilder<FoundryToolResource> tool)
@@ -177,9 +157,11 @@ public static class PromptAgentBuilderExtensions
     /// run Python code in a sandboxed environment for data analysis, math, and chart generation.
     /// </summary>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a Code Interpreter tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<CodeInterpreterToolResource> AddCodeInterpreterTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name)
@@ -197,10 +179,12 @@ public static class PromptAgentBuilderExtensions
     /// uploaded files and proprietary documents using vector search.
     /// </summary>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="vectorStoreIds">Optional vector store IDs to search. If empty, the agent's default stores are used.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a File Search tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<FileSearchToolResource> AddFileSearchTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -222,9 +206,11 @@ public static class PromptAgentBuilderExtensions
     /// real-time information from the public web and return answers with inline citations.
     /// </summary>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a Web Search tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<WebSearchToolResource> AddWebSearchTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name)
@@ -242,9 +228,11 @@ public static class PromptAgentBuilderExtensions
     /// generate and edit images.
     /// </summary>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds an Image Generation tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ImageGenerationToolResource> AddImageGenerationTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name)
@@ -262,12 +250,14 @@ public static class PromptAgentBuilderExtensions
     /// with a computer desktop by taking screenshots, moving the mouse, clicking, and typing.
     /// </summary>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="displayWidth">The width of the display in pixels.</param>
     /// <param name="displayHeight">The height of the display in pixels.</param>
     /// <param name="environment">The environment identifier. Defaults to "browser".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a Computer Use tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ComputerToolResource> AddComputerUseTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -292,14 +282,17 @@ public static class PromptAgentBuilderExtensions
     /// ground their responses using data from an Azure AI Search index.
     /// </summary>
     /// <remarks>
-    /// After creating the tool, call <see cref="WithReference(IResourceBuilder{AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>
+    /// After creating the tool, call <see cref="WithReference(IResourceBuilder{Foundry.AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>
     /// to link it to the backing Azure AI Search resource.
     /// </remarks>
+    /// <ats-remarks />
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="indexName">Optional name of the search index to query. If not specified, the agent must be told which index to use.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds an Azure AI Search tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureAISearchToolResource> AddAISearchTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -320,10 +313,12 @@ public static class PromptAgentBuilderExtensions
     /// Links an Azure AI Search tool to a backing <see cref="AzureSearchResource"/>,
     /// creating the necessary Foundry project connection and role assignments.
     /// </summary>
+    /// <ats-summary>Links an Azure AI Search tool to a backing search resource.</ats-summary>
     /// <param name="tool">The Azure AI Search tool resource builder.</param>
     /// <param name="search">The Azure AI Search resource to use for grounding.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Links an Azure AI Search tool to a backing search resource.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureAISearchToolResource> WithReference(
         this IResourceBuilder<AzureAISearchToolResource> tool,
         IResourceBuilder<AzureSearchResource> search)
@@ -357,9 +352,11 @@ public static class PromptAgentBuilderExtensions
     /// to link it to a Bing Search resource.
     /// </remarks>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a Bing Grounding tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<BingGroundingToolResource> AddBingGroundingTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name)
@@ -425,7 +422,10 @@ public static class PromptAgentBuilderExtensions
         return WithReference(tool, (object)bingResourceId);
     }
 
-    [AspireExport("withBingReference", MethodName = "withReference", Description = "Links a Bing Grounding tool to a Bing Search resource or connection.")]
+    /// <summary>
+    /// Links a Bing Grounding tool to a Bing Search resource or connection.
+    /// </summary>
+    [AspireExport("withBingReference", MethodName = "withReference")]
     internal static IResourceBuilder<BingGroundingToolResource> WithReference(
         this IResourceBuilder<BingGroundingToolResource> tool,
         [AspireUnion(
@@ -481,10 +481,12 @@ public static class PromptAgentBuilderExtensions
     /// search data from SharePoint sites configured as Foundry project connections.
     /// </summary>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="projectConnectionIds">The Foundry project connection IDs for the SharePoint sites.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a SharePoint grounding tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<SharePointToolResource> AddSharePointTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -503,10 +505,12 @@ public static class PromptAgentBuilderExtensions
     /// agents to query data through Fabric data agents.
     /// </summary>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="projectConnectionIds">The Foundry project connection IDs for the Fabric data agents.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a Microsoft Fabric data agent tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<FabricToolResource> AddFabricTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -565,6 +569,7 @@ public static class PromptAgentBuilderExtensions
     /// invoke a serverless Azure Function with queue-based input/output bindings.
     /// </summary>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="functionName">The name of the Azure Function.</param>
     /// <param name="description">A description of what the function does.</param>
@@ -574,7 +579,8 @@ public static class PromptAgentBuilderExtensions
     /// <param name="outputQueueEndpoint">The Azure Storage Queue endpoint for output binding.</param>
     /// <param name="outputQueueName">The queue name for output binding.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds an Azure Function tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureFunctionToolResource> AddAzureFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -625,13 +631,15 @@ public static class PromptAgentBuilderExtensions
     /// call application-defined functions with structured parameters.
     /// </summary>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
+    /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="functionName">The name of the function.</param>
     /// <param name="parametersJson">The JSON schema defining the function parameters as a JSON string.</param>
     /// <param name="description">A description of what the function does.</param>
     /// <param name="strictModeEnabled">Whether to enable strict mode for parameter validation.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a function calling tool to a Microsoft Foundry project.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     internal static IResourceBuilder<FunctionToolResource> AddFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,

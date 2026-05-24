@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using Aspire.Hosting;
+using Aspire.Shared;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -322,7 +322,7 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <returns>The CLI version string, or an empty string if not available.</returns>
     internal static string GetCliVersion()
     {
-        return typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty;
+        return AssemblyVersionHelper.GetInformationalVersion(typeof(Program).Assembly);
     }
 
     /// <summary>
@@ -331,6 +331,6 @@ internal sealed class AspireCliTelemetry : IHostedService
     /// <returns>The CLI build ID string, or an empty string if not available.</returns>
     internal static string GetCliBuildId()
     {
-        return typeof(Program).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? string.Empty;
+        return AssemblyVersionHelper.GetFileVersion(typeof(Program).Assembly);
     }
 }

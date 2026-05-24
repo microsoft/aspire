@@ -29,7 +29,7 @@ internal sealed class AppHostConnectionResult
     public int? ExitCode { get; init; }
 
     [MemberNotNullWhen(true, nameof(ExitCode))]
-    public bool IsProjectResolutionError => ExitCode is ExitCodeConstants.FailedToFindProject or ExitCodeConstants.SdkNotInstalled;
+    public bool IsProjectResolutionError => ExitCode is CliExitCodes.FailedToFindProject or CliExitCodes.SdkNotInstalled;
 }
 
 /// <summary>
@@ -121,7 +121,7 @@ internal sealed class AppHostConnectionResolver(
                     return new AppHostConnectionResult
                     {
                         ErrorMessage = InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts,
-                        ExitCode = ExitCodeConstants.FailedToFindProject,
+                        ExitCode = CliExitCodes.FailedToFindProject,
                     };
                 }
             }
@@ -130,7 +130,7 @@ internal sealed class AppHostConnectionResolver(
                 return new AppHostConnectionResult
                 {
                     ErrorMessage = InteractionServiceStrings.ProjectOptionDoesntExist,
-                    ExitCode = ExitCodeConstants.FailedToFindProject,
+                    ExitCode = CliExitCodes.FailedToFindProject,
                 };
             }
 
@@ -148,7 +148,9 @@ internal sealed class AppHostConnectionResolver(
                         socketPath, logger, cancellationToken, profilingTelemetry).ConfigureAwait(false);
                     if (connection is not null)
                     {
-                        return new AppHostConnectionResult { Connection = connection };
+                        var result = new AppHostConnectionResult { Connection = connection };
+                        StoreAppHostCliLogFilePath(result);
+                        return result;
                     }
                 }
                 catch (Exception ex)
@@ -217,12 +219,26 @@ internal sealed class AppHostConnectionResolver(
             return new AppHostConnectionResult { ErrorMessage = notFoundMessage };
         }
 
-        return new AppHostConnectionResult { Connection = selectedConnection };
+        var selectedResult = new AppHostConnectionResult { Connection = selectedConnection };
+        StoreAppHostCliLogFilePath(selectedResult);
+        return selectedResult;
+    }
+
+    /// <summary>
+    /// Stores the app host's CLI log file path on the execution context so that
+    /// <see cref="Commands.BaseCommand"/> can display it alongside the current CLI's log path on failure.
+    /// </summary>
+    internal void StoreAppHostCliLogFilePath(AppHostConnectionResult result)
+    {
+        if (result.Success && result.Connection.AppHostInfo?.CliLogFilePath is { } cliLogFilePath)
+        {
+            executionContext.AppHostCliLogFilePath = cliLogFilePath;
+        }
     }
 
     /// <summary>
     /// Displays an informational message, prompts the user to select from available AppHost connections,
-    /// and displays the selected AppHost.
+    /// and displays the selected AppHost with a success indicator.
     /// </summary>
     private async Task<IAppHostAuxiliaryBackchannel?> PromptForAppHostSelectionAsync(
         List<IAppHostAuxiliaryBackchannel> candidateConnections,
@@ -247,6 +263,7 @@ internal sealed class AppHostConnectionResolver(
             selectPrompt,
             choices.Select(c => c.Display).ToArray(),
             c => c.EscapeMarkup(),
+            echoSelected: false,
             cancellationToken: cancellationToken);
 
         var selectedConnection = choices.FirstOrDefault(c => c.Display == selectedDisplay).Connection;

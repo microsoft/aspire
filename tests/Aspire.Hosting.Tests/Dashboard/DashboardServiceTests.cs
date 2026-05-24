@@ -293,14 +293,11 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             {
                 ResourceName = testResource.Name,
                 CommandName = "click",
-                Arguments = Value.ForStruct(new Struct
+                Arguments =
                 {
-                    Fields =
-                    {
-                        ["selector"] = Value.ForString("#submit"),
-                        ["clickCount"] = Value.ForNumber(2)
-                    }
-                })
+                    ["selector"] = Value.ForString("#submit"),
+                    ["clickCount"] = Value.ForNumber(2)
+                }
             },
             context);
 
@@ -355,13 +352,10 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             {
                 ResourceName = testResource.Name,
                 CommandName = "click",
-                Arguments = Value.ForStruct(new Struct
+                Arguments =
                 {
-                    Fields =
-                    {
-                        ["selecter"] = Value.ForString("#submit")
-                    }
-                })
+                    ["selecter"] = Value.ForString("#submit")
+                }
             },
             context);
 
@@ -421,21 +415,16 @@ public class DashboardServiceTests(ITestOutputHelper testOutputHelper)
             {
                 ResourceName = testResource.Name,
                 CommandName = "validate",
-                Arguments = Value.ForStruct(new Struct
+                Arguments =
                 {
-                    Fields =
-                    {
-                        ["target"] = Value.ForString("prod")
-                    }
-                })
+                    ["target"] = Value.ForString("prod")
+                }
             },
             context);
 
         Assert.Equal(ResourceCommandResponseKind.InvalidArguments, response.Kind);
+        Assert.Equal("Command argument validation failed.", response.Message);
         Assert.False(executed);
-        var invalidArgument = Assert.Single(response.ArgumentInputs);
-        Assert.Equal("target", invalidArgument.Name);
-        Assert.Equal("Target must not be prod.", Assert.Single(invalidArgument.ValidationErrors));
     }
 
     [Theory]

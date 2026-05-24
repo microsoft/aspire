@@ -32,14 +32,14 @@
         <target state="new">Path</target>
         <note />
       </trans-unit>
-      <trans-unit id="HeaderRelativePath">
-        <source>Relative Path</source>
-        <target state="new">Relative Path</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HeaderStatus">
         <source>Status</source>
         <target state="new">Status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
         <note />
       </trans-unit>
       <trans-unit id="IsolatedOptionDescription">
@@ -67,6 +67,21 @@
         <target state="new">No candidate AppHosts found.</target>
         <note />
       </trans-unit>
+      <trans-unit id="LsSearchingForAppHostsStatus">
+        <source>Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found...</source>
+        <target state="new">Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found...</target>
+        <note>{0} is the number of directories searched so far. {1} is the number of AppHost candidates found so far.</note>
+      </trans-unit>
+      <trans-unit id="LsStreamOptionDescription">
+        <source>Stream newline-delimited JSON discovery events. Requires --format json</source>
+        <target state="new">Stream newline-delimited JSON discovery events. Requires --format json</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsStreamRequiresJson">
+        <source>The --stream option requires --format json.</source>
+        <target state="new">The --stream option requires --format json.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MultipleInScopeAppHosts">
         <source>Multiple running AppHosts found in the current directory. Select from running AppHosts.</source>
         <target state="new">Multiple running AppHosts found in the current directory. Select from running AppHosts.</target>
@@ -81,6 +96,11 @@
         <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="new">The path to the Aspire AppHost project file or a directory to search</target>
         <note />
+      </trans-unit>
+      <trans-unit id="NonInteractiveRequiresYesFormat">
+        <source>The {0} command requires --yes when the --non-interactive option is specified.</source>
+        <target state="new">The {0} command requires --yes when the --non-interactive option is specified.</target>
+        <note>{0} is the command name.</note>
       </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
         <source>The environment to use for the operation. The default is 'Production'.</source>

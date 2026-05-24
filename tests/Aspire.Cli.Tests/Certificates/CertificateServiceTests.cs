@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -70,13 +71,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task EnsureCertificatesTrustedAsync_WithPartiallyTrustedCert_RunsTrustAndSetsSslCertDirOnLinux()
+    public async Task EnsureCertificatesTrustedAsync_WithPartiallyTrustedCert_ReturnsFailureForInteractiveLinux()
     {
-        if (!OperatingSystem.IsLinux())
-        {
-            return;
-        }
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var trustCalled = false;
 
@@ -88,7 +84,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 return EnsureCertificateResult.PartiallyFailedToTrustTheCertificate;
             },
             CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Partial)
-        });
+        }, nonInteractive: false, isLinux: () => true);
 
         var cs = sp.GetRequiredService<ICertificateService>();
 
@@ -98,8 +94,34 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         Assert.False(result.Success);
         Assert.False(result.WasCancelled);
         Assert.Equal(EnsureCertificateResult.PartiallyFailedToTrustTheCertificate, result.ResultCode);
-        Assert.True(result.EnvironmentVariables.ContainsKey("SSL_CERT_DIR"));
-        Assert.Contains(".aspnet/dev-certs/trust", result.EnvironmentVariables["SSL_CERT_DIR"]);
+        AssertSslCertDirContainsDevCertsTrustPath(result.EnvironmentVariables);
+    }
+
+    [Fact]
+    public async Task EnsureCertificatesTrustedAsync_WithPartiallyTrustedCert_ReturnsSuccessForNonInteractiveLinux()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var trustCalled = false;
+
+        using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
+        {
+            TrustHttpCertificateCallback = () =>
+            {
+                trustCalled = true;
+                return EnsureCertificateResult.PartiallyFailedToTrustTheCertificate;
+            },
+            CheckHttpCertificateCallback = () => CreateTrustResult(CertificateManager.TrustLevel.Partial)
+        }, nonInteractive: true, isLinux: () => true);
+
+        var cs = sp.GetRequiredService<ICertificateService>();
+
+        var result = await cs.EnsureCertificatesTrustedAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+
+        Assert.True(trustCalled);
+        Assert.True(result.Success);
+        Assert.False(result.WasCancelled);
+        Assert.Equal(EnsureCertificateResult.PartiallyFailedToTrustTheCertificate, result.ResultCode);
+        AssertSslCertDirContainsDevCertsTrustPath(result.EnvironmentVariables);
     }
 
     [Fact]
@@ -273,8 +295,6 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_ProceedsOnLinux()
     {
-        Assert.SkipUnless(OperatingSystem.IsLinux(), "Linux-only: non-interactive trust is supported on Linux.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var trustCalled = false;
 
@@ -296,6 +316,13 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var configuration = sp.GetRequiredService<IConfiguration>();
                 return new CliHostEnvironment(configuration, nonInteractive: true);
             };
+            options.CertificateServiceFactory = sp =>
+            {
+                var interactiveService = sp.GetRequiredService<IInteractionService>();
+                var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
+                var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, isLinux: () => true);
+            };
         });
 
         using var sp = services.BuildServiceProvider();
@@ -307,7 +334,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         Assert.True(result.Success);
     }
 
-    private ServiceProvider CreateServiceProvider(TemporaryWorkspace workspace, TestCertificateToolRunner toolRunner)
+    private ServiceProvider CreateServiceProvider(TemporaryWorkspace workspace, TestCertificateToolRunner toolRunner, bool nonInteractive = false, Func<bool>? isLinux = null)
     {
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -315,7 +342,14 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
             options.CliHostEnvironmentFactory = sp =>
             {
                 var configuration = sp.GetRequiredService<IConfiguration>();
-                return new CliHostEnvironment(configuration, nonInteractive: false);
+                return new CliHostEnvironment(configuration, nonInteractive);
+            };
+            options.CertificateServiceFactory = sp =>
+            {
+                var interactiveService = sp.GetRequiredService<IInteractionService>();
+                var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
+                var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, isLinux);
             };
         });
 
@@ -350,5 +384,11 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 }
             ]
         };
+    }
+
+    private static void AssertSslCertDirContainsDevCertsTrustPath(IDictionary<string, string> environmentVariables)
+    {
+        Assert.True(environmentVariables.ContainsKey("SSL_CERT_DIR"));
+        Assert.Contains(CertificateHelpers.GetDevCertsTrustPath(), environmentVariables["SSL_CERT_DIR"].Split(Path.PathSeparator));
     }
 }

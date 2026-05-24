@@ -25,10 +25,20 @@ internal static class ResourceCommandHelpParser
         //   aspire resource web --help
         var resourceName = GetArgumentValue(parseResult, resourceArgument);
         var commandName = GetArgumentValue(parseResult, commandArgument);
+        var appHostOptionValue = GetOptionTokenValue(parseResult, appHostOption.InnerOption) ?? GetOptionTokenValue(parseResult, appHostOption.LegacyOption);
+
+        // Only intercept help when the resource and command tokens are real positional arguments. Resource-only help,
+        // option tokens, and option values that System.CommandLine bound into the command argument should fall back to
+        // the default/resource-scoped help paths instead of being treated as command-specific help.
+        // Examples:
+        //   aspire resource web --help
+        //   aspire resource web --apphost ./AppHost.csproj --help
+        //   aspire resource web -- --message hi --help
         if (string.IsNullOrEmpty(resourceName) ||
             IsOptionLikeToken(resourceName) ||
             string.IsNullOrEmpty(commandName) ||
-            IsOptionLikeToken(commandName))
+            IsOptionLikeToken(commandName) ||
+            string.Equals(commandName, appHostOptionValue, StringComparison.Ordinal))
         {
             return null;
         }
@@ -36,7 +46,7 @@ internal static class ResourceCommandHelpParser
         return new ResourceCommandHelpRequest(
             resourceName,
             commandName,
-            GetOptionValue(parseResult, appHostOption.InnerOption) ?? GetOptionValue(parseResult, appHostOption.LegacyOption));
+            appHostOptionValue is null ? null : new FileInfo(appHostOptionValue));
     }
 
     private static string? GetArgumentValue(ParseResult parseResult, Argument<string> argument)
@@ -45,10 +55,10 @@ internal static class ResourceCommandHelpParser
         return result?.Tokens.Count > 0 ? result.Tokens[0].Value : null;
     }
 
-    private static FileInfo? GetOptionValue(ParseResult parseResult, Option<FileInfo?> option)
+    private static string? GetOptionTokenValue(ParseResult parseResult, Option<FileInfo?> option)
     {
         var result = parseResult.GetResult(option);
-        return result?.Tokens.Count > 0 ? new FileInfo(result.Tokens[0].Value) : null;
+        return result?.Tokens.Count > 0 ? result.Tokens[0].Value : null;
     }
 
     private static bool IsOptionLikeToken(string value)

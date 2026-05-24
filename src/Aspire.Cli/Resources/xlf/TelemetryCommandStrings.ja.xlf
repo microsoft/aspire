@@ -162,9 +162,19 @@
         <target state="needs-review-translation">ダッシュボード テレメトリ API から構造化ログを表示します。</target>
         <note />
       </trans-unit>
+      <trans-unit id="MinimumDurationOptionDescription">
+        <source>Filter by minimum span duration in milliseconds</source>
+        <target state="new">Filter by minimum span duration in milliseconds</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>Filter by resource name</source>
         <target state="needs-review-translation">リソース名でフィルター処理します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</source>
+        <target state="new">Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

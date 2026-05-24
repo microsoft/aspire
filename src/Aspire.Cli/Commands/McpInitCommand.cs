@@ -58,15 +58,13 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
             telemetry);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Display deprecation warning
         InteractionService.DisplayMarkupLine($"[yellow]⚠ {McpCommandStrings.DeprecatedCommandWarning}[/]");
         InteractionService.DisplayEmptyLine();
         
         // Delegate to the new AgentInitCommand
-        return _agentInitCommand.ExecuteCommandAsync(parseResult, cancellationToken);
+        return await _agentInitCommand.ExecuteCommandAsync(parseResult, cancellationToken);
     }
 }

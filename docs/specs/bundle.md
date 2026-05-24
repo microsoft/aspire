@@ -297,11 +297,12 @@ The parent directory check supports the installed layout where the CLI binary li
 | `ASPIRE_DCP_PATH` | DCP binaries location | `/opt/aspire/dcp` |
 | `ASPIRE_DASHBOARD_PATH` | Path used by Aspire.Hosting to locate the dashboard binary (now points to `aspire-managed`) | `/opt/aspire/managed/aspire-managed` |
 | `ASPIRE_MANAGED_PATH` | CLI-only path for the `aspire-managed` binary | `/opt/aspire/managed/aspire-managed` |
-| `ASPIRE_INTEGRATION_LIBS_PATH` | Path to integration DLLs for aspire-server assembly resolution | `/home/user/.aspire/libs` |
+| `ASPIRE_INTEGRATION_LIBS_PATH` | Path to copied project-reference integration DLLs for aspire-server assembly resolution | `/home/user/myapp/.aspire/integrations/apphosts/app-hash/project-layouts/items/fingerprint/libs` |
+| `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` | Path to the NuGet package probe manifest for package-backed integration assemblies | `/home/user/myapp/.aspire/integrations/package-restore/hash/integration-package-probe-manifest.json` |
 | `ASPIRE_USE_GLOBAL_DOTNET` | Force SDK mode | `true` |
 | `ASPIRE_REPO_ROOT` | Dev mode (Aspire repo path, DEBUG builds only) | `/home/user/aspire` |
 
-**Note:** `ASPIRE_INTEGRATION_LIBS_PATH` is set by the CLI when running guest apphosts that require additional hosting integration packages (e.g., `Aspire.Hosting.Redis`). The aspire-server uses this path to resolve integration assemblies at runtime.
+**Note:** NuGet package-backed integrations are resolved from `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` and loaded directly from the NuGet package cache. `ASPIRE_INTEGRATION_LIBS_PATH` is only needed when project references produce copied integration DLLs.
 
 ### Transition Compatibility
 
@@ -403,12 +404,18 @@ The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, 
   --package "Aspire.Hosting.Redis" \
   --version "13.2.0" \
   --framework net10.0 \
-  --output ~/.aspire/packages
+  --output <workspace>/.aspire/integrations/package-restore/hash/obj
 
-# Create flat layout from restored packages (DLLs + XML doc files)
+# Create package probe manifest from restored packages
+{managed}/aspire-managed nuget manifest \
+  --assets <workspace>/.aspire/integrations/package-restore/hash/obj/project.assets.json \
+  --output <workspace>/.aspire/integrations/package-restore/hash/integration-package-probe-manifest.json \
+  --framework net10.0
+
+# Create flat layout from restored packages (legacy and diagnostic scenarios)
 {managed}/aspire-managed nuget layout \
-  --assets ~/.aspire/packages/obj/project.assets.json \
-  --output ~/.aspire/packages/libs \
+  --assets <workspace>/.aspire/integrations/package-restore/hash/obj/project.assets.json \
+  --output <workspace>/.aspire/integrations/legacy-layout/libs \
   --framework net10.0
 ```
 
@@ -431,26 +438,28 @@ The bundle includes NuGet operations via the `aspire-managed nuget` subcommand, 
 }
 ```
 
-### Package Cache Structure
+### AppHost Integration Cache Structure
 
 ```text
-~/.aspire/packages/
-├── aspire.hosting.redis/
-│   └── 13.2.0/
-│       ├── aspire.hosting.redis.13.2.0.nupkg
-│       └── lib/
-│           └── net10.0/
-│               └── Aspire.Hosting.Redis.dll
-├── aspire.hosting.valkey/
-│   └── 13.2.0/
-│       └── ...
-└── libs/                               # Flat layout for probing
-    ├── Aspire.Hosting.Redis.dll
-    ├── Aspire.Hosting.Redis.xml         # XML doc file (for IntelliSense/MCP)
-    ├── Aspire.Hosting.Valkey.dll
-    ├── Aspire.Hosting.Valkey.xml
-    └── ...
+<workspace>/.aspire/integrations/
+├── package-restore/
+│   └── {package-restore-hash}/
+│       ├── obj/
+│       │   └── project.assets.json
+│       └── integration-package-probe-manifest.json
+└── apphosts/
+    └── {app-path-hash}/
+        ├── appsettings.json
+        ├── integration-package-probe-manifest.json
+        ├── integration-restore/
+        └── project-layouts/
+            └── items/
+                └── {project-output-fingerprint}/
+                    └── libs/
+                        └── MyIntegration.dll
 ```
+
+NuGet package-backed assets are loaded directly from the NuGet package cache via the probe manifest. Project-reference outputs are the only integration assets copied into `libs`, and those layouts are immutable and fingerprinted by content.
 
 ---
 
@@ -507,10 +516,11 @@ The bundle includes a pre-built AppHost Server with core hosting only (no integr
 When a project references integrations (e.g., `Aspire.Hosting.Redis`):
 
 1. CLI reads `.aspire/settings.json` for package list
-2. CLI checks local cache (`~/.aspire/packages/`)
+2. CLI checks local integration cache (`<workspace>/.aspire/integrations/`)
 3. Missing packages are downloaded via NuGet Helper
-4. Packages are extracted to flat layout for assembly loading
-5. AppHost Server loads integration assemblies at startup
+4. Packages are represented by a probe manifest that points at the NuGet package cache
+5. Project-reference outputs are copied to immutable fingerprinted layouts when needed
+6. AppHost Server loads integration assemblies at startup
 
 ### Pre-built Mode Execution
 
@@ -526,8 +536,9 @@ When a project references integrations (e.g., `Aspire.Hosting.Redis`):
 When the user's project requires integrations not included in the bundle:
 
 1. CLI downloads missing packages using NuGet Helper to a project-specific cache
-2. NuGet Helper restores packages and creates a flat DLL layout in `ASPIRE_INTEGRATION_LIBS_PATH`
-3. AppHost Server loads integration assemblies via `IntegrationLoadContext`
+2. NuGet Helper restores packages and writes a package probe manifest
+3. Project-reference outputs, when present, are copied to an immutable `ASPIRE_INTEGRATION_LIBS_PATH` layout
+4. AppHost Server loads integration assemblies via `IntegrationLoadContext`
 
 #### Aspire.TypeSystem
 
@@ -539,7 +550,8 @@ All types in `Aspire.TypeSystem` are public. It is loaded in the default context
 
 Integration assemblies are loaded in a custom `AssemblyLoadContext` ("Aspire.Integrations") that:
 
-- **Probes directories** for assemblies — `ASPIRE_INTEGRATION_LIBS_PATH` and `AppContext.BaseDirectory`
+- **Loads package assets by manifest** — `ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH` points at package-cache assemblies and native libraries
+- **Probes directories** for assemblies — `ASPIRE_INTEGRATION_LIBS_PATH` for copied project-reference outputs and `AppContext.BaseDirectory`
 - **Shares `Aspire.TypeSystem`** — always defers to the default context for type identity
 - **Performs version unification** — before loading an assembly from the probe directory, checks if the default context already provides it at a higher or equal version; if so, defers to the default
 
@@ -600,13 +612,14 @@ aspire update --self --channel daily
 ```
 
 With self-extracting binaries, the update process is:
-1. User selects a channel (stable, staging, daily)
+1. User selects a channel (stable, staging, daily). When invoked without `--channel`, the CLI prompts; the chosen channel applies to this invocation only.
 2. Downloads the new self-extracting CLI binary (platform-specific archive)
 3. Extracts archive to temp, finds new binary
 4. Backs up current binary, swaps in the new one
 5. Verifies new binary with `--version`
 6. Calls `BundleService.ExtractAsync(force: true)` to proactively extract the embedded payload
-7. Saves selected channel to global settings
+
+The selected channel is **not** persisted to global settings. The new binary identifies its own channel via the `AspireCliChannel` assembly metadata baked at build time (read by `IdentityChannelReader`); per-project channel overrides live in the project's `aspire.config.json#channel`. There is no global-channel write step.
 
 The old bundle-update path (downloading a full tarball and applying via `IBundleDownloader`) has been removed. The self-extracting binary IS the bundle — one download, one file, everything included.
 
@@ -641,6 +654,31 @@ For advanced scenarios (testing, debugging), a single environment variable can f
 | `ASPIRE_USE_GLOBAL_DOTNET=true` | Force SDK mode even when running from bundle |
 
 This is not documented for end users - it's for internal testing and edge cases only.
+
+### Channel Identity
+
+Every CLI binary is built for a specific acquisition channel. The pipeline is:
+
+1. **MSBuild property** — `AspireCliChannel` is set by CI (for example, `/p:AspireCliChannel=stable`) or defaults to `local` for local developer builds.
+2. **Assembly metadata** — `Aspire.Cli.csproj` emits `<AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />`, which becomes a `[AssemblyMetadata]` attribute on the compiled assembly.
+3. **`IdentityChannelReader`** — registered as an `IIdentityChannelReader` singleton in DI, reading and validating the attribute on first access. The read is lazy, cached via `Lazy<string>`, and thread-safe. The reader is AOT-safe: it only enumerates a sealed, build-time-known attribute type.
+4. **`CliExecutionContext.IdentityChannel`** — the resolved string, available to all CLI components for hive selection and project reseeding.
+
+#### Supported channel names
+
+The following values are the only accepted `AspireCliChannel` values. Any other value causes `IdentityChannelReader` to throw `InvalidOperationException` at startup.
+
+| Channel | Built by | Package source |
+|---------|----------|----------------|
+| `stable` | Release pipeline | Official NuGet feeds |
+| `staging` | RC/preview pipeline | RC/preview NuGet feeds |
+| `daily` | Daily CI | Daily build NuGet feeds |
+| `local` | Developer build (default when no `/p:AspireCliChannel=` override) | `~/.aspire/hives/local/packages/` |
+| `pr-<N>` | PR CI build (N = PR number, for example `pr-16820`) | `~/.aspire/hives/pr-<N>/packages/` |
+
+Bare `pr` (without a numeric suffix) is explicitly rejected; CI bakes `pr-<N>` directly so no runtime join is needed. The `default` sentinel in `PackageChannelNames` is a project-level value for `aspire.config.json#channel` and is **not** a valid assembly-baked identity channel.
+
+`CliExecutionContext.IdentityChannel` is the CLI's own identity. It is distinct from the channel a project requests via `aspire.config.json#channel`: packaging decisions (such as PSM emission for an apphost) key on the project's channel, not the CLI's identity.
 
 ---
 
@@ -749,6 +787,18 @@ For testing PR builds before they are merged:
 
 The PR script also downloads NuGet package artifacts (`built-nugets` and `built-nugets-for-{rid}`) and installs them as a NuGet hive at `~/.aspire/hives/pr-{N}/packages/`. This enables `aspire new` and `aspire add` to resolve PR-built package versions when the channel is set to `pr-{N}`.
 
+### Hive Types
+
+The CLI maintains per-channel NuGet package directories ("hives") under `~/.aspire/hives/`. On startup the CLI selects the hive whose directory name matches `CliExecutionContext.IdentityChannel`.
+
+| Hive directory | Channel | Package resolution |
+|----------------|---------|-------------------|
+| `hives/local/packages/` | `local` | Flat directory of `.nupkg` files. The CLI pins to the version found in `Aspire.Hosting.*.nupkg`. |
+| `hives/pr-<N>/packages/` | `pr-<N>` | Flat directory of `.nupkg` files populated by `get-aspire-cli-pr.sh` / `.ps1`. |
+| _(none)_ | `stable`, `staging`, `daily` | No on-disk hive. Packages are resolved from the appropriate public NuGet feeds. |
+
+Hive directories are preserved across CLI installations and re-extractions — only the binary and managed payload are overwritten.
+
 ---
 
 ## Configuration
@@ -763,9 +813,7 @@ ASPIRE_* env vars > relative path auto-detect > assembly metadata (NuGet package
 
 ### Integration Cache
 
-Downloaded integration packages are cached in:
-- Linux/macOS: `~/.aspire/packages/`
-- Windows: `%LOCALAPPDATA%\Aspire\packages\`
+AppHost integration restore artifacts are cached under `<workspace>/.aspire/integrations/`.
 
 ---
 

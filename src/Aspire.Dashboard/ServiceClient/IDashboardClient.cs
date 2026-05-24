@@ -80,9 +80,9 @@ public interface IDashboardClient : IAsyncDisposable
 public sealed class ExecuteResourceCommandOptions
 {
     /// <summary>
-    /// Gets the invocation arguments supplied to the command.
+    /// Gets the invocation arguments supplied to the command, keyed by argument name.
     /// </summary>
-    public Value? Arguments { get; init; }
+    public IReadOnlyDictionary<string, Value>? Arguments { get; init; }
 
     /// <summary>
     /// Gets a value indicating whether command execution should fail instead of prompting for missing input.

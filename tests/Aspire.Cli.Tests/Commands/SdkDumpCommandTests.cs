@@ -67,7 +67,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -112,7 +112,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -184,14 +184,14 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // "Aspire.Hosting.Redis@" is not a valid semver, so it should fail version validation
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
     public void SdkDumpCi_ForHostingProject_DoesNotEmitWarnings()
     {
         // Assertions and skips inside the callback are surfaced back to the parent test process.
-        using var result = RemoteExecutor.Invoke(async (baseDirectory) =>
+        using var result = RemoteExecutor.Invoke((Func<string, Task>)(async (baseDirectory) =>
         {
             var repoRoot = TryFindRepoRoot(baseDirectory);
             if (repoRoot is null)
@@ -219,7 +219,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
                 // ExtraLongTimeout because this spawns a real dotnet build of Aspire.Hosting.csproj
                 // in a child process, which can exceed the default timeout under concurrent test load.
                 var exitCode = await Program.Main(["sdk", "dump", "--format", "ci", "--output", outputPath, projectPath]).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
-                Assert.Equal(ExitCodeConstants.Success, exitCode);
+                Assert.Equal((int)CliExitCodes.Success, exitCode);
 
                 var output = await File.ReadAllTextAsync(outputPath);
                 Assert.NotEmpty(output);
@@ -244,7 +244,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
                     Directory.Delete(tempDirectory, recursive: true);
                 }
             }
-        }, AppContext.BaseDirectory, options: s_remoteInvokeOptions);
+        }), AppContext.BaseDirectory, options: s_remoteInvokeOptions);
 
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
     }

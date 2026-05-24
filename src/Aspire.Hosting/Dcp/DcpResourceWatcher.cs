@@ -30,6 +30,8 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
     private readonly DcpExecutorEvents _executorEvents;
     private readonly ILogger _logger;
     private readonly IConfiguration _configuration;
+    private readonly Func<IResource, CancellationToken, Task> _publishEndpointsAllocatedEventAsync;
+    private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly CancellationToken _shutdownToken;
 
     private readonly DcpResourceState _resourceState;
@@ -55,6 +57,8 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         DistributedApplicationModel model,
         DcpAppResourceStore appResources,
         IConfiguration configuration,
+        Func<IResource, CancellationToken, Task> publishEndpointsAllocatedEventAsync,
+        ProfilingTelemetry profilingTelemetry,
         CancellationToken shutdownToken)
     {
         _kubernetesService = kubernetesService;
@@ -62,6 +66,8 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         _executorEvents = executorEvents;
         _logger = logger;
         _configuration = configuration;
+        _publishEndpointsAllocatedEventAsync = publishEndpointsAllocatedEventAsync;
+        _profilingTelemetry = profilingTelemetry;
         _shutdownToken = shutdownToken;
 
         _resourceState = new(model.Resources.ToDictionary(r => r.Name), appResources.Get());
@@ -322,6 +328,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         }
         if (resource is Executable executable)
         {
+            if (executable.Spec.Start == false && IsNotStartedExecutableState(executable.Status?.State))
+            {
+                // If the resource is set for delay start, treat not-yet-started states as NotStarted.
+                return new(KnownResourceStates.NotStarted, null, null);
+            }
+
             return new(executable.Status?.State, executable.Status?.StartupTimestamp?.ToUniversalTime(), executable.Status?.FinishTimestamp?.ToUniversalTime());
         }
         if (resource is ContainerExec containerExec)
@@ -334,8 +346,7 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
 
     private void AddDcpResourceObservedEvent(CustomResource resource, IResource appModelResource, string resourceKind, ResourceStatus status)
     {
-        using var activity = ProfilingTelemetry.StartDcpResourceObserved(
-            _configuration,
+        using var activity = _profilingTelemetry.StartDcpResourceObserved(
             appModelResource,
             resourceKind,
             resource.Metadata.Name,
@@ -343,6 +354,11 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
             status.StartupTimestamp,
             status.FinishedTimestamp,
             resource.Metadata.Annotations);
+    }
+
+    private static bool IsNotStartedExecutableState(string? state)
+    {
+        return string.IsNullOrEmpty(state) || state == ExecutableState.Unknown;
     }
 
     public async IAsyncEnumerable<IReadOnlyList<LogEntry>> GetAllLogsAsync(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -479,6 +495,12 @@ internal sealed class DcpResourceWatcher : IConsoleLogsService, IAsyncDisposable
         if (!ProcessResourceChange(_resourceState.ServicesMap, watchEventType, service))
         {
             return;
+        }
+
+        if (watchEventType is WatchEventType.Added or WatchEventType.Modified &&
+            DcpModelUtilities.TryApplyServiceAddressToEndpoint(service, _resourceState.AppResources, out var allocatedResource))
+        {
+            await _publishEndpointsAllocatedEventAsync(allocatedResource, _shutdownToken).ConfigureAwait(false);
         }
 
         foreach (var ((resourceKind, resourceName), _) in _resourceState.ResourceAssociatedServicesMap.Where(e => e.Value.Contains(service.Metadata.Name)))

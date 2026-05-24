@@ -1,9 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Immutable;
-using Aspire.DashboardService.Proto.V1;
-
 namespace Aspire.Dashboard.Model;
 
 public class ResourceCommandResponseViewModel
@@ -12,7 +9,6 @@ public class ResourceCommandResponseViewModel
     public string? ErrorMessage { get; init; }
     public string? Message { get; init; }
     public ResourceCommandResultViewModel? Result { get; init; }
-    public ImmutableArray<InteractionInput> ArgumentInputs { get; init; } = [];
 }
 
 /// <summary>

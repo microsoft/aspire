@@ -4,6 +4,7 @@
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
 
 namespace Aspire.Cli.Tests.Mcp;
@@ -22,7 +23,7 @@ internal static class MockPackagingServiceFactory
                     GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
                         Task.FromResult<IEnumerable<NuGetPackageCli>>(packages)
                 };
-                return Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache)]);
+                return Task.FromResult<IEnumerable<PackageChannel>>([PackageChannel.CreateImplicitChannel(cache, new TestFeatures())]);
             }
         };
     }
@@ -32,13 +33,8 @@ internal static class TestExecutionContextFactory
 {
     public static CliExecutionContext CreateTestContext()
     {
-        return new CliExecutionContext(
-            new DirectoryInfo(Path.GetTempPath()),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "cache")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "sdks")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "logs")),
-            "test.log");
+        return TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(Path.GetTempPath()));
     }
 }
 

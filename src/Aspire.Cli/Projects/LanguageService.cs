@@ -99,10 +99,6 @@ internal sealed class LanguageService : ILanguageService
             lang => lang.DisplayName,
             cancellationToken: cancellationToken);
 
-        // The prompt is cleared after selection.
-        // Write out the selected template again for context before proceeding.
-        _interactionService.DisplayPlainText($"Which language would you like to use? {selected.DisplayName}");
-
         return (_projectFactory.GetProject(selected), selected);
     }
 

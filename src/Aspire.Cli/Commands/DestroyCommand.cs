@@ -30,15 +30,7 @@ internal sealed class DestroyCommand : PipelineCommandBase
         };
         Options.Add(_yesOption);
 
-        Validators.Add(result =>
-        {
-            var nonInteractive = result.GetValue(RootCommand.NonInteractiveOption);
-            var yes = result.GetValue(_yesOption);
-            if (nonInteractive && !yes)
-            {
-                result.AddError(DestroyCommandStrings.NonInteractiveRequiresYes);
-            }
-        });
+        AddNonInteractiveRequiresYesValidator(this, _yesOption);
     }
 
     protected override string OperationCompletedPrefix => DestroyCommandStrings.OperationCompletedPrefix;
@@ -60,7 +52,7 @@ internal sealed class DestroyCommand : PipelineCommandBase
             baseArgs.AddRange(["--yes", "true"]);
         }
 
-        var logLevel = parseResult.GetValue(s_logLevelOption);
+        var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
         if (!string.IsNullOrEmpty(logLevel))
         {
             baseArgs.AddRange(["--log-level", logLevel!]);

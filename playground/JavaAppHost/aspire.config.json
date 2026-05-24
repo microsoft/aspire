@@ -11,17 +11,12 @@
   },
   "profiles": {
     "https": {
-      "applicationUrl": "https://localhost:17000;http://localhost:15000",
-      "environmentVariables": {
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21000",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22000"
-      }
+      "applicationUrl": "https://JavaAppHost.dev.localhost:17000;http://JavaAppHost.dev.localhost:15000",
+      "environmentVariables": {}
     },
     "http": {
-      "applicationUrl": "http://localhost:15000",
+      "applicationUrl": "http://JavaAppHost.dev.localhost:15000",
       "environmentVariables": {
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19000",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20000",
         "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
       }
     }

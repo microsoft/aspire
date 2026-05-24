@@ -29,7 +29,7 @@ internal sealed class TelemetryApiService(
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetSpans(string[]? resourceNames, string? traceId, bool? hasError, int? limit)
+    public TelemetryApiResponse? GetSpans(string[]? resourceNames, string? traceId, bool? hasError, int? limit, string? search = null, double? minDurationMs = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -64,7 +64,7 @@ internal sealed class TelemetryApiService(
         // Filter by traceId
         if (!string.IsNullOrEmpty(traceId))
         {
-            spans = spans.Where(s => OtlpHelpers.MatchTelemetryId(s.TraceId, traceId)).ToList();
+            spans = spans.Where(s => OtlpHelpers.MatchTelemetryId(traceId, s.TraceId)).ToList();
         }
 
         // Filter by hasError
@@ -75,6 +75,17 @@ internal sealed class TelemetryApiService(
         else if (hasError == false)
         {
             spans = spans.Where(s => s.Status != OtlpSpanStatusCode.Error).ToList();
+        }
+
+        // Apply full-text search across all span fields
+        if (!string.IsNullOrEmpty(search))
+        {
+            spans = spans.Where(s => MatchesSearch(s, search)).ToList();
+        }
+
+        if (GetMinimumDuration(minDurationMs) is { } minimumDuration)
+        {
+            spans = spans.Where(s => s.Duration >= minimumDuration).ToList();
         }
 
         var totalCount = spans.Count;
@@ -100,7 +111,7 @@ internal sealed class TelemetryApiService(
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetTraces(string[]? resourceNames, bool? hasError, int? limit)
+    public TelemetryApiResponse? GetTraces(string[]? resourceNames, bool? hasError, int? limit, string? search = null, double? minDurationMs = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -139,16 +150,59 @@ internal sealed class TelemetryApiService(
             traces = traces.Where(t => !t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error)).ToList();
         }
 
-        var totalCount = traces.Count;
-
-        // Apply limit (take from end for most recent)
-        if (traces.Count > effectiveLimit)
+        // Apply full-text search: a trace matches if its name matches or any span within it matches
+        if (!string.IsNullOrEmpty(search))
         {
-            traces = traces.Skip(traces.Count - effectiveLimit).ToList();
+            traces = traces.Where(t =>
+                t.FullName.Contains(search, StringComparisons.FullTextSearch) ||
+                t.Spans.Any(s => MatchesSearch(s, search))).ToList();
         }
 
-        // Get all spans from filtered traces
-        var spans = traces.SelectMany(t => t.Spans).ToList();
+        List<OtlpSpan> spans;
+        int totalCount;
+        int returnedCount;
+
+        if (GetMinimumDuration(minDurationMs) is { } minimumDuration)
+        {
+            var returnedTraceSpans = new Queue<List<OtlpSpan>>();
+            totalCount = 0;
+
+            foreach (var trace in traces)
+            {
+                var matchingSpans = GetSpansMatchingMinimumDuration(trace.Spans, minimumDuration).ToList();
+                if (matchingSpans.Count == 0)
+                {
+                    continue;
+                }
+
+                totalCount++;
+
+                if (effectiveLimit > 0)
+                {
+                    returnedTraceSpans.Enqueue(matchingSpans);
+                    if (returnedTraceSpans.Count > effectiveLimit)
+                    {
+                        returnedTraceSpans.Dequeue();
+                    }
+                }
+            }
+
+            spans = returnedTraceSpans.SelectMany(s => s).ToList();
+            returnedCount = returnedTraceSpans.Count;
+        }
+        else
+        {
+            totalCount = traces.Count;
+
+            // Apply limit (take from end for most recent)
+            if (traces.Count > effectiveLimit)
+            {
+                traces = traces.Skip(traces.Count - effectiveLimit).ToList();
+            }
+
+            spans = traces.SelectMany(t => t.Spans).ToList();
+            returnedCount = traces.Count;
+        }
 
         var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
 
@@ -156,7 +210,7 @@ internal sealed class TelemetryApiService(
         {
             Data = otlpData,
             TotalCount = totalCount,
-            ReturnedCount = traces.Count
+            ReturnedCount = returnedCount
         };
     }
 
@@ -164,7 +218,7 @@ internal sealed class TelemetryApiService(
     /// Gets a specific trace by ID with all spans in OTLP format.
     /// Returns null if trace not found.
     /// </summary>
-    public TelemetryApiResponse? GetTrace(string traceId)
+    public TelemetryApiResponse? GetTrace(string traceId, double? minDurationMs = null)
     {
         var trace = telemetryRepository.GetTrace(traceId);
         if (trace is null)
@@ -172,7 +226,7 @@ internal sealed class TelemetryApiService(
             return null;
         }
 
-        var spans = trace.Spans.ToList();
+        var spans = GetSpansMatchingMinimumDuration(trace.Spans, GetMinimumDuration(minDurationMs)).ToList();
 
         var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
 
@@ -189,7 +243,7 @@ internal sealed class TelemetryApiService(
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetLogs(string[]? resourceNames, string? traceId, string? severity, int? limit)
+    public TelemetryApiResponse? GetLogs(string[]? resourceNames, string? traceId, string? severity, int? limit, string? search = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -243,6 +297,13 @@ internal sealed class TelemetryApiService(
         }
 
         var logs = allLogs;
+
+        // Apply full-text search across all log fields
+        if (!string.IsNullOrEmpty(search))
+        {
+            logs = logs.Where(l => MatchesSearch(l, search)).ToList();
+        }
+
         var totalCount = logs.Count;
 
         // Apply limit (take from end for most recent)
@@ -269,7 +330,9 @@ internal sealed class TelemetryApiService(
         string[]? resourceNames,
         string? traceId,
         bool? hasError,
-        [EnumeratorCancellation] CancellationToken cancellationToken)
+        string? search,
+        double? minDurationMs = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         // Resolve resource keys
         var resources = telemetryRepository.GetResources();
@@ -278,6 +341,8 @@ internal sealed class TelemetryApiService(
         // For streaming, if resources were specified but can't be resolved, filter everything out
         var hasResourceFilter = resourceNames is { Length: > 0 };
         var invalidResourceFilter = hasResourceFilter && resourceKeys is null;
+
+        var minimumDuration = GetMinimumDuration(minDurationMs);
 
         // Watch all spans and filter
         await foreach (var span in telemetryRepository.WatchSpansAsync(null, cancellationToken).ConfigureAwait(false))
@@ -296,13 +361,24 @@ internal sealed class TelemetryApiService(
             }
 
             // Apply traceId filter
-            if (!string.IsNullOrEmpty(traceId) && !OtlpHelpers.MatchTelemetryId(span.TraceId, traceId))
+            if (!string.IsNullOrEmpty(traceId) && !OtlpHelpers.MatchTelemetryId(traceId, span.TraceId))
             {
                 continue;
             }
 
             // Apply hasError filter
             if (hasError.HasValue && (span.Status == OtlpSpanStatusCode.Error) != hasError.Value)
+            {
+                continue;
+            }
+
+            // Apply full-text search filter
+            if (!string.IsNullOrEmpty(search) && !MatchesSearch(span, search))
+            {
+                continue;
+            }
+
+            if (minimumDuration is { } duration && span.Duration < duration)
             {
                 continue;
             }
@@ -320,6 +396,7 @@ internal sealed class TelemetryApiService(
         string[]? resourceNames,
         string? traceId,
         string? severity,
+        string? search,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         // Resolve resource keys
@@ -373,6 +450,12 @@ internal sealed class TelemetryApiService(
                 continue;
             }
 
+            // Apply full-text search filter
+            if (!string.IsNullOrEmpty(search) && !MatchesSearch(log, search))
+            {
+                continue;
+            }
+
             var otlpData = TelemetryExportService.ConvertLogsToOtlpJson([log]);
             yield return JsonSerializer.Serialize(otlpData, OtlpJsonSerializerContext.DefaultOptions);
         }
@@ -396,6 +479,158 @@ internal sealed class TelemetryApiService(
                 HasMetrics = r.HasMetrics
             })
             .ToArray();
+    }
+
+    /// <summary>
+    /// Checks whether a log entry matches a full-text search string.
+    /// Searches across message, attribute values, scope name, event name, trace ID, span ID,
+    /// severity, and resource name using case-insensitive contains matching.
+    /// </summary>
+    private static bool MatchesSearch(OtlpLogEntry log, string search)
+    {
+        if (log.Message.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.Scope.Name.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.EventName is not null && log.EventName.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.TraceId.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.SpanId.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.Severity.ToString().Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.ResourceView.Resource.ResourceName.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        foreach (var attribute in log.Attributes)
+        {
+            if (attribute.Key.Contains(search, StringComparisons.FullTextSearch) ||
+                attribute.Value.Contains(search, StringComparisons.FullTextSearch))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether a span matches a full-text search string.
+    /// Searches across name, attribute values, span ID, trace ID, status message,
+    /// scope name, event names, and resource name using case-insensitive contains matching.
+    /// </summary>
+    private static bool MatchesSearch(OtlpSpan span, string search)
+    {
+        if (span.Name.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.SpanId.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.TraceId.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.StatusMessage is not null && span.StatusMessage.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.Scope.Name.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.Source.Resource.ResourceName.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.Status.ToString().Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.Kind.ToString().Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        foreach (var attribute in span.Attributes)
+        {
+            if (attribute.Key.Contains(search, StringComparisons.FullTextSearch) ||
+                attribute.Value.Contains(search, StringComparisons.FullTextSearch))
+            {
+                return true;
+            }
+        }
+
+        foreach (var evt in span.Events)
+        {
+            if (evt.Name.Contains(search, StringComparisons.FullTextSearch))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static TimeSpan? GetMinimumDuration(double? minimumDurationMilliseconds)
+    {
+        if (minimumDurationMilliseconds is not > 0)
+        {
+            return null;
+        }
+
+        var value = minimumDurationMilliseconds.GetValueOrDefault();
+        if (!double.IsFinite(value))
+        {
+            return null;
+        }
+
+        if (value >= TimeSpan.MaxValue.TotalMilliseconds)
+        {
+            return TimeSpan.MaxValue;
+        }
+
+        return TimeSpan.FromMilliseconds(value);
+    }
+
+    private static IEnumerable<OtlpSpan> GetSpansMatchingMinimumDuration(IEnumerable<OtlpSpan> spans, TimeSpan? minimumDuration)
+    {
+        if (minimumDuration is not { } duration)
+        {
+            return spans;
+        }
+
+        return spans.Where(s => s.Duration >= duration);
     }
 
     /// <summary>

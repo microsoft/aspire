@@ -894,7 +894,7 @@ class AspireClient:
         Results are automatically wrapped in Handle objects when applicable.
         '''
         self._check_connection()
-        result = self._send_request("invokeCapability", capability_id, args or {})
+        result = self._send_request("invokeCapability", capability_id, self._marshal_transport_value(args or {}))
 
         # Check for structured error response
         if _is_ats_error(result):
@@ -904,6 +904,15 @@ class AspireClient:
 
         # Wrap handles automatically
         return _wrap_if_handle(result, self, kwargs)
+
+    def _marshal_transport_value(self, value: typing.Any) -> typing.Any:
+        if callable(value):
+            return self.register_callback(value)
+        if isinstance(value, dict):
+            return {key: self._marshal_transport_value(nested_value) for key, nested_value in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [self._marshal_transport_value(item) for item in value]
+        return value
 
     def _send_request(self, method: str, *params: typing.Any) -> typing.Any:
         '''Send a JSON-RPC request and wait for response'''
@@ -1543,17 +1552,17 @@ class TestConfigDto(typing.TypedDict, total=False):
     Name: str
     Port: int
     Enabled: bool
-    OptionalField: str
+    OptionalField: str | None
 
 class TestDeeplyNestedDto(typing.TypedDict, total=False):
-    NestedData: AspireDict[str, AspireList[TestConfigDto]]
-    MetadataArray: typing.Iterable[AspireDict[str, str]]
+    NestedData: typing.Mapping[str, typing.Iterable[TestConfigDto]]
+    MetadataArray: typing.Iterable[typing.Mapping[str, str]]
 
 class TestNestedDto(typing.TypedDict, total=False):
     Id: str
     Config: TestConfigDto
-    Tags: AspireList[str]
-    Counts: AspireDict[str, int]
+    Tags: typing.Iterable[str]
+    Counts: typing.Mapping[str, int]
 
 
 # ============================================================================
@@ -1603,7 +1612,7 @@ class DistributedApplicationBuilder:
         app.run(timeout=timeout)
 
     def add_test_redis(self, name: str, *, port: int | None = None, **kwargs: typing.Unpack["TestRedisResourceKwargs"]) -> TestRedisResource:  # type: ignore
-        """Adds a test Redis resource"""
+        """Adds a test Redis resource from ATS documentation."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         if port is not None:
@@ -1655,16 +1664,16 @@ class TestCallbackContext:
         return self._handle
 
     @_uncached_property
-    def name(self) -> str:
+    def name(self) -> str | None:
         """Gets the Name property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @name.setter
-    def name(self, value: str) -> None:
+    def name(self, value: str | None) -> None:
         """Sets the Name property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName',
@@ -1714,7 +1723,7 @@ class TestCollectionContext:
 
     @_cached_property
     def items(self) -> AspireList[str]:
-        """Gets the Items property"""
+        """List property - should generate AspireList getter like Dictionary properties."""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items',
             {'context': self._handle}
@@ -1723,7 +1732,7 @@ class TestCollectionContext:
 
     @_cached_property
     def metadata(self) -> AspireDict[str, str]:
-        """Gets the Metadata property"""
+        """Dictionary property - already works with AspireDict getter."""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata',
             {'context': self._handle}
@@ -1764,16 +1773,16 @@ class TestEnvironmentContext:
         )
 
     @_uncached_property
-    def description(self) -> str:
+    def description(self) -> str | None:
         """Gets the Description property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @description.setter
-    def description(self, value: str) -> None:
+    def description(self, value: str | None) -> None:
         """Sets the Description property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription',
@@ -1898,7 +1907,7 @@ class TestResourceContext:
         )
 
     def get_value(self) -> str:
-        """Invokes the GetValueAsync method"""
+        """Instance method that should be exposed as async method."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.getValueAsync',
@@ -1907,7 +1916,7 @@ class TestResourceContext:
         return result
 
     def set_value(self, value: str) -> None:
-        """Invokes the SetValueAsync method"""
+        """Instance method with parameter."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['value'] = value
         self._client.invoke_capability(
@@ -1916,7 +1925,7 @@ class TestResourceContext:
         )
 
     def validate(self) -> bool:
-        """Invokes the ValidateAsync method"""
+        """Instance method with return type."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.validateAsync',

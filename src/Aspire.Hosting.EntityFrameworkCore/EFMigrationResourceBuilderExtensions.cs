@@ -266,7 +266,7 @@ public static class EFMigrationResourceBuilderExtensions
     /// <summary>
     /// Configures a separate project containing migrations for polyglot app hosts.
     /// </summary>
-    [AspireExport("withMigrationsProject", Description = "Configures a separate project containing the migrations")]
+    [AspireExport("withMigrationsProject")]
     internal static IResourceBuilder<EFMigrationResource> WithMigrationsProjectForPolyglot(
         this IResourceBuilder<EFMigrationResource> builder,
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ProjectResource>))] object? migrationsProject = null)

@@ -73,7 +73,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project (Preview)</source>
+        <source>Update integrations in the Aspire project</source>
         <target state="needs-review-translation">Aspire プロジェクトの統合を更新します。(プレビュー)</target>
         <note />
       </trans-unit>
@@ -105,6 +105,11 @@
       <trans-unit id="FailedFetchItemsAndPropertiesFormat">
         <source>Failed to fetch items and properties for project: {0}</source>
         <target state="translated">プロジェクト {0} のアイテムとプロパティのフェッチに失敗しました</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedToRestoreAfterUpdateFormat">
+        <source>Failed to restore packages for project {0} after update.</source>
+        <target state="new">Failed to restore packages for project {0} after update.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
@@ -145,6 +150,11 @@
       <trans-unit id="NoChangesDetectedInNuGetConfig">
         <source>No changes detected in NuGet.config</source>
         <target state="translated">NuGet.config に変更は検出されませんでした</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoChannelFoundMatching">
+        <source>No channel found matching '{0}'. Valid options are: {1}.</source>
+        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoPackageFoundFormat">
@@ -197,6 +207,11 @@
         <target state="translated">プロジェクトは最新の状態です!(更新は必要ありません)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectUpdateSkippedAfterCliUpdateMessage">
+        <source>Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</source>
+        <target state="new">Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="QualityOptionDescription">
         <source>Quality level to update to (stable, daily)</source>
         <target state="translated">更新先の品質レベル (安定、毎日)</target>
@@ -227,6 +242,11 @@
         <target state="translated">古い Aspire.Hosting.AppHost パッケージ参照を削除しました</target>
         <note />
       </trans-unit>
+      <trans-unit id="RestoringPackagesAfterUpdate">
+        <source>Restoring packages...</source>
+        <target state="new">Restoring packages...</target>
+        <note />
+      </trans-unit>
       <trans-unit id="RetainedFeedFormat">
         <source>Retained: {0}</source>
         <target state="translated">保持済み: {0}</target>
@@ -250,6 +270,11 @@
       <trans-unit id="UpdateCliAfterProjectUpdatePrompt">
         <source>An update is available for the Aspire CLI. Would you like to update it now?</source>
         <target state="translated">Aspire CLI の更新プログラムが利用可能です。今すぐ更新しますか?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateCliBeforeGuestProjectUpdatePrompt">
+        <source>The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</source>
+        <target state="new">The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdatePackageFormat">

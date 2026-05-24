@@ -68,8 +68,8 @@ func (d *TestConfigDto) ToMap() map[string]any {
 type TestNestedDto struct {
 	Id string `json:"Id,omitempty"`
 	Config *TestConfigDto `json:"Config,omitempty"`
-	Tags *List[string] `json:"Tags,omitempty"`
-	Counts *Dict[string, float64] `json:"Counts,omitempty"`
+	Tags []string `json:"Tags,omitempty"`
+	Counts map[string]float64 `json:"Counts,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -84,8 +84,8 @@ func (d *TestNestedDto) ToMap() map[string]any {
 
 // TestDeeplyNestedDto represents TestDeeplyNestedDto.
 type TestDeeplyNestedDto struct {
-	NestedData *Dict[string, *List[*TestConfigDto]] `json:"NestedData,omitempty"`
-	MetadataArray []*Dict[string, string] `json:"MetadataArray,omitempty"`
+	NestedData map[string][]*TestConfigDto `json:"NestedData,omitempty"`
+	MetadataArray []map[string]string `json:"MetadataArray,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -579,7 +579,7 @@ func newIDistributedApplicationBuilderFromHandle(h *handle, c *client) IDistribu
 	return &iDistributedApplicationBuilder{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// AddTestRedis adds a test Redis resource
+// AddTestRedis adds a test Redis resource from ATS documentation.
 func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource {
 	if s.err != nil { return &testRedisResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -664,7 +664,7 @@ func newTestCallbackContextFromHandle(h *handle, c *client) TestCallbackContext 
 	return &testCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken gets the CancellationToken property
+// CancellationToken cancellationToken is supported by ATS.
 func (s *testCallbackContext) CancellationToken() (*CancellationToken, error) {
 	if s.err != nil { var zero *CancellationToken; return zero, s.err }
 	ctx := context.Background()
@@ -777,7 +777,7 @@ func newTestCollectionContextFromHandle(h *handle, c *client) TestCollectionCont
 	return &testCollectionContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Items gets the Items property
+// Items list property - should generate AspireList getter like Dictionary properties.
 func (s *testCollectionContext) Items() *List[string] {
 	if s.items == nil {
 		s.items = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items")
@@ -785,7 +785,7 @@ func (s *testCollectionContext) Items() *List[string] {
 	return s.items
 }
 
-// Metadata gets the Metadata property
+// Metadata dictionary property - already works with AspireDict getter.
 func (s *testCollectionContext) Metadata() *Dict[string, string] {
 	if s.metadata == nil {
 		s.metadata = newDictWithGetter[string, string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata")
@@ -2027,7 +2027,7 @@ func newTestResourceContextFromHandle(h *handle, c *client) TestResourceContext 
 	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// GetValueAsync invokes the GetValueAsync method
+// GetValueAsync instance method that should be exposed as async method.
 func (s *testResourceContext) GetValueAsync() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -2081,7 +2081,7 @@ func (s *testResourceContext) SetValue(value float64) TestResourceContext {
 	return s
 }
 
-// SetValueAsync invokes the SetValueAsync method
+// SetValueAsync instance method with parameter.
 func (s *testResourceContext) SetValueAsync(value string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -2093,7 +2093,7 @@ func (s *testResourceContext) SetValueAsync(value string) error {
 	return err
 }
 
-// ValidateAsync invokes the ValidateAsync method
+// ValidateAsync instance method with return type.
 func (s *testResourceContext) ValidateAsync() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -2338,7 +2338,11 @@ func CreateBuilder() (IDistributedApplicationBuilder, error) {
 	resolved := map[string]any{}
 	if _, ok := resolved["Args"]; !ok { resolved["Args"] = os.Args[1:] }
 	if projectDirectory, ok := resolved["ProjectDirectory"].(string); !ok || projectDirectory == "" {
-		if pwd, err := os.Getwd(); err == nil { resolved["ProjectDirectory"] = pwd }
+		if projectDirectory := os.Getenv("ASPIRE_PROJECT_DIRECTORY"); projectDirectory != "" {
+			resolved["ProjectDirectory"] = projectDirectory
+		} else if pwd, err := os.Getwd(); err == nil {
+			resolved["ProjectDirectory"] = pwd
+		}
 	}
 	if appHostFilePath, ok := resolved["AppHostFilePath"].(string); !ok || appHostFilePath == "" {
 		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["AppHostFilePath"] = appHostFilePath }

@@ -150,15 +150,17 @@ public static class DashboardEndpointsBuilder
             [FromQuery] bool? hasError,
             [FromQuery] int? limit,
             [FromQuery] bool? follow,
+            [FromQuery] string? search,
+            [FromQuery] double? minDurationMs,
             CancellationToken cancellationToken) =>
         {
             if (follow == true)
             {
-                await StreamNdjsonAsync(httpContext, service.FollowSpansAsync(resource, traceId, hasError, cancellationToken), cancellationToken).ConfigureAwait(false);
+                await StreamNdjsonAsync(httpContext, service.FollowSpansAsync(resource, traceId, hasError, search, minDurationMs, cancellationToken), cancellationToken).ConfigureAwait(false);
                 return Results.Empty;
             }
 
-            var response = service.GetSpans(resource, traceId, hasError, limit);
+            var response = service.GetSpans(resource, traceId, hasError, limit, search, minDurationMs);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -181,15 +183,16 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string? severity,
             [FromQuery] int? limit,
             [FromQuery] bool? follow,
+            [FromQuery] string? search,
             CancellationToken cancellationToken) =>
         {
             if (follow == true)
             {
-                await StreamNdjsonAsync(httpContext, service.FollowLogsAsync(resource, traceId, severity, cancellationToken), cancellationToken).ConfigureAwait(false);
+                await StreamNdjsonAsync(httpContext, service.FollowLogsAsync(resource, traceId, severity, search, cancellationToken), cancellationToken).ConfigureAwait(false);
                 return Results.Empty;
             }
 
-            var response = service.GetLogs(resource, traceId, severity, limit);
+            var response = service.GetLogs(resource, traceId, severity, limit, search);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -208,9 +211,11 @@ public static class DashboardEndpointsBuilder
             TelemetryApiService service,
             [FromQuery] string[]? resource,
             [FromQuery] bool? hasError,
-            [FromQuery] int? limit) =>
+            [FromQuery] int? limit,
+            [FromQuery] string? search,
+            [FromQuery] double? minDurationMs) =>
         {
-            var response = service.GetTraces(resource, hasError, limit);
+            var response = service.GetTraces(resource, hasError, limit, search, minDurationMs);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails
@@ -226,9 +231,10 @@ public static class DashboardEndpointsBuilder
         // GET /api/telemetry/traces/{traceId} - Get a specific trace with all spans in OTLP format
         group.MapGet("/traces/{traceId}", (
             TelemetryApiService service,
-            string traceId) =>
+            string traceId,
+            [FromQuery] double? minDurationMs) =>
         {
-            var response = service.GetTrace(traceId);
+            var response = service.GetTrace(traceId, minDurationMs);
             if (response is null)
             {
                 return Results.NotFound(new ProblemDetails

@@ -7,13 +7,14 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 
 	compose := builder.AddDockerComposeEnvironment("compose")
 	api := builder.AddContainer("api", "nginx:alpine")
+	api.WithComputeEnvironment(compose)
 
 	compose.WithProperties(func(environment aspire.DockerComposeEnvironmentResource) {
 		environment.SetDefaultNetworkName("validation-network")
@@ -42,6 +43,20 @@ func main() {
 		_, _ = otlpGrpcEndpoint.Port()
 	})
 
+	compose.ConfigureComposeFile(func(composeFile aspire.ComposeFile) {
+		composeFile.SetName("validation-compose")
+		_, _ = composeFile.Name()
+		composeFile.AddNetwork("validation-network-extra", &aspire.AddNetworkOptions{Driver: aspire.StringPtr("bridge")})
+		composeFile.AddService("validation-sidecar", &aspire.AddServiceOptions{Image: aspire.StringPtr("busybox")})
+		composeFile.AddVolume("validation-data", &aspire.AddVolumeOptions{Driver: aspire.StringPtr("local")})
+		composeFile.AddConfig("validation-config", &aspire.AddConfigOptions{Content: aspire.StringPtr("enabled=true")})
+		composeFile.AddSecret("validation-secret", &aspire.AddSecretOptions{External: aspire.BoolPtr(true)})
+		composeApi, _ := composeFile.Services().Get("api")
+		composeApi.SetPullPolicy("always")
+		_, _ = composeApi.PullPolicy()
+		composeApi.AddVolume("validation-data", "/container/compose-data", &aspire.ServiceAddVolumeOptions{IsReadOnly: aspire.BoolPtr(true)})
+	})
+
 	_ = api.PublishAsDockerComposeService(func(composeService aspire.DockerComposeServiceResource, service aspire.Service) {
 		service.SetContainerName("validation-api")
 		service.SetPullPolicy("always")
@@ -54,6 +69,9 @@ func main() {
 		_, _ = service.ContainerName()
 		_, _ = service.PullPolicy()
 		_, _ = service.Restart()
+		_, _ = service.Configs().Count()
+		_, _ = service.Secrets().Count()
+		_, _ = service.Ulimits().Count()
 	})
 
 	_, _ = compose.DefaultNetworkName()
@@ -67,7 +85,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

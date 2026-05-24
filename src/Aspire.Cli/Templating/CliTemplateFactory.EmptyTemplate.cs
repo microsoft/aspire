@@ -18,14 +18,14 @@ internal sealed partial class CliTemplateFactory
         if (string.IsNullOrWhiteSpace(languageId))
         {
             _interactionService.DisplayError("Language selection is required.");
-            return new TemplateResult(ExitCodeConstants.InvalidCommand);
+            return new TemplateResult(CliExitCodes.InvalidCommand);
         }
 
         var language = _languageDiscovery.GetLanguageById(languageId);
         if (language is null)
         {
             _interactionService.DisplayError($"Unknown language: '{languageId}'");
-            return new TemplateResult(ExitCodeConstants.InvalidCommand);
+            return new TemplateResult(CliExitCodes.InvalidCommand);
         }
 
         var projectName = inputs.Name;
@@ -38,7 +38,7 @@ internal sealed partial class CliTemplateFactory
         var outputPath = await ResolveOutputPathAsync(inputs, template.PathDeriver, projectName, parseResult, cancellationToken);
         if (outputPath is null)
         {
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
 
         _logger.LogDebug("Applying empty AppHost template. LanguageId: {LanguageId}, Language: {LanguageDisplayName}, ProjectName: {ProjectName}, OutputPath: {OutputPath}.", languageId, language.DisplayName, projectName, outputPath);
@@ -57,12 +57,15 @@ internal sealed partial class CliTemplateFactory
             if (isCsharp)
             {
                 // Do this first so there is no prompt while status is displayed for creating project.
-                await _templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(inputs.Channel, outputPath, cancellationToken);
+                if (!await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken))
+                {
+                    await _templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(inputs.Channel, outputPath, cancellationToken);
+                }
             }
 
             templateResult = await _interactionService.ShowStatusAsync(
                 TemplatingStrings.CreatingNewProject,
-                async () =>
+                (Func<Task<TemplateResult>>)(async () =>
                 {
                     if (isCsharp)
                     {
@@ -77,10 +80,11 @@ internal sealed partial class CliTemplateFactory
                             new DirectoryInfo(outputPath),
                             projectName,
                             SdkVersion: inputs.Version,
-                            Channel: inputs.Channel);
+                            Channel: inputs.Channel,
+                            PackageSourceOverride: inputs.Source);
                         if (!await _scaffoldingService.ScaffoldAsync(context, cancellationToken))
                         {
-                            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                            return new TemplateResult((int)CliExitCodes.FailedToCreateNewProject);
                         }
 
                         if (useLocalhostTld)
@@ -89,18 +93,23 @@ internal sealed partial class CliTemplateFactory
                         }
                     }
 
-                    return new TemplateResult(ExitCodeConstants.Success, outputPath);
-                }, emoji: KnownEmojis.Rocket);
+                    return new TemplateResult((int)CliExitCodes.Success, outputPath);
+                }), emoji: KnownEmojis.Rocket);
 
-            if (templateResult.ExitCode != ExitCodeConstants.Success)
+            if (templateResult.ExitCode != CliExitCodes.Success)
             {
                 return templateResult;
+            }
+
+            if (!isCsharp)
+            {
+                await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken);
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _interactionService.DisplayError($"Failed to create project files: {ex.Message}");
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
 
         _interactionService.DisplaySuccess($"Created {language.DisplayName.EscapeMarkup()} project at {outputPath.EscapeMarkup()}");

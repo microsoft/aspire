@@ -75,6 +75,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string AvailableResourceCommands {
+            get {
+                return ResourceManager.GetString("AvailableResourceCommands", resourceCulture);
+            }
+        }
+
         internal static string CommandSpecificHelpAllowedValues {
             get {
                 return ResourceManager.GetString("CommandSpecificHelpAllowedValues", resourceCulture);

@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -25,7 +25,7 @@ func main() {
 		Name:       aspire.StringPtr("nats-data"),
 		IsReadOnly: aspire.BoolPtr(false),
 	})
-	nats2.WithLifetime(aspire.ContainerLifetimePersistent)
+	nats2.WithPersistentLifetime()
 	if err = nats2.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -66,7 +66,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

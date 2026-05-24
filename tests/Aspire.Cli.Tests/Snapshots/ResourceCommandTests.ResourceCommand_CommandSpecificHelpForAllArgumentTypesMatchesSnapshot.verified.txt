@@ -14,6 +14,7 @@ Command options:
 
 Options:
   --apphost <apphost>            The path to the Aspire AppHost project file or a directory to search
+  --include-hidden               Include hidden resources in the output
   -?, -h, /?, /h, --help         Show help and usage information
   -l, --log-level <log-level>    Set the minimum log level for console output (Trace, Debug, Information, Warning,
                                  Error, Critical)

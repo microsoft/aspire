@@ -13,12 +13,13 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Aspire.Hosting.Analyzers;
 
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public partial class AspireExportAnalyzer : DiagnosticAnalyzer
+internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
 {
     private const string RunSyncOnBackgroundThreadPropertyName = "RunSyncOnBackgroundThread";
     private const string ExposeMethodsPropertyName = "ExposeMethods";
     private const string ExposePropertiesPropertyName = "ExposeProperties";
     private const string MethodNamePropertyName = "MethodName";
+    private const string DescriptionPropertyName = "Description";
 
     // Matches: valid method name (camelCase identifier, may contain dots for namespacing)
     // Examples: addRedis, addContainer, Dictionary.set
@@ -154,8 +155,14 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             SymbolKind.Method);
 
         context.RegisterSymbolAction(
-            c => AnalyzeNamedType(c, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames),
+            c => AnalyzeNamedType(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames),
             SymbolKind.NamedType);
+
+        context.RegisterSymbolAction(
+            c => AnalyzeProperty(c, aspireExportAttribute),
+            SymbolKind.Property);
+
+        context.RegisterCompilationEndAction(c => ReportAssemblyExportDescriptions(c, aspireExportAttribute));
 
         // At the end of compilation, report duplicate export IDs
         context.RegisterCompilationEndAction(c => ReportDuplicateExports(c, exportsByKey));
@@ -165,6 +172,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // Warn when exported builder methods invoke synchronous callback delegates inline. Deferred callbacks
         // that are stored for later execution are fine, and exports that opt into background-thread dispatch
         // are handled safely by the runtime.
+        var inlineDelegateInvocationCache = new ConcurrentDictionary<ISymbol, ImmutableHashSet<int>>(SymbolEqualityComparer.Default);
         context.RegisterOperationBlockStartAction(c =>
         {
             if (c.OwningSymbol is not IMethodSymbol method ||
@@ -190,7 +198,13 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
             var reportedParameters = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
             c.RegisterOperationAction(
-                oc => AnalyzeInlineSynchronousDelegateInvocation(oc, method, synchronousDelegateParameters, reportedParameters),
+                oc => AnalyzeInlineSynchronousDelegateInvocation(
+                    oc,
+                    context.Compilation.Assembly,
+                    method,
+                    synchronousDelegateParameters,
+                    reportedParameters,
+                    inlineDelegateInvocationCache),
                 OperationKind.Invocation);
         });
     }
@@ -255,6 +269,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         var attributeSyntax = exportAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken);
         var location = attributeSyntax?.GetLocation() ?? method.Locations.FirstOrDefault() ?? Location.None;
+        AnalyzeExportDescription(context, exportAttribute, location);
+
         var containingTypeExportAttribute = GetContainingTypeAspireExportAttribute(method.ContainingType, aspireExportAttribute);
 
         // Rule 1: Method must be static
@@ -372,14 +388,80 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeNamedType(
         SymbolAnalysisContext context,
+        WellKnownTypes wellKnownTypes,
         INamedTypeSymbol aspireExportAttribute,
         INamedTypeSymbol? aspireExportIgnoreAttribute,
         ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
         ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
     {
         var type = (INamedTypeSymbol)context.Symbol;
+        AnalyzeDtoType(type, wellKnownTypes, aspireExportIgnoreAttribute, context);
+
         var typeExportAttribute = GetContainingTypeAspireExportAttribute(type, aspireExportAttribute);
+        if (typeExportAttribute is not null)
+        {
+            var location = GetAttributeLocation(typeExportAttribute, context.CancellationToken) ?? type.Locations.FirstOrDefault() ?? Location.None;
+            AnalyzeExportDescription(context, typeExportAttribute, location);
+        }
+
         AnalyzeContextType(type, typeExportAttribute, context.Compilation.Assembly.Identity.Name, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
+    }
+
+    private static void AnalyzeProperty(SymbolAnalysisContext context, INamedTypeSymbol aspireExportAttribute)
+    {
+        var property = (IPropertySymbol)context.Symbol;
+        var propertyExportAttribute = GetAspireExportAttribute(property, aspireExportAttribute);
+        if (propertyExportAttribute is null)
+        {
+            return;
+        }
+
+        var location = GetAttributeLocation(propertyExportAttribute, context.CancellationToken) ?? property.Locations.FirstOrDefault() ?? Location.None;
+        AnalyzeExportDescription(context, propertyExportAttribute, location);
+    }
+
+    private static void AnalyzeDtoType(
+        INamedTypeSymbol type,
+        WellKnownTypes wellKnownTypes,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
+        SymbolAnalysisContext context)
+    {
+        if (!HasAspireDtoAttribute(type))
+        {
+            return;
+        }
+
+        foreach (var property in GetInstanceProperties(type))
+        {
+            if (IsMutableCollectionType(property.Type, wellKnownTypes) &&
+                property.SetMethod is null &&
+                !property.IsStatic &&
+                property.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
+                !HasAspireExportIgnoreAttribute(property, aspireExportIgnoreAttribute))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.s_dtoMutableCollectionPropertyMustBeInitSettable,
+                    property.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault() ?? Location.None,
+                    $"{type.Name}.{property.Name}"));
+            }
+        }
+    }
+
+    private static void ReportAssemblyExportDescriptions(CompilationAnalysisContext context, INamedTypeSymbol aspireExportAttribute)
+    {
+        foreach (var attribute in context.Compilation.Assembly.GetAttributes())
+        {
+            if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, aspireExportAttribute))
+            {
+                continue;
+            }
+
+            var location = GetAttributeLocation(attribute, context.CancellationToken) ?? Location.None;
+            if (HasNamedArgument(attribute, DescriptionPropertyName))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Diagnostics.s_descriptionShouldUseXmlDocs, location));
+            }
+        }
     }
 
     private static void AnalyzeAssemblyExportedTypes(
@@ -793,35 +875,277 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeInlineSynchronousDelegateInvocation(
         OperationAnalysisContext context,
+        IAssemblySymbol assembly,
         IMethodSymbol method,
         IReadOnlyDictionary<string, IParameterSymbol> synchronousDelegateParameters,
-        ConcurrentDictionary<string, byte> reportedParameters)
+        ConcurrentDictionary<string, byte> reportedParameters,
+        ConcurrentDictionary<ISymbol, ImmutableHashSet<int>> inlineDelegateInvocationCache)
     {
         var invocation = (IInvocationOperation)context.Operation;
 
-        if (invocation.TargetMethod.MethodKind != MethodKind.DelegateInvoke ||
-            invocation.Syntax is not InvocationExpressionSyntax invocationSyntax ||
+        if (invocation.Syntax is not InvocationExpressionSyntax invocationSyntax ||
             IsInsideNestedCallback(invocationSyntax))
         {
             return;
         }
 
-        var parameterName = GetInvokedDelegateParameterName(invocationSyntax);
-        if (parameterName is null || !synchronousDelegateParameters.TryGetValue(parameterName, out var parameter))
+        if (invocation.TargetMethod.MethodKind == MethodKind.DelegateInvoke)
         {
+            var parameterName = GetInvokedDelegateParameterName(invocationSyntax);
+            if (parameterName is null || !synchronousDelegateParameters.TryGetValue(parameterName, out var parameter))
+            {
+                return;
+            }
+
+            ReportInlineSynchronousDelegateInvocation(context, method, reportedParameters, invocationSyntax.GetLocation(), parameter);
             return;
         }
 
-        if (!reportedParameters.TryAdd(parameterName, default))
+        foreach (var argument in invocation.Arguments)
         {
-            return;
+            if (argument.Parameter is null ||
+                GetReferencedParameter(argument.Value) is not { } referencedParameter ||
+                !synchronousDelegateParameters.TryGetValue(referencedParameter.Name, out var callbackParameter))
+            {
+                continue;
+            }
+
+            var targetInvokedParameters = GetInlineInvokedDelegateParameterOrdinals(
+                invocation.TargetMethod,
+                assembly,
+                inlineDelegateInvocationCache,
+                new HashSet<ISymbol>(SymbolEqualityComparer.Default),
+                context.CancellationToken);
+
+            if (!targetInvokedParameters.Contains(argument.Parameter.Ordinal))
+            {
+                continue;
+            }
+
+            ReportInlineSynchronousDelegateInvocation(context, method, reportedParameters, invocationSyntax.GetLocation(), callbackParameter);
+        }
+    }
+
+    private static void ReportInlineSynchronousDelegateInvocation(
+        OperationAnalysisContext context,
+        IMethodSymbol method,
+        ConcurrentDictionary<string, byte> reportedParameters,
+        Location location,
+        IParameterSymbol parameter)
+    {
+        if (reportedParameters.TryAdd(parameter.Name, default))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.s_exportedSyncDelegateInvokedInline,
+                location,
+                method.Name,
+                parameter.Name));
+        }
+    }
+
+    private static ImmutableHashSet<int> GetInlineInvokedDelegateParameterOrdinals(
+        IMethodSymbol method,
+        IAssemblySymbol assembly,
+        ConcurrentDictionary<ISymbol, ImmutableHashSet<int>> cache,
+        HashSet<ISymbol> visiting,
+        CancellationToken cancellationToken)
+    {
+        if (cache.TryGetValue(method, out var cached))
+        {
+            return cached;
         }
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            Diagnostics.s_exportedSyncDelegateInvokedInline,
-            invocationSyntax.GetLocation(),
-            method.Name,
-            parameter.Name));
+        if (!SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, assembly) ||
+            method.DeclaringSyntaxReferences.Length == 0 ||
+            !visiting.Add(method))
+        {
+            return ImmutableHashSet<int>.Empty;
+        }
+
+        try
+        {
+            var result = ComputeInlineInvokedDelegateParameterOrdinals(method, assembly, cache, visiting, cancellationToken);
+            cache.TryAdd(method, result);
+            return result;
+        }
+        finally
+        {
+            visiting.Remove(method);
+        }
+    }
+
+    private static ImmutableHashSet<int> ComputeInlineInvokedDelegateParameterOrdinals(
+        IMethodSymbol method,
+        IAssemblySymbol assembly,
+        ConcurrentDictionary<ISymbol, ImmutableHashSet<int>> cache,
+        HashSet<ISymbol> visiting,
+        CancellationToken cancellationToken)
+    {
+        var synchronousDelegateParameterOrdinals = method.Parameters
+            .Where(IsSynchronousDelegateParameter)
+            .Select(static p => p.Ordinal)
+            .ToImmutableHashSet();
+
+        if (synchronousDelegateParameterOrdinals.Count == 0)
+        {
+            return ImmutableHashSet<int>.Empty;
+        }
+
+        var syntax = method.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken);
+        var result = ImmutableHashSet.CreateBuilder<int>();
+
+        foreach (var invocationSyntax in syntax.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (IsInsideNestedCallback(invocationSyntax))
+            {
+                continue;
+            }
+
+            var parameterName = GetInvokedDelegateParameterName(invocationSyntax);
+            var parameter = parameterName is null
+                ? null
+                : method.Parameters.FirstOrDefault(p => p.Name == parameterName);
+            if (parameter is not null && synchronousDelegateParameterOrdinals.Contains(parameter.Ordinal))
+            {
+                result.Add(parameter.Ordinal);
+                continue;
+            }
+
+            foreach (var targetMethod in ResolveSameTypeMethodInvocations(method, invocationSyntax))
+            {
+                foreach (var argument in invocationSyntax.ArgumentList.Arguments)
+                {
+                    if (GetReferencedParameterName(argument.Expression) is not { } referencedParameterName)
+                    {
+                        continue;
+                    }
+
+                    var referencedParameter = method.Parameters.FirstOrDefault(p => p.Name == referencedParameterName);
+                    var targetParameterOrdinal = GetTargetParameterOrdinal(targetMethod, argument, invocationSyntax.ArgumentList);
+
+                    if (referencedParameter is null ||
+                        targetParameterOrdinal is null ||
+                        !synchronousDelegateParameterOrdinals.Contains(referencedParameter.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var targetInvokedParameters = GetInlineInvokedDelegateParameterOrdinals(
+                        targetMethod,
+                        assembly,
+                        cache,
+                        visiting,
+                        cancellationToken);
+
+                    if (targetInvokedParameters.Contains(targetParameterOrdinal.Value))
+                    {
+                        result.Add(referencedParameter.Ordinal);
+                    }
+                }
+            }
+        }
+
+        return result.ToImmutable();
+    }
+
+    private static IParameterSymbol? GetReferencedParameter(IOperation operation)
+    {
+        while (operation is IConversionOperation conversion)
+        {
+            operation = conversion.Operand;
+        }
+
+        return operation is IParameterReferenceOperation parameterReference
+            ? parameterReference.Parameter
+            : null;
+    }
+
+    private static IEnumerable<IMethodSymbol> ResolveSameTypeMethodInvocations(IMethodSymbol containingMethod, InvocationExpressionSyntax invocation)
+    {
+        // Analyzer rules prohibit fetching a SemanticModel for arbitrary helper syntax here, so helper
+        // summaries use the exact operation symbol at the export boundary and bounded syntax matching
+        // for subsequent calls inside the same helper type.
+        var methodName = invocation.Expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+            _ => null
+        };
+
+        if (methodName is null || containingMethod.ContainingType is null)
+        {
+            yield break;
+        }
+
+        foreach (var member in containingMethod.ContainingType.GetMembers(methodName).OfType<IMethodSymbol>())
+        {
+            if (member.DeclaringSyntaxReferences.Length == 0 ||
+                !CouldAcceptArguments(member, invocation.ArgumentList))
+            {
+                continue;
+            }
+
+            yield return member;
+        }
+    }
+
+    private static bool CouldAcceptArguments(IMethodSymbol targetMethod, ArgumentListSyntax argumentList)
+    {
+        var positionalArgumentCount = 0;
+        foreach (var argument in argumentList.Arguments)
+        {
+            if (argument.NameColon is not null)
+            {
+                if (!targetMethod.Parameters.Any(p => p.Name == argument.NameColon.Name.Identifier.ValueText))
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            positionalArgumentCount++;
+        }
+
+        if (positionalArgumentCount > targetMethod.Parameters.Length)
+        {
+            return false;
+        }
+
+        var suppliedNames = new HashSet<string>(argumentList.Arguments
+            .Where(static a => a.NameColon is not null)
+            .Select(static a => a.NameColon!.Name.Identifier.ValueText),
+            StringComparer.Ordinal);
+
+        return targetMethod.Parameters
+            .Where(static p => !p.IsOptional)
+            .All(p => p.Ordinal < positionalArgumentCount || suppliedNames.Contains(p.Name));
+    }
+
+    private static int? GetTargetParameterOrdinal(IMethodSymbol targetMethod, ArgumentSyntax argument, ArgumentListSyntax argumentList)
+    {
+        if (argument.NameColon is not null)
+        {
+            var parameter = targetMethod.Parameters.FirstOrDefault(p => p.Name == argument.NameColon.Name.Identifier.ValueText);
+            return parameter?.Ordinal;
+        }
+
+        var ordinal = argumentList.Arguments.IndexOf(argument);
+        return ordinal >= 0 && ordinal < targetMethod.Parameters.Length
+            ? ordinal
+            : null;
+    }
+
+    private static string? GetReferencedParameterName(ExpressionSyntax expression)
+    {
+        while (expression is ParenthesizedExpressionSyntax parenthesized)
+        {
+            expression = parenthesized.Expression;
+        }
+
+        return expression is IdentifierNameSyntax identifier
+            ? identifier.Identifier.ValueText
+            : null;
     }
 
     private static bool IsInsideNestedCallback(InvocationExpressionSyntax invocation)
@@ -1451,6 +1775,27 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         return null;
     }
 
+    private static void AnalyzeExportDescription(SymbolAnalysisContext context, AttributeData exportAttribute, Location location)
+    {
+        if (HasNamedArgument(exportAttribute, DescriptionPropertyName))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(Diagnostics.s_descriptionShouldUseXmlDocs, location));
+        }
+    }
+
+    private static bool HasNamedArgument(AttributeData exportAttribute, string argumentName)
+    {
+        foreach (var namedArgument in exportAttribute.NamedArguments)
+        {
+            if (namedArgument.Key == argumentName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static AttributeData? GetAspireExportAttribute(ISymbol symbol, INamedTypeSymbol aspireExportAttribute)
     {
         foreach (var attr in symbol.GetAttributes())
@@ -1960,6 +2305,14 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         return false;
+    }
+
+    private static bool IsMutableCollectionType(ITypeSymbol type, WellKnownTypes wellKnownTypes)
+    {
+        return TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_Dictionary_2) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IDictionary_2) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_List_1) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IList_1);
     }
 
     private static bool IsResourceType(ITypeSymbol type, WellKnownTypes wellKnownTypes)

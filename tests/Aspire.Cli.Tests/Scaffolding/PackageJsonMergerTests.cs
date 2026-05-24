@@ -1093,6 +1093,33 @@ public class PackageJsonMergerTests
     }
 
     [Fact]
+    public void DevDependencyAlreadyInDependencies_IsNotDuplicated()
+    {
+        var existing = """
+            {
+              "dependencies": {
+                "vscode-jsonrpc": "^8.1.0"
+              }
+            }
+            """;
+
+        var scaffold = """
+            {
+              "devDependencies": {
+                "vscode-jsonrpc": "^8.2.0",
+                "typescript": "^5.9.3"
+              }
+            }
+            """;
+
+        var result = MergeJson(existing, scaffold);
+
+        Assert.Equal("^8.2.0", GetDep(result, "dependencies", "vscode-jsonrpc"));
+        Assert.Null(GetDep(result, "devDependencies", "vscode-jsonrpc"));
+        Assert.Equal("^5.9.3", GetDep(result, "devDependencies", "typescript"));
+    }
+
+    [Fact]
     public void Engines_NodeConstraint_OverwrittenByScaffold()
     {
         var existing = """

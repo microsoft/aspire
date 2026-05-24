@@ -18,11 +18,11 @@ using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Exec;
 using Aspire.Hosting.Health;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Orchestrator;
@@ -181,6 +181,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     public DistributedApplicationBuilder(DistributedApplicationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuilderConstructing);
 
         _options = options;
 
@@ -229,6 +230,19 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // Add the logging configuration again to allow the user to override the defaults
         _innerBuilder.Logging.AddConfiguration(_innerBuilder.Configuration.GetSection("Logging"));
 
+        // The CLI sets ASPIRE_LOGLEVEL to control the default log level for Aspire processes
+        // without polluting child processes (unlike Logging__LogLevel__Default which cascades
+        // through DCP into project processes and overrides their appsettings.json configuration).
+        var aspireLogLevelValue = _innerBuilder.Configuration[KnownConfigNames.AspireLogLevel];
+        if (aspireLogLevelValue is not null && Enum.TryParse<LogLevel>(aspireLogLevelValue, ignoreCase: true, out var aspireLogLevel))
+        {
+            _innerBuilder.Logging.SetMinimumLevel(aspireLogLevel);
+            _innerBuilder.Services.Configure<LoggerFilterOptions>(options =>
+            {
+                options.Rules.Add(new LoggerFilterRule(providerName: null, categoryName: null, logLevel: aspireLogLevel, filter: null));
+            });
+        }
+
         AppHostDirectory = options.ProjectDirectory ?? _innerBuilder.Environment.ContentRootPath;
         var appHostName = options.ProjectName ?? _innerBuilder.Environment.ApplicationName;
         var appHostPath = Path.Join(AppHostDirectory, appHostName);
@@ -240,10 +254,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var appHostFilePath = options.AppHostFilePath;
 
         var assemblyMetadata = AppHostAssembly?.GetCustomAttributes<AssemblyMetadataAttribute>();
-        var aspireDir = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
+        var aspireDir = ResolveAspireStorePath(assemblyMetadata, AppHostDirectory);
 
         ConfigurePipelineOptions(options);
-        var isExecMode = ConfigureExecOptions(options);
 
         // Compute the dashboard application name - use DashboardApplicationName if set for file-based apps,
         // otherwise fall back to the environment's ApplicationName
@@ -318,13 +331,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             LoadDeploymentState(appHostPathSha);
         }
 
-        // exec
-        if (isExecMode)
-        {
-            _innerBuilder.Services.AddSingleton<ExecResourceManager>();
-            Eventing.Subscribe<BeforeStartEvent>(ExecEventingHandlers.InitializeExecResources);
-        }
-
         // Core things
         // Create and register the directory service (first, so it can be used by other services)
         _directoryService = new FileSystemService(_innerBuilder.Configuration);
@@ -355,6 +361,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceNotificationService>();
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
+        _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
@@ -398,13 +405,15 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddHostedService<CliOrphanDetector>();
         _innerBuilder.Services.AddSingleton<BackchannelService>();
         _innerBuilder.Services.AddHostedService<BackchannelService>(sp => sp.GetRequiredService<BackchannelService>());
+        _innerBuilder.Services.AddSingleton<ProfilingTelemetry>();
+        _innerBuilder.Services.AddSingleton<AppHostStartupState>();
         _innerBuilder.Services.AddSingleton<AuxiliaryBackchannelService>();
         _innerBuilder.Services.AddHostedService<AuxiliaryBackchannelService>(sp => sp.GetRequiredService<AuxiliaryBackchannelService>());
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
 
         ConfigureHealthChecks();
 
-        if (ExecutionContext.IsRunMode && !isExecMode)
+        if (ExecutionContext.IsRunMode)
         {
             // Dashboard
             if (!options.DisableDashboard)
@@ -469,7 +478,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
                 _innerBuilder.Services.AddSingleton<IDashboardEndpointProvider, HostDashboardEndpointProvider>();
                 _innerBuilder.Services.AddEventingSubscriber<DashboardEventHandlers>();
                 _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<DashboardOptions>, ConfigureDefaultDashboardOptions>());
-                _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<DashboardOptions>, ValidateDashboardOptions>());
             }
 
             if (options.EnableResourceLogging)
@@ -579,6 +587,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Services.AddSingleton(ExecutionContext);
         LogBuilderConstructed(this);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuilderConstructed, _innerBuilder.Configuration);
     }
 
     private void ConfigureHealthChecks()
@@ -770,76 +779,34 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
     }
 
-    private bool ConfigureExecOptions(DistributedApplicationOptions options)
-    {
-        var switchMappings = new Dictionary<string, string>()
-        {
-            { "--operation", "AppHost:Operation" },
-            { "--resource", "Exec:ResourceName" },
-            { "--start-resource", "Exec:ResourceName" },
-            { "--command", "Exec:Command" },
-            { "--workdir", "Exec:WorkingDirectory" }
-        };
-        _innerBuilder.Configuration.AddCommandLine(options.Args ?? [], switchMappings);
-
-        var execOptionsSection = _innerBuilder.Configuration.GetSection(ExecOptions.SectionName);
-        _innerBuilder.Services
-            .Configure<ExecOptions>(execOptionsSection)
-            .PostConfigure<ExecOptions>(execOptions =>
-        {
-            if (options.Args is null || !options.Args.Any())
-            {
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(execOptions.Command))
-            {
-                execOptions.Enabled = true;
-            }
-
-            if (options.Args.Contains("--start-resource"))
-            {
-                execOptions.StartResource = true;
-            }
-        });
-
-        return options.Args?.Any(arg => arg == "--command") ?? false;
-    }
-
     /// <inheritdoc />
     public DistributedApplication Build()
     {
-        AspireEventSource.Instance.DistributedApplicationBuildStart();
-        try
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildStarted, _innerBuilder.Configuration);
+        LogAppBuilding(this);
+
+        // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
+        // could have a different implementation that doesn't. Validate as a safety net.
+        foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key))
         {
-            LogAppBuilding(this);
-
-            // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
-            // could have a different implementation that doesn't. Validate as a safety net.
-            foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key))
-            {
-                throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
-            }
-
-            // Validate resource names. Resources added directly to the collection bypass AddResource validation.
-            foreach (var resource in Resources)
-            {
-                ValidateResourceName(resource);
-            }
-
-            var application = new DistributedApplication(_innerBuilder.Build());
-
-            _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
-
-            LogAppBuilt(application);
-            return application;
+            throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
         }
-        finally
+
+        // Validate resource names. Resources added directly to the collection bypass AddResource validation.
+        foreach (var resource in Resources)
         {
-            AspireEventSource.Instance.DistributedApplicationBuildStop();
+            ValidateResourceName(resource);
         }
+
+        var application = new DistributedApplication(_innerBuilder.Build());
+
+        _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
+
+        LogAppBuilt(application);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);
+        return application;
     }
 
     /// <inheritdoc />
@@ -1025,4 +992,19 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// <returns>The metadata value if found; otherwise, null.</returns>
     private static string? GetMetadataValue(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string key) =>
         assemblyMetadata?.FirstOrDefault(a => string.Equals(a.Key, key, StringComparison.OrdinalIgnoreCase))?.Value;
+
+    private static string ResolveAspireStorePath(IEnumerable<AssemblyMetadataAttribute>? assemblyMetadata, string appHostDirectory)
+    {
+        var baseIntermediateOutputPath = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
+        if (!string.IsNullOrEmpty(baseIntermediateOutputPath))
+        {
+            return baseIntermediateOutputPath;
+        }
+
+        // File-based and dynamically loaded AppHosts do not have the MSBuild intermediate output
+        // metadata that normal project AppHosts get. Use the AppHost directory as the root so
+        // IAspireStore resolves to the workspace-local .aspire folder instead of creating a
+        // .NET-style obj directory for non-.NET AppHosts.
+        return Path.GetFullPath(appHostDirectory);
+    }
 }

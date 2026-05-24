@@ -175,6 +175,38 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void NotifyIfUpdateAvailable_WithoutCachedPackages_DoesNotNotify()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure =>
+        {
+            configure.InteractionServiceFactory = sp =>
+            {
+                var interactionService = new TestInteractionService();
+                interactionService.DisplayVersionUpdateNotificationCallback = _ =>
+                {
+                    Assert.Fail("Should not notify before package metadata has been cached.");
+                };
+
+                return interactionService;
+            };
+
+            configure.CliUpdateNotifierFactory = sp =>
+            {
+                var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
+                var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService);
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var notifier = provider.GetRequiredService<ICliUpdateNotifier>();
+
+        notifier.NotifyIfUpdateAvailable();
+    }
+
+    [Fact]
     public async Task NotifyIfUpdateAvailable_UsesDotnetToolCommandForNativeAotToolStorePath()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

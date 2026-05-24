@@ -55,7 +55,7 @@
       "type": "container.v1",
       "build": {
         "context": "../NodeFrontend",
-        "dockerfile": "../NodeFrontend/Dockerfile"
+        "dockerfile": "frontend.Dockerfile"
       },
       "env": {
         "NODE_ENV": "production",
@@ -68,7 +68,9 @@
         "CACHE_PORT": "{cache.bindings.tcp.port}",
         "CACHE_PASSWORD": "{pass.value}",
         "CACHE_URI": "{cache.bindings.tcp.scheme}://:{pass-uri-encoded.value}@{cache.bindings.tcp.host}:{cache.bindings.tcp.port}",
-        "PORT": "{frontend.bindings.http.targetPort}"
+        "PORT": "{frontend.bindings.http.targetPort}",
+        "HOST": "0.0.0.0",
+        "HOSTNAME": "0.0.0.0"
       },
       "bindings": {
         "http": {

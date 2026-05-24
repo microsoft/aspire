@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 
 namespace Aspire.TypeSystem;
 
@@ -33,6 +34,19 @@ public sealed class AtsTypeRef
     /// Only meaningful for Handle category types.
     /// </summary>
     public bool IsInterface { get; init; }
+
+    /// <summary>
+    /// Gets or sets whether this type reference accepts a JSON null value at its current use site.
+    /// </summary>
+    /// <remarks>
+    /// Nullability is attached to the type reference as it appears in a capability or DTO property.
+    /// Nested element, key, and value type nullability is only represented when those nested
+    /// references were scanned from member metadata that exposes nullability information.
+    /// For example, a DTO property declared as <code>string?</code> produces a nullable string
+    /// type reference, while the same CLR <see cref="string" /> type on a non-nullable property does not.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool? IsNullable { get; init; }
 
     /// <summary>
     /// Gets or sets the element type reference for Array/List types.
@@ -161,6 +175,64 @@ public sealed class AtsDiagnostic
 }
 
 /// <summary>
+/// Represents XML documentation captured for generated polyglot SDK APIs.
+/// </summary>
+public sealed class AtsDocumentationInfo
+{
+    /// <summary>
+    /// Gets the summary text.
+    /// </summary>
+    public string? Summary { get; init; }
+
+    /// <summary>
+    /// Gets the remarks text.
+    /// </summary>
+    public string? Remarks { get; init; }
+
+    /// <summary>
+    /// Gets the return value documentation.
+    /// </summary>
+    public string? Returns { get; init; }
+
+    /// <summary>
+    /// Gets parameter documentation entries keyed by C# parameter name.
+    /// </summary>
+    public IReadOnlyList<AtsParameterDocumentationInfo> Parameters { get; init; } = [];
+}
+
+/// <summary>
+/// Represents documentation for a named parameter.
+/// </summary>
+public sealed class AtsParameterDocumentationInfo
+{
+    /// <summary>
+    /// Gets the parameter name.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the parameter documentation.
+    /// </summary>
+    public required string Description { get; init; }
+}
+
+/// <summary>
+/// Represents a documented enum value.
+/// </summary>
+public sealed class AtsEnumValueInfo
+{
+    /// <summary>
+    /// Gets the enum value name.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets documentation for this enum value.
+    /// </summary>
+    public AtsDocumentationInfo? Documentation { get; init; }
+}
+
+/// <summary>
 /// Represents a discovered [AspireExport] capability.
 /// </summary>
 /// <remarks>
@@ -211,6 +283,11 @@ public sealed class AtsCapabilityInfo
     /// Gets or sets the description of what this capability does.
     /// </summary>
     public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets or sets the XML documentation captured for this capability.
+    /// </summary>
+    public AtsDocumentationInfo? Documentation { get; init; }
 
     /// <summary>
     /// Gets or sets whether this capability is obsolete.
@@ -331,6 +408,11 @@ public sealed class AtsParameterInfo
     /// Gets or sets the default value for optional parameters.
     /// </summary>
     public object? DefaultValue { get; init; }
+
+    /// <summary>
+    /// Gets or sets the XML documentation captured for this parameter.
+    /// </summary>
+    public AtsDocumentationInfo? Documentation { get; init; }
 }
 
 /// <summary>
@@ -347,6 +429,11 @@ public sealed class AtsCallbackParameterInfo
     /// Gets or sets the type reference for this parameter.
     /// </summary>
     public required AtsTypeRef Type { get; init; }
+
+    /// <summary>
+    /// Gets or sets the XML documentation captured for this callback parameter.
+    /// </summary>
+    public AtsDocumentationInfo? Documentation { get; init; }
 }
 
 /// <summary>
@@ -399,6 +486,11 @@ public sealed class AtsTypeInfo
     /// Gets whether this handle type represents an Aspire resource type.
     /// </summary>
     public bool IsResourceBuilder => HostingTypeHelpers.IsResourceType(ClrType);
+
+    /// <summary>
+    /// Gets or sets the XML documentation captured for this type.
+    /// </summary>
+    public AtsDocumentationInfo? Documentation { get; init; }
 }
 
 /// <summary>
@@ -421,6 +513,11 @@ public sealed class AtsDtoTypeInfo
     /// Gets or sets a description of this DTO type.
     /// </summary>
     public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets or sets the XML documentation captured for this DTO type.
+    /// </summary>
+    public AtsDocumentationInfo? Documentation { get; init; }
 
     /// <summary>
     /// Gets or sets the CLR type reference for direct type access.
@@ -472,6 +569,11 @@ public sealed class AtsDtoPropertyInfo
     public string? Description { get; init; }
 
     /// <summary>
+    /// Gets or sets the XML documentation captured for this property.
+    /// </summary>
+    public AtsDocumentationInfo? Documentation { get; init; }
+
+    /// <summary>
     /// Gets or sets whether this property is optional (nullable or has default).
     /// </summary>
     public bool IsOptional { get; init; }
@@ -502,4 +604,14 @@ public sealed class AtsEnumTypeInfo
     /// Gets or sets the enum member names.
     /// </summary>
     public required IReadOnlyList<string> Values { get; init; }
+
+    /// <summary>
+    /// Gets or sets the documented enum values.
+    /// </summary>
+    public IReadOnlyList<AtsEnumValueInfo> ValueInfos { get; init; } = [];
+
+    /// <summary>
+    /// Gets or sets the XML documentation captured for this enum type.
+    /// </summary>
+    public AtsDocumentationInfo? Documentation { get; init; }
 }

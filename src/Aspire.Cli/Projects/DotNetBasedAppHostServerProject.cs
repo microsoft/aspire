@@ -41,8 +41,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly string _repoRoot;
     private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IPackagingService _packagingService;
-    private readonly IConfigurationService _configurationService;
     private readonly ILogger _logger;
+    private readonly string? _logFilePath;
 
     public DotNetBasedAppHostServerProject(
         string appPath,
@@ -50,9 +50,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         string repoRoot,
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
-        IConfigurationService configurationService,
         ILogger<DotNetBasedAppHostServerProject> logger,
-        string? projectModelPath = null)
+        string? projectModelPath = null,
+        string? logFilePath = null)
     {
         _appPath = Path.GetFullPath(appPath);
         _appPath = new Uri(_appPath).LocalPath;
@@ -61,8 +61,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;
         _packagingService = packagingService;
-        _configurationService = configurationService;
         _logger = logger;
+        _logFilePath = logFilePath;
 
         var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appPath));
 
@@ -88,6 +88,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public string ProjectModelPath => _projectModelPath;
     public string UserSecretsId => _userSecretsId;
     public string BuildPath => Path.Combine(_projectModelPath, BuildFolder);
+
+    internal string? LogFilePath => _logFilePath;
 
     /// <summary>
     /// Gets the full path to the AppHost server project file.
@@ -144,6 +146,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                     <RepoRoot>{_repoRoot}</RepoRoot>
                     <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
                     <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
+                    <SkipAspireIntegrationAnalyzersReference>true</SkipAspireIntegrationAnalyzersReference>
                     <AspireHostingSDKVersion>42.42.42</AspireHostingSDKVersion>
                     <!-- DCP and Dashboard paths for local development -->
                     <DcpDir>$([MSBuild]::EnsureTrailingSlash('$(NuGetPackageRoot)')){dcpPackageName}/{dcpVersion}/tools/</DcpDir>
@@ -257,6 +260,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// </summary>
     public async Task<(string ProjectPath, string? ChannelName)> CreateProjectFilesAsync(
         IEnumerable<IntegrationReference> integrations,
+        string? requestedChannel = null,
+        string? packageSourceOverride = null,
         CancellationToken cancellationToken = default)
     {
         // Clean obj folder to ensure fresh NuGet restore
@@ -323,14 +328,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             File.Copy(userNugetConfig, nugetConfigPath, overwrite: true);
         }
 
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken);
-        var configuredChannelName = AspireConfigFile.Load(_appPath)?.Channel
+        var configuredChannelName = requestedChannel
+            ?? AspireConfigFile.Load(_appPath)?.Channel
             ?? AspireJsonConfiguration.Load(_appPath)?.Channel;
-
-        if (string.IsNullOrEmpty(configuredChannelName))
-        {
-            configuredChannelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
 
         // Resolve channel sources and add them via RestoreAdditionalProjectSources
         // This is additive — it preserves the user's nuget.config and adds channel-specific sources
@@ -352,6 +353,20 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                     }
                 }
             }
+        }
+
+        // Thread an explicit `--source` override into the restore sources so the dogfood
+        // `aspire new --source <pr-hive>` flow is honored in dev mode (in-repo). Prepending
+        // makes the override the first source NuGet evaluates, which matters when the same
+        // Aspire package version exists in both the hive and a channel feed. Note: unlike
+        // PrebuiltAppHostServer this path does not emit Package Source Mappings, so NuGet
+        // may still consult other sources if the override does not satisfy a request — the
+        // override is best-effort here, sufficient for the in-repo developer scenario where
+        // most Aspire.* dependencies come from ProjectReference, not PackageReference.
+        if (!string.IsNullOrWhiteSpace(packageSourceOverride) &&
+            !channelSources.Contains(packageSourceOverride, StringComparer.OrdinalIgnoreCase))
+        {
+            channelSources.Insert(0, packageSourceOverride);
         }
 
         // Create the project file
@@ -425,9 +440,11 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public async Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
+        string? requestedChannel = null,
+        string? packageSourceOverride = null,
         CancellationToken cancellationToken = default)
     {
-        var (_, channelName) = await CreateProjectFilesAsync(integrations, cancellationToken);
+        var (_, channelName) = await CreateProjectFilesAsync(integrations, requestedChannel, packageSourceOverride, cancellationToken);
         var (buildSuccess, buildOutput) = await BuildAsync(cancellationToken);
 
         if (!buildSuccess)
@@ -481,6 +498,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
         startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        startInfo.Environment[KnownConfigNames.CliLogFilePath] = _logFilePath;
 
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
@@ -496,7 +514,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         if (debug)
         {
-            startInfo.Environment["Logging__LogLevel__Default"] = "Debug";
+            startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
             _logger.LogDebug("Enabling debug logging for AppHostServer");
         }
 

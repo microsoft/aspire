@@ -79,7 +79,7 @@ internal sealed class GuestRuntime
             var launcher = CreateDefaultLauncher();
             using var activity = _profilingTelemetry is null
                 ? default
-                : _profilingTelemetry.StartGuestInitializeCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args.Length, directory);
+                : _profilingTelemetry.StartGuestInitializeCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args, directory);
             var (exitCode, output) = await launcher.LaunchAsync(
                 commandSpec.Command,
                 args,
@@ -119,7 +119,7 @@ internal sealed class GuestRuntime
         var launcher = CreateDefaultLauncher();
         using var activity = _profilingTelemetry is null
             ? default
-            : _profilingTelemetry.StartGuestInstallDependencies(_spec.Language, _spec.DisplayName, _spec.InstallDependencies.Command, args.Length, directory);
+            : _profilingTelemetry.StartGuestInstallDependencies(_spec.Language, _spec.DisplayName, _spec.InstallDependencies.Command, args, directory);
         var (exitCode, output) = await launcher.LaunchAsync(
             _spec.InstallDependencies.Command,
             args,
@@ -144,6 +144,7 @@ internal sealed class GuestRuntime
     /// <param name="watchMode">Whether to run in watch mode for hot reload.</param>
     /// <param name="launcher">Strategy for launching the process.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="afterAppHostLaunchedAsync">Callback invoked after the AppHost execute command has launched.</param>
     /// <returns>A tuple of the exit code and captured output (null when launched via extension).</returns>
     public async Task<(int ExitCode, OutputCollector? Output)> RunAsync(
         FileInfo appHostFile,
@@ -151,7 +152,8 @@ internal sealed class GuestRuntime
         IDictionary<string, string> environmentVariables,
         bool watchMode,
         IGuestProcessLauncher launcher,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Task>? afterAppHostLaunchedAsync = null)
     {
         var useWatchCommand = watchMode && _spec.WatchExecute is not null;
         var commandSpec = useWatchCommand
@@ -168,7 +170,10 @@ internal sealed class GuestRuntime
             }
         }
 
-        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, null, launcher, cancellationToken);
+        var phase = useWatchCommand
+            ? ProfilingTelemetry.Values.GuestCommandPhaseWatchExecute
+            : ProfilingTelemetry.Values.GuestCommandPhaseExecute;
+        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, null, phase, launcher, cancellationToken, afterLaunchAsync: afterAppHostLaunchedAsync);
     }
 
     /// <summary>
@@ -198,7 +203,10 @@ internal sealed class GuestRuntime
             return preExecuteResult;
         }
 
-        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, publishArgs, launcher, cancellationToken);
+        var phase = _spec.PublishExecute is not null
+            ? ProfilingTelemetry.Values.GuestCommandPhasePublishExecute
+            : ProfilingTelemetry.Values.GuestCommandPhaseExecute;
+        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, publishArgs, phase, launcher, cancellationToken);
     }
 
     private async Task<(int ExitCode, OutputCollector? Output)> RunPreExecuteCommandsAsync(
@@ -222,7 +230,7 @@ internal sealed class GuestRuntime
             _logger.LogDebug("Launching pre-execution command: {Command} {Args}", commandSpec.Command, string.Join(" ", args));
             using var activity = _profilingTelemetry is null
                 ? default
-                : _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args.Length, directory);
+                : _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args, directory, ProfilingTelemetry.Values.GuestCommandPhasePreExecute);
             var (exitCode, output) = await preExecuteLauncher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
             activity.SetProcessExitCode(exitCode);
             if (exitCode != 0)
@@ -241,8 +249,10 @@ internal sealed class GuestRuntime
         DirectoryInfo directory,
         IDictionary<string, string> environmentVariables,
         string[]? additionalArgs,
+        string phase,
         IGuestProcessLauncher launcher,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Task>? afterLaunchAsync = null)
     {
         var args = ReplacePlaceholders(commandSpec.Args, appHostFile, directory, additionalArgs);
 
@@ -251,8 +261,8 @@ internal sealed class GuestRuntime
         _logger.LogDebug("Launching: {Command} {Args}", commandSpec.Command, string.Join(" ", args));
         using var activity = _profilingTelemetry is null
             ? default
-            : _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args.Length, directory);
-        var (exitCode, output) = await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken);
+            : _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args, directory, phase);
+        var (exitCode, output) = await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken, afterLaunchAsync: afterLaunchAsync);
         activity.SetProcessExitCode(exitCode);
         if (exitCode != 0)
         {

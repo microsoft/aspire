@@ -512,7 +512,7 @@
 
 The structured logs and distributed traces in the dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
 
-Use Aspire CLI commands to get telemetry data in your terminal:
+First, [install the Aspire CLI]({2}) if you haven't already. Then use Aspire CLI commands to get telemetry data in your terminal:
 
 ```bash
 aspire otel logs --dashboard-url {0}
@@ -524,23 +524,24 @@ aspire otel logs --dashboard-url {0}
 - [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/) — Export telemetry and resource data to a zip file
 
 For more information about using AI agents with the dashboard, such as setting up skills, see [Standalone dashboard and AI coding agents]({1}).</value>
-    <comment>{0} is the dashboard URL, {1} is the learn more URL</comment>
+    <comment>{0} is the dashboard URL, {1} is the learn more URL, {2} is the install CLI URL</comment>
   </data>
   <data name="AIAgentsDialogAppHostDescription" xml:space="preserve">
     <value>Build, debug, and profile apps using AI agents and Aspire 🚀
 
 The structured logs, distributed traces, and resource status in this dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
 
-Get started by running this command in your project:
+First, [install the Aspire CLI]({1}) if you haven't already. Then use an Aspire CLI command to initialize agent support in your project:
 
 ```bash
 aspire agent init
 ```
 
-This configures skill files for your AI assistant. The skill files tell the agent how to use Aspire CLI commands such as [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
+This configures skill files for your AI agent. The skill files tell the agent how to use Aspire CLI commands such as [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
 
 Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
 
 For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</value>
+    <comment>{0} is the learn more URL, {1} is the install CLI URL</comment>
   </data>
 </root>

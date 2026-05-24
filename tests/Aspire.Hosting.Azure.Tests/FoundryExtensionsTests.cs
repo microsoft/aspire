@@ -178,8 +178,6 @@ public class FoundryExtensionsTests
         var roles = Assert.Single(model.Resources.OfType<AzureProvisioningResource>(), r => r.Name == "foundry-roles");
         var rolesManifest = await AzureManifestUtils.GetManifestWithBicep(roles, skipPreparer: true);
 
-        Assert.Contains("name: 'foundry-caphost'", manifest.BicepText);
-
         await Verify(manifest.BicepText, extension: "bicep")
             .AppendContentAsFile(rolesManifest.BicepText, "bicep");
     }
@@ -232,6 +230,22 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
+    public async Task AddProject_GeneratesEndpointFromParentFoundryApiEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddFoundry("foundry")
+            .AddProject("project");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var (_, bicepText) = await AzureManifestUtils.GetManifestWithBicep(model, project.Resource);
+
+        await Verify(bicepText, extension: "bicep");
+    }
+
+    [Fact]
     public async Task AddFoundry_WithPublishAsExisting_UsesStableDefaultCapabilityHostName()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -274,11 +288,11 @@ public class FoundryExtensionsTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        var weatherAgent = builder.AddProject<Project>("weather-agent", launchProfileName: null)
+        var weatherAgent = builder.AddProject<Project>("weatheragent", launchProfileName: null)
             .WithEndpoint(targetPort: 9000, scheme: "http", name: "http", isExternal: true)
             .WithComputeEnvironment(env);
 
-        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+        var advisorAgent = builder.AddProject<Project>("advisoragent", launchProfileName: null)
             .WithReference(weatherAgent)
             .WaitFor(weatherAgent)
             .PublishAsHostedAgent(project);
@@ -300,7 +314,35 @@ public class FoundryExtensionsTests
             NullLogger<FoundryExtensionsTests>.Instance,
             cts.Token);
 
-        Assert.Equal("https://weather-agent.example.azurecontainerapps.io", environmentVariables["services__weather-agent__http__0"]);
+        Assert.Equal("https://weatheragent.example.azurecontainerapps.io", environmentVariables["services__weatheragent__http__0"]);
+    }
+
+    [Fact]
+    public async Task PublishAsHostedAgent_DoesNotSetReservedFoundryProjectEndpointEnvironmentVariable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
+            .PublishAsHostedAgent(project);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            builder.ExecutionContext,
+            hostedAgent,
+            advisorAgent.Resource,
+            NullLogger<FoundryExtensionsTests>.Instance,
+            cts.Token);
+
+        Assert.DoesNotContain("FOUNDRY_PROJECT_ENDPOINT", environmentVariables.Keys);
     }
 
     [Fact]
@@ -427,3 +469,4 @@ public class FoundryExtensionsTests
     }
 
 }
+

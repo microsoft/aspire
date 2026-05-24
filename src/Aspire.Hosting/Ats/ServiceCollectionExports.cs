@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Ats;
@@ -18,7 +19,7 @@ internal static class ServiceCollectionExports
     /// </summary>
     /// <param name="builder">The distributed-application builder.</param>
     /// <param name="subscribe">The callback that registers the event subscriptions.</param>
-    [AspireExport(Description = "Adds an eventing subscriber")]
+    [AspireExport]
     public static void AddEventingSubscriber(this IDistributedApplicationBuilder builder, Func<EventingSubscriberRegistrationContext, Task> subscribe)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -32,7 +33,7 @@ internal static class ServiceCollectionExports
     /// </summary>
     /// <param name="builder">The distributed-application builder.</param>
     /// <param name="subscribe">The callback that registers the event subscriptions.</param>
-    [AspireExport(Description = "Attempts to add an eventing subscriber")]
+    [AspireExport]
     public static void TryAddEventingSubscriber(this IDistributedApplicationBuilder builder, Func<EventingSubscriberRegistrationContext, Task> subscribe)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -53,7 +54,7 @@ internal static class ServiceCollectionExports
     /// </summary>
     /// <param name="serviceProvider">The service provider.</param>
     /// <returns>The Aspire store.</returns>
-    [AspireExport(Description = "Gets the Aspire store from the service provider")]
+    [AspireExport]
     public static IAspireStore GetAspireStore(this IServiceProvider serviceProvider)
     {
         ArgumentNullException.ThrowIfNull(serviceProvider);
@@ -67,7 +68,7 @@ internal static class ServiceCollectionExports
     /// <param name="context">The eventing subscriber registration context.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The event subscription.</returns>
-    [AspireExport("eventingSubscriberOnBeforeStart", MethodName = "onBeforeStart", Description = "Subscribes an eventing subscriber to the BeforeStart event")]
+    [AspireExport("eventingSubscriberOnBeforeStart", MethodName = "onBeforeStart")]
     public static DistributedApplicationEventSubscription OnBeforeStart(this EventingSubscriberRegistrationContext context, Func<BeforeStartEvent, Task> callback)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -77,12 +78,42 @@ internal static class ServiceCollectionExports
     }
 
     /// <summary>
+    /// Subscribes to the BeforePublish event from an eventing subscriber registration context.
+    /// </summary>
+    /// <param name="context">The eventing subscriber registration context.</param>
+    /// <param name="callback">The callback to invoke when the event fires.</param>
+    /// <returns>The event subscription.</returns>
+    [AspireExport("eventingSubscriberOnBeforePublish", MethodName = "onBeforePublish")]
+    public static DistributedApplicationEventSubscription OnBeforePublish(this EventingSubscriberRegistrationContext context, Func<BeforePublishEvent, Task> callback)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return context.Eventing.Subscribe<BeforePublishEvent>((@event, _) => callback(@event));
+    }
+
+    /// <summary>
+    /// Subscribes to the AfterPublish event from an eventing subscriber registration context.
+    /// </summary>
+    /// <param name="context">The eventing subscriber registration context.</param>
+    /// <param name="callback">The callback to invoke when the event fires.</param>
+    /// <returns>The event subscription.</returns>
+    [AspireExport("eventingSubscriberOnAfterPublish", MethodName = "onAfterPublish")]
+    public static DistributedApplicationEventSubscription OnAfterPublish(this EventingSubscriberRegistrationContext context, Func<AfterPublishEvent, Task> callback)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return context.Eventing.Subscribe<AfterPublishEvent>((@event, _) => callback(@event));
+    }
+
+    /// <summary>
     /// Subscribes to the AfterResourcesCreated event from an eventing subscriber registration context.
     /// </summary>
     /// <param name="context">The eventing subscriber registration context.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The event subscription.</returns>
-    [AspireExport("eventingSubscriberOnAfterResourcesCreated", MethodName = "onAfterResourcesCreated", Description = "Subscribes an eventing subscriber to the AfterResourcesCreated event")]
+    [AspireExport("eventingSubscriberOnAfterResourcesCreated", MethodName = "onAfterResourcesCreated")]
     public static DistributedApplicationEventSubscription OnAfterResourcesCreated(this EventingSubscriberRegistrationContext context, Func<AfterResourcesCreatedEvent, Task> callback)
     {
         ArgumentNullException.ThrowIfNull(context);

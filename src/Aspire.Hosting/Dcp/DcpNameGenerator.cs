@@ -14,7 +14,7 @@ internal sealed class DcpNameGenerator
     // A random suffix added to every DCP object name ensures that those names (and derived object names, for example container names)
     // are unique machine-wide with a high level of probability.
     // The length of 8 achieves that while keeping the names relatively short and readable.
-    // The second purpose of the suffix is to play a role of a unique OpenTelemetry service instance ID.
+    // The second purpose of the suffix is to play the role of a unique OpenTelemetry service instance ID for session resources.
     private const int RandomNameSuffixLength = 8;
     private readonly IConfiguration _configuration;
     private readonly IOptions<DcpOptions> _options;
@@ -34,6 +34,8 @@ internal sealed class DcpNameGenerator
 
     public void EnsureDcpInstancesPopulated(IResource resource)
     {
+        ThrowIfPersistentExecutableHasReplicas(resource);
+
         if (resource.TryGetInstances(out _))
         {
             return;
@@ -67,11 +69,24 @@ internal sealed class DcpNameGenerator
         resource.Annotations.Add(new DcpInstancesAnnotation(instances));
     }
 
+    private static void ThrowIfPersistentExecutableHasReplicas(IResource resource)
+    {
+        if (resource is not (ExecutableResource or ProjectResource))
+        {
+            return;
+        }
+
+        if (resource.GetReplicaCount() > 1 && resource.GetLifetimeType() == Lifetime.Persistent)
+        {
+            throw new InvalidOperationException($"Resource '{resource.Name}' uses multiple replicas and a persistent lifetime. These features do not work together.");
+        }
+    }
+
     public (string Name, string Suffix) GetContainerName(IResource container)
     {
-        var nameSuffix = container.GetContainerLifetimeType() switch
+        var nameSuffix = container.GetLifetimeType() switch
         {
-            ContainerLifetime.Session => GetRandomNameSuffix(),
+            Lifetime.Session => GetRandomNameSuffix(),
             _ => GetProjectHashSuffix(),
         };
 
@@ -80,7 +95,12 @@ internal sealed class DcpNameGenerator
 
     public (string Name, string Suffix) GetExecutableName(IResource project)
     {
-        var nameSuffix = GetRandomNameSuffix();
+        var nameSuffix = project.GetLifetimeType() switch
+        {
+            Lifetime.Session => GetRandomNameSuffix(),
+            _ => GetProjectHashSuffix(),
+        };
+
         return (GetObjectNameForResource(project, _options.Value, nameSuffix), nameSuffix);
     }
 

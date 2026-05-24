@@ -364,74 +364,57 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var dashboardUrls = options.DashboardUrl;
         var otlpGrpcEndpointUrl = options.OtlpGrpcEndpointUrl;
         var otlpHttpEndpointUrl = options.OtlpHttpEndpointUrl;
+        var allowUnsecureTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
 
-        eventing.Subscribe<ResourceReadyEvent>(dashboardResource, async (@event, cancellationToken) =>
+        // Build endpoint generation context from dashboard URLs so OTLP endpoints
+        // use the same target host as the frontend when no explicit URL is configured.
+        var endpointContext = new EndpointGenerationContext { Scheme = allowUnsecureTransport ? "http" : "https" };
+
+        if (string.IsNullOrWhiteSpace(dashboardUrls))
         {
-            var browserToken = options.DashboardToken;
+            var endpointName = allowUnsecureTransport ? "http" : "https";
+            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: endpointContext.Scheme, isProxied: true));
+            LogEndpointAdded(endpointName, scheme: endpointContext.Scheme, host: "localhost", port: null);
 
-            // Get the actual allocated URL from the dashboard resource endpoint
-            string? dashboardUrl = null;
-
-            if (@event.Resource is IResourceWithEndpoints resourceWithEndpoints)
+            eventing.Subscribe<BeforeResourceStartedEvent>(dashboardResource, (@event, _) =>
             {
-                // Try HTTPS first, then HTTP
-                var httpsEndpoint = resourceWithEndpoints.GetEndpoint("https");
-                var httpEndpoint = resourceWithEndpoints.GetEndpoint("http");
-
-                var endpoint = httpsEndpoint.Exists ? httpsEndpoint : httpEndpoint;
-                if (endpoint.Exists)
+                var dcpOptions = @event.Services.GetRequiredService<IOptions<DcpOptions>>();
+                if (!dcpOptions.Value.RandomizePorts)
                 {
-                    dashboardUrl = await EndpointHostHelpers.GetUrlWithTargetHostAsync(endpoint, cancellationToken).ConfigureAwait(false);
+                    distributedApplicationLogger.LogInformation("Generating a dynamic url for dashboard.  If you want a consistent url, configure `ASPNETCORE_URLS`");
                 }
-            }
-
-            // Fall back to configured URL if we couldn't get it from the resource
-            if (string.IsNullOrEmpty(dashboardUrl))
-            {
-                if (!StringUtils.TryGetUriFromDelimitedString(dashboardUrls, ";", out var firstDashboardUrl))
-                {
-                    return;
-                }
-
-                dashboardUrl = firstDashboardUrl.GetLeftPart(UriPartial.Authority);
-            }
-
-            dashboardUrl = codespaceUrlRewriter.RewriteUrl(dashboardUrl);
-
-            distributedApplicationLogger.LogInformation("Now listening on: {DashboardUrl}", dashboardUrl.TrimEnd('/'));
-
-            if (!string.IsNullOrEmpty(browserToken))
-            {
-                LoggingHelpers.WriteDashboardUrl(distributedApplicationLogger, dashboardUrl, browserToken, isContainer: false);
-            }
-        });
-
-        foreach (var d in dashboardUrls?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? [])
-        {
-            var address = BindingAddress.Parse(d);
-
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: address.Scheme, port: address.Port, isProxied: true)
-            {
-                TargetHost = address.Host
+                return Task.CompletedTask;
             });
         }
-
-        if (otlpGrpcEndpointUrl != null)
+        else
         {
-            var address = BindingAddress.Parse(otlpGrpcEndpointUrl);
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: KnownEndpointNames.OtlpGrpcEndpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true, transport: "http2")
+            foreach (var d in dashboardUrls.Split(';', StringSplitOptions.RemoveEmptyEntries))
             {
-                TargetHost = address.Host
-            });
+                var address = BindingAddress.Parse(d.Trim());
+
+                dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: address.Scheme, port: address.Port, isProxied: true)
+                {
+                    TargetHost = address.Host
+                });
+                LogEndpointAdded(address.Scheme, scheme: address.Scheme, host: address.Host, port: address.Port);
+
+                if (string.Equals(address.Scheme, endpointContext.Scheme, StringComparison.OrdinalIgnoreCase))
+                {
+                    endpointContext.TargetHost = address.Host;
+                }
+            }
         }
 
-        if (otlpHttpEndpointUrl != null)
+        // When neither OTLP endpoint is configured, create both dynamic defaults so server-side
+        // and browser telemetry work without requiring explicit launch profile configuration.
+        if (otlpHttpEndpointUrl is not null || otlpGrpcEndpointUrl is null)
         {
-            var address = BindingAddress.Parse(otlpHttpEndpointUrl);
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: KnownEndpointNames.OtlpHttpEndpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true)
-            {
-                TargetHost = address.Host
-            });
+            AddDashboardOtlpEndpoint(dashboardResource, otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName, endpointContext);
+        }
+
+        if (otlpGrpcEndpointUrl is not null || otlpHttpEndpointUrl is null)
+        {
+            AddDashboardOtlpEndpoint(dashboardResource, otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, endpointContext, transport: "http2");
         }
 
         // Determine whether any HTTPS endpoints are configured
@@ -501,13 +484,93 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var snapshot = new CustomResourceSnapshot
         {
             Properties = [],
-            ResourceType = dashboardResource.GetResourceType(),
-            IsHidden = hideDashboard
+            ResourceType = dashboardResource.GetResourceType()
         };
 
         dashboardResource.Annotations.Add(new ResourceSnapshotAnnotation(snapshot));
 
+        if (hideDashboard)
+        {
+            dashboardResource.Annotations.Add(new HiddenAnnotation(HiddenBehavior.Always));
+        }
+
         dashboardResource.Annotations.Add(new EnvironmentCallbackAnnotation(ConfigureEnvironmentVariables));
+
+        // Print dashboard URL details when started.
+        eventing.Subscribe<ResourceReadyEvent>(dashboardResource, DashboardStarted);
+    }
+
+    private async Task DashboardStarted(ResourceReadyEvent @event, CancellationToken cancellationToken)
+    {
+        var options = dashboardOptions.Value;
+        var browserToken = options.DashboardToken;
+        var dashboardResource = @event.Resource as IResourceWithEndpoints;
+
+        if (dashboardResource is null)
+        {
+            // Should never happen.
+            return;
+        }
+
+        var dashboardUrl = await ResolveUrlAsync(async () =>
+        {
+            // Try HTTPS first, then HTTP
+            var httpsEndpoint = dashboardResource.GetEndpoint("https");
+            var httpEndpoint = dashboardResource.GetEndpoint("http");
+
+            var endpoint = httpsEndpoint.Exists ? httpsEndpoint : httpEndpoint;
+            return endpoint.Exists
+                ? await EndpointHostHelpers.GetUrlWithTargetHostAsync(endpoint, cancellationToken).ConfigureAwait(false)
+                : null;
+        }, options.DashboardUrl).ConfigureAwait(false);
+
+        if (dashboardUrl is null)
+        {
+            // Should never happen.
+            return;
+        }
+
+        distributedApplicationLogger.LogInformation("Now listening on: {DashboardUrl}", dashboardUrl.TrimEnd('/'));
+
+        var otlpGrpcUrl = await ResolveUrlAsync(
+            () => GetEndpointUrlAsync(dashboardResource, KnownEndpointNames.OtlpGrpcEndpointName, cancellationToken),
+            options.OtlpGrpcEndpointUrl).ConfigureAwait(false);
+
+        var otlpHttpUrl = await ResolveUrlAsync(
+            () => GetEndpointUrlAsync(dashboardResource, KnownEndpointNames.OtlpHttpEndpointName, cancellationToken),
+            options.OtlpHttpEndpointUrl).ConfigureAwait(false);
+
+        LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcUrl, otlpHttpUrl, browserToken, isContainer: false);
+    }
+
+    private async ValueTask<string?> ResolveUrlAsync(Func<ValueTask<string?>> resolveCallback, string? configuredUrl)
+    {
+        var url = await resolveCallback().ConfigureAwait(false);
+
+        if (string.IsNullOrEmpty(url) && StringUtils.TryGetUriFromDelimitedString(configuredUrl, ";", out var firstUrl))
+        {
+            url = firstUrl.GetLeftPart(UriPartial.Authority);
+        }
+
+        if (string.IsNullOrEmpty(url))
+        {
+            return null;
+        }
+
+        return codespaceUrlRewriter.RewriteUrl(url);
+    }
+
+    private static async ValueTask<string?> GetEndpointUrlAsync(IResourceWithEndpoints? resourceWithEndpoints, string endpointName, CancellationToken cancellationToken)
+    {
+        if (resourceWithEndpoints is null)
+        {
+            return null;
+        }
+
+        var endpoint = resourceWithEndpoints.GetEndpoint(endpointName);
+        return endpoint.Exists
+            ? await EndpointHostHelpers.GetUrlWithTargetHostAsync(endpoint, cancellationToken).ConfigureAwait(false)
+            : null;
     }
 
     internal async Task ConfigureEnvironmentVariables(EnvironmentCallbackContext context)
@@ -527,11 +590,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         var options = dashboardOptions.Value;
 
-        // Options should have been validated these should not be null
-
-        Debug.Assert(options.DashboardUrl is not null, "DashboardUrl should not be null");
-        Debug.Assert(options.OtlpGrpcEndpointUrl is not null || options.OtlpHttpEndpointUrl is not null, "OtlpGrpcEndpointUrl and OtlpHttpEndpointUrl should not both be null");
-
         var environment = options.AspNetCoreEnvironment;
         var browserToken = options.DashboardToken;
         var otlpApiKey = options.OtlpApiKey;
@@ -544,7 +602,8 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         PopulateDashboardUrls(context);
 
-        if (options.OtlpHttpEndpointUrl != null)
+        var otlpHttp = ((IResourceWithEndpoints)context.Resource).GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName, KnownNetworkIdentifiers.LocalhostNetwork);
+        if (otlpHttp.Exists)
         {
             // Use explicitly defined allowed origins if configured.
             var allowedOrigins = configuration.GetString(KnownConfigNames.DashboardCorsAllowedOrigins, KnownConfigNames.Legacy.DashboardCorsAllowedOrigins);
@@ -643,6 +702,53 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
         }
 
+    }
+
+    private class EndpointGenerationContext
+    {
+        public required string Scheme { get; init; }
+        public string TargetHost { get; set; } = "localhost";
+    }
+
+    private void AddDashboardOtlpEndpoint(IResource dashboardResource, string? endpointUrl, string endpointName, EndpointGenerationContext context, string? transport = null)
+    {
+        EndpointAnnotation annotation;
+
+        if (string.IsNullOrWhiteSpace(endpointUrl))
+        {
+            annotation = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: context.Scheme, isProxied: true, transport: transport)
+            {
+                TargetHost = context.TargetHost
+            };
+            LogEndpointAdded(endpointName, scheme: context.Scheme, host: context.TargetHost, port: null);
+        }
+        else
+        {
+            var address = BindingAddress.Parse(endpointUrl);
+            annotation = new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true, transport: transport)
+            {
+                TargetHost = address.Host
+            };
+            LogEndpointAdded(endpointName, scheme: address.Scheme, host: address.Host, port: address.Port);
+        }
+
+        dashboardResource.Annotations.Add(annotation);
+    }
+
+    /// <summary>
+    /// Logs a debug message when a dashboard endpoint is added, indicating whether it was
+    /// configured from an explicit URL or generated dynamically with a random port.
+    /// </summary>
+    private void LogEndpointAdded(string endpointName, string scheme, string host, int? port)
+    {
+        if (port is not null)
+        {
+            distributedApplicationLogger.LogDebug("Dashboard endpoint '{EndpointName}' configured: {Scheme}://{Host}:{Port}", endpointName, scheme, host, port);
+        }
+        else
+        {
+            distributedApplicationLogger.LogDebug("Dashboard endpoint '{EndpointName}' generated dynamically: {Scheme}://{Host}:<random> (no configured URL).", endpointName, scheme, host);
+        }
     }
 
     private static void PopulateDashboardUrls(EnvironmentCallbackContext context)

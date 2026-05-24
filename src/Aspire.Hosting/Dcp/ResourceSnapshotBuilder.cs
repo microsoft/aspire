@@ -144,6 +144,10 @@ internal class ResourceSnapshotBuilder
         }
 
         var state = executable.AppModelInitialState is "Hidden" ? "Hidden" : executable.Status?.State;
+        if (executable.Spec.Start is false && IsNotStartedExecutableState(state))
+        {
+            state = KnownResourceStates.NotStarted;
+        }
 
         var urls = GetUrls(executable, executable.Status?.State);
 
@@ -204,6 +208,11 @@ internal class ResourceSnapshotBuilder
             Urls = urls,
             Relationships = relationships
         };
+    }
+
+    private static bool IsNotStartedExecutableState(string? state)
+    {
+        return string.IsNullOrEmpty(state) || state == ExecutableState.Unknown;
     }
 
     private static (ImmutableArray<string> Args, ImmutableArray<int>? ArgsAreSensitive, bool IsSensitive)? GetLaunchArgs(CustomResource resource, IReadOnlyList<string>? effectiveArgs)

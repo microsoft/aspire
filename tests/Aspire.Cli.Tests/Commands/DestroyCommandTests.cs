@@ -57,7 +57,7 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("destroy --apphost invalid.csproj");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
@@ -152,8 +152,9 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse(commandLine);
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
-        Assert.Contains(result.Errors, error => string.Equals(error.Message, DestroyCommandStrings.NonInteractiveRequiresYes, StringComparison.Ordinal));
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        var error = Assert.Single(result.Errors);
+        Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, "destroy"), error.Message);
         Assert.False(appHostStarted);
     }
 
@@ -325,7 +326,7 @@ public class DestroyCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("destroy --yes");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode);
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
 
         static async IAsyncEnumerable<PublishingActivity> GetFailedDestroyActivities([EnumeratorCancellation] CancellationToken cancellationToken)
         {

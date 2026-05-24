@@ -6,6 +6,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Configuration options and references that need to be exposed to the <see cref="DistributedApplicationExecutionContext"/>.
 /// </summary>
+/// <ats-summary>Configuration options and references that need to be exposed to the <ats-see cref="!:type:DistributedApplicationExecutionContext" />.</ats-summary>
 [AspireExport]
 public class DistributedApplicationExecutionContextOptions
 {

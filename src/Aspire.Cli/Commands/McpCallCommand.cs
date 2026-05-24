@@ -63,7 +63,7 @@ internal sealed class McpCallCommand : BaseCommand
         Options.Add(s_appHostOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var toolName = parseResult.GetValue(s_toolArgument)!;
@@ -79,7 +79,7 @@ internal sealed class McpCallCommand : BaseCommand
 
         if (!result.Success)
         {
-            return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToDotnetRunAppHost);
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, CliExitCodes.FailedToDotnetRunAppHost));
         }
 
         var connection = result.Connection!;
@@ -93,8 +93,7 @@ internal sealed class McpCallCommand : BaseCommand
                 using var doc = JsonDocument.Parse(inputJson);
                 if (doc.RootElement.ValueKind != JsonValueKind.Object)
                 {
-                    _interactionService.DisplayError("Invalid JSON input: expected a JSON object.");
-                    return ExitCodeConstants.InvalidCommand;
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, "Invalid JSON input: expected a JSON object.");
                 }
                 var dict = new Dictionary<string, JsonElement>();
                 foreach (var prop in doc.RootElement.EnumerateObject())
@@ -105,8 +104,7 @@ internal sealed class McpCallCommand : BaseCommand
             }
             catch (JsonException ex)
             {
-                _interactionService.DisplayError($"Invalid JSON input: {ex.Message}");
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid JSON input: {ex.Message}");
             }
         }
 
@@ -143,15 +141,14 @@ internal sealed class McpCallCommand : BaseCommand
 
             if (callResult.IsError == true)
             {
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(CliExitCodes.InvalidCommand);
             }
 
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
         catch (Exception ex)
         {
-            _interactionService.DisplayError($"Failed to call tool '{toolName}' on resource '{resourceName}': {ex.Message}");
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Failed to call tool '{toolName}' on resource '{resourceName}': {ex.Message}");
         }
     }
 }

@@ -65,7 +65,7 @@ internal sealed class WaitCommand : BaseCommand
         Options.Add(s_appHostOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -77,15 +77,13 @@ internal sealed class WaitCommand : BaseCommand
         // Validate status value
         if (!IsValidStatus(status))
         {
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.InvalidStatusValue, status));
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.InvalidStatusValue, status));
         }
 
         // Validate timeout
         if (timeoutSeconds <= 0)
         {
-            _interactionService.DisplayError(WaitCommandStrings.TimeoutMustBePositive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, WaitCommandStrings.TimeoutMustBePositive);
         }
 
         // Resolve connection to a running AppHost
@@ -98,12 +96,12 @@ internal sealed class WaitCommand : BaseCommand
 
         if (!result.Success)
         {
-            return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject);
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, CliExitCodes.FailedToFindProject));
         }
 
         var connection = result.Connection!;
 
-        return await WaitForResourceAsync(connection, resourceName, status, timeoutSeconds, cancellationToken);
+        return CommandResult.FromExitCode(await WaitForResourceAsync(connection, resourceName, status, timeoutSeconds, cancellationToken));
     }
 
     private async Task<int> WaitForResourceAsync(
@@ -121,36 +119,36 @@ internal sealed class WaitCommand : BaseCommand
 
         var exitCode = await _interactionService.ShowStatusAsync(
             string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitingForResource, resourceName, statusLabel),
-            async () =>
+            (Func<Task<int>>)(async () =>
             {
                 var response = await connection.WaitForResourceAsync(resourceName, status, timeoutSeconds, cancellationToken).ConfigureAwait(false);
 
                 if (response.Success)
                 {
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 }
 
                 if (response.ResourceNotFound)
                 {
                     _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceNotFound, resourceName));
-                    return ExitCodeConstants.WaitResourceFailed;
+                    return CliExitCodes.WaitResourceFailed;
                 }
 
                 if (response.TimedOut)
                 {
                     _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.WaitTimedOut, resourceName, statusLabel, timeoutSeconds));
-                    return ExitCodeConstants.WaitTimeout;
+                    return CliExitCodes.WaitTimeout;
                 }
 
                 // Resource entered a failed state
                 _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceEnteredFailedState, resourceName, response.State ?? response.ErrorMessage));
-                return ExitCodeConstants.WaitResourceFailed;
-            });
+                return CliExitCodes.WaitResourceFailed;
+            }));
 
         // Reset cursor position after spinner
         _interactionService.DisplayPlainText("");
 
-        if (exitCode == ExitCodeConstants.Success)
+        if (exitCode == CliExitCodes.Success)
         {
             var elapsed = _timeProvider.GetElapsedTime(startTimestamp);
             _interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.ResourceReachedTargetStatus, resourceName, statusLabel, elapsed.TotalSeconds));

@@ -42,11 +42,9 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         Options.Add(_formatOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     protected abstract string? GetSearchTerm(ParseResult parseResult);
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -59,7 +57,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             var (workingDirectory, configuredChannel, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(passedAppHostProjectFile, cancellationToken);
             if (contextExitCode is { } exitCode)
             {
-                return exitCode;
+                return CommandResult.FromExitCode(exitCode);
             }
 
             var packagesWithChannels = (await InteractionService.ShowStatusAsync(
@@ -72,7 +70,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
                 .ToArray();
 
-            return DisplayIntegrationResults(packagesWithShortName, searchTerm, format);
+            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format));
         }
         catch (ProjectLocatorException ex)
         {
@@ -80,15 +78,13 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayCancellationMessage();
-            return ExitCodeConstants.FailedToSearchIntegrations;
+            return CommandResult.Cancelled();
         }
         catch (Exception ex)
         {
             var errorMessage = string.Format(CultureInfo.CurrentCulture, AddCommandStrings.ErrorOccurredWhileSearchingIntegrations, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            InteractionService.DisplayError(errorMessage);
-            return ExitCodeConstants.FailedToSearchIntegrations;
+            return CommandResult.Failure(CliExitCodes.FailedToSearchIntegrations, errorMessage);
         }
     }
 
@@ -117,7 +113,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         {
             var json = JsonSerializer.Serialize(results, JsonSourceGenerationContext.RelaxedEscaping.IntegrationSearchResultArray);
             InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         if (results.Length == 0)
@@ -131,7 +127,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 InteractionService.DisplayError(AddCommandStrings.NoPackagesFound);
             }
 
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         if (searchTerm is not null)
@@ -157,7 +153,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
 
         InteractionService.DisplayRenderable(table);
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 }
 
@@ -200,6 +196,8 @@ internal sealed class IntegrationSearchCommand : IntegrationDiscoveryCommand
     protected override string? GetSearchTerm(ParseResult parseResult) => parseResult.GetValue(_queryArgument);
 }
 
+// `aspire integration list --format json` and `aspire integration search --format json`
+// use this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class IntegrationSearchResult
 {
     public required string Name { get; init; }

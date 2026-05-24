@@ -54,6 +54,7 @@ internal interface IDocsIndexService
 /// <summary>
 /// Represents a document in the list.
 /// </summary>
+// `aspire docs list --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class DocsListItem
 {
     public required string Title { get; init; }
@@ -76,6 +77,7 @@ internal sealed class DocsSearchResult
 /// <summary>
 /// Represents document content with available sections.
 /// </summary>
+// `aspire docs get --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class DocsContent
 {
     public required string Title { get; init; }
@@ -118,6 +120,16 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
     // Changelog/What's New penalty - these pages mention many terms and shouldn't outrank dedicated docs
     private const float WhatsNewPenaltyMultiplier = 0.3f;   // Apply 0.3x to whats-new pages
+
+    // Cache schema version for the LlmsTxtParser output. Bump this constant whenever a
+    // change to LlmsTxtParser would produce different indexed documents for the same
+    // input (slug shape, content slicing, section structure, etc.). The fingerprint
+    // mixes this version into the hash so previously-cached indices are invalidated on
+    // first launch with the new CLI; otherwise users keep stale slugs/content until the
+    // upstream llms-full.txt changes.
+    //   v1 — original LlmsTxtParser output.
+    //   v2 — slug disambiguation suffixes + fenced-bash-comment H1 fix.
+    private const int IndexSchemaVersion = 2;
 
     private readonly IDocsFetcher _docsFetcher = docsFetcher;
     private readonly IDocsCache _docsCache = docsCache;
@@ -174,7 +186,7 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
                 return;
             }
 
-            var currentFingerprint = SourceContentFingerprint.Compute(content);
+            var currentFingerprint = SourceContentFingerprint.Compute(content, IndexSchemaVersion);
             if (cachedDocuments is not null && string.Equals(cachedFingerprint, currentFingerprint, StringComparison.Ordinal))
             {
                 _indexedDocuments = [.. cachedDocuments.Select(static d => new IndexedDocument(d))];
@@ -245,6 +257,29 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
         foreach (var doc in _indexedDocuments)
         {
+            // Early reject: if NONE of the query tokens appear anywhere in the doc's
+            // concatenated searchable text, ScoreDocument cannot produce a positive
+            // score. Every scoring path (slug, title, summary, section heading/body,
+            // code spans, identifiers) is a substring of AllSearchableTextLower —
+            // see IndexedDocument ctor for the correctness argument. A single
+            // IndexOf per token on a ~10KB string is much cheaper than walking every
+            // section's content + headings + code spans + identifiers.
+            var allText = doc.AllSearchableTextLower.AsSpan();
+            var anyTokenMatches = false;
+            foreach (var token in queryTokens)
+            {
+                if (allText.IndexOf(token, StringComparison.Ordinal) >= 0)
+                {
+                    anyTokenMatches = true;
+                    break;
+                }
+            }
+
+            if (!anyTokenMatches)
+            {
+                continue;
+            }
+
             var (score, matchedSection) = ScoreDocument(doc, queryTokens, queryAsSlug);
 
             if (score > 0)
@@ -536,6 +571,9 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             return content;
         }
 
+        // Replace allocates only when a match is found. The CRLF/CR replacements are
+        // already cheap when absent (llms.txt is LF-only on the wire), so don't bother
+        // gating them.
         content = content.Replace("\r\n", "\n").Replace("\r", "\n");
 
         var builder = new StringBuilder(content.Length + 64);
@@ -550,11 +588,16 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
 
         builder.Append(NormalizeMarkdownSegment(content[position..]));
 
-        var normalized = TrailingWhitespaceBeforeNewlineRegex().Replace(builder.ToString(), "\n");
-        normalized = BlankLineAfterHeadingRegex().Replace(normalized, "$1\n");
-        normalized = BlankLineAfterTableRegex().Replace(normalized, "$1\n");
-        normalized = BlankLineAfterListRegex().Replace(normalized, "$1\n");
-        normalized = ExcessBlankLinesRegex().Replace(normalized, "\n\n");
+        // Each Regex.Replace in this chain allocates a fresh string the size of the
+        // input when ANY match is found, even if only one. For long documents this is
+        // the dominant allocation source in GetDocumentAsync (≈1.4 MB per call before
+        // these IsMatch gates). For docs that don't contain tables/lists/etc. the
+        // corresponding pass becomes a single forward scan with no allocation.
+        var normalized = ReplaceIfMatches(builder.ToString(), TrailingWhitespaceBeforeNewlineRegex(), "\n");
+        normalized = ReplaceIfMatches(normalized, BlankLineAfterHeadingRegex(), "$1\n");
+        normalized = ReplaceIfMatches(normalized, BlankLineAfterTableRegex(), "$1\n");
+        normalized = ReplaceIfMatches(normalized, BlankLineAfterListRegex(), "$1\n");
+        normalized = ReplaceIfMatches(normalized, ExcessBlankLinesRegex(), "\n\n");
 
         return normalized.Trim();
     }
@@ -566,17 +609,23 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             return content;
         }
 
-        content = InlineHeadingRegex().Replace(content, "\n\n$1");
-        content = SectionTitledBookmarkRegex().Replace(content, "\n\n");
-        content = InlineOrderedListRegex().Replace(content, "\n$1");
-        content = InlineUnorderedListRegex().Replace(content, "\n* ");
-        content = InlineTableStartRegex().Replace(content, "$1\n$2");
-        content = InlineTableRowBoundaryRegex().Replace(content, "\n");
-        content = InlineTableEndRegex().Replace(content, "$1\n$2");
-        content = LeadingWhitespaceRegex().Replace(content, "");
+        // See NormalizeContent for the rationale: IsMatch is a no-allocation scan
+        // that short-circuits at the first match, so when a pattern doesn't apply
+        // we avoid both the rebuild and the allocation.
+        content = ReplaceIfMatches(content, InlineHeadingRegex(), "\n\n$1");
+        content = ReplaceIfMatches(content, SectionTitledBookmarkRegex(), "\n\n");
+        content = ReplaceIfMatches(content, InlineOrderedListRegex(), "\n$1");
+        content = ReplaceIfMatches(content, InlineUnorderedListRegex(), "\n* ");
+        content = ReplaceIfMatches(content, InlineTableStartRegex(), "$1\n$2");
+        content = ReplaceIfMatches(content, InlineTableRowBoundaryRegex(), "\n");
+        content = ReplaceIfMatches(content, InlineTableEndRegex(), "$1\n$2");
+        content = ReplaceIfMatches(content, LeadingWhitespaceRegex(), "");
 
         return content;
     }
+
+    private static string ReplaceIfMatches(string input, Regex regex, string replacement)
+        => regex.IsMatch(input) ? regex.Replace(input, replacement) : input;
 
     private static string NormalizeCodeBlock(string codeBlock)
     {
@@ -683,6 +732,48 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
             SlugSegments = _slugLower.Split('-');
             SummaryLower = source.Summary?.ToLowerInvariant();
             Sections = [.. source.Sections.Select(static s => new IndexedSection(s))];
+
+            // Build a single concatenated lowercase haystack used ONLY as an early-reject
+            // pre-filter in SearchAsync. Probing each query token against every section's
+            // ContentLower scales with every section in every document; one per-doc haystack
+            // check lets us skip the full per-section scoring for docs that can't possibly
+            // match.
+            //
+            // CORRECTNESS: We include every substring that ScoreDocument could ever match:
+            //   - SlugLower (ScoreSlugMatch)
+            //   - TitleLower (ScoreField on title)
+            //   - SummaryLower (ScoreField on summary)
+            //   - Each section's HeadingLower + ContentLower (ScoreField)
+            //   - CodeSpans + Identifiers are already substrings of section.ContentLower
+            //     (the extraction regexes pull text directly out of source.Content), so
+            //     they don't need to be appended separately.
+            // A space separator between fields prevents tokens from spanning two unrelated
+            // fields (e.g., end of title + start of summary).
+            var capacity = _slugLower.Length + TitleLower.Length + (SummaryLower?.Length ?? 0);
+            foreach (var section in Sections)
+            {
+                capacity += section.HeadingLower.Length + section.ContentLower.Length + 2;
+            }
+
+            var builder = new StringBuilder(capacity + 4);
+            builder.Append(_slugLower);
+            builder.Append(' ');
+            builder.Append(TitleLower);
+            if (SummaryLower is not null)
+            {
+                builder.Append(' ');
+                builder.Append(SummaryLower);
+            }
+
+            foreach (var section in Sections)
+            {
+                builder.Append(' ');
+                builder.Append(section.HeadingLower);
+                builder.Append(' ');
+                builder.Append(section.ContentLower);
+            }
+
+            AllSearchableTextLower = builder.ToString();
         }
 
         public LlmsDocument Source { get; }
@@ -699,6 +790,15 @@ internal sealed partial class DocsIndexService(IDocsFetcher docsFetcher, IDocsCa
         public string? SummaryLower { get; }
 
         public IReadOnlyList<IndexedSection> Sections { get; }
+
+        /// <summary>
+        /// Concatenated lowercase text of every searchable field (slug, title, summary,
+        /// each section heading + content), separated by single spaces. Used by
+        /// <c>SearchAsync</c> as a fast reject filter: if none of the query tokens appear
+        /// anywhere in this haystack, the document cannot score &gt; 0 and we skip the
+        /// per-section scoring loop. Does NOT participate in scoring itself.
+        /// </summary>
+        public string AllSearchableTextLower { get; }
     }
 
     /// <summary>

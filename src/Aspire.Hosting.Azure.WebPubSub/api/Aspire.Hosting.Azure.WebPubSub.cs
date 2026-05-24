@@ -10,7 +10,7 @@ namespace Aspire.Hosting
 {
     public static partial class AzureWebPubSubExtensions
     {
-        [AspireExport("addAzureWebPubSub", Description = "Adds an Azure Web PubSub resource to the distributed application model.")]
+        [AspireExport(Description = "Adds an Azure Web PubSub resource to the distributed application model.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureWebPubSubResource> AddAzureWebPubSub(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
         [AspireExportIgnore(Reason = "UpstreamAuthSettings is not ATS-compatible. Use the polyglot overload without auth settings instead.")]
@@ -19,7 +19,7 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "ExpressionInterpolatedStringHandler and UpstreamAuthSettings are not ATS-compatible. Use the polyglot overload without auth settings instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureWebPubSubHubResource> AddEventHandler(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureWebPubSubHubResource> builder, ApplicationModel.ReferenceExpression.ExpressionInterpolatedStringHandler urlTemplateExpression, string userEventPattern = "*", string[]? systemEvents = null, global::Azure.Provisioning.WebPubSub.UpstreamAuthSettings? authSettings = null) { throw null; }
 
-        [AspireExport("addHub", Description = "Adds a hub to the Azure Web PubSub resource.")]
+        [AspireExport(Description = "Adds a hub to the Azure Web PubSub resource.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.AzureWebPubSubHubResource> AddHub(this ApplicationModel.IResourceBuilder<ApplicationModel.AzureWebPubSubResource> builder, string name, string? hubName = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Use the AddHub overload with the optional hubName parameter instead.")]
@@ -34,7 +34,7 @@ namespace Aspire.Hosting
 namespace Aspire.Hosting.ApplicationModel
 {
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Hub = {HubName}")]
-    public partial class AzureWebPubSubHubResource : Resource, IResourceWithParent<AzureWebPubSubResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    public partial class AzureWebPubSubHubResource : Resource, IResourceWithParent<AzureWebPubSubResource>, IResourceWithParent, IResource, IResourceWithConnectionString, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public AzureWebPubSubHubResource(string name, AzureWebPubSubResource webpubsub) : base(default!) { }
 
@@ -47,7 +47,7 @@ namespace Aspire.Hosting.ApplicationModel
         public AzureWebPubSubResource Parent { get { throw null; } }
     }
 
-    public partial class AzureWebPubSubResource : Azure.AzureProvisioningResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences, Azure.IAzurePrivateEndpointTarget
+    public partial class AzureWebPubSubResource : Azure.AzureProvisioningResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences, Azure.IAzurePrivateEndpointTarget
     {
         public AzureWebPubSubResource(string name, System.Action<Azure.AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -65,7 +65,7 @@ namespace Aspire.Hosting.ApplicationModel
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ReferenceExpression>> IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
-        string Azure.IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+        System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> Azure.IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
     }

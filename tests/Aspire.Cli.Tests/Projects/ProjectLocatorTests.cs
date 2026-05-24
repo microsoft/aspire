@@ -8,6 +8,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Telemetry;
@@ -22,12 +23,9 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 {
     private static Aspire.Cli.CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory, IReadOnlyDictionary<string, string?>? environmentVariables = null)
     {
-        // NOTE: This would normally be in the users home directory, but for tests we create
-        //       it in the temporary workspace directory.
-        var settingsDirectory = workingDirectory.CreateSubdirectory(".aspire");
-        var hivesDirectory = settingsDirectory.CreateSubdirectory("hives");
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", environmentVariables: environmentVariables);
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
+            environmentVariables: environmentVariables);
     }
 
     [Fact]
@@ -614,6 +612,43 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UseOrFindAppHostProjectFileUpdatesStaleConfigForExplicitProjectFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var legacyAppHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "// TypeScript AppHost");
+
+        await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = legacyAppHostFile.Name,
+                language = KnownLanguageId.TypeScript
+            }
+        }));
+
+        var globalSettingsFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.global.json");
+        var globalSettingsFile = new FileInfo(globalSettingsFilePath);
+        var config = new ConfigurationBuilder().Build();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var configurationService = new ConfigurationService(config, executionContext, globalSettingsFile, NullLogger<ConfigurationService>.Instance);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            configurationService: configurationService,
+            projectFactory: new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+
+        var returnedProjectFile = await projectLocator.UseOrFindAppHostProjectFileAsync(appHostFile, createSettingsFile: true).DefaultTimeout();
+
+        Assert.Equal(appHostFile.FullName, returnedProjectFile!.FullName);
+
+        var updatedConfig = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.Equal("apphost.mts", updatedConfig?.AppHost?.Path);
+        Assert.Equal(KnownLanguageId.TypeScript, updatedConfig?.AppHost?.Language);
+    }
+
+    [Fact]
     public async Task CreateSettingsFileIfNotExistsAsync_UsesForwardSlashPathSeparator()
     {
         // Arrange
@@ -650,6 +685,190 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         Assert.NotNull(settings!.AppHost?.Path);
         Assert.DoesNotContain('\\', settings.AppHost.Path); // Ensure no backslashes
         Assert.Contains('/', settings.AppHost.Path); // Ensure forward slashes
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_UpdatesAppHostAdjacentConfigWhenDiscoveredFromParent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+        var appHostFile = new FileInfo(Path.Combine(srcDirectory.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "// TypeScript apphost");
+
+        var adjacentConfigPath = Path.Combine(srcDirectory.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(
+            adjacentConfigPath,
+            """
+            {
+              "sdk": {
+                "version": "10.0.0-preview.5.26311.1"
+              },
+              "channel": "staging",
+              "profiles": {
+                "http": {
+                  "applicationUrl": "http://localhost:15071",
+                  "environmentVariables": {
+                    "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+                  }
+                }
+              },
+              "packages": {
+                "Aspire.Hosting.Redis": ""
+              }
+            }
+            """);
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var globalSettingsFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.global.json"));
+        var configurationService = new ConfigurationService(new ConfigurationBuilder().Build(), executionContext, globalSettingsFile, NullLogger<ConfigurationService>.Instance);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            configurationService: configurationService,
+            projectFactory: new GuestAppHostFileProjectFactory("apphost.ts"),
+            languageDiscovery: new TestLanguageDiscovery(new LanguageInfo(
+                LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                DisplayName: "TypeScript (Node.js)",
+                PackageName: "Aspire.Hosting.JavaScript",
+                DetectionPatterns: ["apphost.ts"],
+                CodeGenerator: "TypeScript",
+                AppHostFileName: "apphost.ts")));
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.Throw,
+            createSettingsFile: true,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(appHostFile.FullName, result.SelectedProjectFile?.FullName);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName)));
+
+        var adjacentConfigJson = await File.ReadAllTextAsync(adjacentConfigPath);
+        var adjacentConfig = JsonSerializer.Deserialize<AspireConfigFile>(adjacentConfigJson);
+
+        Assert.Equal("apphost.ts", adjacentConfig?.AppHost?.Path);
+        Assert.Equal(KnownLanguageId.TypeScript, adjacentConfig?.AppHost?.Language);
+        Assert.Contains("\"Aspire.Hosting.Redis\"", adjacentConfigJson, StringComparison.Ordinal);
+        Assert.Contains("\"channel\"", adjacentConfigJson, StringComparison.Ordinal);
+        Assert.Contains("\"profiles\"", adjacentConfigJson, StringComparison.Ordinal);
+        Assert.Contains("\"ASPIRE_ALLOW_UNSECURED_TRANSPORT\"", adjacentConfigJson, StringComparison.Ordinal);
+        Assert.Contains("\"sdk\"", adjacentConfigJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_UpdatesSelectedAppHostAdjacentConfigWhenMultipleAppHostsFound()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHost1Directory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost1");
+        var appHost1File = new FileInfo(Path.Combine(appHost1Directory.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(appHost1File.FullName, "// TypeScript apphost");
+        var appHost1ConfigPath = Path.Combine(appHost1Directory.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(appHost1ConfigPath, """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": ""
+              }
+            }
+            """);
+
+        var appHost2Directory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost2");
+        var appHost2File = new FileInfo(Path.Combine(appHost2Directory.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(appHost2File.FullName, "// TypeScript apphost");
+        var appHost2ConfigPath = Path.Combine(appHost2Directory.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(appHost2ConfigPath, """
+            {
+              "packages": {
+                "Aspire.Hosting.PostgreSQL": ""
+              }
+            }
+            """);
+
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, choices, _, _) =>
+                choices.Cast<FileInfo>().Single(file => file.Directory?.Name == appHost2Directory.Name)
+        };
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var globalSettingsFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.global.json"));
+        var configurationService = new ConfigurationService(new ConfigurationBuilder().Build(), executionContext, globalSettingsFile, NullLogger<ConfigurationService>.Instance);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            interactionService: interactionService,
+            configurationService: configurationService,
+            projectFactory: new GuestAppHostFileProjectFactory("apphost.ts"),
+            languageDiscovery: new TestLanguageDiscovery(new LanguageInfo(
+                LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                DisplayName: "TypeScript (Node.js)",
+                PackageName: "Aspire.Hosting.JavaScript",
+                DetectionPatterns: ["apphost.ts"],
+                CodeGenerator: "TypeScript",
+                AppHostFileName: "apphost.ts")));
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.Prompt,
+            createSettingsFile: true,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(appHost2File.FullName, result.SelectedProjectFile?.FullName);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName)));
+
+        var appHost1ConfigJson = await File.ReadAllTextAsync(appHost1ConfigPath);
+        var appHost1Config = JsonSerializer.Deserialize<AspireConfigFile>(appHost1ConfigJson);
+        Assert.Null(appHost1Config?.AppHost?.Path);
+        Assert.Contains("\"Aspire.Hosting.Redis\"", appHost1ConfigJson, StringComparison.Ordinal);
+
+        var appHost2ConfigJson = await File.ReadAllTextAsync(appHost2ConfigPath);
+        var appHost2Config = JsonSerializer.Deserialize<AspireConfigFile>(appHost2ConfigJson);
+        Assert.Equal("apphost.ts", appHost2Config?.AppHost?.Path);
+        Assert.Equal(KnownLanguageId.TypeScript, appHost2Config?.AppHost?.Language);
+        Assert.Contains("\"Aspire.Hosting.PostgreSQL\"", appHost2ConfigJson, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_HealsStaleAppHostPathInAdjacentConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+        var appHostFile = new FileInfo(Path.Combine(srcDirectory.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "// TypeScript apphost");
+
+        var staleConfig = new AspireConfigFile
+        {
+            AppHost = new AspireConfigAppHost
+            {
+                Path = "missing-apphost.ts",
+                Language = KnownLanguageId.TypeScript
+            }
+        };
+        staleConfig.Save(srcDirectory.FullName);
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var globalSettingsFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "settings.global.json"));
+        var configurationService = new ConfigurationService(new ConfigurationBuilder().Build(), executionContext, globalSettingsFile, NullLogger<ConfigurationService>.Instance);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            configurationService: configurationService,
+            projectFactory: new GuestAppHostFileProjectFactory("apphost.ts"),
+            languageDiscovery: new TestLanguageDiscovery(new LanguageInfo(
+                LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                DisplayName: "TypeScript (Node.js)",
+                PackageName: "Aspire.Hosting.JavaScript",
+                DetectionPatterns: ["apphost.ts"],
+                CodeGenerator: "TypeScript",
+                AppHostFileName: "apphost.ts")));
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.Throw,
+            createSettingsFile: true,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(appHostFile.FullName, result.SelectedProjectFile?.FullName);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName)));
+
+        var healedConfig = AspireConfigFile.Load(srcDirectory.FullName);
+        Assert.Equal("apphost.ts", healedConfig?.AppHost?.Path);
+        Assert.Equal(KnownLanguageId.TypeScript, healedConfig?.AppHost?.Language);
     }
 
     [Fact]
@@ -1057,7 +1276,7 @@ builder.Build().Run();");
             return Task.FromResult<string?>(null);
         }
 
-        public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
+        public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, bool continueSearchWhenKeyMissing = false, CancellationToken cancellationToken = default)
         {
             return Task.FromResult<string?>(null);
         }
@@ -1144,6 +1363,9 @@ builder.Build().Run();");
 
             public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
                 => Task.FromResult(new AppHostValidationResult(IsValid: appHostFile.Name.Equals(supportedFileName, StringComparison.OrdinalIgnoreCase)));
+
+            public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+                => Task.FromResult<string?>(VersionHelper.GetDefaultTemplateVersion());
 
             public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
                 => throw new NotImplementedException();
@@ -2172,6 +2394,164 @@ builder.Build().Run();");
 
         Assert.Single(found);
         Assert.Equal(realAppHost.FullName, found[0].AppHostFile.FullName);
+    }
+
+    // ---------------------------------------------------------------------
+    // GetAppHostFromSettingsAsync regression tests (issue: `aspire update`
+    // crash when the configured AppHost's SDK pin no longer resolves).
+    //
+    // `aspire update` is the one command whose job is to *repair* an AppHost
+    // whose pinned SDK can't be restored. The strict discovery path
+    // (UseOrFindAppHostProjectFileAsync) calls MSBuild against the configured
+    // path via ValidateAppHostAsync; when MSBuild fails, the configured path
+    // is dropped and discovery cannot find any "buildable" AppHost either,
+    // so the user gets "No buildable AppHosts were found".
+    //
+    // GetAppHostFromSettingsAsync intentionally does NOT MSBuild-validate the
+    // configured path — it only checks file existence and handler presence.
+    // The four tests below lock down the contract:
+    //   * settings lookup returns the configured path when validation would fail;
+    //   * settings lookup still rejects a missing file (returns null);
+    //   * settings lookup still rejects a project with no handler (returns null);
+    //   * strict discovery still rejects an unbuildable configured path (so a
+    //     future change cannot silently weaken `aspire run` / `aspire add`).
+    // ---------------------------------------------------------------------
+
+    [Fact]
+    public async Task GetAppHostFromSettings_ReturnsConfiguredAppHostEvenWhenValidationWouldFail()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, "Not a real apphost");
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var aspireSettingsFile = new FileInfo(Path.Combine(workspaceSettingsDirectory.FullName, "settings.json"));
+
+        using (var writer = aspireSettingsFile.OpenWrite())
+        {
+            await JsonSerializer.SerializeAsync(writer, new
+            {
+                appHostPath = Path.GetRelativePath(aspireSettingsFile.Directory!.FullName, appHostProjectFile.FullName)
+            });
+        }
+
+        // Even if MSBuild validation would fail (simulating an unresolvable SDK pin),
+        // GetAppHostFromSettingsAsync must return the configured path: it doesn't
+        // invoke ValidateAppHostAsync at all. `aspire update` relies on this so it
+        // can rewrite the pin via ProjectUpdater's fallback parser.
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostAsyncCallback = (_, _) => Task.FromResult(new AppHostValidationResult(IsValid: false))
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var foundAppHost = await projectLocator.GetAppHostFromSettingsAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.NotNull(foundAppHost);
+        Assert.Equal(appHostProjectFile.FullName, foundAppHost!.FullName);
+    }
+
+    [Fact]
+    public async Task GetAppHostFromSettings_ReturnsNullWhenConfiguredFileDoesNotExist()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var aspireSettingsFile = new FileInfo(Path.Combine(workspaceSettingsDirectory.FullName, "settings.json"));
+
+        using (var writer = aspireSettingsFile.OpenWrite())
+        {
+            await JsonSerializer.SerializeAsync(writer, new
+            {
+                appHostPath = "DoesNotExist/AppHost.csproj"
+            });
+        }
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        // Skipping MSBuild validation does not mean accepting paths that
+        // aren't on disk — the existence check still runs.
+        var foundAppHost = await projectLocator.GetAppHostFromSettingsAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.Null(foundAppHost);
+    }
+
+    [Fact]
+    public async Task GetAppHostFromSettings_ReturnsNullWhenNoHandlerCanProcessFile()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        // Use an extension with no registered handler; TryGetProject returns null
+        // for this file. Settings lookup must still reject it: skipping MSBuild
+        // validation is not the same as accepting anything.
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.unknown"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, "Not a real apphost");
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var aspireSettingsFile = new FileInfo(Path.Combine(workspaceSettingsDirectory.FullName, "settings.json"));
+
+        using (var writer = aspireSettingsFile.OpenWrite())
+        {
+            await JsonSerializer.SerializeAsync(writer, new
+            {
+                appHostPath = Path.GetRelativePath(aspireSettingsFile.Directory!.FullName, appHostProjectFile.FullName)
+            });
+        }
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        var foundAppHost = await projectLocator.GetAppHostFromSettingsAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.Null(foundAppHost);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFile_RejectsUnbuildableSettingsAppHost()
+    {
+        // Inverse of the GetAppHostFromSettings tests above: locks down today's
+        // strict UseOrFindAppHostProjectFileAsync behavior so a future change
+        // cannot silently make `aspire run` / `aspire add` trust an unbuildable
+        // configured path. The discovery fallback must also fail (no other
+        // AppHosts on disk), so we expect a ProjectLocatorException.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostProjectFile.FullName, "Not a real apphost");
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var aspireSettingsFile = new FileInfo(Path.Combine(workspaceSettingsDirectory.FullName, "settings.json"));
+
+        using (var writer = aspireSettingsFile.OpenWrite())
+        {
+            await JsonSerializer.SerializeAsync(writer, new
+            {
+                appHostPath = Path.GetRelativePath(aspireSettingsFile.Directory!.FullName, appHostProjectFile.FullName)
+            });
+        }
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostAsyncCallback = (_, _) => Task.FromResult(new AppHostValidationResult(IsValid: false))
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        await Assert.ThrowsAsync<ProjectLocatorException>(async () =>
+        {
+            await projectLocator.UseOrFindAppHostProjectFileAsync(
+                projectFile: null,
+                createSettingsFile: false,
+                CancellationToken.None).DefaultTimeout();
+        });
     }
 
     private static ProjectLocator CreateProjectLocator(

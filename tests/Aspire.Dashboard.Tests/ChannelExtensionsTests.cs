@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -11,6 +12,44 @@ namespace Aspire.Dashboard.Tests;
 
 public class ChannelExtensionsTests
 {
+    [Fact]
+    public async Task GetBatchesAsync_AsyncEnumerable_YieldsFullAndFinalBatches()
+    {
+        var batches = new List<int[]>();
+
+        await foreach (var batch in EnumerateAsync([1, 2, 3, 4, 5]).GetBatchesAsync(maxBatchSize: 2))
+        {
+            batches.Add(batch);
+        }
+
+        Assert.Collection(
+            batches,
+            b => Assert.Equal([1, 2], b),
+            b => Assert.Equal([3, 4], b),
+            b => Assert.Equal([5], b));
+    }
+
+    [Fact]
+    public async Task GetBatchesAsync_AsyncEnumerable_CancellationToken_Exits()
+    {
+        var cts = new CancellationTokenSource();
+        var batches = new List<int[]>();
+
+        var readTask = Task.Run(async () =>
+        {
+            await foreach (var batch in EnumerateUntilCancelledAsync(cts.Token).GetBatchesAsync(maxBatchSize: 1, cts.Token))
+            {
+                batches.Add(batch);
+                cts.Cancel();
+            }
+        });
+
+        await TaskHelpers.WaitIgnoreCancelAsync(readTask).DefaultTimeout();
+
+        var batch = Assert.Single(batches);
+        Assert.Equal([1], batch);
+    }
+
     [Fact]
     public async Task GetBatchesAsync_CancellationToken_Exits()
     {
@@ -151,5 +190,20 @@ public class ChannelExtensionsTests
 
         var elapsed = stopwatch.Elapsed;
         Assert.True(elapsed <= minReadInterval, $"Elapsed time {elapsed} should be less than min read interval {minReadInterval} on cancellation.");
+    }
+
+    private static async IAsyncEnumerable<int> EnumerateAsync(IEnumerable<int> values)
+    {
+        foreach (var value in values)
+        {
+            await Task.Yield();
+            yield return value;
+        }
+    }
+
+    private static async IAsyncEnumerable<int> EnumerateUntilCancelledAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return 1;
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
     }
 }

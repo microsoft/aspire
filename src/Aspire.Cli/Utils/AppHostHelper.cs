@@ -14,40 +14,59 @@ namespace Aspire.Cli.Utils;
 
 internal static class AppHostHelper
 {
-    internal static async Task<(bool IsCompatibleAppHost, bool SupportsBackchannel, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, AspireCliTelemetry telemetry, DirectoryInfo workingDirectory, string logFilePath, CancellationToken cancellationToken)
+    internal static async Task<(bool IsCompatibleAppHost, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, AspireCliTelemetry telemetry, DirectoryInfo workingDirectory, string logFilePath, CancellationToken cancellationToken)
     {
         var appHostInformation = await GetAppHostInformationAsync(runner, interactionService, projectFile, telemetry, workingDirectory, cancellationToken);
 
-        if (appHostInformation.ExitCode != 0)
+        return EvaluateAppHostCompatibility(
+            appHostInformation.ExitCode,
+            appHostInformation.IsAspireHost,
+            appHostInformation.AspireHostingVersion,
+            interactionService,
+            logFilePath);
+    }
+
+    /// <summary>
+    /// Applies the SemVer minimum-version gate (and user-facing error display) for an AppHost
+    /// using already-fetched project information. Use this when the caller has cached the
+    /// MSBuild result and wants to avoid issuing another <c>dotnet msbuild -getProperty</c>
+    /// invocation to evaluate compatibility.
+    /// </summary>
+    internal static (bool IsCompatibleAppHost, string? AspireHostingVersion) EvaluateAppHostCompatibility(
+        int exitCode,
+        bool isAspireHost,
+        string? aspireHostingVersion,
+        IInteractionService interactionService,
+        string logFilePath)
+    {
+        if (exitCode != 0)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectCouldNotBeAnalyzed, logFilePath));
-            return (false, false, null);
+            return (false, null);
         }
 
-        if (!appHostInformation.IsAspireHost)
+        if (!isAspireHost)
         {
             interactionService.DisplayError(ErrorStrings.ProjectIsNotAppHost);
-            return (false, false, null);
+            return (false, null);
         }
 
-        if (!SemVersion.TryParse(appHostInformation.AspireHostingVersion, out var aspireVersion))
+        if (!SemVersion.TryParse(aspireHostingVersion, out var aspireVersion))
         {
             interactionService.DisplayError(ErrorStrings.CouldNotParseAspireSDKVersion);
-            return (false, false, null);
+            return (false, null);
         }
 
         var minimumVersion = SemVersion.Parse("9.2.0");
         if (aspireVersion.ComparePrecedenceTo(minimumVersion) < 0)
         {
-            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.AspireSDKVersionNotSupported, appHostInformation.AspireHostingVersion));
-            return (false, false, appHostInformation.AspireHostingVersion);
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.AspireSDKVersionNotSupported, aspireHostingVersion));
+            return (false, aspireHostingVersion);
         }
-        else
-        {
-            // NOTE: When we go to support < 9.2.0 app hosts this is where we'll make
-            //       a determination as to whether the apphsot supports backchannel or not.
-            return (true, true, appHostInformation.AspireHostingVersion);
-        }
+
+        // NOTE: When we go to support < 9.2.0 app hosts this is where we'll make
+        //       a determination as to whether the apphost supports backchannel or not.
+        return (true, aspireHostingVersion);
     }
 
     internal static async Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(IDotNetCliRunner runner, IInteractionService interactionService, FileInfo projectFile, AspireCliTelemetry telemetry, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
@@ -83,8 +102,8 @@ internal static class AppHostHelper
     /// Computes the auxiliary backchannel socket path prefix for a given AppHost project file.
     /// </summary>
     /// <remarks>
-    /// Since socket names now include a randomized instance hash and the AppHost's PID
-    /// (e.g., <c>auxi.sock.{hash}.{instanceHash}.{pid}</c>),
+    /// Since socket names now include a randomized instance ID and the AppHost's PID
+    /// (e.g., <c>{appHostId}{instanceId}.{pid}</c>),
     /// the CLI cannot compute the exact socket path. Use this prefix with a glob pattern
     /// to find matching sockets, or use <see cref="FindMatchingSockets"/> instead.
     /// </remarks>
@@ -103,6 +122,14 @@ internal static class AppHostHelper
         => BackchannelConstants.ComputeLegacyHash(appHostPath);
 
     /// <summary>
+    /// Computes all legacy hashes for backward compatibility with older AppHosts.
+    /// </summary>
+    /// <param name="appHostPath">The full path to the AppHost project file or assembly.</param>
+    /// <returns>The legacy hashes to search.</returns>
+    internal static string[] ComputeLegacyHashes(string appHostPath)
+        => BackchannelConstants.ComputeLegacyHashes(appHostPath);
+
+    /// <summary>
     /// Finds all socket files matching the given AppHost path.
     /// </summary>
     /// <param name="appHostPath">The full path to the AppHost project file or assembly.</param>
@@ -115,8 +142,9 @@ internal static class AppHostHelper
     /// Extracts the hash portion from an auxiliary socket path.
     /// </summary>
     /// <remarks>
-    /// Works with old format (<c>auxi.sock.{hash}</c>), previous format (<c>auxi.sock.{hash}.{pid}</c>),
-    /// and current format (<c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
+    /// Works with compact format (<c>{appHostId}{instanceId}.{pid}</c>), old format (<c>auxi.sock.{hash}</c>),
+    /// previous format (<c>auxi.sock.{hash}.{pid}</c>), and legacy current format
+    /// (<c>auxi.sock.{hash}.{instanceHash}.{pid}</c>).
     /// </remarks>
     /// <param name="socketPath">The full socket path (e.g., "/path/to/auxi.sock.b67075ff12d56865.a1b2c3d4e5f6.12345").</param>
     /// <returns>The hash portion (e.g., "b67075ff12d56865"), or null if the format is unrecognized.</returns>

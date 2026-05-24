@@ -81,44 +81,46 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         body: {}
       });
 
-      const appHostPath = this._session.configuration.program as string;
       const command = this.configuration.command ?? 'run';
       const noDebug = !!message.arguments?.noDebug && command === 'run';
 
-      const args: string[] = [command];
-
       // Append any additional command args forwarded from the CLI (e.g., step name for 'do', unmatched tokens)
-      const commandArgs = this.configuration.args;
-      if (commandArgs && commandArgs.length > 0) {
-        args.push(...commandArgs);
-      }
+      const commandArgs = this.configuration.args ?? [];
+      const appHostPath = this._session.configuration.program as string;
+      const appHostIsDirectory = isDirectory(appHostPath);
+      const extensionArgs: string[] = [];
 
       // For 'do' with an explicit step (old CLI fallback), pass it as a positional argument
       const step = this.configuration.step;
-      if (command === 'do' && step && !commandArgs?.length) {
-        args.push(step);
+      if (command === 'do' && step && commandArgs.length === 0) {
+        extensionArgs.push(step);
       }
 
       // --start-debug-session tells the CLI to launch the AppHost via the extension with debugger attached
       if (!noDebug) {
-        args.push('--start-debug-session');
+        extensionArgs.push('--start-debug-session');
       }
 
       if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-        args.push('--cli-wait-for-debugger');
+        extensionArgs.push('--cli-wait-for-debugger');
       }
 
       if (process.env[EnvironmentVariables.ASPIRE_APPHOST_STOP_ON_ENTRY] === 'true') {
-        args.push('--wait-for-debugger');
+        extensionArgs.push('--wait-for-debugger');
       }
 
       if (this._terminalProvider.isCliDebugLoggingEnabled()) {
-        args.push('--debug');
+        extensionArgs.push('--debug');
       }
 
+      if (!appHostIsDirectory) {
+        extensionArgs.push('--apphost', appHostPath);
+      }
+
+      const args = buildAspireCommandArgs(command, commandArgs, extensionArgs);
       const commandLabel = `aspire ${command}`;
 
-      if (isDirectory(appHostPath)) {
+      if (appHostIsDirectory) {
         this.sendMessageWithEmoji("📁", launchingWithDirectory(appHostPath));
 
         void this.spawnAspireCommand(args, appHostPath, noDebug, commandLabel);
@@ -127,7 +129,6 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         this.sendMessageWithEmoji("📂", launchingWithAppHost(appHostPath));
 
         const workspaceFolder = path.dirname(appHostPath);
-        args.push('--apphost', appHostPath);
         void this.spawnAspireCommand(args, workspaceFolder, noDebug, commandLabel);
       }
     }
@@ -585,6 +586,23 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   notifyAppHostStartupCompleted() {
     extensionLogOutputChannel.info(`AppHost startup completed and dashboard is running.`);
   }
+}
+
+export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[]): string[] {
+  const args = [command];
+  const separatorIndex = commandArgs.indexOf('--');
+  if (separatorIndex < 0) {
+    args.push(...commandArgs, ...extensionArgs);
+  }
+  else {
+    // Extension-owned CLI switches must stay before the `--` app-args separator.
+    // Otherwise commands delegated from the Aspire terminal, such as:
+    //   aspire start --apphost AppHost.csproj -- --custom-arg value
+    // would pass --apphost/--start-debug-session to the AppHost instead of the CLI.
+    args.push(...commandArgs.slice(0, separatorIndex), ...extensionArgs, ...commandArgs.slice(separatorIndex));
+  }
+
+  return args;
 }
 
 function isErrorWithStreamedDebugConsoleOutput(err: unknown): boolean {
