@@ -465,6 +465,41 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 
 `status` is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
 
+### `aspire installs list`
+
+`aspire installs list --format json` emits the Aspire CLI installs and orphan package hives that the running CLI can discover:
+
+```json
+[
+  {
+    "id": "script",
+    "kind": "script",
+    "channel": "stable",
+    "path": "/home/user/.aspire/bin/aspire",
+    "hive": "/home/user/.aspire/hives/stable",
+    "status": "active"
+  },
+  {
+    "id": "pr-17400",
+    "kind": "orphan-hive",
+    "channel": "pr-17400",
+    "hive": "/home/user/.aspire/hives/pr-17400",
+    "status": "no install found",
+    "statusReason": "No discovered install reports this hive's channel."
+  },
+  {
+    "id": "stable",
+    "kind": "homebrew",
+    "channel": "stable",
+    "path": "/opt/homebrew/Caskroom/aspire/13.2.0/aspire",
+    "status": "active",
+    "managedBy": "homebrew"
+  }
+]
+```
+
+`status` uses the install-discovery status (`active`, `shadowed`, `notOnPath`, `failed: <reason>`, `notProbed: <reason>`) or `no install found` for orphan hives.
+
 ### `aspire config info`
 
 `aspire config info --json` is a hidden tooling command that emits configuration paths, feature metadata, settings schemas, and advertised CLI capabilities:

@@ -170,7 +170,7 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
                 ;;
             esac
 
-            echo "unexpected brew command: $*" >&2
+            echo "unexpected Homebrew command: $*" >&2
             exit 1
             """);
         FileHelper.MakeExecutable(brewPath);
@@ -471,7 +471,7 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         Assert.Contains("-Force", result.Output);
         Assert.Contains("built-nugets", result.Output);
         Assert.DoesNotContain("Add to your shell profile", result.Output);
-        Assert.DoesNotContain("route sidecar", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("source sidecar", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("dogfood/pr-12345/bin", result.Output);
     }
 
@@ -496,7 +496,7 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         Assert.Contains("--archive-root", result.Output);
         Assert.Contains("built-nugets", result.Output);
         Assert.DoesNotContain("Add to your shell profile", result.Output);
-        Assert.DoesNotContain("route sidecar", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("source sidecar", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("dogfood/pr-12345/bin", result.Output);
     }
 
@@ -634,7 +634,7 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         Assert.Contains("-Force", result.Output);
         Assert.Contains("built-nugets", result.Output);
         Assert.DoesNotContain("Add to your shell profile", result.Output);
-        Assert.DoesNotContain("Route sidecar", result.Output);
+        Assert.DoesNotContain("Source sidecar", result.Output);
         Assert.DoesNotContain($"dogfood{Path.DirectorySeparatorChar}pr-12345{Path.DirectorySeparatorChar}bin", result.Output);
     }
 
@@ -659,7 +659,7 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
         Assert.Contains("--archive-root", result.Output);
         Assert.Contains("built-nugets", result.Output);
         Assert.DoesNotContain("Add to your shell profile", result.Output);
-        Assert.DoesNotContain("Route sidecar", result.Output);
+        Assert.DoesNotContain("Source sidecar", result.Output);
         Assert.DoesNotContain($"dogfood{Path.DirectorySeparatorChar}pr-12345{Path.DirectorySeparatorChar}bin", result.Output);
     }
 

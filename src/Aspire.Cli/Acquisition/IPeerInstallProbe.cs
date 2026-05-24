@@ -5,7 +5,7 @@ namespace Aspire.Cli.Acquisition;
 
 /// <summary>
 /// Result of asking a peer Aspire CLI binary to self-describe via
-/// <c>&lt;peer&gt; doctor --self --format json</c>.
+/// <c>&lt;peer&gt; installs --self --format json</c>.
 /// </summary>
 internal abstract record PeerProbeResult
 {
@@ -25,7 +25,7 @@ internal abstract record PeerProbeResult
 internal interface IPeerInstallProbe
 {
     /// <summary>
-    /// Runs <c><paramref name="binaryPath"/> doctor --self --format json</c> and
+    /// Runs <c><paramref name="binaryPath"/> installs --self --format json</c> and
     /// returns either the parsed <see cref="InstallationInfo"/> or a failure
     /// reason. <c>--self</c> bounds the peer to describing only itself so the
     /// probe does not recursively trigger a discovery walk inside the peer.

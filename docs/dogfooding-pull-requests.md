@@ -9,7 +9,7 @@ Two cross-platform helper scripts are available:
 They download the correct build artifacts for your OS/architecture and support four CLI install modes:
 
 - **Archive mode** (default): installs the native CLI archive into an isolated PR-specific directory and populates a PR-scoped NuGet "hive" with the matching packages.
-- **Tool mode**: installs the `Aspire.Cli` .NET tool from the PR's RID-specific NuGet artifact and populates the same PR-scoped NuGet hive. Use this when you also want to dogfood the dotnet-tool packaging or acquisition route.
+- **Tool mode**: installs the `Aspire.Cli` .NET tool from the PR's RID-specific NuGet artifact and populates the same PR-scoped NuGet hive. Use this when you also want to dogfood the dotnet-tool packaging or acquisition source.
 - **WinGet mode**: installs from the PR's generated `winget-manifests-prerelease` artifact and local native archive artifacts.
 - **Homebrew mode**: installs from the PR's generated `homebrew-cask-prerelease` artifact and local native archive artifacts.
 
@@ -47,7 +47,7 @@ Use archive mode when you want the CLI and project/package operations such as `a
 
 Tool mode installs the `Aspire.Cli` package as a .NET tool from the PR's `built-nugets-for-<rid>` artifact and also populates the PR-scoped NuGet hive from the cross-platform `built-nugets` artifact (just like archive mode), so `aspire new`, `aspire add`, and `aspire run` resolve against the PR build.
 
-Use tool mode when you also want to dogfood the `Aspire.Cli` dotnet-tool package layout / install route in addition to the rest of the PR. By default it installs as a global .NET tool:
+Use tool mode when you also want to dogfood the `Aspire.Cli` dotnet-tool package layout / install source in addition to the rest of the PR. By default it installs as a global .NET tool:
 
 ```bash
 ./eng/scripts/get-aspire-cli-pr.sh 1234 --install-mode tool
@@ -329,9 +329,9 @@ The file is scoped to the solution directory and only affects projects under it.
 
 The Homebrew cask (`eng/homebrew/aspire.rb.template`) installs Aspire entirely
 inside the Caskroom version directory — `brew uninstall aspire` removes
-the binary and the route sidecar end-to-end. The cask intentionally carries
-no `zap` stanza, because `~/.aspire/` is a shared prefix with the script-route
-and PR-route installers and a brew-driven recursive delete would clobber state
+the binary and the source sidecar end-to-end. The cask intentionally carries
+no `zap` stanza, because `~/.aspire/` is a shared prefix with the script-source
+and PR-source installers and a brew-driven recursive delete would clobber state
 those installers still own.
 
 If you installed via the Homebrew cask before this change, you may have a
@@ -343,7 +343,7 @@ Clean it up manually once after upgrading the cask:
 rm -rf ~/.aspire/installs/brew-stable
 ```
 
-NuGet hives under `~/.aspire/hives/` and any script-route or PR-route
+NuGet hives under `~/.aspire/hives/` and any script-source or PR-source
 binaries under `~/.aspire/bin/` and `~/.aspire/dogfood/` are not touched by
 the cask in either direction; manage those with the steps above.
 

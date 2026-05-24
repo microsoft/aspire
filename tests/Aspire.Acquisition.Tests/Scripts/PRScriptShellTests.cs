@@ -510,13 +510,13 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain("run-99999", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
-    // PR-route CLI binary lands at <prefix>/dogfood/pr-<N>/bin so PR installs
-    // do not collide with the script-route prefix (<prefix>/bin) or with other PR installs.
+    // PR-source CLI binary lands at <prefix>/dogfood/pr-<N>/bin so PR installs
+    // do not collide with the script-source prefix (<prefix>/bin) or with other PR installs.
     // Under --dry-run the script emits the absolute install path via a
     // "DRYRUN: would install Aspire CLI binary to: <path>" message on stdout;
     // this test parses that message to verify the resolved install path.
     [Fact]
-    public async Task DryRun_PRRoute_CliInstallPath_IsUnderDogfoodPrN()
+    public async Task DryRun_PRSource_CliInstallPath_IsUnderDogfoodPrN()
     {
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
@@ -526,18 +526,18 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         var expectedBinaryPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-99999", "bin", "aspire");
         Assert.Contains($"DRYRUN: would install Aspire CLI binary to: {expectedBinaryPath}", result.Output);
-        var scriptRouteBin = Path.Combine(env.MockHome, ".aspire", "bin", "aspire");
-        Assert.DoesNotContain($"DRYRUN: would install Aspire CLI binary to: {scriptRouteBin}", result.Output);
+        var scriptSourceBin = Path.Combine(env.MockHome, ".aspire", "bin", "aspire");
+        Assert.DoesNotContain($"DRYRUN: would install Aspire CLI binary to: {scriptSourceBin}", result.Output);
     }
 
-    // Under --dry-run the PR-route script must NOT write the source=pr sidecar
+    // Under --dry-run the PR-source script must NOT write the source=pr sidecar
     // at <prefix>/dogfood/pr-<N>/.aspire-install.json. The describe-but-do-not-do
     // contract requires the script to print a DRYRUN message naming the path it
     // would write, then return without touching the filesystem. Positive sidecar
-    // content (the source field) for the PR route is covered by end-to-end
+    // content (the source field) for the PR source is covered by end-to-end
     // install runs, not at this unit-test layer.
     [Fact]
-    public async Task DryRun_PRRoute_DoesNotWriteSidecar_AndAnnouncesPath()
+    public async Task DryRun_PRSource_DoesNotWriteSidecar_AndAnnouncesPath()
     {
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
@@ -547,19 +547,19 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-99999", "bin", ".aspire-install.json");
-        Assert.Contains($"DRYRUN: would write route sidecar to: {sidecarPath}", result.Output);
+        Assert.Contains($"DRYRUN: would write source sidecar to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under --dry-run, but found one at {sidecarPath}");
     }
 
-    // PR-route install prints the PATH-activation hint to stdout so users
+    // PR-source install prints the PATH-activation hint to stdout so users
     // know how to add <prefix>/dogfood/pr-<N>/bin to their shell profile.
     //
     // Hint must carry the literal "$HOME" form, not the pre-expanded absolute path,
     // so the profile line is portable across users.
     [Fact]
-    public async Task DryRun_PRRoute_PrintsPathHintToStdout()
+    public async Task DryRun_PRSource_PrintsPathHintToStdout()
     {
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
@@ -575,7 +575,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
-    public async Task DryRun_PRRoute_PrintsPathHintWithAbsoluteInstallPath()
+    public async Task DryRun_PRSource_PrintsPathHintWithAbsoluteInstallPath()
     {
         using var env = new TestEnvironment();
         var customPath = Path.Combine(env.TempDirectory, "custom-prefix");
@@ -604,9 +604,9 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         return string.Empty;
     }
 
-    // PR-route hive location is unchanged at <prefix>/hives/pr-<N>/packages.
+    // PR-source hive location is unchanged at <prefix>/hives/pr-<N>/packages.
     [Fact]
-    public async Task DryRun_PRRoute_HiveLocation_IsUnchanged()
+    public async Task DryRun_PRSource_HiveLocation_IsUnchanged()
     {
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
@@ -618,12 +618,12 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains(expectedHive, result.Output);
     }
 
-    // The PR-route script must not mutate route sidecars under --dry-run.
-    // Companion to DryRun_PRRoute_DoesNotWriteSidecar_AndAnnouncesPath; kept as a
+    // The PR-source script must not mutate source sidecars under --dry-run.
+    // Companion to DryRun_PRSource_DoesNotWriteSidecar_AndAnnouncesPath; kept as a
     // separate test method to keep dry-run sidecar-absence coverage visible in
     // test inventories alongside the other dry-run guards.
     [Fact]
-    public async Task DryRun_PRRoute_DoesNotWriteSidecar_AnyContentRegression()
+    public async Task DryRun_PRSource_DoesNotWriteSidecar_AnyContentRegression()
     {
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
@@ -639,7 +639,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
 
     // Under --dry-run no global aspire.config.json is materialized.
     [Fact]
-    public async Task DryRun_PRRoute_DoesNotCreateGlobalAspireConfigJson()
+    public async Task DryRun_PRSource_DoesNotCreateGlobalAspireConfigJson()
     {
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
@@ -683,7 +683,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         // --local-dir without a PR number is an unmanaged install, so the script must
         // not write a sidecar; the resolver should return Unknown for these installs.
         var binSidecar = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
-        Assert.False(File.Exists(binSidecar), $"--local-dir install must not write sidecar at {binSidecar} (unmanaged route).");
+        Assert.False(File.Exists(binSidecar), $"--local-dir install must not write sidecar at {binSidecar} (unmanaged source).");
 
         // Defensive: walk the .aspire root and assert no sidecar landed at any depth.
         var aspireRoot = Path.Combine(env.MockHome, ".aspire");
@@ -723,7 +723,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-99999999999", "bin", ".aspire-install.json");
-        Assert.Contains($"DRYRUN: would write route sidecar to: {sidecarPath}", result.Output);
+        Assert.Contains($"DRYRUN: would write source sidecar to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under --dry-run, but found one at {sidecarPath}");

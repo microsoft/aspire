@@ -7,14 +7,14 @@ namespace Aspire.Cli.Tests.Bundles;
 
 /// <summary>
 /// Verifies <see cref="BundleService.ComputeDefaultExtractDir(string)"/> against
-/// every (source × prefix shape) combination the supported install routes produce.
+/// every (source × prefix shape) combination the supported install sources produce.
 /// The matrix locks in the contract: the reader walks the sidecar's
 /// <c>source</c> field — and nothing else — to decide between
-/// <c>binaryDir</c> (winget / brew / dotnet-tool) and the parent of
+/// <c>binaryDir</c> (winget / homebrew / dotnet-tool) and the parent of
 /// <c>binaryDir</c> (script / pr / localhive). Missing, invalid, or unknown sidecars fall
 /// through to the parent-of-binary heuristic.
 /// </summary>
-public class BundleServiceCrossRouteExtractionTests
+public class BundleServiceCrossSourceExtractionTests
 {
     // The inline-data paths use forward slashes for source-readability; the test
     // method converts them to platform-native separators before constructing
@@ -23,8 +23,8 @@ public class BundleServiceCrossRouteExtractionTests
     // 1) winget canonical: WinGet places the portable binary in a per-package
     //    versioned directory; the bundle payload lives in that same directory.
     [InlineData("winget", "WinGet/Packages/Microsoft.Aspire_Microsoft.Winget.Source_8wekyb3d8bbwe/aspire.exe", "WinGet/Packages/Microsoft.Aspire_Microsoft.Winget.Source_8wekyb3d8bbwe")]
-    // 2) brew canonical: Homebrew cellar with versioned cask directory.
-    [InlineData("brew", "Caskroom/aspire/13.2.0/aspire", "Caskroom/aspire/13.2.0")]
+    // 2) homebrew canonical: Homebrew cellar with versioned cask directory.
+    [InlineData("homebrew", "Caskroom/aspire/13.2.0/aspire", "Caskroom/aspire/13.2.0")]
     // 3) dotnet-tool canonical: dotnet's global-tools shim at ~/.dotnet/tools/aspire
     //    delegates (apphost launch on Windows; symlink follow on Unix) to the
     //    RID-specific native binary inside the .store directory tree. The
@@ -37,13 +37,13 @@ public class BundleServiceCrossRouteExtractionTests
     [InlineData("pr", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817")]
     // 6) localhive canonical: local dev hive with the same bin layout as script.
     [InlineData("localhive", ".aspire/local/bin/aspire", ".aspire/local")]
-    // 7) Cross-route smuggle case: a brew-source sidecar dropped into a
+    // 7) Cross-source smuggle case: a homebrew-source sidecar dropped into a
     //    script-layout prefix MUST resolve to binaryDir per the switch — the
     //    reader is honest about whatever the producer put on disk. When the
     //    producer side correctly suppresses the smuggled sidecar, this row's
     //    input condition never arises in practice; the test verifies the
     //    reader's behavior is well-defined and consistent for all inputs.
-    [InlineData("brew", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817/bin")]
+    [InlineData("homebrew", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817/bin")]
     // 8) script source dropped at a flat-cellar layout (misuse, but defined):
     //    script maps to parent-of-binary, so the result is one level above the
     //    cask version dir. Not a real install pattern; locks in determinism.
@@ -55,7 +55,7 @@ public class BundleServiceCrossRouteExtractionTests
     // 11) Sidecar with an unknown source value: switch default arm, same as
     //     missing sidecar — parent-of-binary.
     [InlineData("github-actions", ".aspire/bin/aspire", ".aspire")]
-    public void ComputeDefaultExtractDir_RouteAndPrefixCombinations_ProduceExpectedExtractDir(
+    public void ComputeDefaultExtractDir_SourceAndPrefixCombinations_ProduceExpectedExtractDir(
         string? sourceField,
         string relativeProcessPath,
         string relativeExpectedExtractDir)

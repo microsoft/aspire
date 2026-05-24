@@ -4,16 +4,16 @@
 namespace Aspire.Cli.Acquisition;
 
 /// <summary>
-/// Identifies the installation route that placed the running CLI binary.
+/// Identifies the installation source that placed the running CLI binary.
 /// The value is read from the <c>source</c> field of the
 /// <c>.aspire-install.json</c> sidecar that sits next to the binary.
-/// See <c>docs/specs/install-routes.md</c>.
+/// See <c>docs/specs/install-sources.md</c>.
 /// </summary>
 internal enum InstallSource
 {
     /// <summary>
     /// No sidecar was found, or the sidecar contained a value that does not
-    /// match any known route. Treated as legacy / pre-sidecar by callers.
+    /// match any known source. Treated as legacy / pre-sidecar by callers.
     /// </summary>
     Unknown = 0,
 
@@ -27,7 +27,7 @@ internal enum InstallSource
     Winget,
 
     /// <summary>Homebrew cask.</summary>
-    Brew,
+    Homebrew,
 
     /// <summary>.NET global tool (<c>dotnet tool install -g Aspire.Cli</c>).</summary>
     DotnetTool,
@@ -42,13 +42,13 @@ internal enum InstallSource
 /// </summary>
 internal static class InstallSourceExtensions
 {
-    // Wire strings — these match the contract in docs/specs/install-routes.md
+    // Wire strings — these match the contract in docs/specs/install-sources.md
     // exactly. They are kebab-case strings consumed by both the installer
     // scripts and BundleService.ComputeDefaultExtractDir.
     internal const string ScriptWire = "script";
     internal const string PrWire = "pr";
     internal const string WingetWire = "winget";
-    internal const string BrewWire = "brew";
+    internal const string HomebrewWire = "homebrew";
     internal const string DotnetToolWire = "dotnet-tool";
     internal const string LocalHiveWire = "localhive";
 
@@ -65,7 +65,7 @@ internal static class InstallSourceExtensions
             ScriptWire => InstallSource.Script,
             PrWire => InstallSource.Pr,
             WingetWire => InstallSource.Winget,
-            BrewWire => InstallSource.Brew,
+            HomebrewWire => InstallSource.Homebrew,
             DotnetToolWire => InstallSource.DotnetTool,
             LocalHiveWire => InstallSource.LocalHive,
             _ => InstallSource.Unknown,
@@ -84,7 +84,7 @@ internal static class InstallSourceExtensions
             InstallSource.Script => ScriptWire,
             InstallSource.Pr => PrWire,
             InstallSource.Winget => WingetWire,
-            InstallSource.Brew => BrewWire,
+            InstallSource.Homebrew => HomebrewWire,
             InstallSource.DotnetTool => DotnetToolWire,
             InstallSource.LocalHive => LocalHiveWire,
             _ => null,

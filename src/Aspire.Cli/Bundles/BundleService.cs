@@ -193,7 +193,7 @@ internal sealed class BundleService(
         }
 
         // The winget portable installer has no post-install hook, so the CLI
-        // self-stamps the install-route sidecar on first run. No-op on
+        // self-stamps the install-source sidecar on first run. No-op on
         // non-Windows and once the sidecar already exists.
         if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
         {
@@ -382,7 +382,7 @@ internal sealed class BundleService(
 
     /// <summary>
     /// Computes the bundle extract directory from the sidecar source value.
-    /// See <c>docs/specs/install-routes.md</c> for the contract.
+    /// See <c>docs/specs/install-sources.md</c> for the contract.
     /// </summary>
     internal static string? ComputeDefaultExtractDir(string processPath)
         => ComputeDefaultExtractDir(processPath, logger: null);
@@ -413,7 +413,7 @@ internal sealed class BundleService(
         return source switch
         {
             InstallSourceExtensions.WingetWire
-                or InstallSourceExtensions.BrewWire
+                or InstallSourceExtensions.HomebrewWire
                 or InstallSourceExtensions.DotnetToolWire => binaryDir,
             InstallSourceExtensions.ScriptWire
                 or InstallSourceExtensions.PrWire

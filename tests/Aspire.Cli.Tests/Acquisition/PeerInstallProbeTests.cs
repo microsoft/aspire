@@ -17,7 +17,7 @@ namespace Aspire.Cli.Tests.Acquisition;
 /// </summary>
 public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
 {
-    // Route internal probe diagnostics (LogDebug for "JSON without an
+    // Source internal probe diagnostics (LogDebug for "JSON without an
     // installation row", "invalid JSON", etc.) into the xunit test output
     // so a failure log tells us why the probe took whichever code path it
     // took. Keep the factory alive for the lifetime of the test class so
@@ -74,10 +74,10 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
     }
 
     [Fact]
-    public async Task ProbeAsync_InvokesPeerWithDoctorSelfFormatJson()
+    public async Task ProbeAsync_InvokesPeerWithInstallsSelfFormatJson()
     {
         // The peer must be asked to describe ONLY itself. Without --self,
-        // `aspire doctor` would run full installation discovery and the peer would
+        // `aspire installs` would run full installation discovery and the peer would
         // recursively probe back into us — and into every other peer it
         // finds — turning a single discovery invocation into a fan-out bounded
         // only by the per-level timeout. `--format json` selects the
@@ -92,7 +92,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
         Assert.NotNull(fakePeer.ArgvFile);
         Assert.True(File.Exists(fakePeer.ArgvFile), $"Expected argv recorder file at {fakePeer.ArgvFile} to exist.");
         var argv = await File.ReadAllLinesAsync(fakePeer.ArgvFile, TestContext.Current.CancellationToken);
-        Assert.Equal(["doctor", "--self", "--format", "json"], argv);
+        Assert.Equal(["installs", "--self", "--format", "json"], argv);
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
                           "path": "/peer/aspire",
                           "version": "12.5.0",
                           "channel": "stable",
-                          "route": "script",
+                          "source": "script",
                           "pathStatus": "shadowed",
                           "status": "ok"
                         }
@@ -124,8 +124,41 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
         var ok = AssertProbeOk(result);
         Assert.Equal("12.5.0", ok.Info.Version);
         Assert.Equal("stable", ok.Info.Channel);
-        Assert.Equal("script", ok.Info.Route);
+        Assert.Equal("script", ok.Info.Source);
         Assert.Equal(InstallationPathStatus.Shadowed, ok.Info.PathStatus);
+    }
+
+    [Fact]
+    public async Task ProbeAsync_PeerEmitsBareInstallationArray_ReturnsOk()
+    {
+        // `aspire installs --self --format json` writes a bare array of
+        // InstallationInfo rows (see src/Aspire.Cli/Commands/InstallsCommand.cs).
+        // The probe must accept that shape — not only the wrapped object form —
+        // so it stays compatible with new peers.
+        using var fakePeer = FakePeerScript.Build(
+            outputHelper,
+            stdout: """
+                    [
+                      {
+                        "path": "/peer/aspire",
+                        "version": "13.0.0",
+                        "channel": "pr-17400",
+                        "source": "pr",
+                        "pathStatus": "active",
+                        "status": "ok"
+                      }
+                    ]
+                    """,
+            exitCode: 0);
+
+        var probe = CreateProbeWithGenerousTimeout();
+        var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
+
+        var ok = AssertProbeOk(result);
+        Assert.Equal("13.0.0", ok.Info.Version);
+        Assert.Equal("pr-17400", ok.Info.Channel);
+        Assert.Equal("pr", ok.Info.Source);
+        Assert.Equal(InstallationPathStatus.Active, ok.Info.PathStatus);
     }
 
     [Fact]
@@ -178,7 +211,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
     [Fact]
     public async Task ProbeAsync_PeerExitsNonZero_ReturnsFailedWhenVersionAlsoFails()
     {
-        // doctor path scripted to exit 7; --version not supported by this
+        // installs path scripted to exit 7; --version not supported by this
         // script (the default EmitExit body) → fallback path also fails
         // and the user sees the failure.
         using var fakePeer = FakePeerScript.Build(outputHelper, stdout: "{}", exitCode: 7);
@@ -262,8 +295,8 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
 
         var ok = AssertProbeOk(result);
         Assert.Equal("13.4.0-pr.16817.g790d6fa3", ok.Info.Version);
-        // Fallback can't read route or channel from the older peer; the
-        // discovery layer overlays the route from the local sidecar.
+        // Fallback can't read source or channel from the older peer; the
+        // discovery layer overlays the source from the local sidecar.
         Assert.Null(ok.Info.Channel);
     }
 
@@ -290,7 +323,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
     [Fact]
     public async Task ProbeAsync_PeerEmitsEmptyArray_FallsBackToVersion()
     {
-        // Empty rich output is treated as "doctor didn't tell us anything useful"
+        // Empty rich output is treated as "installs didn't tell us anything useful"
         // and triggers the --version fallback. With no version response
         // scripted either, the overall probe fails.
         using var fakePeer = FakePeerScript.BuildDoctorOrVersion(
@@ -309,7 +342,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
     [Fact]
     public async Task ProbeAsync_PeerEmitsInvalidJson_FallsBackToVersion()
     {
-        // Invalid JSON on the doctor path is treated as a peer failure mode
+        // Invalid JSON on the installs path is treated as a peer failure mode
         // where the command emits help / error text, and triggers the
         // --version fallback.
         using var fakePeer = FakePeerScript.BuildDoctorOrVersion(
@@ -461,7 +494,7 @@ internal static class FakePeerScript
     /// Produces a script that writes <paramref name="stdout"/> verbatim
     /// and exits with <paramref name="exitCode"/>. The script dispatches on
     /// its first argument, so it works with both the probe's
-    /// <c>doctor --self --format json</c> invocation and the <c>--version</c>
+    /// <c>installs --self --format json</c> invocation and the <c>--version</c>
     /// fallback.
     /// </summary>
     internal static FakeScriptResult Build(ITestOutputHelper outputHelper, string stdout, int exitCode)
@@ -475,7 +508,7 @@ internal static class FakePeerScript
     }
 
     /// <summary>
-    /// Builds a script that responds differently to <c>doctor</c> vs
+    /// Builds a script that responds differently to <c>installs</c> vs
     /// <c>--version</c> arguments so PeerInstallProbeTests can exercise
     /// the rich-probe → version fallback path.
     /// </summary>
@@ -595,14 +628,14 @@ internal abstract record ScriptBody
         public override string RenderShell()
         {
             // The script behaves differently based on its first arg:
-            // - "doctor" → emit the scripted stdout and exit with the scripted code
+            // - "installs" → emit the scripted stdout and exit with the scripted code
             // - anything else (e.g. "--version") → emit nothing and exit 127
             // This lets PeerInstallProbeTests isolate the "rich probe failed"
             // case without the fallback `--version` accidentally succeeding
             // by virtue of the script ignoring its args.
             return $"""
                     #!/bin/sh
-                    if [ "$1" != "doctor" ]; then
+                    if [ "$1" != "installs" ]; then
                       exit 127
                     fi
                     cat <<'__ASPIRE_PEER_EOF__'
@@ -618,7 +651,7 @@ internal abstract record ScriptBody
             var lines = Stdout.Split('\n');
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if not \"%~1\" == \"doctor\" exit /b 127");
+            sb.AppendLine("if not \"%~1\" == \"installs\" exit /b 127");
             foreach (var line in lines)
             {
                 sb.Append("echo ").AppendLine(line.TrimEnd('\r'));
@@ -634,7 +667,7 @@ internal abstract record ScriptBody
         public override string RenderShell() =>
             $"""
              #!/bin/sh
-             if [ "$1" != "doctor" ]; then
+             if [ "$1" != "installs" ]; then
                exit 127
              fi
              dd if=/dev/zero bs={ByteCount} count=1 2>/dev/null | LC_ALL=C tr '\000' 'x' 1>&2
@@ -645,7 +678,7 @@ internal abstract record ScriptBody
         {
             var sb = new StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if not \"%~1\" == \"doctor\" exit /b 127");
+            sb.AppendLine("if not \"%~1\" == \"installs\" exit /b 127");
             sb.AppendLine($"powershell -NoProfile -ExecutionPolicy Bypass -Command \"[Console]::Error.Write(('x' * {ByteCount}))\"");
             sb.AppendLine($"exit /b {ExitCode}");
             return sb.ToString();
@@ -688,7 +721,7 @@ internal abstract record ScriptBody
         {
             return $"""
                     #!/bin/sh
-                    if [ "$1" = "doctor" ]; then
+                    if [ "$1" = "installs" ]; then
                       cat <<'__ASPIRE_DOCTOR_EOF__'
                     {DoctorStdout}
                     __ASPIRE_DOCTOR_EOF__
@@ -708,7 +741,7 @@ internal abstract record ScriptBody
         {
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("@echo off");
-            sb.AppendLine("if \"%~1\" == \"doctor\" goto :doctor");
+            sb.AppendLine("if \"%~1\" == \"installs\" goto :doctor");
             sb.AppendLine("if \"%~1\" == \"--version\" goto :version");
             sb.AppendLine("exit /b 127");
             sb.AppendLine(":doctor");
@@ -729,7 +762,7 @@ internal abstract record ScriptBody
 
     private sealed record ArgvRecorderScript(string ArgvFile) : ScriptBody
     {
-        // Minimal valid doctor JSON: enough for the probe to take the primary
+        // Minimal valid installs JSON: enough for the probe to take the primary
         // path (no fallback to --version), so the recorded argv reflects the
         // first invocation only.
         private const string DoctorJson = """{"checks":[],"summary":{"passed":0,"warnings":0,"failed":0},"installations":[{"path":"/peer/aspire","version":"1.0.0","status":"ok"}]}""";

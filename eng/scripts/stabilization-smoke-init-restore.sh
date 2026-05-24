@@ -38,7 +38,7 @@
 #
 # Aspire.* packages MUST come from the local stable feed (so missing/preview-only Aspire packages
 # fail restore here, exactly as they would on a real stabilization branch). Non-Aspire deps
-# pulled in by the template (Microsoft.Extensions.*, OpenTelemetry.*, etc.) are routed to the
+# pulled in by the template (Microsoft.Extensions.*, OpenTelemetry.*, etc.) are sourced to the
 # normal public dotnet feeds via packageSourceMapping — they're not the surface we're validating.
 #
 # The pack-time NU5104 check (the primary detector for the Foo.Lib scenario above) is the

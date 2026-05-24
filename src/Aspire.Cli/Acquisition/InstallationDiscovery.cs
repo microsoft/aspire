@@ -11,7 +11,7 @@ namespace Aspire.Cli.Acquisition;
 /// Default <see cref="IInstallationDiscovery"/>. The self-describe path
 /// composes data already available in-process (channel from
 /// <see cref="IIdentityChannelReader"/>, version from
-/// <see cref="VersionHelper.GetDefaultTemplateVersion"/>, route from the
+/// <see cref="VersionHelper.GetDefaultTemplateVersion"/>, source from the
 /// running binary's sidecar) so it is cheap and side-effect-free.
 /// </summary>
 /// <remarks>
@@ -78,10 +78,10 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
         // Use the wire string from the parsed source so callers see the same
         // identifier the install scripts wrote, not the C# enum name. For
         // sidecars with an unrecognized source value we surface the raw
-        // string so users see "(unknown: future-route)" rather than nothing.
-        // Route through the shared helper so an empty RawSource collapses to
+        // string so users see "(unknown: future-source)" rather than nothing.
+        // Source through the shared helper so an empty RawSource collapses to
         // null and the JSON shape of `--self` matches the full discovery walk.
-        var route = sidecar is not null ? GetRouteFromSidecar(sidecar) : null;
+        var source = sidecar is not null ? GetSourceFromSidecar(sidecar) : null;
 
         return new InstallationInfo
         {
@@ -95,7 +95,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
             CanonicalPath = canonicalPath,
             Version = VersionHelper.GetDefaultTemplateVersion(),
             Channel = TryReadChannel(),
-            Route = route,
+            Source = source,
             PathStatus = pathStatus,
             Status = InstallationInfoStatus.Ok,
         };
@@ -218,10 +218,10 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
             {
                 case PeerProbeResult.Ok ok:
                     // Preserve the original discovered path for display and
-                    // canonical path for identity. Overlay the route from
+                    // canonical path for identity. Overlay the source from
                     // the LOCAL sidecar so older peers using the
-                    // --version fallback (which can't report route) still
-                    // surface the install route we already know about.
+                    // --version fallback (which can't report source) still
+                    // surface the install source we already know about.
                     // Also derive the channel for PR builds — the channel
                     // is structurally `pr-<N>` for a PR install, and we
                     // can recover it from the install path layout
@@ -229,7 +229,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
                     // version string (<x.y.z>-pr.<N>.<hash>) baked at
                     // build time, so we surface it even when the peer
                     // didn't report it.
-                    var route = ok.Info.Route ?? GetRouteFromSidecar(sidecar);
+                    var source = ok.Info.Source ?? GetSourceFromSidecar(sidecar);
                     var channel = ok.Info.Channel;
                     if (string.IsNullOrEmpty(channel) && sidecar.Source == InstallSource.Pr)
                     {
@@ -240,7 +240,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
                         // Final attempt: derive the channel from the peer's
                         // reported version. This is the only signal we have
                         // for older peers that don't recognize the
-                        // `doctor --self` self-describe contract — they
+                        // `installs --self` self-describe contract — they
                         // fall through to the `--version` floor in the
                         // probe and can't report their channel directly,
                         // but the assembly's InformationalVersion has it
@@ -252,20 +252,20 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
                     {
                         Path = candidate.BinaryPath,
                         CanonicalPath = canonical,
-                        Route = route,
+                        Source = source,
                         Channel = channel,
                         PathStatus = pathStatus,
                     });
                     break;
                 case PeerProbeResult.Failed failed:
                     _logger.LogDebug(
-                        "Discovery: candidate '{Canonical}' (origin: {Origin}, route: {Route}) failed peer probe: {Reason}.",
-                        canonical, candidate.Origin, GetRouteFromSidecar(sidecar), failed.Reason);
+                        "Discovery: candidate '{Canonical}' (origin: {Origin}, source: {Source}) failed peer probe: {Reason}.",
+                        canonical, candidate.Origin, GetSourceFromSidecar(sidecar), failed.Reason);
                     results.Add(new InstallationInfo
                     {
                         Path = candidate.BinaryPath,
                         CanonicalPath = canonical,
-                        Route = GetRouteFromSidecar(sidecar),
+                        Source = GetSourceFromSidecar(sidecar),
                         PathStatus = pathStatus,
                         Status = InstallationInfoStatus.Failed,
                         StatusReason = failed.Reason,
@@ -284,7 +284,7 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
     }
 
     /// <summary>
-    /// Derives the <c>pr-&lt;N&gt;</c> identity channel for a PR-route install
+    /// Derives the <c>pr-&lt;N&gt;</c> identity channel for a PR-source install
     /// from its on-disk path. The PR install layout is, by convention,
     /// <c>&lt;root&gt;/dogfood/pr-&lt;N&gt;/bin/aspire</c> (or with a
     /// <c>.exe</c>); this method walks up two directories from the binary
@@ -360,10 +360,10 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
     /// Like <see cref="TryDerivePrChannel(string)"/>, this is a purely
     /// cosmetic enrichment for the user-facing table. It rescues the
     /// channel column for peers that don't recognize the
-    /// <c>doctor --self</c> self-describe contract: those fall through to
+    /// <c>installs --self</c> self-describe contract: those fall through to
     /// the <c>--version</c> floor in the probe and can't report their
     /// channel directly, but their assembly's InformationalVersion has
-    /// the PR number baked in regardless of route.
+    /// the PR number baked in regardless of source.
     /// </remarks>
     internal static string? TryDerivePrChannelFromVersion(string? version)
     {
@@ -413,12 +413,12 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
     private static string GetNotProbedReason(InstallSidecarReadResult result)
         => result switch
         {
-            InstallSidecarReadResult.NotFound => $"No install-route sidecar found at {result.SidecarPath}; peer was not probed.",
-            InstallSidecarReadResult.Invalid => $"Install-route sidecar at {result.SidecarPath} could not be read or parsed; peer was not probed.",
-            _ => $"No install-route sidecar found at {result.SidecarPath}; peer was not probed.",
+            InstallSidecarReadResult.NotFound => $"No install-source sidecar found at {result.SidecarPath}; peer was not probed.",
+            InstallSidecarReadResult.Invalid => $"Install-source sidecar at {result.SidecarPath} could not be read or parsed; peer was not probed.",
+            _ => $"No install-source sidecar found at {result.SidecarPath}; peer was not probed.",
         };
 
-    private static string? GetRouteFromSidecar(InstallSidecarInfo sidecar)
+    private static string? GetSourceFromSidecar(InstallSidecarInfo sidecar)
         => sidecar.Source.ToWireString() ?? (string.IsNullOrEmpty(sidecar.RawSource) ? null : sidecar.RawSource);
 
     /// <summary>
