@@ -31,15 +31,21 @@ export function createResourceCommandArgumentLoader(context: ResourceCommandArgu
 async function loadResourceCommandArgumentInputs(
     context: ResourceCommandArgumentLoaderContext,
     values: readonly ResourceCommandArgumentValue[]): Promise<ResourceCommandArgumentInputJson[] | undefined> {
+    // Refuse to invoke `aspire resource ... --load-arguments` without an explicit --apphost.
+    // Without it the CLI auto-discovers some AppHost, which can return dynamic inputs for a
+    // different process than the one the user clicked on when multiple AppHosts are running.
+    if (!context.appHostPath) {
+        extensionLogOutputChannel.warn(`Failed to load resource command arguments for '${context.resourceName}' (${context.commandName}): no AppHost path could be resolved.`);
+        await vscode.window.showWarningMessage(resourceCommandDynamicInputsFailed, { modal: true });
+        return undefined;
+    }
+
     return await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Window, title: resourceCommandLoadingDynamicInputs },
         async () => {
             try {
                 const cliPath = await context.terminalProvider.getAspireCliExecutablePath();
-                const args = ['resource', context.resourceName, context.commandName, '--load-arguments'];
-                if (context.appHostPath) {
-                    args.push('--apphost', context.appHostPath);
-                }
+                const args = ['resource', context.resourceName, context.commandName, '--load-arguments', '--apphost', context.appHostPath!];
                 args.push(...buildResourceCommandCliArgs(values));
 
                 const loadedInputs = await new Promise<ResourceCommandArgumentInputJson[] | undefined>((resolve) => {

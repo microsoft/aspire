@@ -9,7 +9,6 @@ import {
     confirmSecretArgumentWarning,
     getResourceCommandArgumentValidationMessage,
     hasDynamicResourceCommandArguments,
-    hasSecretResourceCommandArguments,
     resourceCommandSecretWarningSuppressedKey,
     ResourceCommandArgumentValue,
 } from '../views/ResourceCommandArguments';
@@ -193,25 +192,6 @@ suite('ResourceCommandArguments', () => {
         assert.strictEqual(getResourceCommandArgumentValidationMessage(input, 'abcd'), 'Value must be 3 characters or fewer.');
     });
 
-    test('detects enabled secret text arguments', () => {
-        assert.strictEqual(hasSecretResourceCommandArguments({
-            description: null,
-            argumentInputs: [
-                makeInput({ inputType: 'Text' }),
-                makeInput({ inputType: 'SecretText' }),
-            ],
-        }), true);
-    });
-
-    test('ignores disabled secret text arguments', () => {
-        assert.strictEqual(hasSecretResourceCommandArguments({
-            description: null,
-            argumentInputs: [
-                makeInput({ inputType: 'SecretText', disabled: true }),
-            ],
-        }), false);
-    });
-
     test('detects enabled dynamic arguments', () => {
         assert.strictEqual(hasDynamicResourceCommandArguments({
             description: null,
@@ -314,6 +294,69 @@ suite('ResourceCommandArguments', () => {
         }
     });
 
+    test('handles dynamic reload that removes a pending input', async () => {
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+
+        let acceptCallback: (() => void) | undefined;
+        const inputBox: any = {
+            value: '',
+            title: '',
+            step: 0,
+            totalSteps: 0,
+            password: false,
+            prompt: '',
+            placeholder: '',
+            ignoreFocusOut: false,
+            validationMessage: undefined,
+            onDidChangeValue: () => ({ dispose() { } }),
+            onDidAccept: (callback: () => void) => {
+                acceptCallback = callback;
+                return { dispose() { } };
+            },
+            onDidHide: () => ({ dispose() { } }),
+            show() {
+                // Simulate the user typing a value and accepting after the prompt is shown.
+                inputBox.value = 'first-answer';
+                queueMicrotask(() => acceptCallback?.());
+            },
+            dispose: () => { },
+        };
+        const inputBoxStub = sinon.stub(vscode.window, 'createInputBox').callsFake(() => inputBox as vscode.InputBox);
+
+        try {
+            const result = await collectResourceCommandArguments('open', {
+                description: null,
+                argumentInputs: [
+                    makeInput({ name: 'first', inputType: 'Text', dynamicLoading: { alwaysLoadOnStart: true } }),
+                    makeInput({ name: 'second', inputType: 'Text' }),
+                ],
+            }, {
+                loadDynamicArguments: async values => {
+                    // After the first answer, the AppHost removes the second input entirely.
+                    // Previously this would throw because the loop continued to read inputs[1].
+                    if (values.length === 0) {
+                        return [
+                            makeInput({ name: 'first', inputType: 'Text', dynamicLoading: { alwaysLoadOnStart: true } }),
+                            makeInput({ name: 'second', inputType: 'Text' }),
+                        ];
+                    }
+
+                    return [
+                        makeInput({ name: 'first', inputType: 'Text', dynamicLoading: { alwaysLoadOnStart: true } }),
+                    ];
+                },
+            });
+
+            assert.deepStrictEqual(result?.args, ['--', '--first=first-answer']);
+            assert.strictEqual(result?.containsSecret, false);
+            assert.strictEqual(warningStub.called, false);
+        }
+        finally {
+            inputBoxStub.restore();
+            warningStub.restore();
+        }
+    });
+
     test('shared dynamic argument loader invokes load-arguments with current values', async () => {
         const withProgressStub = sinon.stub(vscode.window, 'withProgress').callsFake((_options: any, task: any) => task(undefined, undefined));
         const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves(undefined);
@@ -364,6 +407,36 @@ suite('ResourceCommandArguments', () => {
             assert.strictEqual(withProgressStub.calledOnce, true);
             assert.strictEqual(loadedInputs?.[0]?.name, 'item');
             assert.strictEqual(loadedInputs?.[0]?.options?.banana, 'Banana');
+        }
+        finally {
+            spawnStub.restore();
+            warningStub.restore();
+            withProgressStub.restore();
+        }
+    });
+
+    test('shared dynamic argument loader fails when no AppHost path is provided', async () => {
+        const withProgressStub = sinon.stub(vscode.window, 'withProgress').callsFake((_options: any, task: any) => task(undefined, undefined));
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        const spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+        } as AspireTerminalProvider;
+
+        try {
+            const loader = createResourceCommandArgumentLoader({
+                terminalProvider,
+                resourceName: 'argument-commands',
+                commandName: 'dependent-arguments',
+                appHostPath: undefined,
+            });
+
+            const loadedInputs = await loader([]);
+
+            assert.strictEqual(loadedInputs, undefined);
+            assert.strictEqual(spawnStub.called, false);
+            assert.strictEqual(withProgressStub.called, false);
+            assert.strictEqual(warningStub.calledOnce, true);
         }
         finally {
             spawnStub.restore();

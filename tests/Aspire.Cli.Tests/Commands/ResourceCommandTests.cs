@@ -1711,7 +1711,8 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
                         CreateArgument("browser", inputType: "Choice")))
             ]
         };
-        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+        var interactionService = new TestInteractionService();
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("""resource web-browser-automation configure --load-arguments -- --browser Chrome""");
@@ -1722,6 +1723,40 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.True(backchannel.ExecuteResourceCommandOptions?.ValidateOnly);
         Assert.True(backchannel.ExecuteResourceCommandOptions?.ReturnArgumentInputs);
         Assert.DoesNotContain("[]", output.ToString(), StringComparison.Ordinal);
+        Assert.Contains("Loaded argument inputs were not returned.", interactionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_LoadArgumentsReportsFallbackErrorWhenArgumentInputsAndMessageAreMissing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var output = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("browser", inputType: "Choice")))
+            ]
+        };
+        var interactionService = new TestInteractionService();
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation configure --load-arguments -- --browser Chrome""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = output }).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        Assert.Contains("AppHost returned no loaded argument inputs.", interactionService.DisplayedErrors);
     }
 
     [Fact]

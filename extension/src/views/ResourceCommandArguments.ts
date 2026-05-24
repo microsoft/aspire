@@ -88,7 +88,14 @@ export async function collectResourceCommandArguments(commandName: string, comma
         secretWarningConfirmed = true;
     }
 
-    for (let i = 0; i < inputs.length; i++) {
+    // Track which inputs have already been answered by name so a reload that removes,
+    // renames, reorders, or conditionally hides an input cannot desynchronize the loop
+    // from the current input set. Positional indexing across reloads is unsafe because
+    // hosting does not document that the input set must stay stable across LoadCallback
+    // invocations.
+    const answeredNames = new Set<string>();
+
+    while (true) {
         // Reload before each prompt because a previous answer can change later input metadata,
         // such as enabling an input, replacing choice options, or assigning a default value.
         const loadedInputs = await loadDynamicArgumentInputs(inputs, values, options?.loadDynamicArguments, loadedInputSignatures);
@@ -97,9 +104,9 @@ export async function collectResourceCommandArguments(commandName: string, comma
         }
 
         inputs = loadedInputs;
-        const input = inputs[i];
-        if (input.disabled) {
-            continue;
+        const input = inputs.find(candidate => !candidate.disabled && !answeredNames.has(candidate.name));
+        if (!input) {
+            break;
         }
 
         if (!secretWarningConfirmed && input.inputType === ResourceCommandInputType.SecretText) {
@@ -111,13 +118,14 @@ export async function collectResourceCommandArguments(commandName: string, comma
             secretWarningConfirmed = true;
         }
 
-        const enabledInputs = inputs.filter(input => !input.disabled);
+        const enabledInputs = inputs.filter(candidate => !candidate.disabled);
         const value = await promptForArgumentValue(commandTitle, input, values.length + 1, enabledInputs.length);
         if (value === undefined) {
             return undefined;
         }
 
         values.push({ input, value });
+        answeredNames.add(input.name);
     }
 
     return {
@@ -150,10 +158,6 @@ export async function confirmSecretArgumentWarning(secretWarningState: vscode.Me
     }
 
     return result !== undefined;
-}
-
-export function hasSecretResourceCommandArguments(command: ResourceCommandJson | undefined): boolean {
-    return command?.argumentInputs?.some(input => !input.disabled && input.inputType === ResourceCommandInputType.SecretText) ?? false;
 }
 
 export function hasDynamicResourceCommandArguments(command: ResourceCommandJson | undefined): boolean {

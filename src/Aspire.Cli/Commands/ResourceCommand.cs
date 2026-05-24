@@ -204,7 +204,14 @@ internal sealed class ResourceCommand : BaseCommand
 
         if (response.ArgumentInputs is null)
         {
-            return CommandResult.Failure(CliExitCodes.FailedToExecuteResourceCommand, response.Message);
+            // Surface a concrete diagnostic so partial-state failures (e.g. AppHost returned a
+            // response with no ArgumentInputs and no Message) are self-describing in the VS Code
+            // extension log channel rather than producing a silent FailedToExecuteResourceCommand.
+            var errorMessage = response.Message is { Length: > 0 } message
+                ? message
+                : "AppHost returned no loaded argument inputs.";
+
+            return CommandResult.Failure(CliExitCodes.FailedToExecuteResourceCommand, errorMessage);
         }
 
         var argumentInputs = response.ArgumentInputs.Select(ResourceSnapshotMapper.MapCommandArgumentInput).ToArray();
