@@ -3,11 +3,16 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../Dialogs.resx">
     <body>
       <trans-unit id="AIAgentsDialogAppHostDescription">
-        <source>Build, debug, and profile apps using AI agents and Aspire 🚀
+        <source>Give AI agents deep observability into your app, to help them diagnose issues and verify fixes 🚀
 
-The structured logs, distributed traces, and resource status in this dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
+- 📦 Resource state, source, relationships
+- 🖥️ Console logs
+- 📊 Distributed traces
+- 🪵 Structured logs
 
-First, [install the Aspire CLI]({1}) if you haven't already. Then use an Aspire CLI command to initialize agent support in your project:
+Information is provided to AI agents from the dashboard via the Aspire CLI. [Install the Aspire CLI]({1}) if you haven't already.
+
+Use an Aspire CLI command to initialize agent support in your project:
 
 ```bash
 aspire agent init
@@ -18,11 +23,16 @@ This configures skill files for your AI agent. The skill files tell the agent ho
 Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
 
 For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</source>
-        <target state="new">Build, debug, and profile apps using AI agents and Aspire 🚀
+        <target state="new">Give AI agents deep observability into your app, to help them diagnose issues and verify fixes 🚀
 
-The structured logs, distributed traces, and resource status in this dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
+- 📦 Resource state, source, relationships
+- 🖥️ Console logs
+- 📊 Distributed traces
+- 🪵 Structured logs
 
-First, [install the Aspire CLI]({1}) if you haven't already. Then use an Aspire CLI command to initialize agent support in your project:
+Information is provided to AI agents from the dashboard via the Aspire CLI. [Install the Aspire CLI]({1}) if you haven't already.
+
+Use an Aspire CLI command to initialize agent support in your project:
 
 ```bash
 aspire agent init
@@ -36,36 +46,40 @@ For more information about using AI agents with Aspire, such as setting up skill
         <note>{0} is the learn more URL, {1} is the install CLI URL</note>
       </trans-unit>
       <trans-unit id="AIAgentsDialogStandaloneDescription">
-        <source>Build, debug, and profile apps using AI agents and Aspire 🚀
+        <source>Give AI agents deep observability into your app, to help them diagnose issues and verify fixes 🚀
 
-The structured logs and distributed traces in the dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
+- 📊 Distributed traces
+- 🔗 Trace spans
+- 🪵 Structured logs
+- 🗂️ Zip file export
 
-First, [install the Aspire CLI]({2}) if you haven't already. Then use Aspire CLI commands to get telemetry data in your terminal:
+Information is provided to AI agents from the dashboard via the Aspire CLI. [Install the Aspire CLI]({2}) if you haven't already.
+
+Use Aspire CLI commands to get telemetry data in your terminal:
 
 ```bash
 aspire otel logs --dashboard-url {0}
 ```
 
-- [`aspire otel logs`](https://aspire.dev/reference/cli/commands/aspire-otel-logs/) — View structured logs
-- [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/) — View distributed traces
-- [`aspire otel spans`](https://aspire.dev/reference/cli/commands/aspire-otel-spans/) — View trace spans
-- [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/) — Export telemetry and resource data to a zip file
+This is an example of a command that AI agents can use to get telemetry for your app. See [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
 
 For more information about using AI agents with the dashboard, such as setting up skills, see [Standalone dashboard and AI coding agents]({1}).</source>
-        <target state="new">Build, debug, and profile apps using AI agents and Aspire 🚀
+        <target state="new">Give AI agents deep observability into your app, to help them diagnose issues and verify fixes 🚀
 
-The structured logs and distributed traces in the dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
+- 📊 Distributed traces
+- 🔗 Trace spans
+- 🪵 Structured logs
+- 🗂️ Zip file export
 
-First, [install the Aspire CLI]({2}) if you haven't already. Then use Aspire CLI commands to get telemetry data in your terminal:
+Information is provided to AI agents from the dashboard via the Aspire CLI. [Install the Aspire CLI]({2}) if you haven't already.
+
+Use Aspire CLI commands to get telemetry data in your terminal:
 
 ```bash
 aspire otel logs --dashboard-url {0}
 ```
 
-- [`aspire otel logs`](https://aspire.dev/reference/cli/commands/aspire-otel-logs/) — View structured logs
-- [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/) — View distributed traces
-- [`aspire otel spans`](https://aspire.dev/reference/cli/commands/aspire-otel-spans/) — View trace spans
-- [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/) — Export telemetry and resource data to a zip file
+This is an example of a command that AI agents can use to get telemetry for your app. See [`aspire otel`](https://aspire.dev/reference/cli/commands/aspire-otel/) and [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/).
 
 For more information about using AI agents with the dashboard, such as setting up skills, see [Standalone dashboard and AI coding agents]({1}).</target>
         <note>{0} is the dashboard URL, {1} is the learn more URL, {2} is the install CLI URL</note>
