@@ -67,6 +67,19 @@ public class DockerfileBuildAnnotation(string contextPath, string dockerfilePath
     public bool HasEntrypoint { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the default <c>.dockerignore</c> content to emit alongside the published
+    /// Dockerfile using BuildKit's per-Dockerfile ignore convention
+    /// (<c>&lt;dockerfile-name&gt;.dockerignore</c> next to the Dockerfile).
+    /// </summary>
+    /// <remarks>
+    /// When the build context root already contains a <c>.dockerignore</c> authored by the user,
+    /// no per-Dockerfile file is emitted so the user's file is honored — BuildKit gives per-Dockerfile
+    /// ignore files precedence over the context-root file, so emitting both would silently shadow
+    /// a user override. See https://docs.docker.com/build/concepts/context/#filename-and-location.
+    /// </remarks>
+    public string? BuildContextIgnoreContent { get; set; }
+
+    /// <summary>
     /// Materializes the Dockerfile from the factory if it hasn't been materialized yet.
     /// This method is thread-safe and ensures the Dockerfile is only written once.
     /// </summary>
@@ -103,5 +116,38 @@ public class DockerfileBuildAnnotation(string contextPath, string dockerfilePath
         {
             _materializationLock.Release();
         }
+    }
+
+    /// <summary>
+    /// Emits the per-Dockerfile <c>.dockerignore</c> sibling next to a published Dockerfile when
+    /// <see cref="BuildContextIgnoreContent"/> is set. Intended to be called by publishers after
+    /// copying the materialized Dockerfile into the publish output directory.
+    /// </summary>
+    /// <param name="resourceDockerfilePath">The path of the published Dockerfile (typically
+    /// <c>&lt;outputDir&gt;/&lt;resource-name&gt;.Dockerfile</c>). The sibling
+    /// <c>&lt;resourceDockerfilePath&gt;.dockerignore</c> is written next to it.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <remarks>
+    /// Skipped when <see cref="BuildContextIgnoreContent"/> is null. Also skipped when the build
+    /// context root already contains a <c>.dockerignore</c> authored by the user — BuildKit gives
+    /// per-Dockerfile ignore files precedence over the context-root file, so emitting both would
+    /// silently shadow a user override. See
+    /// https://docs.docker.com/build/concepts/context/#filename-and-location.
+    /// </remarks>
+    public async Task EmitBuildContextIgnoreAsync(string resourceDockerfilePath, CancellationToken cancellationToken)
+    {
+        if (BuildContextIgnoreContent is not { } content)
+        {
+            return;
+        }
+
+        var contextRootIgnore = Path.Combine(ContextPath, ".dockerignore");
+        if (File.Exists(contextRootIgnore))
+        {
+            return;
+        }
+
+        var perDockerfileIgnore = $"{resourceDockerfilePath}.dockerignore";
+        await File.WriteAllTextAsync(perDockerfileIgnore, content, cancellationToken).ConfigureAwait(false);
     }
 }

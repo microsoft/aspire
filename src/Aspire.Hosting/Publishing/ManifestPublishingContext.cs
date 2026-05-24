@@ -383,6 +383,8 @@ public sealed class ManifestPublishingContext(DistributedApplicationExecutionCon
                 Directory.CreateDirectory(manifestDirectory);
                 File.Copy(annotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
 
+                await annotation.EmitBuildContextIgnoreAsync(resourceDockerfilePath, CancellationToken).ConfigureAwait(false);
+
                 // Update the dockerfile path to use the generated file for the manifest
                 dockerfilePath = resourceDockerfilePath;
             }

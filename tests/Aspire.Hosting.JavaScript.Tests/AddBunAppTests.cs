@@ -147,6 +147,66 @@ public class AddBunAppTests
     }
 
     [Fact]
+    public async Task VerifyDockerfileEmitsPerDockerfileDockerignore()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "package.json"), "{}");
+
+        var bunApp = builder.AddBunApp("js", appDir, "server.ts");
+
+        await ManifestUtils.GetManifest(bunApp.Resource, tempDir.Path);
+
+        // The default .dockerignore should be emitted alongside the published Dockerfile using
+        // BuildKit's per-Dockerfile convention (<dockerfile-name>.dockerignore), not into the
+        // user's source tree.
+        var perDockerfileIgnorePath = Path.Combine(tempDir.Path, "js.Dockerfile.dockerignore");
+        Assert.True(File.Exists(perDockerfileIgnorePath), $"Expected per-Dockerfile dockerignore at {perDockerfileIgnorePath}");
+        var ignoreContents = File.ReadAllText(perDockerfileIgnorePath);
+        Assert.Contains("node_modules", ignoreContents);
+        Assert.Contains(".aspire", ignoreContents);
+
+        // The user's source tree must not be polluted with a generated .dockerignore.
+        Assert.False(File.Exists(Path.Combine(appDir, ".dockerignore")), "Aspire should not write a .dockerignore into the user's source tree.");
+
+        // The annotation should carry the default content so it can be inspected/overridden by users.
+        var dockerBuildAnnotation = bunApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
+        Assert.NotNull(dockerBuildAnnotation.BuildContextIgnoreContent);
+        Assert.Contains("node_modules", dockerBuildAnnotation.BuildContextIgnoreContent!);
+    }
+
+    [Fact]
+    public async Task VerifyDockerfileSkipsDockerignoreWhenUserAuthoredOneExists()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "package.json"), "{}");
+
+        // User has authored their own .dockerignore at the context root. BuildKit gives
+        // per-Dockerfile ignore files precedence, so Aspire must skip emitting its sibling to
+        // honor the user's file.
+        var userIgnorePath = Path.Combine(appDir, ".dockerignore");
+        var userIgnoreContents = "# user-authored\nsecrets/\n";
+        File.WriteAllText(userIgnorePath, userIgnoreContents);
+
+        var bunApp = builder.AddBunApp("js", appDir, "server.ts");
+
+        await ManifestUtils.GetManifest(bunApp.Resource, tempDir.Path);
+
+        var perDockerfileIgnorePath = Path.Combine(tempDir.Path, "js.Dockerfile.dockerignore");
+        Assert.False(File.Exists(perDockerfileIgnorePath), "Aspire should not shadow a user-authored context-root .dockerignore.");
+
+        // User file is untouched.
+        Assert.Equal(userIgnoreContents, File.ReadAllText(userIgnorePath));
+    }
+
+    [Fact]
     public void AddBunApp_DoesNotAddBunPackageManagerWhenNoPackageJson()
     {
         using var tempDir = new TestTempDirectory();
