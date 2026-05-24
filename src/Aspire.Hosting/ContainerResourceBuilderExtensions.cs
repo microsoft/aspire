@@ -766,7 +766,6 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use the asynchronous <see cref="WithDockerfileFactory{T}(IResourceBuilder{T}, string, Func{DockerfileFactoryContext, Task{string}}, string?)"/> overload instead.</remarks>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
     public static IResourceBuilder<T> WithDockerfileFactory<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileFactoryContext, string> dockerfileFactory, string? stage = null) where T : ContainerResource
     {
@@ -939,7 +938,6 @@ public static class ContainerResourceBuilderExtensions
     /// The output is trusted and not validated.
     /// </para>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use the asynchronous <see cref="AddDockerfileFactory(IDistributedApplicationBuilder, string, string, Func{DockerfileFactoryContext, Task{string}}, string?)"/> overload instead.</remarks>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
     public static IResourceBuilder<ContainerResource> AddDockerfileFactory(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileFactoryContext, string> dockerfileFactory, string? stage = null)
     {
