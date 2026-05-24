@@ -164,9 +164,10 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
         // `aspire init --language typescript` creates apphost.mts (since PR #16984), not
         // apphost.ts. Overwrite that file with the test's custom AppHost; otherwise
         // `aspire deploy` runs against the empty default apphost.mts and no Azure
-        // resources get provisioned.
+        // resources get provisioned. The mts variant imports the generated SDK as
+        // `aspire.mjs` (not `aspire.js`, which is the legacy apphost.ts shape).
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts"), """
-            import { createBuilder } from './.aspire/modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
 
