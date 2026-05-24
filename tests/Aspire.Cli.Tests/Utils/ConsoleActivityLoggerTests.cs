@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Resources;
@@ -473,8 +474,15 @@ public class ConsoleActivityLoggerTests
         var logger = new ConsoleActivityLogger(console, TestHelpers.CreateInteractiveHostEnvironment(), forceColor: false);
 
         logger.StartSpinner();
-        // Allow several spinner ticks (each ~120ms) to exercise MoveLeft repeatedly.
-        await Task.Delay(400);
+
+        // Poll for the spinner to actually run rather than waiting a fixed wall-clock
+        // duration. Under thread-pool starvation the spinner task may not get scheduled
+        // for a while, so a fixed Task.Delay would be timing-dependent and flaky.
+        var sw = Stopwatch.StartNew();
+        while (console.MoveLeftCallCount == 0 && sw.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            await Task.Delay(50);
+        }
 
         // StopSpinnerAsync awaits the spinner task, so any unhandled exception
         // inside the loop or the finally block would be observed and rethrown here.
