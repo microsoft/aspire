@@ -66,6 +66,25 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task UninstallWhatIfWithQuality_ShowsInferredChannelAndSharedInstallSkip()
+    {
+        using var env = new TestEnvironment();
+        var customPath = Path.Combine(env.TempDirectory, "aspire", "bin");
+        Directory.CreateDirectory(Path.Combine(env.TempDirectory, "aspire", "hives", "staging", "packages"));
+
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "-Uninstall",
+            "-Quality", "staging",
+            "-InstallPath", customPath,
+            "-WhatIf");
+
+        result.EnsureSuccessful();
+        Assert.Contains("hive staging", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RemoveSharedInstall", result.Output);
+    }
+
+    [Fact]
     public async Task AllMainParameters_ShownInHelp()
     {
         using var env = new TestEnvironment();

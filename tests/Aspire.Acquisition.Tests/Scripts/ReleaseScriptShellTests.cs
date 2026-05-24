@@ -79,6 +79,75 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains(customPath, result.Output);
     }
 
+    [Fact]
+    public async Task UninstallDryRunWithQuality_ShowsInferredChannelAndSharedInstallSkip()
+    {
+        using var env = new TestEnvironment();
+        var customPath = Path.Combine(env.TempDirectory, "aspire", "bin");
+        Directory.CreateDirectory(Path.Combine(env.TempDirectory, "aspire", "hives", "staging", "packages"));
+
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "--uninstall",
+            "--quality", "staging",
+            "--install-path", customPath,
+            "--dry-run");
+
+        result.EnsureSuccessful();
+        Assert.Contains("hive staging", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--remove-shared-install", result.Output);
+    }
+
+    [Fact]
+    public async Task UninstallWithRemoveSharedInstall_DeletesSharedArtifacts()
+    {
+        using var env = new TestEnvironment();
+        var aspireHome = Path.Combine(env.TempDirectory, "aspire");
+        var customPath = Path.Combine(aspireHome, "bin");
+        Directory.CreateDirectory(Path.Combine(aspireHome, "hives", "daily", "packages"));
+        Directory.CreateDirectory(Path.Combine(aspireHome, "bundle"));
+        Directory.CreateDirectory(Path.Combine(aspireHome, "versions", "v1"));
+        Directory.CreateDirectory(customPath);
+        var binaryPath = Path.Combine(customPath, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(binaryPath, "");
+
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "--uninstall",
+            "--quality", "dev",
+            "--install-path", customPath,
+            "--yes",
+            "--remove-shared-install");
+
+        result.EnsureSuccessful();
+        Assert.False(Directory.Exists(Path.Combine(aspireHome, "hives", "daily")));
+        Assert.False(File.Exists(binaryPath));
+        Assert.False(Directory.Exists(Path.Combine(aspireHome, "bundle")));
+        Assert.True(Directory.Exists(Path.Combine(aspireHome, "versions", "v1")));
+    }
+
+    [Fact]
+    public async Task UninstallWithoutChannelOrAll_FailsWithoutSilentlyTargetingDefaultQualityChannel()
+    {
+        // Without --channel/--all/--quality, the script must refuse rather than
+        // infer "stable" from the default quality and quietly delete it.
+        using var env = new TestEnvironment();
+        var aspireHome = Path.Combine(env.TempDirectory, "aspire");
+        var customPath = Path.Combine(aspireHome, "bin");
+        var stableHive = Path.Combine(aspireHome, "hives", "stable");
+        Directory.CreateDirectory(Path.Combine(stableHive, "packages"));
+
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "--uninstall",
+            "--install-path", customPath,
+            "--yes");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("--channel or --all", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.True(Directory.Exists(stableHive));
+    }
+
     [Theory]
     [InlineData("--verbose")]
     [InlineData("-v")]

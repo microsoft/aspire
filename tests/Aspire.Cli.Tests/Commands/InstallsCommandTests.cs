@@ -146,6 +146,7 @@ public class InstallsCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("orphan-hive", output);
         Assert.Contains("pr-17400", output);
         Assert.Contains("no install found", output);
+        Assert.Contains("Cleanup", output);
         Assert.DoesNotContain("│", output);
     }
 
@@ -181,6 +182,7 @@ public class InstallsCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         var output = string.Join(Environment.NewLine, outputWriter.Logs);
+        Assert.Contains("Cleanup", output);
         Assert.DoesNotContain("│", output);
     }
 
@@ -264,6 +266,173 @@ public class InstallsCommandTests(ITestOutputHelper outputHelper)
                 Assert.Equal("no install found", row["status"]!.GetValue<string>());
             });
     }
+
+    [Theory]
+    [InlineData("dotnet-tool", "dotnet-tool", "Managed by dotnet tool; use: dotnet tool uninstall")]
+    [InlineData("winget", "winget", "Managed by WinGet; use: winget uninstall")]
+    [InlineData("brew", "homebrew", "Managed by Homebrew; use: brew uninstall")]
+    public async Task InstallsList_ManagedInstalls_ShowPackageManagerCleanupHint(string source, string expectedManagedBy, string expectedHint)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = Path.Combine(aspireHome, source, "aspire"),
+                CanonicalPath = Path.Combine(aspireHome, source, "aspire"),
+                Version = "13.2.0",
+                Channel = "stable",
+                Source = source,
+                PathStatus = InstallationPathStatus.Active,
+                Status = InstallationInfoStatus.Ok
+            })));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("installs list --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var json = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!.AsArray();
+        Assert.Equal(expectedManagedBy, json[0]!["managedBy"]!.GetValue<string>());
+        Assert.Equal(expectedHint, json[0]!["cleanupHint"]!.GetValue<string>());
+        Assert.Null(json[0]!["uninstallCommand"]);
+    }
+
+    [Theory]
+    [InlineData("script", null, "script", "Use: aspire installs uninstall script")]
+    [InlineData("pr", "pr-17416", "pr", "Use: aspire installs uninstall pr-17416")]
+    [InlineData("localhive", "local", "localhive", "Use: aspire installs uninstall local")]
+    [InlineData("future-source", "future", "future-source", "Use: aspire installs uninstall future")]
+    public async Task InstallsList_AspireOwnedAndUnknownSources_UseAspireCleanupHint(string source, string? channel, string expectedKind, string expectedHint)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = Path.Combine(aspireHome, source, "aspire"),
+                CanonicalPath = Path.Combine(aspireHome, source, "aspire"),
+                Version = "13.2.0",
+                Channel = channel,
+                Source = source,
+                PathStatus = InstallationPathStatus.NotOnPath,
+                Status = InstallationInfoStatus.Ok
+            })));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("installs list --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var row = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!.AsArray()[0]!;
+        Assert.Equal(expectedKind, row["kind"]!.GetValue<string>());
+        Assert.Equal(expectedHint, row["cleanupHint"]!.GetValue<string>());
+        Assert.Null(row["managedBy"]);
+    }
+
+    [Theory]
+    [InlineData("dotnet-tool", "dotnet")]
+    [InlineData("winget", "winget")]
+    [InlineData("brew", "brew")]
+    public async Task InstallsUninstall_ManagedInstalls_AreDenied(string source, string expectedCommand)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        Directory.CreateDirectory(Path.Combine(aspireHome, "hives", "stable", "packages"));
+
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = Path.Combine(aspireHome, source, "aspire"),
+                CanonicalPath = Path.Combine(aspireHome, source, "aspire"),
+                Version = "13.2.0",
+                Channel = "stable",
+                Source = source,
+                PathStatus = InstallationPathStatus.Active,
+                Status = InstallationInfoStatus.Ok
+            })));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("installs uninstall stable --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.True(Directory.Exists(Path.Combine(aspireHome, "hives", "stable")));
+        Assert.Empty(testInteractionService.BooleanPromptCalls);
+        Assert.Contains(testInteractionService.DisplayedErrors, e => e.Contains($"use: {expectedCommand}", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task InstallsUninstall_UnknownId_FailsWithoutPrompting()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var testInteractionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("installs uninstall missing-id");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Empty(testInteractionService.BooleanPromptCalls);
+        Assert.Contains(testInteractionService.DisplayedErrors, e => e.Contains("missing-id", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InstallsUninstall_ValidId_PromptsBeforeDeletingWhenYesIsNotSpecified()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        var hivePath = Path.Combine(aspireHome, "hives", "pr-17400");
+        Directory.CreateDirectory(Path.Combine(hivePath, "packages"));
+        var testInteractionService = new TestInteractionService();
+        testInteractionService.SetupBooleanResponse(false);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("installs uninstall pr-17400");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Cancelled, exitCode);
+        Assert.Single(testInteractionService.BooleanPromptCalls);
+        Assert.True(Directory.Exists(hivePath));
+    }
+
     [Fact]
     public async Task InstallsList_OrdersActiveFirstAndOmitsMissingHivePaths()
     {
@@ -419,5 +588,80 @@ public class InstallsCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(logger.Entries, e => e.Level == LogLevel.Debug && e.Message.Contains("Ignoring discovery row path", StringComparison.Ordinal));
         Assert.Contains(logger.Entries, e => e.Level == LogLevel.Debug && e.Message.Contains("Classified install path", StringComparison.Ordinal) && e.Message.Contains("localhive", StringComparison.Ordinal));
         Assert.Contains(logger.Entries, e => e.Level == LogLevel.Debug && e.Message.Contains("Classified hive", StringComparison.Ordinal) && e.Message.Contains("orphan", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InstallsUninstall_OrphanHive_DeletesHive()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        var hivePath = Path.Combine(aspireHome, "hives", "pr-17400");
+        Directory.CreateDirectory(Path.Combine(hivePath, "packages"));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("installs uninstall pr-17400 --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(Directory.Exists(hivePath));
+    }
+
+    [Fact]
+    public async Task InstallsUninstall_PrNumberId_DeletesExactHive()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        var hivePath = Path.Combine(aspireHome, "hives", "pr-17400");
+        Directory.CreateDirectory(Path.Combine(hivePath, "packages"));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("installs uninstall pr-17400 --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(Directory.Exists(hivePath));
+    }
+
+    [Fact]
+    public async Task InstallsUninstall_SuffixedIdWithoutMatchingRow_RejectsRatherThanDeleteUnderlyingChannel()
+    {
+        // `aspire installs uninstall pr-17416-2` must NOT silently strip the
+        // numeric suffix and delete the unsuffixed `pr-17416` hive. A typoed
+        // id (one that BuildRowsAsync didn't actually materialize) is a
+        // user error, not a license to delete a different hive.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        var hivePath = Path.Combine(aspireHome, "hives", "pr-17416");
+        Directory.CreateDirectory(Path.Combine(hivePath, "packages"));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = Path.Combine(aspireHome, "dogfood", "pr-17416", "bin", "aspire"),
+                CanonicalPath = Path.Combine(aspireHome, "dogfood", "pr-17416", "bin", "aspire"),
+                Version = "13.2.0",
+                Channel = "pr-17416",
+                Source = "pr",
+                PathStatus = InstallationPathStatus.Active,
+                Status = InstallationInfoStatus.Ok
+            })));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("installs uninstall pr-17416-2 --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
+        Assert.True(Directory.Exists(hivePath), "Underlying hive must not be deleted when the typoed id has no matching row.");
     }
 }

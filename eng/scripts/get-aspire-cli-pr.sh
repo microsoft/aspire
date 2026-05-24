@@ -46,6 +46,11 @@ HIVE_ONLY=false
 SKIP_EXTENSION_INSTALL=false
 USE_INSIDERS=false
 SKIP_PATH=false
+UNINSTALL=false
+UNINSTALL_CHANNEL=""
+UNINSTALL_ALL=false
+UNINSTALL_YES=false
+REMOVE_SHARED_INSTALL=false
 HOST_OS="unset"
 
 # Function to show help
@@ -98,6 +103,11 @@ USAGE:
     --skip-extension.           Skip VS Code extension download and installation
     --use-insiders              Install extension to VS Code Insiders instead of VS Code
     --skip-path                 Do not add the install path to PATH environment variable (useful for portable installs)
+    --uninstall                 Clean up Aspire CLI state created by this PR script
+    --channel CHANNEL           Channel/hive label to clean up (defaults to pr-<PR_NUMBER> when supplied)
+    --all                       Clean pr-*, staging, and daily hives
+    --yes, -y                   Confirm uninstall without prompting
+    --remove-shared-install     Also remove shared ~/.aspire/bin plus bundle/version artifacts
     -v, --verbose               Enable verbose output
     -k, --keep-archive          Keep downloaded archive files after installation
     --dry-run                   Show what would be done without performing actions
@@ -158,7 +168,9 @@ parse_args() {
     fi
 
     # First argument can be a PR number, --run-id, or --local-dir for direct artifact installation
-    if [[ "$1" == "--run-id" || "$1" == "-r" ]]; then
+    if [[ "$1" == "--uninstall" ]]; then
+        PR_NUMBER=""
+    elif [[ "$1" == "--run-id" || "$1" == "-r" ]]; then
         # No PR number — install directly from workflow run ID
         PR_NUMBER=""
     elif [[ "$1" == "--local-dir" ]]; then
@@ -282,6 +294,31 @@ parse_args() {
                 SKIP_PATH=true
                 shift
                 ;;
+            --uninstall)
+                UNINSTALL=true
+                shift
+                ;;
+            --channel)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    say_error "Option '$1' requires a non-empty value"
+                    say_info "Use --help for usage information."
+                    exit 1
+                fi
+                UNINSTALL_CHANNEL="$2"
+                shift 2
+                ;;
+            --all)
+                UNINSTALL_ALL=true
+                shift
+                ;;
+            --yes|-y)
+                UNINSTALL_YES=true
+                shift
+                ;;
+            --remove-shared-install)
+                REMOVE_SHARED_INSTALL=true
+                shift
+                ;;
             --dry-run)
                 DRY_RUN=true
                 shift
@@ -297,6 +334,99 @@ parse_args() {
                 ;;
         esac
     done
+}
+
+remove_path() {
+    local path="$1"
+    local description="${2:-$path}"
+
+    if [[ ! -e "$path" ]]; then
+        say_info "skipped: $path (does not exist)"
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] would remove $description: $path"
+        return 0
+    fi
+
+    rm -rf "$path"
+    say_info "removed: $path"
+}
+
+remove_bundle_layout() {
+    local install_prefix="$1"
+    local bundle_path="$install_prefix/bundle"
+    local versions_root="$install_prefix/versions"
+
+    if [[ -L "$bundle_path" ]]; then
+        local target
+        target="$(readlink "$bundle_path")"
+        if [[ "$target" != /* ]]; then
+            target="$(cd "$(dirname "$bundle_path")" && pwd)/$target"
+        fi
+        case "$target" in
+            "$versions_root"/*)
+                remove_path "$target" "shared bundle version"
+                ;;
+        esac
+    fi
+
+    remove_path "$bundle_path" "shared bundle link"
+}
+
+run_uninstall() {
+    local install_prefix="$1"
+    local -a channels=()
+    if [[ "$UNINSTALL_ALL" == true ]]; then
+        if [[ -d "$install_prefix/hives" ]]; then
+            while IFS= read -r hive; do
+                local name
+                name="$(basename "$hive")"
+                if [[ "$name" == pr-* || "$name" == "staging" || "$name" == "daily" ]]; then
+                    channels+=("$name")
+                fi
+            done < <(find "$install_prefix/hives" -mindepth 1 -maxdepth 1 -type d | sort)
+        fi
+    else
+        local channel="$UNINSTALL_CHANNEL"
+        if [[ -z "$channel" && -n "$HIVE_LABEL" ]]; then
+            channel="$HIVE_LABEL"
+        elif [[ -z "$channel" && -n "$PR_NUMBER" ]]; then
+            channel="pr-$PR_NUMBER"
+        fi
+        if [[ -z "$channel" ]]; then
+            say_error "Uninstall requires a PR number, --channel, or --all when the channel cannot be inferred."
+            return 1
+        fi
+        channels+=("$channel")
+    fi
+
+    if [[ "$DRY_RUN" != true && "$UNINSTALL_YES" != true ]]; then
+        say_error "Uninstall requires --yes unless --dry-run is specified."
+        return 1
+    fi
+
+    if [[ ${#channels[@]} -eq 0 ]]; then
+        say_info "No matching Aspire CLI cleanup targets were found."
+        return 0
+    fi
+
+    for channel in "${channels[@]}"; do
+        remove_path "$install_prefix/hives/$channel" "hive $channel"
+        if [[ "$channel" == pr-* ]]; then
+            remove_path "$install_prefix/dogfood/$channel" "dogfood install $channel"
+        fi
+    done
+
+    if [[ "$REMOVE_SHARED_INSTALL" == true ]]; then
+        remove_path "$install_prefix/bin/aspire" "shared script binary"
+        remove_path "$install_prefix/bin/aspire.exe" "shared script binary"
+        remove_path "$install_prefix/bin/.aspire-install.json" "shared script sidecar"
+        remove_bundle_layout "$install_prefix"
+    else
+        say_info "Shared script install artifacts were left in place. Pass --remove-shared-install to remove $install_prefix/bin/aspire and the matching bundle/versions layout."
+    fi
 }
 
 # =============================================================================
@@ -1842,17 +1972,22 @@ main() {
         exit 1
     fi
 
-    # Check gh dependency (not needed for --local-dir mode)
-    if [[ -z "$LOCAL_DIR" ]]; then
-        check_gh_dependency
-    fi
-
     # Set default install prefix if not provided
     if [[ -z "$INSTALL_PREFIX" ]]; then
         INSTALL_PREFIX="$HOME/.aspire"
         INSTALL_PREFIX_UNEXPANDED="\$HOME/.aspire"
     else
         INSTALL_PREFIX_UNEXPANDED="$INSTALL_PREFIX"
+    fi
+
+    if [[ "$UNINSTALL" == true ]]; then
+        run_uninstall "$INSTALL_PREFIX"
+        exit $?
+    fi
+
+    # Check gh dependency (not needed for --local-dir mode)
+    if [[ -z "$LOCAL_DIR" ]]; then
+        check_gh_dependency
     fi
 
     # Set paths based on install prefix.

@@ -94,6 +94,27 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task UninstallWhatIfWithPRNumber_ShowsHiveAndDogfoodTargets()
+    {
+        using var env = new TestEnvironment();
+        var installPrefix = Path.Combine(env.TempDirectory, "aspire");
+        Directory.CreateDirectory(Path.Combine(installPrefix, "hives", "pr-12345", "packages"));
+        Directory.CreateDirectory(Path.Combine(installPrefix, "dogfood", "pr-12345", "bin"));
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync(
+            "-PRNumber", "12345",
+            "-Uninstall",
+            "-InstallPath", installPrefix,
+            "-WhatIf");
+
+        result.EnsureSuccessful();
+        Assert.Contains("hive pr-12345", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dogfood install pr-12345", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RemoveSharedInstall", result.Output);
+    }
+
+    [Fact]
     public async Task MockGhApiWithoutJqFailsLoudly()
     {
         using var env = new TestEnvironment();

@@ -32,6 +32,22 @@ param(
     [Parameter(HelpMessage = "Do not add the install path to PATH environment variable (useful for portable installs)")]
     [switch]$SkipPath,
 
+    [Parameter(HelpMessage = "Clean up Aspire CLI state created by this script")]
+    [switch]$Uninstall,
+
+    [Parameter(HelpMessage = "Channel/hive label to clean up")]
+    [string]$Channel = "",
+
+    [Parameter(HelpMessage = "Clean pr-*, staging, and daily hives")]
+    [switch]$All,
+
+    [Parameter(HelpMessage = "Confirm uninstall without prompting")]
+    [Alias("y")]
+    [switch]$Yes,
+
+    [Parameter(HelpMessage = "Also remove shared ~/.aspire/bin plus bundle/version artifacts")]
+    [switch]$RemoveSharedInstall,
+
     [Parameter(HelpMessage = "Show help message")]
     [switch]$Help
 )
@@ -788,6 +804,132 @@ function ConvertTo-ChannelName {
     }
 }
 
+function Remove-CleanupPath {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        Write-Message "skipped: $Path (does not exist)" -Level Info
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess($Path, "Remove $Description")) {
+        Remove-Item -LiteralPath $Path -Recurse -Force
+        Write-Message "removed: $Path" -Level Info
+    }
+    else {
+        Write-Message "What if: would remove ${Description}: $Path" -Level Info
+    }
+}
+
+function Get-BundleVersionTarget {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$AspireHome
+    )
+
+    $bundlePath = Join-Path $AspireHome "bundle"
+    if (-not (Test-Path -LiteralPath $bundlePath)) {
+        return $null
+    }
+
+    $bundleItem = Get-Item -LiteralPath $bundlePath -Force
+    if (-not $bundleItem.LinkType -or -not $bundleItem.Target) {
+        return $null
+    }
+
+    $targetPath = $bundleItem.Target
+    if (-not [System.IO.Path]::IsPathRooted($targetPath)) {
+        $targetPath = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $bundlePath) $targetPath))
+    }
+
+    $versionsRoot = [System.IO.Path]::GetFullPath((Join-Path $AspireHome "versions"))
+    $normalizedTarget = [System.IO.Path]::GetFullPath($targetPath)
+    if ($normalizedTarget.StartsWith($versionsRoot + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::Ordinal)) {
+        return $normalizedTarget
+    }
+
+    return $null
+}
+
+function Remove-BundleLayout {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$AspireHome
+    )
+
+    $versionTarget = Get-BundleVersionTarget -AspireHome $AspireHome
+    if ($versionTarget) {
+        Remove-CleanupPath -Path $versionTarget -Description "shared bundle version"
+    }
+
+    Remove-CleanupPath -Path (Join-Path $AspireHome "bundle") -Description "shared bundle link"
+}
+
+function Start-AspireCliUninstall {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ResolvedInstallPath
+    )
+
+    $aspireHome = Split-Path -Parent $ResolvedInstallPath
+    $channels = @()
+    if ($All) {
+        $hivesRoot = Join-Path $aspireHome "hives"
+        if (Test-Path -LiteralPath $hivesRoot -PathType Container) {
+            $channels = Get-ChildItem -LiteralPath $hivesRoot -Directory |
+                Where-Object { $_.Name -like "pr-*" -or $_.Name -eq "staging" -or $_.Name -eq "daily" } |
+                Sort-Object Name |
+                ForEach-Object { $_.Name }
+        }
+    }
+    else {
+        $targetChannel = $Channel
+        if ([string]::IsNullOrWhiteSpace($targetChannel) -and -not [string]::IsNullOrWhiteSpace($Quality)) {
+            $targetChannel = ConvertTo-ChannelName -Quality $Quality
+        }
+        if ([string]::IsNullOrWhiteSpace($targetChannel)) {
+            throw "Uninstall requires -Channel or -All when the channel cannot be inferred."
+        }
+        $channels = @($targetChannel)
+    }
+
+    if (-not $WhatIfPreference -and -not $Yes) {
+        throw "Uninstall requires -Yes unless -WhatIf is specified."
+    }
+
+    if ($channels.Count -eq 0) {
+        Write-Message "No matching Aspire CLI cleanup targets were found." -Level Info
+        return
+    }
+
+    foreach ($targetChannel in $channels) {
+        Remove-CleanupPath -Path (Join-Path (Join-Path $aspireHome "hives") $targetChannel) -Description "hive $targetChannel"
+        if ($targetChannel.StartsWith("pr-", [StringComparison]::Ordinal)) {
+            Remove-CleanupPath -Path (Join-Path (Join-Path $aspireHome "dogfood") $targetChannel) -Description "dogfood install $targetChannel"
+        }
+    }
+
+    if ($RemoveSharedInstall) {
+        Remove-CleanupPath -Path (Join-Path $ResolvedInstallPath "aspire") -Description "shared script binary"
+        Remove-CleanupPath -Path (Join-Path $ResolvedInstallPath "aspire.exe") -Description "shared script binary"
+        Remove-CleanupPath -Path (Join-Path $ResolvedInstallPath ".aspire-install.json") -Description "shared script sidecar"
+        Remove-BundleLayout -AspireHome $aspireHome
+    }
+    else {
+        Write-Message "Shared script install artifacts were left in place. Pass -RemoveSharedInstall to remove $ResolvedInstallPath/aspire and the matching bundle/versions layout." -Level Info
+    }
+}
+
 # Simplified installation path determination
 function Get-InstallPath {
     [CmdletBinding()]
@@ -1268,6 +1410,11 @@ function Start-AspireCliInstallation {
 
         # Determine the installation path
         $resolvedInstallPath = Get-InstallPath -InstallPath $InstallPath
+
+        if ($Uninstall) {
+            Start-AspireCliUninstall -ResolvedInstallPath $resolvedInstallPath
+            return 0
+        }
 
         # Ensure the installation directory exists
         if (-not (Test-Path $resolvedInstallPath)) {

@@ -8,6 +8,7 @@ using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Uninstall;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -32,7 +33,7 @@ internal sealed class InstallsCommand : BaseCommand
     private readonly IInstallationDiscovery _installationDiscovery;
     private readonly ILogger _logger;
 
-    public InstallsCommand(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry, ILogger<InstallsCommand> logger)
+    public InstallsCommand(HiveEnumerator hiveEnumerator, CliCleanupService cleanupService, IInstallationDiscovery installationDiscovery, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry, ILogger<InstallsCommand> logger)
         : base("installs", "Manage Aspire CLI installs", features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _installationDiscovery = installationDiscovery;
@@ -40,6 +41,7 @@ internal sealed class InstallsCommand : BaseCommand
         Options.Add(s_formatOption);
         Options.Add(s_selfOption);
         Subcommands.Add(new ListCommand(hiveEnumerator, installationDiscovery, interactionService, features, updateNotifier, executionContext, telemetry, logger));
+        Subcommands.Add(new UninstallSubCommand(hiveEnumerator, cleanupService, installationDiscovery, interactionService, features, updateNotifier, executionContext, telemetry, logger));
     }
 
     protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -123,6 +125,7 @@ internal sealed class InstallsCommand : BaseCommand
                 {
                     DisplayField("Reason", row.StatusReason);
                 }
+                DisplayField("Cleanup", row.CleanupHint);
                 InteractionService.DisplayEmptyLine();
             }
 
@@ -161,9 +164,10 @@ internal sealed class InstallsCommand : BaseCommand
             var hive = install.Channel is { Length: > 0 } && hiveEnumerator.HasHive(install.Channel)
                 ? hiveEnumerator.GetHivePath(install.Channel)
                 : null;
+            var cleanupHint = GetCleanupHint(install, id);
             var managedBy = GetManagedBy(install);
             logger.LogDebug(
-                "Classified install path '{Path}' as id '{Id}', kind '{Kind}', channel '{Channel}', status '{Status}', hive '{Hive}', managedBy '{ManagedBy}'. Source='{Source}', pathStatus='{PathStatus}', discoveryStatus='{DiscoveryStatus}', reason='{Reason}'.",
+                "Classified install path '{Path}' as id '{Id}', kind '{Kind}', channel '{Channel}', status '{Status}', hive '{Hive}', managedBy '{ManagedBy}', cleanup '{CleanupHint}'. Source='{Source}', pathStatus='{PathStatus}', discoveryStatus='{DiscoveryStatus}', reason='{Reason}'.",
                 install.Path,
                 id,
                 kind,
@@ -171,11 +175,12 @@ internal sealed class InstallsCommand : BaseCommand
                 status,
                 hive ?? "(none)",
                 managedBy ?? "(none)",
+                cleanupHint,
                 install.Source ?? "(none)",
                 install.PathStatus,
                 install.Status,
                 install.StatusReason ?? "(none)");
-            rows.Add(new InstallListItem(id, kind, install.Channel, install.Path, hive, status, install.StatusReason, managedBy));
+            rows.Add(new InstallListItem(id, kind, install.Channel, install.Path, hive, status, install.StatusReason, managedBy, cleanupHint));
         }
 
         foreach (var hive in hiveEnumerator.GetHives().Where(h => !installChannels.Contains(h.Name)))
@@ -186,7 +191,7 @@ internal sealed class InstallsCommand : BaseCommand
                 hive.Path,
                 id,
                 hive.Name);
-            rows.Add(new InstallListItem(id, "orphan-hive", hive.Name, null, hive.Path, "no install found", "No discovered install reports this hive's channel.", null));
+            rows.Add(new InstallListItem(id, "orphan-hive", hive.Name, null, hive.Path, "no install found", "No discovered install reports this hive's channel.", null, $"Use: aspire installs uninstall {id}"));
         }
 
         return rows
@@ -274,6 +279,15 @@ internal sealed class InstallsCommand : BaseCommand
             _ => install.Source,
         };
 
+    private static string GetCleanupHint(InstallationInfo install, string id)
+        => install.Source switch
+        {
+            "dotnet-tool" => "Managed by dotnet tool; use: dotnet tool uninstall",
+            "winget" => "Managed by WinGet; use: winget uninstall",
+            "brew" => "Managed by Homebrew; use: brew uninstall",
+            _ => $"Use: aspire installs uninstall {id}"
+        };
+
     private static string? GetManagedBy(InstallationInfo install)
         => install.Source switch
         {
@@ -295,6 +309,120 @@ internal sealed class InstallsCommand : BaseCommand
         return install.PathStatus;
     }
 
+    private static async Task<Dictionary<string, InstallListItem>> BuildIdToChannelMapAsync(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, ILogger logger, CancellationToken cancellationToken)
+    {
+        var rows = await BuildRowsAsync(hiveEnumerator, installationDiscovery, logger, cancellationToken);
+        var map = new Dictionary<string, InstallListItem>(StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            map[row.Id] = row;
+        }
+
+        return map;
+    }
+
+    private sealed class UninstallSubCommand : BaseCommand
+    {
+        private static readonly Argument<string> s_idArgument = new("id")
+        {
+            Description = "The install ID or hive label to uninstall."
+        };
+
+        private static readonly Option<bool> s_yesOption = new("--yes", "-y")
+        {
+            Description = "Confirm uninstall without prompting."
+        };
+
+        private static readonly Option<bool> s_dryRunOption = new("--dry-run")
+        {
+            Description = "Show what would be removed without deleting it."
+        };
+
+        private static readonly Option<bool> s_removeSharedInstallOption = new("--remove-shared-install")
+        {
+            Description = "Also remove the shared script install under ~/.aspire/bin and its bundle layout."
+        };
+
+        private readonly HiveEnumerator _hiveEnumerator;
+        private readonly CliCleanupService _cleanupService;
+        private readonly IInstallationDiscovery _installationDiscovery;
+        private readonly ILogger _logger;
+
+        public UninstallSubCommand(HiveEnumerator hiveEnumerator, CliCleanupService cleanupService, IInstallationDiscovery installationDiscovery, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry, ILogger logger)
+            : base("uninstall", "Uninstall an Aspire CLI install or orphan hive", features, updateNotifier, executionContext, interactionService, telemetry)
+        {
+            _hiveEnumerator = hiveEnumerator;
+            _cleanupService = cleanupService;
+            _installationDiscovery = installationDiscovery;
+            _logger = logger;
+            Arguments.Add(s_idArgument);
+            Options.Add(s_yesOption);
+            Options.Add(s_dryRunOption);
+            Options.Add(s_removeSharedInstallOption);
+            AddNonInteractiveRequiresYesValidator(this, s_yesOption);
+        }
+
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        {
+            var id = parseResult.GetValue(s_idArgument);
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, "An install ID is required.");
+            }
+
+            var dryRun = parseResult.GetValue(s_dryRunOption);
+            var yes = parseResult.GetValue(s_yesOption);
+            var idToRow = await BuildIdToChannelMapAsync(_hiveEnumerator, _installationDiscovery, _logger, cancellationToken);
+            if (idToRow.TryGetValue(id, out var row) && row.ManagedBy is not null)
+            {
+                InteractionService.DisplayError($"Install '{id}' cannot be uninstalled by Aspire. {row.CleanupHint}");
+                return CommandResult.Failure(CliExitCodes.InvalidCommand);
+            }
+
+            if (!TryResolveChannelFromId(id, _hiveEnumerator, idToRow, _logger, out var channel))
+            {
+                InteractionService.DisplayError($"No Aspire CLI install or hive named '{id}' was found. Run 'aspire installs list' to see uninstallable IDs.");
+                return CommandResult.Failure(CliExitCodes.InvalidCommand);
+            }
+
+            if (!dryRun && !yes && !await InteractionService.PromptConfirmAsync($"Uninstall Aspire CLI install '{id}'?", cancellationToken: cancellationToken))
+            {
+                return CommandResult.Cancelled();
+            }
+
+            var result = await _cleanupService.UninstallAsync([channel], parseResult.GetValue(s_removeSharedInstallOption), dryRun, cancellationToken);
+            HivesCommand.DisplayOperations(InteractionService, result.Operations);
+
+            return result.HasFailures ? CommandResult.Failure(CliExitCodes.InvalidCommand) : CommandResult.Success();
+        }
+
+        private static bool TryResolveChannelFromId(string id, HiveEnumerator hiveEnumerator, IReadOnlyDictionary<string, InstallListItem> idToRow, ILogger logger, out string channel)
+        {
+            if (idToRow.TryGetValue(id, out var mappedRow) && mappedRow.Channel is { Length: > 0 } mappedChannel)
+            {
+                logger.LogDebug("Resolved install id '{Id}' to channel '{Channel}' from installs list mapping.", id, mappedChannel);
+                channel = mappedChannel;
+                return true;
+            }
+
+            if (hiveEnumerator.HasHive(id))
+            {
+                logger.LogDebug("Resolved install id '{Id}' to exact matching hive channel.", id);
+                channel = id;
+                return true;
+            }
+
+            // Require an exact match: disambiguated ids produced by
+            // BuildRowsAsync are already in `idToRow` (first branch above).
+            // Accepting a typoed-suffix id like `pr-17416-2` and stripping it
+            // to `pr-17416` would let a user typo silently delete a different
+            // hive than they named, so anything that doesn't match exactly
+            // is rejected.
+            logger.LogDebug("Could not resolve install id '{Id}' because no install mapping or hive match was found.", id);
+            channel = string.Empty;
+            return false;
+        }
+    }
 }
 
 internal sealed record InstallListItem(
@@ -305,7 +433,8 @@ internal sealed record InstallListItem(
     [property: JsonPropertyName("hive")] string? Hive,
     [property: JsonPropertyName("status")] string Status,
     [property: JsonPropertyName("statusReason")] string? StatusReason,
-    [property: JsonPropertyName("managedBy")] string? ManagedBy);
+    [property: JsonPropertyName("managedBy")] string? ManagedBy,
+    [property: JsonPropertyName("cleanupHint")] string CleanupHint);
 
 internal enum InstallsOutputFormat
 {
