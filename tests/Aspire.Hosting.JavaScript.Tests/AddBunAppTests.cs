@@ -22,30 +22,7 @@ public class AddBunAppTests
             .WithHttpEndpoint(port: 5033, env: "PORT");
         var manifest = await ManifestUtils.GetManifest(bunApp.Resource);
 
-        var expectedManifest = $$"""
-            {
-              "type": "executable.v0",
-              "workingDirectory": ".",
-              "command": "bun",
-              "args": [
-                "server.ts"
-              ],
-              "env": {
-                "NODE_ENV": "{{builder.Environment.EnvironmentName.ToLowerInvariant()}}",
-                "PORT": "{bunapp.bindings.http.targetPort}"
-              },
-              "bindings": {
-                "http": {
-                  "scheme": "http",
-                  "protocol": "tcp",
-                  "transport": "http",
-                  "port": 5033,
-                  "targetPort": 8000
-                }
-              }
-            }
-            """;
-        Assert.Equal(expectedManifest, manifest.ToString());
+        await Verify(manifest.ToString());
     }
 
     [Theory]
@@ -70,53 +47,7 @@ public class AddBunAppTests
 
         var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
         var dockerfileContents = File.ReadAllText(dockerfilePath);
-        var expectedDockerfile = includePackageJson ?
-            """
-            FROM oven/bun:1 AS build
-
-            WORKDIR /app
-            COPY package.json ./
-            RUN --mount=type=cache,target=/root/.bun/install/cache bun install
-            COPY . .
-
-            FROM oven/bun:1 AS prod-deps
-
-            WORKDIR /app
-            COPY package.json ./
-            RUN --mount=type=cache,target=/root/.bun/install/cache bun install --production
-
-            FROM oven/bun:1 AS runtime
-
-            WORKDIR /app
-            COPY --from=prod-deps /app/node_modules ./node_modules
-            COPY . .
-
-            ENV NODE_ENV=production
-
-            USER bun
-
-            ENTRYPOINT ["bun","server.ts"]
-
-            """.Replace("\r\n", "\n") :
-            """
-            FROM oven/bun:1 AS build
-
-            WORKDIR /app
-            COPY . .
-
-            FROM oven/bun:1 AS runtime
-
-            WORKDIR /app
-            COPY --from=build /app /app
-
-            ENV NODE_ENV=production
-
-            USER bun
-
-            ENTRYPOINT ["bun","server.ts"]
-
-            """.Replace("\r\n", "\n");
-        Assert.Equal(expectedDockerfile, dockerfileContents);
+        await Verify(dockerfileContents);
 
         var dockerBuildAnnotation = bunApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
         Assert.True(dockerBuildAnnotation.HasEntrypoint);
@@ -141,9 +72,7 @@ public class AddBunAppTests
 
         await ManifestUtils.GetManifest(bunApp.Resource, tempDir.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
-        Assert.Contains($"FROM {customBuildImage}", dockerfileContents);
-        Assert.Contains($"FROM {customRuntimeImage}", dockerfileContents);
+        await Verify(File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile")));
     }
 
     [Fact]
@@ -166,8 +95,7 @@ public class AddBunAppTests
         var perDockerfileIgnorePath = Path.Combine(tempDir.Path, "js.Dockerfile.dockerignore");
         Assert.True(File.Exists(perDockerfileIgnorePath), $"Expected per-Dockerfile dockerignore at {perDockerfileIgnorePath}");
         var ignoreContents = File.ReadAllText(perDockerfileIgnorePath);
-        Assert.Contains("node_modules", ignoreContents);
-        Assert.Contains(".aspire", ignoreContents);
+        await Verify(ignoreContents);
 
         // The user's source tree must not be polluted with a generated .dockerignore.
         Assert.False(File.Exists(Path.Combine(appDir, ".dockerignore")), "Aspire should not write a .dockerignore into the user's source tree.");
