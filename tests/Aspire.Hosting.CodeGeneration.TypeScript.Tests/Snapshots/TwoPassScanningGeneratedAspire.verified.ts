@@ -155,6 +155,9 @@ type DockerfileStageHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationMo
 /** Provides context information for Dockerfile build callbacks. */
 type DockerfileBuilderCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext'>;
 
+/** Provides context for Dockerfile factory functions. */
+type DockerfileFactoryContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext'>;
+
 /** Handle to DotnetToolResource */
 type DotnetToolResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource'>;
 
@@ -1135,6 +1138,11 @@ export interface AddDockerfileBuilderOptions {
     stage?: string;
 }
 
+export interface AddDockerfileFactoryOptions {
+    /** The stage representing the image to be published in a multi-stage Dockerfile. */
+    stage?: string;
+}
+
 export interface AddDockerfileOptions {
     /** Path to the Dockerfile relative to the `contextPath`. Defaults to "Dockerfile" if not specified. */
     dockerfilePath?: string;
@@ -1351,6 +1359,11 @@ export interface WithDockerfileBaseImageOptions {
 }
 
 export interface WithDockerfileBuilderOptions {
+    /** The stage representing the image to be published in a multi-stage Dockerfile. */
+    stage?: string;
+}
+
+export interface WithDockerfileFactoryOptions {
     /** The stage representing the image to be published in a multi-stage Dockerfile. */
     stage?: string;
 }
@@ -3258,6 +3271,67 @@ class DockerfileBuilderCallbackContextPromiseImpl implements DockerfileBuilderCa
 
     cancellationToken(): Promise<CancellationToken> {
         return this._promise.then(obj => obj.cancellationToken());
+    }
+
+}
+
+// ============================================================================
+// DockerfileFactoryContext
+// ============================================================================
+
+/** Provides context for Dockerfile factory functions. */
+export interface DockerfileFactoryContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the resource for which the Dockerfile is being generated. This allows factory functions to query resource annotations and properties to customize the generated Dockerfile. ``` var containerAnnotation = context.Resource.Annotations.OfType<ContainerImageAnnotation>().FirstOrDefault(); var baseImage = containerAnnotation?.Image ?? "alpine:latest"; ``` */
+    resource(): ResourcePromise;
+}
+
+export interface DockerfileFactoryContextPromise extends PromiseLike<DockerfileFactoryContext> {
+    /** Gets the resource for which the Dockerfile is being generated. This allows factory functions to query resource annotations and properties to customize the generated Dockerfile. ``` var containerAnnotation = context.Resource.Annotations.OfType<ContainerImageAnnotation>().FirstOrDefault(); var baseImage = containerAnnotation?.Image ?? "alpine:latest"; ``` */
+    resource(): ResourcePromise;
+}
+
+// ============================================================================
+// DockerfileFactoryContextImpl
+// ============================================================================
+
+/** Provides context for Dockerfile factory functions. */
+class DockerfileFactoryContextImpl implements DockerfileFactoryContext {
+    constructor(private _handle: DockerfileFactoryContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    resource(): ResourcePromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting.ApplicationModel/DockerfileFactoryContext.resource',
+                { context: this._handle }
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for DockerfileFactoryContext that enables fluent chaining.
+ */
+class DockerfileFactoryContextPromiseImpl implements DockerfileFactoryContextPromise {
+    constructor(private _promise: Promise<DockerfileFactoryContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = DockerfileFactoryContext, TResult2 = never>(
+        onfulfilled?: ((value: DockerfileFactoryContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
     }
 
 }
@@ -8542,6 +8616,19 @@ export interface DistributedApplicationBuilder {
      */
     addDockerfile(name: string, contextPath: string, options?: AddDockerfileOptions): ContainerResourcePromise;
     /**
+     * Adds a Dockerfile to the application model that can be treated like a container resource, with the Dockerfile content generated by an asynchronous factory function.
+     *
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * @param name The name of the resource.
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    addDockerfileFactory(name: string, contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: AddDockerfileFactoryOptions): ContainerResourcePromise;
+    /**
      * Adds a container resource built from a programmatically generated Dockerfile
      *
      * This method provides a programmatic way to build Dockerfiles using the `DockerfileBuilder` API
@@ -8743,6 +8830,19 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      * @returns The resource builder.
      */
     addDockerfile(name: string, contextPath: string, options?: AddDockerfileOptions): ContainerResourcePromise;
+    /**
+     * Adds a Dockerfile to the application model that can be treated like a container resource, with the Dockerfile content generated by an asynchronous factory function.
+     *
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * @param name The name of the resource.
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    addDockerfileFactory(name: string, contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: AddDockerfileFactoryOptions): ContainerResourcePromise;
     /**
      * Adds a container resource built from a programmatically generated Dockerfile
      *
@@ -9049,6 +9149,39 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new ContainerResourcePromiseImpl(this._addDockerfileInternal(name, contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** @internal */
+    async _addDockerfileFactoryInternal(name: string, contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, stage?: string): Promise<ContainerResource> {
+        const dockerfileFactoryId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileFactoryContextHandle;
+            const arg = new DockerfileFactoryContextImpl(argHandle, this._client);
+            return await dockerfileFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, contextPath, dockerfileFactory: dockerfileFactoryId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/addDockerfileFactory',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a Dockerfile to the application model that can be treated like a container resource, with the Dockerfile content generated by an asynchronous factory function.
+     *
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * @param name The name of the resource.
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    addDockerfileFactory(name: string, contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: AddDockerfileFactoryOptions): ContainerResourcePromise {
+        const stage = options?.stage;
+        return new ContainerResourcePromiseImpl(this._addDockerfileFactoryInternal(name, contextPath, dockerfileFactory, stage), this._client);
     }
 
     /** @internal */
@@ -9530,6 +9663,10 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
 
     addDockerfile(name: string, contextPath: string, options?: AddDockerfileOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.addDockerfile(name, contextPath, options)), this._client);
+    }
+
+    addDockerfileFactory(name: string, contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: AddDockerfileFactoryOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.addDockerfileFactory(name, contextPath, dockerfileFactory, options)), this._client);
     }
 
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise {
@@ -13514,6 +13651,32 @@ export interface ContainerResource {
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): ContainerResourcePromise;
     /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): ContainerResourcePromise;
+    /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
      * Combining this with `Persistent` will allow Aspire to re-use an existing container that was not
@@ -14214,6 +14377,32 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The resource builder.
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): ContainerResourcePromise;
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): ContainerResourcePromise;
     /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
@@ -15087,6 +15276,52 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new ContainerResourcePromiseImpl(this._withDockerfileInternal(contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileFactoryInternal(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, stage?: string): Promise<ContainerResource> {
+        const dockerfileFactoryId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileFactoryContextHandle;
+            const arg = new DockerfileFactoryContextImpl(argHandle, this._client);
+            return await dockerfileFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, dockerfileFactory: dockerfileFactoryId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withDockerfileFactory',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): ContainerResourcePromise {
+        const stage = options?.stage;
+        return new ContainerResourcePromiseImpl(this._withDockerfileFactoryInternal(contextPath, dockerfileFactory, stage), this._client);
     }
 
     /** @internal */
@@ -17251,6 +17486,10 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
 
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withDockerfile(contextPath, options)), this._client);
+    }
+
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileFactory(contextPath, dockerfileFactory, options)), this._client);
     }
 
     withContainerName(name: string): ContainerResourcePromise {
@@ -35826,6 +36065,32 @@ export interface TestDatabaseResource {
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestDatabaseResourcePromise;
     /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestDatabaseResourcePromise;
+    /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
      * Combining this with `Persistent` will allow Aspire to re-use an existing container that was not
@@ -36526,6 +36791,32 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The resource builder.
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestDatabaseResourcePromise;
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestDatabaseResourcePromise;
     /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
@@ -37398,6 +37689,52 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new TestDatabaseResourcePromiseImpl(this._withDockerfileInternal(contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileFactoryInternal(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, stage?: string): Promise<TestDatabaseResource> {
+        const dockerfileFactoryId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileFactoryContextHandle;
+            const arg = new DockerfileFactoryContextImpl(argHandle, this._client);
+            return await dockerfileFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, dockerfileFactory: dockerfileFactoryId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withDockerfileFactory',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestDatabaseResourcePromise {
+        const stage = options?.stage;
+        return new TestDatabaseResourcePromiseImpl(this._withDockerfileFactoryInternal(contextPath, dockerfileFactory, stage), this._client);
     }
 
     /** @internal */
@@ -39564,6 +39901,10 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDockerfile(contextPath, options)), this._client);
     }
 
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileFactory(contextPath, dockerfileFactory, options)), this._client);
+    }
+
     withContainerName(name: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerName(name)), this._client);
     }
@@ -40040,6 +40381,32 @@ export interface TestRedisResource {
      * @returns The resource builder.
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestRedisResourcePromise;
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestRedisResourcePromise;
     /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
@@ -40805,6 +41172,32 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The resource builder.
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestRedisResourcePromise;
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestRedisResourcePromise;
     /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
@@ -41741,6 +42134,52 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new TestRedisResourcePromiseImpl(this._withDockerfileInternal(contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileFactoryInternal(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, stage?: string): Promise<TestRedisResource> {
+        const dockerfileFactoryId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileFactoryContextHandle;
+            const arg = new DockerfileFactoryContextImpl(argHandle, this._client);
+            return await dockerfileFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, dockerfileFactory: dockerfileFactoryId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withDockerfileFactory',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestRedisResourcePromise {
+        const stage = options?.stage;
+        return new TestRedisResourcePromiseImpl(this._withDockerfileFactoryInternal(contextPath, dockerfileFactory, stage), this._client);
     }
 
     /** @internal */
@@ -44154,6 +44593,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDockerfile(contextPath, options)), this._client);
     }
 
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileFactory(contextPath, dockerfileFactory, options)), this._client);
+    }
+
     withContainerName(name: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerName(name)), this._client);
     }
@@ -44690,6 +45133,32 @@ export interface TestVaultResource {
      * @returns The resource builder.
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestVaultResourcePromise;
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestVaultResourcePromise;
     /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
@@ -45393,6 +45862,32 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The resource builder.
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestVaultResourcePromise;
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestVaultResourcePromise;
     /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
@@ -46267,6 +46762,52 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new TestVaultResourcePromiseImpl(this._withDockerfileInternal(contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileFactoryInternal(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, stage?: string): Promise<TestVaultResource> {
+        const dockerfileFactoryId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileFactoryContextHandle;
+            const arg = new DockerfileFactoryContextImpl(argHandle, this._client);
+            return await dockerfileFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, dockerfileFactory: dockerfileFactoryId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withDockerfileFactory',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestVaultResourcePromise {
+        const stage = options?.stage;
+        return new TestVaultResourcePromiseImpl(this._withDockerfileFactoryInternal(contextPath, dockerfileFactory, stage), this._client);
     }
 
     /** @internal */
@@ -48446,6 +48987,10 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDockerfile(contextPath, options)), this._client);
+    }
+
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileFactory(contextPath, dockerfileFactory, options)), this._client);
     }
 
     withContainerName(name: string): TestVaultResourcePromise {
@@ -52972,6 +53517,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecu
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel', (handle, client) => new DistributedApplicationModelImpl(handle as DistributedApplicationModelHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder', (handle, client) => new DockerfileBuilderImpl(handle as DockerfileBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext', (handle, client) => new DockerfileBuilderCallbackContextImpl(handle as DockerfileBuilderCallbackContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext', (handle, client) => new DockerfileFactoryContextImpl(handle as DockerfileFactoryContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage', (handle, client) => new DockerfileStageImpl(handle as DockerfileStageHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference', (handle, client) => new EndpointReferenceImpl(handle as EndpointReferenceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression', (handle, client) => new EndpointReferenceExpressionImpl(handle as EndpointReferenceExpressionHandle, client));
