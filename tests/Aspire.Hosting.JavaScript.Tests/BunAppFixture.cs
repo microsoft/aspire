@@ -33,11 +33,13 @@ public class BunAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
         _bunAppPath = CreateBunApp();
 
         BunAppBuilder = _builder.AddBunApp("bunapp", _bunAppPath, "server.ts")
-            .WithHttpEndpoint(env: "PORT");
+            .WithHttpEndpoint(env: "PORT")
+            .WithHttpHealthCheck("/", endpointName: "http");
 
         BunScriptBuilder = _builder.AddBunApp("bunscript", _bunAppPath, "server.ts")
             .WithRunScript("start")
-            .WithHttpEndpoint(env: "PORT");
+            .WithHttpEndpoint(env: "PORT")
+            .WithHttpHealthCheck("/", endpointName: "http");
 
         _app = _builder.Build();
 
@@ -116,12 +118,9 @@ public class BunAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
     {
         // Wait for each resource in parallel — separate timeouts would compound startup time
         // and either resource being slow shouldn't starve the other.
-        using var directClient = App.CreateHttpClient(BunAppBuilder!.Resource.Name, endpointName: "http");
-        using var scriptClient = App.CreateHttpClient(BunScriptBuilder!.Resource.Name, endpointName: "http");
-
         await Task.WhenAll(
-            directClient.GetStringAsync("/", cancellationToken),
-            scriptClient.GetStringAsync("/", cancellationToken));
+            App.ResourceNotifications.WaitForResourceHealthyAsync(BunAppBuilder!.Resource.Name, cancellationToken),
+            App.ResourceNotifications.WaitForResourceHealthyAsync(BunScriptBuilder!.Resource.Name, cancellationToken));
     }
 
     private sealed class TestOutputWrapper(IMessageSink messageSink) : ITestOutputHelper

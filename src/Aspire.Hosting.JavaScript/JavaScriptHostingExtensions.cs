@@ -343,6 +343,7 @@ public static class JavaScriptHostingExtensions
         aspire-output
         Dockerfile
         Dockerfile.*
+        *.Dockerfile.dockerignore
         .dockerignore
         *.tsbuildinfo
 

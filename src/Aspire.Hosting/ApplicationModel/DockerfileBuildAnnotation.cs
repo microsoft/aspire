@@ -73,9 +73,9 @@ public class DockerfileBuildAnnotation(string contextPath, string dockerfilePath
     /// </summary>
     /// <remarks>
     /// When the build context root already contains a <c>.dockerignore</c> authored by the user,
-    /// no per-Dockerfile file remains in the output so the user's file is honored — BuildKit gives
-    /// per-Dockerfile ignore files precedence over the context-root file, so emitting both would
-    /// silently shadow a user override. See https://docs.docker.com/build/concepts/context/#filename-and-location.
+    /// generated per-Dockerfile files are removed so the user's file is honored. User-authored
+    /// per-Dockerfile ignore files are preserved because BuildKit gives them precedence over the
+    /// context-root file. See https://docs.docker.com/build/concepts/context/#filename-and-location.
     /// </remarks>
     public string? BuildContextIgnoreContent { get; set; }
 
@@ -152,7 +152,7 @@ public class DockerfileBuildAnnotation(string contextPath, string dockerfilePath
                 Directory.CreateDirectory(targetDirectory);
             }
 
-            if (!string.Equals(Path.GetFullPath(DockerfilePath), Path.GetFullPath(dockerfilePath), StringComparison.Ordinal))
+            if (!PathEquals(DockerfilePath, dockerfilePath))
             {
                 File.Copy(DockerfilePath, dockerfilePath, overwrite: true);
             }
@@ -172,8 +172,11 @@ public class DockerfileBuildAnnotation(string contextPath, string dockerfilePath
         var contextRootIgnore = Path.Combine(ContextPath, ".dockerignore");
         if (File.Exists(contextRootIgnore))
         {
-            if (File.Exists(perDockerfileIgnore))
+            if (File.Exists(perDockerfileIgnore) &&
+                await IsGeneratedBuildContextIgnoreAsync(perDockerfileIgnore, content, cancellationToken).ConfigureAwait(false))
             {
+                // BuildKit gives per-Dockerfile ignore files precedence over the context-root
+                // .dockerignore, so only remove siblings that match content Aspire generated.
                 File.Delete(perDockerfileIgnore);
             }
 
@@ -181,5 +184,21 @@ public class DockerfileBuildAnnotation(string contextPath, string dockerfilePath
         }
 
         await File.WriteAllTextAsync(perDockerfileIgnore, content, cancellationToken).ConfigureAwait(false);
+    }
+
+    private static bool PathEquals(string path, string otherPath)
+    {
+        var comparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        return string.Equals(Path.GetFullPath(path), Path.GetFullPath(otherPath), comparison);
+    }
+
+    private static async Task<bool> IsGeneratedBuildContextIgnoreAsync(string path, string content, CancellationToken cancellationToken)
+    {
+        var existingContent = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+
+        return string.Equals(existingContent, content, StringComparison.Ordinal);
     }
 }
