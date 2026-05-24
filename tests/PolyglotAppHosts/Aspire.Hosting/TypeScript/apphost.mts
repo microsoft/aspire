@@ -34,6 +34,11 @@ const taggedContainer = await builder.addContainer("mytaggedcontainer", {
 
 // addDockerfile
 const dockerContainer = await builder.addDockerfile("dockerapp", "./app");
+const dockerFactoryContainer = await builder.addDockerfileFactory("dockerfactoryapp", "./app", async () => `
+FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+WORKDIR /app
+ENTRYPOINT ["dotnet", "App.dll"]
+`, { stage: "runtime" });
 
 const configureDockerfileBuilder = async (dockerfileContext: DockerfileBuilderCallbackContext) => {
     const _dockerfileResource = await dockerfileContext.resource();
@@ -67,6 +72,11 @@ const configureDockerfileBuilder = async (dockerfileContext: DockerfileBuilderCa
 
 const dockerBuilderContainer = await builder.addDockerfileBuilder("dockerbuilderapp", "./app", configureDockerfileBuilder, { stage: "runtime" });
 await dockerContainer.withDockerfileBuilder("./app", configureDockerfileBuilder, { stage: "runtime" });
+await dockerFactoryContainer.withDockerfileFactory("./app", async () => `
+FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+WORKDIR /app
+ENTRYPOINT ["dotnet", "App.dll"]
+`, { stage: "runtime" });
 
 // addExecutable (pre-existing)
 const exe = await builder.addExecutable("myexe", "echo", ".", ["hello"]);
