@@ -119,7 +119,11 @@ public sealed class TypeScriptAzureContainerAppJobDeploymentTests(ITestOutputHel
 
     private static void WriteContainerAppJobsAppHost(TemporaryWorkspace workspace)
     {
-        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"), """
+        // `aspire init --language typescript` creates apphost.mts (since PR #16984), not
+        // apphost.ts. Overwrite that file with the test's custom AppHost; otherwise
+        // `aspire deploy` runs against the empty default apphost.mts and no Azure
+        // resources get provisioned.
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts"), """
             import { createBuilder } from './.aspire/modules/aspire.js';
 
             const builder = await createBuilder();
