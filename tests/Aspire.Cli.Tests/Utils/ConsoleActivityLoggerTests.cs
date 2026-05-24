@@ -481,6 +481,7 @@ public class ConsoleActivityLoggerTests
         await logger.StopSpinnerAsync();
 
         Assert.True(console.MoveLeftCallCount > 0, "Expected the spinner to attempt at least one MoveLeft.");
+        Assert.True(console.ShowHideCallCount >= 2, "Expected the spinner to attempt both Hide (at start) and Show (in finally).");
     }
 
     [Fact]
@@ -529,6 +530,7 @@ public class ConsoleActivityLoggerTests
         }
 
         public int MoveLeftCallCount => _cursor.MoveLeftCallCount;
+        public int ShowHideCallCount => _cursor.ShowHideCallCount;
 
         public Profile Profile => _inner.Profile;
         public IAnsiConsoleCursor Cursor => _cursor;
@@ -546,9 +548,15 @@ public class ConsoleActivityLoggerTests
         private int _moveLeftCallCount;
 
         public int MoveLeftCallCount => _moveLeftCallCount;
+        public int ShowHideCallCount { get; private set; }
 
         public void Show(bool show)
         {
+            ShowHideCallCount++;
+            // Simulate Spectre's LegacyConsoleCursor.Show, which sets
+            // System.Console.CursorVisible and can throw IOException when stdout is
+            // redirected or attached to a non-tty.
+            throw new IOException("Simulated legacy cursor visibility failure.");
         }
 
         public void Move(CursorDirection direction, int steps)

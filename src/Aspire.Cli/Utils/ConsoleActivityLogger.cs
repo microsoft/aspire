@@ -120,7 +120,7 @@ internal sealed class ConsoleActivityLogger
         {
             lock (_lock)
             {
-                _console.Cursor.Hide();
+                SafeSetCursorVisible(visible: false);
             }
 
             try
@@ -154,7 +154,7 @@ internal sealed class ConsoleActivityLogger
                     // Clear spinner character
                     _console.Write(" ");
                     SafeMoveCursorLeft();
-                    _console.Cursor.Show();
+                    SafeSetCursorVisible(visible: true);
                 }
             }
         });
@@ -177,6 +177,35 @@ internal sealed class ConsoleActivityLogger
         {
             // Cursor manipulation can fail on redirected/non-tty outputs. Spinner output
             // is purely cosmetic, so there is nothing meaningful to do here.
+        }
+    }
+
+    private void SafeSetCursorVisible(bool visible)
+    {
+        try
+        {
+            if (visible)
+            {
+                _console.Cursor.Show();
+            }
+            else
+            {
+                _console.Cursor.Hide();
+            }
+        }
+        catch (IOException)
+        {
+            // Spectre's legacy cursor backend implements Show/Hide as
+            // `System.Console.CursorVisible = X`, which throws IOException when stdout
+            // is redirected or attached to a non-tty. The spinner is purely cosmetic,
+            // so a missing show/hide is not worth crashing the command (especially in
+            // the `finally` block, where an exception would also fault the spinner task
+            // and surface from StopSpinnerAsync).
+        }
+        catch (PlatformNotSupportedException)
+        {
+            // Some platforms (notably non-Windows for the setter) do not support
+            // Console.CursorVisible. Same rationale as above: cosmetic, ignore.
         }
     }
 
