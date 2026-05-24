@@ -61,22 +61,22 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Give AI agents deep observability into your app, to help them diagnose issues and verify fixes 🚀
+        ///   Looks up a localized string similar to Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
         ///
-        ///- 📦 Resource state, source, relationships
+        ///- 📦 Resource state, health checks, and relationships
         ///- 🖥️ Console logs
         ///- 📊 Distributed traces
         ///- 🪵 Structured logs
         ///
-        ///Information is provided to AI agents from the dashboard via the Aspire CLI. [Install the Aspire CLI]({1}) if you haven&apos;t already.
+        ///AI agents access dashboard telemetry through the Aspire CLI. If you haven’t installed it yet, [install the Aspire CLI]({1}).
         ///
-        ///Use an Aspire CLI command to initialize agent support in your project:
+        ///Initialize AI agent support in your project with:
         ///
         ///```bash
         ///aspire agent init
         ///```
         ///
-        ///This configures skill files for your AI agent. The skill [rest of string was truncated]&quot;;.
+        ///This command configures skill files for your AI agent. The ski [rest of string was truncated]&quot;;.
         /// </summary>
         public static string AIAgentsDialogAppHostDescription {
             get {
@@ -85,22 +85,22 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Give AI agents deep observability into your app, to help them diagnose issues and verify fixes 🚀
+        ///   Looks up a localized string similar to Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
         ///
         ///- 📊 Distributed traces
         ///- 🔗 Trace spans
         ///- 🪵 Structured logs
         ///- 🗂️ Zip file export
         ///
-        ///Information is provided to AI agents from the dashboard via the Aspire CLI. [Install the Aspire CLI]({2}) if you haven&apos;t already.
+        ///AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven&apos;t already.
         ///
-        ///Use Aspire CLI commands to get telemetry data in your terminal:
+        ///Use Aspire CLI commands to retrieve telemetry data directly in your terminal:
         ///
         ///```bash
         ///aspire otel logs --dashboard-url {0}
         ///```
         ///
-        ///This is an example of a command that AI agents can use to get telem [rest of string was truncated]&quot;;.
+        ///This is one example of how AI agents can access t [rest of string was truncated]&quot;;.
         /// </summary>
         public static string AIAgentsDialogStandaloneDescription {
             get {
