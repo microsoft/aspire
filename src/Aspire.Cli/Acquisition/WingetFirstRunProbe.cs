@@ -8,8 +8,8 @@ namespace Aspire.Cli.Acquisition;
 
 /// <summary>
 /// First-run self-stamp for winget-installed CLI binaries. Writes the
-/// install-route sidecar when the OS reports the running binary as a winget
-/// portable install. See <c>docs/specs/install-routes.md</c>.
+/// install-source sidecar when the OS reports the running binary as a winget
+/// portable install. See <c>docs/specs/install-sources.md</c>.
 /// </summary>
 internal sealed class WingetFirstRunProbe
 {

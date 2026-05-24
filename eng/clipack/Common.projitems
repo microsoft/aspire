@@ -42,12 +42,12 @@
   </Target>
 
   <!--
-    No install-route sidecar is staged into the per-RID CLI archive. The
-    shared archives are sidecar-free by contract; each route writes its own
+    No install-source sidecar is staged into the per-RID CLI archive. The
+    shared archives are sidecar-free by contract; each source writes its own
     .aspire-install.json at install time. The dotnet-tool nupkg is the
-    exception (route-exclusive, payload-embedded by
+    exception (source-exclusive, payload-embedded by
     src/Aspire.Cli/Aspire.Cli.csproj _PreparePreBuiltCliBinaryForPackTool).
-    See docs/specs/install-routes.md for the full authorship table.
+    See docs/specs/install-sources.md for the full authorship table.
 
     _AssertNoSidecarInArchiveStaging below is the build-time guard that
     fails the build if a regression starts staging the sidecar back in.
@@ -59,7 +59,7 @@
       <_ArchiveSidecarPath>$([MSBuild]::NormalizePath($(OutputPath), '.aspire-install.json'))</_ArchiveSidecarPath>
     </PropertyGroup>
     <Error Condition="Exists('$(_ArchiveSidecarPath)')"
-           Text="Per-RID CLI archives must not contain '.aspire-install.json' — shared across install routes. See docs/specs/install-routes.md. Found smuggled sidecar at $(_ArchiveSidecarPath)." />
+           Text="Per-RID CLI archives must not contain '.aspire-install.json' — shared across install sources. See docs/specs/install-sources.md. Found smuggled sidecar at $(_ArchiveSidecarPath)." />
   </Target>
 
   <Target Name="_PublishProject">

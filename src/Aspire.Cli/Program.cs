@@ -528,6 +528,7 @@ public class Program
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
+        builder.Services.AddTransient<InstallsCommand>();
         builder.Services.AddTransient<CacheCommand>();
         builder.Services.AddTransient<CertificatesCommand>();
         builder.Services.AddTransient<CertificatesCleanCommand>();
@@ -577,6 +578,7 @@ public class Program
 #endif
         builder.Services.AddTransient<RootCommand>();
         builder.Services.AddTransient<ExtensionInternalCommand>();
+        builder.Services.AddTransient<Acquisition.HiveEnumerator>();
 
         var app = builder.Build();
         return app;
@@ -699,7 +701,7 @@ public class Program
 
             // Don't persist the sentinel for informational commands (--version, --help, etc.)
             // or for machine-readable invocations (--format json, including the hidden
-            // `doctor --self --format json` peer probe). Otherwise an automation invocation
+            // `installs --self --format json` peer probe). Otherwise an automation invocation
             // or peer probe — which deliberately suppressed the user-facing notice — would
             // silently consume the first-run slot, and the next interactive invocation by
             // the same user would never see the telemetry notice.
@@ -712,8 +714,8 @@ public class Program
 
     // Machine-readable output flags should never have welcome/telemetry text
     // interleaved with the structured payload. Today the only such flag is
-    // `--format json` (consumed by `aspire doctor`); extend this scan if new
-    // options are added.
+    // `--format json` (consumed by `aspire doctor` and `aspire installs`); extend
+    // this scan if new options are added.
     private static bool HasMachineReadableOutputFormat(string[] args)
     {
         for (var i = 0; i < args.Length; i++)

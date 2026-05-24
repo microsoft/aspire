@@ -230,6 +230,7 @@ internal static class CliTestHelper
         services.AddTransient<DoCommand>();
         services.AddTransient<PublishCommand>();
         services.AddTransient<ConfigCommand>();
+        services.AddTransient<InstallsCommand>();
         services.AddTransient<CacheCommand>();
         services.AddTransient<CertificatesCommand>();
         services.AddTransient<CertificatesCleanCommand>();
@@ -278,6 +279,7 @@ internal static class CliTestHelper
         services.AddTransient<RenderCommand>();
 #endif
         services.AddTransient(options.AppHostBackchannelFactory);
+        services.AddTransient<HiveEnumerator>();
 
         return services;
     }
