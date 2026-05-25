@@ -235,9 +235,15 @@ internal static class ContainerRestartPolicy
 
 internal static class ContainerPlatform
 {
-    // Linux platforms (Aspire only supports Linux containers).
+    // Linux platforms
     public const string LinuxAmd64 = "linux/amd64";
     public const string LinuxArm64 = "linux/arm64";
+    public const string LinuxArm = "linux/arm";
+    public const string Linux386 = "linux/386";
+
+    // Windows platforms
+    public const string WindowsAmd64 = "windows/amd64";
+    public const string WindowsArm64 = "windows/arm64";
 }
 
 internal static class ContainerPullPolicy

@@ -66,6 +66,26 @@ public enum ContainerTargetPlatform
     LinuxArm64 = 2,
 
     /// <summary>
+    /// Linux ARM (linux/arm).
+    /// </summary>
+    LinuxArm = 4,
+
+    /// <summary>
+    /// Linux 386 (linux/386).
+    /// </summary>
+    Linux386 = 8,
+
+    /// <summary>
+    /// Windows AMD64 (windows/amd64).
+    /// </summary>
+    WindowsAmd64 = 16,
+
+    /// <summary>
+    /// Windows ARM64 (windows/arm64).
+    /// </summary>
+    WindowsArm64 = 32,
+
+    /// <summary>
     /// All Linux platforms (AMD64 and ARM64).
     /// </summary>
     AllLinux = LinuxAmd64 | LinuxArm64
@@ -588,6 +608,22 @@ internal static class ContainerTargetPlatformExtensions
         {
             platforms.Add("linux/arm64");
         }
+        if (platform.HasFlag(ContainerTargetPlatform.LinuxArm))
+        {
+            platforms.Add("linux/arm");
+        }
+        if (platform.HasFlag(ContainerTargetPlatform.Linux386))
+        {
+            platforms.Add("linux/386");
+        }
+        if (platform.HasFlag(ContainerTargetPlatform.WindowsAmd64))
+        {
+            platforms.Add("windows/amd64");
+        }
+        if (platform.HasFlag(ContainerTargetPlatform.WindowsArm64))
+        {
+            platforms.Add("windows/arm64");
+        }
 
         if (platforms.Count == 0)
         {
@@ -613,6 +649,22 @@ internal static class ContainerTargetPlatformExtensions
         if (platform.HasFlag(ContainerTargetPlatform.LinuxArm64))
         {
             rids.Add("linux-arm64");
+        }
+        if (platform.HasFlag(ContainerTargetPlatform.LinuxArm))
+        {
+            rids.Add("linux-arm");
+        }
+        if (platform.HasFlag(ContainerTargetPlatform.Linux386))
+        {
+            rids.Add("linux-x86");
+        }
+        if (platform.HasFlag(ContainerTargetPlatform.WindowsAmd64))
+        {
+            rids.Add("win-x64");
+        }
+        if (platform.HasFlag(ContainerTargetPlatform.WindowsArm64))
+        {
+            rids.Add("win-arm64");
         }
 
         if (rids.Count == 0)
