@@ -861,8 +861,6 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         Assert.False(firstElement.TryGetProperty("logFilePath", out _));
     }
 
-
-
     private sealed class TestAppHostBackchannelServer : IDisposable
     {
         private readonly TcpListener _listener;
