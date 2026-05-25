@@ -279,7 +279,7 @@ Based on the PR changes, generate appropriate test scenarios. Always use new pro
 
 #### Unhappy-Path Coverage
 
-For every changed user-facing behavior, include 1-3 high-value unhappy-path, negative, or boundary test cases after the happy-path scenario. Do not add generic torture tests that are unrelated to the diff. Each case should have an expected outcome, such as a clear validation error, a safe failed state, a non-zero exit code, or a recoverable dashboard/resource state.
+For every changed user-facing behavior, include 1-3 high-value unhappy-path, negative, or boundary test cases after the happy-path scenario. Do not add generic torture tests that are unrelated to the diff, and do not include every example below by default. Each case should have an expected outcome, such as a clear validation error, a safe failed state, a non-zero exit code, or a recoverable dashboard/resource state.
 
 Use these examples as a starting point and adapt them to the actual PR:
 
@@ -291,7 +291,7 @@ Use these examples as a starting point and adapt them to the actual PR:
 | Templates | Invalid project names, non-empty output directories, unsupported template option values, disabled optional services, non-interactive creation with all prompt-suppressing flags |
 | Client/components | Missing configuration, connection refusal, auth failure, unavailable resource, malformed endpoint metadata |
 
-Prefer cases that reproduce how a real user could break or misuse the changed feature. Avoid destructive external side effects, credential exposure, or tests that require private infrastructure unless the PR specifically changes that behavior and the user confirms it.
+Prefer cases that reproduce how a real user could break or misuse the changed feature. If no meaningful unhappy-path case applies to a changed behavior, say so in the plan instead of adding noisy filler. Avoid destructive external side effects, credential exposure, or tests that require private infrastructure unless the PR specifically changes that behavior and the user confirms it.
 
 ### 7. Present Scenarios and Get User Input
 
