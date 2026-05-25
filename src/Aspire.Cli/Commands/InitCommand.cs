@@ -298,11 +298,15 @@ internal sealed class InitCommand : BaseCommand
         // Persist the running CLI's identity channel (e.g. `daily`, `staging`, `pr-<N>`)
         // so subsequent commands like `aspire add` resolve packages against the matching
         // channel. Resolve through PackagingService and only persist when the identity
-        // matches a registered Explicit channel — mirrors `NewCommand.cs:316-402`. This
-        // avoids pinning `stable` (Implicit → restricts polyglot discovery, see
-        // https://github.com/microsoft/aspire/issues/17295) or pinning an unregistered
-        // identity like `local` / stale `pr-<N>` (no PSM rule satisfies it → polyglot
-        // `aspire add` returns zero packages).
+        // matches a registered Explicit channel — mirrors `NewCommand.cs:316-402`.
+        //
+        // `ResolvePersistableChannelNameAsync` filters out identities that aren't
+        // registered as channels on this CLI install (e.g. `local`, `staging` on a CLI
+        // without the staging feature flag, stale `pr-<N>` after the hive is gone) and
+        // the Implicit `default` channel that no CLI identity ever has. Channels that
+        // do resolve to a registered Explicit entry — including `stable`, `dev`,
+        // `staging`, and `pr-<N>` — are persisted so polyglot `aspire add` can match
+        // a PSM rule. See https://github.com/microsoft/aspire/issues/17295.
         var resolvedChannel = await ResolvePersistableChannelNameAsync(cancellationToken);
         var (configResult, effectivePorts) = DropAspireConfig(workingDirectory, "apphost.cs", language: null, resolvedChannel, ports);
         if (configResult != CliExitCodes.Success)
@@ -639,11 +643,13 @@ internal sealed class InitCommand : BaseCommand
     /// machine without the matching hive). Persisting these would pin a name no PSM rule can
     /// satisfy and zero out polyglot <c>aspire add</c> discovery via
     /// <c>IntegrationPackageSearchService.cs</c> line 28-30.</description></item>
-    /// <item><description>The matched channel is <see cref="PackageChannelType.Implicit"/>
-    /// (e.g. <c>stable</c> → nuget.org). Implicit channels should not be persisted so
-    /// downstream commands fall back to the default aggregated-source behavior — pinning
-    /// <c>stable</c> on a polyglot AppHost is the regression tracked by
-    /// https://github.com/microsoft/aspire/issues/17295.</description></item>
+    /// <item><description>The matched channel is <see cref="PackageChannelType.Implicit"/>.
+    /// In production the only Implicit channel created by <c>PackagingService.GetChannelsAsync</c>
+    /// is <c>default</c> (the unscoped nuget.org aggregator), which no CLI identity ever
+    /// resolves to — this branch exists defensively in case a future <c>PackagingService</c>
+    /// adds another Implicit channel whose name happens to collide with a CLI identity.
+    /// Note that <c>stable</c> is created via <c>CreateExplicitChannel</c> and IS persisted
+    /// — see the <c>[InlineData("stable")]</c> test cases for the resolved behavior.</description></item>
     /// </list>
     /// Mirrors the resolution logic in <c>NewCommand.cs:316-402</c> and the warning in
     /// <c>ScaffoldingService.cs:84-92</c> against falling back to <c>IdentityChannel</c> blindly.

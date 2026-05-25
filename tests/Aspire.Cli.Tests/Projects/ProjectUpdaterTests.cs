@@ -290,6 +290,116 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateProjectFileAsync_DoesNotCreateAspireConfigJsonWhenAbsent()
+    {
+        // Sibling of UpdateProjectFileAsync_CanUpdateFromStableToDaily covering the case where
+        // the AppHost project predates aspire.config.json (legacy split layouts, pre-init projects).
+        // `aspire update` must not fabricate a fresh aspire.config.json — that's `aspire init`'s job.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var srcFolder = workspace.CreateDirectory("src");
+
+        var serviceDefaultsFolder = workspace.CreateDirectory("UpdateTester.ServiceDefaults");
+        var serviceDefaultsProjectFile = new FileInfo(Path.Combine(serviceDefaultsFolder.FullName, "UpdateTester.ServiceDefaults.csproj"));
+
+        var webAppFolder = workspace.CreateDirectory("UpdateTester.WebApp");
+        var webAppProjectFile = new FileInfo(Path.Combine(webAppFolder.FullName, "UpdateTester.WebApp.csproj"));
+
+        var appHostFolder = workspace.CreateDirectory("UpdateTester.AppHost");
+        var appHostProjectFile = new FileInfo(Path.Combine(appHostFolder.FullName, "UpdateTester.AppHost.csproj"));
+
+        await File.WriteAllTextAsync(
+            appHostProjectFile.FullName,
+            $$"""
+            <Project Sdk="Microsoft.NET.Sdk">
+                <Sdk Name="Aspire.AppHost.Sdk" Version="9.4.1" />
+            </Project>
+            """);
+
+        // Intentionally do NOT pre-create aspire.config.json. The post-update assertion below
+        // verifies the file is still absent.
+        var aspireConfigFile = new FileInfo(Path.Combine(appHostFolder.FullName, "aspire.config.json"));
+        Assert.False(aspireConfigFile.Exists, "Pre-condition: aspire.config.json should not exist before the update.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, config =>
+        {
+            config.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner()
+                {
+                    SearchPackagesAsyncCallback = (_, query, _, _, _, _, _, _, _, _) =>
+                    {
+                        var packages = new List<NuGetPackageCli>
+                        {
+                            query switch
+                            {
+                                "Aspire.AppHost.Sdk" => new NuGetPackageCli { Id = "Aspire.AppHost.Sdk", Version = "9.5.0-preview.1", Source = "daily" },
+                                "Aspire.Hosting.AppHost" => new NuGetPackageCli { Id = "Aspire.Hosting.AppHost", Version = "9.5.0-preview.1", Source = "daily" },
+                                "Aspire.Hosting.Redis" => new NuGetPackageCli { Id = "Aspire.Hosting.Redis", Version = "9.5.0-preview.1", Source = "daily" },
+                                "Aspire.StackExchange.Redis.OutputCaching" => new NuGetPackageCli { Id = "Aspire.StackExchange.Redis.OutputCaching", Version = "9.5.0-preview.1", Source = "daily" },
+                                "Microsoft.Extensions.ServiceDiscovery" => new NuGetPackageCli { Id = "Microsoft.Extensions.ServiceDiscovery", Version = "9.5.0-preview.1", Source = "daily" },
+                                _ => throw new InvalidOperationException("Unexpected package query."),
+                            }
+                        };
+
+                        return (0, packages.ToArray());
+                    },
+
+                    GetProjectItemsAndPropertiesAsyncCallback = (projectFile, _, _, _, _) =>
+                    {
+                        var itemsAndProperties = new JsonObject();
+
+                        if (projectFile.FullName == appHostProjectFile.FullName)
+                        {
+                            itemsAndProperties.WithSdkVersion("9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.AppHost", "9.4.1");
+                            itemsAndProperties.WithPackageReference("Aspire.Hosting.Redis", "9.4.1");
+                            itemsAndProperties.WithProjectReference(webAppProjectFile.FullName);
+                        }
+                        else if (projectFile.FullName == webAppProjectFile.FullName)
+                        {
+                            itemsAndProperties.WithPackageReference("Aspire.StackExchange.Redis.OutputCaching", "9.4.1");
+                            itemsAndProperties.WithProjectReference(serviceDefaultsProjectFile.FullName);
+                        }
+                        else if (projectFile.FullName == serviceDefaultsProjectFile.FullName)
+                        {
+                            itemsAndProperties.WithPackageReference("Microsoft.Extensions.ServiceDiscovery", "9.4.1");
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException("Unexpected project file.");
+                        }
+
+                        var json = itemsAndProperties.ToJsonString();
+                        var document = JsonDocument.Parse(json);
+                        return (0, document);
+                    },
+                    AddPackageAsyncCallback = (_, _, _, _, _, _, _) => 0,
+                };
+            };
+
+            config.InteractionServiceFactory = (s) => new TestInteractionService();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var packagingService = provider.GetRequiredService<IPackagingService>();
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var selectedChannel = channels.Single(c => c.Name == "daily");
+
+        var projectUpdater = provider.GetRequiredService<IProjectUpdater>();
+        var updateResult = await projectUpdater.UpdateProjectAsync(CreateUpdateContext(appHostProjectFile, selectedChannel)).DefaultTimeout();
+
+        Assert.True(updateResult.UpdatedApplied);
+
+        // Post-condition: the updater MUST NOT have created aspire.config.json. Creating one
+        // would silently introduce config the user never asked for and contradict the comment
+        // in ProjectUpdater.GetUpdateStepsAsync claiming the rewrite is skipped when the file
+        // is absent.
+        aspireConfigFile.Refresh();
+        Assert.False(aspireConfigFile.Exists, "aspire update must not create aspire.config.json for projects that never had one.");
+    }
+
+    [Fact]
     public async Task UpdateProjectFileAsync_CanUpdateFromDailyToStableWhereOnePackageIsUnstableOnly()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

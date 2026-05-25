@@ -222,33 +222,44 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         // aspire.config.json lives next to the AppHost project file:
         //   - C# single-file init: <dir>/apphost.cs + <dir>/aspire.config.json
         //   - C# project-mode (aspire-apphost template): <dir>/MyApp.AppHost.csproj + <dir>/aspire.config.json
-        // If no aspire.config.json is present (legacy split layouts), the rewrite is skipped.
+        // If no aspire.config.json is present (legacy split layouts or pre-init projects),
+        // skip the rewrite — `aspire update` must not create a fresh aspire.config.json for a
+        // project that never had one; that is the responsibility of `aspire init`.
         if (channel.Type == PackageChannelType.Explicit && projectFile.Directory is { } projectDirectory)
         {
             var existingConfig = AspireConfigFile.Load(projectDirectory.FullName);
-            var existingChannel = existingConfig?.Channel;
-
-            if (!string.Equals(existingChannel, channel.Name, StringComparisons.CliInputOrOutput))
+            if (existingConfig is not null)
             {
-                var description = string.Format(
-                    CultureInfo.InvariantCulture,
-                    UpdateCommandStrings.UpdateChannelStepDescriptionFormat,
-                    existingChannel ?? UpdateCommandStrings.ChannelNonePlaceholder,
-                    channel.Name);
+                var existingChannel = existingConfig.Channel;
+                if (!string.Equals(existingChannel, channel.Name, StringComparisons.CliInputOrOutput))
+                {
+                    var description = string.Format(
+                        CultureInfo.InvariantCulture,
+                        UpdateCommandStrings.UpdateChannelStepDescriptionFormat,
+                        existingChannel ?? UpdateCommandStrings.ChannelNonePlaceholder,
+                        channel.Name);
 
-                context.UpdateSteps.Enqueue(new ChannelUpdateStep(
-                    description,
-                    () =>
-                    {
-                        // Re-load inside the callback so we don't race with anything else that may
-                        // have rewritten aspire.config.json between analysis and apply.
-                        var configToSave = AspireConfigFile.LoadOrCreate(projectDirectory.FullName);
-                        configToSave.Channel = channel.Name;
-                        configToSave.Save(projectDirectory.FullName);
-                        return Task.CompletedTask;
-                    },
-                    existingChannel,
-                    channel.Name));
+                    context.UpdateSteps.Enqueue(new ChannelUpdateStep(
+                        description,
+                        () =>
+                        {
+                            // Re-load inside the callback so we don't race with anything else that may
+                            // have rewritten aspire.config.json between analysis and apply. The file
+                            // was confirmed present above; `Load` returning null here would only
+                            // happen if it was deleted mid-update, in which case we skip the rewrite
+                            // rather than recreate the file behind the user's back.
+                            var configToSave = AspireConfigFile.Load(projectDirectory.FullName);
+                            if (configToSave is null)
+                            {
+                                return Task.CompletedTask;
+                            }
+                            configToSave.Channel = channel.Name;
+                            configToSave.Save(projectDirectory.FullName);
+                            return Task.CompletedTask;
+                        },
+                        existingChannel,
+                        channel.Name));
+                }
             }
         }
 
