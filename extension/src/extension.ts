@@ -156,8 +156,8 @@ export async function activate(context: vscode.ExtensionContext) {
     command += ' --follow';
     terminalProvider.sendAspireCommandToAspireTerminal(command);
   });
-  const codeLensRevealResourceRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensRevealResource', (resourceName: string) => {
-    const element = appHostTreeProvider.findResourceElement(resourceName);
+  const codeLensRevealResourceRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensRevealResource', (resourceName: string, appHostPath?: string) => {
+    const element = appHostTreeProvider.findResourceElement(resourceName, appHostPath);
     if (element) {
       appHostTreeView.reveal(element, { select: true, focus: true });
     }

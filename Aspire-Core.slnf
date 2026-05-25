@@ -2,6 +2,8 @@
   "solution": {
     "path": "Aspire.slnx",
     "projects": [
+      "playground\\BrowserTelemetry\\BrowserTelemetry.AppHost\\BrowserTelemetry.AppHost.csproj",
+      "playground\\BrowserTelemetry\\BrowserTelemetry.Web\\BrowserTelemetry.Web.csproj",
       "playground\\Playground.ServiceDefaults\\Playground.ServiceDefaults.csproj",
       "playground\\Stress\\Stress.ApiService\\Stress.ApiService.csproj",
       "playground\\Stress\\Stress.AppHost\\Stress.AppHost.csproj",
@@ -23,9 +25,10 @@
       "src\\Aspire.Hosting.Azure.ContainerRegistry\\Aspire.Hosting.Azure.ContainerRegistry.csproj",
       "src\\Aspire.Hosting.Azure.OperationalInsights\\Aspire.Hosting.Azure.OperationalInsights.csproj",
       "src\\Aspire.Hosting.Azure\\Aspire.Hosting.Azure.csproj",
+      "src\\Aspire.Hosting.Browsers\\Aspire.Hosting.Browsers.csproj",
       "src\\Aspire.Hosting.EntityFrameworkCore\\Aspire.Hosting.EntityFrameworkCore.csproj",
-      "src\\Aspire.Hosting.Integration.Analyzers\\Aspire.Hosting.Integration.Analyzers.csproj",
       "src\\Aspire.Hosting.Go\\Aspire.Hosting.Go.csproj",
+      "src\\Aspire.Hosting.Integration.Analyzers\\Aspire.Hosting.Integration.Analyzers.csproj",
       "src\\Aspire.Hosting.JavaScript\\Aspire.Hosting.JavaScript.csproj",
       "src\\Aspire.Hosting.PostgreSQL\\Aspire.Hosting.PostgreSQL.csproj",
       "src\\Aspire.Hosting.Python\\Aspire.Hosting.Python.csproj",

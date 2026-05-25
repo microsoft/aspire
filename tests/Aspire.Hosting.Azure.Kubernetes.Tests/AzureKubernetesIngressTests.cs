@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Azure.Tests;
 public class AzureKubernetesIngressTests
 {
     [Fact]
-    public async Task AksAddIngress_WithRoute_GeneratesIngressInHelmOutput()
+    public async Task AksAddIngress_WithPath_GeneratesIngressInHelmOutput()
     {
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
@@ -24,7 +24,7 @@ public class AzureKubernetesIngressTests
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
 
-        ingress.WithRoute("/", api.GetEndpoint("http"));
+        ingress.WithPath("/", api.GetEndpoint("http"));
 
         var app = builder.Build();
         app.Run();
@@ -132,7 +132,7 @@ public class AzureKubernetesIngressTests
     }
 
     [Fact]
-    public void AksAddIngress_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
+    public void AksAddIngress_WithPath_NonExternalEndpoint_ThrowsOnPublish()
     {
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
@@ -143,7 +143,7 @@ public class AzureKubernetesIngressTests
         var api = builder.AddContainer("myapi", "nginx")
             .WithHttpEndpoint(targetPort: 8080);
 
-        ingress.WithRoute("/", api.GetEndpoint("http"));
+        ingress.WithPath("/", api.GetEndpoint("http"));
 
         var app = builder.Build();
         var aggregate = Assert.Throws<AggregateException>(app.Run);

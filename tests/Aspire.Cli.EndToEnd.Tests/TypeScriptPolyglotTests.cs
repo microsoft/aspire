@@ -57,7 +57,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Step 1: Create TypeScript AppHost
         await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
@@ -94,13 +94,13 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
 
-        // Step 5: Modify apphost.ts to add the Vite app
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        // Step 5: Modify apphost.mts to add the Vite app
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         var newContent = """
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
 
@@ -185,7 +185,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
@@ -243,6 +243,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         string? originalDevScript = null;
         string? originalBuildScript = null;
         string? originalPreviewScript = null;
+        string? originalPackageType = null;
         string? originalTsConfig = null;
 
         var counter = new SequenceCounter();
@@ -269,6 +270,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         originalDevScript = scripts["dev"]?.GetValue<string>();
         originalBuildScript = scripts["build"]?.GetValue<string>();
         originalPreviewScript = scripts["preview"]?.GetValue<string>();
+        originalPackageType = packageJson["type"]?.GetValue<string>();
         originalTsConfig = File.ReadAllText(Path.Combine(projectRoot, "tsconfig.json"));
 
         // LocalHive strategy only: PrepareLocalChannel returned a real channel,
@@ -283,7 +285,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Run aspire init in brownfield mode
         await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created aspire-apphost/apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
         // Verify brownfield augmentation preserved existing config
@@ -294,46 +296,63 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         packageJson = JsonNode.Parse(File.ReadAllText(Path.Combine(projectRoot, "package.json")))!.AsObject();
         scripts = packageJson["scripts"]!.AsObject();
-        var dependencies = packageJson["dependencies"]!.AsObject();
-        var devDependencies = packageJson["devDependencies"]!.AsObject();
 
         Assert.Equal(originalDevScript, scripts["dev"]?.GetValue<string>());
         Assert.Equal(originalBuildScript, scripts["build"]?.GetValue<string>());
         Assert.Equal(originalPreviewScript, scripts["preview"]?.GetValue<string>());
-        Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
-        Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
-        Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
-        Assert.Equal("npm run aspire:start", scripts["start"]?.GetValue<string>());
-
-        Assert.Equal("module", packageJson["type"]?.GetValue<string>());
-        Assert.NotNull(dependencies["vscode-jsonrpc"]);
-        Assert.NotNull(devDependencies["@types/node"]);
-        Assert.NotNull(devDependencies["nodemon"]);
-        Assert.NotNull(devDependencies["tsx"]);
-        Assert.NotNull(devDependencies["typescript"]);
-
+        Assert.Equal("npm --prefix aspire-apphost run aspire:start", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("npm --prefix aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("npm --prefix aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+        Assert.Equal(originalPackageType, packageJson["type"]?.GetValue<string>());
+        Assert.False(scripts.ContainsKey("start"));
+        var rootDependencies = packageJson["dependencies"]?.AsObject();
+        var rootDevDependencies = packageJson["devDependencies"]?.AsObject();
+        Assert.Null(rootDependencies?["vscode-jsonrpc"]);
+        Assert.Null(rootDevDependencies?["vscode-jsonrpc"]);
+        Assert.Null(rootDevDependencies?["nodemon"]);
+        Assert.Null(rootDevDependencies?["tsx"]);
         Assert.Equal(originalTsConfig, File.ReadAllText(Path.Combine(projectRoot, "tsconfig.json")));
-        Assert.True(File.Exists(Path.Combine(projectRoot, "tsconfig.apphost.json")));
+        Assert.False(File.Exists(Path.Combine(projectRoot, "tsconfig.apphost.json")));
+        Assert.False(File.Exists(Path.Combine(projectRoot, "apphost.mts")));
+
+        var appHostDirectory = Path.Combine(projectRoot, "aspire-apphost");
+        var appHostPath = Path.Combine(appHostDirectory, "apphost.mts");
+        Assert.True(File.Exists(appHostPath));
+
+        var appHostPackageJson = JsonNode.Parse(File.ReadAllText(Path.Combine(appHostDirectory, "package.json")))!.AsObject();
+        var appHostScripts = appHostPackageJson["scripts"]!.AsObject();
+        var appHostDependencies = appHostPackageJson["dependencies"]!.AsObject();
+        var appHostDevDependencies = appHostPackageJson["devDependencies"]!.AsObject();
+        Assert.Equal("module", appHostPackageJson["type"]?.GetValue<string>());
+        Assert.Equal("aspire-apphost", appHostPackageJson["name"]?.GetValue<string>());
+        Assert.Equal("aspire run", appHostScripts["aspire:start"]?.GetValue<string>());
+        Assert.NotNull(appHostDependencies["vscode-jsonrpc"]);
+        Assert.NotNull(appHostDevDependencies["@types/node"]);
+        Assert.NotNull(appHostDevDependencies["nodemon"]);
+        Assert.NotNull(appHostDevDependencies["tsx"]);
+        Assert.NotNull(appHostDevDependencies["typescript"]);
+        Assert.True(File.Exists(Path.Combine(appHostDirectory, "tsconfig.apphost.json")));
 
         // Verify Aspire.Hosting.JavaScript was pre-added in config
         var configPath = Path.Combine(projectRoot, "aspire.config.json");
         var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
+        var appHost = config["appHost"]!.AsObject();
+        Assert.Equal("aspire-apphost/apphost.mts", appHost["path"]?.GetValue<string>());
         var packagesNode = config["packages"];
         Assert.NotNull(packagesNode);
         var packages = packagesNode!.AsObject();
         Assert.NotNull(packages["Aspire.Hosting.JavaScript"]);
 
-        // Modify apphost.ts to add the Vite app before running
-        var appHostPath = Path.Combine(projectRoot, "apphost.ts");
+        // Modify apphost.mts to add the Vite app before running
         var newContent = """
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
 
-            await builder.addViteApp("brownfield", ".");
+            await builder.addViteApp("brownfield", "..");
 
             await builder.build().run();
             """;

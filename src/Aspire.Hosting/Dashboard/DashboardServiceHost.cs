@@ -18,8 +18,6 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Dashboard;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 /// <summary>
 /// Hosts a gRPC service via <see cref="DashboardService"/> (aka the "Resource Service") that a dashboard can connect to.
 /// Configures DI and networking options for the service.
@@ -138,23 +136,21 @@ internal sealed class DashboardServiceHost : IHostedService
         {
             // Inspect environment for the address to listen on.
             var uri = configuration.GetUri(ResourceServiceUrlVariableName);
+            var allowUnsecuredTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
 
-            string? scheme;
+            var scheme = ResolveScheme(uri, allowUnsecuredTransport);
 
             if (uri is null)
             {
-                // No URI available from the environment.
-                scheme = null;
-
                 // Listen on a random port.
                 kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
+                _logger.LogDebug("Resource service endpoint not configured. Listening on {Scheme}://127.0.0.1:<random>.", scheme);
             }
             else if (uri.IsLoopback)
             {
-                scheme = uri.Scheme;
-
                 // Listen on the requested localhost port.
                 kestrelOptions.ListenLocalhost(uri.Port, ConfigureListen);
+                _logger.LogDebug("Resource service endpoint configured: {Uri}", uri);
             }
             else
             {
@@ -173,6 +169,21 @@ internal sealed class DashboardServiceHost : IHostedService
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Determines the scheme for the resource service endpoint. When a URI is explicitly
+    /// configured, its scheme is used. When no URI is provided, defaults to HTTPS unless
+    /// unsecured transport is explicitly allowed.
+    /// </summary>
+    internal static string ResolveScheme(Uri? configuredUri, bool allowUnsecuredTransport)
+    {
+        if (configuredUri is not null)
+        {
+            return configuredUri.Scheme;
+        }
+
+        return allowUnsecuredTransport ? "http" : "https";
     }
 
     /// <summary>
@@ -226,5 +237,3 @@ internal sealed class DashboardServiceHost : IHostedService
         }
     }
 }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

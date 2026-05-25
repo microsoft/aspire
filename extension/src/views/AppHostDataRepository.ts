@@ -4,8 +4,8 @@ import { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
-import { EnvironmentVariables } from '../utils/environment';
-import { errorFetchingAppHosts } from '../loc/strings';
+import { appHostDescribeMayNotBeSupported, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
+import { AppHostCandidate, findAppHostsWithAspireLs, formatAppHostLanguage, isBuildableAppHostCandidate } from '../utils/workspace';
 
 export interface ResourceUrlJson {
     name: string | null;
@@ -75,6 +75,7 @@ export interface ResourceJson {
 export interface AppHostDisplayInfo {
     appHostPath: string;
     appHostPid: number;
+    status?: string;
     cliPid: number | null;
     dashboardUrl: string | null;
     resources: ResourceJson[] | null | undefined;
@@ -87,8 +88,8 @@ export type ViewMode = 'workspace' | 'global';
  *
  * Owns two independent data sources:
  *  - `aspire describe --follow` (workspace mode) — streams resource updates
- *    via NDJSON.  Only active while the tree-view panel is visible **and**
- *    workspace mode is selected.
+ *    via NDJSON for the selected workspace AppHost.  Only active while the
+ *    tree-view panel is visible **and** workspace mode is selected.
  *  - `aspire ps` polling — periodically fetches running app hosts. In global
  *    mode this backs the full tree; in workspace mode it confirms whether the
  *    selected workspace AppHost is running when the resource stream is empty.
@@ -113,21 +114,31 @@ export class AppHostDataRepository {
     private _describeStartPending = false;
     private _describeStartVersion = 0;
 
-    // ── Global mode state (ps polling) ──
+    // ── Running AppHost state (ps polling) ──
     private _appHosts: AppHostDisplayInfo[] = [];
     private _workspaceAppHost: AppHostDisplayInfo | undefined;
     private _pollingInterval: ReturnType<typeof setInterval> | undefined;
     private _psProcesses = new Set<ChildProcessWithoutNullStreams>();
     private _psFetchVersion = 0;
     private _supportsResources = true;
+    private _supportsPsFollow = true;
     private _fetchInProgress = false;
 
-    // ── Workspace app host (from aspire extension get-apphosts) ──
+    // ── Workspace app host (from aspire ls) ──
+    // The singular fields track a selected/default workspace AppHost. The candidate
+    // paths track every buildable AppHost found by `aspire ls`, so workspace-mode
+    // `aspire ps` polling can filter and render multiple running workspace AppHosts.
     private _workspaceAppHostName: string | undefined;
     private _workspaceAppHostPath: string | undefined;
+    private _workspaceAppHostCandidatePaths: string[] = [];
+    private _workspaceAppHostDescription: string | undefined;
+    private _workspaceAppHostDiscoveryComplete = false;
+    private _workspaceAppHostDiscoveryUsesWorkspaceRoot = false;
     private _getAppHostsProcess: ChildProcessWithoutNullStreams | undefined;
 
     // ── Error state ──
+    private _describeErrorMessage: string | undefined;
+    private _psErrorMessage: string | undefined;
     private _errorMessage: string | undefined;
 
     // ── Loading state ──
@@ -172,6 +183,14 @@ export class AppHostDataRepository {
         return this._workspaceAppHostPath;
     }
 
+    get hasMultipleWorkspaceAppHosts(): boolean {
+        return this._workspaceAppHostCandidatePaths.length > 1;
+    }
+
+    get workspaceAppHostDescription(): string | undefined {
+        return this._workspaceAppHostDescription;
+    }
+
     get errorMessage(): string | undefined {
         return this._errorMessage;
     }
@@ -188,7 +207,7 @@ export class AppHostDataRepository {
         }
         this._viewMode = mode;
         vscode.commands.executeCommand('setContext', 'aspire.viewMode', mode);
-        this._setError(undefined);
+        this._clearErrors();
         this._updateLoadingContext();
         this._syncPolling();
         this._onDidChangeData.fire();
@@ -220,7 +239,7 @@ export class AppHostDataRepository {
     refresh(): void {
         this._stopDescribeWatch();
         this._workspaceResources.clear();
-        this._setError(undefined);
+        this._clearErrors();
         this._updateWorkspaceContext();
         this._describeRestartDelay = 5000;
         if (this._shouldWatchWorkspace) {
@@ -243,7 +262,7 @@ export class AppHostDataRepository {
         if (this._getAppHostsProcess) {
             const getAppHostsProcess = this._getAppHostsProcess;
             this._getAppHostsProcess = undefined;
-            this._terminateProcess(getAppHostsProcess, 'aspire extension get-apphosts');
+            this._terminateProcess(getAppHostsProcess, 'aspire ls');
         }
         this._configChangeDisposable.dispose();
         this._onDidChangeData.dispose();
@@ -259,11 +278,19 @@ export class AppHostDataRepository {
     private get _shouldPoll(): boolean {
         // Workspace mode still polls ps after the selected AppHost path is known so
         // a running AppHost can be shown even when describe has no resources to emit.
-        return this._dataActive && (this._viewMode === 'global' || !!this._workspaceAppHostPath);
+        return this._dataActive && (this._viewMode === 'global' || this._workspaceAppHostCandidatePaths.length > 0);
     }
 
     private get _shouldWatchWorkspace(): boolean {
-        return this._dataActive && this._viewMode === 'workspace';
+        if (!this._dataActive || this._viewMode !== 'workspace') {
+            return false;
+        }
+
+        if (!this._workspaceAppHostDiscoveryUsesWorkspaceRoot) {
+            return true;
+        }
+
+        return this._workspaceAppHostDiscoveryComplete && this._workspaceAppHostPath !== undefined;
     }
 
     private _syncPolling(): void {
@@ -288,65 +315,101 @@ export class AppHostDataRepository {
         }
     }
 
-    // ── Workspace app host (from aspire extension get-apphosts) ──
+    // ── Workspace app host (from aspire ls) ──
 
     private _fetchWorkspaceAppHost(): void {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
+            this._workspaceAppHostDiscoveryComplete = true;
             return;
         }
         const rootFolder = workspaceFolders[0];
+        this._workspaceAppHostDiscoveryUsesWorkspaceRoot = true;
 
-        extensionLogOutputChannel.info('Fetching workspace apphost via: aspire extension get-apphosts');
+        extensionLogOutputChannel.info('Fetching workspace apphost via: aspire ls');
 
         this._terminalProvider.getAspireCliExecutablePath().then(cliPath => {
             if (this._disposed) {
                 return;
             }
 
-            const args = ['extension', 'get-apphosts'];
-            if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-                args.push('--cli-wait-for-debugger');
-            }
+            const discovery = findAppHostsWithAspireLs(this._terminalProvider, cliPath, rootFolder);
+            this._getAppHostsProcess = discovery.process;
+            discovery.result.then(result => {
+                if (this._disposed) {
+                    return;
+                }
 
-            this._getAppHostsProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
-                noExtensionVariables: true,
-                workingDirectory: rootFolder.uri.fsPath,
-                lineCallback: (line) => {
-                    try {
-                        const parsed = JSON.parse(line);
-                        if (parsed && (typeof parsed.selected_project_file === 'string' || parsed.selected_project_file === null) && Array.isArray(parsed.all_project_file_candidates)) {
-                            const appHostCandidates = parsed.all_project_file_candidates.filter((candidate: unknown): candidate is string => typeof candidate === 'string');
-                            const appHostPath = parsed.selected_project_file
-                                ?? (appHostCandidates.length === 1 ? appHostCandidates[0] : null);
-                            if (appHostPath) {
-                                this._workspaceAppHostPath = appHostPath;
-                                const appHostLabels = shortenPaths(appHostCandidates);
-                                const candidateIndex = appHostCandidates.indexOf(appHostPath);
-                                this._workspaceAppHostName = candidateIndex >= 0 ? appHostLabels[candidateIndex] : shortenPath(appHostPath);
-                                extensionLogOutputChannel.info(`Workspace apphost resolved: ${appHostPath}`);
-                                this._syncPolling();
-                                this._onDidChangeData.fire();
-                            }
-                        }
-                    } catch {
-                        // Not a JSON line we care about
-                    }
-                },
-                exitCallback: (code) => {
-                    this._getAppHostsProcess = undefined;
-                    if (code !== 0) {
-                        extensionLogOutputChannel.warn(`aspire extension get-apphosts exited with code ${code}`);
-                    }
-                },
-                errorCallback: (error) => {
-                    this._getAppHostsProcess = undefined;
-                    extensionLogOutputChannel.warn(`aspire extension get-apphosts error: ${error.message}`);
-                },
+                this._getAppHostsProcess = undefined;
+                this._workspaceAppHostDiscoveryComplete = true;
+                this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
+            }).catch(error => {
+                this._getAppHostsProcess = undefined;
+                this._workspaceAppHostDiscoveryComplete = true;
+                extensionLogOutputChannel.warn(`aspire ls error: ${error}`);
+                this._syncPolling();
             });
         }).catch(error => {
+            this._workspaceAppHostDiscoveryComplete = true;
             extensionLogOutputChannel.warn(`Failed to fetch workspace apphost: ${error}`);
+            this._syncPolling();
         });
+    }
+
+    private _handleWorkspaceAppHostCandidates(appHostCandidates: readonly AppHostCandidate[], selectedAppHostPath: string | null): void {
+        const buildableAppHostCandidates = appHostCandidates.filter(isBuildableAppHostCandidate);
+
+        if (buildableAppHostCandidates.length > 1) {
+            this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
+            if (selectedAppHostPath) {
+                this._setWorkspaceAppHostPath(selectedAppHostPath, buildableAppHostCandidates);
+            } else {
+                this._clearWorkspaceAppHostSelection();
+            }
+            this._workspaceAppHostDescription = workspaceViewSelectedMultipleAppHosts(buildableAppHostCandidates.length);
+            extensionLogOutputChannel.info(`Workspace contains ${buildableAppHostCandidates.length} buildable AppHosts; keeping workspace view`);
+            this.setViewMode('workspace');
+            this._syncPolling();
+            this._onDidChangeData.fire();
+            return;
+        }
+
+        const selectedAppHostCandidate = selectedAppHostPath
+            ? buildableAppHostCandidates.find(candidate => isMatchingAppHostPath(candidate.path, selectedAppHostPath))
+            : buildableAppHostCandidates[0];
+        if (selectedAppHostCandidate) {
+            this._setWorkspaceAppHostCandidatePaths(buildableAppHostCandidates);
+            this._setWorkspaceAppHostPath(selectedAppHostCandidate.path, buildableAppHostCandidates);
+            this._workspaceAppHostDescription = workspaceViewSelectedSingleAppHost(formatAppHostLanguage(selectedAppHostCandidate.language));
+            extensionLogOutputChannel.info(`Workspace apphost resolved: ${selectedAppHostCandidate.path} (${selectedAppHostCandidate.language}, ${selectedAppHostCandidate.status})`);
+            this._syncPolling();
+            this._onDidChangeData.fire();
+        } else if (appHostCandidates.length > 0) {
+            extensionLogOutputChannel.info(`aspire ls found ${appHostCandidates.length} AppHost candidates, but none are buildable`);
+        }
+    }
+
+    private _setWorkspaceAppHostPath(appHostPath: string, appHostCandidates: readonly AppHostCandidate[]): void {
+        this._workspaceAppHostPath = appHostPath;
+        const appHostCandidatePaths = appHostCandidates.map(candidate => candidate.path);
+        const appHostLabels = shortenPaths(appHostCandidatePaths);
+        const candidateIndex = appHostCandidatePaths.findIndex(candidatePath => isMatchingAppHostPath(candidatePath, appHostPath));
+        this._workspaceAppHostName = candidateIndex >= 0 ? appHostLabels[candidateIndex] : shortenPath(appHostPath);
+    }
+
+    private _setWorkspaceAppHostCandidatePaths(appHostCandidates: readonly AppHostCandidate[]): void {
+        this._workspaceAppHostCandidatePaths = appHostCandidates.map(candidate => candidate.path);
+    }
+
+    private _clearWorkspaceAppHostSelection(): void {
+        this._workspaceAppHostPath = undefined;
+        this._workspaceAppHostName = undefined;
+    }
+
+    private _clearWorkspaceAppHostDiscovery(): void {
+        this._clearWorkspaceAppHostSelection();
+        this._workspaceAppHostCandidatePaths = [];
+        this._workspaceAppHostDescription = undefined;
     }
 
     // ── Workspace mode: describe --follow ──
@@ -367,17 +430,33 @@ export class AppHostDataRepository {
             }
 
             const args = ['describe', '--follow', '--format', 'json'];
+            if (this._workspaceAppHostPath) {
+                args.push('--apphost', this._workspaceAppHostPath);
+            }
 
             extensionLogOutputChannel.info('Starting aspire describe --follow for workspace resources');
 
             this._describeReceivedData = false;
+            const describeNonJsonLines: string[] = [];
+            let describeStderr = '';
             const describeProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                 noExtensionVariables: true,
                 lineCallback: (line) => {
                     if (this._describeProcess !== describeProcess) {
                         return;
                     }
-                    this._handleDescribeLine(line);
+                    const handled = this._handleDescribeLine(line);
+                    if (!handled && describeNonJsonLines.length < 20) {
+                        describeNonJsonLines.push(line);
+                    }
+                },
+                stderrCallback: (data) => {
+                    if (this._describeProcess !== describeProcess) {
+                        return;
+                    }
+                    if (describeStderr.length < 4000) {
+                        describeStderr += data;
+                    }
                 },
                 exitCallback: (code) => {
                     if (this._describeProcess !== describeProcess) {
@@ -391,14 +470,14 @@ export class AppHostDataRepository {
                         return;
                     }
 
-                    // If this attempt never produced any data, there is no running apphost
-                    // to follow (or the CLI doesn't support --follow). Stop quietly: do not
-                    // set the error state (which would show the "CLI not supported" banner)
-                    // and do not auto-restart on a 5s loop forever — the panel will refresh
-                    // when the user explicitly retries or when activity resumes.
+                    // If this attempt never produced any data, surface a compatibility
+                    // hint when we have enough context, but do not auto-restart on a 5s
+                    // loop forever. The panel will refresh when the user explicitly
+                    // retries or when activity resumes.
                     if (!this._describeReceivedData) {
                         extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
                         this._workspaceResources.clear();
+                        this._setDescribeError(this._getDescribeNoDataError(code, describeNonJsonLines, describeStderr));
                         this._updateWorkspaceContext({ clearLoading: true });
                         return;
                     }
@@ -407,7 +486,7 @@ export class AppHostDataRepository {
                     // once more with backoff in case the apphost is restarting; if that
                     // attempt also produces no data we'll fall into the branch above.
                     this._workspaceResources.clear();
-                    this._setError(undefined);
+                    this._setDescribeError(undefined);
                     this._updateWorkspaceContext();
 
                     const delay = this._describeRestartDelay;
@@ -430,7 +509,7 @@ export class AppHostDataRepository {
                     if (!this._disposed) {
                         this._loadingWorkspace = false;
                         this._updateLoadingContext();
-                        this._setError(errorFetchingAppHosts(error.message));
+                        this._setDescribeError(errorFetchingAppHosts(error.message));
                     }
                 }
             });
@@ -442,7 +521,7 @@ export class AppHostDataRepository {
             extensionLogOutputChannel.warn(`Failed to start describe watch: ${error}`);
             this._loadingWorkspace = false;
             this._updateLoadingContext();
-            this._setError(errorFetchingAppHosts(String(error)));
+            this._setDescribeError(errorFetchingAppHosts(String(error)));
         }).finally(() => {
             if (startVersion === this._describeStartVersion) {
                 this._describeStartPending = false;
@@ -490,10 +569,10 @@ export class AppHostDataRepository {
         }
     }
 
-    private _handleDescribeLine(line: string): void {
+    private _handleDescribeLine(line: string): boolean {
         const trimmed = line.trim();
         if (!trimmed) {
-            return;
+            return true;
         }
 
         try {
@@ -501,20 +580,36 @@ export class AppHostDataRepository {
             if (resource.name) {
                 this._workspaceResources.set(resource.name, resource);
                 this._describeReceivedData = true;
-                this._setError(undefined);
+                this._setDescribeError(undefined);
                 this._describeRestartDelay = 5000; // Reset backoff on successful data
                 this._updateWorkspaceContext();
+                return true;
             }
         } catch (e) {
             extensionLogOutputChannel.warn(`Failed to parse describe NDJSON line: ${e}`);
         }
+
+        return false;
+    }
+
+    private _getDescribeNoDataError(exitCode: number | null, nonJsonLines: readonly string[], stderr: string): string | undefined {
+        if (isDescribeUnsupportedOutput(nonJsonLines, stderr)) {
+            return aspireCliDescribeNotSupported(aspireDescribeMinimumVersion);
+        }
+
+        if (exitCode !== 0 && this._workspaceAppHostPath) {
+            return appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion);
+        }
+
+        return undefined;
     }
 
     private _updateWorkspaceContext(options?: { clearLoading?: boolean }): void {
         const hasWorkspaceAppHost = this._workspaceAppHost !== undefined;
         const hasResources = this._workspaceResources.size > 0;
-        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasWorkspaceAppHost && !hasResources);
-        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost);
+        const hasRunningAppHosts = this._appHosts.length > 0;
+        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts);
+        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
             this._updateLoadingContext();
@@ -526,8 +621,24 @@ export class AppHostDataRepository {
 
     private _startPsPolling(): void {
         this._stopPolling();
+        if (this._supportsPsFollow) {
+            this._startPsFollow();
+            return;
+        }
+
+        this._startPsIntervalPolling();
+    }
+
+    private _startPsIntervalPolling(fetchImmediately = true): void {
+        if (this._pollingInterval) {
+            clearInterval(this._pollingInterval);
+            this._pollingInterval = undefined;
+        }
+
         const intervalMs = this._getPollingIntervalMs();
-        this._fetchAppHosts();
+        if (fetchImmediately) {
+            this._fetchAppHosts();
+        }
         this._pollingInterval = setInterval(() => {
             if (!this._disposed) {
                 this._fetchAppHosts();
@@ -555,6 +666,101 @@ export class AppHostDataRepository {
         return Math.max(interval, 1000);
     }
 
+    private async _startPsFollow(): Promise<void> {
+        const fetchVersion = ++this._psFetchVersion;
+        let cliPath: string;
+        try {
+            cliPath = await this._terminalProvider.getAspireCliExecutablePath();
+        } catch (error) {
+            if (this._isCurrentPsFetch(fetchVersion)) {
+                const errorMessage = errorFetchingAppHosts(String(error));
+                extensionLogOutputChannel.warn(errorMessage);
+                this._setPsError(errorMessage);
+                if (this._loadingGlobal) {
+                    this._loadingGlobal = false;
+                    this._updateLoadingContext();
+                }
+                this._supportsPsFollow = false;
+                this._startPsIntervalPolling(false);
+            }
+            return;
+        }
+
+        if (!this._isCurrentPsFetch(fetchVersion)) {
+            return;
+        }
+
+        let psProcess: ChildProcessWithoutNullStreams | undefined;
+        let psProcessCompletedSynchronously = false;
+        let callbackInvoked = false;
+        const removePsProcess = () => {
+            if (psProcess) {
+                this._psProcesses.delete(psProcess);
+            } else {
+                psProcessCompletedSynchronously = true;
+            }
+        };
+
+        const args = ['ps', '--follow', '--format', 'json'];
+        if (this._supportsResources) {
+            args.push('--resources');
+        }
+
+        psProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+            noExtensionVariables: true,
+            lineCallback: (line) => {
+                if (!this._isCurrentPsFetch(fetchVersion) || line.trim().length === 0) {
+                    return;
+                }
+
+                this._setPsError(undefined);
+                this._handlePsOutput(line);
+            },
+            exitCallback: (code) => {
+                removePsProcess();
+                if (callbackInvoked) {
+                    return;
+                }
+                callbackInvoked = true;
+                if (!this._isCurrentPsFetch(fetchVersion)) {
+                    return;
+                }
+
+                if (code !== 0) {
+                    this._supportsPsFollow = false;
+                    extensionLogOutputChannel.info('aspire ps --follow failed, falling back to aspire ps polling');
+                    this._startPsIntervalPolling();
+                    return;
+                }
+
+                this._startPsIntervalPolling();
+            },
+            errorCallback: (error) => {
+                removePsProcess();
+                if (callbackInvoked) {
+                    return;
+                }
+                callbackInvoked = true;
+                if (!this._isCurrentPsFetch(fetchVersion)) {
+                    return;
+                }
+
+                extensionLogOutputChannel.warn(errorFetchingAppHosts(error.message));
+                this._supportsPsFollow = false;
+                this._startPsIntervalPolling();
+            }
+        });
+        if (!psProcessCompletedSynchronously) {
+            this._psProcesses.add(psProcess);
+        }
+
+        if (this._viewMode === 'global' && this._loadingGlobal) {
+            this._loadingGlobal = false;
+            this._updateLoadingContext();
+            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', this._appHosts.length === 0);
+        }
+    }
+
     private _fetchAppHosts(): void {
         if (this._fetchInProgress || this._disposed || !this._shouldPoll) {
             return;
@@ -568,7 +774,7 @@ export class AppHostDataRepository {
         }
         this._runPsCommand(args, fetchVersion, (code, stdout, stderr) => {
             if (code === 0) {
-                this._setError(undefined);
+                this._setPsError(undefined);
                 this._handlePsOutput(stdout);
                 this._fetchInProgress = false;
             } else if (this._supportsResources) {
@@ -576,19 +782,19 @@ export class AppHostDataRepository {
                 extensionLogOutputChannel.info('aspire ps --resources failed, falling back to aspire ps without --resources');
                 this._runPsCommand(['ps', '--format', 'json'], fetchVersion, (retryCode, retryStdout, retryStderr) => {
                     if (retryCode === 0) {
-                        this._setError(undefined);
+                        this._setPsError(undefined);
                         this._handlePsOutput(retryStdout);
                     } else {
                         this._loadingGlobal = false;
                         this._updateLoadingContext();
-                        this._setError(errorFetchingAppHosts(retryStderr || `exit code ${retryCode}`));
+                        this._setPsError(errorFetchingAppHosts(retryStderr || `exit code ${retryCode}`));
                     }
                     this._fetchInProgress = false;
                 });
             } else {
                 this._loadingGlobal = false;
                 this._updateLoadingContext();
-                this._setError(errorFetchingAppHosts(stderr || `exit code ${code}`));
+                this._setPsError(errorFetchingAppHosts(stderr || `exit code ${code}`));
                 this._fetchInProgress = false;
             }
         });
@@ -603,7 +809,30 @@ export class AppHostDataRepository {
         vscode.commands.executeCommand('setContext', 'aspire.loading', isLoading);
     }
 
-    private _setError(message: string | undefined): void {
+    private _clearErrors(): void {
+        this._describeErrorMessage = undefined;
+        this._psErrorMessage = undefined;
+        this._updateErrorMessage();
+    }
+
+    private _setDescribeError(message: string | undefined): void {
+        if (this._describeErrorMessage !== message) {
+            this._describeErrorMessage = message;
+            this._updateErrorMessage();
+        }
+    }
+
+    private _setPsError(message: string | undefined): void {
+        if (this._psErrorMessage !== message) {
+            this._psErrorMessage = message;
+            this._updateErrorMessage();
+        }
+    }
+
+    private _updateErrorMessage(): void {
+        const message = this._viewMode === 'workspace'
+            ? this._describeErrorMessage ?? this._psErrorMessage
+            : this._psErrorMessage ?? this._describeErrorMessage;
         const hasError = message !== undefined;
         if (this._errorMessage !== message) {
             this._errorMessage = message;
@@ -617,14 +846,18 @@ export class AppHostDataRepository {
 
     private _handlePsOutput(stdout: string): void {
         try {
-            const parsed: AppHostDisplayInfo[] = JSON.parse(stdout);
+            const parsed: AppHostDisplayInfo[] | AppHostDisplayInfo = JSON.parse(stdout);
+            const appHosts = Array.isArray(parsed)
+                ? parsed
+                : this._applyPsDelta(parsed);
+
             if (this._viewMode === 'workspace') {
-                this._handleWorkspacePsOutput(parsed);
+                this._handleWorkspacePsOutput(appHosts);
                 return;
             }
 
-            const changed = JSON.stringify(parsed) !== JSON.stringify(this._appHosts);
-            this._appHosts = parsed;
+            const changed = JSON.stringify(appHosts) !== JSON.stringify(this._appHosts);
+            this._appHosts = appHosts;
 
             if (this._loadingGlobal) {
                 this._loadingGlobal = false;
@@ -632,7 +865,7 @@ export class AppHostDataRepository {
             }
 
             if (changed) {
-                vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', parsed.length === 0);
+                vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', appHosts.length === 0);
                 this._onDidChangeData.fire();
             }
         } catch (e) {
@@ -640,17 +873,37 @@ export class AppHostDataRepository {
         }
     }
 
+    private _applyPsDelta(appHost: AppHostDisplayInfo): AppHostDisplayInfo[] {
+        if (appHost.status?.toLowerCase() === 'stopped') {
+            return this._appHosts.filter(current => !isMatchingAppHostInstance(current, appHost));
+        }
+
+        return [
+            ...this._appHosts.filter(current => !isMatchingAppHostInstance(current, appHost)),
+            appHost,
+        ];
+    }
+
     private _handleWorkspacePsOutput(appHosts: readonly AppHostDisplayInfo[]): void {
         const workspaceAppHostPath = this._workspaceAppHostPath;
+        const workspaceAppHosts = this._workspaceAppHostCandidatePaths.length > 0
+            ? appHosts.filter(appHost => this._workspaceAppHostCandidatePaths.some(candidatePath => isMatchingAppHostPath(appHost.appHostPath, candidatePath)))
+            : [];
         const workspaceAppHost = workspaceAppHostPath
-            ? appHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, workspaceAppHostPath))
+            ? workspaceAppHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, workspaceAppHostPath))
             : undefined;
-        const changed = JSON.stringify(workspaceAppHost) !== JSON.stringify(this._workspaceAppHost);
+        const changed = JSON.stringify(workspaceAppHosts) !== JSON.stringify(this._appHosts)
+            || JSON.stringify(workspaceAppHost) !== JSON.stringify(this._workspaceAppHost);
 
+        if (workspaceAppHostPath && !workspaceAppHost && (this._workspaceAppHost || this._workspaceResources.size > 0)) {
+            this._stopDescribeWatch({ clearWorkspaceResources: true });
+        }
+
+        this._appHosts = workspaceAppHosts;
         this._workspaceAppHost = workspaceAppHost;
 
-        if (changed) {
-            this._updateWorkspaceContext();
+        if (changed || this._loadingWorkspace) {
+            this._updateWorkspaceContext({ clearLoading: true });
         }
     }
 
@@ -662,7 +915,7 @@ export class AppHostDataRepository {
             if (this._isCurrentPsFetch(fetchVersion)) {
                 const errorMessage = errorFetchingAppHosts(String(error));
                 extensionLogOutputChannel.warn(errorMessage);
-                this._setError(errorMessage);
+                this._setPsError(errorMessage);
                 this._fetchInProgress = false;
                 if (this._loadingGlobal) {
                     this._loadingGlobal = false;
@@ -875,6 +1128,19 @@ function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
 }
 
+function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
+    const output = [...nonJsonLines, stderr].join('\n').toLowerCase();
+    if (!output) {
+        return false;
+    }
+
+    return (output.includes('usage:') && output.includes('commands:'))
+        || output.includes('unknown command')
+        || output.includes('unrecognized command')
+        || output.includes('unrecognized option')
+        || output.includes('is not a recognized command');
+}
+
 function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {
     if (!left || !right) {
         return false;
@@ -890,4 +1156,17 @@ function isMatchingAppHostPath(left: string | undefined, right: string | undefin
     // can report the AppHost source file. Match by directory as a fallback to
     // mirror the CodeLens AppHost resolution strategy.
     return getComparisonKey(path.dirname(normalizedLeft)) === getComparisonKey(path.dirname(normalizedRight));
+}
+
+function isSameAppHostPath(left: string | undefined, right: string | undefined): boolean {
+    if (!left || !right) {
+        return false;
+    }
+
+    return getComparisonKey(path.normalize(left)) === getComparisonKey(path.normalize(right));
+}
+
+function isMatchingAppHostInstance(left: AppHostDisplayInfo, right: AppHostDisplayInfo): boolean {
+    return left.appHostPid === right.appHostPid
+        && isSameAppHostPath(left.appHostPath, right.appHostPath);
 }

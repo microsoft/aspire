@@ -31,6 +31,7 @@ internal class ConsoleInteractionService : IInteractionService
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ILogger _stdoutLogger;
     private readonly ILogger _stderrLogger;
+    private readonly ConsoleLogBufferContext _logBufferContext;
     private int _inStatus;
 
     /// <summary>
@@ -57,18 +58,20 @@ internal class ConsoleInteractionService : IInteractionService
 
     public bool SupportsLinks => MessageConsole.Profile.Capabilities.Links;
 
-    public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, ILoggerFactory loggerFactory)
+    public ConsoleInteractionService(ConsoleEnvironment consoleEnvironment, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, ILoggerFactory loggerFactory, ConsoleLogBufferContext logBufferContext)
     {
         ArgumentNullException.ThrowIfNull(consoleEnvironment);
         ArgumentNullException.ThrowIfNull(executionContext);
         ArgumentNullException.ThrowIfNull(hostEnvironment);
         ArgumentNullException.ThrowIfNull(loggerFactory);
+        ArgumentNullException.ThrowIfNull(logBufferContext);
         _outConsole = consoleEnvironment.Out;
         _errorConsole = consoleEnvironment.Error;
         _executionContext = executionContext;
         _hostEnvironment = hostEnvironment;
         _stdoutLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stdout}");
         _stderrLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stderr}");
+        _logBufferContext = logBufferContext;
     }
 
     public async Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
@@ -239,6 +242,10 @@ internal class ConsoleInteractionService : IInteractionService
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
         }
 
+        // Buffer console logs while interactive prompts are active so
+        // background debug output doesn't drown the prompt UI.
+        using var promptScope = _logBufferContext.BeginInteractivePromptScope();
+
         MessageLogger.LogInformation("Prompt: {PromptText} (default: {DefaultValue}, secret: {IsSecret})", promptText, isSecret ? "****" : defaultValue ?? "(none)", isSecret);
 
         var displayDefaultValue = defaultValue?.EscapeMarkup();
@@ -312,6 +319,10 @@ internal class ConsoleInteractionService : IInteractionService
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NoItemsAvailableForSelection, promptText));
         }
 
+        // Buffer console logs while interactive prompts are active so
+        // background debug output doesn't drown the prompt UI.
+        using var promptScope = _logBufferContext.BeginInteractivePromptScope();
+
         MessageLogger.LogInformation("Selection prompt: {PromptText}", promptText);
 
         var prompt = new SelectionPrompt<T>()
@@ -370,6 +381,10 @@ internal class ConsoleInteractionService : IInteractionService
         {
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NoItemsAvailableForSelection, promptText));
         }
+
+        // Buffer console logs while interactive prompts are active so
+        // background debug output doesn't drown the prompt UI.
+        using var promptScope = _logBufferContext.BeginInteractivePromptScope();
 
         var preSelectedSet = preSelected is not null ? new HashSet<T>(preSelected) : null;
 
@@ -626,6 +641,10 @@ internal class ConsoleInteractionService : IInteractionService
 
             throw new InvalidOperationException(InteractionServiceStrings.InteractiveInputNotSupported);
         }
+
+        // Buffer console logs while interactive prompts are active so
+        // background debug output doesn't drown the prompt UI.
+        using var promptScope = _logBufferContext.BeginInteractivePromptScope();
 
         // When no binding is provided, default to true (matching the historical behavior
         // where the old ConfirmAsync signature had defaultValue = true).

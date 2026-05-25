@@ -663,7 +663,7 @@ func (c *client) invokeCapability(ctx context.Context, capabilityID string, args
 		return nil, err
 	}
 
-	result, err := c.sendRequest(ctx, "invokeCapability", []any{capabilityID, args})
+	result, err := c.sendRequest(ctx, "invokeCapability", []any{capabilityID, c.marshalTransportValue(args)})
 	if err != nil {
 		return nil, err
 	}
@@ -671,6 +671,32 @@ func (c *client) invokeCapability(ctx context.Context, capabilityID string, args
 		return nil, &CapabilityError{err: atsErr}
 	}
 	return wrapIfHandle(result, c), nil
+}
+
+func (c *client) marshalTransportValue(value any) any {
+	if callback, ok := value.(func(...any) any); ok {
+		return c.registerCallback(callback)
+	}
+
+	serialized := serializeValue(value)
+	switch v := serialized.(type) {
+	case func(...any) any:
+		return c.registerCallback(v)
+	case map[string]any:
+		result := make(map[string]any, len(v))
+		for key, nestedValue := range v {
+			result[key] = c.marshalTransportValue(nestedValue)
+		}
+		return result
+	case []any:
+		result := make([]any, len(v))
+		for i, item := range v {
+			result[i] = c.marshalTransportValue(item)
+		}
+		return result
+	default:
+		return serialized
+	}
 }
 
 func (c *client) authenticate(ctx context.Context, token string) error {

@@ -19,6 +19,8 @@ internal sealed class StopCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly IInteractionService _interactionService;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<StopCommand> _logger;
@@ -158,8 +160,8 @@ internal sealed class StopCommand : BaseCommand
 
         if (allConnections.Length == 0)
         {
-            _interactionService.DisplayError(SharedCommandStrings.AppHostNotRunning);
-            return CliExitCodes.FailedToFindProject;
+            _interactionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
+            return CliExitCodes.Success;
         }
 
         _logger.LogDebug("Found {Count} running AppHost(s) to stop", allConnections.Length);

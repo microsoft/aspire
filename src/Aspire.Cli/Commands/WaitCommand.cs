@@ -34,10 +34,12 @@ internal sealed class WaitCommand : BaseCommand
         DefaultValueFactory = _ => "healthy"
     };
 
+    internal const int DefaultTimeoutSeconds = 120;
+
     private static readonly Option<int> s_timeoutOption = new("--timeout")
     {
         Description = WaitCommandStrings.TimeoutOptionDescription,
-        DefaultValueFactory = _ => 120
+        DefaultValueFactory = _ => DefaultTimeoutSeconds
     };
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);

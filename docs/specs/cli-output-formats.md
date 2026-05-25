@@ -87,6 +87,7 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
   {
     "appHostPath": "/path/to/MyApp.AppHost/MyApp.AppHost.csproj",
     "appHostPid": 12345,
+    "status": "running",
     "sdkVersion": "13.0.0",
     "cliPid": 12340,
     "dashboardUrl": "https://localhost:17010/login?t=token"
@@ -101,6 +102,7 @@ Use `aspire ps --format json --resources` to include each AppHost's current reso
   {
     "appHostPath": "/path/to/MyApp.AppHost/MyApp.AppHost.csproj",
     "appHostPid": 12345,
+    "status": "running",
     "resources": [
       {
         "name": "api",
@@ -118,6 +120,13 @@ Use `aspire ps --format json --resources` to include each AppHost's current reso
     ]
   }
 ]
+```
+
+`aspire ps --follow --format json` streams newline-delimited AppHost objects. New or changed AppHosts are emitted with `"status": "running"`. When an AppHost stops, it is emitted one last time with `"status": "stopped"` so consumers can remove it from their state:
+
+```json
+{"appHostPath":"/path/to/MyApp.AppHost/MyApp.AppHost.csproj","appHostPid":12345,"status":"running"}
+{"appHostPath":"/path/to/MyApp.AppHost/MyApp.AppHost.csproj","appHostPid":12345,"status":"stopped"}
 ```
 
 ### `aspire describe`

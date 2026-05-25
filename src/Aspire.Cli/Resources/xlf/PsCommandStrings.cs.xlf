@@ -7,9 +7,14 @@
         <target state="needs-review-translation">Vypíše spuštěné hostitele aplikací Aspire.</target>
         <note />
       </trans-unit>
-      <trans-unit id="HeaderCliLog">
-        <source>Logs</source>
-        <target state="new">Logs</target>
+      <trans-unit id="FollowOptionDescription">
+        <source>Keep running and emit updates as running AppHosts or resources change. JSON output is emitted as newline-delimited full snapshots.</source>
+        <target state="new">Keep running and emit updates as running AppHosts or resources change. JSON output is emitted as newline-delimited full snapshots.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FollowRequiresJson">
+        <source>The --follow option only supports JSON output. Use --format json.</source>
+        <target state="new">The --follow option only supports JSON output. Use --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderCliPid">

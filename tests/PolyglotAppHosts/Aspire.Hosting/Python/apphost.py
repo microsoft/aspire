@@ -96,8 +96,13 @@ with create_builder() as builder:
     container.with_otlp_exporter(protocol="HttpJson")
     # addDockerfile
     docker_container = builder.add_dockerfile("resource", ".")
+    dockerfile_factory = lambda factory_context: """FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+WORKDIR /app
+ENTRYPOINT ["dotnet", "App.dll"]"""
+    docker_factory_container = builder.add_dockerfile_factory("dockerfactoryapp", ".", dockerfile_factory, stage="runtime")
     docker_builder_container = builder.add_dockerfile_builder("builder-resource", ".", configure_dockerfile_builder, stage="runtime")
     docker_container.with_dockerfile_builder(".", configure_dockerfile_builder, stage="runtime")
+    docker_factory_container.with_dockerfile_factory(".", dockerfile_factory, stage="runtime")
     # addExecutable (pre-existing)
     exe = builder.add_executable("resource", "echo", ".", [])
     # addProject (pre-existing)
@@ -142,6 +147,7 @@ with create_builder() as builder:
     built_connection_string.with_connection_property_value("Key", "Value")
     container.with_reference(endpoint)
     container.with_reference("https://example.com/", name="external-uri")
+    external_service = builder.add_external_service("external-service", "https://example.com")
     built_connection_string.with_connection_property("Host", expr)
     built_connection_string.with_connection_property("Mode", "Development")
     vnet = builder.add_azure_virtual_network("vnet", address_prefix="10.0.0.0/16")
@@ -199,6 +205,8 @@ with create_builder() as builder:
     # withEnvironment - connection string resource
     container.with_environment("MY_CONN", env_connection_string)
     container.with_environment("MY_EXPR_CONN", expression_connection_string)
+    # withEnvironment - external service resource
+    container.with_environment("MY_EXTERNAL_SERVICE", external_service)
     container.with_env_callback(configure_environment_callback)
     container.with_args_callback(configure_args_callback)
     container.with_urls_callback(configure_urls_callback)
@@ -282,6 +290,7 @@ with create_builder() as builder:
     builder_execution_context = builder.execution_context
     execution_context_service_provider = builder_execution_context.service_provider
     _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
+    resource_command_service = execution_context_service_provider.get_resource_command_service()
 
     def configure_eventing_subscriber(registration_context):
         _subscriber_execution_context = registration_context.execution_context
@@ -393,13 +402,30 @@ with create_builder() as builder:
     # withHttpHealthCheck
     container.with_http_health_check()
     # withCommand
-    def restart_command(ctx):
-        service_provider = ctx.service_provider
-        command_service = service_provider.get_resource_command_service()
+    def update_command_state(ctx):
+        snapshot = ctx.resource_snapshot
+        return "Enabled" if snapshot.get("HealthStatus") == "Healthy" else "Disabled"
 
-        return command_service.execute_command("mycontainer", "noop")
+    def echo_command(ctx):
+        command_arguments = list(ctx.arguments.to_array())
+        return {"success": command_arguments[0]["Value"] == "hello"}
 
-    container.with_command("noop", "Noop", lambda *_args, **_kwargs: {"success": True})
+    container.with_command(
+        "noop",
+        "Noop",
+        lambda *_args, **_kwargs: {"success": True},
+        command_options={"UpdateState": update_command_state}
+    )
+
+    def restart_command(_ctx):
+        return resource_command_service.execute_command(container, "echo", arguments={"message": "hello"})
+
+    container.with_command(
+        "echo",
+        "Echo",
+        echo_command,
+        command_options={"Arguments": [{"Name": "message", "InputType": "Text", "Required": True}]}
+    )
     container.with_command("restart", "Restart", restart_command)
     # withHttpCommand
     container.with_http_command("/health", "Health Check")

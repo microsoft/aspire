@@ -1,12 +1,11 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { getParserForDocument } from './parsers/AppHostResourceParser';
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
-import { findResourceState, findWorkspaceResourceState } from './resourceStateUtils';
+import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, HealthStatus, StateStyle, ResourceType } from './resourceConstants';
 import {
     codeLensDebugPipelineStep,
@@ -63,8 +62,12 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         const workspaceResources = this._treeProvider.workspaceResources;
         const workspaceAppHost = this._treeProvider.workspaceAppHost;
         const workspaceAppHostPath = this._treeProvider.workspaceAppHostPath ?? '';
-        const hasRunningData = appHosts.length > 0 || workspaceResources.length > 0 || workspaceAppHost !== undefined;
-        const findWorkspace = findWorkspaceResourceState(workspaceResources, workspaceAppHostPath);
+        const globalAppHost = this._resolveGlobalAppHostForDocument(document, appHosts);
+        const workspaceAppHostMatchesDocument = workspaceAppHostPath !== '' && this._documentMatchesAppHostPath(document, workspaceAppHostPath);
+        const hasRunningData = globalAppHost !== undefined || (workspaceAppHostMatchesDocument && (workspaceResources.length > 0 || workspaceAppHost !== undefined));
+        const findWorkspace = workspaceAppHostMatchesDocument
+            ? findWorkspaceResourceState(workspaceResources, workspaceAppHostPath)
+            : () => undefined;
 
         const lenses: vscode.CodeLens[] = [];
 
@@ -109,7 +112,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             } else if (resource.kind === 'resource') {
                 // Resources get state lenses when live data is available
                 if (hasRunningData) {
-                    const match = findResourceState(appHosts, resource.name)
+                    const match = (globalAppHost ? findResourceState([globalAppHost], resource.name) : undefined)
                         ?? findWorkspace(resource.name);
                     if (match) {
                         this._addStateLenses(lenses, lineRange, match.resource, match.appHost);
@@ -186,24 +189,31 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         workspaceResources: readonly ResourceJson[],
     ): string | undefined {
         const docPath = document.uri.fsPath;
-        const docDir = path.dirname(docPath);
         const match = this._dataRepository.appHosts.find(host => {
             const hostPath = host.appHostPath;
-            if (!hostPath) {
-                return false;
-            }
-            return hostPath === docPath || path.dirname(hostPath) === docDir;
+            return matchesAppHostPathOrDirectory(docPath, hostPath);
         });
         if (match) {
             return match.appHostPath;
         }
         if (workspaceAppHostPath && (workspaceResources.length > 0 || this._dataRepository.workspaceAppHost !== undefined)) {
-            const workspaceAppHostDir = path.dirname(workspaceAppHostPath);
-            if (workspaceAppHostPath === docPath || workspaceAppHostDir === docDir) {
+            if (matchesAppHostPathOrDirectory(docPath, workspaceAppHostPath)) {
                 return workspaceAppHostPath;
             }
         }
         return undefined;
+    }
+
+    private _resolveGlobalAppHostForDocument(document: vscode.TextDocument, appHosts: readonly AppHostDisplayInfo[]): AppHostDisplayInfo | undefined {
+        return appHosts.find(host => this._documentMatchesAppHostPath(document, host.appHostPath));
+    }
+
+    private _documentMatchesAppHostPath(document: vscode.TextDocument, appHostPath: string | undefined): boolean {
+        if (!appHostPath) {
+            return false;
+        }
+
+        return matchesAppHostPathOrDirectory(document.uri.fsPath, appHostPath);
     }
 
     private _addStateLenses(
@@ -243,7 +253,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             title: stateLabel,
             command: 'aspire-vscode.codeLensRevealResource',
             tooltip: tooltipText,
-            arguments: [resource.displayName ?? resource.name],
+            arguments: [resource.displayName ?? resource.name, appHost.appHostPath],
         }));
 
         // Action lenses based on available commands

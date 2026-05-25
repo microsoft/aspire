@@ -273,7 +273,7 @@ public class AddViteAppTests
     }
 
     [Fact]
-    public async Task VerifyDockerfileWhenNpmScriptUsesPnpm()
+    public async Task VerifyDockerfileWhenPackageScriptUsesPnpm()
     {
         using var tempDir = new TestTempDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
@@ -284,7 +284,7 @@ public class AddViteAppTests
 
         var nodeApp = builder.AddViteApp("nuxt", appDir)
             .WithPnpm(install: true)
-            .PublishAsNpmScript("start");
+            .PublishAsPackageScript("start");
 
         await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
 
@@ -293,7 +293,7 @@ public class AddViteAppTests
     }
 
     [Fact]
-    public async Task VerifyDockerfileWhenNpmScriptUsesBun()
+    public async Task VerifyDockerfileWhenPackageScriptUsesBun()
     {
         using var tempDir = new TestTempDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
@@ -304,7 +304,7 @@ public class AddViteAppTests
 
         var nodeApp = builder.AddViteApp("nuxt", appDir)
             .WithBun(install: true)
-            .PublishAsNpmScript("start");
+            .PublishAsPackageScript("start");
 
         await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
 

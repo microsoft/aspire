@@ -706,6 +706,68 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProcessGuestLauncher_KillsProcessAndReturnsOnCancellation()
+    {
+        // Regression coverage for the AppHost system teardown path: when the AppHost server's
+        // backchannel fails or the user cancels the run, GuestAppHostProject cancels a CTS that's
+        // passed to this launcher. The launcher must kill the guest process tree (rather than
+        // leaving it running) and drain output, otherwise pendingRun never completes and the CLI
+        // appears to hang while it waits for the AppHost system to exit.
+        var launcher = new ProcessGuestLauncher(
+            "test",
+            _loggerFactory.CreateLogger<ProcessGuestLauncher>());
+
+        // Use a long-running cross-platform command. We pick something the OS resolves through PATH
+        // so the launcher's CommandPathResolver succeeds without any fake.
+        string command;
+        string[] args;
+        if (OperatingSystem.IsWindows())
+        {
+            // ping with a long count keeps the process alive for ~60 seconds; the kill needs to
+            // actually terminate the process tree (cmd.exe -> ping.exe) for this to return.
+            command = "cmd.exe";
+            args = ["/c", "ping", "-n", "60", "127.0.0.1"];
+        }
+        else
+        {
+            command = "sleep";
+            args = ["60"];
+        }
+
+        using var cts = new CancellationTokenSource();
+        var launchTask = launcher.LaunchAsync(
+            command,
+            args,
+            new DirectoryInfo(Path.GetTempPath()),
+            new Dictionary<string, string>(),
+            cts.Token);
+
+        // Give the process a moment to actually start before cancelling so we exercise the
+        // kill-after-running path, not the cancel-before-start short-circuit.
+        await Task.Delay(500);
+
+        var stopwatch = Stopwatch.StartNew();
+        cts.Cancel();
+
+        var (exitCode, _) = await launchTask;
+        stopwatch.Stop();
+
+        // The killed process should report a non-zero exit code. Different platforms report this
+        // differently (SIGKILL maps to 137 on Linux/macOS; cmd.exe and ping return their own
+        // process-tree-termination codes on Windows), so we only assert "not zero".
+        Assert.NotEqual(0, exitCode);
+
+        // Most importantly, the launcher must return quickly after cancellation. Before this fix
+        // it just propagated the OperationCanceledException without killing the process, so the
+        // caller-owned `using var process = new Process { ... }` only disposed the handle - the
+        // OS process kept running until the underlying command finished on its own. We give a
+        // generous slack here so the test isn't flaky under load, but it should still be well
+        // under the 60s the command would run for if not killed.
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(15),
+            $"Expected ProcessGuestLauncher to return within 15s of cancellation but it took {stopwatch.Elapsed}.");
+    }
+
+    [Fact]
     public async Task RunAsync_CreatesMissingMigrationFiles()
     {
         using var tempDirectory = new TestTempDirectory();

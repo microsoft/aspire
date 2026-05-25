@@ -692,6 +692,11 @@ internal sealed class ProjectLocator(
                     if (validationResult.IsValid)
                     {
                         logger.LogDebug("Using {Language} apphost {ProjectFile}", handler.DisplayName, projectFile.FullName);
+                        if (createSettingsFile)
+                        {
+                            await CreateSettingsFileAsync(projectFile, cancellationToken);
+                        }
+
                         return new AppHostProjectSearchResult(projectFile, [projectFile]);
                     }
                 }

@@ -7,6 +7,10 @@ param tags object = { }
 
 param env_acr_outputs_name string
 
+param appServicePlanName string
+
+param appServicePlanResourceGroup string
+
 resource env_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
   name: take('env_mi-${uniqueString(resourceGroup().id)}', 128)
   location: location
@@ -27,18 +31,9 @@ resource env_acr_env_mi_AcrPull 'Microsoft.Authorization/roleAssignments@2022-04
   scope: env_acr
 }
 
-resource env_asplan 'Microsoft.Web/serverfarms@2025-03-01' = {
-  name: take('envasplan-${uniqueString(resourceGroup().id)}', 60)
-  location: location
-  properties: {
-    perSiteScaling: true
-    reserved: true
-  }
-  kind: 'Linux'
-  sku: {
-    name: 'P0V3'
-    tier: 'Premium'
-  }
+resource env 'Microsoft.Web/serverfarms@2025-03-01' existing = {
+  name: appServicePlanName
+  scope: resourceGroup(appServicePlanResourceGroup)
 }
 
 resource env_contributor_mi 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
@@ -59,7 +54,7 @@ resource dashboard 'Microsoft.Web/sites@2025-03-01' = {
   name: take('${toLower('env')}-${toLower('aspiredashboard')}-${uniqueString(resourceGroup().id)}', 60)
   location: location
   properties: {
-    serverFarmId: env_asplan.id
+    serverFarmId: env.id
     siteConfig: {
       numberOfWorkers: 1
       linuxFxVersion: 'ASPIREDASHBOARD|1.0'
@@ -125,9 +120,9 @@ resource dashboard 'Microsoft.Web/sites@2025-03-01' = {
   kind: 'app,linux,aspiredashboard'
 }
 
-output name string = env_asplan.name
+output name string = env.name
 
-output planId string = env_asplan.id
+output planId string = env.id
 
 output webSiteSuffix string = uniqueString(resourceGroup().id)
 

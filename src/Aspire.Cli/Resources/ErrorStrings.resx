@@ -139,6 +139,9 @@
   <data name="ExtensionIncompatibleWithCli" xml:space="preserve">
     <value>Aspire Extension is incompatible with the CLI. The Extension must be updated to a version that supports the {0} capability.</value>
   </data>
+  <data name="CertificateGenerationFailed" xml:space="preserve">
+    <value>Failed to generate HTTPS development certificate (result: {0}).</value>
+  </data>
   <data name="CertificatesMayNotBeFullyTrusted" xml:space="preserve">
     <value>Developer certificates may not be fully trusted (trust exit code was: {0}).</value>
   </data>

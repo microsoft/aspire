@@ -100,7 +100,16 @@ steps:
       Write-Host "Validated Homebrew summary: $summaryPath"
       Write-Host "##vso[task.setvariable variable=HomebrewValidationSummaryPath]$summaryPath"
     displayName: '🟣Validate Homebrew validation summary'
-    condition: and(succeeded(), eq('${{ parameters.dryRun }}', 'false'))
+    # Same gate as the Submit step below. The summary's brewInstall/brewUninstall
+    # checks only pass when the prepare stage ran with runInstallTest=true, which
+    # in turn only happens on production-publishing builds, so on non-production
+    # branches the required checks are absent and this would fail meaninglessly.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -147,6 +156,15 @@ steps:
       }
       Write-Host "All download URLs are accessible."
     displayName: '🟣Validate download URLs from cask'
+    # Same gate as the Submit step below. Non-production casks point to artifacts
+    # that aren't published at their canonical ci.dot.net paths, and in dry-run
+    # we're not submitting anything; in either case the reachability probe is moot.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -468,8 +486,7 @@ steps:
         if (-not [bool]$existingOpenPr.draft) {
           Write-Host "Converting existing PR #$($existingOpenPr.number) to draft..."
 
-          $graphQlData = Invoke-GitHubGraphQL -Query @'
-          mutation ConvertPullRequestToDraft($pullRequestId: ID!) {
+          $convertPullRequestToDraftMutation = 'mutation ConvertPullRequestToDraft($pullRequestId: ID!) {
             convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
               pullRequest {
                 number
@@ -477,8 +494,9 @@ steps:
                 url
               }
             }
-          }
-          '@ -Variables @{
+          }'
+
+          $graphQlData = Invoke-GitHubGraphQL -Query $convertPullRequestToDraftMutation -Variables @{
             pullRequestId = $existingOpenPr.node_id
           }
 
@@ -505,6 +523,15 @@ steps:
         Write-Host "Draft PR created successfully: #$($createdPr.number) $($createdPr.html_url)"
       }
     displayName: '🟣Submit PR to Homebrew/homebrew-cask'
-    condition: and(succeeded(), eq('${{ parameters.dryRun }}', 'false'))
+    # Guard: only submit to Homebrew from production branches.
+    # 1ES PT branch validation surfaces this as a non-blocking warning, which is too easy to miss;
+    # a hard condition stops accidental submissions from feature, fork or dogfood branches.
+    # _IsProductionBranch is defined in eng/pipelines/common-variables.yml.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
     env:
       HOMEBREW_CASK_GITHUB_TOKEN: $(aspire-homebrew-bot-pat)

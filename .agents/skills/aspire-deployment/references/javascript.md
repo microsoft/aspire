@@ -37,8 +37,8 @@ aspire docs api search "PublishAsStaticWebsite" --language csharp
 aspire docs api search "PublishAsStaticWebsite" --language typescript
 aspire docs api search "PublishAsNodeServer" --language csharp
 aspire docs api search "PublishAsNodeServer" --language typescript
-aspire docs api search "PublishAsNpmScript" --language csharp
-aspire docs api search "PublishAsNpmScript" --language typescript
+aspire docs api search "PublishAsPackageScript" --language csharp
+aspire docs api search "PublishAsPackageScript" --language typescript
 aspire docs api search "PublishWithContainerFiles" --language csharp
 aspire docs api search "PublishWithContainerFiles" --language typescript
 aspire docs api search "PublishWithStaticFiles" --language csharp
@@ -72,7 +72,7 @@ Choose the production entrypoint before deploying:
 | Static frontend served by a gateway/BFF | YARP or another proxy is the public entrypoint and serves the built frontend | Gateway uses `PublishWithStaticFiles(frontend)` |
 | Static frontend served by the JavaScript resource | The frontend should deploy as its own static website/container | JavaScript resource uses `PublishAsStaticWebsite(...)` |
 | SSR or Node.js server with built output | The framework emits a server entrypoint/artifact | JavaScript resource uses `PublishAsNodeServer(...)` |
-| SSR or Node.js server started by package script | Runtime needs package manager scripts and runtime dependencies | JavaScript resource uses `PublishAsNpmScript(...)` |
+| SSR or Node.js server started by package script | Runtime needs package manager scripts and runtime dependencies | JavaScript resource uses `PublishAsPackageScript(...)` |
 | Next.js standalone app | Next.js is configured for standalone output | Use `AddNextJsApp(...)` |
 
 Do not assume the Vite dev server is the production server. During publish/deploy, Vite resources usually build static files unless the AppHost selects a JavaScript publish mode.
@@ -121,6 +121,6 @@ Do not assume the Vite dev server is the production server. During publish/deplo
 - Vite dev-server proxy configuration does not automatically become production routing.
 - `PublishWithContainerFiles(...)` copies built files into a destination container; the destination app still needs to serve those files.
 - `PublishWithStaticFiles(...)` is for gateway/BFF resources such as YARP serving frontend files.
-- `PublishAsNpmScript(...)` keeps runtime package dependencies and is larger than a built Node server output; prefer `PublishAsNodeServer(...)` when the framework emits a runnable server artifact.
+- `PublishAsPackageScript(...)` keeps runtime package dependencies and is larger than a built Node server output; prefer `PublishAsNodeServer(...)` when the framework emits a runnable server artifact.
 - Next.js standalone deployment requires Next.js standalone output configuration. Validate this before deploying.
 - Do not expose both a dev frontend resource and the production-serving gateway/backend unless the user intentionally wants two public surfaces.

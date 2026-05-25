@@ -1,4 +1,4 @@
-﻿// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.mts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -15,10 +15,10 @@ import {
     wrapIfHandle,
     registerHandleWrapper,
     isPromiseLike
-} from './transport.js';
-import type { AspireClientRpc } from './transport.js';
+} from './transport.mjs';
+import type { AspireClientRpc } from './transport.mjs';
 
-import type { HandleReference } from './base.js';
+import type { HandleReference } from './base.mjs';
 
 import {
     ResourceBuilderBase,
@@ -26,24 +26,24 @@ import {
     refExpr,
     AspireDict,
     AspireList
-} from './base.js';
+} from './base.mjs';
 
 export {
     InputType,
     InteractionInputCollection
-} from './base.js';
+} from './base.mjs';
 
 export type {
     InteractionInput,
     InteractionInputOption
-} from './base.js';
+} from './base.mjs';
 
 import type {
     Awaitable,
     InteractionInput,
     InteractionInputCollection,
     InputType
-} from './base.js';
+} from './base.mjs';
 
 // ============================================================================
 // Handle Type Aliases (Internal - not exported to users)
@@ -309,6 +309,13 @@ export interface TestCollectionContext {
     metadata(): Promise<AspireDict<string, string>>;
 }
 
+export interface TestCollectionContextPromise extends PromiseLike<TestCollectionContext> {
+    /** List property - should generate AspireList getter like Dictionary properties. */
+    items(): Promise<AspireList<string>>;
+    /** Dictionary property - already works with AspireDict getter. */
+    metadata(): Promise<AspireDict<string, string>>;
+}
+
 // ============================================================================
 // TestCollectionContextImpl
 // ============================================================================
@@ -344,6 +351,31 @@ class TestCollectionContextImpl implements TestCollectionContext {
             );
         }
         return this._metadata;
+    }
+
+}
+
+/**
+ * Thenable wrapper for TestCollectionContext that enables fluent chaining.
+ */
+class TestCollectionContextPromiseImpl implements TestCollectionContextPromise {
+    constructor(private _promise: Promise<TestCollectionContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = TestCollectionContext, TResult2 = never>(
+        onfulfilled?: ((value: TestCollectionContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    items(): Promise<AspireList<string>> {
+        return this._promise.then(obj => obj.items());
+    }
+
+    metadata(): Promise<AspireDict<string, string>> {
+        return this._promise.then(obj => obj.metadata());
     }
 
 }
@@ -3959,9 +3991,9 @@ export async function createBuilder(options?: CreateBuilderOptions): Promise<Dis
 }
 
 // Re-export commonly used types
-export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.js';
-export { refExpr, ReferenceExpression } from './base.js';
-export type { HandleReference, Awaitable } from './base.js';
+export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.mjs';
+export { refExpr, ReferenceExpression } from './base.mjs';
+export type { HandleReference, Awaitable } from './base.mjs';
 
 // ============================================================================
 // Global Error Handling
@@ -4029,5 +4061,4 @@ registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hos
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource', (handle, client) => new ResourceImpl(handle as IResourceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString', (handle, client) => new ResourceWithConnectionStringImpl(handle as IResourceWithConnectionStringHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment', (handle, client) => new ResourceWithEnvironmentImpl(handle as IResourceWithEnvironmentHandle, client));
-
 

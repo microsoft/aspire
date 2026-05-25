@@ -33,7 +33,7 @@ public sealed class KubernetesPublishRequiresExternalEndpointTests(ITestOutputHe
             appHostBodyExtension: """
             var kube = builder.AddKubernetesEnvironment("kube");
             var api = builder.AddContainer("api", "nginx").WithHttpEndpoint(targetPort: 80);
-            kube.AddIngress("public").WithRoute("/", api.GetEndpoint("http"));
+            kube.AddIngress("public").WithPath("/", api.GetEndpoint("http"));
             """);
     }
 

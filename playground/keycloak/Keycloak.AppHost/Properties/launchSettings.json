@@ -5,24 +5,20 @@
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "https://localhost:17241;http://localhost:15079",
+      "applicationUrl": "https://keycloak.dev.localhost:17241;http://keycloak.dev.localhost:15079",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:21125",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:22112"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "http": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,
-      "applicationUrl": "http://localhost:15079",
+      "applicationUrl": "http://keycloak.dev.localhost:15079",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19191",
-        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:20230"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     },
     "generate-manifest": {
@@ -30,11 +26,10 @@
       "launchBrowser": true,
       "dotnetRunMessages": true,
       "commandLineArgs": "--publisher manifest --output-path aspire-manifest.json",
-      "applicationUrl": "http://localhost:16370",
+      "applicationUrl": "http://keycloak.dev.localhost:16370",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DOTNET_ENVIRONMENT": "Development",
-        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:17360"
+        "DOTNET_ENVIRONMENT": "Development"
       }
     }
   }

@@ -90,14 +90,14 @@ internal sealed class PythonLanguageSupport : ILanguageSupport
             editable = true
 
             [packages.directory]
-            path = ".modules"
+            path = ".aspire/modules"
             """;
 
         // Create requirements.txt as a fallback for pip (which doesn't support pylock.toml)
         files["apphost_requirements.txt"] = """
             # Aspire Python AppHost requirements
             # This file is used when uv is not available and pip is used instead.
-            -e .modules
+            -e .aspire/modules
             """;
 
         // Create apphost.run.json with random ports

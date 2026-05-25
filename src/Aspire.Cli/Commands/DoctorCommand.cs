@@ -24,7 +24,6 @@ internal sealed class DoctorCommand : BaseCommand
     // BaseCommand-driven update banner would print a second, less-structured copy on
     // stderr — pure duplication, plus noise for JSON consumers. Matches the convention
     // already used by other --format json commands (ApiGet, ApiList, DocsSearch, DocsList).
-    protected override bool UpdateNotificationsEnabled => false;
 
     private readonly IEnvironmentChecker _environmentChecker;
     private readonly IInstallationDiscovery _installationDiscovery;

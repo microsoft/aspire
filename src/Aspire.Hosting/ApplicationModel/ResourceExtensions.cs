@@ -450,7 +450,10 @@ public static class ResourceExtensions
     /// <param name="resource">The resource to process container build options for.</param>
     /// <param name="serviceProvider">The service provider for dependency injection.</param>
     /// <param name="logger">The logger used to log any information or errors during processing.</param>
-    /// <param name="executionContext">The optional execution context.</param>
+    /// <param name="executionContext">
+    /// The execution context to expose on the callback context. When <see langword="null"/> (the default),
+    /// the execution context is resolved from <paramref name="serviceProvider"/>.
+    /// </param>
     /// <param name="cancellationToken">A cancellation token to observe during the asynchronous operation.</param>
     /// <returns>A context object containing the accumulated container build options from all callbacks.</returns>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
@@ -461,12 +464,14 @@ public static class ResourceExtensions
         DistributedApplicationExecutionContext? executionContext = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(serviceProvider);
+
         var context = new ContainerBuildOptionsCallbackContext(
             resource,
             serviceProvider,
             logger,
             cancellationToken,
-            executionContext);
+            executionContext ?? serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>());
 
         if (resource.TryGetAnnotationsOfType<ContainerBuildOptionsCallbackAnnotation>(out var annotations))
         {

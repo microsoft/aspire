@@ -58,6 +58,9 @@ export const dashboardLabel = vscode.l10n.t('Dashboard');
 export const cliPidLabel = (pid: number) => vscode.l10n.t('CLI PID: {0}', pid);
 export const appHostPidLabel = (pid: number) => vscode.l10n.t('AppHost PID: {0}', pid);
 export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fetching running AppHosts: {0}', error);
+export const aspireDescribeMinimumVersion = '13.2.0';
+export const aspireCliDescribeNotSupported = (version: string) => vscode.l10n.t('Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.', version);
+export const appHostDescribeMayNotBeSupported = (version: string) => vscode.l10n.t('No workspace resources were returned. Workspace resources require the AppHost to reference Aspire.Hosting {0} or newer.', version);
 export const resourcesGroupLabel = vscode.l10n.t('Resources');
 export const noCommandsAvailable = vscode.l10n.t('No commands available for this resource.');
 export const selectCommandPlaceholder = vscode.l10n.t('Select a command to execute');
@@ -73,6 +76,11 @@ export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
 export const workspaceAppHostLabel = vscode.l10n.t('Workspace AppHost');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
+export const appHostCandidateDescription = (language: string, status: string) => vscode.l10n.t('{0} · {1}', language, status);
+export const workspaceViewSelectedSingleAppHost = (language?: string) => language
+    ? vscode.l10n.t('Workspace view selected because aspire ls found one buildable {0} AppHost.', language)
+    : vscode.l10n.t('Workspace view selected because aspire ls found one buildable AppHost.');
+export const workspaceViewSelectedMultipleAppHosts = (count: number) => vscode.l10n.t('Workspace view selected because aspire ls found {0} buildable AppHosts.', count);
 export const tooltipType = (type: string) => vscode.l10n.t('Type: {0}', type);
 export const tooltipState = (state: string) => vscode.l10n.t('State: {0}', state);
 export const tooltipHealth = (health: string) => vscode.l10n.t('Health: {0}', health);
@@ -101,6 +109,8 @@ export const invalidTokenLength = vscode.l10n.t('Invalid token length in Authori
 export const authorizationHeaderMustStartWithBearer = vscode.l10n.t('Authorization header must start with \'Bearer \'.');
 export const authorizationAndDcpHeadersRequired = vscode.l10n.t('Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.');
 export const buildFailedForProjectWithError = (project: string, error: string) => vscode.l10n.t('Build failed for project {0} with error: {1}.', project, error);
+export const failedToInspectRuntimeConfig = (outputPath: string, error: string) => vscode.l10n.t('Failed to inspect runtimeconfig for {0}: {1}', outputPath, error);
+export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPath: string) => vscode.l10n.t('Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', outputPath, projectPath);
 export const lookingForDevkitBuildTask = vscode.l10n.t('C# Dev Kit is installed, looking for C# Dev Kit build task...');
 export const csharpDevKitNotInstalled = vscode.l10n.t('C# Dev Kit is not installed, building using dotnet CLI...');
 export const dismissLabel = vscode.l10n.t('Dismiss');

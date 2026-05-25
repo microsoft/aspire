@@ -54,7 +54,7 @@ public sealed class JavaScriptPackageManagerAnnotation(string executableName, st
     internal Action<DockerfileStage>? InitializeDockerRuntimeStage { get; init; }
 
     /// <summary>
-    /// Gets or sets a callback to resolve the default <c>PublishAsNpmScript</c> runtime image from the build image.
+    /// Gets or sets a callback to resolve the default <c>PublishAsPackageScript</c> runtime image from the build image.
     /// </summary>
-    internal Func<string, string>? ResolveNpmScriptRuntimeImage { get; init; }
+    internal Func<string, string>? ResolvePackageScriptRuntimeImage { get; init; }
 }

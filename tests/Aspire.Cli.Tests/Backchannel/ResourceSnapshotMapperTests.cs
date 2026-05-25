@@ -11,9 +11,28 @@ namespace Aspire.Cli.Tests.Backchannel;
 public class ResourceSnapshotMapperTests
 {
     [Fact]
+    public void ResourceSnapshotDeserialization_WithNumericPropertyValue_PreservesJsonNumber()
+    {
+        var json = """
+            {
+                "Name": "service",
+                "ResourceType": "Executable",
+                "Properties": {
+                    "executable.pid": 12345
+                }
+            }
+            """;
+
+        var snapshot = JsonSerializer.Deserialize(json, BackchannelJsonSerializerContext.Default.ResourceSnapshot);
+
+        Assert.NotNull(snapshot);
+        var pid = Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["executable.pid"]);
+        Assert.Equal(12345, pid.GetValue<int>());
+    }
+
+    [Fact]
     public void MapToResourceJson_WithPopulatedProperties_MapsCorrectly()
     {
-        // Arrange
         var snapshot = new ResourceSnapshot
         {
             Name = "frontend",
@@ -63,10 +82,8 @@ public class ResourceSnapshotMapperTests
 
         var allSnapshots = new List<ResourceSnapshot> { snapshot };
 
-        // Act
         var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, allSnapshots, dashboardBaseUrl: "http://localhost:18080");
 
-        // Assert
         Assert.Equal("frontend", result.Name);
         Assert.Single(result.Urls!);
         Assert.Equal("http://localhost:5000", result.Urls![0].Url);

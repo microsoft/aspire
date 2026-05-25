@@ -37,7 +37,7 @@ public static class AzureKubernetesIngressExtensions
     ///     .WithIngressClass("azure-alb-external");
     ///
     /// var api = builder.AddProject&lt;MyApi&gt;("api");
-    /// ingress.WithRoute("/api", api.GetEndpoint("http"));
+    /// ingress.WithPath("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
     [AspireExport]

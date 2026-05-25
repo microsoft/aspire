@@ -83,6 +83,7 @@ internal sealed class AppHostLauncher(
     /// <param name="isolated">Whether to run in isolated mode.</param>
     /// <param name="isExtensionHost">Whether running inside VS Code extension.</param>
     /// <param name="waitForDebugger">Whether the AppHost is waiting for a debugger to attach.</param>
+    /// <param name="timeoutSeconds">The maximum number of seconds to wait for AppHost startup.</param>
     /// <param name="globalArgs">Global CLI args to forward to child process.</param>
     /// <param name="additionalArgs">Additional unmatched args to forward.</param>
     /// <param name="stopAfterLaunchDelay">Optional delay after launch before stopping the AppHost.</param>
@@ -94,6 +95,7 @@ internal sealed class AppHostLauncher(
         bool isolated,
         bool isExtensionHost,
         bool waitForDebugger,
+        int timeoutSeconds,
         IEnumerable<string> globalArgs,
         IEnumerable<string> additionalArgs,
         TimeSpan? stopAfterLaunchDelay,
@@ -141,12 +143,12 @@ internal sealed class AppHostLauncher(
             effectiveAppHostFile.FullName,
             executionContext.HomeDirectory.FullName);
         var expectedHash = AppHostHelper.ExtractHashFromSocketPath(expectedSocketPrefix)!;
-        var legacyHash = AppHostHelper.ComputeLegacyHash(effectiveAppHostFile.FullName);
+        var legacyHashes = AppHostHelper.ComputeLegacyHashes(effectiveAppHostFile.FullName);
 
         logger.LogDebug("Waiting for socket with prefix: {SocketPrefix}, Hash: {Hash}", expectedSocketPrefix, expectedHash);
-        if (legacyHash is not null)
+        if (legacyHashes.Length > 0)
         {
-            logger.LogDebug("Also searching for legacy hash: {LegacyHash}", legacyHash);
+            logger.LogDebug("Also searching for legacy hash(es): {LegacyHashes}", string.Join(", ", legacyHashes));
         }
 
         // If --wait-for-debugger is active, show a message so the user knows the AppHost
@@ -163,9 +165,9 @@ internal sealed class AppHostLauncher(
         LaunchResult launchResult;
         try
         {
-            launchResult = await interactionService.ShowStatusAsync(
+            launchResult = await interactionService.ShowDynamicStatusAsync(
                 RunCommandStrings.StartingAppHostInBackground,
-                () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHash, cancellationToken));
+                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHashes, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -175,7 +177,7 @@ internal sealed class AppHostLauncher(
         // Handle failure cases
         if (launchResult.Backchannel is null || launchResult.ChildProcess is null)
         {
-            return HandleLaunchFailure(launchResult, childLogFile);
+            return HandleLaunchFailure(launchResult, childLogFile, timeoutSeconds);
         }
 
         // Display results
@@ -322,7 +324,9 @@ internal sealed class AppHostLauncher(
         string executablePath,
         List<string> childArgs,
         string expectedHash,
-        string? legacyHash,
+        IReadOnlyList<string> legacyHashes,
+        TimeSpan timeout,
+        Action<string> updateStatus,
         CancellationToken cancellationToken)
     {
         Process childProcess;
@@ -351,8 +355,7 @@ internal sealed class AppHostLauncher(
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.Id);
 
         var startTime = timeProvider.GetUtcNow();
-        var timeout = TimeSpan.FromSeconds(120);
-        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.Id, expectedHash, legacyHash is not null);
+        using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.Id, expectedHash, legacyHashes.Count > 0);
         var scanCount = 0;
         IAppHostAuxiliaryBackchannel? connection = null;
         DashboardUrlsState? dashboardUrls = null;
@@ -376,7 +379,7 @@ internal sealed class AppHostLauncher(
                 scanCount++;
 
                 connection ??= backchannelMonitor.GetConnectionsByHash(expectedHash).FirstOrDefault()
-                    ?? (legacyHash is not null ? backchannelMonitor.GetConnectionsByHash(legacyHash).FirstOrDefault() : null);
+                    ?? legacyHashes.SelectMany(backchannelMonitor.GetConnectionsByHash).FirstOrDefault();
                 if (connection is not null)
                 {
                     waitForBackchannelActivity.SetBackchannelScanCount(scanCount);
@@ -425,7 +428,9 @@ internal sealed class AppHostLauncher(
                                 return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
                             }
 
-                            break;
+                            updateStatus(RunCommandStrings.AppHostConnectionLostWaitingForExit);
+                            await childProcess.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                            return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
                         }
 
                         if (appHostReady is null)
@@ -626,7 +631,7 @@ internal sealed class AppHostLauncher(
             TaskScheduler.Default);
     }
 
-    private CommandResult HandleLaunchFailure(LaunchResult result, string childLogFile)
+    private CommandResult HandleLaunchFailure(LaunchResult result, string childLogFile, int timeoutSeconds)
     {
         if (result.ChildProcess is null)
         {
@@ -646,7 +651,7 @@ internal sealed class AppHostLauncher(
         }
         else
         {
-            failureMessage = RunCommandStrings.TimeoutWaitingForAppHost;
+            failureMessage = string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeout);
         }
 
         interactionService.DisplayError(RunCommandStrings.FailedToStartAppHost);

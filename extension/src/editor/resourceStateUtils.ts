@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { ResourceJson, AppHostDisplayInfo } from '../views/AppHostDataRepository';
 
 export interface ResourceMatch {
@@ -47,4 +48,19 @@ export function findWorkspaceResourceState(
         }
         return undefined;
     };
+}
+
+export function matchesAppHostPathOrDirectory(documentPath: string, appHostPath: string | undefined): boolean {
+    if (!appHostPath) {
+        return false;
+    }
+
+    const normalizedDocumentPath = getComparisonKey(path.normalize(documentPath));
+    const normalizedAppHostPath = getComparisonKey(path.normalize(appHostPath));
+    return normalizedAppHostPath === normalizedDocumentPath
+        || getComparisonKey(path.dirname(normalizedAppHostPath)) === getComparisonKey(path.dirname(normalizedDocumentPath));
+}
+
+function getComparisonKey(value: string): string {
+    return process.platform === 'win32' ? value.toLowerCase() : value;
 }

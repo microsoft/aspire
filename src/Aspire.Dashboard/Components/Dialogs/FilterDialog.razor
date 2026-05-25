@@ -33,31 +33,48 @@
                           Width="100%" />
         </div>
 
-        <div class="filter-input-container input-container">
-            <FluentCombobox TOption="SelectViewModel<FieldValue>"
-                            @bind-Value="_formModel.Value"
-                            @bind-Value:after="ValueChanged"
-                            Items="@_filteredValues"
-                            Width="100%"
-                            Height="400px"
-                            OptionText="@(c => c.Name)"
-                            OptionValue="@(c => c.Name)"
-                            OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))"
-                            Immediate="true"
-                            ImmediateDelay="@FluentUIExtensions.InputDelay"
-                            Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]">
-                <OptionTemplate Context="optionContext">
-                    <FluentBadge Circular=true Appearance="Appearance.Neutral" Slot="end">
-                        @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
-                        @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
-                        @* Workaround this issue by inserting extra text using CSS. *@
-                        <span data-filtercount="@optionContext.Id!.Count"></span>
-                    </FluentBadge>
-                    <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
-                </OptionTemplate>
-            </FluentCombobox>
-            <ValidationMessage For="() => _formModel.Value" />
-        </div>
+        @if (_formModel.ValueIsNumeric)
+        {
+            <div class="filter-input-container input-container">
+                <FluentNumberField TValue="double?"
+                                   @bind-Value="_formModel.NumericValue"
+                                   Min="0"
+                                   Step="50"
+                                   Width="100%"
+                                   Immediate="true"
+                                   ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                   Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]" />
+                <ValidationMessage For="() => _formModel.NumericValue" />
+            </div>
+        }
+        else
+        {
+            <div class="filter-input-container input-container">
+                <FluentCombobox TOption="SelectViewModel<FieldValue>"
+                                @bind-Value="_formModel.Value"
+                                @bind-Value:after="ValueChanged"
+                                Items="@_filteredValues"
+                                Width="100%"
+                                Height="400px"
+                                OptionText="@(c => c.Name)"
+                                OptionValue="@(c => c.Name)"
+                                OptionTitle="@(c => DashboardUIHelpers.ResolveTooltip(c.Name))"
+                                Immediate="true"
+                                ImmediateDelay="@FluentUIExtensions.InputDelay"
+                                Label="@Loc[nameof(Dialogs.FilterDialogTextValuePlaceholder)]">
+                    <OptionTemplate Context="optionContext">
+                        <FluentBadge Circular=true Appearance="Appearance.Neutral" Slot="end">
+                            @* There is FluentUI bug that causes bad data if there is additional text in an option. *@
+                            @* https://github.com/microsoft/fluentui-blazor/issues/2695 *@
+                            @* Workaround this issue by inserting extra text using CSS. *@
+                            <span data-filtercount="@optionContext.Id!.Count"></span>
+                        </FluentBadge>
+                        <FluentHighlighter Text="@optionContext.Name" HighlightedText="@_formModel.Value" />
+                    </OptionTemplate>
+                </FluentCombobox>
+                <ValidationMessage For="() => _formModel.Value" />
+            </div>
+        }
 
         <div class="filter-input-container filter-button-container input-container">
             <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.Left">

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
@@ -41,6 +42,12 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
     {
         _logger = logger;
     }
+
+    /// <summary>
+    /// Overrides <see cref="Environment.ProcessPath"/> for relative-layout discovery.
+    /// Used in tests to simulate the CLI executable living at an arbitrary path.
+    /// </summary>
+    internal string? ProcessPathOverride { get; init; }
 
     public LayoutConfiguration? DiscoverLayout(string? projectDirectory = null)
     {
@@ -138,18 +145,36 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
 
     private LayoutConfiguration? TryDiscoverRelativeLayout()
     {
-        // Get CLI executable location
-        var cliPath = Environment.ProcessPath;
+        var cliPath = ProcessPathOverride ?? Environment.ProcessPath;
         if (string.IsNullOrEmpty(cliPath))
         {
             _logger.LogDebug("TryDiscoverRelativeLayout: ProcessPath is null or empty");
             return null;
         }
 
+        var resolvedCliPath = CliPathHelper.ResolveSymlinkOrOriginalPath(cliPath, _logger);
+        if (!string.Equals(resolvedCliPath, cliPath, StringComparison.Ordinal))
+        {
+            _logger.LogDebug("TryDiscoverRelativeLayout: Resolved CLI path {RawPath} -> {ResolvedPath}", cliPath, resolvedCliPath);
+
+            var resolvedLayout = TryDiscoverRelativeLayout(resolvedCliPath);
+            if (resolvedLayout is not null)
+            {
+                return resolvedLayout;
+            }
+
+            _logger.LogDebug("TryDiscoverRelativeLayout: No layout found relative to resolved CLI path; trying raw path {Path}.", cliPath);
+        }
+
+        return TryDiscoverRelativeLayout(cliPath);
+    }
+
+    private LayoutConfiguration? TryDiscoverRelativeLayout(string cliPath)
+    {
         var cliDir = Path.GetDirectoryName(cliPath);
         if (string.IsNullOrEmpty(cliDir))
         {
-            _logger.LogDebug("TryDiscoverRelativeLayout: Could not get directory from ProcessPath");
+            _logger.LogDebug("TryDiscoverRelativeLayout: Could not get directory from process path {Path}", cliPath);
             return null;
         }
 

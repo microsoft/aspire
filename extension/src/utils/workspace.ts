@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { cliNotAvailable, cliFoundAtDefaultPath, dismissLabel, dontShowAgainLabel, doYouWantToSetDefaultApphost, noLabel, noWorkspaceOpen, openCliInstallInstructions, selectDefaultLaunchApphost, yesLabel } from '../loc/strings';
+import { appHostCandidateDescription, cliNotAvailable, cliFoundAtDefaultPath, dismissLabel, dontShowAgainLabel, doYouWantToSetDefaultApphost, noLabel, noWorkspaceOpen, openCliInstallInstructions, selectDefaultLaunchApphost, yesLabel } from '../loc/strings';
 import path from 'path';
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
@@ -40,7 +40,7 @@ const commonExcludePatterns = [
 
     // Generated/Cache
     '**/.angular/**',
-    '**/.modules/**',
+    '**/.aspire/modules/**',
     '**/.azurite/**',
 ];
 
@@ -110,13 +110,232 @@ export function getRelativePathToWorkspace(filePath: string): string {
     return filePath;
 }
 
-interface AppHostProjectSearchResult {
-    selected_project_file: string | null;
-    all_project_file_candidates: string[];
+export interface AppHostCandidate {
+    relativePath: string;
+    path: string;
+    language: string;
+    status: string;
 }
 
-function isAppHostProjectSearchResult(obj: any): obj is AppHostProjectSearchResult {
-    return obj && (typeof obj.selected_project_file === 'string' || obj.selected_project_file === null) && Array.isArray(obj.all_project_file_candidates);
+export interface AppHostProjectSearchResult {
+    selected_project_file: string | null;
+    all_project_file_candidates: string[];
+    app_host_candidates: AppHostCandidate[];
+}
+
+interface AppHostQuickPickItem extends vscode.QuickPickItem {
+    appHostPath: string;
+}
+
+export function isBuildableAppHostCandidate(candidate: AppHostCandidate): boolean {
+    return candidate.status === 'buildable';
+}
+
+function isAppHostCandidate(obj: any): obj is AppHostCandidate {
+    return obj
+        && typeof obj.relativePath === 'string'
+        && typeof obj.path === 'string'
+        && typeof obj.language === 'string'
+        && typeof obj.status === 'string';
+}
+
+interface ParsedAppHostCandidates {
+    candidates: AppHostCandidate[];
+    selectedProjectFile: string | null;
+    isAspireLsOutput: boolean;
+}
+
+function parseAppHostCandidates(stdout: string): ParsedAppHostCandidates {
+    const parsed = JSON.parse(stdout);
+    if (Array.isArray(parsed)) {
+        return {
+            candidates: parsed.filter(isAppHostCandidate),
+            selectedProjectFile: null,
+            isAspireLsOutput: true,
+        };
+    }
+
+    if (parsed
+        && (typeof parsed.selected_project_file === 'string' || parsed.selected_project_file === null)
+        && Array.isArray(parsed.all_project_file_candidates)) {
+        const candidates = parsed.all_project_file_candidates
+            .filter((appHostPath: unknown): appHostPath is string => typeof appHostPath === 'string')
+            .map((appHostPath: string) => ({
+                relativePath: path.basename(appHostPath),
+                path: appHostPath,
+                language: '',
+                status: 'buildable',
+            }));
+
+        return {
+            candidates,
+            selectedProjectFile: parsed.selected_project_file,
+            isAspireLsOutput: false,
+        };
+    }
+
+    return {
+        candidates: [],
+        selectedProjectFile: null,
+        isAspireLsOutput: true,
+    };
+}
+
+async function getConfiguredAppHostPathFromWorkspaceRoot(rootFolder: vscode.WorkspaceFolder): Promise<string | null> {
+    const configUris = [
+        vscode.Uri.joinPath(rootFolder.uri, aspireConfigFileName),
+        vscode.Uri.joinPath(rootFolder.uri, '.aspire', 'settings.json'),
+    ];
+
+    for (const uri of configUris) {
+        try {
+            const json = await readJsonFile(uri);
+            const appHostPath = getAppHostPathFromConfig(json);
+            if (!appHostPath) {
+                continue;
+            }
+
+            const configDir = path.dirname(uri.fsPath);
+            return path.isAbsolute(appHostPath)
+                ? appHostPath
+                : path.join(configDir, appHostPath);
+        } catch {
+            // Missing or invalid settings files do not block AppHost discovery.
+        }
+    }
+
+    return null;
+}
+
+function createAppHostProjectSearchResult(appHostCandidates: AppHostCandidate[], selectedProjectFile: string | null, rootFolder: vscode.WorkspaceFolder): AppHostProjectSearchResult {
+    const effectiveAppHostCandidates = selectedProjectFile && !appHostCandidates.some(candidate => isSamePath(candidate.path, selectedProjectFile))
+        ? [...appHostCandidates, createConfiguredAppHostCandidate(selectedProjectFile, rootFolder)]
+        : appHostCandidates;
+    const buildableCandidates = effectiveAppHostCandidates.filter(isBuildableAppHostCandidate);
+    const allProjectFileCandidates = buildableCandidates.map(candidate => candidate.path);
+    const selectedCandidate = selectedProjectFile && buildableCandidates.some(candidate => isSamePath(candidate.path, selectedProjectFile))
+        ? selectedProjectFile
+        : null;
+
+    return {
+        selected_project_file: selectedCandidate,
+        all_project_file_candidates: allProjectFileCandidates,
+        app_host_candidates: effectiveAppHostCandidates,
+    };
+}
+
+function createConfiguredAppHostCandidate(appHostPath: string, rootFolder: vscode.WorkspaceFolder): AppHostCandidate {
+    return {
+        relativePath: path.relative(rootFolder.uri.fsPath, appHostPath),
+        path: appHostPath,
+        language: '',
+        status: 'buildable',
+    };
+}
+
+function isSamePath(left: string, right: string): boolean {
+    const normalizedLeft = path.normalize(left);
+    const normalizedRight = path.normalize(right);
+    return process.platform === 'win32'
+        ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+        : normalizedLeft === normalizedRight;
+}
+
+export function formatAppHostLanguage(language: string): string | undefined {
+    if (!language) {
+        return undefined;
+    }
+
+    switch (language.toLowerCase()) {
+        case 'csharp':
+            return 'C#';
+        case 'typescript':
+        case 'typescript/nodejs':
+            return 'TypeScript';
+        default:
+            return language.charAt(0).toUpperCase() + language.slice(1);
+    }
+}
+
+function createAppHostQuickPickItems(result: AppHostProjectSearchResult, rootFolder: vscode.WorkspaceFolder): AppHostQuickPickItem[] {
+    const candidates = result.app_host_candidates.length > 0
+        ? result.app_host_candidates
+        : result.all_project_file_candidates.map(appHostPath => ({
+            relativePath: path.relative(rootFolder.uri.fsPath, appHostPath),
+            path: appHostPath,
+            language: '',
+            status: 'buildable',
+        }));
+
+    return candidates.map(candidate => {
+        const language = candidate.language ? formatAppHostLanguage(candidate.language) : undefined;
+        const status = candidate.status || undefined;
+        return {
+            label: candidate.relativePath || path.relative(rootFolder.uri.fsPath, candidate.path),
+            description: language && status ? appHostCandidateDescription(language, status) : status,
+            detail: candidate.path,
+            appHostPath: candidate.path,
+        };
+    });
+}
+
+export function findAppHostsWithAspireLs(terminalProvider: AspireTerminalProvider, cliPath: string, rootFolder: vscode.WorkspaceFolder): { process: ChildProcessWithoutNullStreams; result: Promise<AppHostProjectSearchResult> } {
+    let stdout = '';
+    let stderr = '';
+    const configuredAppHostPathPromise = getConfiguredAppHostPathFromWorkspaceRoot(rootFolder);
+
+    const args = ['ls', '--format', 'json'];
+    if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
+        args.push('--cli-wait-for-debugger');
+    }
+
+    let proc: ChildProcessWithoutNullStreams;
+    const result = new Promise<AppHostProjectSearchResult>((resolve, reject) => {
+        let settled = false;
+        proc = spawnCliProcess(terminalProvider, cliPath, args, {
+            errorCallback: error => {
+                settled = true;
+                extensionLogOutputChannel.error(`Error executing aspire ls command: ${error}`);
+                reject(error);
+            },
+            exitCallback: async code => {
+                if (settled) {
+                    return;
+                }
+
+                if (code !== 0) {
+                    settled = true;
+                    extensionLogOutputChannel.warn(`aspire ls command exited with code: ${code}`);
+                    reject(new Error(stderr || `aspire ls exited with code ${code}`));
+                    return;
+                }
+
+                try {
+                    const parsed = parseAppHostCandidates(stdout);
+                    const selectedProjectFile = parsed.isAspireLsOutput
+                        ? await configuredAppHostPathPromise
+                        : null;
+                    const effectiveSelectedProjectFile = selectedProjectFile ?? parsed.selectedProjectFile;
+                    extensionLogOutputChannel.info(`Found ${parsed.candidates.length} AppHost candidates with aspire ls`);
+                    settled = true;
+                    resolve(createAppHostProjectSearchResult(parsed.candidates, effectiveSelectedProjectFile, rootFolder));
+                } catch (error) {
+                    settled = true;
+                    reject(error);
+                }
+            },
+            stdoutCallback: data => {
+                stdout += data;
+            },
+            stderrCallback: data => {
+                stderr += data;
+            },
+            noExtensionVariables: true,
+            workingDirectory: rootFolder.uri.fsPath
+        });
+    });
+
+    return { process: proc!, result };
 }
 
 export async function checkForExistingAppHostPathInWorkspace(terminalProvider: AspireTerminalProvider, getEnableSettingsFileCreationPromptOnStartup: () => boolean, setEnableSettingsFileCreationPromptOnStartup: (value: boolean) => Promise<void>): Promise<vscode.Disposable | null> {
@@ -173,45 +392,18 @@ export async function checkForExistingAppHostPathInWorkspace(terminalProvider: A
     }
 
     const settingsFile = settingsFiles[0];
-    extensionLogOutputChannel.info('Searching for AppHost projects using CLI command: aspire extension get-apphosts');
+    extensionLogOutputChannel.info('Searching for AppHost projects using CLI command: aspire ls');
 
-    let proc: ChildProcessWithoutNullStreams;
+    let proc: ChildProcessWithoutNullStreams | undefined;
     const cliPath = await terminalProvider.getAspireCliExecutablePath();
-    new Promise<AppHostProjectSearchResult>((resolve, reject) => {
-        const args = ['extension', 'get-apphosts'];
-        if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            args.push('--cli-wait-for-debugger');
-        }
-
-        proc = spawnCliProcess(terminalProvider, cliPath, args, {
-            errorCallback: error => {
-                extensionLogOutputChannel.error(`Error executing get-apphosts command: ${error}`);
-                reject();
-            },
-            exitCallback: code => {
-                extensionLogOutputChannel.warn(`get-apphosts command exited with code: ${code}`);
-                reject();
-            },
-            lineCallback: line => {
-                try {
-                    const parsed = JSON.parse(line);
-                    if (isAppHostProjectSearchResult(parsed)) {
-                        extensionLogOutputChannel.info(`Found AppHost search results - Selected: ${parsed.selected_project_file ?? 'none'}, Candidates: ${parsed.all_project_file_candidates.length}`);
-                        resolve(parsed);
-                    }
-                }
-                catch {
-                }
-            },
-            noExtensionVariables: true,
-            workingDirectory: rootFolder.uri.fsPath
-        });
-    })
+    const discovery = findAppHostsWithAspireLs(terminalProvider, cliPath, rootFolder);
+    proc = discovery.process;
+    discovery.result
         .then(result => promptToAddAppHostPathToSettingsFile(result, settingsFileExists, settingsFile, rootFolder, setEnableSettingsFileCreationPromptOnStartup))
         .catch(error => {
             extensionLogOutputChannel.error(`Failed to retrieve AppHost projects: ${error}`);
         })
-        .finally(() => proc?.kill());
+        .finally(() => proc = undefined);
 
     return {
         dispose() {
@@ -221,7 +413,7 @@ export async function checkForExistingAppHostPathInWorkspace(terminalProvider: A
 }
 
 async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearchResult, settingsFileExists: boolean, settingsFileLocation: vscode.Uri, rootFolder: vscode.WorkspaceFolder, setEnableSettingsFileCreationPromptOnStartup: (value: boolean) => Promise<void>): Promise<void> {
-    if (!result.selected_project_file && result.all_project_file_candidates.length === 0) {
+    if (!result.selected_project_file && result.all_project_file_candidates.length === 0 && result.app_host_candidates.length === 0) {
         extensionLogOutputChannel.info('No AppHost projects found in workspace');
         return;
     }
@@ -244,18 +436,18 @@ async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearch
 
     let appHostToUse: string | null = result.selected_project_file;
     if (!appHostToUse) {
-        extensionLogOutputChannel.info(`Showing quick pick with ${result.all_project_file_candidates.length} AppHost candidates`);
-        result.all_project_file_candidates = result.all_project_file_candidates.map(p => path.relative(rootFolder.uri.fsPath, p));
-        const selected = await vscode.window.showQuickPick(result.all_project_file_candidates, {
+        const appHostItems = createAppHostQuickPickItems(result, rootFolder);
+        extensionLogOutputChannel.info(`Showing quick pick with ${appHostItems.length} AppHost candidates`);
+        const selected = await vscode.window.showQuickPick(appHostItems, {
             placeHolder: selectDefaultLaunchApphost,
             canPickMany: false,
             ignoreFocusOut: true
         }) ?? null;
 
-        appHostToUse = selected ? path.join(rootFolder.uri.fsPath, selected) : null;
+        appHostToUse = selected?.appHostPath ?? null;
 
         if (selected) {
-            extensionLogOutputChannel.info(`User selected AppHost: ${selected}`);
+            extensionLogOutputChannel.info(`User selected AppHost: ${selected.appHostPath}`);
         } else {
             extensionLogOutputChannel.info('User cancelled AppHost selection');
         }

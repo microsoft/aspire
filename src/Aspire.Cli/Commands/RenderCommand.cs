@@ -45,6 +45,7 @@ internal sealed class RenderCommand : BaseCommand
         ["choice"] = "Selection prompt with formatted choices",
         ["choice-simple"] = "Selection prompt without formatter",
         ["mixed"] = "Mixed interaction service methods",
+        ["buffered-logging"] = "Background logging during interactive prompt (buffer demo)",
         ["markdown-interactive"] = "Render markdown with DisplayMarkdown (interactive)",
         ["markdown-plain"] = "Render markdown as plain text with DisplayRawText (non-interactive)",
         ["markdown-renderable"] = "Render markdown via ConvertToRenderable with ANSI disabled",
@@ -108,8 +109,6 @@ internal sealed class RenderCommand : BaseCommand
         Options.Add(s_listScenariosOption);
         Hidden = true;
     }
-
-    protected override bool UpdateNotificationsEnabled => false;
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -179,6 +178,8 @@ internal sealed class RenderCommand : BaseCommand
                 case "mixed":
                     await TestMixedMethodsAsync(cancellationToken);
                     return CliExitCodes.Success;
+                case "buffered-logging":
+                    return await TestBufferedLoggingAsync(cancellationToken);
                 case "markdown-interactive":
                     return TestMarkdownRenderInteractive();
                 case "markdown-plain":
@@ -389,6 +390,55 @@ internal sealed class RenderCommand : BaseCommand
 
         InteractionService.DisplayEmptyLine();
         InteractionService.DisplayMessage(KnownEmojis.StopSign, "Mixed methods test complete.");
+    }
+
+    private async Task<int> TestBufferedLoggingAsync(CancellationToken cancellationToken)
+    {
+        // Create a dedicated LoggerFactory with SpectreConsoleLoggerProvider so log messages
+        // are always visible on stderr without requiring --debug. Uses the shared buffer
+        // context from DI so buffering during interactive prompts still works.
+        var logBufferContext = _serviceProvider.GetRequiredService<ConsoleLogBufferContext>();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Debug);
+            builder.AddProvider(new SpectreConsoleLoggerProvider(Console.Error, logBufferContext));
+        });
+        var logger = loggerFactory.CreateLogger<RenderCommand>();
+
+        InteractionService.DisplayMessage(KnownEmojis.Information, "This demo fires background log messages while a prompt is active.");
+        InteractionService.DisplayMessage(KnownEmojis.Information, "Logs are buffered and flushed after the prompt completes.");
+        InteractionService.DisplayEmptyLine();
+
+        // Start a background task that writes log messages every 200ms.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var loggingTask = Task.Run(async () =>
+        {
+            var counter = 0;
+            while (!cts.Token.IsCancellationRequested)
+            {
+                counter++;
+                logger.LogDebug("Background log #{Counter} written while prompt is active", counter);
+                await Task.Delay(200, cts.Token).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+            }
+        }, cancellationToken);
+
+        await Task.Delay(500, cancellationToken); // Let a few logs accumulate before starting the prompt
+
+        // Show an interactive prompt — background logs should be buffered during this.
+        var answer = await InteractionService.PromptForStringAsync(
+            "Type something (background logs are buffering)",
+            binding: PromptBinding.CreateDefault<string?>("hello"),
+            cancellationToken: cancellationToken);
+
+        // Stop background logging and let buffered messages flush.
+        cts.Cancel();
+        await loggingTask;
+
+        InteractionService.DisplayEmptyLine();
+        InteractionService.DisplaySuccess($"You entered: {answer}");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Buffered log lines should appear above this message.");
+
+        return CliExitCodes.Success;
     }
 
     private async Task<int> TestLinksAsync(CancellationToken cancellationToken)

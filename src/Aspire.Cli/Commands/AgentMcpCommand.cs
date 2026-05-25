@@ -85,8 +85,6 @@ internal sealed class AgentMcpCommand : BaseCommand
         Options.Add(s_apiKeyOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     /// <summary>
     /// Public entry point for executing the MCP server command.
     /// This allows McpStartCommand to delegate to this implementation.

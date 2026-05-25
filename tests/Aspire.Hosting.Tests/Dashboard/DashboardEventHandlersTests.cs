@@ -141,9 +141,12 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         var otlpGrpcEndpoint = new EndpointReference(dashboardResource, KnownEndpointNames.OtlpGrpcEndpointName);
         otlpGrpcEndpoint.EndpointAnnotation.AllocatedEndpoint = new(otlpGrpcEndpoint.EndpointAnnotation, "localhost", 4317);
 
-        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { ServiceProvider = TestServiceProvider.Instance });
         var dashboardEnvironmentVariables = new ConcurrentDictionary<string, string?>();
 
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            ServiceProvider = new TestServiceProvider().AddService(model)
+        });
         var dashboardEnvironment = await ExecutionConfigurationBuilder.Create(dashboardResource)
             .WithEnvironmentVariablesConfig()
             .BuildAsync(context, new FakeLogger(), CancellationToken.None)
@@ -181,19 +184,24 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         var envVars = new Dictionary<string, object>();
 
         var dashboardResource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+        var model = new DistributedApplicationModel([dashboardResource]);
 
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            ServiceProvider = new TestServiceProvider().AddService(model)
+        });
         // Act
-        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run), environmentVariables: envVars, resource: dashboardResource));
+        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: envVars, resource: dashboardResource));
 
         // Assert
         Assert.Equal("true", envVars.Single(e => e.Key == "ASPIRE_DASHBOARD_PURPLE_MONKEY_DISHWASHER").Value);
     }
 
     [Theory]
-    [InlineData("https://localhost:17131", "localhost", 9999, "https")]
-    [InlineData("https://aspire-dashboard.dev.localhost:17131", "aspire-dashboard.dev.localhost", 9999, "https")]
-    [InlineData("http://myapp.localhost:8080", "myapp.localhost", 5555, "http")]
-    public async Task ResourceReadyEvent_LogsDashboardUrlFromAllocatedEndpoint(string configuredUrl, string expectedHost, int allocatedPort, string expectedScheme)
+    [InlineData("https://localhost:17131", "localhost", 9999, "https", "localhost")]
+    [InlineData("https://aspire-dashboard.dev.localhost:17131", "aspire-dashboard.dev.localhost", 9999, "https", "aspire-dashboard.dev.localhost")]
+    [InlineData("http://myapp.localhost:8080", "myapp.localhost", 5555, "http", "localhost")]
+    public async Task ResourceReadyEvent_LogsDashboardUrlFromAllocatedEndpoint(string configuredUrl, string expectedHost, int allocatedPort, string expectedScheme, string expectedOtlpHost)
     {
         // Arrange
         var testSink = new TestSink();
@@ -216,7 +224,6 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             DashboardPath = "test.dll",
             DashboardUrl = configuredUrl,
             DashboardToken = "test-token",
-            OtlpGrpcEndpointUrl = "http://localhost:4317",
         });
 
         var eventing = new Hosting.Eventing.DistributedApplicationEventing();
@@ -239,6 +246,10 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         // Set up allocated endpoint - DCP allocates "localhost" as the address since localhost TLD binds to localhost
         var endpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == expectedScheme);
         endpointAnnotation.AllocatedEndpoint = new(endpointAnnotation, "localhost", allocatedPort, targetPortExpression: allocatedPort.ToString());
+        var otlpGrpcEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        otlpGrpcEndpointAnnotation.AllocatedEndpoint = new(otlpGrpcEndpointAnnotation, "localhost", 4317, targetPortExpression: "4317");
+        var otlpHttpEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        otlpHttpEndpointAnnotation.AllocatedEndpoint = new(otlpHttpEndpointAnnotation, "localhost", 4318, targetPortExpression: "4318");
 
         // Fire the ResourceReadyEvent
         var readyEvent = new ResourceReadyEvent(dashboardResource, new TestServiceProvider());
@@ -259,6 +270,73 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(expectedHost, uri.Host);
         Assert.Equal(allocatedPort, uri.Port);
         Assert.Equal(expectedScheme, uri.Scheme);
+
+        var summaryLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);
+
+        Assert.NotNull(summaryLog);
+        Assert.Equal($"https://{expectedOtlpHost}:4317", LogTestHelpers.GetValue(summaryLog, "OtlpGrpcUrl"));
+        Assert.Equal($"https://{expectedOtlpHost}:4318", LogTestHelpers.GetValue(summaryLog, "OtlpHttpUrl"));
+    }
+
+    [Fact]
+    public async Task ResourceReadyEvent_LogsConfiguredOtlpUrlsWhenConfigured()
+    {
+        var testSink = new TestSink();
+        var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Information);
+            b.AddProvider(new TestLoggerProvider(testSink));
+            b.AddXunit(testOutputHelper);
+        });
+        var distributedAppLogger = loggerFactory.CreateLogger<DistributedApplication>();
+
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:18888",
+            DashboardToken = "test-token",
+            OtlpGrpcEndpointUrl = "http://otel-grpc.example.com:1234",
+            OtlpHttpEndpointUrl = "http://otel-http.example.com:5678",
+        });
+
+        var eventing = new Hosting.Eventing.DistributedApplicationEventing();
+
+        var hook = CreateHook(
+            resourceLoggerService,
+            resourceNotificationService,
+            configuration,
+            dashboardOptions: dashboardOptions,
+            eventing: eventing,
+            distributedApplicationLogger: distributedAppLogger);
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+
+        var httpEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+        httpEndpointAnnotation.AllocatedEndpoint = new(httpEndpointAnnotation, "localhost", 18888, targetPortExpression: "18888");
+        var otlpGrpcEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        otlpGrpcEndpointAnnotation.AllocatedEndpoint = new(otlpGrpcEndpointAnnotation, "localhost", 4317, targetPortExpression: "4317");
+        var otlpHttpEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        otlpHttpEndpointAnnotation.AllocatedEndpoint = new(otlpHttpEndpointAnnotation, "localhost", 4318, targetPortExpression: "4318");
+
+        var readyEvent = new ResourceReadyEvent(dashboardResource, new TestServiceProvider());
+        await eventing.PublishAsync(readyEvent, CancellationToken.None).DefaultTimeout();
+
+        var summaryLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);
+
+        Assert.NotNull(summaryLog);
+        // Endpoint-resolved URLs take priority over configured URLs (consistent with frontend URL behavior)
+        Assert.Equal("http://localhost:4317", LogTestHelpers.GetValue(summaryLog, "OtlpGrpcUrl"));
+        Assert.Equal("http://localhost:4318", LogTestHelpers.GetValue(summaryLog, "OtlpHttpUrl"));
     }
 
     [Fact]

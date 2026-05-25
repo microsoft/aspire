@@ -38,7 +38,7 @@ internal sealed class RustLanguageSupport : ILanguageSupport
             // Aspire Rust AppHost
             // For more information, see: https://aspire.dev
 
-            #[path = "../.modules/mod.rs"]
+            #[path = "../.aspire/modules/mod.rs"]
             mod aspire;
 
             use aspire::*;

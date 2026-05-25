@@ -6,12 +6,14 @@ Two cross-platform helper scripts are available:
 - Bash: `eng/scripts/get-aspire-cli-pr.sh`
 - PowerShell: `eng/scripts/get-aspire-cli-pr.ps1`
 
-They download the correct build artifacts for your OS/architecture and support two CLI install modes:
+They download the correct build artifacts for your OS/architecture and support four CLI install modes:
 
 - **Archive mode** (default): installs the native CLI archive into an isolated PR-specific directory and populates a PR-scoped NuGet "hive" with the matching packages.
 - **Tool mode**: installs the `Aspire.Cli` .NET tool from the PR's RID-specific NuGet artifact and populates the same PR-scoped NuGet hive. Use this when you also want to dogfood the dotnet-tool packaging or acquisition route.
+- **WinGet mode**: installs from the PR's generated `winget-manifests-prerelease` artifact and local native archive artifacts.
+- **Homebrew mode**: installs from the PR's generated `homebrew-cask-prerelease` artifact and local native archive artifacts.
 
-Both modes give `aspire new`, `aspire add`, and `aspire run` access to the PR's NuGet packages via the hive at `~/.aspire/hives/pr-<PR_NUMBER>/packages`. The difference is only how the CLI binary itself is acquired.
+All modes give `aspire new`, `aspire add`, and `aspire run` access to the PR's NuGet packages via the hive at `~/.aspire/hives/pr-<PR_NUMBER>/packages`. The difference is only how the CLI binary itself is acquired.
 
 ## Prerequisites
 
@@ -20,6 +22,8 @@ Both modes give `aspire new`, `aspire add`, and `aspire run` access to the PR's 
   - Authenticate: `gh auth login`
 - Network access to GitHub Actions
 - .NET SDK available on PATH when using tool mode (`--install-mode tool` or `-InstallMode Tool`)
+- WinGet available on Windows when using WinGet mode (`--install-mode winget` or `-InstallMode WinGet`)
+- Homebrew available on macOS when using Homebrew mode (`--install-mode homebrew` or `-InstallMode Homebrew`)
 - Archive tools:
   - On Unix/macOS: `tar` (and/or `unzip`, depending on the archive format)
   - On Windows (PowerShell script): built-in extraction is used; for Git Bash + `.sh` script, ensure `unzip` or `tar` is available
@@ -65,20 +69,51 @@ To avoid changing the global .NET tool installation, pass a custom install path.
 ./eng/scripts/get-aspire-cli-pr.ps1 1234 -InstallMode Tool -InstallPath $HOME/.aspire-pr
 ```
 
+### WinGet mode
+
+WinGet mode downloads the PR's generated WinGet manifest artifact, downloads both Windows native archive artifacts, rewrites the manifest to use the local archive files, and installs via WinGet:
+
+```bash
+./eng/scripts/get-aspire-cli-pr.sh 1234 --install-mode winget
+```
+
+```powershell
+./eng/scripts/get-aspire-cli-pr.ps1 1234 -InstallMode WinGet
+```
+
+WinGet mode is supported only on Windows. If `Microsoft.Aspire` is already installed through WinGet, uninstall it first or pass `--force`/`-Force` to allow the dogfood manifest to replace it.
+
+### Homebrew mode
+
+Homebrew mode downloads the PR's generated Homebrew cask artifact, downloads both macOS native archive artifacts, rewrites the cask to use the local archive files, and installs via Homebrew:
+
+```bash
+./eng/scripts/get-aspire-cli-pr.sh 1234 --install-mode homebrew
+```
+
+```powershell
+./eng/scripts/get-aspire-cli-pr.ps1 1234 -InstallMode Homebrew
+```
+
+Homebrew mode is supported only on macOS. If `aspire` is already installed as a Homebrew cask, uninstall it first with `brew uninstall --cask aspire`.
+
 ## What gets installed
 
 - Aspire CLI binary:
   - **Archive mode** default location: `~/.aspire/dogfood/pr-<PR_NUMBER>/bin/aspire` (or `aspire.exe` on Windows).
   - **Tool mode** default location: `dotnet tool install --global` puts the tool on the PATH per the .NET SDK's global-tools convention. When tool mode is combined with `--install-path`, the scripts pass that path to `dotnet tool --tool-path` using the PR-specific `bin` directory under the prefix.
+  - **WinGet/Homebrew mode** location: managed by the platform package manager.
   - Important: If you already have an Aspire CLI installed for the same PR under the same prefix, running this script will overwrite that PR installation. Other PR installs and the regular script install under `~/.aspire/bin` are isolated from this path.
 
 - PR-scoped NuGet packages "hive":
   - Default location: `~/.aspire/hives/pr-<PR_NUMBER>/packages`
-  - Populated in both archive and tool mode. This local, PR-specific hive is isolated, making it easy to create new projects with just the packages produced by the PR build without affecting your global NuGet caches or other projects.
+  - Populated in all install modes. This local, PR-specific hive is isolated, making it easy to create new projects with just the packages produced by the PR build without affecting your global NuGet caches or other projects.
 
 In archive mode, the scripts attempt to add the PR-specific `bin` directory to your shell/profile PATH so you can invoke `aspire` directly in new terminals. If PATH isn't updated automatically, add it manually per the script's message.
 
 In default tool mode, PATH setup is left to `dotnet tool install --global`. When tool mode is used with a custom install path, the scripts treat the PR-specific `bin` directory as the tool path and can add it to PATH.
+
+In WinGet and Homebrew mode, PATH setup is left to the platform package manager.
 
 ## Channel names
 
@@ -165,7 +200,7 @@ The scripts auto-detect your OS and architecture and locate the latest `ci.yml` 
 
 - Override OS and architecture (auto-detected by default):
   - Allowed OS values: `win`, `linux`, `linux-musl`, `osx`
-  - Allowed arch values: `x64`, `x86`, `arm64`
+  - Allowed arch values: `x64`, `arm64`
   - Tool mode uses `dotnet tool install`, which resolves RID-specific packages for the current host. Use OS/architecture overrides with archive mode, not to cross-install a dotnet tool for another RID.
   - Bash:
     ```bash
@@ -185,6 +220,10 @@ The scripts auto-detect your OS and architecture and locate the latest `ci.yml` 
   - Bash: `--install-mode tool` or `-m tool`
   - PowerShell: `-InstallMode Tool`
   - If an existing dotnet-tool install blocks the requested version, use Bash `--force` or PowerShell `-Force`.
+
+- Install through a platform package manager:
+  - WinGet: Bash `--install-mode winget` or PowerShell `-InstallMode WinGet`
+  - Homebrew: Bash `--install-mode homebrew` or PowerShell `-InstallMode Homebrew`
 
 - Verbose, keep archives, or dry run:
   - Bash: `-v/--verbose`, `-k/--keep-archive`, `--dry-run`

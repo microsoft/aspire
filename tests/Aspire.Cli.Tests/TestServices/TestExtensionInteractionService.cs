@@ -25,6 +25,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     public Action<string, bool>? ConsoleDisplaySubtleMessageCallback { get; set; }
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Func<string, IReadOnlyList<string>, string>? SelectionCallback { get; set; }
+    public Func<IRenderable, Func<Action<IRenderable>, Task>, Task>? DisplayLiveAsyncCallback { get; set; }
 
     public IExtensionBackchannel Backchannel { get; } = serviceProvider.GetRequiredService<IExtensionBackchannel>();
 
@@ -190,6 +191,11 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
 
     public Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback)
     {
+        if (DisplayLiveAsyncCallback is not null)
+        {
+            return DisplayLiveAsyncCallback(initialRenderable, callback);
+        }
+
         return callback(_ => { });
     }
 

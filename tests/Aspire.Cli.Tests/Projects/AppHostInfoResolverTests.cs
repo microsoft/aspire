@@ -30,6 +30,12 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
                 AspireHostingVersion = "9.5.0",
                 IsUsingCliBundle = true,
                 UserSecretsId = "secrets",
+                RunCommand = "/repo/bin/AppHost",
+                TargetPath = "/repo/bin/AppHost.dll",
+                RunWorkingDirectory = "/repo/src/AppHost",
+                RunArguments = "--from-msbuild",
+                TargetFramework = "net10.0",
+                TargetFrameworks = null,
             },
         };
         var resolver = new AppHostInfoResolver(runner, diskCache);
@@ -40,6 +46,11 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
         Assert.Equal("9.5.0", info.AspireHostingVersion);
         Assert.True(info.IsUsingCliBundle);
         Assert.Equal("secrets", info.UserSecretsId);
+        Assert.Equal("/repo/bin/AppHost", info.RunCommand);
+        Assert.Equal("/repo/bin/AppHost.dll", info.TargetPath);
+        Assert.Equal("/repo/src/AppHost", info.RunWorkingDirectory);
+        Assert.Equal("--from-msbuild", info.RunArguments);
+        Assert.Equal("net10.0", info.TargetFramework);
     }
 
     [Fact]
@@ -157,6 +168,32 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
         Assert.Equal(1, msbuildCalls);
     }
 
+    [Fact]
+    public async Task GetAppHostInfoAsync_RequestsComputeRunArgumentsTarget()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = CreateProjectFile(workspace);
+        string[]? capturedTargets = null;
+        var runner = new TestDotNetCliRunner
+        {
+            GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, targets, _, _) =>
+            {
+                capturedTargets = targets;
+                return (0, CreateAppHostInfoJson());
+            },
+        };
+        var resolver = new AppHostInfoResolver(runner, new NullAppHostInfoDiskCache());
+
+        var info = await resolver.GetAppHostInfoAsync(projectFile, CancellationToken.None).DefaultTimeout();
+
+        Assert.True(info.IsAspireHost);
+        // The direct-launch path reads RunCommand/RunArguments/RunWorkingDirectory, which the
+        // SDK only populates after ComputeRunArguments has run. The resolver must request that
+        // target on its single MSBuild probe so the cached run metadata is correct.
+        Assert.NotNull(capturedTargets);
+        Assert.Contains("ComputeRunArguments", capturedTargets);
+    }
+
     private static FileInfo CreateProjectFile(TemporaryWorkspace workspace)
     {
         var path = Path.Combine(workspace.WorkspaceRoot.FullName, "Test.AppHost.csproj");
@@ -172,7 +209,12 @@ public sealed class AppHostInfoResolverTests(ITestOutputHelper outputHelper)
                 "IsAspireHost": "true",
                 "AspireHostingSDKVersion": "9.5.0",
                 "AspireUseCliBundle": "true",
-                "UserSecretsId": "secrets"
+                "UserSecretsId": "secrets",
+                "RunCommand": "/repo/bin/AppHost",
+                "TargetPath": "/repo/bin/AppHost.dll",
+                "RunWorkingDirectory": "/repo/src/AppHost",
+                "RunArguments": "--from-msbuild",
+                "TargetFramework": "net10.0"
               },
               "Items": {}
             }

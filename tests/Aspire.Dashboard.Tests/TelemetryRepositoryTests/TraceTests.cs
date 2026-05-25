@@ -1237,6 +1237,7 @@ public class TraceTests
     [InlineData(KnownResourceFields.ServiceNameField, "resource1")]
     [InlineData(KnownResourceFields.ServiceNameField, "TestPeer")]
     [InlineData(KnownSourceFields.NameField, "TestScope")]
+    [InlineData(KnownTraceFields.DurationField, "540000")]
     public void GetTraces_KnownFilters(string name, string value)
     {
         // Arrange
@@ -1299,6 +1300,126 @@ public class TraceTests
             {
                 AssertId("1", trace.TraceId);
             });
+    }
+
+    [Fact]
+    public void GetTraces_FiltersPagingAndMaxDuration_ComputedFromAllMatchingTraces()
+    {
+        var repository = CreateRepository();
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "resource1", instanceId: "123"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMilliseconds(1), endTime: s_testTime.AddMilliseconds(11), attributes: [KeyValuePair.Create("dynamic.filter", "match")]),
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMilliseconds(2), endTime: s_testTime.AddMilliseconds(22), attributes: [KeyValuePair.Create("dynamic.filter", "match")]),
+                            CreateSpan(traceId: "3", spanId: "3-1", startTime: s_testTime.AddMilliseconds(3), endTime: s_testTime.AddMilliseconds(33), attributes: [KeyValuePair.Create("dynamic.filter", "other")]),
+                            CreateSpan(traceId: "4", spanId: "4-1", startTime: s_testTime.AddMilliseconds(4), endTime: s_testTime.AddMilliseconds(44), attributes: [KeyValuePair.Create("dynamic.filter", "match")]),
+                            CreateSpan(traceId: "5", spanId: "5-1", startTime: s_testTime.AddMilliseconds(5), endTime: s_testTime.AddMilliseconds(55), attributes: [KeyValuePair.Create("dynamic.filter", "match")])
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+
+        // This pins the behavior expected from an optimized single-pass implementation:
+        // dynamic field filters, known duration filters, paging, total count, and max
+        // duration must all be computed from the same filtered trace set. MaxDuration
+        // intentionally comes from all matching traces, not just the returned page.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = new ResourceKey("resource1", InstanceId: null),
+            FilterText = string.Empty,
+            StartIndex = 1,
+            Count = 1,
+            Filters =
+            [
+                new FieldTelemetryFilter { Field = "dynamic.filter", Condition = FilterCondition.Equals, Value = "match" },
+                new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.GreaterThanOrEqual, Value = "20" }
+            ]
+        });
+
+        Assert.Equal(3, traces.PagedResult.TotalItemCount);
+        Assert.Equal(TimeSpan.FromMilliseconds(50), traces.MaxDuration);
+        Assert.Collection(traces.PagedResult.Items,
+            trace =>
+            {
+                AssertId("4", trace.TraceId);
+                Assert.Equal(TimeSpan.FromMilliseconds(40), trace.Duration);
+            });
+    }
+
+    [Fact]
+    public void GetTraces_DurationFilter_AppliesTraceLevelDuration()
+    {
+        // Verifies that the duration filter uses the trace's overall duration (first span
+        // start to latest span end), not individual span durations. A trace with a 100ms
+        // root span containing a 5ms child span should match "> 50ms" (trace is 100ms)
+        // but NOT "< 10ms" (even though the child span is only 5ms).
+        var repository = CreateRepository();
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "resource1", instanceId: "123"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Root span: 100ms duration
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMilliseconds(0), endTime: s_testTime.AddMilliseconds(100)),
+                            // Child span: 5ms duration (well under any "short" threshold)
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMilliseconds(10), endTime: s_testTime.AddMilliseconds(15), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+
+        var resourceKey = new ResourceKey("resource1", InstanceId: null);
+
+        // Duration filter "> 50ms" should match because trace duration is 100ms.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = resourceKey,
+            FilterText = string.Empty,
+            StartIndex = 0,
+            Count = 10,
+            Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.GreaterThan, Value = "50" }]
+        });
+
+        Assert.Single(traces.PagedResult.Items);
+
+        // Duration filter "< 10ms" should NOT match because trace duration is 100ms,
+        // even though the child span is only 5ms.
+        traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = resourceKey,
+            FilterText = string.Empty,
+            StartIndex = 0,
+            Count = 10,
+            Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.LessThan, Value = "10" }]
+        });
+
+        Assert.Empty(traces.PagedResult.Items);
     }
 
     [Fact]
