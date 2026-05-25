@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES003
 
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Publishing;
@@ -768,10 +769,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         // The compose file uses the user-specified container env var name; the .env file uses the
         // name derived from the provider's ValueExpression. Docker Compose interpolates between them.
         var composeContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "docker-compose.yaml"));
-        Assert.Contains("MY_VAR: \"${TEST_CONDITION}\"", composeContent);
-
         var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
-        Assert.Contains("TEST_CONDITION=resolved-value", envFileContent);
+        await Verify(composeContent, "yaml")
+            .AppendContentAsFile(envFileContent, "env");
     }
 
     [Fact]
@@ -802,8 +802,7 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         app.Run();
 
         var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
-        Assert.Contains("MYPARAM=static-override", envFileContent);
-        Assert.DoesNotContain("MYPARAM=dynamic-value", envFileContent);
+        await Verify(envFileContent, "env");
     }
 
     [Fact]
@@ -827,8 +826,9 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
         app.Run();
 
         var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
-        Assert.Contains("PROJECT1_IMAGE=", envFileContent);
-        Assert.DoesNotContain("PROJECT1_IMAGE=project1:latest", envFileContent);
+        await Verify(envFileContent, "env")
+            // The image tag includes the current time (e.g. "aspire-deploy-20260525182406"); scrub it so the snapshot is stable across runs.
+            .ScrubLinesWithReplace(line => Regex.Replace(line, @"aspire-deploy-\d{14}", "aspire-deploy-TIMESTAMP"));
     }
 
     [Fact]
@@ -972,8 +972,8 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
             .ConfigureEnvFile(envVars =>
             {
                 // Find and remove the auto-generated bind mount placeholder for yarp
-                var keysToRemove = envVars.Where(kv => 
-                    kv.Value.Resource?.Name == "yarp" && 
+                var keysToRemove = envVars.Where(kv =>
+                    kv.Value.Resource?.Name == "yarp" &&
                     kv.Value.Source is ContainerMountAnnotation).Select(kv => kv.Key).ToList();
 
                 foreach (var key in keysToRemove)
