@@ -29,6 +29,7 @@ public class AtsMarshallerTests
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonPropertyName", Name = "DtoWithJsonPropertyName", ClrType = typeof(DtoWithJsonPropertyName), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonIgnore", Name = "DtoWithJsonIgnore", ClrType = typeof(DtoWithJsonIgnore), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithReadOnlyProperty", Name = "DtoWithReadOnlyProperty", ClrType = typeof(DtoWithReadOnlyProperty), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithInitListProperties", Name = "DtoWithInitListProperties", ClrType = typeof(DtoWithInitListProperties), Properties = [] },
             ],
             EnumTypes = []
         };
@@ -1131,6 +1132,16 @@ public class AtsMarshallerTests
     {
         public string? Name { get; set; }
         public string Computed { get; } = "read-only";
+    }
+
+    [AspireDto]
+    private sealed class DtoWithInitListProperties
+    {
+        public string? Name { get; set; }
+
+        public List<string> AddressPrefixes { get; init; } = ["default"];
+
+        public List<ReferenceExpression> AddressPrefixReferences { get; init; } = [];
     }
 
     [Fact]
