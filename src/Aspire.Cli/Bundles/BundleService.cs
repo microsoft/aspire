@@ -413,7 +413,7 @@ internal sealed class BundleService(
         return source switch
         {
             InstallSourceExtensions.WingetWire
-                or InstallSourceExtensions.HomebrewWire
+                or InstallSourceExtensions.BrewWire
                 or InstallSourceExtensions.DotnetToolWire => binaryDir,
             InstallSourceExtensions.ScriptWire
                 or InstallSourceExtensions.PrWire

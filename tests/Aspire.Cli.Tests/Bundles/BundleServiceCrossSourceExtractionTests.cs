@@ -24,7 +24,7 @@ public class BundleServiceCrossSourceExtractionTests
     //    versioned directory; the bundle payload lives in that same directory.
     [InlineData("winget", "WinGet/Packages/Microsoft.Aspire_Microsoft.Winget.Source_8wekyb3d8bbwe/aspire.exe", "WinGet/Packages/Microsoft.Aspire_Microsoft.Winget.Source_8wekyb3d8bbwe")]
     // 2) homebrew canonical: Homebrew cellar with versioned cask directory.
-    [InlineData("homebrew", "Caskroom/aspire/13.2.0/aspire", "Caskroom/aspire/13.2.0")]
+    [InlineData("brew", "Caskroom/aspire/13.2.0/aspire", "Caskroom/aspire/13.2.0")]
     // 3) dotnet-tool canonical: dotnet's global-tools shim at ~/.dotnet/tools/aspire
     //    delegates (apphost launch on Windows; symlink follow on Unix) to the
     //    RID-specific native binary inside the .store directory tree. The
@@ -43,7 +43,7 @@ public class BundleServiceCrossSourceExtractionTests
     //    producer side correctly suppresses the smuggled sidecar, this row's
     //    input condition never arises in practice; the test verifies the
     //    reader's behavior is well-defined and consistent for all inputs.
-    [InlineData("homebrew", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817/bin")]
+    [InlineData("brew", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817/bin")]
     // 8) script source dropped at a flat-cellar layout (misuse, but defined):
     //    script maps to parent-of-binary, so the result is one level above the
     //    cask version dir. Not a real install pattern; locks in determinism.

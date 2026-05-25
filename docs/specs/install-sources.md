@@ -18,7 +18,7 @@ portable installs, the Aspire home used for hives and local state.
 
 | `source` value | Install source                                          |
 |----------------|--------------------------------------------------------|
-| `homebrew`         | Homebrew cask                                          |
+| `brew`         | Homebrew cask                                          |
 | `winget`       | WinGet portable manifest                               |
 | `dotnet-tool`  | `dotnet tool install -g Aspire.Cli`                    |
 | `script`       | `get-aspire-cli.{sh,ps1}`                              |
@@ -27,7 +27,7 @@ portable installs, the Aspire home used for hives and local state.
 
 `BundleService.ComputeDefaultExtractDir` maps `source` to extract-dir shape:
 
-- `winget` / `homebrew` / `dotnet-tool` → `binaryDir` (flat: bundle extracts beside the binary).
+- `winget` / `brew` / `dotnet-tool` → `binaryDir` (flat: bundle extracts beside the binary).
 - `script` / `pr` / `localhive` → `Path.GetDirectoryName(binaryDir)` (bin layout: bundle extracts as a sibling of `bin/`).
 - missing, unreadable, malformed, or unknown `source` sidecar → parent-of-binary, matching the legacy heuristic for pre-sidecar installs.
 
@@ -54,7 +54,7 @@ The dotnet-tool nupkg is the one exception that payload-embeds the sidecar: the 
 
 ## Why no payload-embed in shared archives
 
-Until PR 16817 the per-RID archives baked source sidecars (`osx-*` as Homebrew, `win-*` as WinGet) into the archive root via an MSBuild target. Because the `osx-*` tarball is also consumed by `get-aspire-cli-pr.sh`, the smuggled `homebrew` sidecar landed in the script-source prefix at `<prefix>/dogfood/pr-<N>/bin/.aspire-install.json`, and `BundleService` then selected `binaryDir` (the `homebrew` flat-layout case) as the extract dir — producing `<prefix>/dogfood/pr-<N>/bin/versions/<v>/` instead of `<prefix>/dogfood/pr-<N>/versions/<v>/`.
+Until PR 16817 the per-RID archives baked source sidecars (`osx-*` as Homebrew, `win-*` as WinGet) into the archive root via an MSBuild target. Because the `osx-*` tarball is also consumed by `get-aspire-cli-pr.sh`, the smuggled `brew` sidecar landed in the script-source prefix at `<prefix>/dogfood/pr-<N>/bin/.aspire-install.json`, and `BundleService` then selected `binaryDir` (the `brew` flat-layout case) as the extract dir — producing `<prefix>/dogfood/pr-<N>/bin/versions/<v>/` instead of `<prefix>/dogfood/pr-<N>/versions/<v>/`.
 
 Removing the MSBuild target and moving each source to author its own sidecar at install time makes the per-RID archive source-agnostic and prevents the leak by construction.
 
@@ -67,7 +67,7 @@ Two mechanical checks guard the contract:
 
 ## Reader-side invariants (runtime)
 
-`BundleService.ComputeDefaultExtractDir` is the single point of truth for layout selection. It performs no path-shape detection: layout is a pure function of the sidecar `source` value (or the fallback when the sidecar is absent, unreadable, malformed, or has an unknown `source`). Unknown `source` values fall back to parent-of-binary for typed bundle layout handling. Coverage lives in `tests/Aspire.Cli.Tests/Bundles/BundleServiceCrossSourceExtractionTests.cs` as a theory over (source × prefix-shape) rows, including the cross-source case where a `homebrew` sidecar lands under a script-style prefix.
+`BundleService.ComputeDefaultExtractDir` is the single point of truth for layout selection. It performs no path-shape detection: layout is a pure function of the sidecar `source` value (or the fallback when the sidecar is absent, unreadable, malformed, or has an unknown `source`). Unknown `source` values fall back to parent-of-binary for typed bundle layout handling. Coverage lives in `tests/Aspire.Cli.Tests/Bundles/BundleServiceCrossSourceExtractionTests.cs` as a theory over (source × prefix-shape) rows, including the cross-source case where a `brew` sidecar lands under a script-style prefix.
 
 `CliPathHelper.GetAspireHomeDirectory` is the single point of truth for Aspire-home selection. It reads the same sidecar but only changes home for Aspire-owned portable sources (`script`, `pr`, and `localhive`); package-manager sources use the user-profile home because their install roots are package-manager-owned. Coverage lives in `tests/Aspire.Cli.Tests/Utils/CliPathHelperTests.cs`.
 

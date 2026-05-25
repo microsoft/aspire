@@ -52,7 +52,7 @@ internal interface IBundleService
     /// binary in <c>bin/</c>): the parent of the binary's directory (= the install
     /// prefix root).</description></item>
     /// <item><description>Packager-managed sources (<c>source=winget</c> /
-    /// <c>source=homebrew</c> / <c>source=dotnet-tool</c>): the directory containing the
+    /// <c>source=brew</c> / <c>source=dotnet-tool</c>): the directory containing the
     /// binary (symlinks resolved first).</description></item>
     /// <item><description>No sidecar / unmanaged installs: the parent of the binary's
     /// directory, preserving the historical <c>~/.aspire/bin/aspire → ~/.aspire/</c>

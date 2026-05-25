@@ -48,7 +48,7 @@ internal static class InstallSourceExtensions
     internal const string ScriptWire = "script";
     internal const string PrWire = "pr";
     internal const string WingetWire = "winget";
-    internal const string HomebrewWire = "homebrew";
+    internal const string BrewWire = "brew";
     internal const string DotnetToolWire = "dotnet-tool";
     internal const string LocalHiveWire = "localhive";
 
@@ -65,7 +65,7 @@ internal static class InstallSourceExtensions
             ScriptWire => InstallSource.Script,
             PrWire => InstallSource.Pr,
             WingetWire => InstallSource.Winget,
-            HomebrewWire => InstallSource.Homebrew,
+            BrewWire => InstallSource.Homebrew,
             DotnetToolWire => InstallSource.DotnetTool,
             LocalHiveWire => InstallSource.LocalHive,
             _ => InstallSource.Unknown,
@@ -84,7 +84,7 @@ internal static class InstallSourceExtensions
             InstallSource.Script => ScriptWire,
             InstallSource.Pr => PrWire,
             InstallSource.Winget => WingetWire,
-            InstallSource.Homebrew => HomebrewWire,
+            InstallSource.Homebrew => BrewWire,
             InstallSource.DotnetTool => DotnetToolWire,
             InstallSource.LocalHive => LocalHiveWire,
             _ => null,

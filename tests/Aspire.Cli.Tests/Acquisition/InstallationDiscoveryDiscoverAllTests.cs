@@ -435,7 +435,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var brewDir = Path.Combine(workspace.WorkspaceRoot.FullName, "Caskroom", "aspire", "13.4.0-pr.17115.gcd700928");
         Directory.CreateDirectory(brewDir);
         var binary = WriteFakeBinary(brewDir);
-        File.WriteAllText(Path.Combine(brewDir, InstallSidecarReader.SidecarFileName), "{\"source\":\"homebrew\"}");
+        File.WriteAllText(Path.Combine(brewDir, InstallSidecarReader.SidecarFileName), "{\"source\":\"brew\"}");
 
         var probe = new FakePeerInstallProbe(new Dictionary<string, PeerProbeResult>
         {
@@ -456,7 +456,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var brewRow = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal("pr-17115", brewRow.Channel);
-        Assert.Equal("homebrew", brewRow.Source);
+        Assert.Equal("brew", brewRow.Source);
         Assert.Equal("13.4.0-pr.17115.gcd700928", brewRow.Version);
     }
 
@@ -471,7 +471,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var brewDir = Path.Combine(workspace.WorkspaceRoot.FullName, "Caskroom", "aspire", "13.4.0");
         Directory.CreateDirectory(brewDir);
         var binary = WriteFakeBinary(brewDir);
-        File.WriteAllText(Path.Combine(brewDir, InstallSidecarReader.SidecarFileName), "{\"source\":\"homebrew\"}");
+        File.WriteAllText(Path.Combine(brewDir, InstallSidecarReader.SidecarFileName), "{\"source\":\"brew\"}");
 
         var probe = new FakePeerInstallProbe(new Dictionary<string, PeerProbeResult>
         {
@@ -490,7 +490,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var brewRow = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Null(brewRow.Channel);
-        Assert.Equal("homebrew", brewRow.Source);
+        Assert.Equal("brew", brewRow.Source);
     }
 
     [Theory]

@@ -281,14 +281,22 @@ internal sealed class InstallsCommand : BaseCommand
     }
 
     private static string GetInstallKind(InstallationInfo install)
-        => install.Source ?? "unknown";
+        => install.Source switch
+        {
+            // The sidecar wire string is "brew" but everywhere we surface this to
+            // a human (or tool reading our JSON output) we use the friendlier
+            // "homebrew" label so the displayed `kind` and `managedBy` agree.
+            "brew" => "homebrew",
+            null => "unknown",
+            _ => install.Source,
+        };
 
     private static string? GetManagedBy(InstallationInfo install)
         => install.Source switch
         {
             "dotnet-tool" => "dotnet-tool",
             "winget" => "winget",
-            "homebrew" => "homebrew",
+            "brew" => "homebrew",
             _ => null
         };
 

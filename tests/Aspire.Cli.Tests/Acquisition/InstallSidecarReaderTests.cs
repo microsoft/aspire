@@ -19,7 +19,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [InlineData("script", "Script")]
     [InlineData("pr", "Pr")]
     [InlineData("winget", "Winget")]
-    [InlineData("homebrew", "Homebrew")]
+    [InlineData("brew", "Homebrew")]
     [InlineData("dotnet-tool", "DotnetTool")]
     [InlineData("localhive", "LocalHive")]
     public void TryRead_ParsesEachKnownSource(string wireValue, string expectedEnumName)
@@ -207,7 +207,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [InlineData("Script", "script")]
     [InlineData("Pr", "pr")]
     [InlineData("Winget", "winget")]
-    [InlineData("Homebrew", "homebrew")]
+    [InlineData("Homebrew", "brew")]
     [InlineData("DotnetTool", "dotnet-tool")]
     [InlineData("LocalHive", "localhive")]
     public void ToWireString_RoundTripsWithParseInstallSource(string enumName, string expectedWire)

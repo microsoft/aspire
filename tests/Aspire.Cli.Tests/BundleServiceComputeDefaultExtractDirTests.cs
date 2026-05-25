@@ -103,7 +103,7 @@ public class BundleServiceComputeDefaultExtractDirTests
         Directory.CreateDirectory(cellarDir);
         var cellarBinary = Path.Combine(cellarDir, "aspire");
         File.WriteAllText(cellarBinary, string.Empty);
-        File.WriteAllText(Path.Combine(cellarDir, SidecarFileName), "{\"source\":\"homebrew\"}");
+        File.WriteAllText(Path.Combine(cellarDir, SidecarFileName), "{\"source\":\"brew\"}");
 
         var brewBinDir = Path.Combine(temp.Path, "bin");
         Directory.CreateDirectory(brewBinDir);
