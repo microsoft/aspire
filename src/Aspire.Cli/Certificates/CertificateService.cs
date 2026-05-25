@@ -87,7 +87,17 @@ internal sealed class CertificateService(
                 // non-.NET AppHost languages (TypeScript, Python, etc.) launch a prebuilt
                 // native binary and never invoke `dotnet`, so the first-run cert generation
                 // never triggers. This call ensures consistent behavior across all languages.
-                certificateToolRunner.EnsureHttpCertificateExists();
+                var generateResult = certificateToolRunner.EnsureHttpCertificateExists();
+
+                if (generateResult is EnsureCertificateResult.Succeeded or EnsureCertificateResult.ValidCertificatePresent)
+                {
+                    // Refresh the check so subsequent trust-level logic reflects the newly created cert.
+                    preCheck = certificateToolRunner.CheckHttpCertificate();
+                }
+                else
+                {
+                    interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.CertificateGenerationFailed, generateResult));
+                }
             }
 
             if (preCheck.IsPartiallyTrusted)

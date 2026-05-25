@@ -37,6 +37,11 @@
         <target state="translated">Nelze použít --watch a --no-build současně.</target>
         <note />
       </trans-unit>
+      <trans-unit id="CertificateGenerationFailed">
+        <source>Failed to generate HTTPS development certificate (result: {0}).</source>
+        <target state="new">Failed to generate HTTPS development certificate (result: {0}).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CertificatesMayNotBeFullyTrusted">
         <source>Developer certificates may not be fully trusted (trust exit code was: {0}).</source>
         <target state="translated">Vývojářské certifikáty nemusí být plně důvěryhodné (ukončovací kód vztahu důvěryhodnosti byl: {0}).</target>

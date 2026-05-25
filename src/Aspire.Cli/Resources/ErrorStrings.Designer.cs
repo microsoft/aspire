@@ -109,6 +109,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string CertificateGenerationFailed
+        {
+            get
+            {
+                return ResourceManager.GetString("CertificateGenerationFailed", resourceCulture);
+            }
+        }
+
         public static string CertificatesMayNotBeFullyTrusted
         {
             get

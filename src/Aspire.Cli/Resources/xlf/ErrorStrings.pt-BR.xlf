@@ -37,6 +37,11 @@
         <target state="translated">Não é possível usar --watch e --no-build ao mesmo tempo.</target>
         <note />
       </trans-unit>
+      <trans-unit id="CertificateGenerationFailed">
+        <source>Failed to generate HTTPS development certificate (result: {0}).</source>
+        <target state="new">Failed to generate HTTPS development certificate (result: {0}).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CertificatesMayNotBeFullyTrusted">
         <source>Developer certificates may not be fully trusted (trust exit code was: {0}).</source>
         <target state="translated">Os certificados de desenvolvedor podem não ser totalmente confiáveis (o código de saída de confiança era: {0}).</target>

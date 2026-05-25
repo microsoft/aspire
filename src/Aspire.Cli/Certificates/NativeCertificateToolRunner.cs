@@ -68,7 +68,8 @@ internal sealed class NativeCertificateToolRunner(CertificateManager certificate
         var now = DateTimeOffset.Now;
         return certificateManager.EnsureAspNetCoreHttpsDevelopmentCertificate(
             now, now.Add(TimeSpan.FromDays(365)),
-            trust: false);
+            trust: false,
+            isInteractive: false);
     }
 
     public EnsureCertificateResult TrustHttpCertificate()

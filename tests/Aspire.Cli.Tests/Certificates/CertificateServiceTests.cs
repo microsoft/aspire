@@ -343,10 +343,16 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var generateCalled = false;
+        var checkCallCount = 0;
 
         var toolRunner = new TestCertificateToolRunner
         {
-            CheckHttpCertificateCallback = () => CreateTrustResult(null),
+            CheckHttpCertificateCallback = () =>
+            {
+                checkCallCount++;
+                // First call: no certs exist. Second call (after generation): untrusted cert present.
+                return checkCallCount == 1 ? CreateNoCertsResult() : CreateTrustResult(CertificateManager.TrustLevel.None);
+            },
             EnsureHttpCertificateExistsCallback = () =>
             {
                 generateCalled = true;
@@ -421,7 +427,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
 
         var toolRunner = new TestCertificateToolRunner
         {
-            CheckHttpCertificateCallback = () => CreateTrustResult(null),
+            CheckHttpCertificateCallback = () => CreateNoCertsResult(),
             EnsureHttpCertificateExistsCallback = () =>
             {
                 generateCalled = true;
@@ -479,16 +485,21 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
         return services.BuildServiceProvider();
     }
 
+    private static CertificateTrustResult CreateNoCertsResult()
+    {
+        return new CertificateTrustResult
+        {
+            HasCertificates = false,
+            TrustLevel = null,
+            Certificates = []
+        };
+    }
+
     private static CertificateTrustResult CreateTrustResult(CertificateManager.TrustLevel? trustLevel)
     {
         if (trustLevel is null)
         {
-            return new CertificateTrustResult
-            {
-                HasCertificates = false,
-                TrustLevel = null,
-                Certificates = []
-            };
+            return CreateNoCertsResult();
         }
 
         return new CertificateTrustResult
