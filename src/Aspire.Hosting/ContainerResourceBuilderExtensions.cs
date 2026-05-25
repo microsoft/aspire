@@ -710,7 +710,7 @@ public static class ContainerResourceBuilderExtensions
             // architectures. In run mode, leave the platform unset so docker/podman uses the host
             // architecture by default and avoids slow/buggy emulation. Users can override either
             // default via WithContainerBuildOptions(...).
-            if (context.ExecutionContext?.IsPublishMode == true)
+            if (context.ExecutionContext.IsPublishMode)
             {
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             }
@@ -861,7 +861,7 @@ public static class ContainerResourceBuilderExtensions
             }
 
             // Publish/run split: see AddDockerfile.
-            if (context.ExecutionContext?.IsPublishMode == true)
+            if (context.ExecutionContext.IsPublishMode)
             {
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             }
