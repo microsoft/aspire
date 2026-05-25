@@ -95,6 +95,31 @@ public sealed class TypeScriptApiCompatTests
     }
 
     [Fact]
+    public void ParserUsesMostSpecificKnownPackageForDottedSymbols()
+    {
+        var surface = AtsSurfaceParser.Parse("Aspire.Hosting", """
+            # Handle Types
+            Aspire.Hosting.CoreResource
+            Aspire.Hosting.Redis.RedisResource
+
+            # DTO Types
+            Aspire.Hosting.Options
+              name: string
+            Aspire.Hosting.Redis.Options
+              name: string
+
+            # Enum Types
+            enum:Aspire.Hosting.Mode = One
+            enum:Aspire.Hosting.Redis.Mode = One
+            """,
+            ["Aspire.Hosting", "Aspire.Hosting.Redis"]);
+
+        Assert.Equal(["Aspire.Hosting.CoreResource"], surface.HandleTypes.Keys);
+        Assert.Equal(["Aspire.Hosting.Options"], surface.DtoTypes.Keys);
+        Assert.Equal(["Aspire.Hosting.Mode"], surface.EnumTypes.Keys.Select(k => k["enum:".Length..]));
+    }
+
+    [Fact]
     public void ComparerClassifiesBreakingAndAdditiveChanges()
     {
         using var tempDirectory = new TestTempDirectory();

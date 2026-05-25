@@ -368,7 +368,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or RemoteInvocationException)
         {
-            _logger.LogDebug(ex, "Failed to dump capabilities for integration {IntegrationName}", integration.Name);
+            _logger.LogWarning(ex, "Failed to dump capabilities for integration {IntegrationName}", integration.Name);
             return new IntegrationDumpResult(integration.Name, Success: false, HasErrors: false, ex.Message);
         }
     }

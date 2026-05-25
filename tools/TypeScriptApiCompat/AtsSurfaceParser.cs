@@ -5,8 +5,9 @@ namespace TypeScriptApiCompat;
 
 internal static class AtsSurfaceParser
 {
-    public static AtsSurface Parse(string packageName, string content)
+    public static AtsSurface Parse(string packageName, string content, IReadOnlyCollection<string>? knownPackageNames = null)
     {
+        var packageNames = GetKnownPackageNames(packageName, knownPackageNames);
         var handleTypes = new Dictionary<string, AtsHandleType>(StringComparer.Ordinal);
         var dtoTypes = new Dictionary<string, AtsDtoTypeBuilder>(StringComparer.Ordinal);
         var enumTypes = new Dictionary<string, AtsEnumType>(StringComparer.Ordinal);
@@ -45,7 +46,7 @@ internal static class AtsSurfaceParser
             {
                 case AtsSection.HandleTypes:
                     var handle = ParseHandleType(trimmed);
-                    if (IsOwnedByPackage(handle.TypeId, packageName))
+                    if (IsOwnedByPackage(handle.TypeId, packageName, packageNames))
                     {
                         handleTypes.Add(handle.TypeId, handle);
                     }
@@ -70,7 +71,7 @@ internal static class AtsSurfaceParser
                     else
                     {
                         currentDto = new AtsDtoTypeBuilder(StripDescription(trimmed));
-                        if (IsOwnedByPackage(currentDto.TypeId, packageName))
+                        if (IsOwnedByPackage(currentDto.TypeId, packageName, packageNames))
                         {
                             dtoTypes.Add(currentDto.TypeId, currentDto);
                             skippingDto = false;
@@ -85,7 +86,7 @@ internal static class AtsSurfaceParser
 
                 case AtsSection.EnumTypes:
                     var enumType = ParseEnumType(trimmed);
-                    if (IsOwnedByPackage(enumType.TypeId, packageName))
+                    if (IsOwnedByPackage(enumType.TypeId, packageName, packageNames))
                     {
                         enumTypes.Add(enumType.TypeId, enumType);
                     }
@@ -98,7 +99,7 @@ internal static class AtsSurfaceParser
 
                 case AtsSection.Capabilities:
                     var capability = ParseCapability(trimmed);
-                    if (IsOwnedByPackage(capability.CapabilityId, packageName))
+                    if (IsOwnedByPackage(capability.CapabilityId, packageName, packageNames))
                     {
                         capabilities.Add(capability.CapabilityId, capability);
                     }
@@ -231,14 +232,67 @@ internal static class AtsSurfaceParser
         return descriptionIndex < 0 ? value : value[..descriptionIndex];
     }
 
-    private static bool IsOwnedByPackage(string symbolId, string packageName)
+    private static HashSet<string> GetKnownPackageNames(string packageName, IReadOnlyCollection<string>? knownPackageNames)
+    {
+        var packageNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            packageName
+        };
+
+        if (knownPackageNames is not null)
+        {
+            foreach (var knownPackageName in knownPackageNames)
+            {
+                if (!string.IsNullOrWhiteSpace(knownPackageName))
+                {
+                    packageNames.Add(knownPackageName);
+                }
+            }
+        }
+
+        return packageNames;
+    }
+
+    private static bool IsOwnedByPackage(string symbolId, string packageName, IReadOnlySet<string> knownPackageNames)
     {
         var normalizedSymbolId = symbolId.StartsWith("enum:", StringComparison.Ordinal)
             ? symbolId["enum:".Length..]
             : symbolId;
 
-        return normalizedSymbolId.StartsWith($"{packageName}/", StringComparison.Ordinal) ||
-               normalizedSymbolId.StartsWith($"{packageName}.", StringComparison.Ordinal);
+        if (normalizedSymbolId.StartsWith($"{packageName}/", StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        if (!normalizedSymbolId.StartsWith($"{packageName}.", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return !TryGetMostSpecificDottedOwner(normalizedSymbolId, knownPackageNames, out var ownerPackageName) ||
+            string.Equals(ownerPackageName, packageName, StringComparison.Ordinal);
+    }
+
+    private static bool TryGetMostSpecificDottedOwner(string symbolId, IReadOnlySet<string> knownPackageNames, out string packageName)
+    {
+        packageName = string.Empty;
+
+        foreach (var knownPackageName in knownPackageNames)
+        {
+            if (symbolId.Length <= knownPackageName.Length ||
+                symbolId[knownPackageName.Length] != '.' ||
+                !symbolId.StartsWith(knownPackageName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (knownPackageName.Length > packageName.Length)
+            {
+                packageName = knownPackageName;
+            }
+        }
+
+        return packageName.Length > 0;
     }
 
     private sealed class AtsDtoTypeBuilder(string typeId)
