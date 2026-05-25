@@ -52,6 +52,14 @@ param(
     [switch]$Help
 )
 
+# Capture whether -Quality was bound by the caller before any default-fill
+# logic runs. The uninstall path infers a channel from -Quality (e.g.
+# `release` -> `stable`) and must NOT do so when -Quality was filled in by
+# the install default, or `-Uninstall -Yes` with no other arguments would
+# silently delete `~/.aspire/hives/stable`. Mirrors QUALITY_EXPLICIT in
+# get-aspire-cli.sh.
+$Script:QualityExplicit = $PSBoundParameters.ContainsKey('Quality')
+
 # Global constants
 $Script:UserAgent = "get-aspire-cli.ps1/1.0"
 $Script:IsModernPowerShell = $PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.PSEdition -eq "Core"
@@ -828,6 +836,18 @@ function Remove-CleanupPath {
     }
 }
 
+# Reject channel names that contain path separators or '..' segments so
+# $aspireHome\hives\<channel> cannot resolve outside $aspireHome\hives.
+# Mirrors validate_channel in get-aspire-cli.sh and the C# CliCleanupService.ValidateChannel.
+function Test-UninstallChannel {
+    param([string]$ChannelName)
+    if ([string]::IsNullOrWhiteSpace($ChannelName)) { return $false }
+    if ($ChannelName.Contains('/') -or $ChannelName.Contains('\')) { return $false }
+    if ($ChannelName -eq '.' -or $ChannelName -eq '..') { return $false }
+    if ($ChannelName.Contains('..')) { return $false }
+    return $true
+}
+
 function Get-BundleVersionTarget {
     [CmdletBinding()]
     param(
@@ -894,11 +914,17 @@ function Start-AspireCliUninstall {
     }
     else {
         $targetChannel = $Channel
-        if ([string]::IsNullOrWhiteSpace($targetChannel) -and -not [string]::IsNullOrWhiteSpace($Quality)) {
+        # Only infer the channel from -Quality when the user passed -Quality
+        # explicitly; the install-default quality must not silently target
+        # ~/.aspire/hives/stable for `-Uninstall -Yes` with no other arguments.
+        if ([string]::IsNullOrWhiteSpace($targetChannel) -and $Script:QualityExplicit -and -not [string]::IsNullOrWhiteSpace($Quality)) {
             $targetChannel = ConvertTo-ChannelName -Quality $Quality
         }
         if ([string]::IsNullOrWhiteSpace($targetChannel)) {
             throw "Uninstall requires -Channel or -All when the channel cannot be inferred."
+        }
+        if (-not (Test-UninstallChannel -ChannelName $targetChannel)) {
+            throw "Invalid -Channel value '$targetChannel'. Channel names must not contain path separators or '..'."
         }
         $channels = @($targetChannel)
     }

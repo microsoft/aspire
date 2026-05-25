@@ -918,6 +918,19 @@ function Remove-CleanupPath {
     }
 }
 
+# Reject channel names that contain path separators or '..' segments so
+# $ResolvedInstallPrefix\hives\<channel> cannot resolve outside
+# $ResolvedInstallPrefix\hives. Mirrors validate_channel in
+# get-aspire-cli.sh and the C# CliCleanupService.ValidateChannel.
+function Test-UninstallChannel {
+    param([string]$ChannelName)
+    if ([string]::IsNullOrWhiteSpace($ChannelName)) { return $false }
+    if ($ChannelName.Contains('/') -or $ChannelName.Contains('\')) { return $false }
+    if ($ChannelName -eq '.' -or $ChannelName -eq '..') { return $false }
+    if ($ChannelName.Contains('..')) { return $false }
+    return $true
+}
+
 function Get-BundleVersionTarget {
     [CmdletBinding()]
     param(
@@ -991,6 +1004,9 @@ function Start-AspireCliUninstall {
         }
         if ([string]::IsNullOrWhiteSpace($targetChannel)) {
             throw "Uninstall requires a PR number, -Channel, or -All when the channel cannot be inferred."
+        }
+        if (-not (Test-UninstallChannel -ChannelName $targetChannel)) {
+            throw "Invalid -Channel value '$targetChannel'. Channel names must not contain path separators or '..'."
         }
         $channels = @($targetChannel)
     }

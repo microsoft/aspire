@@ -66,6 +66,32 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task UninstallWithoutChannelOrAllOrQuality_FailsWithoutSilentlyTargetingDefaultQualityChannel()
+    {
+        // Without -Channel/-All/-Quality, the script must refuse rather than
+        // infer "stable" from the install default quality and quietly delete
+        // it. The default-quality fallback in Start-AspireCliInstallation
+        // runs before the uninstall dispatch, so the script must explicitly
+        // track whether -Quality was bound (mirrors QUALITY_EXPLICIT in the
+        // shell script).
+        using var env = new TestEnvironment();
+        var aspireHome = Path.Combine(env.TempDirectory, "aspire");
+        var customPath = Path.Combine(aspireHome, "bin");
+        var stableHive = Path.Combine(aspireHome, "hives", "stable");
+        Directory.CreateDirectory(Path.Combine(stableHive, "packages"));
+
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "-Uninstall",
+            "-InstallPath", customPath,
+            "-Yes");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("-Channel or -All", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.True(Directory.Exists(stableHive));
+    }
+
+    [Fact]
     public async Task UninstallWhatIfWithQuality_ShowsInferredChannelAndSharedInstallSkip()
     {
         using var env = new TestEnvironment();

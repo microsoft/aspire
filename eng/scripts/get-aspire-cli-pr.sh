@@ -375,6 +375,24 @@ remove_bundle_layout() {
     remove_path "$bundle_path" "shared bundle link"
 }
 
+# Reject channel names that contain path separators or `..` segments so
+# `$install_prefix/hives/$channel` cannot resolve outside `$install_prefix/hives`.
+# Mirrors validate_channel in get-aspire-cli.sh and the C# CliCleanupService.ValidateChannel.
+validate_channel() {
+    local channel="$1"
+    case "$channel" in
+        ""|*/*|*\\*|..|.|*/..|../*|*/../*)
+            say_error "Invalid channel name '$channel'."
+            return 1
+            ;;
+    esac
+    if [[ "$channel" == *".."* ]]; then
+        say_error "Invalid channel name '$channel'."
+        return 1
+    fi
+    return 0
+}
+
 run_uninstall() {
     local install_prefix="$1"
     local -a channels=()
@@ -397,6 +415,9 @@ run_uninstall() {
         fi
         if [[ -z "$channel" ]]; then
             say_error "Uninstall requires a PR number, --channel, or --all when the channel cannot be inferred."
+            return 1
+        fi
+        if ! validate_channel "$channel"; then
             return 1
         fi
         channels+=("$channel")
