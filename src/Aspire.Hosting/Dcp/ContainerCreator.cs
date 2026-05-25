@@ -10,9 +10,6 @@ using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Utils;
-// Type alias keeps the public ContainerTargetPlatform enum reachable here
-// without dragging in the rest of the Aspire.Hosting.Publishing namespace.
-using ContainerTargetPlatform = Aspire.Hosting.Publishing.ContainerTargetPlatform;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -954,18 +951,19 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
     }
 
-    // Local to keep this file free of a using on Aspire.Hosting.Publishing. Behavior matches
-    // ToRuntimePlatformString in Publishing/ResourceContainerImageManager.cs.
+    // Maps the publishing-side ContainerTargetPlatform enum to DCP-native ContainerPlatform string
+    // constants. The publishing type is fully qualified so the DCP layer doesn't carry a
+    // `using Aspire.Hosting.Publishing` directive.
 #pragma warning disable ASPIREPIPELINES003 // ContainerTargetPlatform is experimental.
-    private static string ToDcpPlatformString(ContainerTargetPlatform platform)
+    private static string ToDcpPlatformString(Publishing.ContainerTargetPlatform platform)
     {
         var parts = new List<string>();
-        if (platform.HasFlag(ContainerTargetPlatform.LinuxAmd64)) { parts.Add("linux/amd64"); }
-        if (platform.HasFlag(ContainerTargetPlatform.LinuxArm64)) { parts.Add("linux/arm64"); }
-        if (platform.HasFlag(ContainerTargetPlatform.LinuxArm)) { parts.Add("linux/arm"); }
-        if (platform.HasFlag(ContainerTargetPlatform.Linux386)) { parts.Add("linux/386"); }
-        if (platform.HasFlag(ContainerTargetPlatform.WindowsAmd64)) { parts.Add("windows/amd64"); }
-        if (platform.HasFlag(ContainerTargetPlatform.WindowsArm64)) { parts.Add("windows/arm64"); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxAmd64)) { parts.Add(ContainerPlatform.LinuxAmd64); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxArm64)) { parts.Add(ContainerPlatform.LinuxArm64); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxArm)) { parts.Add(ContainerPlatform.LinuxArm); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.Linux386)) { parts.Add(ContainerPlatform.Linux386); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.WindowsAmd64)) { parts.Add(ContainerPlatform.WindowsAmd64); }
+        if (platform.HasFlag(Publishing.ContainerTargetPlatform.WindowsArm64)) { parts.Add(ContainerPlatform.WindowsArm64); }
 
         if (parts.Count == 0)
         {
