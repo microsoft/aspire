@@ -258,20 +258,11 @@ internal sealed class PsCommand : BaseCommand
 
         var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList());
 
-        // Only show the CLI Log column when at least one app host has a log file path.
-        var includeCliLog = appHosts.Any(a => !string.IsNullOrEmpty(a.LogFilePath));
-
         var table = new Table();
         table.AddBoldColumn(PsCommandStrings.HeaderPath);
         table.AddBoldColumn(PsCommandStrings.HeaderSdk);
         table.AddBoldColumn(PsCommandStrings.HeaderPid);
         table.AddBoldColumn(PsCommandStrings.HeaderCliPid);
-
-        if (includeCliLog)
-        {
-            table.AddBoldColumn(PsCommandStrings.HeaderCliLog);
-        }
-
         table.AddBoldColumn(PsCommandStrings.HeaderDashboard);
 
         foreach (var appHost in appHosts)
@@ -298,17 +289,6 @@ internal sealed class PsCommand : BaseCommand
                 appHost.AppHostPid.ToString(CultureInfo.InvariantCulture),
                 cliPid,
             };
-
-            if (includeCliLog)
-            {
-                var logDisplay = "-";
-                if (!string.IsNullOrEmpty(appHost.LogFilePath))
-                {
-                    logDisplay = MarkupHelpers.SafeFileLink(_interactionService, appHost.LogFilePath, Path.GetFileName(appHost.LogFilePath));
-                }
-
-                columns.Add(logDisplay);
-            }
 
             columns.Add(dashboard);
 

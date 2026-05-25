@@ -87,12 +87,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string HeaderCliLog {
-            get {
-                return ResourceManager.GetString("HeaderCliLog", resourceCulture);
-            }
-        }
-
         public static string UnknownPath {
             get {
                 return ResourceManager.GetString("UnknownPath", resourceCulture);

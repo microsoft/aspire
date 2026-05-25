@@ -138,9 +138,6 @@
   <data name="HeaderDashboard" xml:space="preserve">
     <value>Dashboard</value>
   </data>
-  <data name="HeaderCliLog" xml:space="preserve">
-    <value>Logs</value>
-  </data>
   <data name="UnknownPath" xml:space="preserve">
     <value>Unknown</value>
   </data>
