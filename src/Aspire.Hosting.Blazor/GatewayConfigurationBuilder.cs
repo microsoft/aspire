@@ -241,7 +241,7 @@ internal static class GatewayConfigurationBuilder
             // Send only the OTLP path so the WASM client resolves it against its own
             // page origin (HostEnvironment.BaseAddress). This avoids cross-origin issues
             // when the user navigates via HTTP but the gateway also exposes HTTPS.
-            environment["ASPIRE_OTLP_PATH_BASE"] = $"{pathBase}/{otlpPrefix}";
+            environment["OTEL_EXPORTER_OTLP_ENDPOINT"] = $"{pathBase}/{otlpPrefix}";
             environment["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf";
 
             // NOTE: OTEL_EXPORTER_OTLP_HEADERS is intentionally NOT sent to the WASM client.
