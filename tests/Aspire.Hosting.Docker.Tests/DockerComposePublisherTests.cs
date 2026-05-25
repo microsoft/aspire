@@ -747,6 +747,34 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareStep_ResolvesArbitraryIValueProviderSource()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose");
+
+        builder.AddContainer("testapp", "testimage")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["MY_VAR"] = new TestConditionProvider("resolved-value");
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        // The compose file uses the user-specified container env var name; the .env file uses the
+        // name derived from the provider's ValueExpression. Docker Compose interpolates between them.
+        var composeContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "docker-compose.yaml"));
+        Assert.Contains("MY_VAR: \"${TEST_CONDITION}\"", composeContent);
+
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        Assert.Contains("TEST_CONDITION=resolved-value", envFileContent);
+    }
+
+    [Fact]
     public async Task PublishAsync_BindMounts_ReplacedWithEnvironmentPlaceholders()
     {
         using var tempDir = new TestTempDirectory();
