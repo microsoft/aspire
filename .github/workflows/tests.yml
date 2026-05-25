@@ -323,7 +323,7 @@ jobs:
         with:
           node-version: '20.x'
       - name: Validate lockfile registries
-        run: node -e "const fs = require('fs'); const lock = fs.readFileSync('yarn.lock', 'utf8'); if (/registry\\.(npmjs|yarnpkg)\\.com/.test(lock)) { throw new Error('extension/yarn.lock contains public npm registry URLs. Regenerate it using the internal dotnet-public-npm feed before restoring.'); }"
+        run: node -e "const fs = require('fs'); const lock = fs.readFileSync('yarn.lock', 'utf8'); if (/registry\\.(?:npmjs\\.org|yarnpkg\\.com)/.test(lock)) { throw new Error('extension/yarn.lock contains public npm registry URLs. Regenerate it using the internal dotnet-public-npm feed before restoring.'); }"
       - name: Install dependencies
         run: yarn install --frozen-lockfile --non-interactive
       - name: Run tests
