@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes a regression where launching an Aspire AppHost from VS Code via Remote SSH would enter debug mode but never open the dashboard browser. The CLI now sends dashboard URL information and the startup-complete notification to the extension before entering the live remote endpoint display loop.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📡",
+  "firstMergedAt": "2026-05-25T07:32:29Z",
+  "lastMergedAt": "2026-05-25T07:32:29Z",
+  "name": "Fix Remote SSH dashboard auto-launch regression",
+  "owner": "adamint",
+  "prs": [
+    17389
+  ]
+}

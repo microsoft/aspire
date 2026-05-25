@@ -7,7 +7,8 @@
   "communityContributors": [],
   "description": "The Azure Container Apps job publishing APIs (`PublishAsAzureContainerAppJob`) are now stable and no longer require suppressing the `ASPIREAZURE002` experimental warning, completing the graduation of ACA job publishing APIs for general use.",
   "docsPrs": [
-    1018
+    1018,
+    1001
   ],
   "docsRequired": true,
   "emoji": "🎓",

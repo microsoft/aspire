@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents graduation of ACA job APIs; matched to PR #17219 change entry",
+  "mergedAt": "2026-05-25T08:35:38Z",
+  "number": 1001,
+  "runDate": "2026-05-25T09:22:14Z",
+  "status": "included",
+  "title": "[docs] Graduate Azure Container Apps job APIs from experimental"
+}

@@ -6,8 +6,10 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "`aspire update --channel <channel>` no longer fails mid-update with NU1103 when switching to a non-stable channel on projects with multiple Aspire package references. The fix defers the NuGet restore until after all package version edits are applied, preventing partial update failures.",
-  "docsPrs": [],
-  "docsRequired": false,
+  "docsPrs": [
+    989
+  ],
+  "docsRequired": true,
   "emoji": "🔧",
   "firstMergedAt": "2026-05-16T02:59:54Z",
   "lastMergedAt": "2026-05-16T02:59:54Z",

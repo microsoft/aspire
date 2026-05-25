@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Bug fix for Remote SSH dashboard auto-launch regression in VS Code run command",
+  "mergedAt": "2026-05-25T07:32:29Z",
+  "number": 17389,
+  "runDate": "2026-05-25T09:22:14Z",
+  "status": "included",
+  "title": "Fix Remote SSH dashboard auto-launch from run command"
+}

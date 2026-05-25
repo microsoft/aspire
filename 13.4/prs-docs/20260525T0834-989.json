@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents deferred restore behavior for aspire update --channel; matched to PR #17017 change entry",
+  "mergedAt": "2026-05-25T08:34:59Z",
+  "number": 989,
+  "runDate": "2026-05-25T09:22:14Z",
+  "status": "included",
+  "title": "[docs] Document deferred restore behavior for aspire update --channel"
+}
