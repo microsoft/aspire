@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "New aspire ps --follow --resources flags and live multi-AppHost workspace support in VS Code",
+  "mergedAt": "2026-05-25T10:31:34Z",
+  "number": 16836,
+  "runDate": "2026-05-25T11:25:27Z",
+  "status": "included",
+  "title": "Support live workspace AppHost updates"
+}

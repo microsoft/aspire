@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Adds --follow and --resources flags to aspire ps, enabling live streaming of AppHost and resource snapshots as newline-delimited JSON. This allows consumers like the VS Code extension to receive real-time AppHost updates without increased polling overhead.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udce1",
+  "firstMergedAt": "2026-05-25T10:31:34Z",
+  "lastMergedAt": "2026-05-25T10:31:34Z",
+  "name": "Live streaming aspire ps with --follow and --resources",
+  "owner": "adamint",
+  "prs": [
+    16836
+  ]
+}

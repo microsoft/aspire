@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The VS Code extension now supports live workspace updates for multi-AppHost workspaces. Running AppHosts are rendered independently in the workspace tree, resource actions and CodeLens are scoped to the owning AppHost, and stale progress notifications are cleared when the CLI connection closes.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udfd8\ufe0f",
+  "firstMergedAt": "2026-05-25T10:31:34Z",
+  "lastMergedAt": "2026-05-25T10:31:34Z",
+  "name": "Live multi-AppHost workspace support in VS Code",
+  "owner": "adamint",
+  "prs": [
+    16836
+  ]
+}

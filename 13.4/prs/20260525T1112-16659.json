@@ -1,0 +1,9 @@
+{
+  "author": "maddymontaquila",
+  "comment": "Internal repo configuration change (removed MCP server entry from .mcp.json), no user impact",
+  "mergedAt": "2026-05-25T11:12:42Z",
+  "number": 16659,
+  "runDate": "2026-05-25T11:25:27Z",
+  "status": "excluded",
+  "title": "Remove Aspire MCP repo configuration"
+}

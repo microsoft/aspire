@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents the Kubernetes manifest resource API introduced in microsoft/aspire#16883",
+  "mergedAt": "2026-05-25T10:52:11Z",
+  "number": 927,
+  "runDate": "2026-05-25T11:25:27Z",
+  "status": "included",
+  "title": "[docs] Add custom Kubernetes manifest API documentation"
+}

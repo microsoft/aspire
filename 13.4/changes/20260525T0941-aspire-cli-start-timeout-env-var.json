@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Adds the ASPIRE_CLI_START_TIMEOUT environment variable to configure the AppHost startup timeout for aspire start and aspire run, including detached launches. This provides a reliable escape hatch for slow machines or CI environments where the default wait period is insufficient.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\u23f1\ufe0f",
+  "firstMergedAt": "2026-05-25T09:41:56Z",
+  "lastMergedAt": "2026-05-25T09:41:56Z",
+  "name": "ASPIRE_CLI_START_TIMEOUT env var for aspire start and run",
+  "owner": "sebastienros",
+  "prs": [
+    16686
+  ]
+}

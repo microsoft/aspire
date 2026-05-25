@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "New ASPIRE_CLI_START_TIMEOUT env var for configuring CLI startup timeout",
+  "mergedAt": "2026-05-25T09:41:56Z",
+  "number": 16686,
+  "runDate": "2026-05-25T11:25:27Z",
+  "status": "included",
+  "title": "Support AppHost startup timeout env var"
+}
