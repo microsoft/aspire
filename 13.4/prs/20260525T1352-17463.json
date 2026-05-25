@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: aspire stop --all now returns exit code 0 when no app hosts are running instead of exit code 7",
+  "mergedAt": "2026-05-25T13:52:31Z",
+  "number": 17463,
+  "runDate": "2026-05-25T15:07:16Z",
+  "status": "included",
+  "title": "Fix `stop --all` to return success when no app hosts are running"
+}

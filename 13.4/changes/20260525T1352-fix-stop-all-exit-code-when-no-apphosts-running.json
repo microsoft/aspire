@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`aspire stop --all` now returns exit code 0 (success) with an informational message when no app hosts are running, matching the behavior of interactive `aspire stop`. Previously, `--all` returned exit code 7 (FailedToFindProject) with an error, causing scripting failures in environments where no app hosts may be running.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚦",
+  "firstMergedAt": "2026-05-25T13:52:31Z",
+  "lastMergedAt": "2026-05-25T13:52:31Z",
+  "name": "Fix aspire stop --all exit code when no app hosts are running",
+  "owner": "JamesNK",
+  "prs": [
+    17463
+  ]
+}
