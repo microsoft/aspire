@@ -775,6 +775,63 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareStep_SkipsParameterResolutionWhenStaticDefaultIsSet()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        var environment = builder.AddDockerComposeEnvironment("docker-compose");
+
+        var param = builder.AddParameter("myparam", "dynamic-value");
+
+        builder.AddContainer("testapp", "testimage")
+            .WithEnvironment("MY_PARAM", param);
+
+        // Set a static default before PrepareAsync runs; parameter resolution should be skipped.
+        environment.ConfigureEnvFile(vars =>
+        {
+            if (vars.TryGetValue("MYPARAM", out var envVar))
+            {
+                envVar.DefaultValue = "static-override";
+            }
+        });
+
+        var app = builder.Build();
+        app.Run();
+
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        Assert.Contains("MYPARAM=static-override", envFileContent);
+        Assert.DoesNotContain("MYPARAM=dynamic-value", envFileContent);
+    }
+
+    [Fact]
+    public async Task PrepareStep_ResolvesContainerImageReferenceViaIValueProvider()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path, step: "prepare-docker-compose");
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose");
+
+        // ProjectResource triggers AsContainerImagePlaceholder, which creates a CapturedEnvironmentVariable
+        // with Source=ContainerImageReference and DefaultValue="project1:latest".
+        // PrepareAsync should call GetValueAsync() via the IValueProvider branch; with no registry
+        // configured in the test, GetValueAsync() returns null and the entry is written empty —
+        // not "project1:latest". If the IValueProvider branch were skipped, the static default would appear.
+        builder.AddProject<TestProjectWithLaunchSettings>("project1");
+
+        var app = builder.Build();
+        app.Run();
+
+        var envFileContent = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, ".env.Production"));
+        Assert.Contains("PROJECT1_IMAGE=", envFileContent);
+        Assert.DoesNotContain("PROJECT1_IMAGE=project1:latest", envFileContent);
+    }
+
+    [Fact]
     public async Task PublishAsync_BindMounts_ReplacedWithEnvironmentPlaceholders()
     {
         using var tempDir = new TestTempDirectory();
