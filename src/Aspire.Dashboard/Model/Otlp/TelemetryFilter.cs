@@ -131,6 +131,24 @@ public class FieldTelemetryFilter : TelemetryFilter
         return func(fieldNumber, filterNumber);
     }
 
+    public bool HasNumericMatch(double fieldValue)
+    {
+        if (!double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var filterNumber) ||
+            !double.IsFinite(filterNumber) ||
+            !double.IsFinite(fieldValue))
+        {
+            return false;
+        }
+
+        if (Condition is not (FilterCondition.Equals or FilterCondition.GreaterThan or FilterCondition.LessThan or FilterCondition.GreaterThanOrEqual or FilterCondition.LessThanOrEqual or FilterCondition.NotEqual))
+        {
+            return false;
+        }
+
+        var func = ConditionToFuncNumber(Condition);
+        return func(fieldValue, filterNumber);
+    }
+
     public override IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input)
     {
         switch (Field)

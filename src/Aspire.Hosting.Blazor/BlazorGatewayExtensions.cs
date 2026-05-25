@@ -34,10 +34,10 @@ public static class BlazorGatewayExtensions
     /// The gateway is shipped as Gateway.cs alongside this library and launched
     /// via <c>AddCSharpApp</c>. No separate project is needed.
     /// </summary>
-    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
+    [AspireExport]
     public static IResourceBuilder<ProjectResource> AddBlazorGateway(
         this IDistributedApplicationBuilder builder,
-        string name)
+        [ResourceName] string name)
     {
         var gatewayPath = GetScriptPath("Gateway.cs");
         var gateway = builder.AddCSharpApp(name, gatewayPath)
@@ -106,10 +106,10 @@ public static class BlazorGatewayExtensions
     /// Registers a Blazor WebAssembly project as a resource without launching it as a process.
     /// Prefer AddBlazorWasmProject&lt;TProject&gt; which uses IProjectMetadata for path discovery.
     /// </summary>
-    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
+    [AspireExport("addBlazorWasmProject")]
     public static IResourceBuilder<BlazorWasmAppResource> AddBlazorWasmApp(
         this IDistributedApplicationBuilder builder,
-        string name,
+        [ResourceName] string name,
         string projectPath)
     {
         var resolvedPath = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, projectPath));
@@ -138,7 +138,7 @@ public static class BlazorGatewayExtensions
     /// <param name="apiPrefix">The URL path prefix for API proxy routes. Defaults to <c>"_api"</c>.</param>
     /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
     /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
-    [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
+    [AspireExport]
     public static IResourceBuilder<ProjectResource> WithBlazorClientApp(
         this IResourceBuilder<ProjectResource> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,

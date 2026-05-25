@@ -12,13 +12,13 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// TypeScript-AppHost variant of the AKS cert-manager E2E test. Mirrors
 /// <see cref="AksAzureKubernetesEnvironmentCertManagerDeploymentTests"/> but uses the
 /// TypeScript Express/React starter (<c>aspire new</c> --&gt; <c>Starter App (Express/React, TypeScript AppHost)</c>)
-/// and patches <c>apphost.ts</c> to wire <c>addAzureKubernetesEnvironment</c> +
+/// and patches <c>apphost.mts</c> to wire <c>addAzureKubernetesEnvironment</c> +
 /// <c>addCertManager</c> + <c>addIssuer().withLetsEncryptProductionParam(acmeEmail).withHttp01Solver()</c>
 /// + <c>gateway.withGatewayTlsIssuer(letsEncrypt)</c> around the Express API.
 ///
 /// Proves that the cert-manager API surface generated for TypeScript via <c>[AspireExport]</c>
 /// works end-to-end against a real AKS cluster (this complements the polyglot type-check
-/// validation in <c>tests/PolyglotAppHosts/Aspire.Hosting.Kubernetes/TypeScript/apphost.ts</c>).
+/// validation in <c>tests/PolyglotAppHosts/Aspire.Hosting.Kubernetes/TypeScript/apphost.mts</c>).
 ///
 /// Uses Let's Encrypt <em>production</em> so the served cert chains to a publicly-trusted root
 /// (mirrors a realistic deployment). Production is rate-limited (50 certs / registered
@@ -117,7 +117,7 @@ public sealed class AksAzureKubernetesEnvironmentCertManagerTypeScriptDeployment
                 await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
             }
 
-            // Patch apphost.ts. The Express/React starter creates an Express API at ./api
+            // Patch apphost.mts. The Express/React starter creates an Express API at ./api
             // exposing an HTTP endpoint, plus a Vite frontend bundled in for publish. We
             // replace the trailing `await builder.build().run();` with the AKS + cert-manager
             // wiring that puts the API behind a Gateway with TLS issued by Let's Encrypt production.
@@ -129,9 +129,11 @@ public sealed class AksAzureKubernetesEnvironmentCertManagerTypeScriptDeployment
             //   addGateway / withLoadBalancer / withRoute / withGatewayTlsIssuer
             //   publishAsKubernetesService / addManifest
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-            var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
+            // The TypeScript starter templates (including Express/React) emit apphost.mts
+            // since PR #16984. Reading apphost.ts here would fail with FileNotFoundException.
+            var appHostFilePath = Path.Combine(projectDir, "apphost.mts");
 
-            output.WriteLine($"Step 6: Modifying apphost.ts at: {appHostFilePath}");
+            output.WriteLine($"Step 6: Modifying apphost.mts at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
 
@@ -190,7 +192,7 @@ await builder.build().run();
 
             content = content.Replace(buildRunPattern, replacement);
             File.WriteAllText(appHostFilePath, content);
-            output.WriteLine("Modified apphost.ts with addCertManager + addIssuer + withGatewayTlsIssuer");
+            output.WriteLine("Modified apphost.mts with addCertManager + addIssuer + withGatewayTlsIssuer");
 
             output.WriteLine("Step 7: Setting deployment environment variables...");
             await auto.TypeAsync(

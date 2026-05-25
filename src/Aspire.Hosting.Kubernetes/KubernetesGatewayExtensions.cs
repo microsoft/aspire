@@ -95,7 +95,7 @@ public static class KubernetesGatewayExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="path">The URL path to match (e.g., <c>"/"</c> or <c>"/api"</c>). Must start with <c>/</c>.</param>
     /// <param name="endpoint">The endpoint reference identifying the target service and port.</param>
-    /// <param name="pathType">The path matching strategy. Defaults to <see cref="IngressPathType.Prefix"/>.</param>
+    /// <param name="pathType">The path matching strategy. Defaults to <see cref="GatewayPathMatchType.PathPrefix"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withGatewayPathRoute")]
@@ -103,7 +103,7 @@ public static class KubernetesGatewayExtensions
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string path,
         EndpointReference endpoint,
-        IngressPathType pathType = IngressPathType.Prefix)
+        GatewayPathMatchType pathType = GatewayPathMatchType.PathPrefix)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(path);
@@ -132,7 +132,7 @@ public static class KubernetesGatewayExtensions
     /// <param name="host">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
     /// <param name="path">The URL path to match. Must start with <c>/</c>.</param>
     /// <param name="endpoint">The endpoint reference identifying the target service and port.</param>
-    /// <param name="pathType">The path matching strategy. Defaults to <see cref="IngressPathType.Prefix"/>.</param>
+    /// <param name="pathType">The path matching strategy. Defaults to <see cref="GatewayPathMatchType.PathPrefix"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withGatewayHostRoute")]
@@ -141,7 +141,7 @@ public static class KubernetesGatewayExtensions
         string host,
         string path,
         EndpointReference endpoint,
-        IngressPathType pathType = IngressPathType.Prefix)
+        GatewayPathMatchType pathType = GatewayPathMatchType.PathPrefix)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(host);

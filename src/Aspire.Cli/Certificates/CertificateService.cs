@@ -47,15 +47,18 @@ internal sealed class CertificateService(
     ICertificateToolRunner certificateToolRunner,
     IInteractionService interactionService,
     AspireCliTelemetry telemetry,
-    ICliHostEnvironment hostEnvironment) : ICertificateService
+    ICliHostEnvironment hostEnvironment,
+    Func<bool>? isLinux = null) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
+    private readonly Func<bool> _isLinux = isLinux ?? OperatingSystem.IsLinux;
 
     public async Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartDiagnosticActivity(kind: ActivityKind.Client);
 
         var environmentVariables = new Dictionary<string, string>();
+        var isLinux = _isLinux();
 
         // In non-interactive environments on macOS and Windows we can't successfully
         // prompt for trust (macOS Keychain password, Windows trust dialog) and we also
@@ -63,7 +66,7 @@ internal sealed class CertificateService(
         // Skip the trust attempt but still check the current state so we can warn when
         // the environment does not already have a trusted certificate. Linux trust is
         // non-interactive so it's safe to run the full flow there.
-        var canPerformTrust = hostEnvironment.SupportsInteractiveInput || OperatingSystem.IsLinux();
+        var canPerformTrust = hostEnvironment.SupportsInteractiveInput || isLinux;
 
         if (!canPerformTrust)
         {
@@ -77,7 +80,7 @@ internal sealed class CertificateService(
                 interactionService.DisplayMessage(KnownEmojis.Warning, ErrorStrings.CertificatesNotTrustedNonInteractive);
             }
 
-            if (preCheck.IsPartiallyTrusted && OperatingSystem.IsLinux())
+            if (preCheck.IsPartiallyTrusted && isLinux)
             {
                 ConfigureSslCertDir(environmentVariables);
             }
@@ -107,15 +110,20 @@ internal sealed class CertificateService(
         }
 
         var postTrustCheck = certificateToolRunner.CheckHttpCertificate();
-        if (postTrustCheck.IsPartiallyTrusted && OperatingSystem.IsLinux())
+        if (postTrustCheck.IsPartiallyTrusted && isLinux)
         {
             ConfigureSslCertDir(environmentVariables);
         }
 
+        var partialTrustAccepted = !hostEnvironment.SupportsInteractiveInput
+            && isLinux
+            && trustResultCode == EnsureCertificateResult.PartiallyFailedToTrustTheCertificate
+            && postTrustCheck.IsPartiallyTrusted;
+
         return new EnsureCertificatesTrustedResult
         {
             EnvironmentVariables = environmentVariables,
-            Success = CertificateHelpers.IsSuccessfulTrustResult(trustResultCode),
+            Success = CertificateHelpers.IsSuccessfulTrustResult(trustResultCode) || partialTrustAccepted,
             WasCancelled = trustResultCode == EnsureCertificateResult.UserCancelledTrustStep,
             ResultCode = trustResultCode
         };

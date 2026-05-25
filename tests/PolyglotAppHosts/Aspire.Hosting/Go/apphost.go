@@ -36,6 +36,38 @@ func main() {
 	if err = dockerContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
+	dockerfileFactory := func(factoryContext aspire.DockerfileFactoryContext) string {
+		_ = factoryContext.Resource()
+		return `FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+WORKDIR /app
+ENTRYPOINT ["dotnet", "App.dll"]
+`
+	}
+	dockerFactoryContainer := builder.AddDockerfileFactory("dockerfactoryapp", "./app", dockerfileFactory,
+		&aspire.AddDockerfileFactoryOptions{Stage: aspire.StringPtr("runtime")})
+	if err = dockerFactoryContainer.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+	configureDockerfileBuilder := func(dockerfileContext aspire.DockerfileBuilderCallbackContext) {
+		dockerfileBuilder := dockerfileContext.Builder()
+		dockerfileBuilder.Arg("BASE_IMAGE", &aspire.ArgOptions{DefaultValue: aspire.StringPtr("mcr.microsoft.com/dotnet/runtime:8.0")})
+		buildStage := dockerfileBuilder.From("mcr.microsoft.com/dotnet/sdk:8.0", &aspire.FromOptions{StageName: aspire.StringPtr("build")})
+		buildStage.WorkDir("/src")
+		buildStage.Copy("./src", "/src")
+		buildStage.Run("echo building dockerfile")
+		runtimeStage := dockerfileBuilder.From("mcr.microsoft.com/dotnet/runtime:8.0", &aspire.FromOptions{StageName: aspire.StringPtr("runtime")})
+		runtimeStage.CopyFrom("build", "/src", "/app")
+		runtimeStage.Entrypoint([]string{"dotnet", "App.dll"})
+	}
+	dockerBuilderContainer := builder.AddDockerfileBuilder("dockerbuilderapp", "./app", configureDockerfileBuilder,
+		&aspire.AddDockerfileBuilderOptions{Stage: aspire.StringPtr("runtime")})
+	if err = dockerBuilderContainer.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+	dockerContainer.WithDockerfileBuilder("./app", configureDockerfileBuilder,
+		&aspire.WithDockerfileBuilderOptions{Stage: aspire.StringPtr("runtime")})
+	dockerFactoryContainer.WithDockerfileFactory("./app", dockerfileFactory,
+		&aspire.WithDockerfileFactoryOptions{Stage: aspire.StringPtr("runtime")})
 
 	// AddExecutable (pre-existing)
 	exe := builder.AddExecutable("myexe", "echo", ".", []string{"hello"})

@@ -766,8 +766,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithDockerfile{T}"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
     public static IResourceBuilder<T> WithDockerfileFactory<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileFactoryContext, string> dockerfileFactory, string? stage = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -814,8 +813,8 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithDockerfile{T}"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithDockerfileFactory<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileFactoryContext, Task<string>> dockerfileFactory, string? stage = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -939,8 +938,7 @@ public static class ContainerResourceBuilderExtensions
     /// The output is trusted and not validated.
     /// </para>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddDockerfile"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
     public static IResourceBuilder<ContainerResource> AddDockerfileFactory(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileFactoryContext, string> dockerfileFactory, string? stage = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -970,8 +968,8 @@ public static class ContainerResourceBuilderExtensions
     /// The output is trusted and not validated.
     /// </para>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddDockerfile"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ContainerResource> AddDockerfileFactory(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileFactoryContext, Task<string>> dockerfileFactory, string? stage = null)
     {
         ArgumentNullException.ThrowIfNull(builder);

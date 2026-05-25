@@ -6,6 +6,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Provides context for Dockerfile factory functions.
 /// </summary>
+[AspireExport]
 public sealed class DockerfileFactoryContext
 {
     /// <summary>
@@ -34,6 +35,7 @@ public sealed class DockerfileFactoryContext
     /// </code>
     /// </example>
     /// </summary>
+    [AspireExport]
     public required IResource Resource { get; init; }
 
     /// <summary>

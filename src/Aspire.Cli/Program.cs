@@ -672,8 +672,10 @@ public class Program
 
         var hostEnvironment = serviceProvider.GetRequiredService<ICliHostEnvironment>();
 
-        // Show banner if explicitly requested OR on first run (unless suppressed by noLogo or non-interactive output)
-        if (showBanner || (isFirstRun && !noLogo && hostEnvironment.SupportsInteractiveOutput))
+        // Show banner if explicitly requested OR on first run (unless suppressed by noLogo).
+        // Always require interactive output support — the animated banner uses Spectre.Console's Live display
+        // which manipulates the cursor and fails when console handles are invalid (e.g., stdout is redirected).
+        if ((showBanner || (isFirstRun && !noLogo)) && hostEnvironment.SupportsInteractiveOutput)
         {
             var bannerService = serviceProvider.GetRequiredService<IBannerService>();
             await bannerService.DisplayBannerAsync(cancellationToken);

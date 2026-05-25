@@ -7,6 +7,15 @@ void main() throws Exception {
         var container = builder.addContainer("mycontainer", "nginx");
         container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
+        var dockerfileFactory = (AspireFunc1<DockerfileFactoryContext, String>) (factoryContext) -> {
+            var _factoryResource = factoryContext.resource();
+            return """
+                FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+                WORKDIR /app
+                ENTRYPOINT ["dotnet", "App.dll"]
+                """;
+        };
+        var dockerFactoryContainer = builder.addDockerfileFactory("dockerfactoryapp", "./app", dockerfileFactory, "runtime");
         var configureDockerfileBuilder = (AspireAction1<DockerfileBuilderCallbackContext>) (dockerfileContext) -> {
             var _dockerfileResource = dockerfileContext.resource();
             var dockerfileServices = dockerfileContext.services();
@@ -35,6 +44,7 @@ void main() throws Exception {
         };
         var dockerBuilderContainer = builder.addDockerfileBuilder("dockerbuilderapp", "./app", configureDockerfileBuilder, "runtime");
         dockerContainer.withDockerfileBuilder("./app", configureDockerfileBuilder, "runtime");
+        dockerFactoryContainer.withDockerfileFactory("./app", dockerfileFactory, "runtime");
         var exe = builder.addExecutable("myexe", "echo", ".", new String[] { "hello" });
         var project = builder.addProject("myproject", "./src/MyProject", "https");
         var csharpApp = builder.addCSharpApp("csharpapp", "./src/CSharpApp");

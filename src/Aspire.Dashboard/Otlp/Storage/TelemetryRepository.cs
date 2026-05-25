@@ -723,12 +723,26 @@ public sealed partial class TelemetryRepository : IDisposable
             return MatchesFilters(trace, optimizedFilters);
         }
 
-        // A trace matches when one of its spans matches all filters.
+        // Duration filters apply to the trace's overall duration, not individual spans.
+        foreach (var filter in filters)
+        {
+            if (filter.IsTraceDurationFilter() && !filter.HasNumericMatch(trace.Duration.TotalMilliseconds))
+            {
+                return false;
+            }
+        }
+
+        // A trace matches when one of its spans matches all non-duration filters.
         foreach (var span in trace.Spans)
         {
             var match = true;
             foreach (var filter in filters)
             {
+                if (filter.IsTraceDurationFilter())
+                {
+                    continue;
+                }
+
                 if (!filter.Apply(span))
                 {
                     match = false;
@@ -747,12 +761,26 @@ public sealed partial class TelemetryRepository : IDisposable
 
     private static bool MatchesFilters(OtlpTrace trace, List<TraceFilter> optimizedFilters)
     {
-        // A trace matches when one of its spans matches all filters.
+        // Duration filters apply to the trace's overall duration, not individual spans.
+        foreach (var filter in optimizedFilters)
+        {
+            if (filter.IsDurationFilter && !filter.ApplyDuration(trace.Duration.TotalMilliseconds))
+            {
+                return false;
+            }
+        }
+
+        // A trace matches when one of its spans matches all non-duration filters.
         foreach (var span in trace.Spans)
         {
             var match = true;
             foreach (var filter in optimizedFilters)
             {
+                if (filter.IsDurationFilter)
+                {
+                    continue;
+                }
+
                 if (!filter.Apply(span))
                 {
                     match = false;
@@ -773,6 +801,8 @@ public sealed partial class TelemetryRepository : IDisposable
     {
         public bool IsOptimized => OptimizedDurationFilter is not null || OptimizedStringFilter is not null;
 
+        public bool IsDurationFilter => OptimizedDurationFilter is not null || Filter.IsTraceDurationFilter();
+
         public static TraceFilter Create(TelemetryFilter filter)
         {
             if (DurationFilter.TryCreate(filter, out var durationFilter))
@@ -790,17 +820,22 @@ public sealed partial class TelemetryRepository : IDisposable
 
         public bool Apply(OtlpSpan span)
         {
-            if (OptimizedDurationFilter is { } durationFilter)
-            {
-                return durationFilter.Apply(span.Duration.TotalMilliseconds);
-            }
-
             if (OptimizedStringFilter is { } stringFilter)
             {
                 return stringFilter.Apply(span);
             }
 
             return Filter.Apply(span);
+        }
+
+        public bool ApplyDuration(double traceDurationMs)
+        {
+            if (OptimizedDurationFilter is { } durationFilter)
+            {
+                return durationFilter.Apply(traceDurationMs);
+            }
+
+            return Filter.HasNumericMatch(traceDurationMs);
         }
     }
 
