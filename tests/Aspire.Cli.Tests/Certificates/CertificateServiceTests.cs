@@ -321,7 +321,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var interactiveService = sp.GetRequiredService<IInteractionService>();
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, isLinux: () => true);
+                var executionContext = sp.GetRequiredService<CliExecutionContext>();
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, executionContext, isLinux: () => true);
             };
         });
 
@@ -349,7 +350,8 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
                 var interactiveService = sp.GetRequiredService<IInteractionService>();
                 var telemetry = sp.GetRequiredService<AspireCliTelemetry>();
                 var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
-                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, isLinux);
+                var executionContext = sp.GetRequiredService<CliExecutionContext>();
+                return new CertificateService(toolRunner, interactiveService, telemetry, hostEnvironment, executionContext, isLinux);
             };
         });
 

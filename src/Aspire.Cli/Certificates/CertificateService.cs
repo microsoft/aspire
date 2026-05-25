@@ -7,6 +7,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Certificates;
@@ -48,6 +49,7 @@ internal sealed class CertificateService(
     IInteractionService interactionService,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
+    CliExecutionContext executionContext,
     Func<bool>? isLinux = null) : ICertificateService
 {
     private const string SslCertDirEnvVar = "SSL_CERT_DIR";
@@ -71,7 +73,7 @@ internal sealed class CertificateService(
         {
             var preCheck = certificateToolRunner.CheckHttpCertificate();
 
-            if (!preCheck.HasCertificates)
+            if (!preCheck.HasCertificates && ShouldGenerateHttpsCertificate())
             {
                 // No certificate exists yet. Generate one without trusting it so that
                 // Kestrel's UseHttps() can load the cert from the personal store.
@@ -144,6 +146,17 @@ internal sealed class CertificateService(
             WasCancelled = trustResultCode == EnsureCertificateResult.UserCancelledTrustStep,
             ResultCode = trustResultCode
         };
+    }
+
+    /// <summary>
+    /// Checks whether automatic HTTPS certificate generation is enabled.
+    /// Set ASPIRE_CLI_GENERATE_HTTPS_CERTIFICATE=false to suppress generation,
+    /// mirroring the .NET SDK's DOTNET_GENERATE_ASPNET_CERTIFICATE opt-out.
+    /// </summary>
+    private bool ShouldGenerateHttpsCertificate()
+    {
+        var value = executionContext.GetEnvironmentVariable(KnownConfigNames.CliGenerateHttpsCertificate);
+        return !string.Equals(value, "false", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void ConfigureSslCertDir(Dictionary<string, string> environmentVariables)
