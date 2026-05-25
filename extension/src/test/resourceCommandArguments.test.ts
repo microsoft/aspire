@@ -30,6 +30,18 @@ function makeInput(overrides: Partial<ResourceCommandArgumentInputJson> = {}): R
     };
 }
 
+function createLoadingQuickPick() {
+    return {
+        title: '',
+        placeholder: '',
+        busy: false,
+        enabled: true,
+        ignoreFocusOut: false,
+        show: sinon.spy(),
+        dispose: sinon.spy(),
+    };
+}
+
 class TestMemento implements vscode.Memento {
     private readonly values = new Map<string, unknown>();
 
@@ -236,6 +248,8 @@ suite('ResourceCommandArguments', () => {
 
     test('loads dynamic arguments before prompting', async () => {
         const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        const quickPick = createLoadingQuickPick();
+        const createQuickPickStub = sinon.stub(vscode.window, 'createQuickPick').returns(quickPick as unknown as vscode.QuickPick<vscode.QuickPickItem>);
         let loadCount = 0;
 
         try {
@@ -258,8 +272,14 @@ suite('ResourceCommandArguments', () => {
             assert.strictEqual(result?.containsSecret, false);
             assert.strictEqual(loadCount, 1);
             assert.strictEqual(warningStub.called, false);
+            assert.strictEqual(quickPick.show.calledOnce, true);
+            assert.strictEqual(quickPick.dispose.calledOnce, true);
+            assert.strictEqual(quickPick.busy, true);
+            assert.strictEqual(quickPick.enabled, false);
+            assert.strictEqual(quickPick.placeholder, 'Updating command inputs...');
         }
         finally {
+            createQuickPickStub.restore();
             warningStub.restore();
         }
     });

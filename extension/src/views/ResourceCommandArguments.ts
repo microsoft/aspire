@@ -8,6 +8,7 @@ import {
     resourceCommandCustomChoice,
     resourceCommandCustomChoiceDescription,
     resourceCommandDynamicInputsUnsupported,
+    resourceCommandLoadingDynamicInputs,
     resourceCommandInvalidNumber,
     resourceCommandMaxLength,
     resourceCommandDontShowAgain,
@@ -69,7 +70,7 @@ export async function collectResourceCommandArguments(commandName: string, comma
 
     // Load before the first prompt so initially-disabled dependent inputs can become visible
     // once the AppHost applies defaults or AlwaysLoadOnStart callbacks.
-    const initialLoadedInputs = await loadDynamicArgumentInputs(inputs, values, options?.loadDynamicArguments, loadedInputSignatures);
+    const initialLoadedInputs = await loadDynamicArgumentInputs(commandTitle, inputs, values, options?.loadDynamicArguments, loadedInputSignatures);
     if (!initialLoadedInputs) {
         return undefined;
     }
@@ -98,7 +99,7 @@ export async function collectResourceCommandArguments(commandName: string, comma
     while (true) {
         // Reload before each prompt because a previous answer can change later input metadata,
         // such as enabling an input, replacing choice options, or assigning a default value.
-        const loadedInputs = await loadDynamicArgumentInputs(inputs, values, options?.loadDynamicArguments, loadedInputSignatures);
+        const loadedInputs = await loadDynamicArgumentInputs(commandTitle, inputs, values, options?.loadDynamicArguments, loadedInputSignatures);
         if (!loadedInputs) {
             return undefined;
         }
@@ -165,6 +166,7 @@ export function hasDynamicResourceCommandArguments(command: ResourceCommandJson 
 }
 
 async function loadDynamicArgumentInputs(
+    commandTitle: string,
     inputs: readonly ResourceCommandArgumentInputJson[],
     values: readonly ResourceCommandArgumentValue[],
     loader: ResourceCommandArgumentLoader | undefined,
@@ -181,12 +183,29 @@ async function loadDynamicArgumentInputs(
     }
 
     loadedInputSignatures.add(signature);
-    const loadedInputs = await loader(values);
+    const loadedInputs = await showDynamicInputLoading(commandTitle, loader(values));
     if (!loadedInputs) {
         return undefined;
     }
 
     return preserveCollectedValues(loadedInputs, values);
+}
+
+async function showDynamicInputLoading<T>(commandTitle: string, promise: Promise<T>): Promise<T> {
+    const quickPick = vscode.window.createQuickPick();
+    quickPick.title = commandTitle;
+    quickPick.placeholder = resourceCommandLoadingDynamicInputs;
+    quickPick.busy = true;
+    quickPick.enabled = false;
+    quickPick.ignoreFocusOut = true;
+    quickPick.show();
+
+    try {
+        return await promise;
+    }
+    finally {
+        quickPick.dispose();
+    }
 }
 
 function hasDynamicInputs(inputs: readonly ResourceCommandArgumentInputJson[]): boolean {
