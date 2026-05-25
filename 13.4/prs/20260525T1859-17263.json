@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored ATS API surface area update; not a backport or copilot-swe-agent PR",
+  "mergedAt": "2026-05-25T18:59:54Z",
+  "number": 17263,
+  "runDate": "2026-05-25T20:32:53Z",
+  "status": "excluded",
+  "title": "[Automated] Update ATS API Surface Area"
+}
