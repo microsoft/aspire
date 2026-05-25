@@ -429,37 +429,22 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         }
 
         // Suppress the post-update CLI self-update prompt so it doesn't block waiting on
-        // "Update successful!". Pattern borrowed from the polyglot test above.
+        // "Update successful!". No cleanup needed — each test runs in its own Docker container.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        try
-        {
-            // -y skips the "Perform updates?" confirm. For Explicit channels the C# path also prompts
-            // for a NuGet.config directory and a config-changes confirmation; on Polyglot only the
-            // "Perform updates?" prompt fires. Use -y plus a default --nuget-config-dir (current dir)
-            // so the test is identical across both languages.
-            await auto.TypeAsync("aspire update --channel stable -y --nuget-config-dir .");
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromMinutes(3));
-            await auto.WaitForSuccessPromptAsync(counter);
+        // -y skips the "Perform updates?" confirm. For Explicit channels the C# path also prompts
+        // for a NuGet.config directory and a config-changes confirmation; on Polyglot only the
+        // "Perform updates?" prompt fires. Use -y plus a default --nuget-config-dir (current dir)
+        // so the test is identical across both languages.
+        await auto.TypeAsync("aspire update --channel stable -y --nuget-config-dir .");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
 
-            var channelAfter = ReadAspireConfigChannel(aspireConfigPath);
-            Assert.Equal("stable", channelAfter);
-        }
-        finally
-        {
-            try
-            {
-                await auto.TypeAsync("aspire config delete features.updateNotificationsEnabled -g");
-                await auto.EnterAsync();
-                await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromSeconds(30));
-            }
-            catch
-            {
-            }
-        }
+        var channelAfter = ReadAspireConfigChannel(aspireConfigPath);
+        Assert.Equal("stable", channelAfter);
     }
 
     /// <summary>
