@@ -78,6 +78,7 @@ export interface AppHostDisplayInfo {
     status?: string;
     cliPid: number | null;
     dashboardUrl: string | null;
+    logFilePath?: string | null;
     resources: ResourceJson[] | null | undefined;
 }
 
