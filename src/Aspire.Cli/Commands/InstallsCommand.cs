@@ -30,18 +30,16 @@ internal sealed class InstallsCommand : BaseCommand
     };
 
     private readonly IInstallationDiscovery _installationDiscovery;
-    private readonly WingetFirstRunProbe _wingetFirstRunProbe;
     private readonly ILogger _logger;
 
-    public InstallsCommand(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, WingetFirstRunProbe wingetFirstRunProbe, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry, ILogger<InstallsCommand> logger)
+    public InstallsCommand(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry, ILogger<InstallsCommand> logger)
         : base("installs", "Manage Aspire CLI installs", features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _installationDiscovery = installationDiscovery;
-        _wingetFirstRunProbe = wingetFirstRunProbe;
         _logger = logger;
         Options.Add(s_formatOption);
         Options.Add(s_selfOption);
-        Subcommands.Add(new ListCommand(hiveEnumerator, installationDiscovery, wingetFirstRunProbe, interactionService, features, updateNotifier, executionContext, telemetry, logger));
+        Subcommands.Add(new ListCommand(hiveEnumerator, installationDiscovery, interactionService, features, updateNotifier, executionContext, telemetry, logger));
     }
 
     protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -93,22 +91,19 @@ internal sealed class InstallsCommand : BaseCommand
 
         private readonly HiveEnumerator _hiveEnumerator;
         private readonly IInstallationDiscovery _installationDiscovery;
-        private readonly WingetFirstRunProbe _wingetFirstRunProbe;
         private readonly ILogger _logger;
 
-        public ListCommand(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, WingetFirstRunProbe wingetFirstRunProbe, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry, ILogger logger)
+        public ListCommand(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry, ILogger logger)
             : base("list", "List Aspire CLI installs and orphan hives", features, updateNotifier, executionContext, interactionService, telemetry)
         {
             _hiveEnumerator = hiveEnumerator;
             _installationDiscovery = installationDiscovery;
-            _wingetFirstRunProbe = wingetFirstRunProbe;
             _logger = logger;
             Options.Add(s_formatOption);
         }
 
         protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
-            RunWingetFirstRunProbe(_wingetFirstRunProbe, _logger);
             var rows = await BuildRowsAsync(_hiveEnumerator, _installationDiscovery, _logger, cancellationToken);
             if (parseResult.GetValue(s_formatOption) == InstallsOutputFormat.Json)
             {
@@ -142,18 +137,6 @@ internal sealed class InstallsCommand : BaseCommand
             }
 
             InteractionService.DisplayPlainText($"  {name,-8} {value}");
-        }
-    }
-
-    private static void RunWingetFirstRunProbe(WingetFirstRunProbe wingetFirstRunProbe, ILogger logger)
-    {
-        try
-        {
-            InstallationInfoOutput.RunWingetFirstRunProbe(wingetFirstRunProbe);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Could not run the winget first-run install sidecar probe before install listing.");
         }
     }
 

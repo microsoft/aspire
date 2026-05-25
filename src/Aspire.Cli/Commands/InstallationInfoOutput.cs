@@ -28,25 +28,6 @@ internal static class InstallationInfoOutput
         }
     }
 
-    public static void RunWingetFirstRunProbe(WingetFirstRunProbe wingetFirstRunProbe)
-    {
-        // Give a never-run winget install a chance to stamp its sidecar before
-        // we read it. The probe writes nothing on non-Windows hosts or when the
-        // running binary isn't a winget portable install, so this is a cheap
-        // no-op in the common case.
-        var processPath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(processPath))
-        {
-            return;
-        }
-
-        var binaryDir = Path.GetDirectoryName(processPath);
-        if (!string.IsNullOrEmpty(binaryDir))
-        {
-            wingetFirstRunProbe.Run(binaryDir);
-        }
-    }
-
     private static IReadOnlyList<InstallationInfo> CreateFailedDiscoveryRow()
     {
         return

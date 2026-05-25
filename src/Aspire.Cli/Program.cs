@@ -350,6 +350,18 @@ public class Program
         {
             var channelReader = sp.GetRequiredService<IIdentityChannelReader>();
             var channel = channelReader.ReadChannel();
+            // Self-heal the install-source sidecar before anything reads it.
+            // WingetFirstRunProbe is a one-shot writer (no-op on non-Windows or
+            // when the running binary isn't a winget portable install). Running
+            // it here, inside the CliExecutionContext factory, guarantees the
+            // sidecar is stamped before BuildCliExecutionContext below resolves
+            // the install-aware Aspire home, before BundleService computes its
+            // extract dir, and before `aspire installs --self` reads `Source`.
+            // Without this, the first invocation from a fresh winget install
+            // would fall back to the legacy user-profile home and miss the
+            // source row, even though the sidecar would appear on subsequent
+            // runs. The probe is idempotent, so the worst case here is a no-op.
+            TryRunWingetFirstRunProbe(sp);
             return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath, channel);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
@@ -607,6 +619,41 @@ public class Program
         var packagesDirectory = GetPackagesDirectory(processPath);
         var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
         return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel, aspireHomeDirectory: aspireHomeDirectory);
+    }
+
+    /// <summary>
+    /// Invokes <see cref="WingetFirstRunProbe.Run(string)"/> for the running binary's
+    /// directory, swallowing any failure so a misbehaving probe can never block CLI startup.
+    /// Called from the <see cref="CliExecutionContext"/> DI factory so the sidecar is
+    /// stamped before any code reads it.
+    /// </summary>
+    internal static void TryRunWingetFirstRunProbe(IServiceProvider sp)
+    {
+        try
+        {
+            var processPath = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(processPath))
+            {
+                return;
+            }
+
+            var binaryDir = Path.GetDirectoryName(processPath);
+            if (string.IsNullOrEmpty(binaryDir))
+            {
+                return;
+            }
+
+            sp.GetRequiredService<WingetFirstRunProbe>().Run(binaryDir);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The probe is best-effort startup hygiene: a stamping failure must
+            // never block the rest of the CLI from starting. Log and continue —
+            // the worst case is that an unstamped winget install surfaces as an
+            // unknown source until the next invocation retries.
+            var logger = sp.GetService<ILogger<WingetFirstRunProbe>>();
+            logger?.LogWarning(ex, "Winget first-run install sidecar probe failed during CLI startup.");
+        }
     }
 
     private static DirectoryInfo GetCacheDirectory(string? processPath = null)

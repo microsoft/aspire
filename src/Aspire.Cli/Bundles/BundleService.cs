@@ -21,8 +21,7 @@ namespace Aspire.Cli.Bundles;
 internal sealed class BundleService(
     IBundlePayloadProvider payloadProvider,
     ILayoutDiscovery layoutDiscovery,
-    ILogger<BundleService> logger,
-    WingetFirstRunProbe? wingetFirstRunProbe = null) : IBundleService
+    ILogger<BundleService> logger) : IBundleService
 {
     /// <summary>
     /// Name of the marker file written after successful extraction.
@@ -190,19 +189,6 @@ internal sealed class BundleService(
         {
             logger.LogDebug("ProcessPath is null or empty, skipping bundle extraction.");
             return null;
-        }
-
-        // The winget portable installer has no post-install hook, so the CLI
-        // self-stamps the install-source sidecar on first run. No-op on
-        // non-Windows and once the sidecar already exists.
-        if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
-        {
-            var realBinaryPath = CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, logger);
-            var binaryDir = Path.GetDirectoryName(realBinaryPath);
-            if (!string.IsNullOrEmpty(binaryDir))
-            {
-                wingetFirstRunProbe.Run(binaryDir);
-            }
         }
 
         var extractDir = GetDefaultExtractDir(processPath);
