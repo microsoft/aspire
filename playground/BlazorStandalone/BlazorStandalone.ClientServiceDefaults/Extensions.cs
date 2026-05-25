@@ -35,7 +35,7 @@ public static class BlazorClientExtensions
     private static WebAssemblyHostBuilder ConfigureBlazorClientOpenTelemetry(this WebAssemblyHostBuilder builder)
     {
         // Without an OTLP path base, there's nowhere to export telemetry in WASM.
-        var otlpPathBase = builder.Configuration["ASPIRE_OTLP_PATH_BASE"];
+        var otlpPathBase = builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"];
         if (string.IsNullOrEmpty(otlpPathBase))
         {
             return builder;
