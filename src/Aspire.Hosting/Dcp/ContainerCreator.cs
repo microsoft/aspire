@@ -960,10 +960,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         var parts = new List<string>();
         if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxAmd64)) { parts.Add(ContainerPlatform.LinuxAmd64); }
         if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxArm64)) { parts.Add(ContainerPlatform.LinuxArm64); }
-        if (platform.HasFlag(Publishing.ContainerTargetPlatform.LinuxArm)) { parts.Add(ContainerPlatform.LinuxArm); }
-        if (platform.HasFlag(Publishing.ContainerTargetPlatform.Linux386)) { parts.Add(ContainerPlatform.Linux386); }
-        if (platform.HasFlag(Publishing.ContainerTargetPlatform.WindowsAmd64)) { parts.Add(ContainerPlatform.WindowsAmd64); }
-        if (platform.HasFlag(Publishing.ContainerTargetPlatform.WindowsArm64)) { parts.Add(ContainerPlatform.WindowsArm64); }
 
         if (parts.Count == 0)
         {
