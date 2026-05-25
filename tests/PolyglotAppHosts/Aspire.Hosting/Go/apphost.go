@@ -25,7 +25,7 @@ func main() {
 	container.WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &genericOtlpProtocol})
 	taggedContainer := builder.AddContainer("mytaggedcontainer", &aspire.AddContainerOptions{
 		Image: "nginx",
-		Tag:   "stable-alpine",
+		Tag:   aspire.StringPtr("stable-alpine"),
 	})
 	if err = taggedContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
@@ -36,6 +36,38 @@ func main() {
 	if err = dockerContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
+	dockerfileFactory := func(factoryContext aspire.DockerfileFactoryContext) string {
+		_ = factoryContext.Resource()
+		return `FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+WORKDIR /app
+ENTRYPOINT ["dotnet", "App.dll"]
+`
+	}
+	dockerFactoryContainer := builder.AddDockerfileFactory("dockerfactoryapp", "./app", dockerfileFactory,
+		&aspire.AddDockerfileFactoryOptions{Stage: aspire.StringPtr("runtime")})
+	if err = dockerFactoryContainer.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+	configureDockerfileBuilder := func(dockerfileContext aspire.DockerfileBuilderCallbackContext) {
+		dockerfileBuilder := dockerfileContext.Builder()
+		dockerfileBuilder.Arg("BASE_IMAGE", &aspire.ArgOptions{DefaultValue: aspire.StringPtr("mcr.microsoft.com/dotnet/runtime:8.0")})
+		buildStage := dockerfileBuilder.From("mcr.microsoft.com/dotnet/sdk:8.0", &aspire.FromOptions{StageName: aspire.StringPtr("build")})
+		buildStage.WorkDir("/src")
+		buildStage.Copy("./src", "/src")
+		buildStage.Run("echo building dockerfile")
+		runtimeStage := dockerfileBuilder.From("mcr.microsoft.com/dotnet/runtime:8.0", &aspire.FromOptions{StageName: aspire.StringPtr("runtime")})
+		runtimeStage.CopyFrom("build", "/src", "/app")
+		runtimeStage.Entrypoint([]string{"dotnet", "App.dll"})
+	}
+	dockerBuilderContainer := builder.AddDockerfileBuilder("dockerbuilderapp", "./app", configureDockerfileBuilder,
+		&aspire.AddDockerfileBuilderOptions{Stage: aspire.StringPtr("runtime")})
+	if err = dockerBuilderContainer.Err(); err != nil {
+		log.Fatalf(aspire.FormatError(err))
+	}
+	dockerContainer.WithDockerfileBuilder("./app", configureDockerfileBuilder,
+		&aspire.WithDockerfileBuilderOptions{Stage: aspire.StringPtr("runtime")})
+	dockerFactoryContainer.WithDockerfileFactory("./app", dockerfileFactory,
+		&aspire.WithDockerfileFactoryOptions{Stage: aspire.StringPtr("runtime")})
 
 	// AddExecutable (pre-existing)
 	exe := builder.AddExecutable("myexe", "echo", ".", []string{"hello"})
@@ -97,6 +129,17 @@ func main() {
 			Secret:  aspire.BoolPtr(true),
 			Persist: aspire.BoolPtr(true),
 		})
+	customInputType := aspire.InputTypeNumber
+	customInputParam := builder.AddParameter("custom-input")
+	customInputParam.WithCustomInput(&aspire.ParameterCustomInputOptions{
+		InputType:   &customInputType,
+		Label:       "Worker Count",
+		Placeholder: "Enter number (1-10)",
+		Options: map[string]string{
+			"one": "One",
+			"two": "Two",
+		},
+	})
 
 	// ===================================================================
 	// Container-specific methods on ContainerResource
@@ -143,6 +186,7 @@ func main() {
 		&aspire.AddConnectionStringOptions{EnvironmentVariableNameOrExpression: expr})
 
 	envConnectionString := builder.AddConnectionString("envcs")
+	externalService := builder.AddExternalService("external-service", "https://example.com")
 
 	// ===================================================================
 	// ResourceBuilderExtensions on ContainerResource
@@ -162,6 +206,9 @@ func main() {
 
 	// WithEnvironment — with connection string resource
 	container.WithEnvironment("MY_CONN", envConnectionString)
+
+	// WithEnvironment — with external service resource
+	container.WithEnvironment("MY_EXTERNAL_SERVICE", externalService)
 
 	// ExcludeFromManifest
 	container.ExcludeFromManifest()
@@ -337,6 +384,7 @@ func main() {
 	builderExecutionContext := builder.ExecutionContext()
 	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
 	_ = executionContextServiceProvider.GetDistributedApplicationModel()
+	resourceCommandService := executionContextServiceProvider.GetResourceCommandService()
 
 	// Subscriptions (typed callbacks)
 	beforeStartSub := builder.SubscribeBeforeStart(func(e aspire.BeforeStartEvent) {
@@ -377,6 +425,26 @@ func main() {
 		_ = beforeStartServices.GetDistributedApplicationModel()
 	})
 
+	beforePublishSub := builder.SubscribeBeforePublish(func(e aspire.BeforePublishEvent) {
+		beforePublishModel := e.Model()
+		_, _ = beforePublishModel.GetResources()
+		_ = beforePublishModel.FindResourceByName("mycontainer")
+		beforePublishServices := e.Services()
+		beforePublishLoggerFactory := beforePublishServices.GetLoggerFactory()
+		beforePublishLogger := beforePublishLoggerFactory.CreateLogger("ValidationAppHost.BeforePublish")
+		_ = beforePublishLogger.LogInformation("BeforePublish")
+	})
+
+	afterPublishSub := builder.SubscribeAfterPublish(func(e aspire.AfterPublishEvent) {
+		afterPublishModel := e.Model()
+		_, _ = afterPublishModel.GetResources()
+		_ = afterPublishModel.FindResourceByName("mycontainer")
+		afterPublishServices := e.Services()
+		afterPublishLoggerFactory := afterPublishServices.GetLoggerFactory()
+		afterPublishLogger := afterPublishLoggerFactory.CreateLogger("ValidationAppHost.AfterPublish")
+		_ = afterPublishLogger.LogInformation("AfterPublish")
+	})
+
 	afterResourcesSub := builder.SubscribeAfterResourcesCreated(func(e aspire.AfterResourcesCreatedEvent) {
 		afterResourcesModel := e.Model()
 		_, _ = afterResourcesModel.GetResources()
@@ -390,6 +458,8 @@ func main() {
 	builderEventing := builder.Eventing()
 	_ = builderEventing.Unsubscribe(beforeStartSub)
 	_ = builderEventing.Unsubscribe(afterResourcesSub)
+	_ = builderEventing.Unsubscribe(beforePublishSub)
+	_ = builderEventing.Unsubscribe(afterPublishSub)
 
 	// Resource events — typed callbacks
 	_ = container.OnBeforeResourceStarted(func(e aspire.BeforeResourceStartedEvent) {
@@ -454,9 +524,58 @@ func main() {
 	_ = container.WithUrl(expr)
 	_ = container.WithHttpHealthCheck()
 	_ = container.WithHttpHealthCheck()
+	updateCommandState := func(args ...any) any {
+		if len(args) == 0 {
+			return aspire.ResourceCommandStateDisabled
+		}
+		ctx, ok := args[0].(aspire.UpdateCommandStateContext)
+		if !ok {
+			return aspire.ResourceCommandStateDisabled
+		}
+		snapshot, err := ctx.ResourceSnapshot()
+		if err != nil || snapshot.HealthStatus == nil {
+			return aspire.ResourceCommandStateDisabled
+		}
+		if *snapshot.HealthStatus == aspire.HealthStatusHealthy {
+			return aspire.ResourceCommandStateEnabled
+		}
+		return aspire.ResourceCommandStateDisabled
+	}
+	_ = container.WithCommand("noop", "Noop", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		return &aspire.ExecuteCommandResult{Success: true}
+	}, &aspire.WithCommandOptions{
+		CommandOptions: &aspire.CommandOptions{
+			UpdateState: updateCommandState,
+		},
+	})
+	_ = container.WithCommand("echo", "Echo", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
+		commandArguments, err := ctx.Arguments().ToArray()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		return &aspire.ExecuteCommandResult{Success: commandArguments[0].Value == "hello"}
+	}, &aspire.WithCommandOptions{
+		CommandOptions: &aspire.CommandOptions{
+			Arguments: []*aspire.InteractionInput{
+				{
+					Name:      "message",
+					InputType: aspire.InputTypeText,
+					Required:  aspire.BoolPtr(true),
+				},
+			},
+		},
+	})
 	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
-		_ = ctx
-		return &aspire.ExecuteCommandResult{}
+		cancellationToken, err := ctx.CancellationToken()
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+		result, err := resourceCommandService.ExecuteCommandAsync(container, "echo", &aspire.ExecuteCommandAsyncOptions{Arguments: map[string]string{"message": "hello"}, CancellationToken: cancellationToken})
+		if err != nil {
+			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
+		}
+
+		return result
 	})
 
 	app, err := builder.Build()

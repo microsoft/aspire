@@ -86,7 +86,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     /// <param name="name">The Kubernetes metadata name for the manifest.</param>
     /// <param name="configure">A callback that configures the manifest fields.</param>
     /// <returns>The added Kubernetes manifest resource.</returns>
-    [AspireExport(Description = "Adds an arbitrary Kubernetes manifest to this service's generated Helm chart", RunSyncOnBackgroundThread = true)]
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     internal KubernetesManifestResource AddManifest(string apiVersion, string kind, string name, Action<KubernetesManifestResource>? configure = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiVersion);
@@ -470,6 +470,18 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             if (value is string s)
             {
                 return s;
+            }
+
+            // Handle scalar/primitive types (bool, numerics, DateTimeOffset, TimeSpan, Uri, etc.)
+            // These can appear when third-party integrations set environment variables to non-string values.
+            if (value is bool boolValue)
+            {
+                return boolValue ? "true" : "false";
+            }
+
+            if (value is IFormattable formattable)
+            {
+                return formattable.ToString(null, CultureInfo.InvariantCulture);
             }
 
             if (value is EndpointReference ep)

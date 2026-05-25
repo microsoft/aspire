@@ -1,0 +1,163 @@
+name: TypeScript API Compatibility
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  typescript_api_compat:
+    name: TypeScript API Compatibility
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Restore
+        run: ./restore.sh
+
+      - name: Build CLI and compatibility tool
+        run: |
+          ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
+          ./dotnet.sh build tools/TypeScriptApiCompat/TypeScriptApiCompat.csproj --configuration Release
+          test -f artifacts/bin/Aspire.Cli/Release/net10.0/aspire.dll
+          test -f artifacts/bin/TypeScriptApiCompat/Release/net8.0/TypeScriptApiCompat.dll
+
+      - name: Prepare base ATS surface
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          BASELINE_DIR="${RUNNER_TEMP}/ats-baseline"
+          BASE_SUPPRESSIONS_ROOT="${RUNNER_TEMP}/ats-baseline-suppressions"
+          EXCLUDED_PACKAGES_FILE="${RUNNER_TEMP}/typescript-api-compat-excluded-packages.txt"
+          : > "$EXCLUDED_PACKAGES_FILE"
+
+          git fetch --no-tags --depth=1 origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
+
+          echo "::group::Copy checked-in ATS release baselines"
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            case "$file" in
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.Integration.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+                continue
+                ;;
+            esac
+
+            mkdir -p "$BASELINE_DIR/$(dirname "$file")"
+            git show "origin/${BASE_BRANCH}:$file" > "$BASELINE_DIR/$file"
+            echo "$file"
+          done < <(git ls-tree -r --name-only "origin/${BASE_BRANCH}" -- src | grep -E '^src/.+/api/.+\.ats\.txt$' || true)
+          echo "::endgroup::"
+
+          echo "::group::Copy base TypeScript API compatibility suppressions"
+          while IFS= read -r file; do
+            [ -n "$file" ] || continue
+            mkdir -p "$BASE_SUPPRESSIONS_ROOT/$(dirname "$file")"
+            git show "origin/${BASE_BRANCH}:$file" > "$BASE_SUPPRESSIONS_ROOT/$file"
+            echo "$file"
+          done < <(git ls-tree -r --name-only "origin/${BASE_BRANCH}" -- src eng/TypeScriptApiCompat | grep -E '(\.tscompat\.suppression\.txt|(^|/)global\.suppression\.txt)$' || true)
+          echo "::endgroup::"
+
+          echo "BASELINE_DIR=$BASELINE_DIR" >> "$GITHUB_ENV"
+          echo "BASE_SUPPRESSIONS_ROOT=$BASE_SUPPRESSIONS_ROOT" >> "$GITHUB_ENV"
+          echo "TYPESCRIPT_API_COMPAT_EXCLUDED_PACKAGES_FILE=$EXCLUDED_PACKAGES_FILE" >> "$GITHUB_ENV"
+
+      - name: Generate current ATS surface
+        shell: bash
+        env:
+          ASPIRE_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+
+          CURRENT_DIR="${RUNNER_TEMP}/ats-current"
+          EXCLUDED_PACKAGES_FILE="$TYPESCRIPT_API_COMPAT_EXCLUDED_PACKAGES_FILE"
+          PROJECTS_FILE="${RUNNER_TEMP}/ats-projects.txt"
+          SORTED_PROJECTS_FILE="${RUNNER_TEMP}/ats-projects-sorted.txt"
+          ASPIRE_CLI=("${GITHUB_WORKSPACE}/dotnet.sh" exec "${GITHUB_WORKSPACE}/artifacts/bin/Aspire.Cli/Release/net10.0/aspire.dll" --nologo)
+
+          mkdir -p "$CURRENT_DIR/src/Aspire.Hosting/api"
+          : > "$PROJECTS_FILE"
+
+          echo "::group::Aspire.Hosting (core)"
+          "${ASPIRE_CLI[@]}" sdk dump --format ci -o "$CURRENT_DIR/src/Aspire.Hosting/api/Aspire.Hosting.ats.txt"
+          echo "::endgroup::"
+
+          while IFS= read -r file; do
+            case "$file" in
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.Integration.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+                continue
+                ;;
+            esac
+
+            dir=$(dirname "$file")
+            while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+              if compgen -G "$dir/*.csproj" > /dev/null; then
+                echo "$dir" >> "$PROJECTS_FILE"
+                break
+              fi
+
+              dir=$(dirname "$dir")
+            done
+          done < <(grep -rlE '\[AspireExport(\]|\()' src/Aspire.Hosting.*/ --include='*.cs' || true)
+
+          sort -u "$PROJECTS_FILE" > "$SORTED_PROJECTS_FILE"
+
+          PROJECT_FILES=()
+          while IFS= read -r proj; do
+            [ -n "$proj" ] || continue
+            proj_name=$(basename "$proj")
+            csproj="$proj/$proj_name.csproj"
+            if [ -f "$csproj" ]; then
+              disable_package_baseline_validation=$(./dotnet.sh msbuild "$csproj" -nologo -getProperty:DisablePackageBaselineValidation | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+              if [ "$disable_package_baseline_validation" = "true" ]; then
+                echo "$proj_name" >> "$EXCLUDED_PACKAGES_FILE"
+              fi
+
+              PROJECT_FILES+=("$csproj")
+            else
+              echo "Skipping missing project file $csproj"
+            fi
+          done < "$SORTED_PROJECTS_FILE"
+
+          if [ "${#PROJECT_FILES[@]}" -gt 0 ]; then
+            echo "::group::Integration ATS surfaces"
+            "${ASPIRE_CLI[@]}" sdk dump --format ci --output-directory "$CURRENT_DIR" "${PROJECT_FILES[@]}"
+            echo "::endgroup::"
+          fi
+
+          sort -u "$EXCLUDED_PACKAGES_FILE" -o "$EXCLUDED_PACKAGES_FILE"
+          if [ -s "$EXCLUDED_PACKAGES_FILE" ]; then
+            echo "::group::TypeScript API compatibility excluded packages"
+            sed 's/^/- /' "$EXCLUDED_PACKAGES_FILE"
+            echo "::endgroup::"
+          fi
+
+          echo "CURRENT_DIR=$CURRENT_DIR" >> "$GITHUB_ENV"
+
+      - name: Check TypeScript API compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ./dotnet.sh exec \
+            artifacts/bin/TypeScriptApiCompat/Release/net8.0/TypeScriptApiCompat.dll \
+            --baseline "$BASELINE_DIR" \
+            --current "$CURRENT_DIR" \
+            --suppressions-root "${{ github.workspace }}" \
+            --baseline-suppressions-root "$BASE_SUPPRESSIONS_ROOT" \
+            --excluded-packages-file "$TYPESCRIPT_API_COMPAT_EXCLUDED_PACKAGES_FILE" \
+            --report "${RUNNER_TEMP}/typescript-api-compat-report.md" \
+            --github-annotations
+
+      - name: Upload TypeScript API compatibility report
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: typescript-api-compat-report
+          path: ${{ runner.temp }}/typescript-api-compat-report.md
+          if-no-files-found: ignore

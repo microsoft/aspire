@@ -4,6 +4,7 @@
 // This file is source-linked into multiple projects:
 // - Aspire.Hosting
 // - Aspire.Cli
+// - Aspire.Managed
 // Do not add project-specific dependencies.
 
 using System.Runtime.InteropServices;
@@ -40,6 +41,11 @@ internal static class BundleDiscovery
     /// Environment variable for overriding the aspire-managed path.
     /// </summary>
     public const string ManagedPathEnvVar = "ASPIRE_MANAGED_PATH";
+
+    /// <summary>
+    /// Environment variable containing the leased version directory for bundle-owned child processes.
+    /// </summary>
+    public const string BundleVersionDirectoryEnvVar = "ASPIRE_BUNDLE_VERSION_DIR";
 
     /// <summary>
     /// Environment variable to force SDK mode (skip bundle detection).

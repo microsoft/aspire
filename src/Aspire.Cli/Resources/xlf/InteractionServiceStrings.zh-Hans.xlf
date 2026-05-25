@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="zh-Hans" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the AppHost was lost: {0}.</source>
+        <source>The connection to the AppHost was lost: {0}</source>
         <target state="needs-review-translation">与应用主机的连接已断开: {0}。</target>
         <note />
       </trans-unit>
@@ -73,7 +73,7 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
         <target state="needs-review-translation">连接到应用主机时出错。应用主机可能在可用之前发生故障: {0}。</target>
         <note />
       </trans-unit>
@@ -171,6 +171,11 @@
         <source>Searching...</source>
         <target state="translated">正在搜索...</target>
         <note />
+      </trans-unit>
+      <trans-unit id="SeeAppHostLogsAt">
+        <source>See AppHost logs at {0}</source>
+        <target state="new">See AppHost logs at {0}</target>
+        <note>{0} is the log file path of the CLI process managing the AppHost</note>
       </trans-unit>
       <trans-unit id="SeeLogsAt">
         <source>See logs at {0}</source>

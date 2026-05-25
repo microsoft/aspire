@@ -114,7 +114,7 @@ public partial class TextVisualizerDialog : ComponentBase
         return _markdownProcessor ??= new MarkdownProcessor(ControlsStringsLoc, safeUrlSchemes: MarkdownHelpers.SafeUrlSchemes, extensions: []);
     }
 
-    public static async Task OpenDialogAsync(OpenTextVisualizerDialogOptions options)
+    public static async Task<IDialogReference> OpenDialogAsync(OpenTextVisualizerDialogOptions options)
     {
         var width = options.DialogService.IsDesktop ? "75vw" : "100vw";
         var parameters = new DialogParameters
@@ -126,7 +126,7 @@ public partial class TextVisualizerDialog : ComponentBase
             PreventScroll = true,
         };
 
-        await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(
+        return await options.DialogService.ShowDialogAsync<TextVisualizerDialog>(
             new TextVisualizerDialogViewModel(options.Value, options.ValueDescription, options.ContainsSecret, options.DownloadFileName, options.FixedFormat), parameters);
     }
 

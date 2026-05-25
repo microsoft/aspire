@@ -2,7 +2,7 @@ import { MessageConnection } from 'vscode-jsonrpc';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import { getRelativePathToWorkspace, isFolderOpenInWorkspace } from '../utils/workspace';
-import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle } from '../loc/strings';
+import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle, unableToAddFolderToWorkspace } from '../loc/strings';
 import { ICliRpcClient } from './rpcClient';
 import { ProgressNotifier } from './progressNotifier';
 import { applyTextStyle, formatText } from '../utils/strings';
@@ -14,6 +14,7 @@ import { isDirectory } from '../utils/io';
 
 export interface IInteractionService {
     showStatus: (statusText: string | null) => void;
+    clearProgressNotification: () => void;
     promptForString: (promptText: string, defaultValue: string | null, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForSecretString: (promptText: string, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForFilePath: (promptText: string, defaultValue: string | null, directory: boolean) => Promise<string | null>;
@@ -285,6 +286,7 @@ export class InteractionService implements IInteractionService {
         }
 
         extensionLogOutputChannel.info(`Displaying message: ${emoji} ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -297,6 +299,7 @@ export class InteractionService implements IInteractionService {
         }
 
         extensionLogOutputChannel.info(`Displaying success message: ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -312,6 +315,7 @@ export class InteractionService implements IInteractionService {
 
     displayPlainText(message: string) {
         extensionLogOutputChannel.info(`Displaying plain text: ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -406,6 +410,8 @@ export class InteractionService implements IInteractionService {
     }
 
     async displayLines(lines: ConsoleLine[]) {
+        this.clearProgressNotification();
+
         const debugSession = this._getAspireDebugSession();
         const aspireTerminal = !debugSession ? this._getAspireTerminal?.() : undefined;
         for (const line of lines) {
@@ -422,19 +428,30 @@ export class InteractionService implements IInteractionService {
 
     displayCancellationMessage() {
         extensionLogOutputChannel.info(`Cancelled Aspire operation.`);
+        this.clearProgressNotification();
     }
 
     async openEditor(path: string) {
         extensionLogOutputChannel.info(`Opening path: ${path}`);
 
-        // check if is folder
         if (await isDirectory(path)) {
             if (isFolderOpenInWorkspace(path)) {
                 return;
             }
 
             const uri = vscode.Uri.file(path);
-            vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: false });
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders && workspaceFolders.length > 0) {
+                if (!vscode.workspace.updateWorkspaceFolders(workspaceFolders.length, 0, { uri })) {
+                    const message = unableToAddFolderToWorkspace(path);
+                    extensionLogOutputChannel.warn(message);
+                    vscode.window.showWarningMessage(message);
+                }
+
+                return;
+            }
+
+            await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: false });
         }
         else {
             const fileUri = vscode.Uri.file(path);

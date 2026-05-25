@@ -106,6 +106,24 @@ is_valid_versionsuffix() {
   return 0
 }
 
+# Restrict hive names to a safe identifier set: this value is concatenated
+# into $HIVES_ROOT/$HIVE_NAME and then passed to `rm -rf`, so any path
+# separator, leading dot, or `..` segment would let the removal target
+# escape the hives directory and delete arbitrary parent paths.
+is_valid_hivename() {
+  local s="$1"
+  if [[ -z "$s" ]]; then
+    return 1
+  fi
+  if [[ ! "$s" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]]; then
+    return 1
+  fi
+  if [[ "$s" == *".."* ]]; then
+    return 1
+  fi
+  return 0
+}
+
 
 # Parse flags and positional fallbacks
 while [[ $# -gt 0 ]]; do
@@ -157,6 +175,11 @@ if [[ $ARCHIVE -eq 1 ]] && [[ -z "$OUTPUT_DIR" ]]; then
   exit 1
 fi
 
+if ! is_valid_hivename "$HIVE_NAME"; then
+  error "Invalid hive name '$HIVE_NAME'. Hive names must match [A-Za-z0-9][A-Za-z0-9._-]* and cannot contain path separators or '..'."
+  exit 1
+fi
+
 if [[ -n "$TARGET_RID" ]] && [[ $NATIVE_AOT -eq 1 ]]; then
   # Detect if this is a cross-OS build (e.g. building linux-x64 on macOS)
   HOST_OS="$(uname -s)"
@@ -178,7 +201,7 @@ fi
 
 # Normalize config value if set
 if [[ -n "$CONFIG" ]]; then
-  case "${CONFIG,,}" in
+  case "$(printf '%s' "$CONFIG" | tr '[:upper:]' '[:lower:]')" in
     release) CONFIG=Release ;;
     debug)   CONFIG=Debug ;;
     *) error "Unsupported configuration '$CONFIG'. Use Release or Debug."; exit 1 ;;
@@ -256,6 +279,12 @@ else
   esac
 fi
 
+if [[ "$BUNDLE_RID" == win-* ]]; then
+  CLI_EXE_NAME="aspire.exe"
+else
+  CLI_EXE_NAME="aspire"
+fi
+
 if [[ -n "$OUTPUT_DIR" ]]; then
   ASPIRE_ROOT="$OUTPUT_DIR"
 else
@@ -326,12 +355,18 @@ if [[ $SKIP_BUNDLE -eq 0 ]]; then
 
   if [[ $NATIVE_AOT -eq 1 ]]; then
     log "Building bundle (aspire-managed + DCP + native AOT CLI)..."
+    set +e
     dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:TargetRid=$BUNDLE_RID"
+    rc=$?
+    set -e
   else
     log "Building bundle (aspire-managed + DCP)..."
+    set +e
     dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipNativeBuild=true "/p:VersionSuffix=$VERSION_SUFFIX" "/p:TargetRid=$BUNDLE_RID"
+    rc=$?
+    set -e
   fi
-  if [[ $? -ne 0 ]]; then
+  if [[ $rc -ne 0 ]]; then
     error "Bundle build failed."
     exit 1
   fi
@@ -365,28 +400,50 @@ if [[ $SKIP_CLI -eq 0 ]]; then
     if [[ -n "$BUNDLE_PAYLOAD_ARCHIVE" ]]; then
       PUBLISH_ARGS+=("/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE")
     fi
+    set +e
     dotnet publish "$CLI_PROJ" "${PUBLISH_ARGS[@]}"
-    if [[ $? -ne 0 ]]; then
+    rc=$?
+    set -e
+    if [[ $rc -ne 0 ]]; then
       error "CLI publish for RID $TARGET_RID failed."
       exit 1
     fi
   else
-    # Framework-dependent CLI with embedded bundle payload
     CLI_PROJ="$REPO_ROOT/src/Aspire.Cli/Aspire.Cli.Tool.csproj"
-    CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/publish"
     if [[ -n "$BUNDLE_PAYLOAD_ARCHIVE" ]]; then
-      log "Publishing Aspire CLI (dotnet tool) with embedded bundle payload..."
-      dotnet publish "$CLI_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE"
-      if [[ $? -ne 0 ]]; then
+      # NativeAOT CLI (Aspire.Cli.csproj sets PublishAot=true) with embedded bundle payload.
+      # Publish output is RID-specific when we pass -r, so the path includes $BUNDLE_RID.
+      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/publish"
+      log "Publishing Aspire CLI (dotnet tool, native AOT) with embedded bundle payload..."
+      set +e
+      dotnet publish "$CLI_PROJ" -c "$EFFECTIVE_CONFIG" -r "$BUNDLE_RID" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE"
+      rc=$?
+      set -e
+      if [[ $rc -ne 0 ]]; then
         error "CLI publish with embedded bundle failed."
         exit 1
       fi
-    elif [[ ! -d "$CLI_PUBLISH_DIR" ]]; then
-      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0"
+    else
+      # --skip-bundle builds Aspire.Cli.Tool with PublishAot=false, which keeps the
+      # historical framework-dependent, non-RID output layout.
+      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/publish"
+      if [[ ! -d "$CLI_PUBLISH_DIR" ]]; then
+        CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0"
+      fi
+    fi
+
+    if [[ ! -f "$CLI_PUBLISH_DIR/aspire" ]]; then
+      RID_CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/publish"
+      RID_CLI_NATIVE_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/native"
+      if [[ -f "$RID_CLI_PUBLISH_DIR/aspire" ]]; then
+        CLI_PUBLISH_DIR="$RID_CLI_PUBLISH_DIR"
+      elif [[ -f "$RID_CLI_NATIVE_DIR/aspire" ]]; then
+        CLI_PUBLISH_DIR="$RID_CLI_NATIVE_DIR"
+      fi
     fi
   fi
 
-  CLI_SOURCE_PATH="$CLI_PUBLISH_DIR/aspire"
+  CLI_SOURCE_PATH="$CLI_PUBLISH_DIR/$CLI_EXE_NAME"
 
   if [ -f "$CLI_SOURCE_PATH" ]; then
     if [[ $NATIVE_AOT -eq 1 ]]; then
@@ -397,24 +454,31 @@ if [[ $SKIP_CLI -eq 0 ]]; then
     mkdir -p "$CLI_BIN_DIR"
 
     # Copy all files from the publish directory (CLI and its dependencies)
-    cp -f "$CLI_PUBLISH_DIR"/* "$CLI_BIN_DIR"/ 2>/dev/null || true
+    if ! cp -f "$CLI_PUBLISH_DIR"/* "$CLI_BIN_DIR"/; then
+      error "Failed to copy CLI files from $CLI_PUBLISH_DIR to $CLI_BIN_DIR"
+      exit 1
+    fi
 
     # Ensure the CLI is executable
-    chmod +x "$CLI_BIN_DIR/aspire"
+    chmod +x "$CLI_BIN_DIR/$CLI_EXE_NAME"
+    if [[ ! -f "$CLI_BIN_DIR/$CLI_EXE_NAME" ]]; then
+      error "Installed CLI executable was not found at $CLI_BIN_DIR/$CLI_EXE_NAME"
+      exit 1
+    fi
 
-    log "Aspire CLI installed to: $CLI_BIN_DIR/aspire"
+    # Stamp the install-route sidecar so `aspire info` / `aspire uninstall`
+    # can identify this binary as a locally-built (`localhive`) install.
+    # The format matches docs/specs/install-routes.md exactly; localhive
+    # shares the script-route layout (binary under <prefix>/bin/, bundle
+    # extracted at parent-of-bin).
+    printf '%s' '{"source":"localhive"}' > "$CLI_BIN_DIR/.aspire-install.json"
+
+    log "Aspire CLI installed to: $CLI_BIN_DIR/$CLI_EXE_NAME"
 
     if [[ -z "$OUTPUT_DIR" ]]; then
-      if "$CLI_BIN_DIR/aspire" config set channel "$HIVE_NAME" -g >/dev/null 2>&1; then
-        log "Set global channel to '$HIVE_NAME'"
-      else
-        warn "Failed to set global channel to '$HIVE_NAME'. Run: aspire config set channel '$HIVE_NAME' -g"
-      fi
-
-      # Check if the bin directory is in PATH
+      log "Run Aspire directly with: $CLI_BIN_DIR/$CLI_EXE_NAME"
       if [[ ":$PATH:" != *":$CLI_BIN_DIR:"* ]]; then
-        warn "The CLI bin directory is not in your PATH."
-        log "Add it to your PATH with: export PATH=\"$CLI_BIN_DIR:\$PATH\""
+        log "For this shell only, run: export PATH=\"$CLI_BIN_DIR:\$PATH\""
       fi
     fi
   else
@@ -448,8 +512,13 @@ if [[ -n "$OUTPUT_DIR" ]]; then
     log "Archive: $ARCHIVE_PATH"
     log ""
     log "To install on the target machine:"
-    log "  mkdir -p ~/.aspire && tar -xzf $(basename "$ARCHIVE_PATH") -C ~/.aspire"
-    log "  ~/.aspire/bin/aspire config set channel '$HIVE_NAME' -g"
+    if [[ "$BUNDLE_RID" == win-* ]]; then
+      log "  Expand-Archive -Path $(basename "$ARCHIVE_PATH") -DestinationPath \$HOME\\.aspire"
+      log "  \$HOME\\.aspire\\bin\\aspire.exe"
+    else
+      log "  mkdir -p ~/.aspire && tar -xzf $(basename "$ARCHIVE_PATH") -C ~/.aspire"
+      log "  ~/.aspire/bin/aspire"
+    fi
   fi
 else
   log "Aspire CLI will discover a channel named '$HIVE_NAME' from:"

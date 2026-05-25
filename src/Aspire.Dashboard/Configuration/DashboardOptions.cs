@@ -303,6 +303,7 @@ public sealed class TelemetryLimitOptions
     public int MaxAttributeCount { get; set; } = 128;
     public int MaxAttributeLength { get; set; } = int.MaxValue;
     public int MaxSpanEventCount { get; set; } = int.MaxValue;
+    public int MaxResourceCount { get; set; } = 10_000;
 }
 
 public sealed class UIOptions

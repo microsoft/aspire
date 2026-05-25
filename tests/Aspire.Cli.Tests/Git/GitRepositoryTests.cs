@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Cli.Git;
 using Aspire.Cli.Telemetry;
@@ -13,21 +14,11 @@ namespace Aspire.Cli.Tests.Git;
 
 public class GitRepositoryTests(ITestOutputHelper outputHelper)
 {
-    private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
-    {
-        var settings = workingDirectory.CreateSubdirectory(".aspire-cli-state");
-        var hives = settings.CreateSubdirectory("hives");
-        var cache = settings.CreateSubdirectory("cache");
-        var sdks = settings.CreateSubdirectory("sdks");
-        var logs = settings.CreateSubdirectory("logs");
-        return new CliExecutionContext(workingDirectory, hives, cache, sdks, logs, "test.log");
-    }
-
     [Fact]
     public async Task GetIncludedFilesAsync_OutsideRepo_ReturnsNull()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var executionContext = workspace.CreateExecutionContext();
         using var profilingTelemetry = CreateProfilingTelemetry();
         var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
 
@@ -67,7 +58,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "add", "App/AppHost.csproj", ".gitignore");
         await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "commit", "-m", "init");
 
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var executionContext = workspace.CreateExecutionContext();
         using var profilingTelemetry = CreateProfilingTelemetry();
         var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
 
@@ -96,7 +87,7 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         // listed by `git ls-files --cached`.
         File.Delete(trackedFile);
 
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var executionContext = workspace.CreateExecutionContext();
         using var profilingTelemetry = CreateProfilingTelemetry();
         var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
 
@@ -119,27 +110,42 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "add", "AppHost.csproj");
         await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "commit", "-m", "init");
 
-        Activity? startedActivity = null;
-        using var listener = CreateProfilingActivityListener(activity => startedActivity = activity);
+        // ActivitySource listeners are process-wide, so this test can observe profiling spans
+        // from other tests running in parallel. Use a unique session id and filter by it instead
+        // of assuming every observed activity belongs to this git invocation.
+        var sessionId = $"git-{Guid.NewGuid():N}";
+        var startedActivities = new ConcurrentBag<Activity>();
+        using var listener = CreateProfilingActivityListener(startedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
-            (ProfilingTelemetry.EnabledEnvironmentVariable, "true"),
-            (ProfilingTelemetry.SessionIdEnvironmentVariable, "session-1"));
-        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, sessionId));
+        var executionContext = workspace.CreateExecutionContext();
         var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
 
         var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.NotNull(result);
-        Assert.NotNull(startedActivity);
-        Assert.Equal(ProfilingTelemetry.Activities.GitCommand, startedActivity.OperationName);
+        var startedActivity = Assert.Single(startedActivities, activity =>
+            IsActivityFromSession(activity, ProfilingTelemetry.Activities.Process, sessionId) &&
+            activity.GetTagItem(ProfilingTelemetry.Tags.GitCommand) as string == "ls-files");
+        Assert.Equal(ProfilingTelemetry.Activities.Process, startedActivity.OperationName);
+        Assert.Equal("process git", startedActivity.DisplayName);
         Assert.Equal("ls-files", startedActivity.GetTagItem(ProfilingTelemetry.Tags.GitCommand));
         Assert.Equal(workspace.WorkspaceRoot.FullName, startedActivity.GetTagItem(ProfilingTelemetry.Tags.GitWorkingDirectory));
         Assert.Equal("git", startedActivity.GetTagItem(TelemetryConstants.Tags.ProcessExecutableName));
+        Assert.Equal("git", startedActivity.GetTagItem(TelemetryConstants.Tags.ProcessExecutablePath));
+        Assert.Equal(new[] { "ls-files", "--cached", "--others", "--exclude-standard", "-z" }, Assert.IsType<string[]>(startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
         Assert.Equal(5, startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
         Assert.Equal(0, startedActivity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
         Assert.True((int)startedActivity.GetTagItem(TelemetryConstants.Tags.ProcessPid)! > 0);
         Assert.True((int)startedActivity.GetTagItem(ProfilingTelemetry.Tags.GitStdoutLength)! > 0);
-        Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
+        Assert.Equal(sessionId, startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
+    }
+
+    private static bool IsActivityFromSession(Activity activity, string operationName, string sessionId)
+    {
+        return activity.OperationName == operationName &&
+            Equals(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
     }
 
     private static ProfilingTelemetry CreateProfilingTelemetry(params (string Key, string? Value)[] values)

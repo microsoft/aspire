@@ -127,6 +127,7 @@ internal sealed class ApiReferenceItem
 /// <summary>
 /// Represents a listable API child item.
 /// </summary>
+// `aspire docs api list --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class ApiListItem
 {
     /// <summary>
@@ -163,6 +164,7 @@ internal sealed class ApiListItem
 /// <summary>
 /// Represents an API search result.
 /// </summary>
+// `aspire docs api search --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class ApiSearchResult
 {
     /// <summary>
@@ -209,6 +211,7 @@ internal sealed class ApiSearchResult
 /// <summary>
 /// Represents the content returned by <c>aspire docs api get</c>.
 /// </summary>
+// `aspire docs api get --format json` uses this shape; keep docs/specs/cli-output-formats.md in sync when changing it.
 internal sealed class ApiContent
 {
     /// <summary>

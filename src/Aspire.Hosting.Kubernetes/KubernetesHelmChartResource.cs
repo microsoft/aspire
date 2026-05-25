@@ -26,6 +26,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// <see cref="KubernetesHelmChartExtensions.WithDestroy(IResourceBuilder{KubernetesHelmChartResource})"/>.
 /// </para>
 /// </remarks>
+/// <ats-remarks />
 /// <example>
 /// <code>
 /// var k8s = builder.AddKubernetesEnvironment("k8s");
@@ -106,4 +107,12 @@ public class KubernetesHelmChartResource : Resource, IResourceWithParent<Kuberne
     /// are not removed automatically.
     /// </summary>
     internal bool DestroyOnUninstall { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether <c>helm upgrade --install</c> should be invoked with
+    /// the <c>--force-conflicts</c> flag. Set via
+    /// <see cref="KubernetesHelmChartExtensions.WithForceConflicts(IResourceBuilder{KubernetesHelmChartResource})"/>.
+    /// Defaults to <see langword="false"/>.
+    /// </summary>
+    internal bool ForceConflicts { get; set; }
 }

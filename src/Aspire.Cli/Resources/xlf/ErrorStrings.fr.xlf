@@ -37,6 +37,11 @@
         <target state="translated">Impossible d’utiliser --watch et --no-build en même temps.</target>
         <note />
       </trans-unit>
+      <trans-unit id="CertificateGenerationFailed">
+        <source>Failed to generate HTTPS development certificate (result: {0}).</source>
+        <target state="new">Failed to generate HTTPS development certificate (result: {0}).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CertificatesMayNotBeFullyTrusted">
         <source>Developer certificates may not be fully trusted (trust exit code was: {0}).</source>
         <target state="translated">Les certificats de développeur ne sont peut-être pas entièrement approuvés (le code de sortie d’approbation était : {0}).</target>
@@ -101,6 +106,11 @@
         <source>The Aspire extension token must be set if ASPIRE_EXTENSION_ENDPOINT is set. Please ensure that ASPIRE_EXTENSION_TOKEN is set</source>
         <target state="translated">Le jeton d’extension Aspire doit être défini si ASPIRE_EXTENSION_ENDPOINT est défini. Veuillez vérifier que ASPIRE_EXTENSION_TOKEN est défini</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
+      </trans-unit>
+      <trans-unit id="FailedToParsePackageSearchResults">
+        <source>Failed to parse package search results.</source>
+        <target state="new">Failed to parse package search results.</target>
+        <note />
       </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
         <source>Failed to parse template version from stdout.</source>

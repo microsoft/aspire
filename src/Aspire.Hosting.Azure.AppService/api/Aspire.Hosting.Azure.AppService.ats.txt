@@ -8,6 +8,7 @@ Aspire.Hosting.Azure.AppService/Aspire.Hosting.Azure.AzureAppServiceEnvironmentR
 Aspire.Hosting.Azure.AppService/addAzureAppServiceEnvironment(name: string) -> Aspire.Hosting.Azure.AppService/Aspire.Hosting.Azure.AzureAppServiceEnvironmentResource
 Aspire.Hosting.Azure.AppService/publishAsAzureAppServiceWebsite(configure?: callback, configureSlot?: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting.Azure.AppService/skipEnvironmentVariableNameChecks() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
+Aspire.Hosting.Azure.AppService/withAcrPullIdentity(identityBuilder: Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureUserAssignedIdentityResource) -> Aspire.Hosting.Azure.AppService/Aspire.Hosting.Azure.AzureAppServiceEnvironmentResource
 Aspire.Hosting.Azure.AppService/withAzureApplicationInsights(applicationInsights?: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting.Azure.ApplicationInsights/Aspire.Hosting.Azure.AzureApplicationInsightsResource) -> Aspire.Hosting.Azure.AppService/Aspire.Hosting.Azure.AzureAppServiceEnvironmentResource
 Aspire.Hosting.Azure.AppService/withDashboard(enable?: boolean) -> Aspire.Hosting.Azure.AppService/Aspire.Hosting.Azure.AzureAppServiceEnvironmentResource
 Aspire.Hosting.Azure.AppService/withDeploymentSlot(deploymentSlot: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure.AppService/Aspire.Hosting.Azure.AzureAppServiceEnvironmentResource

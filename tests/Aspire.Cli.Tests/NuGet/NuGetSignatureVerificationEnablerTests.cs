@@ -3,6 +3,7 @@
 
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 
 namespace Aspire.Cli.Tests.NuGet;
 
@@ -11,9 +12,7 @@ public class NuGetSignatureVerificationEnablerTests
     private static CliExecutionContext CreateContext(Dictionary<string, string?>? envVars = null)
     {
         var dir = new DirectoryInfo(Path.GetTempPath());
-        return new CliExecutionContext(
-            dir, dir, dir, dir, dir, "test.log",
-            environmentVariables: envVars);
+        return TestExecutionContextHelper.CreateExecutionContext(dir, environmentVariables: envVars);
     }
 
     [Fact]

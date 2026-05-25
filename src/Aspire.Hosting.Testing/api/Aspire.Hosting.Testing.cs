@@ -43,7 +43,7 @@ namespace Aspire.Hosting.Testing
         [AspireExportIgnore(Reason = "Use the exported getConnectionString overload without a cancellation token.")]
         public static System.Threading.Tasks.ValueTask<string?> GetConnectionStringAsync(this DistributedApplication app, string resourceName, System.Threading.CancellationToken cancellationToken = default) { throw null; }
 
-        [AspireExport("getEndpoint", Description = "Gets the endpoint for the specified resource.")]
+        [AspireExport(Description = "Gets the endpoint for the specified resource.")]
         public static System.Uri GetEndpoint(this DistributedApplication app, string resourceName, string? endpointName = null) { throw null; }
 
         [AspireExportIgnore(Reason = "Use the ATS-friendly overload that accepts a network identifier string.")]

@@ -2,26 +2,31 @@
   "name": "nodefrontend",
   "version": "1.0.0",
   "type": "module",
+  "packageManager": "pnpm@10.30.1",
   "main": "app.js",
   "engines": {
     "node": ">=20.12"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node --watch --import ./instrumentation.js app.js",
-    "watch": "npm install && nodemon --import ./instrumentation.js app.js"
+    "build": "echo \"no build needed\"",
+    "start": "node --import ./instrumentation.js app.js",
+    "watch": "nodemon --import ./instrumentation.js app.js"
   },
   "dependencies": {
     "@godaddy/terminus": "^4.12.1",
+    "@grpc/grpc-js": "^1.14.3",
     "@opentelemetry/api": "^1.9.1",
-    "@opentelemetry/auto-instrumentations-node": "^0.67.3",
-    "@opentelemetry/exporter-logs-otlp-grpc": "^0.208.0",
-    "@opentelemetry/exporter-metrics-otlp-grpc": "^0.208.0",
-    "@opentelemetry/exporter-trace-otlp-grpc": "^0.208.0",
-    "@opentelemetry/instrumentation-redis-4": "^0.49.0",
-    "@opentelemetry/sdk-logs": "^0.208.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.76.0",
+    "@opentelemetry/exporter-logs-otlp-grpc": "^0.218.0",
+    "@opentelemetry/exporter-metrics-otlp-grpc": "^0.218.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "^0.218.0",
+    "@opentelemetry/instrumentation-express": "^0.66.0",
+    "@opentelemetry/instrumentation-http": "^0.218.0",
+    "@opentelemetry/instrumentation-redis": "^0.66.0",
+    "@opentelemetry/sdk-logs": "^0.218.0",
     "@opentelemetry/sdk-metrics": "^2.6.1",
-    "@opentelemetry/sdk-node": "^0.208.0",
+    "@opentelemetry/sdk-node": "^0.218.0",
     "express": "^5.2.1",
     "node-fetch": "^3.3.2",
     "pug": "^3.0.4",
@@ -32,12 +37,12 @@
   },
   "overrides": {
     "uuid": "14.0.0",
-    "protobufjs": "7.5.5"
+    "protobufjs": "8.2.0"
   },
   "pnpm": {
     "overrides": {
       "uuid": "14.0.0",
-      "protobufjs": "7.5.5"
+      "protobufjs": "8.2.0"
     }
   }
 }

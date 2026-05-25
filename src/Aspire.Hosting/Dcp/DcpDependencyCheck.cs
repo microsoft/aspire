@@ -31,7 +31,6 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
 
     public async Task<DcpInfo?> GetDcpInfoAsync(bool force = false, CancellationToken cancellationToken = default)
     {
-        AspireEventSource.Instance.DcpInfoFetchStart(force);
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
@@ -135,48 +134,38 @@ internal sealed partial class DcpDependencyCheck : IDcpDependencyCheckService
         finally
         {
             _lock.Release();
-            AspireEventSource.Instance.DcpInfoFetchStop(force);
         }
     }
 
     private static void EnsureDcpVersion(DcpInfo dcpInfo)
     {
-        AspireEventSource.Instance.DcpVersionCheckStart();
+        var dcpVersionString = dcpInfo.VersionString;
 
-        try
+        if (dcpVersionString == null
+            || dcpVersionString == string.Empty
+            || dcpVersionString == "dev")
         {
-            var dcpVersionString = dcpInfo.VersionString;
-
-            if (dcpVersionString == null
-                || dcpVersionString == string.Empty
-                || dcpVersionString == "dev")
-            {
-                // If empty, null, or a dev version, pass
-                dcpInfo.Version = DcpVersion.Dev;
-                return;
-            }
-
-            // Early DCP versions (e.g. preview 1) have a +x at the end of their version string, e.g. 0.1.42+5,
-            // which does not parse. Strip off anything like that.
-            dcpVersionString = VersionRegex().Replace(dcpVersionString, string.Empty);
-
-            if (Version.TryParse(dcpVersionString, out var dcpVersion))
-            {
-                if (dcpVersion < DcpVersion.MinimumVersionInclusive)
-                {
-                    throw new DistributedApplicationException(string.Format(
-                        CultureInfo.InvariantCulture,
-                        MessageStrings.DcpVersionCheckTooLowMessage,
-                        GetCurrentPackageVersion(typeof(DcpDependencyCheck).Assembly)
-                    ));
-                }
-
-                dcpInfo.Version = dcpVersion;
-            }
+            // If empty, null, or a dev version, pass
+            dcpInfo.Version = DcpVersion.Dev;
+            return;
         }
-        finally
+
+        // Early DCP versions (e.g. preview 1) have a +x at the end of their version string, e.g. 0.1.42+5,
+        // which does not parse. Strip off anything like that.
+        dcpVersionString = VersionRegex().Replace(dcpVersionString, string.Empty);
+
+        if (Version.TryParse(dcpVersionString, out var dcpVersion))
         {
-            AspireEventSource.Instance.DcpVersionCheckStop();
+            if (dcpVersion < DcpVersion.MinimumVersionInclusive)
+            {
+                throw new DistributedApplicationException(string.Format(
+                    CultureInfo.InvariantCulture,
+                    MessageStrings.DcpVersionCheckTooLowMessage,
+                    GetCurrentPackageVersion(typeof(DcpDependencyCheck).Assembly)
+                ));
+            }
+
+            dcpInfo.Version = dcpVersion;
         }
     }
 

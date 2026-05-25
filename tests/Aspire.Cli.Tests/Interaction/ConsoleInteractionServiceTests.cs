@@ -28,7 +28,7 @@ public class ConsoleInteractionServiceTests
     {
         executionContext ??= CreateExecutionContext();
         var consoleEnvironment = new ConsoleEnvironment(console, console);
-        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+        return new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment ?? TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
     }
 
     [Fact]
@@ -426,6 +426,70 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public async Task ShowStatusAsync_FallbackPath_DoesNotLeaveInStatusFlagSet()
+    {
+        // Regression test: when ShowStatusAsync takes the fallback path due to debug/non-interactive
+        // mode or empty status text, the _inStatus flag must not be set to 1 (and left there).
+        // Previously the CompareExchange ran first in the || chain, so the swap happened before the
+        // other conditions short-circuited, leaving _inStatus=1 with no try/finally to reset it.
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        // Debug mode forces the fallback path even though host environment supports interactive output.
+        var executionContext = CreateExecutionContext(debugMode: true);
+        var interactionService = CreateInteractionService(console, executionContext);
+
+        await interactionService.ShowStatusAsync("Working...", () => Task.FromResult(0)).DefaultTimeout();
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    [Fact]
+    public async Task ShowStatusAsync_FallbackPathWithEmptyText_DoesNotLeaveInStatusFlagSet()
+    {
+        // Regression test: empty status text triggers the fallback path. The flag must not be left set.
+        var interactionService = CreateInteractionService(AnsiConsole.Console);
+
+        await interactionService.ShowStatusAsync(string.Empty, () => Task.FromResult(0)).DefaultTimeout();
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    [Fact]
+    public async Task ShowDynamicStatusAsync_FallbackPath_DoesNotLeaveInStatusFlagSet()
+    {
+        var executionContext = CreateExecutionContext(debugMode: true);
+        var interactionService = CreateInteractionService(AnsiConsole.Console, executionContext);
+
+        await interactionService.ShowDynamicStatusAsync<int>("Working...", _ => Task.FromResult(0)).DefaultTimeout();
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    [Fact]
+    public void ShowStatus_FallbackPath_DoesNotLeaveInStatusFlagSet()
+    {
+        var executionContext = CreateExecutionContext(debugMode: true);
+        var interactionService = CreateInteractionService(AnsiConsole.Console, executionContext);
+
+        interactionService.ShowStatus("Working...", () => { });
+
+        Assert.Equal(0, GetInStatus(interactionService));
+    }
+
+    private static int GetInStatus(ConsoleInteractionService service)
+    {
+        var field = typeof(ConsoleInteractionService).GetField("_inStatus", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(field);
+        return (int)field!.GetValue(service)!;
+    }
+
+    [Fact]
     public void DisplayIncompatibleVersionError_WithMarkupCharactersInVersion_DoesNotThrow()
     {
         // Arrange
@@ -608,6 +672,63 @@ public class ConsoleInteractionServiceTests
         // Should contain the original text (not double-escaped like [[Prod]])
         Assert.Contains("[Prod]", outputString);
         Assert.DoesNotContain("[[Prod]]", outputString);
+    }
+
+    [Fact]
+    public void DisplayError_WritesToStderr_RegardlessOfConsoleSetting()
+    {
+        var stdoutOutput = new StringBuilder();
+        var stderrOutput = new StringBuilder();
+        var stdoutConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stdoutOutput))
+        });
+        var stderrConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stderrOutput))
+        });
+
+        var executionContext = CreateExecutionContext();
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+
+        // Console defaults to Standard (stdout), but errors should still go to stderr
+        interactionService.DisplayError("Something went wrong");
+
+        Assert.Empty(stdoutOutput.ToString());
+        Assert.Contains("Something went wrong", stderrOutput.ToString());
+    }
+
+    [Fact]
+    public void DisplayMessage_WritesToStdout_WhenConsoleIsStandard()
+    {
+        var stdoutOutput = new StringBuilder();
+        var stderrOutput = new StringBuilder();
+        var stdoutConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stdoutOutput))
+        });
+        var stderrConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stderrOutput))
+        });
+
+        var executionContext = CreateExecutionContext();
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance, new ConsoleLogBufferContext());
+
+        interactionService.DisplayMessage(KnownEmojis.Information, "Status update");
+
+        Assert.Contains("Status update", stdoutOutput.ToString());
+        Assert.Empty(stderrOutput.ToString());
     }
 
     [Fact]

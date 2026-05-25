@@ -31,7 +31,7 @@ public class DotNetTemplateFactoryTests
     }
 
     private static PackageChannel CreateExplicitChannel(PackageMapping[] mappings) =>
-        PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+        PackageChannel.CreateExplicitChannel("test", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache(), new TestFeatures());
 
     private static async Task WriteNuGetConfigAsync(DirectoryInfo dir, string content)
     {
@@ -218,7 +218,7 @@ public class DotNetTemplateFactoryTests
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
-        var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache());
+        var channel = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
 
         // Act
         await NuGetConfigMerger.CreateOrUpdateAsync(outputDir, channel).DefaultTimeout();
@@ -347,9 +347,7 @@ public class DotNetTemplateFactoryTests
         var packagingService = new TestPackagingService();
         var prompter = new TestNewCommandPrompter();
         var workingDirectory = new DirectoryInfo("/tmp");
-        var hivesDirectory = new DirectoryInfo("/tmp/hives");
-        var cacheDirectory = new DirectoryInfo("/tmp/cache");
-        var executionContext = new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workingDirectory);
         sdkInstaller ??= new TestDotNetSdkInstaller();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
@@ -391,6 +389,9 @@ public class DotNetTemplateFactoryTests
         public Task<TResult> ShowStatusAsync<TResult>(string message, Func<Task<TResult>> work, KnownEmoji? emoji = null, bool allowMarkup = false)
             => throw new NotImplementedException();
 
+        public Task<TResult> ShowDynamicStatusAsync<TResult>(string initialStatusText, Func<Action<string>, Task<TResult>> action, KnownEmoji? emoji = null)
+            => throw new NotImplementedException();
+
         public Task ShowStatusAsync(string message, Func<Task> work)
             => throw new NotImplementedException();
 
@@ -399,9 +400,9 @@ public class DotNetTemplateFactoryTests
 
         public void DisplaySuccess(string message, bool allowMarkup = false) { }
         public void DisplayError(string message, bool allowMarkup = false) { }
-        public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
+        public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) { }
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
-        public void DisplayCancellationMessage() { }
+        public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) { }
         public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
         public void DisplayPlainText(string text) { }
         public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }
@@ -447,10 +448,13 @@ public class DotNetTemplateFactoryTests
         public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, ProcessInvocationOptions options, CancellationToken cancellationToken)
+        public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, string[] targets, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<int> RunAsync(FileInfo projectFile, bool watch, bool noBuild, bool noRestore, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken)
+            => throw new NotImplementedException();
+
+        public Task<int> RunAppHostCommandAsync(FileInfo projectFile, string command, DirectoryInfo workingDirectory, string[] args, IDictionary<string, string>? env, TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<(int ExitCode, string[] ConfigPaths)> GetNuGetConfigPathsAsync(DirectoryInfo workingDirectory, ProcessInvocationOptions options, CancellationToken cancellationToken)
@@ -475,7 +479,7 @@ public class DotNetTemplateFactoryTests
         public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default)
+        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default, Func<string, string>? outputPathResolver = null)
             => throw new NotImplementedException();
 
         public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)

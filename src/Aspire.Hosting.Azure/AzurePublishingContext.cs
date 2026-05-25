@@ -347,12 +347,10 @@ public sealed class AzurePublishingContext(
                         Resource = resource,
                         CancellationToken = cancellationToken
                     };
-                    await dockerfileBuildAnnotation.MaterializeDockerfileAsync(context, cancellationToken).ConfigureAwait(false);
 
                     // Copy to a resource-specific path in the output folder for publishing
                     var resourceDockerfilePath = Path.Combine(outputPath, $"{resource.Name}.Dockerfile");
-                    Directory.CreateDirectory(outputPath);
-                    File.Copy(dockerfileBuildAnnotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
+                    await dockerfileBuildAnnotation.EmitDockerfileArtifactsAsync(context, resourceDockerfilePath).ConfigureAwait(false);
                 }
 
                 var task = await step.CreateTaskAsync(

@@ -68,6 +68,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceArgumentDescription", resourceCulture);
             }
         }
+
+        public static string SourceWithCredentialsCannotBePersisted {
+            get {
+                return ResourceManager.GetString("SourceWithCredentialsCannotBePersisted", resourceCulture);
+            }
+        }
         
         public static string VersionArgumentDescription {
             get {
@@ -98,6 +104,30 @@ namespace Aspire.Cli.Resources {
         public static string EnterTheProjectName {
             get {
                 return ResourceManager.GetString("EnterTheProjectName", resourceCulture);
+            }
+        }
+
+        public static string SelectProjectCreationLocation
+        {
+            get
+            {
+                return ResourceManager.GetString("SelectProjectCreationLocation", resourceCulture);
+            }
+        }
+
+        public static string CreateProjectNameSubdirectoryChoice
+        {
+            get
+            {
+                return ResourceManager.GetString("CreateProjectNameSubdirectoryChoice", resourceCulture);
+            }
+        }
+
+        public static string CreateProjectDirectlyInSelectedFolderChoice
+        {
+            get
+            {
+                return ResourceManager.GetString("CreateProjectDirectlyInSelectedFolderChoice", resourceCulture);
             }
         }
         
@@ -166,6 +196,18 @@ namespace Aspire.Cli.Resources {
         public static string OutputPathContainsInvalidCharacters {
             get {
                 return ResourceManager.GetString("OutputPathContainsInvalidCharacters", resourceCulture);
+            }
+        }
+
+        public static string NoPackageChannelsAvailable {
+            get {
+                return ResourceManager.GetString("NoPackageChannelsAvailable", resourceCulture);
+            }
+        }
+
+        public static string NoChannelFoundMatching {
+            get {
+                return ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
             }
         }
     }

@@ -32,11 +32,6 @@
         <target state="new">Path</target>
         <note />
       </trans-unit>
-      <trans-unit id="HeaderRelativePath">
-        <source>Relative Path</source>
-        <target state="new">Relative Path</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HeaderStatus">
         <source>Status</source>
         <target state="new">Status</target>
@@ -70,6 +65,21 @@
       <trans-unit id="LsNoCandidateAppHostsFound">
         <source>No candidate AppHosts found.</source>
         <target state="new">No candidate AppHosts found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsSearchingForAppHostsStatus">
+        <source>Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found...</source>
+        <target state="new">Searching for Aspire AppHosts. {0} directories searched. {1} AppHosts found...</target>
+        <note>{0} is the number of directories searched so far. {1} is the number of AppHost candidates found so far.</note>
+      </trans-unit>
+      <trans-unit id="LsStreamOptionDescription">
+        <source>Stream newline-delimited JSON discovery events. Requires --format json</source>
+        <target state="new">Stream newline-delimited JSON discovery events. Requires --format json</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LsStreamRequiresJson">
+        <source>The --stream option requires --format json.</source>
+        <target state="new">The --stream option requires --format json.</target>
         <note />
       </trans-unit>
       <trans-unit id="MultipleInScopeAppHosts">

@@ -21,6 +21,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly OutputCollector _output;
     private readonly string _socketPath;
     private readonly ProfilingTelemetry.ActivityScope _activity;
+    private readonly ProfilingTelemetry? _profilingTelemetry;
+    private readonly IDisposable? _projectLifetime;
     private IAppHostRpcClient? _rpcClient;
     private bool _disposed;
 
@@ -30,7 +32,9 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         string socketPath,
         string authenticationToken,
         ILogger logger,
-        ProfilingTelemetry.ActivityScope activity = default)
+        ProfilingTelemetry.ActivityScope activity = default,
+        ProfilingTelemetry? profilingTelemetry = null,
+        IDisposable? projectLifetime = null)
     {
         _serverProcess = serverProcess;
         _output = output;
@@ -38,6 +42,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _authenticationToken = authenticationToken;
         _logger = logger;
         _activity = activity;
+        _profilingTelemetry = profilingTelemetry;
+        _projectLifetime = projectLifetime;
     }
 
     /// <inheritdoc />
@@ -81,6 +87,16 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         var activity = profilingTelemetry is null
             ? default
             : profilingTelemetry.StartAppHostServerLifetime(appHostServerProject.GetType().Name);
+        if (activity.IsRunning)
+        {
+            activity.AddContextToEnvironment(serverEnvironmentVariables);
+        }
+        else
+        {
+            // Profiling may be disabled even when an upstream CLI span is active. Still pass that
+            // ambient context through so the AppHostServer can join the existing startup trace.
+            ProfilingTelemetry.AddCurrentContextToEnvironment(serverEnvironmentVariables);
+        }
 
         string socketPath;
         Process serverProcess;
@@ -96,11 +112,12 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         {
             activity.SetError(ex.Message);
             activity.Dispose();
+            (appHostServerProject as IDisposable)?.Dispose();
             throw;
         }
 
         activity.SetProcessId(serverProcess.Id);
-        activity.SetProcessExecutableName(Path.GetFileName(serverProcess.StartInfo.FileName));
+        activity.SetProcessInvocation(serverProcess.StartInfo.FileName, serverProcess.StartInfo.ArgumentList);
 
         return new AppHostServerSession(
             serverProcess,
@@ -108,7 +125,9 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             socketPath,
             authenticationToken,
             logger,
-            activity);
+            activity,
+            profilingTelemetry,
+            appHostServerProject as IDisposable);
     }
 
     /// <inheritdoc />
@@ -116,7 +135,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     {
         ObjectDisposedException.ThrowIf(_disposed, nameof(AppHostServerSession));
 
-        return _rpcClient ??= await AppHostRpcClient.ConnectAsync(_socketPath, _authenticationToken, cancellationToken);
+        return _rpcClient ??= await AppHostRpcClient.ConnectAsync(_socketPath, _authenticationToken, _profilingTelemetry, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -154,6 +173,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         }
 
         _serverProcess.Dispose();
+        _projectLifetime?.Dispose();
         _activity.Dispose();
     }
 }
@@ -189,9 +209,21 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         var appHostServerProject = await _projectFactory.CreateAsync(appHostPath, cancellationToken);
 
         // Prepare the server (create files + build for dev mode, restore packages for prebuilt mode)
-        var prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken);
+        AppHostServerPrepareResult prepareResult;
+        try
+        {
+            prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken: cancellationToken);
+        }
+        catch
+        {
+            (appHostServerProject as IDisposable)?.Dispose();
+            throw;
+        }
+
         if (!prepareResult.Success)
         {
+            (appHostServerProject as IDisposable)?.Dispose();
+
             return new AppHostServerSessionResult(
                 Success: false,
                 Session: null,

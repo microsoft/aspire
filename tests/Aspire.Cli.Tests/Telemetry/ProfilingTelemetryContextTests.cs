@@ -18,16 +18,16 @@ public class ProfilingTelemetryContextTests
         using var activity = source.StartActivity("parent");
         Assert.NotNull(activity);
 
-        activity.SetBaggage(ProfilingTelemetry.SessionIdBaggageName, "session-1");
+        activity.SetBaggage(ProfilingTelemetry.Baggage.SessionId, "session-1");
         activity.TraceStateString = "state-1";
 
         var environment = new Dictionary<string, string>();
         ProfilingTelemetry.AddActivityContextToEnvironment(activity, environment);
 
-        Assert.Equal("true", environment[ProfilingTelemetry.EnabledEnvironmentVariable]);
-        Assert.Equal("session-1", environment[ProfilingTelemetry.SessionIdEnvironmentVariable]);
-        Assert.Equal(activity.Id, environment[ProfilingTelemetry.TraceParentEnvironmentVariable]);
-        Assert.Equal("state-1", environment[ProfilingTelemetry.TraceStateEnvironmentVariable]);
+        Assert.Equal("true", environment[ProfilingTelemetry.EnvironmentVariables.Enabled]);
+        Assert.Equal("session-1", environment[ProfilingTelemetry.EnvironmentVariables.SessionId]);
+        Assert.Equal(activity.Id, environment[ProfilingTelemetry.EnvironmentVariables.TraceParent]);
+        Assert.Equal("state-1", environment[ProfilingTelemetry.EnvironmentVariables.TraceState]);
         Assert.Equal("true", environment[KnownConfigNames.Legacy.StartupProfilingEnabled]);
         Assert.Equal("session-1", environment[KnownConfigNames.Legacy.StartupOperationId]);
         Assert.Equal(activity.Id, environment[KnownConfigNames.Legacy.StartupTraceParent]);
@@ -45,22 +45,36 @@ public class ProfilingTelemetryContextTests
     }
 
     [Fact]
+    public void AddActivityContextToEnvironment_IgnoresNonProfilingActivity()
+    {
+        using var listener = CreateActivityListener("test-profiling-context");
+        using var source = new ActivitySource("test-profiling-context");
+        using var activity = source.StartActivity("parent");
+        Assert.NotNull(activity);
+
+        var environment = new Dictionary<string, string>();
+        ProfilingTelemetry.AddActivityContextToEnvironment(activity, environment);
+
+        Assert.Empty(environment);
+    }
+
+    [Fact]
     public void StartRunCommand_ContinuesConfiguredRemoteParentAndSession()
     {
-        Activity? startedActivity = null;
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activity => startedActivity = activity);
+        var startedActivities = new List<Activity>();
+        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, startedActivities.Add);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
-            (ProfilingTelemetry.EnabledEnvironmentVariable, "true"),
-            (ProfilingTelemetry.SessionIdEnvironmentVariable, "session-1"),
-            (ProfilingTelemetry.TraceParentEnvironmentVariable, "00-0102030405060708090a0b0c0d0e0f10-1112131415161718-01"),
-            (ProfilingTelemetry.TraceStateEnvironmentVariable, "state-1")));
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"),
+            (ProfilingTelemetry.EnvironmentVariables.TraceParent, "00-0102030405060708090a0b0c0d0e0f10-1112131415161718-01"),
+            (ProfilingTelemetry.EnvironmentVariables.TraceState, "state-1")));
 
         using var activity = profilingTelemetry.StartRunCommand();
 
         Assert.True(activity.IsRunning);
-        Assert.NotNull(startedActivity);
+        var startedActivity = Assert.Single(startedActivities, activity => activity.OperationName == ProfilingTelemetry.Activities.RunCommand);
         Assert.Equal("0102030405060708090a0b0c0d0e0f10", startedActivity.TraceId.ToString());
-        Assert.Equal("session-1", startedActivity.GetBaggageItem(ProfilingTelemetry.SessionIdBaggageName));
+        Assert.Equal("session-1", startedActivity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
         Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
     }
 
@@ -75,7 +89,7 @@ public class ProfilingTelemetryContextTests
     public void IsEnabled_ReturnsExpectedValue(string? enabled, bool expected)
     {
         var isEnabled = ProfilingTelemetry.IsProfilingEnabled(CreateConfiguration(
-            (ProfilingTelemetry.EnabledEnvironmentVariable, enabled)));
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, enabled)));
 
         Assert.Equal(expected, isEnabled);
     }
@@ -83,8 +97,8 @@ public class ProfilingTelemetryContextTests
     [Fact]
     public void StartRunCommand_ReadsLegacyStartupNames()
     {
-        Activity? startedActivity = null;
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activity => startedActivity = activity);
+        var startedActivities = new List<Activity>();
+        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, startedActivities.Add);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
             (KnownConfigNames.Legacy.StartupProfilingEnabled, "true"),
             (KnownConfigNames.Legacy.StartupOperationId, "session-1"),
@@ -94,9 +108,9 @@ public class ProfilingTelemetryContextTests
         using var activity = profilingTelemetry.StartRunCommand();
 
         Assert.True(activity.IsRunning);
-        Assert.NotNull(startedActivity);
+        var startedActivity = Assert.Single(startedActivities, activity => activity.OperationName == ProfilingTelemetry.Activities.RunCommand);
         Assert.Equal("0102030405060708090a0b0c0d0e0f10", startedActivity.TraceId.ToString());
-        Assert.Equal("session-1", startedActivity.GetBaggageItem(ProfilingTelemetry.SessionIdBaggageName));
+        Assert.Equal("session-1", startedActivity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
     }
 
     private static ActivityListener CreateActivityListener(string sourceName, Action<Activity>? activityStarted = null)

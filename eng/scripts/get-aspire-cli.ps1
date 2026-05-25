@@ -594,7 +594,7 @@ function Get-CliExecutablePath {
     param(
         [Parameter(Mandatory = $true)]
         [string]$DestinationPath,
-        
+
         [Parameter(Mandatory = $true)]
         [string]$OS
     )
@@ -613,11 +613,11 @@ function Backup-ExistingCliExecutable {
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     if (Test-Path $TargetExePath) {
         $unixTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         $backupPath = "$TargetExePath.old.$unixTimestamp"
-        
+
         if ($PSCmdlet.ShouldProcess($TargetExePath, "Backup to $backupPath")) {
             Write-Message "Backing up existing CLI: $TargetExePath -> $backupPath" -Level Verbose
 
@@ -633,7 +633,7 @@ function Backup-ExistingCliExecutable {
             return $backupPath
         }
     }
-    
+
     return $null
 }
 
@@ -643,18 +643,18 @@ function Restore-CliExecutableFromBackup {
     param(
         [Parameter(Mandatory = $true)]
         [string]$BackupPath,
-        
+
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     if ($PSCmdlet.ShouldProcess($BackupPath, "Restore to $TargetExePath")) {
         Write-Message "Restoring CLI from backup: $BackupPath -> $TargetExePath" -Level Warning
-        
+
         if (Test-Path $TargetExePath) {
             Remove-Item -Path $TargetExePath -Force -ErrorAction SilentlyContinue
         }
-        
+
         Move-Item -Path $BackupPath -Destination $TargetExePath -Force -ErrorAction Stop
     }
 }
@@ -666,15 +666,15 @@ function Remove-OldCliBackupFiles {
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     $directory = Split-Path -Parent $TargetExePath
     if ([string]::IsNullOrEmpty($directory)) {
         return
     }
-    
+
     $exeName = Split-Path -Leaf $TargetExePath
     $searchPattern = "$exeName.old.*"
-    
+
     $oldBackupFiles = Get-ChildItem -Path $directory -Filter $searchPattern -ErrorAction SilentlyContinue
     foreach ($backupFile in $oldBackupFiles) {
         if ($PSCmdlet.ShouldProcess($backupFile.FullName, "Delete old backup")) {
@@ -779,7 +779,7 @@ function ConvertTo-ChannelName {
         [Parameter(Mandatory = $true)]
         [string]$Quality
     )
-    
+
     switch ($Quality.ToLowerInvariant()) {
         "release" { return "stable" }
         "staging" { return "staging" }
@@ -1178,6 +1178,18 @@ function Install-AspireCli {
             Expand-AspireCliArchive -ArchiveFile $archivePath -DestinationPath $InstallPath -OS $targetOS
 
             Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
+        }
+
+        # Write the script-route install-source sidecar next to the binary.
+        # Under -WhatIf, print the target path and skip the write.
+        # Authorship contract: docs/specs/install-routes.md.
+        $sidecarPath = Join-Path $InstallPath '.aspire-install.json'
+        if ($PSCmdlet.ShouldProcess($sidecarPath, "Write route sidecar")) {
+            [System.IO.Directory]::CreateDirectory($InstallPath) | Out-Null
+            [System.IO.File]::WriteAllText($sidecarPath, "{""source"":""script""}`n")
+        }
+        else {
+            Write-Host "What if: Route sidecar would be written to: $sidecarPath"
         }
 
         # Download and install VS Code extension if requested

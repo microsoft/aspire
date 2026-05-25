@@ -39,6 +39,7 @@ You run `aspire run`, and the CLI starts both the .NET AppHost server and your g
 - **DTO** - A serializable data transfer object (marked with `[AspireDto]`)
 - **Enum** - A .NET enum type that serializes as its string name
 - **Exported Value** - An immutable predefined value (marked with `[AspireValue]`) emitted into guest SDK catalogs
+- **Documentation** - Structured XML documentation captured during ATS scanning and emitted by guest SDK generators
 
 ---
 
@@ -47,7 +48,7 @@ You run `aspire run`, and the CLI starts both the .NET AppHost server and your g
 ATS leverages .NET's rich type system rather than replacing it. The `[AspireExport]`, `[AspireDto]`, and `[AspireValue]` attributes mark what should be exposed—the rest is inferred from the C# signatures. This means:
 
 - Integration authors write **normal C# extension methods**
-- The scanner **extracts types, parameters, and relationships** at build time
+- The scanner **extracts types, parameters, relationships, and documentation** at build time
 - Code generators produce **idiomatic APIs** in each target language
 
 ATS then flattens .NET's polymorphism into a simple, portable model that any language can work with:
@@ -239,7 +240,7 @@ flowchart TB
     subgraph Guest["Guest Process"]
         direction TB
         UserCode["User Code<br/>(apphost.ts)"]
-        SDK["Generated SDK<br/>(.modules/aspire.js)"]
+        SDK["Generated SDK<br/>(.aspire/modules/aspire.js)"]
         ATSClient["ATS Client"]
         UserCode --> SDK --> ATSClient
     end
@@ -950,7 +951,7 @@ The CLI generates language-specific SDKs from ATS capabilities.
 
 ### When It Runs
 
-- First run (no `.modules/` folder)
+- First run (no `.aspire/modules/` folder)
 - Package hash changed (after `aspire add`)
 - Development mode (`ASPIRE_REPO_ROOT` set)
 
@@ -959,7 +960,67 @@ The CLI generates language-specific SDKs from ATS capabilities.
 1. Load assemblies from AppHost server build
 2. Scan for `[AspireExport]`, `[AspireDto]`, and `[AspireValue]` metadata using `AtsCapabilityScanner`
 3. Expand interface targets to concrete implementations
-4. Generate language-specific SDK, including predefined value catalogs
+4. Capture XML documentation for generated public SDK surfaces
+5. Generate language-specific SDK, including predefined value catalogs and documentation comments
+
+### Documentation Model
+
+ATS treats C# XML documentation as part of the code-generation model, not as export-shaping metadata. The scanner captures documentation into `AtsDocumentationInfo` so every language generator can choose how to render it.
+
+Documentation is captured for:
+
+- Exported handle and resource types
+- Capabilities, including summaries, remarks, returns, and parameters
+- Callback parameters
+- DTO types and DTO properties
+- Enum types and enum values
+- Exported value catalogs and exported values
+
+`[AspireExport(Description = "...")]` remains compatibility metadata and is only used as a fallback summary when XML summary documentation is unavailable (either because the member has no XML documentation or because its `<summary>`/`<ats-summary>` text is missing). New API documentation should prefer XML docs so C# and generated guest SDK documentation stay tied together.
+
+First-level `ats-*` tags override the matching standard XML documentation when generated SDKs need language-neutral or polyglot-specific text:
+
+| Standard tag | ATS override |
+|--------------|--------------|
+| `<summary>` | `<ats-summary>` |
+| `<param name="...">` | `<ats-param name="...">` |
+| `<returns>` | `<ats-returns>` |
+| `<remarks>` | `<ats-remarks>` |
+
+An empty `ats-*` override intentionally suppresses the matching standard documentation. This is useful when C# documentation is correct for .NET callers but misleading for generated guest language APIs.
+
+```csharp
+/// <summary>
+/// Adds a PostgreSQL resource to the application model.
+/// </summary>
+/// <ats-summary>
+/// Adds a PostgreSQL server resource to the application model.
+/// </ats-summary>
+/// <param name="builder">The distributed application builder.</param>
+/// <param name="name">The resource name.</param>
+/// <ats-param name="name">The name used when referencing this resource from other resources.</ats-param>
+/// <returns>The PostgreSQL resource builder.</returns>
+[AspireExport("addPostgres")]
+public static IResourceBuilder<PostgresServerResource> AddPostgres(
+    this IDistributedApplicationBuilder builder,
+    string name)
+```
+
+Language-neutral links use `ats-see` and `ats-seealso` with generated SDK identifiers instead of C# `cref` syntax:
+
+```csharp
+/// <summary>
+/// Configures <ats-see cref="type:RedisResource" />.
+/// </summary>
+/// <remarks>
+/// See <ats-see cref="method:RedisResource.withPersistence" /> and
+/// <ats-see cref="field:RedisDefaults.Port" />.
+/// </remarks>
+```
+
+The supported reference kinds are `type`, `method`, and `field`. The target uses dot notation over generated polyglot-visible identifiers and must not use C# generic type syntax. TypeScript currently renders these references as JSDoc `{@link ...}` tags.
+
+TypeScript renders captured documentation as JSDoc on generated classes, interfaces, enums, enum values, exported values, methods, method parameters, callback option parameters, and return values. Other language generators should consume the same `AtsDocumentationInfo` model and render documentation in the idiomatic format for that language.
 
 ### Capability Expansion
 
@@ -1009,7 +1070,7 @@ flowchart LR
 ### Output (TypeScript)
 
 ```text
-.modules/
+.aspire/modules/
 ├── .codegen-hash     # Hash of package references for cache invalidation
 ├── aspire.ts         # Generated SDK (builder classes, wrapper registrations)
 ├── base.ts           # Base classes, ReferenceExpression, AspireDict, AspireList
@@ -1051,7 +1112,7 @@ Primitive type mapping:
 ### Generated SDK Usage
 
 ```typescript
-import { createBuilder, refExpr, EnvironmentCallbackContext } from './.modules/aspire.js';
+import { createBuilder, refExpr, EnvironmentCallbackContext } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -1143,7 +1204,7 @@ await api.withEnvironment("REDIS_URL", connectionString);
 Enums are generated as TypeScript enums with string values matching the C# member names:
 
 ```typescript
-import { createBuilder, ContainerLifetime } from './.modules/aspire.js';
+import { createBuilder, ContainerLifetime } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -1487,18 +1548,28 @@ public sealed class AtsContext
 - `ExpandedTargetTypeIds` - Concrete types for interface targets
 - `ReturnType` - Return type reference with category
 - `Parameters` - List of parameter info
-- `Description` - Documentation
+- `Description` - Compatibility/fallback summary metadata
+- `Documentation` - Structured XML documentation for generated SDKs
 
 **AtsEnumTypeInfo** contains:
 - `TypeId` - Enum type ID
 - `Name` - Simple enum name (e.g., `ContainerLifetime`)
 - `Values` - List of enum member names
+- `ValueInfos` - Enum member names with documentation
+- `Documentation` - Structured XML documentation for the enum type
 
 **AtsExportedValueInfo** contains:
 - `PathSegments` - Guest SDK catalog path segments (for example, `["FoundryModels", "OpenAI", "Gpt41Mini"]`)
 - `Type` - ATS type metadata for the snapped value
 - `Value` - Snapped JSON payload emitted into guest SDKs
-- `Description` - Optional XML documentation summary
+- `Description` - Optional compatibility/fallback summary metadata
+- `Documentation` - Structured XML documentation for the exported value
+
+**AtsDocumentationInfo** contains:
+- `Summary` - Summary text
+- `Remarks` - Longer remarks text
+- `Returns` - Return value documentation
+- `Parameters` - List of parameter documentation entries, each with the C# parameter name and description
 
 **Generation steps:**
 
@@ -1580,13 +1651,13 @@ The `-d` (or `--debug`) flag enables additional diagnostic output, useful when d
 
 ### Development Workflow Tips
 
-1. **Rapid iteration**: With `ASPIRE_REPO_ROOT` set, the generated SDK in `.modules/` is regenerated on each run, so changes to code generation logic are immediately reflected.
+1. **Rapid iteration**: With `ASPIRE_REPO_ROOT` set, the generated SDK in `.aspire/modules/` is regenerated on each run, so changes to code generation logic are immediately reflected.
 
 2. **Testing code generators**: Modify your `ICodeGenerator` implementation, then run `aspire run` in a test app—the new generated code will be produced automatically.
 
 3. **Testing language support**: Modify your `ILanguageSupport` implementation, then use `aspire init --language <language>` to test scaffolding or `aspire run` to test detection and execution.
 
-4. **Inspecting generated code**: Check the `.modules/` folder in your test app to see the generated SDK files and verify they match your expectations.
+4. **Inspecting generated code**: Check the `.aspire/modules/` folder in your test app to see the generated SDK files and verify they match your expectations.
 
 ### Quick Reference
 

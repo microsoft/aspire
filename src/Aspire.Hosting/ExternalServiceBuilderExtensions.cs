@@ -39,7 +39,10 @@ public static class ExternalServiceBuilderExtensions
         return AddExternalServiceImpl(builder, name, uri);
     }
 
-    [AspireExport("addExternalService", Description = "Adds an external service resource")]
+    /// <summary>
+    /// Adds an external service resource
+    /// </summary>
+    [AspireExport("addExternalService")]
     internal static IResourceBuilder<ExternalServiceResource> AddExternalServiceForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -203,6 +206,16 @@ public static class ExternalServiceBuilderExtensions
     /// A path for the health check request can be specified. The expected status code is set to <c>200</c> by default but a
     /// different one can be specified.
     /// </para>
+    /// <para>
+    /// When the external service URL is a static <see cref="ExternalServiceResource.Uri"/>, the health check is registered
+    /// with <c>AddUrlGroup</c> at configuration time and the HTTP or HTTPS scheme is validated when this method is called.
+    /// </para>
+    /// <para>
+    /// When the URL comes from a <see cref="ExternalServiceResource.UrlParameter"/>, the final address is not known at
+    /// configuration time. A <see cref="ParameterUriHealthCheck"/> is registered instead; it resolves the parameter with
+    /// <see cref="ParameterResource.GetValueAsync(CancellationToken)"/> on each probe, validates the URL, and then performs
+    /// the HTTP request.
+    /// </para>
     /// </remarks>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withHttpHealthCheck export wrapper.")]
     public static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheck(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null)
@@ -223,6 +236,8 @@ public static class ExternalServiceBuilderExtensions
                 throw new ArgumentException($"The URL '{builder.Resource.Uri}' for external service '{builder.Resource.Name}' cannot be used for HTTP health checks because it has a non-HTTP scheme.", nameof(builder));
             }
         }
+
+        Debug.Assert(builder.Resource.Uri is not null || builder.Resource.UrlParameter is not null, "Either Uri or UrlParameter must be provided.");
 
         statusCode ??= 200;
 
@@ -272,7 +287,7 @@ public static class ExternalServiceBuilderExtensions
     /// <summary>
     /// Adds an HTTP health check to the external service for polyglot app hosts.
     /// </summary>
-    [AspireExport("withExternalServiceHttpHealthCheck", MethodName = "withHttpHealthCheck", Description = "Adds an HTTP health check to the external service")]
+    [AspireExport("withExternalServiceHttpHealthCheck", MethodName = "withHttpHealthCheck")]
     internal static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheckExport(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null, string? endpointName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);

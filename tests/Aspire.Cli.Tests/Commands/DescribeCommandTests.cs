@@ -27,7 +27,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("describe --help");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -43,7 +43,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Should succeed - no running AppHost is not an error (like Unix ps with no processes)
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -61,7 +61,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -79,7 +79,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -124,7 +124,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -139,7 +139,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -154,7 +154,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -184,7 +184,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -275,7 +275,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Parse all JSON lines from output
         var jsonLines = outputWriter.Logs
@@ -319,7 +319,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Filter to lines containing the resource name indicator
         var resourceLines = outputWriter.Logs
@@ -352,7 +352,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLines = outputWriter.Logs
             .Where(l => l.TrimStart().StartsWith("{", StringComparison.Ordinal))
@@ -382,7 +382,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
         Assert.Contains(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
     }
@@ -411,7 +411,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await pendingRun.DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.DoesNotContain(InteractionServiceStrings.AppHostConnectionLostGeneric, errorWriter.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
     }
@@ -433,7 +433,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = string.Join("", outputWriter.Logs);
         var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
@@ -461,7 +461,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLines = outputWriter.Logs
             .Where(l => l.TrimStart().StartsWith("{", StringComparison.Ordinal))
@@ -491,7 +491,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = string.Join("", outputWriter.Logs);
         var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
@@ -517,7 +517,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = string.Join("", outputWriter.Logs);
         var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
@@ -544,7 +544,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = string.Join("", outputWriter.Logs);
         var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
@@ -569,7 +569,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLines = outputWriter.Logs
             .Where(l => l.TrimStart().StartsWith("{", StringComparison.Ordinal))
@@ -597,7 +597,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLines = outputWriter.Logs
             .Where(l => l.TrimStart().StartsWith("{", StringComparison.Ordinal))

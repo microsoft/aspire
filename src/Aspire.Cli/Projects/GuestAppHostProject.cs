@@ -29,6 +29,9 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGenerator
 {
+    private const string TypeScriptAppHostFileName = "apphost.ts";
+    private const string TypeScriptMtsAppHostFileName = "apphost.mts";
+
     private readonly IInteractionService _interactionService;
     private readonly IAppHostCliBackchannel _backchannel;
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
@@ -140,7 +143,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     // ═══════════════════════════════════════════════════════════════
 
     /// <inheritdoc />
-    public string? AppHostFileName => _resolvedLanguage.DetectionPatterns.FirstOrDefault();
+    public string? AppHostFileName => _resolvedLanguage.AppHostFileName;
 
     /// <inheritdoc />
     public bool IsUsingProjectReferences(FileInfo appHostFile)
@@ -202,6 +205,21 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         return config.GetEffectiveSdkVersion(GetEffectiveSdkVersion());
     }
 
+    /// <inheritdoc />
+    public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        var defaultSdkVersion = GetEffectiveSdkVersion();
+
+        // Version inspection is read-only. Load an existing config from the same
+        // inherited config root used by guest AppHost operations, but do not call
+        // LoadOrCreate because merely checking the version must not write config files.
+        var config = appHostFile.Directory is { } directory
+            ? AspireConfigFile.Load(GetConfigDirectory(directory).FullName)
+            : null;
+
+        return Task.FromResult<string?>(config?.GetEffectiveSdkVersion(defaultSdkVersion) ?? defaultSdkVersion);
+    }
+
     /// <summary>
     /// Prepares the AppHost server (creates files and builds for dev mode, restores packages for prebuilt mode).
     /// </summary>
@@ -209,9 +227,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IAppHostServerProject appHostServerProject,
         string sdkVersion,
         List<IntegrationReference> integrations,
-        CancellationToken cancellationToken)
+        string? requestedChannel,
+        string? packageSourceOverride = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken);
+        var result = await appHostServerProject.PrepareAsync(sdkVersion, integrations, requestedChannel, packageSourceOverride, cancellationToken);
         return (result.Success, result.Output, result.ChannelName, result.NeedsCodeGeneration);
     }
 
@@ -219,16 +239,23 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// Builds the AppHost server project and generates SDK code.
     /// </summary>
     /// <returns><see langword="true"/> if the code was generated successfully; otherwise, <see langword="false"/>.</returns>
-    internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
+    {
+        var config = LoadConfiguration(directory);
+        return await BuildAndGenerateSdkAsync(directory, config, packageSourceOverride, cancellationToken);
+    }
+
+    private async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, AspireConfigFile config, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
 
-        // Step 1: Load config - source of truth for SDK version and packages
-        var config = LoadConfiguration(directory);
+        // Step 1: Use the supplied config as the source of truth. Update uses an
+        // in-memory config here so a failed generation does not leave
+        // aspire.config.json pinned to versions the current CLI cannot run.
         var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
         var sdkVersion = GetPrepareSdkVersion(config);
 
-        var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, cancellationToken);
+        var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, config.Channel, packageSourceOverride, cancellationToken);
         if (!buildSuccess)
         {
             if (buildOutput is not null)
@@ -252,9 +279,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Step 4: Generate SDK code via RPC
         // This must happen before dependency installation because the generated
-        // code directory (.modules) may not exist yet and dependency files reference it.
+        // code directory (.aspire/modules) may not exist yet and dependency files reference it.
         await GenerateCodeViaRpcAsync(
             directory.FullName,
+            appHostFile: null,
             rpcClient,
             integrations,
             cancellationToken);
@@ -265,9 +293,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         return true;
     }
 
-    Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride, CancellationToken cancellationToken)
     {
-        return BuildAndGenerateSdkAsync(directory, cancellationToken);
+        return BuildAndGenerateSdkAsync(directory, packageSourceOverride, cancellationToken);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -311,6 +339,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var directory = appHostFile.Directory!;
 
         _logger.LogDebug("Running {Language} AppHost: {AppHostFile}", DisplayName, appHostFile.FullName);
+        var startProjectContext = Activity.Current?.Context ?? default;
 
         try
         {
@@ -340,7 +369,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 async () =>
                 {
                     // Prepare the AppHost server (build for dev mode, restore for prebuilt)
-                    var (prepareSuccess, prepareOutput, channelName, needsCodeGen) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, cancellationToken);
+                    var (prepareSuccess, prepareOutput, channelName, needsCodeGen) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, config.Channel, cancellationToken: cancellationToken);
                     if (!prepareSuccess)
                     {
                         return (Success: false, Output: prepareOutput, Error: "Failed to prepare app host.", ChannelName: (string?)null, NeedsCodeGen: false);
@@ -354,7 +383,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // Set OutputCollector so RunCommand can display errors
                 context.OutputCollector = buildResult.Output;
                 context.BuildCompletionSource?.TrySetResult(false);
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
 
             // Store output collector in context for exception handling by RunCommand
@@ -390,12 +419,57 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var enableHotReload = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
 
             // Start the AppHost server process
-            await using var serverSession = AppHostServerSession.Start(
-                appHostServerProject,
-                launchSettingsEnvVars,
-                context.Debug,
-                _logger,
-                _profilingTelemetry);
+            AppHostServerSession serverSession;
+            IAppHostRpcClient rpcClient;
+            using (_profilingTelemetry.StartRunAppHostStartAppHostServer())
+            {
+                serverSession = AppHostServerSession.Start(
+                    appHostServerProject,
+                    launchSettingsEnvVars,
+                    context.Debug,
+                    _logger,
+                    _profilingTelemetry);
+                try
+                {
+                    // Give the server a moment to start
+                    await Task.Delay(500, cancellationToken);
+
+                    if (serverSession.ServerProcess.HasExited)
+                    {
+                        _interactionService.DisplayLines(serverSession.Output.GetLines());
+                        _interactionService.DisplayError("App host exited unexpectedly.");
+                        await serverSession.DisposeAsync();
+                        return CliExitCodes.FailedToDotnetRunAppHost;
+                    }
+
+                    // Step 5: Connect to server for RPC calls
+                    rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
+
+                    // Step 6: Generate SDK code via RPC if needed
+                    // This must happen before dependency installation because the generated
+                    // code directory (.aspire/modules) may not exist yet (e.g., freshly cloned project)
+                    // and dependency files (pylock.toml, requirements.txt) reference it.
+                    if (buildResult.NeedsCodeGen)
+                    {
+                        await GenerateCodeViaRpcAsync(
+                            directory.FullName,
+                            appHostFile,
+                            rpcClient,
+                            integrations,
+                            cancellationToken);
+                    }
+
+                    await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
+                }
+                catch
+                {
+                    // Once Start() succeeds we own the server process, so dispose it here when
+                    // post-start work fails - the `await using` below isn't in scope yet.
+                    await serverSession.DisposeAsync();
+                    throw;
+                }
+            }
+            await using var serverSessionScope = serverSession;
             var socketPath = serverSession.SocketPath;
             var appHostServerProcess = serverSession.ServerProcess;
             var appHostServerOutputCollector = serverSession.Output;
@@ -405,114 +479,161 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             // We signal this when the backchannel is ready, RunCommand uses it for UX
             var backchannelCompletionSource = context.BackchannelCompletionSource ?? new TaskCompletionSource<IAppHostCliBackchannel>();
 
-            // Start connecting to the backchannel (for dashboard URLs, logs, etc.)
-            _ = StartBackchannelConnectionAsync(appHostServerProcess, backchannelSocketPath, backchannelCompletionSource, enableHotReload, cancellationToken);
+            // Internal escalation CTS for the AppHost system. We cancel this when something fatal
+            // happens to either the server or the guest (e.g. backchannel polling fails after the
+            // 60s timeout, the server exits unexpectedly) so the remaining process gets torn down
+            // promptly. Without this, a hung guest can keep pendingRun alive forever after the CLI
+            // has already given up on the backchannel, causing aspire run/start to hang instead of
+            // surfacing the failure. Linked to the outer cancellationToken so user Ctrl+C still
+            // propagates.
+            using var appHostSystemCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var appHostSystemToken = appHostSystemCts.Token;
 
-            // Give the server a moment to start
-            await Task.Delay(500, cancellationToken);
-
-            if (appHostServerProcess.HasExited)
-            {
-                _interactionService.DisplayLines(appHostServerOutputCollector.GetLines());
-                _interactionService.DisplayError("App host exited unexpectedly.");
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
-            }
-
-            // Step 5: Connect to server for RPC calls
-            var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
-
-            // Step 6: Generate SDK code via RPC if needed
-            // This must happen before dependency installation because the generated
-            // code directory (.modules) may not exist yet (e.g., freshly cloned project)
-            // and dependency files (pylock.toml, requirements.txt) reference it.
-            if (buildResult.NeedsCodeGen)
-            {
-                await GenerateCodeViaRpcAsync(
-                    directory.FullName,
-                    rpcClient,
-                    integrations,
-                    cancellationToken);
-            }
-
-            // Step 7: Install dependencies (using GuestRuntime)
-            // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
-            var installResult = await InstallDependenciesAsync(directory, rpcClient, treatMissingJavaScriptToolAsWarning: false, cancellationToken: cancellationToken);
-            if (installResult != 0)
-            {
-                context.BackchannelCompletionSource?.TrySetException(
-                    new InvalidOperationException($"Failed to install {DisplayName} dependencies."));
-
-                if (!appHostServerProcess.HasExited)
+            // When the backchannel polling task gives up (timeout, server process exit, or other
+            // fatal connection error), escalate to tearing down the whole AppHost system. The
+            // BackchannelCompletionSource only signals readiness/connectivity - it never causes the
+            // server or guest to be killed on its own, so we wire that here.
+            _ = backchannelCompletionSource.Task.ContinueWith(
+                t =>
                 {
-                    try
+                    if (t.IsFaulted && !appHostSystemCts.IsCancellationRequested)
                     {
-                        appHostServerProcess.Kill(entireProcessTree: true);
+                        try
+                        {
+                            appHostSystemCts.Cancel();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // RunAsync already returned and disposed the CTS; nothing to do.
+                        }
                     }
-                    catch (Exception ex)
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
+            int guestExitCode;
+            OutputCollector? guestOutput;
+            IGuestProcessLauncher? launcher = null;
+            using (var guestStartupActivity = _profilingTelemetry.StartRunAppHostStartGuestAppHost(_resolvedLanguage.LanguageId))
+            {
+                // Step 7: Install dependencies (using GuestRuntime)
+                // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
+                var installResult = await InstallDependenciesAsync(directory, rpcClient, treatMissingJavaScriptToolAsWarning: false, cancellationToken: cancellationToken);
+                if (installResult != 0)
+                {
+                    context.BackchannelCompletionSource?.TrySetException(
+                        new InvalidOperationException($"Failed to install {DisplayName} dependencies."));
+
+                    if (!appHostServerProcess.HasExited)
                     {
-                        _logger.LogDebug(ex, "Error killing AppHost server process after dependency install failure");
+                        try
+                        {
+                            appHostServerProcess.Kill(entireProcessTree: true);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Error killing AppHost server process after dependency install failure");
+                        }
                     }
+
+                    return installResult;
                 }
 
-                return installResult;
+                // Step 8: Execute the guest apphost
+
+                // Pass the launch profile and certificate environment variables through to the guest AppHost
+                // so it sees the same dashboard and resource service endpoints as the temporary .NET server.
+                var environmentVariables = CreateGuestEnvironmentVariables(
+                    context.EnvironmentVariables,
+                    launchProfileEnvironmentVariables,
+                    certEnvVars,
+                    defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
+                    args: context.UnmatchedTokens);
+                environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath;
+                environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
+                environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
+                environmentVariables[KnownConfigNames.RemoteAppHostToken] = authenticationToken;
+
+                // Pass debug flag to the guest process
+                if (context.Debug)
+                {
+                    environmentVariables["ASPIRE_DEBUG"] = "true";
+                }
+
+                // Check if the extension should launch the guest app host (for VS Code debugging).
+                // This mirrors the pattern in DotNetCliRunner.ExecuteAsync for .NET app hosts.
+                // The RuntimeSpec declares the required extension capability (e.g., "node" for TypeScript);
+                // only use the extension launcher when the runtime requests it and the extension supports it.
+                if (_guestRuntime is null)
+                {
+                    _interactionService.DisplayError("GuestRuntime not initialized.");
+                    return CliExitCodes.FailedToDotnetRunAppHost;
+                }
+
+                if (_guestRuntime.ExtensionLaunchCapability is { } requiredCapability
+                    && ExtensionHelper.IsExtensionHost(_interactionService, out var extensionInteractionService, out var extensionBackchannel)
+                    && await extensionBackchannel.HasCapabilityAsync(requiredCapability, cancellationToken))
+                {
+                    launcher = new ExtensionGuestLauncher(extensionInteractionService, appHostFile, context.StartDebugSession);
+                }
+                else
+                {
+                    launcher = _guestRuntime.CreateDefaultLauncher();
+                }
+
+                // Start guest apphost - it will connect to AppHost server, define resources.
+                // If launcher is an ExtensionGuestLauncher, it delegates to the VS Code extension.
+                Task StartBackchannelConnectionAfterGuestAppHostLaunchesAsync()
+                {
+                    // Guest runtimes can fail during dependency installation or pre-execute checks before
+                    // the AppHost is invoked. Defer polling the server backchannel until the launcher has
+                    // started or delegated the AppHost so those early failures don't leave the CLI waiting
+                    // on an unused stream.
+                    //
+                    // Use the AppHost system token so that a guest-side failure (which faults the
+                    // backchannel completion source and cancels appHostSystemCts) stops the polling loop
+                    // promptly.
+                    _ = StartBackchannelConnectionAsync(appHostServerProcess, backchannelSocketPath, backchannelCompletionSource, enableHotReload, startProjectContext, appHostSystemToken);
+                    return Task.CompletedTask;
+                }
+
+                // Pass appHostSystemToken so a fatal backchannel failure (or user cancellation, since
+                // appHostSystemCts is linked to cancellationToken) tears down the guest process. The
+                // launcher will kill the guest's process tree when this token cancels.
+                (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
+                    appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, appHostSystemToken);
             }
 
-            // Step 8: Execute the guest apphost
-
-            // Pass the launch profile and certificate environment variables through to the guest AppHost
-            // so it sees the same dashboard and resource service endpoints as the temporary .NET server.
-            var environmentVariables = CreateGuestEnvironmentVariables(
-                context.EnvironmentVariables,
-                launchProfileEnvironmentVariables,
-                certEnvVars,
-                defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
-                args: context.UnmatchedTokens);
-            environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = socketPath;
-            environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
-            environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
-            environmentVariables[KnownConfigNames.RemoteAppHostToken] = authenticationToken;
-
-            // Pass debug flag to the guest process
-            if (context.Debug)
+            // If the user cancelled (Ctrl+C), surface that as cancellation instead of a "guest failed"
+            // run. ProcessGuestLauncher swallows the OperationCanceledException internally so the
+            // process exit code can flow back, so we re-derive cancellation from the outer token here.
+            if (cancellationToken.IsCancellationRequested)
             {
-                environmentVariables["ASPIRE_DEBUG"] = "true";
+                cancellationToken.ThrowIfCancellationRequested();
             }
 
-            // Check if the extension should launch the guest app host (for VS Code debugging).
-            // This mirrors the pattern in DotNetCliRunner.ExecuteAsync for .NET app hosts.
-            // The RuntimeSpec declares the required extension capability (e.g., "node" for TypeScript);
-            // only use the extension launcher when the runtime requests it and the extension supports it.
-            if (_guestRuntime is null)
-            {
-                _interactionService.DisplayError("GuestRuntime not initialized.");
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
-            }
-
-            IGuestProcessLauncher launcher;
-            if (_guestRuntime.ExtensionLaunchCapability is { } requiredCapability
-                && ExtensionHelper.IsExtensionHost(_interactionService, out var extensionInteractionService, out var extensionBackchannel)
-                && await extensionBackchannel.HasCapabilityAsync(requiredCapability, cancellationToken))
-            {
-                launcher = new ExtensionGuestLauncher(extensionInteractionService, appHostFile, context.StartDebugSession);
-            }
-            else
-            {
-                launcher = _guestRuntime.CreateDefaultLauncher();
-            }
-
-            // Start guest apphost - it will connect to AppHost server, define resources.
-            // If launcher is an ExtensionGuestLauncher, it delegates to the VS Code extension.
-            var (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
-                appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, cancellationToken);
-
-            // A non-zero exit code at this point means the in-CLI portion of the guest run
-            // (typically a PreExecute step like `tsc --noEmit` for TypeScript) failed before
-            // the actual AppHost was launched. Surface the failure regardless of launcher
-            // type, otherwise the extension flow would silently hang in
-            // appHostServerProcess.WaitForExitAsync waiting for an apphost that was never started.
+            // A non-zero exit code at this point means either:
+            //  - The in-CLI portion of the guest run (e.g. a TypeScript PreExecute `tsc --noEmit` step)
+            //    failed before the actual AppHost was launched.
+            //  - The guest AppHost itself failed (syntax error, unhandled exception, etc).
+            //  - The AppHost system escalation killed the guest because the server backchannel never
+            //    came up (appHostSystemCts was cancelled by a backchannel failure). In this case the
+            //    guest's own output may be empty - the relevant diagnostics are in the server output
+            //    (e.g. DCP model validation errors).
+            // Surface the failure regardless of launcher type, otherwise the extension flow would
+            // silently hang in appHostServerProcess.WaitForExitAsync waiting for an apphost that was
+            // never started.
             if (guestExitCode != 0)
             {
                 _logger.LogError("{Language} apphost exited with code {ExitCode}", DisplayName, guestExitCode);
+
+                // Merge any captured AppHost server output into context.OutputCollector so RunCommand's
+                // post-failure UX (DisplayRecentAppHostStartupOutput) surfaces it. This is especially
+                // important when the run failed because of a server-side issue like a DCP model
+                // validation error that the user would otherwise never see - the guest is just hung
+                // waiting on the RPC at that point and produces no output of its own.
+                MergeServerOutputIntoContextCollector(context, appHostServerOutputCollector);
 
                 // Surface the captured output (e.g. tsc errors from a TypeScript PreExecute step)
                 // so the user can see why the apphost failed. In the extension flow,
@@ -523,7 +644,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     _interactionService.DisplayLines(guestOutput.GetLines());
                 }
 
-                // Signal failure to RunCommand so it doesn't hang waiting for the backchannel
+                // Signal failure to RunCommand so it doesn't hang waiting for the backchannel.
+                // RunCommand's startup catch path wraps the message with the localized
+                // InteractionServiceStrings.UnexpectedErrorOccurred template before surfacing
+                // it to the user, matching the pre-PR behavior where this exception fell
+                // through to RunCommand's generic exception handler.
                 var error = new InvalidOperationException($"The {DisplayName} apphost failed.");
                 context.BackchannelCompletionSource?.TrySetException(error);
 
@@ -573,8 +698,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             // Signal that build/preparation failed so RunCommand doesn't hang waiting
             context.BuildCompletionSource?.TrySetResult(false);
-            _interactionService.DisplayCancellationMessage();
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Cancelled;
         }
         catch (Exception ex)
         {
@@ -582,7 +706,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             context.BuildCompletionSource?.TrySetResult(false);
             _logger.LogError(ex, "Failed to run {Language} AppHost", DisplayName);
             _interactionService.DisplayError($"Failed to run {DisplayName} AppHost: {ex.Message}");
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return CliExitCodes.FailedToDotnetRunAppHost;
         }
     }
 
@@ -824,6 +948,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var directory = appHostFile.Directory!;
 
         _logger.LogDebug("Publishing guest AppHost: {AppHostFile}", appHostFile.FullName);
+        var startProjectContext = Activity.Current?.Context ?? default;
 
         try
         {
@@ -834,7 +959,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var sdkVersion = GetPrepareSdkVersion(config);
 
             // Prepare the AppHost server (build for dev mode, restore for prebuilt)
-            var (prepareSuccess, prepareOutput, _, needsCodeGen) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, cancellationToken);
+            var (prepareSuccess, prepareOutput, _, needsCodeGen) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, config.Channel, cancellationToken: cancellationToken);
             if (!prepareSuccess)
             {
                 // Set OutputCollector so PipelineCommandBase can display errors
@@ -842,7 +967,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // Signal the backchannel completion source so the caller doesn't wait forever
                 context.BackchannelCompletionSource?.TrySetException(
                     new InvalidOperationException("The app host preparation failed."));
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
 
             // Store output collector in context for exception handling
@@ -866,89 +991,115 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             launchSettingsEnvVars[KnownConfigNames.AspireUserSecretsId] = UserSecretsPathHelper.ComputeSyntheticUserSecretsId(appHostFile.FullName);
 
             // Step 2: Start the AppHost server process(it opens the backchannel for progress reporting)
-            await using var serverSession = AppHostServerSession.Start(
-                appHostServerProject,
-                launchSettingsEnvVars,
-                context.Debug,
-                _logger,
-                _profilingTelemetry);
+            AppHostServerSession serverSession;
+            IAppHostRpcClient rpcClient;
+            using (_profilingTelemetry.StartRunAppHostStartAppHostServer())
+            {
+                serverSession = AppHostServerSession.Start(
+                    appHostServerProject,
+                    launchSettingsEnvVars,
+                    context.Debug,
+                    _logger,
+                    _profilingTelemetry);
+
+                // Start connecting to the backchannel (fire-and-forget) so the caller is unblocked
+                // as soon as the server is reachable; the post-start work below races alongside it.
+                if (context.BackchannelCompletionSource is not null)
+                {
+                    _ = StartBackchannelConnectionAsync(serverSession.ServerProcess, backchannelSocketPath, context.BackchannelCompletionSource, enableHotReload: false, startProjectContext, cancellationToken);
+                }
+
+                try
+                {
+                    // Give the server a moment to start
+                    await Task.Delay(500, cancellationToken);
+
+                    if (serverSession.ServerProcess.HasExited)
+                    {
+                        _interactionService.DisplayLines(serverSession.Output.GetLines());
+                        _interactionService.DisplayError("App host exited unexpectedly.");
+                        await serverSession.DisposeAsync();
+                        return CliExitCodes.FailedToDotnetRunAppHost;
+                    }
+
+                    // Step 3: Connect to server for RPC calls
+                    rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
+
+                    // Step 4: Generate code via RPC if needed
+                    // This must happen before dependency installation because the generated
+                    // code directory (.aspire/modules) may not exist yet (e.g., freshly cloned project)
+                    // and dependency files (pylock.toml, requirements.txt) reference it.
+                    if (needsCodeGen)
+                    {
+                        await GenerateCodeViaRpcAsync(
+                            directory.FullName,
+                            appHostFile,
+                            rpcClient,
+                            integrations,
+                            cancellationToken);
+                    }
+
+                    await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
+                }
+                catch
+                {
+                    // Once Start() succeeds we own the server process, so dispose it here when
+                    // post-start work fails - the `await using` below isn't in scope yet.
+                    await serverSession.DisposeAsync();
+                    throw;
+                }
+            }
+            await using var serverSessionScope = serverSession;
             var jsonRpcSocketPath = serverSession.SocketPath;
             var appHostServerProcess = serverSession.ServerProcess;
             var appHostServerOutputCollector = serverSession.Output;
             var authenticationToken = serverSession.AuthenticationToken;
 
-            // Start connecting to the backchannel
-            if (context.BackchannelCompletionSource is not null)
+            int guestExitCode;
+            OutputCollector? guestOutput;
+            using (var guestStartupActivity = _profilingTelemetry.StartRunAppHostStartGuestAppHost(_resolvedLanguage.LanguageId))
             {
-                _ = StartBackchannelConnectionAsync(appHostServerProcess, backchannelSocketPath, context.BackchannelCompletionSource, enableHotReload: false, cancellationToken);
-            }
-
-            // Give the server a moment to start
-            await Task.Delay(500, cancellationToken);
-
-            if (appHostServerProcess.HasExited)
-            {
-                _interactionService.DisplayLines(appHostServerOutputCollector.GetLines());
-                _interactionService.DisplayError("App host exited unexpectedly.");
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
-            }
-
-            // Step 3: Connect to server for RPC calls
-            var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
-
-            // Step 4: Generate code via RPC if needed
-            // This must happen before dependency installation because the generated
-            // code directory (.modules) may not exist yet (e.g., freshly cloned project)
-            // and dependency files (pylock.toml, requirements.txt) reference it.
-            if (needsCodeGen)
-            {
-                await GenerateCodeViaRpcAsync(
-                    directory.FullName,
-                    rpcClient,
-                    integrations,
-                    cancellationToken);
-            }
-
-            // Step 5: Install dependencies if needed (using GuestRuntime)
-            // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
-            var installResult = await InstallDependenciesAsync(directory, rpcClient, treatMissingJavaScriptToolAsWarning: false, cancellationToken: cancellationToken);
-            if (installResult != 0)
-            {
-                context.BackchannelCompletionSource?.TrySetException(
-                    new InvalidOperationException($"Failed to install {DisplayName} dependencies."));
-
-                if (!appHostServerProcess.HasExited)
+                // Step 5: Install dependencies if needed (using GuestRuntime)
+                // The GuestRuntime will skip if the RuntimeSpec doesn't have InstallDependencies configured
+                var installResult = await InstallDependenciesAsync(directory, rpcClient, treatMissingJavaScriptToolAsWarning: false, cancellationToken: cancellationToken);
+                if (installResult != 0)
                 {
-                    try
+                    context.BackchannelCompletionSource?.TrySetException(
+                        new InvalidOperationException($"Failed to install {DisplayName} dependencies."));
+
+                    if (!appHostServerProcess.HasExited)
                     {
-                        appHostServerProcess.Kill(entireProcessTree: true);
+                        try
+                        {
+                            appHostServerProcess.Kill(entireProcessTree: true);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Error killing AppHost server process after dependency install failure");
+                        }
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogDebug(ex, "Error killing AppHost server process after dependency install failure");
-                    }
+
+                    return installResult;
                 }
 
-                return installResult;
+                // Pass the launch profile environment variables through to the guest AppHost so publish mode
+                // uses the same dashboard and resource service endpoints as the temporary .NET server.
+                var environmentVariables = CreateGuestEnvironmentVariables(
+                    context.EnvironmentVariables,
+                    launchProfileEnvironmentVariables,
+                    defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
+                    includeLaunchProfileEnvironmentVariables: false,
+                    args: context.Arguments);
+                environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = jsonRpcSocketPath;
+                environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
+                environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
+                environmentVariables[KnownConfigNames.RemoteAppHostToken] = authenticationToken;
+
+                // Step 6: Execute the guest apphost for publishing
+                // Pass the publish arguments (e.g., --operation publish --step deploy)
+                (guestExitCode, guestOutput) = await ExecuteGuestAppHostForPublishAsync(
+                    appHostFile, directory, environmentVariables, context.Arguments, rpcClient, cancellationToken);
             }
-
-            // Pass the launch profile environment variables through to the guest AppHost so publish mode
-            // uses the same dashboard and resource service endpoints as the temporary .NET server.
-            var environmentVariables = CreateGuestEnvironmentVariables(
-                context.EnvironmentVariables,
-                launchProfileEnvironmentVariables,
-                defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
-                includeLaunchProfileEnvironmentVariables: false,
-                args: context.Arguments);
-            environmentVariables["REMOTE_APP_HOST_SOCKET_PATH"] = jsonRpcSocketPath;
-            environmentVariables["ASPIRE_PROJECT_DIRECTORY"] = directory.FullName;
-            environmentVariables["ASPIRE_APPHOST_FILEPATH"] = appHostFile.FullName;
-            environmentVariables[KnownConfigNames.RemoteAppHostToken] = authenticationToken;
-
-            // Step 6: Execute the guest apphost for publishing
-            // Pass the publish arguments (e.g., --operation publish --step deploy)
-            var (guestExitCode, guestOutput) = await ExecuteGuestAppHostForPublishAsync(
-                appHostFile, directory, environmentVariables, context.Arguments, rpcClient, cancellationToken);
 
             if (guestExitCode != 0)
             {
@@ -960,7 +1111,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     _interactionService.DisplayLines(guestOutput.GetLines());
                 }
 
-                // Signal failure so callers don't hang waiting for the backchannel
+                // Signal failure so callers don't hang waiting for the backchannel. The caller
+                // (e.g. PipelineCommandBase) wraps the message with the localized
+                // InteractionServiceStrings.UnexpectedErrorOccurred template before surfacing
+                // it to the user.
                 var error = new InvalidOperationException($"The {DisplayName} apphost failed.");
                 context.BackchannelCompletionSource?.TrySetException(error);
 
@@ -1002,14 +1156,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
         catch (OperationCanceledException)
         {
-            _interactionService.DisplayCancellationMessage();
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Cancelled;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to publish {Language} AppHost", DisplayName);
             _interactionService.DisplayError($"Failed to publish {DisplayName} AppHost: {ex.Message}");
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return CliExitCodes.FailedToDotnetRunAppHost;
         }
     }
 
@@ -1022,6 +1175,33 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     }
 
     /// <summary>
+    /// Copies the AppHost server's captured output into <see cref="AppHostProjectContext.OutputCollector"/>
+    /// so RunCommand's post-failure UX (which only reads from context.OutputCollector) can surface
+    /// server-side diagnostics like DCP model validation errors. The build/run collector lives on the
+    /// context and is the canonical place for AppHost output; the server's collector is internal to
+    /// AppHostServerSession and isn't otherwise visible to commands.
+    /// </summary>
+    private static void MergeServerOutputIntoContextCollector(AppHostProjectContext context, OutputCollector serverOutput)
+    {
+        if (context.OutputCollector is not { } target || ReferenceEquals(target, serverOutput))
+        {
+            return;
+        }
+
+        foreach (var (stream, line) in serverOutput.GetLines())
+        {
+            if (stream == OutputLineStream.StdErr)
+            {
+                target.AppendError(line);
+            }
+            else
+            {
+                target.AppendOutput(line);
+            }
+        }
+    }
+
+    /// <summary>
     /// Starts connecting to the AppHost server's backchannel server.
     /// </summary>
     private async Task StartBackchannelConnectionAsync(
@@ -1029,10 +1209,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         string socketPath,
         TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource,
         bool enableHotReload,
+        ActivityContext parentContext,
         CancellationToken cancellationToken)
     {
         const int ConnectionTimeoutSeconds = 60;
 
+        using var activity = _profilingTelemetry.StartBackchannelConnect(socketPath, parentContext, enableHotReload, retryCount: 0);
         var startTime = DateTimeOffset.UtcNow;
         var connectionAttempts = 0;
 
@@ -1043,16 +1225,26 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             try
             {
                 _logger.LogTrace("Attempting to connect to AppHost server backchannel at {SocketPath} (attempt {Attempt})", socketPath, connectionAttempts);
+                if (connectionAttempts == 0 || connectionAttempts % 10 == 0)
+                {
+                    activity.AddBackchannelConnectAttemptEvent(connectionAttempts);
+                }
                 // Pass enableHotReload as autoReconnect - the backchannel will handle reconnection internally
                 await _backchannel.ConnectAsync(socketPath, autoReconnect: enableHotReload, retryCount: connectionAttempts, cancellationToken).ConfigureAwait(false);
+                activity.SetBackchannelRetryCount(connectionAttempts);
+                activity.AddBackchannelConnectedEvent();
                 backchannelCompletionSource.TrySetResult(_backchannel);
                 _logger.LogDebug("Connected to AppHost server backchannel at {SocketPath}", socketPath);
                 return;
             }
-            catch (SocketException ex) when (process.HasExited && process.ExitCode != 0)
+            catch (SocketException ex) when (process.HasExited)
             {
-                _logger.LogError("AppHost server process has exited. Unable to connect to backchannel at {SocketPath}", socketPath);
-                var backchannelException = new FailedToConnectBackchannelConnection($"AppHost server process has exited unexpectedly.", ex);
+                _logger.LogError("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", process.ExitCode, socketPath);
+                var message = process.ExitCode == CliExitCodes.Success
+                    ? "AppHost server process has exited"
+                    : "AppHost server process has exited unexpectedly";
+                var backchannelException = new FailedToConnectBackchannelConnection(message, ex);
+                activity.SetError(backchannelException);
                 backchannelCompletionSource.TrySetException(backchannelException);
                 return;
             }
@@ -1065,6 +1257,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 {
                     _logger.LogError("Timed out waiting for AppHost server to start after {Timeout} seconds", ConnectionTimeoutSeconds);
                     var timeoutException = new TimeoutException($"Timed out waiting for AppHost server to start after {ConnectionTimeoutSeconds} seconds. Check the debug logs for more details.");
+                    activity.SetError(timeoutException);
                     backchannelCompletionSource.TrySetException(timeoutException);
                     return;
                 }
@@ -1082,6 +1275,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to connect to AppHost server backchannel");
+                activity.SetError(ex);
                 backchannelCompletionSource.TrySetException(ex);
                 return;
             }
@@ -1106,10 +1300,16 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Update configuration with the new package
         config.AddOrUpdatePackage(context.PackageId, context.PackageVersion);
-        SaveConfiguration(config, directory);
 
         // Build and regenerate SDK code with the new package
-        return await BuildAndGenerateSdkAsync(directory, cancellationToken);
+        var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
+        if (!regenerateSuccess)
+        {
+            return false;
+        }
+
+        SaveConfiguration(config, directory);
+        return true;
     }
 
     /// <inheritdoc />
@@ -1135,11 +1335,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // Check for SDK version update (silently - it's an implementation detail)
                 try
                 {
-                    var sdkPackages = await context.Channel.GetPackagesAsync("Aspire.Hosting", directory, cancellationToken);
-                    var latestSdkPackage = sdkPackages
-                        .Where(p => SemVersion.TryParse(p.Version, SemVersionStyles.Strict, out _))
-                        .OrderByDescending(p => SemVersion.Parse(p.Version, SemVersionStyles.Strict), SemVersion.PrecedenceComparer)
-                        .FirstOrDefault();
+                    var latestSdkPackage = await context.Channel.GetLatestGuestAppHostSdkPackageAsync(directory, cancellationToken);
 
                     if (latestSdkPackage is not null && latestSdkPackage.Version != config.SdkVersion)
                     {
@@ -1179,10 +1375,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return packageUpdates;
             });
 
+        var explicitChannelName = context.Channel.Type == Packaging.PackageChannelType.Explicit ? context.Channel.Name : null;
+        var explicitChannelChanged = explicitChannelName is not null && !string.Equals(config.Channel, explicitChannelName, StringComparisons.CliInputOrOutput);
+
         if (updates.Count == 0 && newSdkVersion is null)
         {
+            if (explicitChannelChanged)
+            {
+                config.Channel = explicitChannelName;
+                SaveConfiguration(config, directory);
+            }
+
             _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
-            return new UpdatePackagesResult { UpdatesApplied = false };
+            return new UpdatePackagesResult { UpdatesApplied = explicitChannelChanged };
         }
 
         // Display pending updates
@@ -1208,31 +1413,26 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             config.SdkVersion = newSdkVersion;
         }
-        // Persist the channel only when the update resolved an explicit channel (--channel,
-        // per-project config, or prompt selection). When the resolved channel is Implicit
-        // — i.e. the user hasn't pinned a channel — leave the project's existing setting
-        // untouched rather than silently pinning the running CLI's identity, which would
-        // propagate dev/PR-build identities into the project file. The scaffolding /
-        // build-time paths intentionally do auto-pin identity (see GuestAppHostProject.cs:354
-        // and ScaffoldingService.cs:208) — but `aspire update` is a no-pin path: the user
-        // is updating, not initialising, and we should not change the channel pin state.
-        if (context.Channel.Type == Packaging.PackageChannelType.Explicit)
+        // Persist the channel when update resolved an explicit channel. That can come from
+        // --channel, per-project/global config, prompt selection, or the UpdateCommand
+        // identity-channel fallback for non-project-reference AppHosts. When the resolved
+        // channel is Implicit — i.e. no explicit channel source matched — leave the project's
+        // existing setting untouched rather than pinning the implicit/default channel.
+        if (explicitChannelName is not null)
         {
-            config.Channel = context.Channel.Name;
+            config.Channel = explicitChannelName;
         }
         foreach (var (packageId, _, newVersion) in updates)
         {
             config.AddOrUpdatePackage(packageId, newVersion);
         }
-        SaveConfiguration(config, directory);
-
         // Rebuild and regenerate SDK code with updated packages
         _interactionService.DisplayEmptyLine();
         var regenerateResult = await _interactionService.ShowStatusAsync(
             UpdateCommandStrings.RegeneratingSdkCode,
             async () =>
             {
-                var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, cancellationToken);
+                var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
 
                 if (!regenerateSuccess)
                 {
@@ -1246,6 +1446,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             return regenerateResult;
         }
+
+        SaveConfiguration(config, directory);
 
         _interactionService.DisplayMessage(KnownEmojis.Package, UpdateCommandStrings.RegeneratedSdkCode);
 
@@ -1290,6 +1492,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// </summary>
     private async Task GenerateCodeViaRpcAsync(
         string appPath,
+        FileInfo? appHostFile,
         IAppHostRpcClient rpcClient,
         IEnumerable<IntegrationReference> integrations,
         CancellationToken cancellationToken)
@@ -1304,9 +1507,18 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Use the typed RPC method
         var files = await rpcClient.GenerateCodeAsync(codeGenerator, cancellationToken);
+        var outputPath = Path.Combine(appPath, LanguageInfo.GeneratedFolderName);
+        // Legacy TypeScript AppHosts (`apphost.ts`) still import generated files from
+        // `./.modules/aspire.js`. When that scaffold shape is detected, convert the
+        // generated `.mts/.mjs` outputs back to `.ts/.js` AND write them to the legacy
+        // `.modules/` folder so the existing import paths resolve.
+        if (ShouldEmitLegacyTypeScriptGeneratedFiles(appPath, appHostFile))
+        {
+            files = ConvertGeneratedFilesForLegacyTypeScriptAppHost(files);
+            outputPath = Path.Combine(appPath, LanguageInfo.LegacyGeneratedFolderName);
+        }
 
         // Write generated files to the output directory
-        var outputPath = Path.Combine(appPath, LanguageInfo.GeneratedFolderName);
         Directory.CreateDirectory(outputPath);
 
         foreach (var (fileName, content) in files)
@@ -1325,6 +1537,45 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         _logger.LogInformation("Generated {Count} {CodeGenerator} files in {Path}",
             files.Count, codeGenerator, outputPath);
+    }
+
+    internal static Dictionary<string, string> ConvertGeneratedFilesForLegacyTypeScriptAppHost(Dictionary<string, string> files)
+    {
+        var convertedFiles = new Dictionary<string, string>(StringComparer.Ordinal);
+
+        foreach (var (fileName, content) in files)
+        {
+            var convertedFileName = fileName switch
+            {
+                "aspire.mts" => "aspire.ts",
+                "base.mts" => "base.ts",
+                "transport.mts" => "transport.ts",
+                _ => fileName
+            };
+
+            convertedFiles[convertedFileName] = convertedFileName.EndsWith(".ts", StringComparison.Ordinal)
+                ? content
+                    .Replace(".mjs", ".js", StringComparison.Ordinal)
+                    .Replace("aspire.mts", "aspire.ts", StringComparison.Ordinal)
+                    .Replace("base.mts", "base.ts", StringComparison.Ordinal)
+                    .Replace("transport.mts", "transport.ts", StringComparison.Ordinal)
+                : content;
+        }
+
+        return convertedFiles;
+    }
+
+    private bool ShouldEmitLegacyTypeScriptGeneratedFiles(string appPath, FileInfo? appHostFile)
+    {
+        if (!TypeScriptAppHostToolchainResolver.IsTypeScriptLanguage(_resolvedLanguage))
+        {
+            return false;
+        }
+
+        return appHostFile is not null
+            ? appHostFile.Name.Equals(TypeScriptAppHostFileName, StringComparison.OrdinalIgnoreCase)
+            : File.Exists(Path.Combine(appPath, TypeScriptAppHostFileName)) &&
+                !File.Exists(Path.Combine(appPath, TypeScriptMtsAppHostFileName));
     }
 
     /// <summary>
@@ -1414,7 +1665,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         if (_guestRuntime is null)
         {
             _interactionService.DisplayError("GuestRuntime not initialized. This is a bug.");
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CliExitCodes.FailedToBuildArtifacts;
         }
 
         var (initResult, initOutput) = await _guestRuntime.InitializeAsync(directory, cancellationToken);
@@ -1465,6 +1716,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         bool watchMode,
         IAppHostRpcClient rpcClient,
         IGuestProcessLauncher launcher,
+        Func<Task>? afterAppHostLaunchedAsync,
         CancellationToken cancellationToken)
     {
         await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
@@ -1472,10 +1724,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         if (_guestRuntime is null)
         {
             _interactionService.DisplayError("GuestRuntime not initialized. This is a bug.");
-            return (ExitCodeConstants.FailedToDotnetRunAppHost, new OutputCollector());
+            return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
-        return await _guestRuntime.RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, cancellationToken);
+        return await _guestRuntime.RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, cancellationToken, afterAppHostLaunchedAsync: afterAppHostLaunchedAsync);
     }
 
     /// <summary>
@@ -1494,7 +1746,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         if (_guestRuntime is null)
         {
             _interactionService.DisplayError("GuestRuntime not initialized. This is a bug.");
-            return (ExitCodeConstants.FailedToDotnetRunAppHost, new OutputCollector());
+            return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
         return await _guestRuntime.PublishAsync(appHostFile, directory, environmentVariables, publishArgs, _guestRuntime.CreateDefaultLauncher(), cancellationToken);

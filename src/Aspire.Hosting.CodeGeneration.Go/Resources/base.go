@@ -636,12 +636,13 @@ func Float64Ptr(f float64) *float64 { return &f }
 //
 // Dispatch priority:
 //  1. *handle                                      → handle.ToJSON()
-//  2. handleReference (every wrapper impl)         → getHandle().ToJSON()
-//  3. *ReferenceExpression                         → r.ToJSON()
+//  2. *ReferenceExpression                         → r.ToJSON()
+//  3. handleReference (every wrapper impl)         → getHandle().ToJSON()
 //  4. interface{ ToMap() map[string]any }          → recurse into the map
 //  5. []any / map[string]any                       → recurse element-wise
-//  6. fmt.Stringer (compatibility)                 → v.String()
-//  7. default                                      → pass through
+//  6. any slice/array/map                          → recurse element-wise
+//  7. fmt.Stringer (compatibility)                 → v.String()
+//  8. default                                      → pass through
 func serializeValue(value any) any {
 	if value == nil {
 		return nil
@@ -672,10 +673,46 @@ func serializeValue(value any) any {
 			result[k] = serializeValue(val)
 		}
 		return result
-	case fmt.Stringer:
-		return v.String()
 	default:
+		if result, ok := serializeReflectedCollection(value); ok {
+			return result
+		}
+		if stringer, ok := value.(fmt.Stringer); ok {
+			return stringer.String()
+		}
 		return value
+	}
+}
+
+func serializeReflectedCollection(value any) (any, bool) {
+	reflectedValue := reflect.ValueOf(value)
+	switch reflectedValue.Kind() {
+	case reflect.Array, reflect.Slice:
+		if reflectedValue.Kind() == reflect.Slice && reflectedValue.IsNil() {
+			return nil, true
+		}
+
+		result := make([]any, reflectedValue.Len())
+		for i := range reflectedValue.Len() {
+			result[i] = serializeValue(reflectedValue.Index(i).Interface())
+		}
+
+		return result, true
+	case reflect.Map:
+		if reflectedValue.IsNil() {
+			return nil, true
+		}
+
+		result := make(map[string]any, reflectedValue.Len())
+		iter := reflectedValue.MapRange()
+		for iter.Next() {
+			key := iter.Key().Interface()
+			result[fmt.Sprint(serializeValue(key))] = serializeValue(iter.Value().Interface())
+		}
+
+		return result, true
+	default:
+		return nil, false
 	}
 }
 

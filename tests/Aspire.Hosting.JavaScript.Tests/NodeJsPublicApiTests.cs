@@ -222,11 +222,11 @@ public class NodeJsPublicApiTests
     }
 
     [Fact]
-    public void PublishAsNpmScriptShouldThrowWhenBuilderIsNull()
+    public void PublishAsPackageScriptShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<JavaScriptAppResource> builder = null!;
 
-        var action = () => builder.PublishAsNpmScript("start");
+        var action = () => builder.PublishAsPackageScript("start");
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(builder), exception.ParamName);
@@ -235,18 +235,18 @@ public class NodeJsPublicApiTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void PublishAsNpmScriptShouldThrowWhenStartScriptNameIsNullOrEmpty(bool isNull)
+    public void PublishAsPackageScriptShouldThrowWhenScriptNameIsNullOrEmpty(bool isNull)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var app = builder.AddJavaScriptApp("app", ".");
-        var startScriptName = isNull ? null! : string.Empty;
+        var scriptName = isNull ? null! : string.Empty;
 
-        var action = () => app.PublishAsNpmScript(startScriptName);
+        var action = () => app.PublishAsPackageScript(scriptName);
 
         var exception = isNull
             ? Assert.Throws<ArgumentNullException>(action)
             : Assert.Throws<ArgumentException>(action);
-        Assert.Equal(nameof(startScriptName), exception.ParamName);
+        Assert.Equal(nameof(scriptName), exception.ParamName);
     }
 
     [Fact]

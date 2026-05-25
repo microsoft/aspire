@@ -96,8 +96,13 @@ with create_builder() as builder:
     container.with_otlp_exporter(protocol="HttpJson")
     # addDockerfile
     docker_container = builder.add_dockerfile("resource", ".")
+    dockerfile_factory = lambda factory_context: """FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+WORKDIR /app
+ENTRYPOINT ["dotnet", "App.dll"]"""
+    docker_factory_container = builder.add_dockerfile_factory("dockerfactoryapp", ".", dockerfile_factory, stage="runtime")
     docker_builder_container = builder.add_dockerfile_builder("builder-resource", ".", configure_dockerfile_builder, stage="runtime")
     docker_container.with_dockerfile_builder(".", configure_dockerfile_builder, stage="runtime")
+    docker_factory_container.with_dockerfile_factory(".", dockerfile_factory, stage="runtime")
     # addExecutable (pre-existing)
     exe = builder.add_executable("resource", "echo", ".", [])
     # addProject (pre-existing)
@@ -111,6 +116,18 @@ with create_builder() as builder:
     # addParameterFromConfiguration
     config_param = builder.add_parameter_from_config("parameter", "Config:Key")
     secret_param = builder.add_parameter_from_config("parameter", "Config:Key")
+    custom_input_param = builder.add_parameter("custom-input")
+    custom_input_param.with_custom_input(
+        {
+            "InputType": "Number",
+            "Label": "Worker Count",
+            "Placeholder": "Enter number (1-10)",
+            "Options": {
+                "one": "One",
+                "two": "Two",
+            },
+        }
+    )
     # withDockerfileBaseImage
     container.with_dockerfile_base_image()
     # withImageRegistry
@@ -130,6 +147,7 @@ with create_builder() as builder:
     built_connection_string.with_connection_property_value("Key", "Value")
     container.with_reference(endpoint)
     container.with_reference("https://example.com/", name="external-uri")
+    external_service = builder.add_external_service("external-service", "https://example.com")
     built_connection_string.with_connection_property("Host", expr)
     built_connection_string.with_connection_property("Mode", "Development")
     vnet = builder.add_azure_virtual_network("vnet", address_prefix="10.0.0.0/16")
@@ -166,6 +184,9 @@ with create_builder() as builder:
         tagged_steps = list(config_pipeline.steps_by_tag(WellKnownPipelineTags.BuildCompute))
         _step_name = all_steps[0].name
         _description = all_steps[0].description
+        _depends_on_steps = all_steps[0].depends_on_steps
+        _required_by_steps = tagged_steps[0].required_by_steps
+        _tags = tagged_steps[0].tags
         all_steps[0].add_tag("validated")
         all_steps[0].depends_on("restore")
         tagged_steps[0].required_by(WellKnownPipelineSteps.Publish)
@@ -184,6 +205,8 @@ with create_builder() as builder:
     # withEnvironment - connection string resource
     container.with_environment("MY_CONN", env_connection_string)
     container.with_environment("MY_EXPR_CONN", expression_connection_string)
+    # withEnvironment - external service resource
+    container.with_environment("MY_EXTERNAL_SERVICE", external_service)
     container.with_env_callback(configure_environment_callback)
     container.with_args_callback(configure_args_callback)
     container.with_urls_callback(configure_urls_callback)
@@ -267,6 +290,7 @@ with create_builder() as builder:
     builder_execution_context = builder.execution_context
     execution_context_service_provider = builder_execution_context.service_provider
     _distributed_application_model_from_execution_context = execution_context_service_provider.get_distributed_app_model()
+    resource_command_service = execution_context_service_provider.get_resource_command_service()
 
     def configure_eventing_subscriber(registration_context):
         _subscriber_execution_context = registration_context.execution_context
@@ -276,6 +300,18 @@ with create_builder() as builder:
             aspire_store = subscriber_services.get_aspire_store()
             _content_backed_filename = aspire_store.get_file_name_with_content("validation-apphost.py", "apphost.py")
 
+        def on_eventing_before_publish(before_publish_event):
+            before_publish_services = before_publish_event.services
+            before_publish_model = before_publish_event.model
+            _before_publish_eventing = before_publish_services.get_eventing()
+            _before_publish_resources = before_publish_model.get_resources()
+
+        def on_eventing_after_publish(after_publish_event):
+            after_publish_services = after_publish_event.services
+            after_publish_model = after_publish_event.model
+            _after_publish_eventing = after_publish_services.get_eventing()
+            _after_publish_resources = after_publish_model.get_resources()
+
         def on_eventing_after_resources_created(after_resources_created_event):
             after_resources_created_services = after_resources_created_event.services
             after_resources_created_model = after_resources_created_event.model
@@ -283,6 +319,8 @@ with create_builder() as builder:
             _after_resources_created_resources = after_resources_created_model.get_resources()
 
         registration_context.on_before_start(on_eventing_before_start)
+        registration_context.on_before_publish(on_eventing_before_publish)
+        registration_context.on_after_publish(on_eventing_after_publish)
         registration_context.on_after_resources_created(on_eventing_after_resources_created)
 
     builder.add_eventing_subscriber(configure_eventing_subscriber)
@@ -318,9 +356,13 @@ with create_builder() as builder:
     _https_certificate_data = execution_config.get_https_certificate_data()
     before_start_subscription = builder.subscribe_before_start(lambda *_args, **_kwargs: None)
     after_resources_created_subscription = builder.subscribe_after_resources_created(lambda *_args, **_kwargs: None)
+    before_publish_subscription = builder.subscribe_before_publish(lambda *_args, **_kwargs: None)
+    after_publish_subscription = builder.subscribe_after_publish(lambda *_args, **_kwargs: None)
     builder_eventing = builder.eventing
-    builder_eventing.unsubscribe(None)
-    builder_eventing.unsubscribe(None)
+    builder_eventing.unsubscribe(before_start_subscription)
+    builder_eventing.unsubscribe(after_resources_created_subscription)
+    builder_eventing.unsubscribe(before_publish_subscription)
+    builder_eventing.unsubscribe(after_publish_subscription)
     container.on_before_resource_started(lambda *_args, **_kwargs: None)
     container.on_resource_stopped(lambda *_args, **_kwargs: None)
     built_connection_string.on_connection_string_available(lambda *_args, **_kwargs: None)
@@ -360,7 +402,31 @@ with create_builder() as builder:
     # withHttpHealthCheck
     container.with_http_health_check()
     # withCommand
-    container.with_command("command", "Command", lambda *_args, **_kwargs: {"success": True})
+    def update_command_state(ctx):
+        snapshot = ctx.resource_snapshot
+        return "Enabled" if snapshot.get("HealthStatus") == "Healthy" else "Disabled"
+
+    def echo_command(ctx):
+        command_arguments = list(ctx.arguments.to_array())
+        return {"success": command_arguments[0]["Value"] == "hello"}
+
+    container.with_command(
+        "noop",
+        "Noop",
+        lambda *_args, **_kwargs: {"success": True},
+        command_options={"UpdateState": update_command_state}
+    )
+
+    def restart_command(_ctx):
+        return resource_command_service.execute_command(container, "echo", arguments={"message": "hello"})
+
+    container.with_command(
+        "echo",
+        "Echo",
+        echo_command,
+        command_options={"Arguments": [{"Name": "message", "InputType": "Text", "Required": True}]}
+    )
+    container.with_command("restart", "Restart", restart_command)
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})

@@ -175,6 +175,100 @@ public class PathLookupHelperTests
     }
 
     [Fact]
+    public void FindAllFullPathsFromPath_ReturnsMatchesFromPath()
+    {
+        var firstPath = Path.Combine("/first/path", "mycommand");
+        var secondPath = Path.Combine("/second/path", "mycommand");
+        var existingFiles = new HashSet<string>
+        {
+            firstPath,
+            secondPath
+        };
+
+        var result = PathLookupHelper.FindAllFullPathsFromPath("mycommand", "/first/path:/second/path", ':', existingFiles.Contains, null);
+
+        Assert.Equal([firstPath, secondPath], result);
+    }
+
+    [Fact]
+    public void FindAllFullPathsFromPath_WhenCommandNotOnPath_ReturnsEmpty()
+    {
+        static bool AlwaysFalse(string _) => false;
+
+        var result = PathLookupHelper.FindAllFullPathsFromPath("mycommand", "/usr/bin:/usr/local/bin", ':', AlwaysFalse, null);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void FindAllFullPathsFromPath_SkipsNonExecutableFilesOnUnix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var tempDirectory = new TestTempDirectory();
+        var firstBinPath = Path.Combine(tempDirectory.Path, "first-bin");
+        var secondBinPath = Path.Combine(tempDirectory.Path, "second-bin");
+        Directory.CreateDirectory(firstBinPath);
+        Directory.CreateDirectory(secondBinPath);
+
+        var nonExecutablePath = Path.Combine(firstBinPath, "mycommand");
+        File.WriteAllText(nonExecutablePath, string.Empty);
+        File.SetUnixFileMode(nonExecutablePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+        var executablePath = Path.Combine(secondBinPath, "mycommand");
+        File.WriteAllText(executablePath, string.Empty);
+        File.SetUnixFileMode(executablePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        static bool FileExistsAndIsExecutable(string path)
+        {
+            if (!File.Exists(path))
+            {
+                return false;
+            }
+
+            if (OperatingSystem.IsWindows())
+            {
+                return true;
+            }
+
+            const UnixFileMode ExecuteBits = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
+            return (File.GetUnixFileMode(path) & ExecuteBits) != 0;
+        }
+
+        var result = PathLookupHelper.FindAllFullPathsFromPath(
+            "mycommand",
+            string.Join(Path.PathSeparator, firstBinPath, secondBinPath),
+            Path.PathSeparator,
+            FileExistsAndIsExecutable,
+            null);
+
+        Assert.Equal([executablePath], result);
+    }
+
+    [Fact]
+    public void FindAllFullPathsFromPath_WithPathExtensions_ReturnsOneMatchPerDirectory()
+    {
+        var firstExePath = Path.Combine("first", "bin", "code.EXE");
+        var firstCmdPath = Path.Combine("first", "bin", "code.CMD");
+        var secondCmdPath = Path.Combine("second", "bin", "code.CMD");
+        var existingFiles = new HashSet<string>
+        {
+            firstExePath,
+            firstCmdPath,
+            secondCmdPath
+        };
+        var pathExtensions = new[] { ".EXE", ".CMD" };
+        var path = string.Join(';', Path.Combine("first", "bin"), Path.Combine("second", "bin"));
+
+        var result = PathLookupHelper.FindAllFullPathsFromPath("code", path, ';', existingFiles.Contains, pathExtensions);
+
+        Assert.Equal([firstExePath, secondCmdPath], result);
+    }
+
+    [Fact]
     public void FindFullPathFromPath_UsesCorrectPathSeparator()
     {
         // Arrange - use platform-agnostic paths for testing

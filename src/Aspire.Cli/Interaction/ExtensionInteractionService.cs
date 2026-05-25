@@ -81,6 +81,30 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
     }
 
+    public async Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
+    {
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(initialStatusText.RemoveSpectreFormatting(), _cancellationToken));
+        Debug.Assert(result);
+
+        try
+        {
+            return await _consoleInteractionService.ShowDynamicStatusAsync(
+                initialStatusText,
+                updateStatus => action(statusText =>
+                {
+                    var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(statusText.RemoveSpectreFormatting(), _cancellationToken));
+                    Debug.Assert(result);
+                    updateStatus(statusText);
+                }),
+                emoji).ConfigureAwait(false);
+        }
+        finally
+        {
+            result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(null, _cancellationToken));
+            Debug.Assert(result);
+        }
+    }
+
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.ShowStatusAsync(statusText.RemoveSpectreFormatting(), _cancellationToken));
@@ -352,12 +376,12 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         Debug.Assert(result);
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(async () =>
         {
             await Backchannel.DisplayMessageAsync(emoji.Name, message.RemoveSpectreFormatting(), _cancellationToken);
-            _consoleInteractionService.DisplayMessage(emoji, message, allowMarkup);
+            _consoleInteractionService.DisplayMessage(emoji, message, allowMarkup, consoleOverride);
         });
         Debug.Assert(result);
     }
@@ -405,11 +429,11 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         // here would surface every line twice.
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayCancellationMessageAsync(_cancellationToken));
         Debug.Assert(result);
-        _consoleInteractionService.DisplayCancellationMessage();
+        _consoleInteractionService.DisplayCancellationMessage(consoleOverride);
     }
 
     public void DisplayEmptyLine()

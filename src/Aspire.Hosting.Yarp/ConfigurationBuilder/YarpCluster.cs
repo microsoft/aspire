@@ -190,7 +190,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the forwarder request configuration for the cluster.
     /// </summary>
-    [AspireExport(Description = "Sets the forwarder request configuration for the cluster.")]
+    [AspireExport]
     internal static YarpCluster WithForwarderRequestConfig(this YarpCluster cluster, YarpForwarderRequestConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -213,7 +213,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the HTTP client configuration for the cluster.
     /// </summary>
-    [AspireExport(Description = "Sets the HTTP client configuration for the cluster.")]
+    [AspireExport]
     internal static YarpCluster WithHttpClientConfig(this YarpCluster cluster, YarpHttpClientConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -236,7 +236,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the session affinity configuration for the cluster.
     /// </summary>
-    [AspireExport(Description = "Sets the session affinity configuration for the cluster.")]
+    [AspireExport]
     internal static YarpCluster WithSessionAffinityConfig(this YarpCluster cluster, YarpSessionAffinityConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -259,7 +259,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the health check configuration for the cluster.
     /// </summary>
-    [AspireExport(Description = "Sets the health check configuration for the cluster.")]
+    [AspireExport]
     internal static YarpCluster WithHealthCheckConfig(this YarpCluster cluster, YarpHealthCheckConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -271,7 +271,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the LoadBalancingPolicy for the cluster.
     /// </summary>
-    [AspireExport(Description = "Sets the load balancing policy for the cluster.")]
+    [AspireExport]
     public static YarpCluster WithLoadBalancingPolicy(this YarpCluster cluster, string policy)
     {
         cluster.Configure(c => c with { LoadBalancingPolicy = policy });
@@ -281,7 +281,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the Metadata for the cluster.
     /// </summary>
-    [AspireExport("withClusterMetadata", MethodName = "withMetadata", Description = "Sets metadata for the cluster.")]
+    [AspireExport("withClusterMetadata", MethodName = "withMetadata")]
     public static YarpCluster WithMetadata(this YarpCluster cluster, IReadOnlyDictionary<string, string> metadata)
     {
         cluster.Configure(c => c with { Metadata = metadata });

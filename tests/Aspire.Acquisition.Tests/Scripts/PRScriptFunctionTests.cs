@@ -357,4 +357,38 @@ public class PRScriptFunctionTests(ITestOutputHelper testOutput)
     }
 
     #endregion
+
+    #region add_to_path PR install
+
+    [Fact]
+    public async Task AddToPath_AppendsExportLine()
+    {
+        // add_to_path is the lower-level helper invoked by add_to_shell_profile when the
+        // shell config is writable. PR installs deliberately bypass add_to_shell_profile
+        // entirely (verified by PR-install end-to-end behavior); this test pins the
+        // remaining contract: when called directly with a writable config, it appends a
+        // single `export PATH=...` line preceded by the marker comment.
+        using var env = new TestEnvironment();
+        var configFile = Path.Combine(env.MockHome, ".zshrc");
+        File.WriteAllText(configFile, "# existing config\n");
+
+        var newPath = Path.Combine(env.MockHome, ".aspire", "bin");
+        var newCommand = "export PATH=\"$HOME/.aspire/bin:$PATH\"";
+
+        using var cmd = new ScriptFunctionCommand(
+            s_prScript,
+            $"VERBOSE=true; DRY_RUN=false; add_to_path '{configFile}' '{newPath}' '{newCommand}'",
+            env,
+            _testOutput);
+
+        var result = await cmd.ExecuteAsync();
+
+        result.EnsureSuccessful();
+        var contents = File.ReadAllText(configFile);
+        Assert.Contains("# existing config", contents);
+        Assert.Contains("# Added by get-aspire-cli*.sh script", contents);
+        Assert.Contains("$HOME/.aspire/bin", contents);
+    }
+
+    #endregion
 }

@@ -62,6 +62,7 @@ func main() {
 	ingress.WithTls("ingress-tls")
 
 	serviceContainer := builder.AddContainer("kube-service", "redis:alpine")
+	serviceContainer.WithComputeEnvironment(kubernetes)
 	_ = serviceContainer.PublishAsKubernetesService(func(service aspire.KubernetesResource) {
 		_, _ = service.Name()
 		_ = service.Parent()

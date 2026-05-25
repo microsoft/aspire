@@ -13,7 +13,8 @@ internal record AppHostValidationResult(
     bool IsValid,
     bool IsPossiblyUnbuildable = false,
     bool IsUnsupported = false,
-    string? Message = null);
+    string? Message = null,
+    string? AspireHostingVersion = null);
 
 /// <summary>
 /// Context for updating packages in an AppHost project.
@@ -220,6 +221,14 @@ internal interface IAppHostProject
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>A validation result indicating if the file is valid and any additional status.</returns>
     Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets the Aspire SDK version used by the specified AppHost.
+    /// </summary>
+    /// <param name="appHostFile">The AppHost file.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The resolved version using this project type's AppHost model, or <see langword="null"/> when the version is unknown.</returns>
+    Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken);
 
     /// <summary>
     /// Adds a package to the AppHost project.

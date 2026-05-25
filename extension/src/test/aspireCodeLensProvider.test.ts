@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { AspireCodeLensProvider } from '../editor/AspireCodeLensProvider';
+import { codeLensCommand } from '../loc/strings';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
@@ -88,7 +89,7 @@ function makeAppHost(appHostPath: string): AppHostDisplayInfo {
     } as unknown as AppHostDisplayInfo;
 }
 
-function makeResource(name: string): ResourceJson {
+function makeResource(name: string, overrides: Partial<ResourceJson> = {}): ResourceJson {
     return {
         name,
         displayName: name,
@@ -97,6 +98,7 @@ function makeResource(name: string): ResourceJson {
         stateStyle: '',
         commands: {},
         endpoints: [],
+        ...overrides,
     } as unknown as ResourceJson;
 }
 
@@ -183,6 +185,28 @@ suite('AspireCodeLensProvider builder lens', () => {
         harness.dispose();
     });
 
+    test('emits builder lenses when Windows AppHost path casing differs from document path', () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'apphost', 'apphost.csproj');
+        const harness = createHarness({ appHosts: [makeAppHost(hostPath)] });
+
+        try {
+            const doc = createMockDocument(APP_HOST_DOC, docPath);
+            const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+            const builderLenses = lenses.filter(l =>
+                l.command?.command === 'aspire-vscode.codeLensOpenDashboard' ||
+                l.command?.command === 'aspire-vscode.codeLensViewAppHostLogs'
+            );
+
+            assert.strictEqual(builderLenses.length, 2);
+            assert.deepStrictEqual(builderLenses[0].command?.arguments, [hostPath]);
+        } finally {
+            harness.dispose();
+            platformStub.restore();
+        }
+    });
+
     test('does not emit builder lenses when no AppHost is running', () => {
         const harness = createHarness({});
 
@@ -208,6 +232,46 @@ suite('AspireCodeLensProvider builder lens', () => {
         );
 
         assert.strictEqual(builderLenses.length, 0);
+        harness.dispose();
+    });
+
+    test('does not emit resource lenses from a different running AppHost', () => {
+        const runningHostPath = p('repo', 'RunningAppHost', 'AppHost.csproj');
+        const stoppedHostPath = p('repo', 'StoppedAppHost', 'AppHost.cs');
+        const runningAppHost = {
+            ...makeAppHost(runningHostPath),
+            resources: [makeResource('cache')],
+        };
+        const harness = createHarness({ appHosts: [runningAppHost] });
+
+        const doc = createMockDocument(APP_HOST_DOC, stoppedHostPath);
+        const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const resourceLenses = lenses.filter(l =>
+            l.command?.command !== 'aspire-vscode.codeLensOpenDashboard'
+            && l.command?.command !== 'aspire-vscode.codeLensViewAppHostLogs'
+            && l.command?.command !== 'aspire-vscode.codeLensDebugPipelineStep'
+        );
+
+        assert.strictEqual(resourceLenses.length, 0);
+        harness.dispose();
+    });
+
+    test('resource reveal lens includes the matching AppHost path', () => {
+        const firstHostPath = p('repo', 'FirstAppHost', 'AppHost.csproj');
+        const secondHostPath = p('repo', 'SecondAppHost', 'AppHost.csproj');
+        const secondDocPath = p('repo', 'SecondAppHost', 'AppHost.cs');
+        const harness = createHarness({
+            appHosts: [
+                { ...makeAppHost(firstHostPath), resources: [makeResource('cache', { name: 'cache-a' })] },
+                { ...makeAppHost(secondHostPath), resources: [makeResource('cache', { name: 'cache-b' })] },
+            ],
+        });
+
+        const doc = createMockDocument(APP_HOST_DOC, secondDocPath);
+        const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const revealLens = lenses.find(lens => lens.command?.command === 'aspire-vscode.codeLensRevealResource');
+
+        assert.deepStrictEqual(revealLens?.command?.arguments, ['cache', secondHostPath]);
         harness.dispose();
     });
 
@@ -397,6 +461,101 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
             lines.has(2) && lines.has(3),
             `expected resource lenses on both line 2 (pg) and line 3 (db) so they don't stack; got lines [${[...lines].join(', ')}]`
         );
+        harness.dispose();
+    });
+
+    test('custom command lens uses displayName as label and description as tooltip', () => {
+        const docPath = p('repo', 'AppHost', 'apphost.ts');
+        const hostPath = p('repo', 'AppHost', 'apphost.ts');
+        const content = [
+            'const builder = await createBuilder();',
+            'builder.addRedis("cache");',
+        ].join('\n');
+
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeResource('cache', {
+                commands: {
+                    'reset-db': {
+                        displayName: 'Reset Database',
+                        description: 'Stop the resource, rebuild the project from source, and restart it.',
+                    },
+                },
+            })],
+        });
+
+        const doc = createMockDocument(content, docPath);
+        const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const customLens = lenses.find(l =>
+            l.command?.command === 'aspire-vscode.codeLensResourceAction'
+            && l.command?.arguments?.[1] === 'reset-db');
+
+        assert.ok(customLens);
+        assert.strictEqual(customLens!.command?.title, codeLensCommand('Reset Database'));
+        assert.strictEqual(customLens!.command?.tooltip, 'Stop the resource, rebuild the project from source, and restart it.');
+        harness.dispose();
+    });
+
+    test('custom command lens falls back to command name when display text is whitespace', () => {
+        const docPath = p('repo', 'AppHost', 'apphost.ts');
+        const hostPath = p('repo', 'AppHost', 'apphost.ts');
+        const content = [
+            'const builder = await createBuilder();',
+            'builder.addRedis("cache");',
+        ].join('\n');
+
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeResource('cache', {
+                commands: {
+                    'reset-db': {
+                        displayName: '   ',
+                        description: '   ',
+                    },
+                },
+            })],
+        });
+
+        const doc = createMockDocument(content, docPath);
+        const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const customLens = lenses.find(l =>
+            l.command?.command === 'aspire-vscode.codeLensResourceAction'
+            && l.command?.arguments?.[1] === 'reset-db');
+
+        assert.ok(customLens);
+        assert.strictEqual(customLens!.command?.title, codeLensCommand('reset-db'));
+        assert.strictEqual(customLens!.command?.tooltip, 'reset-db');
+        harness.dispose();
+    });
+
+    test('custom command lens falls back to command name when displayName is omitted', () => {
+        const docPath = p('repo', 'AppHost', 'apphost.ts');
+        const hostPath = p('repo', 'AppHost', 'apphost.ts');
+        const content = [
+            'const builder = await createBuilder();',
+            'builder.addRedis("cache");',
+        ].join('\n');
+
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeResource('cache', {
+                commands: {
+                    'reset-db': {
+                        description: null,
+                    },
+                },
+            })],
+        });
+
+        const doc = createMockDocument(content, docPath);
+        const lenses = harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const customLens = lenses.find(l =>
+            l.command?.command === 'aspire-vscode.codeLensResourceAction'
+            && l.command?.arguments?.[1] === 'reset-db');
+
+        assert.ok(customLens);
+        assert.strictEqual(customLens!.command?.title, codeLensCommand('reset-db'));
+        assert.strictEqual(customLens!.command?.tooltip, 'reset-db');
         harness.dispose();
     });
 });

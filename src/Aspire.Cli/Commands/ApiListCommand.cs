@@ -55,9 +55,7 @@ internal sealed class ApiListCommand : BaseCommand
         Options.Add(s_formatOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -71,14 +69,14 @@ internal sealed class ApiListCommand : BaseCommand
         if (items.Count is 0)
         {
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ApiCommandStrings.NoApiEntriesFound, scope));
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         if (format is OutputFormat.Json)
         {
             var json = JsonSerializer.Serialize(items.ToArray(), JsonSourceGenerationContext.RelaxedEscaping.ApiListItemArray);
             InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, ApiCommandStrings.FoundApiEntries, items.Count, scope));
@@ -99,6 +97,6 @@ internal sealed class ApiListCommand : BaseCommand
         }
 
         InteractionService.DisplayRenderable(table);
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

@@ -5,7 +5,7 @@ using System.CommandLine;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local")
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local", DirectoryInfo? aspireHomeDirectory = null)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
@@ -54,7 +54,34 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// </summary>
     public string LogFilePath { get; } = logFilePath;
 
+    /// <summary>
+    /// Gets or sets the log file path of the CLI process managing the connected app host.
+    /// This is populated after connecting to a running app host via <see cref="Backchannel.AppHostConnectionResolver"/>.
+    /// </summary>
+    public string? AppHostCliLogFilePath { get; set; }
+
     public DirectoryInfo HomeDirectory { get; } = homeDirectory ?? new DirectoryInfo(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+
+    /// <summary>
+    /// Gets the Aspire state root used for route-specific install layouts.
+    /// </summary>
+    /// <remarks>
+    /// Production wires this explicitly via <see cref="Program.BuildCliExecutionContext"/>
+    /// using <see cref="Utils.CliPathHelper.GetAspireHomeDirectory(string?, Microsoft.Extensions.Logging.ILogger?)"/>
+    /// so the install-route sidecar lookup runs. When neither <c>aspireHomeDirectory</c>
+    /// nor <c>homeDirectory</c> are supplied (direct construction in tests), the same
+    /// install-route lookup is performed here so route-aware code paths see a
+    /// consistent value. When <c>homeDirectory</c> is supplied without
+    /// <c>aspireHomeDirectory</c>, the home stays contained within the test directory
+    /// at <c>&lt;homeDirectory&gt;/.aspire</c> — the install-route lookup is
+    /// intentionally skipped because tests passing an explicit <c>homeDirectory</c>
+    /// are declaring their own filesystem sandbox.
+    /// </remarks>
+    public DirectoryInfo AspireHomeDirectory { get; } = aspireHomeDirectory ?? new DirectoryInfo(
+        homeDirectory is not null
+            ? Path.Combine(homeDirectory.FullName, ".aspire")
+            : Utils.CliPathHelper.GetAspireHomeDirectory());
+
     public bool DebugMode { get; } = debugMode;
 
     /// <summary>

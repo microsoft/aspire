@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
@@ -113,7 +114,7 @@ public static class EFResourceBuilderExtensions
     /// <summary>
     /// Adds EF Core migration management for polyglot app hosts.
     /// </summary>
-    [AspireExport("addEFMigrations", Description = "Adds EF Core migration management for auto-detected DbContext types or for a specific DbContext type identified by name")]
+    [AspireExport("addEFMigrations")]
     internal static IResourceBuilder<EFMigrationResource> AddEFMigrationsForPolyglot(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,
@@ -208,7 +209,8 @@ public static class EFResourceBuilderExtensions
 
     internal static IEnumerable<PipelineStep> CreateMigrationPipelineStep(PipelineStepFactoryContext context)
     {
-        if (context.Resource is not EFMigrationResource migrationResource
+        if (context.PipelineContext.ExecutionContext.IsRunMode
+            || context.Resource is not EFMigrationResource migrationResource
             || (!migrationResource.PublishAsMigrationScript && !migrationResource.PublishAsMigrationBundle))
         {
             return [];
@@ -552,11 +554,11 @@ public static class EFResourceBuilderExtensions
             .WithParentRelationship(migrationBuilder)
             .WithWorkingDirectory(startupProjectDir)
             .WithExplicitStart()
+            .WithHidden()
             .WithInitialState(new CustomResourceSnapshot
             {
                 ResourceType = "Tool",
-                Properties = [],
-                IsHidden = true
+                Properties = []
             });
 
         // Register the EF-specific start command. The tool resource is captured by the closure
@@ -639,7 +641,18 @@ public static class EFResourceBuilderExtensions
                 Description = "Create a new migration. Note: The target project will need to be recompiled after adding a migration.",
                 IconName = "Add",
                 IconVariant = IconVariant.Regular,
-                UpdateState = context => GetCommandState(context, migrationResource)
+                UpdateState = context => GetCommandState(context, migrationResource),
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "name",
+                        InputType = InputType.Text,
+                        Label = "Migration Name",
+                        Required = true,
+                        Placeholder = "e.g. InitialCreate"
+                    }
+                ]
             });
 
         migrationBuilder.WithCommand(
@@ -795,28 +808,7 @@ public static class EFResourceBuilderExtensions
             waitForDependencies: false,
             async (executor, logger, interaction) =>
             {
-                string migrationName;
-                if (interaction == null || !interaction.IsAvailable)
-                {
-                    migrationName = $"Migration_{DateTime.UtcNow:yyyyMMddHHmmss}";
-                }
-                else
-                {
-                    var inputResult = await interaction.PromptInputAsync(
-                        title: "Add Migration",
-                        message: "Enter the name for the new migration.",
-                        inputLabel: "Migration Name",
-                        placeHolder: "e.g. InitialCreate",
-                        cancellationToken: context.CancellationToken).ConfigureAwait(false);
-
-                    if (inputResult.Canceled || string.IsNullOrWhiteSpace(inputResult.Data?.Value))
-                    {
-                        // Throwing OperationCanceledException lets the wrapper handle state update
-                        throw new OperationCanceledException();
-                    }
-
-                    migrationName = inputResult.Data.Value;
-                }
+                var migrationName = context.Arguments.GetString("name")!;
 
                 var result = await executor.AddMigrationAsync(
                     migrationName,

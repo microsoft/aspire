@@ -17,11 +17,13 @@ public class ResourceCommandService
     /// <summary>
     /// Maps legacy command names to their current equivalents for backwards compatibility.
     /// </summary>
-    private static readonly Dictionary<string, string> s_legacyCommandNameMap = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, string> s_legacyCommandNameMap = new(StringComparers.CommandName)
     {
         [KnownResourceCommands.LegacyStartCommand] = KnownResourceCommands.StartCommand,
         [KnownResourceCommands.LegacyStopCommand] = KnownResourceCommands.StopCommand,
         [KnownResourceCommands.LegacyRestartCommand] = KnownResourceCommands.RestartCommand,
+        [KnownResourceCommands.LegacySetParameterCommand] = KnownResourceCommands.SetParameterCommand,
+        [KnownResourceCommands.LegacyDeleteParameterCommand] = KnownResourceCommands.DeleteParameterCommand,
     };
 
     private readonly ResourceNotificationService _resourceNotificationService;
@@ -156,8 +158,12 @@ public class ResourceCommandService
                 cancellationToken));
         }
 
-        // Check for failures and cancellations.
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
+        return CreateAggregateResult(names, results);
+    }
+
+    private static ExecuteCommandResult CreateAggregateResult(string[] names, ExecuteCommandResult[] results)
+    {
         var failures = new List<(string resourceId, ExecuteCommandResult result)>();
         var cancellations = new List<(string resourceId, ExecuteCommandResult result)>();
         for (var i = 0; i < results.Length; i++)
@@ -217,8 +223,34 @@ public class ResourceCommandService
             return (CreateArguments([], argumentValues), null);
         }
 
+        return CreateCommandArguments(annotation, resolvedCommandName, argumentValues);
+    }
+
+    private static (InteractionInputCollection Arguments, string? ErrorMessage) CreateCommandArguments(IResource resource, string commandName, IReadOnlyDictionary<string, string?>? argumentValues)
+    {
+        var resolvedCommandName = commandName;
+        var annotation = ResolveCommandAnnotation(resource, ref resolvedCommandName);
+        if (annotation is null)
+        {
+            return (CreateArguments([], argumentValues), null);
+        }
+
+        return CreateCommandArguments(annotation, resolvedCommandName, argumentValues);
+    }
+
+    private static (InteractionInputCollection Arguments, string? ErrorMessage) CreateCommandArguments(ResourceCommandAnnotation annotation, string resolvedCommandName, IReadOnlyDictionary<string, string?>? argumentValues)
+    {
         if (argumentValues is { Count: > 0 })
         {
+            var disabledArgumentNames = annotation.Arguments
+                .Where(argument => argument.Disabled && argumentValues.ContainsKey(argument.Name))
+                .Select(argument => argument.Name)
+                .ToArray();
+            if (disabledArgumentNames.Length > 0)
+            {
+                return (CreateArguments(annotation.Arguments, argumentValues), CreateDisabledArgumentMessage(resolvedCommandName, disabledArgumentNames));
+            }
+
             var argumentNames = new HashSet<string>(
                 annotation.Arguments.Select(argument => argument.Name),
                 StringComparers.InteractionInputName);
@@ -254,6 +286,19 @@ public class ResourceCommandService
             return (CreateArguments(annotation.Arguments, orderedArgumentValues: null), $"Command '{resolvedCommandName}' accepts {annotation.Arguments.Count} argument(s), but {argumentCount} were provided.");
         }
 
+        if (orderedArgumentValues is { Count: > 0 })
+        {
+            var disabledArgumentNames = annotation.Arguments
+                .Take(orderedArgumentValues.Count)
+                .Where(static argument => argument.Disabled)
+                .Select(static argument => argument.Name)
+                .ToArray();
+            if (disabledArgumentNames.Length > 0)
+            {
+                return (CreateArguments(annotation.Arguments, orderedArgumentValues), CreateDisabledArgumentMessage(resolvedCommandName, disabledArgumentNames));
+            }
+        }
+
         return (CreateArguments(annotation.Arguments, orderedArgumentValues), null);
     }
 
@@ -262,6 +307,19 @@ public class ResourceCommandService
         ArgumentNullException.ThrowIfNull(options);
 
         return await ExecuteCommandCoreAsync(resourceId, commandName, options, cancellationToken).ConfigureAwait(false);
+    }
+
+    internal async Task<ExecuteCommandResult> ExecuteCommandAsync(IResource resource, string commandName, IReadOnlyDictionary<string, string?>? argumentValues, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(resource);
+
+        var result = CreateCommandArguments(resource, commandName, argumentValues);
+        if (result.ErrorMessage is not null)
+        {
+            return new ExecuteCommandResult { Success = false, Message = result.ErrorMessage };
+        }
+
+        return await ExecuteCommandAsync(resource, commandName, result.Arguments, cancellationToken).ConfigureAwait(false);
     }
 
     internal async Task<ExecuteCommandResult> ExecuteCommandCoreAsync(string resourceId, IResource resource, string commandName, InteractionInputCollection arguments, bool argumentsProvided, bool nonInteractive, CancellationToken cancellationToken)
@@ -412,14 +470,14 @@ public class ResourceCommandService
     private static ResourceCommandAnnotation? ResolveCommandAnnotation(IResource resource, ref string commandName, ILogger? logger = null)
     {
         var requestedCommandName = commandName;
-        var annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => a.Name == requestedCommandName);
+        var annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => string.Equals(a.Name, requestedCommandName, StringComparisons.CommandName));
 
         // Backwards compatibility: if the command wasn't found and the caller used a legacy name
         // (e.g. "resource-start"), fall back to the current name (e.g. "start").
         if (annotation is null && s_legacyCommandNameMap.TryGetValue(commandName, out var mappedName))
         {
             logger?.LogDebug("Command '{CommandName}' not found, falling back to '{MappedName}'.", commandName, mappedName);
-            annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => a.Name == mappedName);
+            annotation = resource.Annotations.OfType<ResourceCommandAnnotation>().SingleOrDefault(a => string.Equals(a.Name, mappedName, StringComparisons.CommandName));
             if (annotation is not null)
             {
                 commandName = mappedName;
@@ -434,6 +492,13 @@ public class ResourceCommandService
         return unknownArgumentNames.Length == 1
             ? $"Unknown argument '{unknownArgumentNames[0]}' for command '{commandName}'."
             : $"Unknown arguments for command '{commandName}': {string.Join(", ", unknownArgumentNames.Select(argumentName => $"'{argumentName}'"))}.";
+    }
+
+    private static string CreateDisabledArgumentMessage(string commandName, string[] disabledArgumentNames)
+    {
+        return disabledArgumentNames.Length == 1
+            ? $"Argument '{disabledArgumentNames[0]}' for command '{commandName}' is disabled."
+            : $"Arguments for command '{commandName}' are disabled: {string.Join(", ", disabledArgumentNames.Select(argumentName => $"'{argumentName}'"))}.";
     }
 
     private async Task<bool> ValidateArgumentsAsync(ResourceCommandAnnotation annotation, InteractionInputCollection arguments, CancellationToken cancellationToken)

@@ -12,6 +12,16 @@
         <target state="translated">Şablonlar için kullanılacak kanal (kararlı, hazırlama, günlük)</target>
         <note />
       </trans-unit>
+      <trans-unit id="CreateProjectDirectlyInSelectedFolderChoice">
+        <source>Directly in the selected folder</source>
+        <target state="new">Directly in the selected folder</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CreateProjectNameSubdirectoryChoice">
+        <source>In a subdirectory named '{0}' in the selected folder</source>
+        <target state="new">In a subdirectory named '{0}' in the selected folder</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Description">
         <source>Create a new app from an Aspire starter template</source>
         <target state="needs-review-translation">Yeni bir Aspire projesi oluşturun.</target>
@@ -40,6 +50,16 @@
       <trans-unit id="NameArgumentDescription">
         <source>The name of the project to create</source>
         <target state="needs-review-translation">Oluşturulacak projenin adı.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoChannelFoundMatching">
+        <source>No channel found matching '{0}'. Valid options are: {1}.</source>
+        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoPackageChannelsAvailable">
+        <source>No package channels are available.</source>
+        <target state="new">No package channels are available.</target>
         <note />
       </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">
@@ -82,9 +102,19 @@
         <target state="translated">Bir şablon sürümü seçin:</target>
         <note />
       </trans-unit>
+      <trans-unit id="SelectProjectCreationLocation">
+        <source>Where do you want the project to be created?</source>
+        <target state="new">Where do you want the project to be created?</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the project templates</source>
         <target state="needs-review-translation">Proje şablonları için kullanılacak NuGet kaynağı.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceWithCredentialsCannotBePersisted">
+        <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
+        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">

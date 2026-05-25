@@ -10,56 +10,56 @@ namespace Aspire.Hosting
 {
     public static partial class AzureStorageExtensions
     {
-        [AspireExport("addAzureStorage", Description = "Adds an Azure Storage resource")]
+        [AspireExport(Description = "Adds an Azure Storage resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> AddAzureStorage(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
         [System.Obsolete("Use AddBlobContainer on IResourceBuilder<AzureStorageResource> instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureBlobStorageContainerResource> AddBlobContainer(this ApplicationModel.IResourceBuilder<Azure.AzureBlobStorageResource> builder, string name, string? blobContainerName = null) { throw null; }
 
-        [AspireExport("addBlobContainer", Description = "Adds an Azure Blob Storage container resource")]
+        [AspireExport(Description = "Adds an Azure Blob Storage container resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureBlobStorageContainerResource> AddBlobContainer(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name, string? blobContainerName = null) { throw null; }
 
-        [AspireExport("addBlobs", Description = "Adds an Azure Blob Storage resource")]
+        [AspireExport(Description = "Adds an Azure Blob Storage resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureBlobStorageResource> AddBlobs(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name) { throw null; }
 
-        [AspireExport("addDataLake", Description = "Adds an Azure Data Lake Storage resource")]
+        [AspireExport(Description = "Adds an Azure Data Lake Storage resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureDataLakeStorageResource> AddDataLake(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name) { throw null; }
 
-        [AspireExport("addDataLakeFileSystem", Description = "Adds an Azure Data Lake Storage file system resource")]
+        [AspireExport(Description = "Adds an Azure Data Lake Storage file system resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureDataLakeStorageFileSystemResource> AddDataLakeFileSystem(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name, string? dataLakeFileSystemName = null) { throw null; }
 
-        [AspireExport("addQueue", Description = "Adds an Azure Storage queue resource")]
+        [AspireExport(Description = "Adds an Azure Storage queue resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureQueueStorageQueueResource> AddQueue(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name, string? queueName = null) { throw null; }
 
-        [AspireExport("addQueues", Description = "Adds an Azure Queue Storage resource")]
+        [AspireExport(Description = "Adds an Azure Queue Storage resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureQueueStorageResource> AddQueues(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name) { throw null; }
 
-        [AspireExport("addTables", Description = "Adds an Azure Table Storage resource")]
+        [AspireExport(Description = "Adds an Azure Table Storage resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureTableStorageResource> AddTables(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name) { throw null; }
 
-        [AspireExport("runAsEmulator", Description = "Configures the Azure Storage resource to be emulated using Azurite", RunSyncOnBackgroundThread = true)]
+        [AspireExport(Description = "Configures the Azure Storage resource to be emulated using Azurite", RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource>>? configureContainer = null) { throw null; }
 
-        [AspireExport("withApiVersionCheck", Description = "Configures whether the emulator checks API version validity")]
+        [AspireExport(Description = "Configures whether the emulator checks API version validity")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithApiVersionCheck(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, bool enable = true) { throw null; }
 
-        [AspireExport("withBlobPort", Description = "Sets the host port for blob requests on the storage emulator")]
+        [AspireExport(Description = "Sets the host port for blob requests on the storage emulator")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithBlobPort(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, int port) { throw null; }
 
-        [AspireExport("withDataBindMount", Description = "Adds a bind mount for the data folder to an Azure Storage emulator resource")]
+        [AspireExport(Description = "Adds a bind mount for the data folder to an Azure Storage emulator resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, string? path = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withDataVolume", Description = "Adds a named volume for the data folder to an Azure Storage emulator resource")]
+        [AspireExport(Description = "Adds a named volume for the data folder to an Azure Storage emulator resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithDataVolume(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExport("withQueuePort", Description = "Sets the host port for queue requests on the storage emulator")]
+        [AspireExport(Description = "Sets the host port for queue requests on the storage emulator")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithQueuePort(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, int port) { throw null; }
 
         [AspireExportIgnore(Reason = "StorageBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureStorageRole-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithRoleAssignments<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> target, params global::Azure.Provisioning.Storage.StorageBuiltInRole[] roles)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport("withTablePort", Description = "Sets the host port for table requests on the storage emulator")]
+        [AspireExport(Description = "Sets the host port for table requests on the storage emulator")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithTablePort(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, int port) { throw null; }
     }
 }
@@ -67,7 +67,7 @@ namespace Aspire.Hosting
 namespace Aspire.Hosting.Azure
 {
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, BlobContainer = {BlobContainerName}")]
-    public partial class AzureBlobStorageContainerResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureBlobStorageResource>, ApplicationModel.IResourceWithParent
+    public partial class AzureBlobStorageContainerResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureBlobStorageResource>, ApplicationModel.IResourceWithParent
     {
         public AzureBlobStorageContainerResource(string name, string blobContainerName, AzureBlobStorageResource parent) : base(default!) { }
 
@@ -80,7 +80,7 @@ namespace Aspire.Hosting.Azure
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class AzureBlobStorageResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureStorageResource>, ApplicationModel.IResourceWithParent, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
+    public partial class AzureBlobStorageResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureStorageResource>, ApplicationModel.IResourceWithParent, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
     {
         public AzureBlobStorageResource(string name, AzureStorageResource storage) : base(default!) { }
 
@@ -94,14 +94,14 @@ namespace Aspire.Hosting.Azure
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
-        string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
 
         void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
     }
 
-    public partial class AzureDataLakeStorageFileSystemResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureDataLakeStorageResource>, ApplicationModel.IResourceWithParent
+    public partial class AzureDataLakeStorageFileSystemResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureDataLakeStorageResource>, ApplicationModel.IResourceWithParent
     {
         public AzureDataLakeStorageFileSystemResource(string name, string dataLakeFileSystemName, AzureDataLakeStorageResource parent) : base(default!) { }
 
@@ -114,7 +114,7 @@ namespace Aspire.Hosting.Azure
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class AzureDataLakeStorageResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureStorageResource>, ApplicationModel.IResourceWithParent, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
+    public partial class AzureDataLakeStorageResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureStorageResource>, ApplicationModel.IResourceWithParent, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
     {
         public AzureDataLakeStorageResource(string name, AzureStorageResource storage) : base(default!) { }
 
@@ -128,7 +128,7 @@ namespace Aspire.Hosting.Azure
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
-        string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
 
@@ -136,7 +136,7 @@ namespace Aspire.Hosting.Azure
     }
 
     [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Queue = {QueueName}")]
-    public partial class AzureQueueStorageQueueResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureQueueStorageResource>, ApplicationModel.IResourceWithParent
+    public partial class AzureQueueStorageQueueResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureQueueStorageResource>, ApplicationModel.IResourceWithParent
     {
         public AzureQueueStorageQueueResource(string name, string queueName, AzureQueueStorageResource parent) : base(default!) { }
 
@@ -149,7 +149,7 @@ namespace Aspire.Hosting.Azure
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public partial class AzureQueueStorageResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureStorageResource>, ApplicationModel.IResourceWithParent, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
+    public partial class AzureQueueStorageResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureStorageResource>, ApplicationModel.IResourceWithParent, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
     {
         public AzureQueueStorageResource(string name, AzureStorageResource storage) : base(default!) { }
 
@@ -163,7 +163,7 @@ namespace Aspire.Hosting.Azure
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
-        string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
 
@@ -179,7 +179,7 @@ namespace Aspire.Hosting.Azure
         public override string Name { get { throw null; } }
     }
 
-    public partial class AzureStorageResource : AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, IResourceWithAzureFunctionsConfig
+    public partial class AzureStorageResource : AzureProvisioningResource, ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResource, IResourceWithAzureFunctionsConfig, IAzureNspAssociationTarget
     {
         public AzureStorageResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
 
@@ -210,7 +210,7 @@ namespace Aspire.Hosting.Azure
         void IResourceWithAzureFunctionsConfig.ApplyAzureFunctionsConfiguration(System.Collections.Generic.IDictionary<string, object> target, string connectionName) { }
     }
 
-    public partial class AzureTableStorageResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureStorageResource>, ApplicationModel.IResourceWithParent, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
+    public partial class AzureTableStorageResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences, ApplicationModel.IResourceWithParent<AzureStorageResource>, ApplicationModel.IResourceWithParent, IResourceWithAzureFunctionsConfig, IAzurePrivateEndpointTarget
     {
         public AzureTableStorageResource(string name, AzureStorageResource storage) : base(default!) { }
 
@@ -224,7 +224,7 @@ namespace Aspire.Hosting.Azure
 
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
 
-        string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() { throw null; }
+        System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() { throw null; }
 
         System.Collections.Generic.IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() { throw null; }
 

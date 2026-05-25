@@ -33,6 +33,7 @@ import {
     ViewMode,
     shortenPaths,
 } from './AppHostDataRepository';
+import { collectResourceCommandArguments, hasSecretResourceCommandArguments } from './ResourceCommandArguments';
 
 type TreeElement = AppHostItem | PidItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | HealthChecksGroupItem | HealthCheckItem;
 
@@ -42,6 +43,20 @@ function sortResources(resources: ResourceJson[]): ResourceJson[] {
         const nameB = (b.displayName ?? b.name).toLowerCase();
         return nameA.localeCompare(nameB);
     });
+}
+
+function isSamePath(left: string, right: string): boolean {
+    const resolvedLeft = path.resolve(left);
+    const resolvedRight = path.resolve(right);
+    return getComparisonKey(resolvedLeft) === getComparisonKey(resolvedRight);
+}
+
+function getComparisonKey(value: string): string {
+    return process.platform === 'win32' ? value.toLowerCase() : value;
+}
+
+function hasNoResources(resources: readonly ResourceJson[] | null | undefined): boolean {
+    return resources === undefined || resources === null || resources.length === 0;
 }
 
 function appHostIcon(path?: string): vscode.ThemeIcon {
@@ -55,13 +70,13 @@ function stripResourceSuffix(url: string): string {
 }
 
 class AppHostItem extends vscode.TreeItem {
-    constructor(public readonly appHost: AppHostDisplayInfo, label: string) {
+    constructor(public readonly appHost: AppHostDisplayInfo, label: string, appHostDescription?: string) {
         super(label, vscode.TreeItemCollapsibleState.Expanded);
         this.id = `apphost:${appHost.appHostPid}`;
         this.description = pidDescription(appHost.appHostPid);
         this.iconPath = appHostIcon(appHost.appHostPath);
         this.contextValue = 'appHost';
-        this.tooltip = appHost.appHostPath;
+        this.tooltip = appHostDescription ? `${appHostDescription}\n${appHost.appHostPath}` : appHost.appHostPath;
     }
 }
 
@@ -70,13 +85,16 @@ class WorkspaceResourcesItem extends vscode.TreeItem {
         public readonly resources: ResourceJson[],
         public readonly dashboardUrl: string | null,
         public readonly appHostPath: string | undefined,
-        appHostName?: string
+        public readonly appHost: AppHostDisplayInfo | undefined,
+        appHostName?: string,
+        appHostDescription?: string
     ) {
         super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.Expanded);
         this.id = 'workspace-resources';
         this.iconPath = appHostIcon(appHostPath);
         this.contextValue = 'workspaceResources';
         this.description = resourceCountDescription(resources.length);
+        this.tooltip = appHostDescription;
     }
 }
 
@@ -158,7 +176,7 @@ function getParentResourceName(resource: ResourceJson): string | null {
 }
 
 class ResourceItem extends vscode.TreeItem {
-    constructor(public readonly resource: ResourceJson, public readonly appHostPid: number | null, hasChildren: boolean) {
+    constructor(public readonly resource: ResourceJson, public readonly appHostPid: number | null, hasChildren: boolean, public readonly allResources?: readonly ResourceJson[]) {
         const label = resource.displayName ?? resource.name;
         const hasUrls = resource.urls && resource.urls.filter(u => !u.isInternal).length > 0;
         const hasHealthReports = resource.healthReports && Object.keys(resource.healthReports).length > 0;
@@ -325,6 +343,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     constructor(
         private readonly _repository: AppHostDataRepository,
         private readonly _terminalProvider: AspireTerminalProvider,
+        private readonly _secretWarningState?: vscode.Memento,
     ) {
         this._dataSubscription = this._repository.onDidChangeData(() => {
             this._onDidChangeTreeData.fire();
@@ -337,6 +356,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     get workspaceResources(): readonly ResourceJson[] {
         return this._repository.workspaceResources;
+    }
+
+    get workspaceAppHost(): AppHostDisplayInfo | undefined {
+        return this._repository.workspaceAppHost;
     }
 
     get workspaceAppHostPath(): string | undefined {
@@ -356,8 +379,13 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         this._treeView = treeView;
     }
 
-    findResourceElement(resourceName: string): TreeElement | undefined {
+    findResourceElement(resourceName: string, appHostPath?: string): TreeElement | undefined {
         const allChildren = this.getChildren();
+        if (appHostPath) {
+            const appHostElement = this.findAppHostElement(appHostPath);
+            return appHostElement ? this._findResourceInTree([appHostElement], resourceName) : undefined;
+        }
+
         return this._findResourceInTree(allChildren, resourceName);
     }
 
@@ -381,7 +409,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 if (!hostPath) {
                     continue;
                 }
-                if (hostPath === appHostPath || path.dirname(hostPath) === targetDir) {
+                if (isSamePath(hostPath, appHostPath) || isSamePath(path.dirname(hostPath), targetDir)) {
                     return element;
                 }
             } else if (element instanceof WorkspaceResourcesItem) {
@@ -389,7 +417,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 if (!hostPath) {
                     continue;
                 }
-                if (hostPath === appHostPath || path.dirname(hostPath) === targetDir) {
+                if (isSamePath(hostPath, appHostPath) || isSamePath(path.dirname(hostPath), targetDir)) {
                     return element;
                 }
             }
@@ -452,13 +480,33 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private _getWorkspaceChildren(element?: TreeElement): TreeElement[] {
         if (!element) {
-            const resources = [...this._repository.workspaceResources];
-            if (resources.length === 0) {
+            const workspaceResources = [...this._repository.workspaceResources];
+            const workspaceAppHost = this._repository.workspaceAppHost;
+            if (this._repository.hasMultipleWorkspaceAppHosts && this._repository.appHosts.length > 0) {
+                const appHosts = this._repository.appHosts.map(appHost => {
+                    const selectedAppHostPath = workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
+                    if (workspaceResources.length > 0 && selectedAppHostPath && isSamePath(appHost.appHostPath, selectedAppHostPath) && hasNoResources(appHost.resources)) {
+                        return { ...appHost, resources: workspaceResources };
+                    }
+
+                    return appHost;
+                });
+                const labels = shortenPaths(appHosts.map(appHost => appHost.appHostPath));
+                return appHosts.map((appHost, index) => new AppHostItem(appHost, labels[index], this._repository.workspaceAppHostDescription));
+            }
+            if (workspaceResources.length === 0 && !workspaceAppHost) {
                 return [];
             }
-            const rawDashboardUrl = resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
+            const resources = workspaceResources.length > 0
+                ? workspaceResources
+                : [...workspaceAppHost?.resources ?? []];
+            const rawDashboardUrl = workspaceAppHost?.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
             const dashboardUrl = rawDashboardUrl ? stripResourceSuffix(rawDashboardUrl) : null;
-            return [new WorkspaceResourcesItem(resources, dashboardUrl, this._repository.workspaceAppHostPath, this._repository.workspaceAppHostName)];
+            return [new WorkspaceResourcesItem(resources, dashboardUrl, workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath, workspaceAppHost, this._repository.workspaceAppHostName, this._repository.workspaceAppHostDescription)];
+        }
+
+        if (element instanceof AppHostItem || element instanceof ResourcesGroupItem) {
+            return this._getGlobalChildren(element);
         }
 
         if (element instanceof WorkspaceResourcesItem) {
@@ -468,17 +516,41 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 items.push(new EndpointUrlItem(element.dashboardUrl, dashboardLabel));
             }
 
+            if (element.appHost) {
+                items.push(new PidItem(
+                    element.appHost.appHostPid,
+                    appHostPidLabel(element.appHost.appHostPid),
+                    'terminal',
+                ));
+
+                if (element.appHost.cliPid !== null) {
+                    items.push(new PidItem(
+                        element.appHost.cliPid,
+                        cliPidLabel(element.appHost.cliPid),
+                        'terminal-cmd',
+                    ));
+                }
+            }
+
             // Show only top-level resources (those without a parent)
             const topLevel = element.resources.filter(r => !getParentResourceName(r));
             for (const resource of sortResources(topLevel)) {
                 const hasChildren = element.resources.some(r => getParentResourceName(r) === resource.name);
-                items.push(new ResourceItem(resource, null, hasChildren));
+                items.push(new ResourceItem(resource, null, hasChildren, element.resources));
             }
             return items;
         }
 
         if (element instanceof ResourceItem) {
-            return this._getResourceChildren(element, [...this._repository.workspaceResources]);
+            const appHost = element.appHostPid !== null
+                ? this._repository.appHosts.find(a => a.appHostPid === element.appHostPid)
+                : undefined;
+            const workspaceResources = [...this._repository.workspaceResources];
+            const selectedAppHostPath = this._repository.workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
+            const allResources = element.allResources ?? (appHost && workspaceResources.length > 0 && selectedAppHostPath && isSamePath(appHost.appHostPath, selectedAppHostPath) && hasNoResources(appHost.resources)
+                ? workspaceResources
+                : appHost?.resources ?? workspaceResources);
+            return this._getResourceChildren(element, allResources);
         }
 
         if (element instanceof HealthChecksGroupItem) {
@@ -494,7 +566,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (!element) {
             const appHosts = this._repository.appHosts;
             const labels = shortenPaths(appHosts.map(appHost => appHost.appHostPath));
-            return appHosts.map((appHost, index) => new AppHostItem(appHost, labels[index]));
+            return appHosts.map((appHost, index) => new AppHostItem(appHost, labels[index], this._repository.workspaceAppHostDescription));
         }
 
         if (element instanceof AppHostItem) {
@@ -530,7 +602,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             const topLevel = element.resources.filter(r => !getParentResourceName(r));
             return sortResources(topLevel).map(r => {
                 const hasChildren = element.resources.some(c => getParentResourceName(c) === r.name);
-                return new ResourceItem(r, element.appHostPid, hasChildren);
+                return new ResourceItem(r, element.appHostPid, hasChildren, element.resources);
             });
         }
 
@@ -553,7 +625,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         const children = allResources.filter(r => getParentResourceName(r) === element.resource.name);
         for (const child of sortResources(children)) {
             const hasChildren = allResources.some(r => getParentResourceName(r) === child.name);
-            items.push(new ResourceItem(child, element.appHostPid, hasChildren));
+            items.push(new ResourceItem(child, element.appHostPid, hasChildren, allResources));
         }
 
         const urls = element.resource.urls?.filter(u => !u.isInternal) ?? [];
@@ -605,7 +677,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (!url) {
             if (this._repository.viewMode === 'workspace') {
                 const resources = [...this._repository.workspaceResources];
-                const resourceUrl = resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
+                const resourceUrl = this._repository.workspaceAppHost?.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
                 url = getBaseDashboardUrl(resourceUrl);
             } else {
                 const appHosts = this._repository.appHosts.filter(a => a.dashboardUrl);
@@ -680,7 +752,8 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         // aspire logs accepts the resource display name, not the internal name
         const resourceName = element.resource.displayName ?? element.resource.name;
         if (this._repository.viewMode === 'workspace') {
-            const appHostFlag = this._repository.workspaceAppHostPath ? ` --apphost "${this._repository.workspaceAppHostPath}"` : '';
+            const appHostPath = this._getAppHostPathForResource(element);
+            const appHostFlag = appHostPath ? ` --apphost "${appHostPath}"` : '';
             this._terminalProvider.sendAspireCommandToAspireTerminal(`logs "${resourceName}"${appHostFlag}`);
             return;
         }
@@ -701,6 +774,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         const items = Object.entries(commands).map(([name, cmd]) => ({
             label: name,
             description: cmd.description ?? undefined,
+            command: cmd,
         }));
 
         const selected = await vscode.window.showQuickPick(items, {
@@ -711,16 +785,12 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        if (this._repository.viewMode === 'workspace') {
-            const appHostFlag = this._repository.workspaceAppHostPath ? ` --apphost "${this._repository.workspaceAppHostPath}"` : '';
-            this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" "${selected.label}"${appHostFlag}`);
+        const additionalArgs = await collectResourceCommandArguments(selected.label, selected.command, { secretWarningState: this._secretWarningState });
+        if (additionalArgs === undefined) {
             return;
         }
 
-        const appHost = this._findAppHostForResource(element);
-        if (appHost) {
-            this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" "${selected.label}" --apphost "${appHost.appHostPath}"`);
-        }
+        this._runResourceCommand(element, `"${selected.label}"`, additionalArgs, hasSecretResourceCommandArguments(selected.command));
     }
 
     async copyAppHostPath(element: AppHostItem): Promise<void> {
@@ -748,12 +818,11 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         vscode.commands.executeCommand('simpleBrowser.show', element.url);
     }
 
-    private _runResourceCommand(element: ResourceItem, command: string, ...extraArgs: string[]): void {
-        const suffix = extraArgs.length > 0 ? ` ${extraArgs.join(' ')}` : '';
-
+    private _runResourceCommand(element: ResourceItem, command: string, additionalArgs?: string[], redactAdditionalArgs = false): void {
         if (this._repository.viewMode === 'workspace') {
-            const appHostFlag = this._repository.workspaceAppHostPath ? ` --apphost "${this._repository.workspaceAppHostPath}"` : '';
-            this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" ${command}${suffix}${appHostFlag}`);
+            const appHostPath = this._getAppHostPathForResource(element);
+            const appHostFlag = appHostPath ? ` --apphost "${appHostPath}"` : '';
+            this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" ${command}${appHostFlag}`, true, additionalArgs, { redactAdditionalArgs });
             return;
         }
 
@@ -761,11 +830,15 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (!appHost) {
             return;
         }
-        this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" ${command} --apphost "${appHost.appHostPath}"${suffix}`);
+        this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" ${command} --apphost "${appHost.appHostPath}"`, true, additionalArgs, { redactAdditionalArgs });
     }
 
     private _findAppHostForResource(element: ResourceItem): AppHostDisplayInfo | undefined {
         return this._repository.appHosts.find(a => a.appHostPid === element.appHostPid);
+    }
+
+    private _getAppHostPathForResource(element: ResourceItem): string | undefined {
+        return this._findAppHostForResource(element)?.appHostPath ?? this._repository.workspaceAppHostPath;
     }
 }
 

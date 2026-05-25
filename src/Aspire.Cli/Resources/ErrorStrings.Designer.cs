@@ -109,6 +109,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string CertificateGenerationFailed
+        {
+            get
+            {
+                return ResourceManager.GetString("CertificateGenerationFailed", resourceCulture);
+            }
+        }
+
         public static string CertificatesMayNotBeFullyTrusted
         {
             get
@@ -154,6 +162,14 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("FailedToSearchForPackages", resourceCulture);
+            }
+        }
+
+        public static string FailedToParsePackageSearchResults
+        {
+            get
+            {
+                return ResourceManager.GetString("FailedToParsePackageSearchResults", resourceCulture);
             }
         }
 

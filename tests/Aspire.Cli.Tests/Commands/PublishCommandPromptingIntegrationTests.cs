@@ -810,6 +810,7 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
 
     // Default implementations for other interface methods
     public Task RequestStopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task NotifyAppHostReadyAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken) =>
         Task.FromResult(new DashboardUrlsState
         {
@@ -946,14 +947,15 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
 
     // Default implementations for other interface methods
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
+    public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => action(_ => { });
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
     public void DisplayError(string errorMessage, bool allowMarkup = false) => DisplayedErrors.Add(errorMessage);
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) { }
     public void DisplaySuccess(string message, bool allowMarkup = false) { }
     public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
-    public void DisplayCancellationMessage() { }
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) { }
     public void DisplayEmptyLine() { }
     public void DisplayPlainText(string text) { }
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }

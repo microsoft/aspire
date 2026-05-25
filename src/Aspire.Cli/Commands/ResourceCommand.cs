@@ -4,7 +4,6 @@
 using System.CommandLine;
 using System.CommandLine.Help;
 using System.CommandLine.Invocation;
-using System.CommandLine.Parsing;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
@@ -52,13 +51,24 @@ internal sealed class ResourceCommand : BaseCommand
 
     /// <summary>
     /// Well-known commands with their display metadata.
-    /// The command name is used directly (no mapping needed since the user-facing names match the actual command names).
+    /// The command names are passed through unchanged; entries only customize progress, success, and error text.
     /// </summary>
     private static readonly Dictionary<string, (string ProgressVerb, string BaseVerb, string PastTenseVerb)> s_wellKnownCommands = new(StringComparers.CommandName)
     {
         ["start"] = ("Starting", "start", "started"),
         ["stop"] = ("Stopping", "stop", "stopped"),
         ["restart"] = ("Restarting", "restart", "restarted"),
+        ["rebuild"] = ("Rebuilding", "rebuild", "rebuilt"),
+        ["set-parameter"] = ("Setting parameter for", "set parameter for", "set"),
+        ["delete-parameter"] = ("Deleting parameter for", "delete parameter for", "deleted"),
+        ["parameter-set"] = ("Setting parameter for", "set parameter for", "set"),
+        ["parameter-delete"] = ("Deleting parameter for", "delete parameter for", "deleted"),
+    };
+
+    private static readonly Dictionary<string, string> s_legacyCommandNameMap = new(StringComparers.CommandName)
+    {
+        ["parameter-set"] = "set-parameter",
+        ["parameter-delete"] = "delete-parameter",
     };
 
     public ResourceCommand(
@@ -102,7 +112,7 @@ internal sealed class ResourceCommand : BaseCommand
         });
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var commandName = parseResult.GetValue(s_commandArgument)!;
@@ -119,7 +129,7 @@ internal sealed class ResourceCommand : BaseCommand
 
         if (!result.Success)
         {
-            return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject);
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, CliExitCodes.FailedToFindProject));
         }
 
         var connection = result.Connection!;
@@ -127,16 +137,15 @@ internal sealed class ResourceCommand : BaseCommand
         var commandArgumentsResult = CreateCommandArguments(command, capturedArguments);
         if (commandArgumentsResult.ErrorMessage is { } errorMessage)
         {
-            _interactionService.DisplayError(errorMessage);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
         }
 
         var commandArguments = commandArgumentsResult.Arguments;
 
-        // Map well-known friendly names (start/stop/restart) to their display metadata
+        // Use display metadata for well-known command names.
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))
         {
-            return await ResourceCommandHelper.ExecuteResourceCommandAsync(
+            return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteResourceCommandAsync(
                 connection,
                 _interactionService,
                 _logger,
@@ -146,27 +155,28 @@ internal sealed class ResourceCommand : BaseCommand
                 knownCommand.BaseVerb,
                 knownCommand.PastTenseVerb,
                 commandArguments,
-                cancellationToken);
+                cancellationToken));
         }
 
-        return await ResourceCommandHelper.ExecuteGenericCommandAsync(
+        return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteGenericCommandAsync(
             connection,
             _interactionService,
             _logger,
             resourceName,
             commandName,
             commandArguments,
-            cancellationToken);
+            cancellationToken));
     }
 
     private static async Task<ResourceSnapshotCommand?> GetCommandMetadataAsync(IAppHostAuxiliaryBackchannel connection, string resourceName, string commandName, bool includeHidden, CancellationToken cancellationToken)
     {
         var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden, cancellationToken).ConfigureAwait(false);
         var resources = ResourceSnapshotMapper.ResolveResources(resourceName, snapshots);
+        var lookupCommandName = s_legacyCommandNameMap.GetValueOrDefault(commandName, commandName);
 
         return resources
             .SelectMany(static resource => resource.Commands)
-            .FirstOrDefault(command => string.Equals(command.Name, commandName, StringComparisons.CommandName));
+            .FirstOrDefault(command => string.Equals(command.Name, lookupCommandName, StringComparisons.CommandName));
     }
 
     private static async Task<(string Name, string Description)[]> GetAvailableCommandMetadataAsync(IAppHostAuxiliaryBackchannel connection, string resourceName, bool includeHidden, CancellationToken cancellationToken)
@@ -365,6 +375,17 @@ internal sealed class ResourceCommand : BaseCommand
             });
         }
 
+        if (argument.Disabled)
+        {
+            option.Validators.Add(result =>
+            {
+                if (result is { Implicit: false })
+                {
+                    result.AddError($"Option '--{optionName}' is disabled.");
+                }
+            });
+        }
+
         var exactName = $"--{argument.Name}";
         if (!string.Equals(exactName, $"--{optionName}", StringComparison.Ordinal))
         {
@@ -520,7 +541,7 @@ internal sealed class ResourceCommand : BaseCommand
             }
 
             WriteResourceCommandHelp(parseResult.InvocationConfiguration.Output, parseResult.CommandResult, request.ResourceName, resourceCommand);
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         private async Task WriteAvailableCommandsAsync(ParseResult parseResult, string resourceName, CancellationToken cancellationToken)
@@ -637,7 +658,7 @@ internal sealed class ResourceCommand : BaseCommand
             return result?.Tokens.Count > 0 ? result.Tokens[0].Value : null;
         }
 
-        private static void WriteResourceCommandHelp(TextWriter writer, CommandResult commandResult, string resourceName, ResourceSnapshotCommand command)
+        private static void WriteResourceCommandHelp(TextWriter writer, System.CommandLine.Parsing.CommandResult commandResult, string resourceName, ResourceSnapshotCommand command)
         {
             var cliOptionNames = GetCliOptionNames(commandResult);
 
@@ -664,7 +685,7 @@ internal sealed class ResourceCommand : BaseCommand
                 trailingBlankLine: false);
         }
 
-        private static IEnumerable<Option> GetVisibleCliOptions(CommandResult commandResult)
+        private static IEnumerable<Option> GetVisibleCliOptions(System.CommandLine.Parsing.CommandResult commandResult)
         {
             var seenOptionNames = new HashSet<string>(StringComparer.Ordinal);
 
@@ -677,7 +698,7 @@ internal sealed class ResourceCommand : BaseCommand
             }
 
             var current = commandResult.Parent;
-            while (current is CommandResult parentCommandResult)
+            while (current is System.CommandLine.Parsing.CommandResult parentCommandResult)
             {
                 foreach (var option in parentCommandResult.Command.Options)
                 {
@@ -691,14 +712,14 @@ internal sealed class ResourceCommand : BaseCommand
             }
         }
 
-        private static HashSet<string> GetCliOptionNames(CommandResult commandResult)
+        private static HashSet<string> GetCliOptionNames(System.CommandLine.Parsing.CommandResult commandResult)
         {
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             AddOptionNames(commandResult.Command.Options, includeOnlyRecursive: false, names);
 
             var current = commandResult.Parent;
-            while (current is CommandResult parentCommandResult)
+            while (current is System.CommandLine.Parsing.CommandResult parentCommandResult)
             {
                 AddOptionNames(parentCommandResult.Command.Options, includeOnlyRecursive: true, names);
                 current = parentCommandResult.Parent;

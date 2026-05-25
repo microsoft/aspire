@@ -207,10 +207,10 @@
     <value>The specified project file is not an Aspire AppHost project.</value>
   </data>
   <data name="ErrorConnectingToAppHost" xml:space="preserve">
-    <value>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</value>
+    <value>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</value>
   </data>
   <data name="AppHostConnectionLost" xml:space="preserve">
-    <value>The connection to the AppHost was lost: {0}.</value>
+    <value>The connection to the AppHost was lost: {0}</value>
   </data>
   <data name="AppHostConnectionLostGeneric" xml:space="preserve">
     <value>The connection to the application was lost.</value>
@@ -225,6 +225,10 @@
   <data name="SeeLogsAt" xml:space="preserve">
     <value>See logs at {0}</value>
     <comment>{0} is the log file path</comment>
+  </data>
+  <data name="SeeAppHostLogsAt" xml:space="preserve">
+    <value>See AppHost logs at {0}</value>
+    <comment>{0} is the log file path of the CLI process managing the AppHost</comment>
   </data>
   <data name="WaitingForDebuggerToAttachToAppHost" xml:space="preserve">
     <value>Waiting for debugger to attach to AppHost process</value>

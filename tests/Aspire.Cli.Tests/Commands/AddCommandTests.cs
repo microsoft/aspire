@@ -74,7 +74,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Empty(rawJson);
     }
 
@@ -105,7 +105,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Empty(rawJson);
     }
 
@@ -181,7 +181,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(projectLocatorWasCalled);
         Assert.False(promptedForIntegration);
         Assert.False(promptedForVersion);
@@ -224,7 +224,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Empty(ReadIntegrationResults(rawJson));
     }
 
@@ -249,7 +249,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToSearchIntegrations, exitCode);
+        Assert.Equal(CliExitCodes.FailedToSearchIntegrations, exitCode);
     }
 
     [Fact]
@@ -299,7 +299,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(addPackageWasCalled);
 
         var integrations = ReadIntegrationResults(rawJson);
@@ -345,7 +345,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var integrations = ReadIntegrationResults(rawJson);
         var integration = Assert.Single(integrations);
@@ -386,12 +386,12 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
-                    PackageChannel.CreateImplicitChannel(implicitCache),
-                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache)
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures())
                 ])
             };
         });
-        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _) => Task.FromResult(true)));
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -399,11 +399,159 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
         Assert.Equal("2.0.0", integration.Version);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonWithAppHostUsesConfiguredStagingChannelUnderStableCli()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "staging"
+            }
+            """);
+
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+        };
+        var stagingCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace, PackageChannelNames.Stable);
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both, [new PackageMapping("Aspire*", "staging")], stagingCache, new TestFeatures())
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search redis --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+        Assert.Equal("2.0.0", integration.Version);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonWithAppHostOutsideLaunchDirectoryUsesConfiguredStagingChannelWithRealPackagingService()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere"));
+        var appHostFile = new FileInfo(Path.Combine(projectDirectory.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "staging"
+            }
+            """);
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace, PackageChannelNames.Stable);
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.NuGetPackageCacheFactory = _ => cache;
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search redis --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+        Assert.Equal("2.0.0", integration.Version);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonWithUnpinnedAppHostUsesImplicitChannelUnderStagingCli()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+        };
+        var stagingCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace, PackageChannelNames.Staging);
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Staging, PackageChannelQuality.Both, [new PackageMapping("Aspire*", "staging")], stagingCache, new TestFeatures())
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search redis --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+        Assert.Equal("1.0.0", integration.Version);
     }
 
     [Fact]
@@ -434,8 +582,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.PackagingServiceFactory = _ => new TestPackagingService
             {
                 GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
-                    PackageChannel.CreateImplicitChannel(implicitCache),
-                    PackageChannel.CreateExplicitChannel("test-hive", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "test-hive")], explicitCache)
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("test-hive", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "test-hive")], explicitCache, new TestFeatures())
                 ])
             };
         });
@@ -446,7 +594,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
@@ -499,7 +647,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(addPackageWasCalled);
 
         var integrations = ReadIntegrationResults(rawJson);
@@ -1258,7 +1406,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.False(promptedForVersion);
         Assert.False(addPackageWasCalled);
         Assert.Contains(testInteractionService.DisplayedErrors, error => error.Contains("13.2.0") && error.Contains("Aspire.Hosting.Redis"));
@@ -1335,7 +1483,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.False(promptedForIntegration);
         Assert.False(promptedForVersion);
         Assert.False(addPackageWasCalled);
@@ -1523,7 +1671,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("add");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.Contains(testInteractionService.DisplayedErrors, e => e.Contains(AddCommandStrings.NoIntegrationPackagesFound));
     }
 
@@ -1652,7 +1800,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         // Create a fake channel
         var fakeCache = new FakeNuGetPackageCache();
-        var channel = PackageChannel.CreateImplicitChannel(fakeCache);
+        var channel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
 
         // Create multiple versions of the same package
         var packages = new[]
@@ -1700,7 +1848,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         // Create a fake channel
         var fakeCache = new FakeNuGetPackageCache();
-        var channel = PackageChannel.CreateImplicitChannel(fakeCache);
+        var channel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
 
         // Create multiple versions of the same package from same channel
         var packages = new[]
@@ -1748,10 +1896,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         // Create two different channels
         var fakeCache = new FakeNuGetPackageCache();
-        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
         
         var mappings = new[] { new PackageMapping("Aspire*", "https://preview-feed") };
-        var explicitChannel = PackageChannel.CreateExplicitChannel("preview", PackageChannelQuality.Prerelease, mappings, fakeCache);
+        var explicitChannel = PackageChannel.CreateExplicitChannel("preview", PackageChannelQuality.Prerelease, mappings, fakeCache, new TestFeatures());
 
         // Create packages from different channels with different versions
         var packages = new[]
@@ -2069,6 +2217,24 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 Version: element.GetProperty("version").GetString()))
             .ToArray();
     }
+
+    private static CliExecutionContext CreateExecutionContext(TemporaryWorkspace workspace, string identityChannel)
+    {
+        var aspireDirectory = workspace.CreateDirectory(".aspire");
+        var hivesDirectory = new DirectoryInfo(Path.Combine(aspireDirectory.FullName, "hives"));
+        var cacheDirectory = new DirectoryInfo(Path.Combine(aspireDirectory.FullName, "cache"));
+        var sdksDirectory = new DirectoryInfo(Path.Combine(aspireDirectory.FullName, "sdks"));
+        var logsDirectory = new DirectoryInfo(Path.Combine(aspireDirectory.FullName, "logs"));
+
+        return new CliExecutionContext(
+            workspace.WorkspaceRoot,
+            hivesDirectory,
+            cacheDirectory,
+            sdksDirectory,
+            logsDirectory,
+            Path.Combine(logsDirectory.FullName, "test.log"),
+            identityChannel: identityChannel);
+    }
 }
 
 internal sealed class TestAddCommandPrompter(IInteractionService interactionService) : AddCommandPrompter(interactionService)
@@ -2222,7 +2388,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.False(addPackageWasCalled);
         Assert.Contains(string.Format(AddCommandStrings.SpecifiedVersionRequiresExactPackageMatch, "postgre"), testInteractionService.DisplayedErrors);
     }
@@ -2274,7 +2440,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.False(addPackageWasCalled);
         Assert.Contains(string.Format(AddCommandStrings.SpecifiedVersionRequiresExactPackageMatch, "nonexistentpackage"), testInteractionService.DisplayedErrors);
     }
@@ -2524,7 +2690,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.True(promptedForIntegration);
         Assert.False(promptedForVersion);
         Assert.False(addPackageWasCalled);
@@ -2699,7 +2865,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.True(promptedForIntegration);
         Assert.False(promptedForVersion);
         Assert.False(addPackageWasCalled);

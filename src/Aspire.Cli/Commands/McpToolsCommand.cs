@@ -50,7 +50,7 @@ internal sealed class McpToolsCommand : BaseCommand
         Options.Add(s_formatOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var format = parseResult.GetValue(s_formatOption);
@@ -64,7 +64,7 @@ internal sealed class McpToolsCommand : BaseCommand
 
         if (!result.Success)
         {
-            return AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService);
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService));
         }
 
         var connection = result.Connection!;
@@ -74,11 +74,13 @@ internal sealed class McpToolsCommand : BaseCommand
         if (resourcesWithTools.Count == 0)
         {
             _interactionService.DisplayMessage(KnownEmojis.Information, "No resources with MCP tools found.");
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         if (format == OutputFormat.Json)
         {
+            // `aspire mcp tools --format json` writes this shape directly because MCP schemas
+            // are already JsonNode instances; keep docs/specs/cli-output-formats.md in sync when changing it.
             using var stream = new MemoryStream();
             using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true }))
             {
@@ -124,6 +126,6 @@ internal sealed class McpToolsCommand : BaseCommand
             _interactionService.DisplayRenderable(table);
         }
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

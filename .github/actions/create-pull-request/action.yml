@@ -47,7 +47,10 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.token }}
       run: |
-        # Use the provided token for both git and gh operations
+        # actions/checkout persists GITHUB_TOKEN as an extraheader by default. If
+        # that credential wins for git push, GitHub suppresses the PR synchronize
+        # workflows. Remove it so pushes use the supplied token instead.
+        git config --local --unset-all http.https://github.com/.extraheader || true
         gh auth setup-git
 
     - name: Commit and push changes
@@ -57,6 +60,7 @@ runs:
       env:
         BRANCH: ${{ inputs.branch }}
         COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        GH_TOKEN: ${{ inputs.token }}
       run: |
         # Check for any changes (staged, unstaged, or untracked)
         if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
@@ -99,13 +103,27 @@ runs:
           echo "pull-request-url=$PR_URL" >> $GITHUB_OUTPUT
           echo "pull-request-operation=none" >> $GITHUB_OUTPUT
         else
-          # Build label arguments as a bash array (avoids eval/injection)
+          # Build label arguments as a bash array (avoids eval/injection).
+          # Filter out any labels that don't exist in the repo — `gh pr create`
+          # otherwise fails the whole call with "could not add label: '<name>' not found",
+          # which would silently break release/automation workflows whenever a
+          # label is renamed or removed. We warn about each skipped label so
+          # the maintainer can fix the workflow input on their own schedule.
           LABEL_ARGS=()
           if [ -n "$LABELS" ]; then
+            # Fetch every label name in the repo. `gh label list` does not
+            # support pagination, so use the REST API directly to avoid
+            # misclassifying valid labels when the repository grows past one page.
+            EXISTING_LABELS=$(gh api "repos/${GITHUB_REPOSITORY}/labels?per_page=100" --paginate --jq '.[].name' 2>/dev/null || echo '')
             while IFS= read -r label; do
               label=$(echo "$label" | xargs)  # trim whitespace
-              if [ -n "$label" ]; then
+              if [ -z "$label" ]; then
+                continue
+              fi
+              if echo "$EXISTING_LABELS" | grep -Fxq "$label"; then
                 LABEL_ARGS+=(--label "$label")
+              else
+                echo "::warning::Skipping label '$label' — not found in this repository."
               fi
             done <<< "$LABELS"
           fi

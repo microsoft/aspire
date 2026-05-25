@@ -23,7 +23,7 @@ internal sealed class IntegrationPackageSearchService(
 
     public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
-        var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
+        var allChannels = await packagingService.GetChannelsAsync(cancellationToken, configuredChannel);
 
         if (!string.IsNullOrEmpty(configuredChannel))
         {
@@ -107,7 +107,7 @@ internal sealed class IntegrationPackageSearchService(
         catch (JsonException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return (ConfiguredChannel: null, ExitCode: ExitCodeConstants.FailedToLoadConfiguration);
+            return (ConfiguredChannel: null, ExitCode: CliExitCodes.FailedToLoadConfiguration);
         }
     }
 
