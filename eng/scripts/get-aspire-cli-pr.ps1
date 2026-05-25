@@ -910,8 +910,19 @@ function Remove-CleanupPath {
     }
 
     if ($PSCmdlet.ShouldProcess($Path, "Remove $Description")) {
-        Remove-Item -LiteralPath $Path -Recurse -Force
-        Write-Message "removed: $Path" -Level Info
+        try {
+            # Without -ErrorAction Stop, Remove-Item failures (permission
+            # denied, file in use, etc.) are non-terminating errors. Without
+            # the explicit try/catch, execution would fall through to the
+            # "removed:" log line below, hiding the failure and producing a
+            # success-looking exit while the path is still on disk.
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            Write-Message "removed: $Path" -Level Info
+        }
+        catch {
+            Write-Message "failed: $Path ($($_.Exception.Message))" -Level Error
+            throw
+        }
     }
     else {
         Write-Message "What if: would remove ${Description}: $Path" -Level Info
@@ -943,7 +954,18 @@ function Get-BundleVersionTarget {
         return $null
     }
 
-    $bundleItem = Get-Item -LiteralPath $bundlePath -Force
+    # Get-Item without -ErrorAction Stop emits non-terminating errors on
+    # permission denied / IO failure, $bundleItem becomes $null, and the
+    # function returns $null. Remove-BundleLayout would then delete just the
+    # bundle symlink and silently strand the versions/<v>/ tree — the same
+    # silent-failure pattern Remove-CleanupPath was hardened against.
+    try {
+        $bundleItem = Get-Item -LiteralPath $bundlePath -Force -ErrorAction Stop
+    }
+    catch [System.Management.Automation.ItemNotFoundException] {
+        # TOCTOU between Test-Path and Get-Item — bundle just disappeared. No-op.
+        return $null
+    }
     if (-not $bundleItem.LinkType -or -not $bundleItem.Target) {
         return $null
     }

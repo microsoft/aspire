@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -186,5 +187,135 @@ public class UninstallCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.NotEqual(CliExitCodes.Success, exitCode);
         Assert.True(Directory.Exists(sibling));
+    }
+
+    [Fact]
+    public async Task Uninstall_RemoveSharedInstall_LeasedBundleVersion_KeepsBothLinkAndVersionAndFailsExit()
+    {
+        // When another aspire process holds an active lease on the bundle
+        // version, --remove-shared-install must leave BOTH the symlink and the
+        // version on disk and surface a non-zero exit. Deleting the symlink
+        // while the lease holder still has the version open would silently
+        // break the live process's ability to re-resolve ~/.aspire/bundle.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        var hivePath = Path.Combine(aspireHome, "hives", "stable");
+        var binPath = Path.Combine(aspireHome, "bin");
+        var binaryPath = Path.Combine(binPath, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        var versionsRoot = Path.Combine(aspireHome, "versions");
+        var versionPath = Path.Combine(versionsRoot, "v1");
+        var bundlePath = Path.Combine(aspireHome, "bundle");
+        Directory.CreateDirectory(Path.Combine(hivePath, "packages"));
+        Directory.CreateDirectory(binPath);
+        Directory.CreateDirectory(versionPath);
+        File.WriteAllText(binaryPath, string.Empty);
+
+        try
+        {
+            Directory.CreateSymbolicLink(bundlePath, versionPath);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            Assert.Skip("Symlink creation is not available (Developer Mode not enabled or not running as admin).");
+            return;
+        }
+
+        using var lease = BundleVersionLease.Acquire(versionPath, "test", "uninstall-lease");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("uninstall --channel stable --remove-shared-install --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
+        Assert.False(Directory.Exists(hivePath));
+        Assert.False(File.Exists(binaryPath));
+        Assert.True(Directory.Exists(bundlePath), "Bundle symlink must remain so the lease holder can still resolve it.");
+        Assert.True(Directory.Exists(versionPath), "Leased bundle version must remain on disk.");
+    }
+
+    [Fact]
+    public async Task Uninstall_RemoveSharedInstall_LeasedBundleVersion_DryRun_StillSucceeds()
+    {
+        // --dry-run is describe-only — even though the real cleanup would be
+        // incomplete due to the lease, dry-run should report success so
+        // automation that just wants a preview doesn't trip on a runtime
+        // condition.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        var hivePath = Path.Combine(aspireHome, "hives", "stable");
+        var versionsRoot = Path.Combine(aspireHome, "versions");
+        var versionPath = Path.Combine(versionsRoot, "v1");
+        var bundlePath = Path.Combine(aspireHome, "bundle");
+        Directory.CreateDirectory(Path.Combine(hivePath, "packages"));
+        Directory.CreateDirectory(versionPath);
+
+        try
+        {
+            Directory.CreateSymbolicLink(bundlePath, versionPath);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            Assert.Skip("Symlink creation is not available (Developer Mode not enabled or not running as admin).");
+            return;
+        }
+
+        using var lease = BundleVersionLease.Acquire(versionPath, "test", "uninstall-lease");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("uninstall --channel stable --remove-shared-install --dry-run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(Directory.Exists(hivePath));
+        Assert.True(Directory.Exists(bundlePath));
+        Assert.True(Directory.Exists(versionPath));
+    }
+
+    [Fact]
+    public async Task Uninstall_RemoveSharedInstall_BundleLinkOutsideVersions_RemovesLinkOnly()
+    {
+        // When the bundle symlink points outside ~/.aspire/versions/, the
+        // service should remove the link but leave whatever it points at
+        // alone — the target is owned by something else (e.g. a dev redirect).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        var externalTarget = Path.Combine(workspace.WorkspaceRoot.FullName, "external-bundle");
+        var bundlePath = Path.Combine(aspireHome, "bundle");
+        Directory.CreateDirectory(aspireHome);
+        Directory.CreateDirectory(externalTarget);
+
+        try
+        {
+            Directory.CreateSymbolicLink(bundlePath, externalTarget);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            Assert.Skip("Symlink creation is not available (Developer Mode not enabled or not running as admin).");
+            return;
+        }
+
+        // Use a hive so --channel stable has work to do; the test focuses on
+        // the bundle-link branch of AddSharedInstallOperations.
+        Directory.CreateDirectory(Path.Combine(aspireHome, "hives", "stable", "packages"));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("uninstall --channel stable --remove-shared-install --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(Directory.Exists(bundlePath), "External-link symlink should be removed.");
+        Assert.True(Directory.Exists(externalTarget), "External symlink target must not be touched.");
     }
 }

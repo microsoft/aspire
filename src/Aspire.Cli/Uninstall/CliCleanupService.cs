@@ -79,12 +79,10 @@ internal sealed class CliCleanupService(HiveEnumerator hives, CliExecutionContex
             await DeleteMatchingGlobalChannelAsync(channel, dryRun, operations, cancellationToken);
         }
 
+        var sharedRemovalIncomplete = false;
         if (removeSharedInstall)
         {
-            foreach (var target in GetSharedInstallTargets())
-            {
-                operations.Add(DeleteFileSystemInfoUnlessRunningFromTarget(target, currentProcessPath, dryRun));
-            }
+            sharedRemovalIncomplete = AddSharedInstallOperations(currentProcessPath, dryRun, operations);
         }
         else if (channels.Any(IsSharedScriptChannel) && SharedInstallExists())
         {
@@ -93,7 +91,12 @@ internal sealed class CliCleanupService(HiveEnumerator hives, CliExecutionContex
                 "Shared script install artifacts were left in place. Pass --remove-shared-install to remove ~/.aspire/bin/aspire and the matching bundle/versions layout."));
         }
 
-        return new CleanupResult(operations, operations.Any(o => o.Status is CleanupOperationStatus.Failed));
+        // sharedRemovalIncomplete is only honored outside dry-run: dry-run is a
+        // describe-only mode and should not fail just because a real cleanup
+        // would have been blocked by a lease at runtime.
+        var hasFailures = operations.Any(o => o.Status is CleanupOperationStatus.Failed)
+            || (sharedRemovalIncomplete && !dryRun);
+        return new CleanupResult(operations, hasFailures);
     }
 
     private async Task DeleteMatchingGlobalChannelAsync(string channel, bool dryRun, List<CleanupOperation> operations, CancellationToken cancellationToken)
@@ -148,46 +151,130 @@ internal sealed class CliCleanupService(HiveEnumerator hives, CliExecutionContex
         => new(Path.Combine(GetAspireHomeDirectory().FullName, "bin"));
 
     private bool SharedInstallExists()
-        => GetSharedInstallTargets().Any(t => t.Exists);
+    {
+        // Check the bin/sidecar targets and the bundle path independently so
+        // a bundle-only remnant still triggers the "shared artifacts left in
+        // place" hint even though EnumerateSharedBinTargets no longer yields
+        // the bundle path.
+        if (EnumerateSharedBinTargets().Any(t => t.Exists))
+        {
+            return true;
+        }
 
-    private IEnumerable<FileSystemInfo> GetSharedInstallTargets()
+        return GetBundleDirectory().Exists;
+    }
+
+    private IEnumerable<FileSystemInfo> EnumerateSharedBinTargets()
     {
         var binDirectory = GetSharedBinDirectory();
         var binaryPath = Path.Combine(binDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
         yield return new FileInfo(binaryPath);
         yield return new FileInfo(Path.Combine(binDirectory.FullName, ".aspire-install.json"));
-        var bundleDirectory = new DirectoryInfo(Path.Combine(executionContext.AspireHomeDirectory.FullName, BundleDiscovery.BundleDirectoryName));
-        if (TryGetBundleVersionTarget(bundleDirectory, out var bundleVersionTarget))
-        {
-            yield return bundleVersionTarget;
-        }
-        yield return bundleDirectory;
     }
 
-    private bool TryGetBundleVersionTarget(DirectoryInfo bundleDirectory, out DirectoryInfo target)
+    private DirectoryInfo GetBundleDirectory()
+        => new(Path.Combine(GetAspireHomeDirectory().FullName, BundleDiscovery.BundleDirectoryName));
+
+    // Returns true when the shared-install removal could not be carried out in
+    // full (e.g. a leased bundle version was skipped). The caller promotes
+    // that to a non-zero exit so automation can tell "fully removed" from
+    // "removed everything except the leased bundle".
+    private bool AddSharedInstallOperations(string? currentProcessPath, bool dryRun, List<CleanupOperation> operations)
     {
-        target = null!;
+        // Resolve the bundle symlink target BEFORE deleting anything: once the
+        // symlink is gone ResolveLinkTarget can no longer recover the
+        // versions/<v>/ tree, and the leased-version guard below depends on
+        // knowing the target path.
+        var bundleDirectory = GetBundleDirectory();
+        var bundleVersionResult = ResolveBundleVersionTarget(bundleDirectory);
+
+        foreach (var target in EnumerateSharedBinTargets())
+        {
+            operations.Add(DeleteFileSystemInfoUnlessRunningFromTarget(target, currentProcessPath, dryRun));
+        }
+
+        switch (bundleVersionResult)
+        {
+            case BundleVersionTargetResult.Target target:
+                // Skip both the symlink and the version directory when another
+                // aspire process holds a lease on this version. Deleting only
+                // the symlink would leave the lease holder unable to
+                // re-resolve ~/.aspire/bundle even though the version itself
+                // was preserved — silently defeating the lease guard.
+                // Matches BundleService.TryCleanupStaleVersions which refuses
+                // to touch leased entries.
+                if (BundleVersionLease.HasActiveLease(target.Directory.FullName))
+                {
+                    operations.Add(CleanupOperation.Skipped(
+                        bundleDirectory.FullName,
+                        "Another running CLI / AppHost holds an active lease on the bundle version this link points at; leaving the link in place so the lease holder can still resolve it."));
+                    operations.Add(CleanupOperation.Skipped(
+                        target.Directory.FullName,
+                        "Another running CLI / AppHost holds an active lease on this bundle version. Stop those processes and re-run cleanup."));
+                    return true;
+                }
+                operations.Add(DeleteFileSystemInfoUnlessRunningFromTarget(bundleDirectory, currentProcessPath, dryRun));
+                operations.Add(DeleteFileSystemInfoUnlessRunningFromTarget(target.Directory, currentProcessPath, dryRun));
+                break;
+            case BundleVersionTargetResult.ExternalLink:
+                // Symlink resolves outside versions/ (e.g. a dev-mode redirect).
+                // Removing just the symlink is safe; recursive delete on a
+                // symlinked directory removes the link, not the target tree.
+                operations.Add(DeleteFileSystemInfoUnlessRunningFromTarget(bundleDirectory, currentProcessPath, dryRun));
+                break;
+            case BundleVersionTargetResult.NotALinkOrMissing:
+                // No symlink (or a real directory at ~/.aspire/bundle) — fall
+                // through to recursive delete. The script installer always
+                // creates a symlink, so a real directory here is an anomalous
+                // state we still clean up; recursive delete on a missing path
+                // is a no-op via the "does not exist" skip.
+                operations.Add(DeleteFileSystemInfoUnlessRunningFromTarget(bundleDirectory, currentProcessPath, dryRun));
+                break;
+            case BundleVersionTargetResult.ResolveFailed failure:
+                // Cannot tell where the symlink points — refuse to delete it,
+                // because deleting it would silently strand whatever
+                // versions/<v>/ tree it referenced.
+                operations.Add(CleanupOperation.Failed(bundleDirectory.FullName, $"Could not resolve bundle link target to clean up versions/<v>/: {failure.Reason}"));
+                break;
+        }
+
+        return false;
+    }
+
+    private BundleVersionTargetResult ResolveBundleVersionTarget(DirectoryInfo bundleDirectory)
+    {
         try
         {
             var resolvedTarget = bundleDirectory.ResolveLinkTarget(returnFinalTarget: true);
             if (resolvedTarget is not DirectoryInfo targetDirectory)
             {
-                return false;
+                // ResolveLinkTarget returns null when the path is not a reparse
+                // point/symlink (including when the path doesn't exist). Lumping
+                // these into one case is safe because both share the same
+                // downstream handling: nothing to detach from.
+                return new BundleVersionTargetResult.NotALinkOrMissing();
             }
 
-            var versionsDirectory = new DirectoryInfo(Path.Combine(executionContext.AspireHomeDirectory.FullName, BundleService.VersionsDirectoryName));
+            var versionsDirectory = new DirectoryInfo(Path.Combine(GetAspireHomeDirectory().FullName, BundleService.VersionsDirectoryName));
             if (!IsPathUnderTarget(targetDirectory.FullName, versionsDirectory.FullName))
             {
-                return false;
+                return new BundleVersionTargetResult.ExternalLink();
             }
 
-            target = targetDirectory;
-            return true;
+            return new BundleVersionTargetResult.Target(targetDirectory);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or System.Security.SecurityException)
         {
-            return false;
+            return new BundleVersionTargetResult.ResolveFailed(ex.Message);
         }
+    }
+
+    private abstract record BundleVersionTargetResult
+    {
+        internal sealed record Target(DirectoryInfo Directory) : BundleVersionTargetResult;
+        internal sealed record ExternalLink : BundleVersionTargetResult;
+        internal sealed record NotALinkOrMissing : BundleVersionTargetResult;
+        internal sealed record ResolveFailed(string Reason) : BundleVersionTargetResult;
     }
 
     private static bool IsPrChannel(string channel)
