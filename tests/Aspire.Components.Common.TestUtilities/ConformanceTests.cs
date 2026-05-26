@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Text.Json.Nodes;
+using System.Text.Json;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -389,9 +389,10 @@ public abstract class ConformanceTests<TService, TOptions>
     public void ConfigurationSchemaValidJsonConfigTest()
     {
         var schema = JsonSchema.FromFile(JsonSchemaPath);
-        var config = JsonNode.Parse(ValidJsonConfig);
+        // JsonSchema.Net 8.x changed JsonSchema.Evaluate to take JsonElement instead of JsonNode.
+        using var config = JsonDocument.Parse(ValidJsonConfig);
 
-        var results = schema.Evaluate(config);
+        var results = schema.Evaluate(config.RootElement);
 
         Assert.True(results.IsValid);
     }
@@ -403,9 +404,10 @@ public abstract class ConformanceTests<TService, TOptions>
 
         foreach ((string json, string error) in InvalidJsonToErrorMessage)
         {
-            var config = JsonNode.Parse(json);
-            var results = schema.Evaluate(config, DefaultEvaluationOptions);
-            var detail = results.Details.FirstOrDefault(x => x.HasErrors);
+            using var config = JsonDocument.Parse(json);
+            var results = schema.Evaluate(config.RootElement, DefaultEvaluationOptions);
+            // EvaluationResults.HasErrors was removed in JsonSchema.Net 8.x; use the Errors dictionary directly.
+            var detail = results.Details?.FirstOrDefault(x => x.Errors is { Count: > 0 });
 
             Assert.NotNull(detail);
             Assert.Equal(error, detail.Errors!.First().Value);

@@ -4,7 +4,7 @@
 #pragma warning disable CS0618 // Type or member is obsolete
 #pragma warning disable ASPIREPIPELINES001
 
-using System.Text.Json.Nodes;
+using System.Text.Json;
 using Aspire.Hosting.Tests.Helpers;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.KeyVault;
@@ -793,22 +793,24 @@ public class SchemaTests
 
     private static void AssertValid(string manifestText)
     {
-        var manifestJson = JsonNode.Parse(manifestText);
+        // JsonSchema.Net 8.x switched JsonSchema.Evaluate from JsonNode to JsonElement input,
+        // so feed the parsed JsonDocument's root element rather than a JsonNode.
+        using var manifestJson = JsonDocument.Parse(manifestText);
         var schema = GetSchema();
-        var results = schema.Evaluate(manifestJson);
+        var results = schema.Evaluate(manifestJson.RootElement);
 
         if (!results.IsValid)
         {
-            var errorMessages = results.Details.Where(x => x.HasErrors).SelectMany(e => e.Errors!).Select(e => e.Value);
+            var errorMessages = results.Details?.Where(x => x.Errors is not null).SelectMany(e => e.Errors!).Select(e => e.Value);
             Assert.True(results.IsValid, string.Join(Environment.NewLine, errorMessages ?? ["Schema failed validation with no errors"]));
         }
     }
 
     private static void AssertInvalid(string manifestText)
     {
-        var manifestJson = JsonNode.Parse(manifestText);
+        using var manifestJson = JsonDocument.Parse(manifestText);
         var schema = GetSchema();
-        var results = schema.Evaluate(manifestJson);
+        var results = schema.Evaluate(manifestJson.RootElement);
 
         Assert.False(results.IsValid);
     }
