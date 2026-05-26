@@ -4,6 +4,19 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
+			"label": "yarn: install extension",
+			"type": "shell",
+			"command": "yarn install",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"presentation": {
+				"reveal": "silent",
+				"group": "watchers"
+			},
+			"problemMatcher": []
+		},
+		{
 			"type": "npm",
 			"script": "watch",
 			"problemMatcher": "$ts-webpack-watch",
@@ -16,7 +29,11 @@
 				"kind": "build",
 				"isDefault": true
 			},
-			"label": "npm: watch extension"
+			"label": "npm: watch extension",
+			"dependsOn": [
+				"yarn: install extension"
+			],
+			"dependsOrder": "sequence"
 		},
 		{
 			"type": "npm",
@@ -28,7 +45,11 @@
 				"group": "watchers"
 			},
 			"group": "build",
-			"label": "npm: watch-tests extension"
+			"label": "npm: watch-tests extension",
+			"dependsOn": [
+				"yarn: install extension"
+			],
+			"dependsOrder": "sequence"
 		},
 		{
 			"label": "tasks: watch-tests extension",
