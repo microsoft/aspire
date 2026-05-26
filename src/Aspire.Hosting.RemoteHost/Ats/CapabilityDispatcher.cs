@@ -619,7 +619,19 @@ internal sealed class CapabilityDispatcher
 
     private static async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runSyncOnBackgroundThread)
     {
-        if (runSyncOnBackgroundThread && !IsAsyncReturnType(method.ReturnType))
+        // When runSyncOnBackgroundThread is true, we must move to a background thread regardless of
+        // whether the method is sync or async. The caller (typically DistributedApplication.RunAsync)
+        // may be executing on the NonConcurrentSynchronizationContext (StreamJsonRpc's single-item
+        // dispatch queue). Any synchronous work done before the first real 'await' — including
+        // BeforeStartEvent subscribers and lazy IOptions.Configure callbacks — runs on that context.
+        // If any of that work invokes an ATS proxy for a TypeScript async callback, the proxy calls
+        // .GetAwaiter().GetResult(), which blocks the context while awaiting responses that are
+        // themselves queued on the same blocked context → deadlock.
+        //
+        // Previously this guard only applied to sync-return methods (!IsAsyncReturnType), leaving
+        // async-return methods like RunAsync unprotected. Removing the guard ensures the synchronous
+        // startup code of those methods also runs off the sync context.
+        if (runSyncOnBackgroundThread)
         {
             return await Task.Run(() => InvokeMethodCore(method, target, methodArgs)).ConfigureAwait(false);
         }
