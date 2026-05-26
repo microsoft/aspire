@@ -127,10 +127,7 @@ public class FoundryResource(string name, Action<AzureResourceInfrastructure> co
     {
         yield return new("Uri", UriExpression);
 
-        if (!IsEmulator)
-        {
-            yield return new("EndpointAIInference", ReferenceExpression.Create($"{AIFoundryApiEndpoint}models"));
-        }
+        yield return new("AI_INFERENCE_URI", IsEmulator ? UriExpression : ReferenceExpression.Create($"{AIFoundryApiEndpoint}models"));
 
         if (IsEmulator)
         {

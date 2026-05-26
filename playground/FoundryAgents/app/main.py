@@ -46,17 +46,9 @@ async def get_forecast() -> str:
         return json.dumps({"error": str(e)})
 
 
-def get_project_endpoint() -> str:
-    project_endpoint = os.environ.get("PROJMYPROJECT_URI")
-    if project_endpoint:
-        return project_endpoint
-
-    raise RuntimeError("PROJMYPROJECT_URI is required.")
-
-
 def main():
     """Main function to run the agent as a web server."""
-    project_endpoint = get_project_endpoint()
+    project_endpoint = os.environ["PROJMYPROJECT_URI"]
     deployment_name = os.environ.get("CHAT_MODELNAME", "chat")
 
     client = FoundryChatClient(
