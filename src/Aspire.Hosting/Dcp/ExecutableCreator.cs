@@ -127,6 +127,19 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 // Clear any existing launch configurations (needed for restart scenarios).
                 exe.Annotate(Executable.LaunchConfigurationsAnnotation, string.Empty);
                 supportsDebuggingAnnotation.LaunchConfigurationAnnotator(exe, mode);
+
+                // Propagate VSCodeServerReadyActionAnnotation to non-project launch configs
+                // (e.g., azure-functions) so that WithVSCodeServerReadyAction() is effective.
+                if (er.ModelResource is ProjectResource pr && pr.TryGetLastAnnotation<VSCodeServerReadyActionAnnotation>(out var sraAnnotation))
+                {
+                    if (exe.TryGetAnnotationAsObjectList<ExecutableLaunchConfiguration>(Executable.LaunchConfigurationsAnnotation, out var launchConfigs))
+                    {
+                        foreach (var lc in launchConfigs)
+                        {
+                            lc.ServerReadyAction = sraAnnotation.ServerReadyAction.ToDcpServerReadyAction();
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {

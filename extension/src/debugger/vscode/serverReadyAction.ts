@@ -46,15 +46,15 @@ export function determineVSCodeServerReadyAction(
     applicationUrl?: string,
     debugConfigurationServerReadyAction?: VSCodeServerReadyAction
 ): VSCodeServerReadyAction | undefined {
-    if (launchBrowser === false) {
-        return undefined;
-    }
-
+    // An explicit serverReadyAction (e.g., from the AppHost via WithVSCodeServerReadyAction)
+    // always takes priority, even when launchBrowser is false in launchSettings.json.
     if (debugConfigurationServerReadyAction) {
         return debugConfigurationServerReadyAction;
     }
 
-    if (launchBrowser === undefined || !applicationUrl) {
+    // Only synthesize a default action from applicationUrl when launchBrowser is not
+    // explicitly disabled.
+    if (launchBrowser === false || launchBrowser === undefined || !applicationUrl) {
         return undefined;
     }
 

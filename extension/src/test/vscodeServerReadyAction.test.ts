@@ -72,14 +72,16 @@ suite('VS Code Server Ready Action Tests', () => {
             assert.deepStrictEqual(result, existing);
         });
 
-        test('returns undefined when launchBrowser is false, applicationUrl is undefined and existing launch config serverReadyAction', () => {
-            const result = determineVSCodeServerReadyAction(false, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+(https?://\\S+)' });
-            assert.strictEqual(result, undefined);
+        test('returns existing serverReadyAction even when launchBrowser is false', () => {
+            const existing = { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+(https?://\\S+)' };
+            const result = determineVSCodeServerReadyAction(false, undefined, existing);
+            assert.deepStrictEqual(result, existing);
         });
 
-        test('returns undefined when launchBrowser is false, applicationUrl is not undefined and existing launch config serverReadyAction', () => {
-            const result = determineVSCodeServerReadyAction(false, 'https://localhost:5001', { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+(https?://\\S+)' });
-            assert.strictEqual(result, undefined);
+        test('returns existing serverReadyAction even when launchBrowser is false with applicationUrl', () => {
+            const existing = { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+(https?://\\S+)' };
+            const result = determineVSCodeServerReadyAction(false, 'https://localhost:5001', existing);
+            assert.deepStrictEqual(result, existing);
         });
 
         test('returns serverReadyAction when launchBrowser true and applicationUrl provided', () => {
