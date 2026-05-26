@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Routine npm dependency bump; no matching changelog entry",
+  "mergedAt": "2026-05-26T15:45:41Z",
+  "number": 1072,
+  "runDate": "2026-05-26T17:10:45Z",
+  "status": "excluded",
+  "title": "build(deps): bump the npm-all group across 1 directory with 3 updates"
+}

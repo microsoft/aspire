@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Fixes TypeScript import paths for createBuilder examples; matches TypeScript AppHosts use explicit ES modules entry",
+  "mergedAt": "2026-05-26T16:23:34Z",
+  "number": 1073,
+  "runDate": "2026-05-26T17:10:45Z",
+  "status": "included",
+  "title": "fix(docs): update import paths for createBuilder in TypeScript examples"
+}
