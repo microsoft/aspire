@@ -479,13 +479,34 @@ internal sealed class UpdateCommand : BaseCommand
             var channels = isStagingEnabled
                 ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
                 : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };
-            var channelBinding = PromptBinding.Create(parseResult, _channelOption);
-            channel = await InteractionService.PromptForSelectionAsync(
-                "Select the channel to update to:",
-                channels,
-                q => q,
-                binding: channelBinding,
-                cancellationToken: cancellationToken);
+
+            // In non-interactive mode, avoid prompting. Prefer the channel the current CLI
+            // was resolved from when it maps to an update channel; otherwise fall back to stable.
+            var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
+            if (nonInteractive)
+            {
+                var identityChannel = ExecutionContext.IdentityChannel;
+                if (!string.IsNullOrWhiteSpace(identityChannel)
+                    && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName)
+                    && channels.Any(c => string.Equals(c, identityChannel, StringComparisons.ChannelName)))
+                {
+                    channel = identityChannel;
+                }
+                else
+                {
+                    channel = PackageChannelNames.Stable;
+                }
+            }
+            else
+            {
+                var channelBinding = PromptBinding.Create(parseResult, _channelOption);
+                channel = await InteractionService.PromptForSelectionAsync(
+                    "Select the channel to update to:",
+                    channels,
+                    q => q,
+                    binding: channelBinding,
+                    cancellationToken: cancellationToken);
+            }
         }
 
         try
