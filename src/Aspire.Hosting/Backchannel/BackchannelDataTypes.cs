@@ -435,6 +435,11 @@ internal sealed class ExecuteResourceCommandRequest : BackchannelRequest
     /// </summary>
     public bool NonInteractive { get; init; } = true;
 
+    /// <summary>
+    /// Gets a value indicating whether the response should include command argument input metadata after dynamic loading.
+    /// </summary>
+    public bool ReturnArgumentInputs { get; init; }
+
     /// <inheritdoc />
     public override ExecuteResourceCommandRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
     {
@@ -443,7 +448,8 @@ internal sealed class ExecuteResourceCommandRequest : BackchannelRequest
         CommandName = CommandName,
         Arguments = Arguments,
         ValidateOnly = ValidateOnly,
-        NonInteractive = NonInteractive
+        NonInteractive = NonInteractive,
+        ReturnArgumentInputs = ReturnArgumentInputs
     };
 }
 
@@ -467,6 +473,11 @@ internal sealed class ExecuteResourceCommandOptions
     /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
     /// </summary>
     public bool NonInteractive { get; init; } = true;
+
+    /// <summary>
+    /// Gets a value indicating whether the response should include command argument input metadata after dynamic loading.
+    /// </summary>
+    public bool ReturnArgumentInputs { get; init; }
 }
 
 /// <summary>
@@ -504,6 +515,12 @@ internal sealed class ExecuteResourceCommandResponse
     /// Gets validation errors for submitted command arguments.
     /// </summary>
     public ResourceCommandArgumentValidationError[] ValidationErrors { get; init; } = [];
+
+    /// <summary>
+    /// Gets command argument input metadata after dynamic loading has run.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceSnapshotCommandArgument[]? ArgumentInputs { get; init; }
 }
 
 /// <summary>
@@ -1204,6 +1221,30 @@ internal sealed class ResourceSnapshotCommandArgument
     /// Gets the maximum length for text inputs.
     /// </summary>
     public int? MaxLength { get; init; }
+
+    /// <summary>
+    /// Gets metadata describing dynamic input loading behavior.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceSnapshotCommandArgumentDynamicLoading? DynamicLoading { get; init; }
+}
+
+/// <summary>
+/// Represents dynamic loading metadata for a resource command argument.
+/// </summary>
+internal sealed class ResourceSnapshotCommandArgumentDynamicLoading
+{
+    /// <summary>
+    /// Gets a value indicating whether the input should always load when prompting starts.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AlwaysLoadOnStart { get; init; }
+
+    /// <summary>
+    /// Gets the input names that trigger reloading when their values change.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? DependsOnInputs { get; init; }
 }
 
 /// <summary>

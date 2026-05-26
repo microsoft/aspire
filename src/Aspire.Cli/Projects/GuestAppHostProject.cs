@@ -1375,7 +1375,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return packageUpdates;
             });
 
-        var explicitChannelName = context.Channel.Type == Packaging.PackageChannelType.Explicit ? context.Channel.Name : null;
+        var explicitChannelName = context.Channel.ShouldPersistChannelName() ? context.Channel.Name : null;
         var explicitChannelChanged = explicitChannelName is not null && !string.Equals(config.Channel, explicitChannelName, StringComparisons.CliInputOrOutput);
 
         if (updates.Count == 0 && newSdkVersion is null)
@@ -1413,11 +1413,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             config.SdkVersion = newSdkVersion;
         }
-        // Persist the channel when update resolved an explicit channel. That can come from
-        // --channel, per-project/global config, prompt selection, or the UpdateCommand
-        // identity-channel fallback for non-project-reference AppHosts. When the resolved
-        // channel is Implicit — i.e. no explicit channel source matched — leave the project's
-        // existing setting untouched rather than pinning the implicit/default channel.
+        // Persist the channel when update resolved a non-stable explicit channel. That can
+        // come from --channel, per-project/global config, prompt selection, or the
+        // UpdateCommand identity-channel fallback for non-project-reference AppHosts. When
+        // the resolved channel is Implicit or stable, leave the project's existing setting
+        // untouched rather than pinning the default public-feed behavior.
         if (explicitChannelName is not null)
         {
             config.Channel = explicitChannelName;

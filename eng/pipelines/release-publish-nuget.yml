@@ -905,6 +905,59 @@ extends:
                 # to match files under the artifact root.
                 patterns: '**/aspire-cli-*'
 
+              # Install the GitHub CLI directly from cli/cli release artifacts.
+              # Reasons for downloading the official zip directly:
+              #   - The 1ES scout image used by this pool does not ship gh
+              #     on PATH (the previous `gh release upload --clobber`
+              #     failed with CommandNotFoundException).
+              #   - Avoids a hard dependency on choco/winget being present.
+              # Version + zip SHA256 are pinned for determinism and supply-
+              # chain integrity — bump together when updating:
+              #   - releases:  https://github.com/cli/cli/releases
+              #   - checksums: https://github.com/cli/cli/releases/download/v<version>/gh_<version>_checksums.txt
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $version  = '2.92.0'
+                  # SHA256 of gh_2.92.0_windows_amd64.zip from the cli/cli
+                  # v2.92.0 checksums.txt. Verifying this locally keeps the
+                  # release-publish pipeline from trusting GitHub's TLS alone
+                  # for the binary that performs the privileged release upload.
+                  $expectedSha256 = 'b6a8df3c8c6b9c80f290906387673bc4d272840f3789c5650e0e4e6e75522785'
+                  $url            = "https://github.com/cli/cli/releases/download/v$version/gh_${version}_windows_amd64.zip"
+                  $dest           = Join-Path $env:AGENT_TEMPDIRECTORY 'gh'
+                  $zipPath        = Join-Path $dest 'gh.zip'
+                  New-Item -ItemType Directory -Force -Path $dest | Out-Null
+                  Write-Host "Downloading $url..."
+                  Invoke-WebRequest -Uri $url -OutFile $zipPath -UseBasicParsing
+                  $actualSha256 = (Get-FileHash -Algorithm SHA256 $zipPath).Hash.ToLower()
+                  if ($actualSha256 -ne $expectedSha256) {
+                      Write-Host "ERROR: SHA256 mismatch for $url. Expected $expectedSha256 but got $actualSha256. If gh $version was re-released, update the pinned hash from the per-release checksums.txt." -ForegroundColor Red
+                      exit 1
+                  }
+                  Write-Host "✓ Verified gh.zip SHA256 against pinned value."
+                  Expand-Archive -LiteralPath $zipPath -DestinationPath $dest -Force
+                  # The zip extracts to gh_<version>_windows_amd64/bin/gh.exe.
+                  $ghExe = Get-ChildItem -Path $dest -Recurse -Filter gh.exe | Select-Object -First 1
+                  if (-not $ghExe) {
+                      Write-Host "ERROR: gh.exe not found after extracting $url." -ForegroundColor Red
+                      exit 1
+                  }
+                  $binDir = $ghExe.Directory.FullName
+                  Write-Host "Prepending $binDir to PATH for subsequent steps."
+                  Write-Host "##vso[task.prependpath]$binDir"
+                  # Verify on the current step's PATH too (prependpath only
+                  # affects subsequent steps). $ErrorActionPreference='Stop'
+                  # catches cmdlet errors but NOT native-exe non-zero exits,
+                  # so check $LASTEXITCODE explicitly — otherwise a corrupt
+                  # extract or missing dependency DLL would pass this step
+                  # and surface as a confusing failure in publish-release-cli-assets.ps1.
+                  & "$binDir/gh.exe" --version
+                  if ($LASTEXITCODE -ne 0) {
+                      Write-Host "ERROR: gh.exe --version exited with code $LASTEXITCODE — the installed binary is on disk but failed to run." -ForegroundColor Red
+                      exit $LASTEXITCODE
+                  }
+                displayName: 'Install GitHub CLI from cli/cli release'
+
               # pwsh (not powershell): publish-release-cli-assets.ps1 calls
               # Get-AspireBotInstallationToken.ps1, which uses RSA.ImportFromPem
               # — only available in .NET Core 3.0+ / .NET 5+, not in the .NET

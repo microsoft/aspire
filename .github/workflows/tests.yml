@@ -322,17 +322,17 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: '20.x'
+      - name: Validate lockfile registries
+        run: node -e "const fs = require('fs'); const lock = fs.readFileSync('yarn.lock', 'utf8'); if (/registry\\.(?:npmjs\\.org|yarnpkg\\.com)/.test(lock)) { throw new Error('extension/yarn.lock contains public npm registry URLs. Regenerate it using the internal dotnet-public-npm feed before restoring.'); }"
       - name: Install dependencies
-        run: npm install
+        run: yarn install --frozen-lockfile --non-interactive
       - name: Run tests
-        run: npm test
+        run: yarn test
       - name: Override extension version for PR builds
         if: ${{ inputs.extensionVersionOverride != '' }}
-        env:
-          EXTENSION_VERSION: ${{ inputs.extensionVersionOverride }}
-        run: npm version "$EXTENSION_VERSION" --no-git-tag-version
+        run: yarn version --new-version "${{ inputs.extensionVersionOverride }}" --no-git-tag-version
       - name: Package VSIX
-        run: npm exec @vscode/vsce -- package --pre-release -o out/aspire-extension.vsix
+        run: yarn run vsce package --pre-release -o out/aspire-extension.vsix
       - name: Upload VSIX
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:

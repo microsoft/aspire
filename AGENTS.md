@@ -263,6 +263,7 @@ kill <pid>
 * Do not use Directory.SetCurrentDirectory in tests as it can cause side effects when tests execute concurrently.
 * Prefer using shared test service implementations (e.g., project-level `TestServices/` or `Helpers/` directories, or the cross-project `tests/Shared/` folder) rather than creating private implementation classes within individual test files. Reusing existing test fakes and helpers keeps tests consistent, reduces duplication, and makes maintenance easier. Do not create private test classes when a shared one already exists or can be extended.
 * MTP diagnostic args (hang dump, crash dump, exit code handling) are defined in `eng/Testing.props` via `MtpBaseArgs`. Do not hardcode these args in workflow YAML. See [docs/ci/mtp-args-pipeline.md](docs/ci/mtp-args-pipeline.md) for details.
+* Use `Verify` (snapshot testing) for generated artifacts (files, serialized output, structured text). Prefer `await Verify(value, "ext")` over `Assert.Contains` / `Assert.DoesNotContain` / `Assert.Equal` on the same value. Run the test once to generate the `.received.` file, review it, then rename it to `.verified.` to accept it.
 
 ## Running tests
 

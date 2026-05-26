@@ -89,6 +89,13 @@ internal static class Hex1bTestHelpers
         int height = 48,
         [CallerMemberName] string testName = "")
     {
+        // Prefer the xUnit-reported test method name so that when a [Fact]/[Theory]
+        // delegates into a private helper (e.g. *Core methods), the .cast file is
+        // still named after the public test the TRX records an outcome for. The CLI
+        // E2E recording-comment workflow joins .cast files to TRX outcomes by name;
+        // when the helper name leaks in via `[CallerMemberName]`, no TRX entry
+        // matches and the test ends up tagged "Unknown" on every PR.
+        testName = ResolveTestMethodName(testName);
         var recordingPath = GetTestResultsRecordingPath(testName, localSubDir);
 
         var builder = Hex1bTerminal.CreateBuilder()
@@ -126,6 +133,20 @@ internal static class Hex1bTestHelpers
 
         Directory.CreateDirectory(recordingsDir);
         return Path.Combine(recordingsDir, $"{testName}.cast");
+    }
+
+    /// <summary>
+    /// Resolves the test method name for naming a recording file. Prefers the xUnit-reported
+    /// <c>TestContext.Current.TestCase.TestMethodName</c> when running inside a live test
+    /// context, so a recording created from inside a private helper still gets named after
+    /// the public <c>[Fact]</c>/<c>[Theory]</c> that the TRX records an outcome for. Falls
+    /// back to the <see cref="CallerMemberNameAttribute"/>-supplied name when no test context
+    /// is available.
+    /// </summary>
+    internal static string ResolveTestMethodName(string callerMemberName)
+    {
+        var fromXunit = Xunit.TestContext.Current?.TestCase?.TestMethodName;
+        return !string.IsNullOrEmpty(fromXunit) ? fromXunit : callerMemberName;
     }
 
     /// <summary>

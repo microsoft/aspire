@@ -245,7 +245,7 @@ Categorize the changes:
 
 ### 6. Generate Test Scenarios
 
-Based on the PR changes, generate appropriate test scenarios. Always use new projects in the temp folder.
+Based on the PR changes, generate appropriate test scenarios. Always use new projects in the temp folder. Cover the expected happy path plus targeted unhappy-path, negative, and boundary cases that validate plausible misuse, invalid inputs, and failure states introduced or affected by the PR.
 
 #### Scenario Categories
 
@@ -277,6 +277,22 @@ Based on the PR changes, generate appropriate test scenarios. Always use new pro
 - Add the corresponding hosting resource
 - Test the client can connect to the resource
 
+#### Unhappy-Path Coverage
+
+For every changed user-facing behavior, include 1-3 high-value unhappy-path, negative, or boundary test cases after the happy-path scenario. Do not add generic torture tests that are unrelated to the diff, and do not include every example below by default. Each case should have an expected outcome, such as a clear validation error, a safe failed state, a non-zero exit code, or a recoverable dashboard/resource state.
+
+Use these examples as a starting point and adapt them to the actual PR:
+
+| Change area | Unhappy-path cases to consider |
+|-------------|-------------------------------|
+| CLI commands/options | Missing required arguments, invalid option combinations, non-existent `--apphost` paths, output directories that already exist, non-interactive execution that would otherwise prompt |
+| Hosting integrations | Invalid or missing configuration, duplicate resource names/endpoints, unavailable backing service, unhealthy resource startup, invalid connection string or credential shape |
+| Dashboard UI | Empty data sets, failed/unhealthy/unknown resource states, long resource names, large resource counts, malformed telemetry/log data from a resource |
+| Templates | Invalid project names, non-empty output directories, unsupported template option values, disabled optional services, non-interactive creation with all prompt-suppressing flags |
+| Client/components | Missing configuration, connection refusal, auth failure, unavailable resource, malformed endpoint metadata |
+
+Prefer cases that reproduce how a real user could break or misuse the changed feature. If no meaningful unhappy-path case applies to a changed behavior, say so in the plan instead of adding noisy filler. Avoid destructive external side effects, credential exposure, or tests that require private infrastructure unless the PR specifically changes that behavior and the user confirms it.
+
 ### 7. Present Scenarios and Get User Input
 
 **Before executing any test scenarios**, present a summary of the proposed scenarios to the user and ask for confirmation. Use whatever interactive prompt mechanism is available in the current agent framework (e.g., a question/form tool, a chat message asking for confirmation, etc.).
@@ -300,6 +316,9 @@ Based on analyzing the PR changes, I've identified the following test scenarios:
 1. **[Scenario Name]** - [Brief description of what will be tested]
 2. **[Scenario Name]** - [Brief description of what will be tested]
 3. ...
+
+### Unhappy-Path Coverage
+- **[Unhappy-Path Case Name]** - [Invalid input/state being tested and expected safe failure or recovery behavior]
 ```
 
 **Then ask the user to confirm the plan and choose an execution target.** Collect the following:
@@ -399,7 +418,17 @@ aspire run 2>&1 | Tee-Object -FilePath "$scenarioDir\run-output.txt"
 
 ### 10. Generate Detailed Report
 
-Create a comprehensive report with the following structure:
+Write the comprehensive report to a markdown file and keep its path in `reportPath` so the same file can be posted in Step 11:
+
+```bash
+reportPath="$testDir/pr-$prNumber-testing-report.md"
+```
+
+```powershell
+$reportPath = Join-Path $testDir "pr-$prNumber-testing-report.md"
+```
+
+Use the following structure:
 
 ```markdown
 # PR Testing Report
@@ -431,6 +460,7 @@ Create a comprehensive report with the following structure:
 
 ### Scenario 1: [Scenario Name]
 **Objective:** [What this scenario tests]
+**Coverage Type:** Happy path / Unhappy path / Boundary
 **Status:** ✅ Passed / ❌ Failed
 
 **Steps:**
@@ -446,6 +476,8 @@ Create a comprehensive report with the following structure:
 **Observations:**
 - All resources started successfully
 - Dashboard displayed Redis resource correctly
+
+**Expected Unhappy-Path Outcome:** [Only for unhappy-path or boundary scenarios: validation error, non-zero exit code, safe failed state, recovery behavior, etc.]
 
 ---
 
@@ -464,6 +496,26 @@ Create a comprehensive report with the following structure:
 ### Recommendations
 - [Any recommendations based on test results]
 ```
+
+### 11. Ask Whether to Post the Report
+
+After the test run finishes and the detailed report is generated, ask the user whether to post the report as a PR comment when the run is associated with a GitHub PR (`prNumber` is known). Default the prompt to **Yes**, but do not post anything without explicit user confirmation.
+
+Use whatever interactive prompt mechanism is available in the current agent framework. The prompt should make the default clear, for example:
+
+```markdown
+Post this test report as a comment on PR #12345?
+
+Default: Yes
+```
+
+If the user confirms, post the report:
+
+```bash
+gh pr comment "$prNumber" --repo microsoft/aspire --body-file "$reportPath"
+```
+
+If the user declines, or if no GitHub PR was resolved, do not post the report. Include the posting status in the final response.
 
 ## Error Handling
 
@@ -543,7 +595,7 @@ Document failures with full context:
 [How this affects users of the PR changes]
 ```
 
-### 11. Offer Container Inspection
+### 12. Offer Container Inspection
 
 If testing ran in the repo container runner, ask the user before cleanup whether they want to keep the mounted workspace around for inspection. Use whatever interactive prompt mechanism is available in the current agent framework.
 
@@ -617,7 +669,8 @@ After completing the task, provide:
 1. **Brief Summary** - One-line result (Passed/Failed with key finding)
 2. **Full Report** - The detailed markdown report as described above
 3. **Artifacts** - List of captured screenshots and logs with their locations
-4. **Cleanup / Inspection Status** - Whether the temp workspace was removed or retained for inspection, plus the reopen command when retained
+4. **PR Comment Status** - Whether the report was posted to the PR, declined, skipped, or failed to post
+5. **Cleanup / Inspection Status** - Whether the temp workspace was removed or retained for inspection, plus the reopen command when retained
 
 Example summary:
 ```markdown
@@ -631,6 +684,7 @@ Dashboard correctly displays the new Redis resource type.
 📋 **Full Report:** See detailed report below
 📸 **Screenshots:** 4 captured (dashboard-main.png, redis-resource.png, ...)
 📝 **Logs:** 3 captured (run-output.txt, version.txt, ...)
+💬 **PR Comment:** Posted to PR #12345
 🧪 **Inspection:** Container workspace cleaned up
 ```
 
@@ -642,6 +696,8 @@ Dashboard correctly displays the new Redis resource type.
 - **Clean up after** - Remove temp directories when done, unless the user explicitly asked to keep the container workspace for inspection
 - **Document everything** - Detailed reports help PR authors understand results
 - **Test actual changes** - Focus scenarios on what the PR modified
+- **Include unhappy-path cases** - Add targeted negative/boundary scenarios for changed user-facing behavior, and verify expected safe failures or recovery states
+- **Ask before posting** - If there is a GitHub PR, ask before posting the report as a PR comment; default to yes, but require explicit confirmation
 - **Fresh projects** - Always use `aspire new` for each scenario, don't reuse projects
 - **Container mode** - Prefer the repo-local `./eng/scripts/aspire-pr-container` scripts and a fresh temp workspace when Docker is available
 - **Ask before container cleanup** - At the end of a container-mode run, ask whether to keep the mounted workspace around for inspection

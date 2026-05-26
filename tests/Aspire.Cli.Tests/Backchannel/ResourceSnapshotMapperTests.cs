@@ -65,7 +65,12 @@ public class ResourceSnapshotMapperTests
                             Options = new Dictionary<string, string?> { ["primary"] = "Primary" },
                             AllowCustomChoice = true,
                             Disabled = true,
-                            MaxLength = 128
+                            MaxLength = 128,
+                            DynamicLoading = new ResourceSnapshotCommandArgumentDynamicLoading
+                            {
+                                AlwaysLoadOnStart = true,
+                                DependsOnInputs = ["browser"]
+                            }
                         }
                     ]
                 },
@@ -104,6 +109,9 @@ public class ResourceSnapshotMapperTests
         Assert.True(argumentInput.AllowCustomChoice);
         Assert.True(argumentInput.Disabled);
         Assert.Equal(128, argumentInput.MaxLength);
+        Assert.NotNull(argumentInput.DynamicLoading);
+        Assert.True(argumentInput.DynamicLoading.AlwaysLoadOnStart);
+        Assert.Equal("browser", Assert.Single(argumentInput.DynamicLoading.DependsOnInputs!));
 
         // Only IsFromSpec environment variables should be included
         Assert.Single(result.Environment!);

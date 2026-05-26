@@ -117,6 +117,14 @@
   <data name="FallbackParsingWarning" xml:space="preserve">
     <value>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</value>
   </data>
+  <data name="UpdateChannelStepDescriptionFormat" xml:space="preserve">
+    <value>Update aspire.config.json channel from '{0}' to '{1}'</value>
+    <comment>{0} = current channel name (or '(none)' if absent). {1} = new channel name.</comment>
+  </data>
+  <data name="ChannelNonePlaceholder" xml:space="preserve">
+    <value>(none)</value>
+    <comment>Displayed in place of the current channel value when aspire.config.json has no channel pinned.</comment>
+  </data>
   <data name="NoAppHostFoundUpdateCliPrompt" xml:space="preserve">
     <value>No Aspire AppHost project found. Would you like to update the Aspire CLI instead?</value>
   </data>
