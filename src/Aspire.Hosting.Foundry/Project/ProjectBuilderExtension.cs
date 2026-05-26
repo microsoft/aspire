@@ -38,7 +38,7 @@ public static class AzureCognitiveServicesProjectExtensions
     [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> AddProject(
         this IResourceBuilder<FoundryResource> builder,
-        string name)
+        [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -138,7 +138,7 @@ public static class AzureCognitiveServicesProjectExtensions
     [AspireExportIgnore(Reason = "CapabilityHostBuilder is not ATS-compatible.")]
     public static CapabilityHostBuilder AddCapabilityHost(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
-        string name)
+        [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);

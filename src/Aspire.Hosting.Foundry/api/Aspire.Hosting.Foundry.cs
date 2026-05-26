@@ -96,7 +96,7 @@ namespace Aspire.Hosting
 
     public static partial class HostedAgentResourceBuilderExtensions
     {
-        [AspireExport("withComputeEnvironmentExecutable", MethodName = "withComputeEnvironment", Description = "Configures the resource to run as a hosted agent in Microsoft Foundry.")]
+        [AspireExport("withComputeEnvironmentExecutable", MethodName = "withComputeEnvironment")]
         public static ApplicationModel.IResourceBuilder<T> WithComputeEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource>? project = null, System.Action<Foundry.HostedAgentConfiguration>? configure = null)
             where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }
 
