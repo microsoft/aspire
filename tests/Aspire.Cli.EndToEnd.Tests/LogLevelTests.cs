@@ -3,6 +3,7 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
+using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -15,6 +16,7 @@ public sealed class LogLevelTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
+    [QuarantinedTest("https://github.com/microsoft/aspire/issues/17485")]
     public async Task LogLevelTrace_ProducesTraceEntriesInCliLogFile()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
