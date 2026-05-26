@@ -231,7 +231,7 @@ internal static class ResourceSnapshotMapper
         return visibility?.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.Api, StringComparison.OrdinalIgnoreCase)) is true;
     }
 
-    private static ResourceCommandArgumentJson MapCommandArgumentInput(ResourceSnapshotCommandArgument input)
+    internal static ResourceCommandArgumentJson MapCommandArgumentInput(ResourceSnapshotCommandArgument input)
     {
         return new ResourceCommandArgumentJson
         {
@@ -246,8 +246,20 @@ internal static class ResourceSnapshotMapper
             Options = input.Options,
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
-            MaxLength = input.MaxLength
+            MaxLength = input.MaxLength,
+            DynamicLoading = MapDynamicLoading(input.DynamicLoading)
         };
+    }
+
+    private static ResourceCommandArgumentDynamicLoadingJson? MapDynamicLoading(ResourceSnapshotCommandArgumentDynamicLoading? dynamicLoading)
+    {
+        return dynamicLoading is null
+            ? null
+            : new ResourceCommandArgumentDynamicLoadingJson
+            {
+                AlwaysLoadOnStart = dynamicLoading.AlwaysLoadOnStart,
+                DependsOnInputs = dynamicLoading.DependsOnInputs
+            };
     }
 
     /// <summary>

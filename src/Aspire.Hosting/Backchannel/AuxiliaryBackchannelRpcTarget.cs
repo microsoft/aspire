@@ -284,9 +284,15 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             };
         }
 
-        var result = request.ValidateOnly
-            ? await ValidateResourceCommandAsync(resourceCommandService, request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false)
-            : await resourceCommandService.ExecuteCommandAsync(
+        ExecuteCommandResult result;
+        InteractionInputCollection? loadedArguments = null;
+        if (request.ValidateOnly)
+        {
+            (result, loadedArguments) = await ValidateResourceCommandAsync(resourceCommandService, request.ResourceName, request.CommandName, arguments, cancellationToken).ConfigureAwait(false);
+        }
+        else
+        {
+            result = await resourceCommandService.ExecuteCommandAsync(
                 request.ResourceName,
                 request.CommandName,
                 new ResourceCommandExecutionOptions
@@ -296,6 +302,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                     NonInteractive = request.NonInteractive
                 },
                 cancellationToken).ConfigureAwait(false);
+        }
 
 #pragma warning disable CS0618 // Type or member is obsolete
         var resolvedMessage = result.Message ?? result.ErrorMessage;
@@ -310,6 +317,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 #pragma warning restore CS0618 // Type or member is obsolete
             Message = resolvedMessage,
             ValidationErrors = CreateValidationErrors(result.InvalidArguments),
+            ArgumentInputs = request.ReturnArgumentInputs && loadedArguments is not null
+                ? loadedArguments.Select(CreateCommandArgument).ToArray()
+                : null,
             Value = result.Data is { } v ? new ExecuteResourceCommandResult
             {
                 Value = v.Value,
@@ -340,7 +350,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         };
     }
 
-    private static async Task<ExecuteCommandResult> ValidateResourceCommandAsync(ResourceCommandService resourceCommandService, string resourceName, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
+    private static async Task<(ExecuteCommandResult Result, InteractionInputCollection? Arguments)> ValidateResourceCommandAsync(ResourceCommandService resourceCommandService, string resourceName, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)
     {
         return await resourceCommandService.ValidateCommandArgumentsAsync(resourceName, commandName, arguments, cancellationToken).ConfigureAwait(false);
     }
@@ -886,21 +896,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 Name = c.Name,
                 DisplayName = c.DisplayName,
                 Description = c.DisplayDescription,
-                ArgumentInputs = c.Arguments.Select(i => new ResourceSnapshotCommandArgument
-                {
-                    Name = i.Name,
-                    Label = i.Label,
-                    Description = i.Description,
-                    EnableDescriptionMarkdown = i.EnableDescriptionMarkdown,
-                    InputType = i.InputType.ToString(),
-                    Required = i.Required,
-                    Placeholder = i.Placeholder,
-                    Value = i.Value,
-                    Options = CreateOptionsDictionary(i.Options),
-                    AllowCustomChoice = i.AllowCustomChoice,
-                    Disabled = i.Disabled,
-                    MaxLength = i.MaxLength
-                }).ToArray(),
+                ArgumentInputs = c.Arguments.Select(CreateCommandArgument).ToArray(),
                 Visibility = c.Visibility.ToString(),
                 State = c.State.ToString()
             })
@@ -928,6 +924,26 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             Properties = properties,
             McpServer = mcpServer,
             Commands = commands
+        };
+    }
+
+    private static ResourceSnapshotCommandArgument CreateCommandArgument(InteractionInput input)
+    {
+        return new ResourceSnapshotCommandArgument
+        {
+            Name = input.Name,
+            Label = input.Label,
+            Description = input.Description,
+            EnableDescriptionMarkdown = input.EnableDescriptionMarkdown,
+            InputType = input.InputType.ToString(),
+            Required = input.Required,
+            Placeholder = input.Placeholder,
+            Value = input.Value,
+            Options = CreateOptionsDictionary(input.Options),
+            AllowCustomChoice = input.AllowCustomChoice,
+            Disabled = input.Disabled,
+            MaxLength = input.MaxLength,
+            DynamicLoading = CreateDynamicLoadingMetadata(input.DynamicLoading)
         };
     }
 
@@ -995,6 +1011,17 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         }
 
         return result;
+    }
+
+    private static ResourceSnapshotCommandArgumentDynamicLoading? CreateDynamicLoadingMetadata(InputLoadOptions? dynamicLoading)
+    {
+        return dynamicLoading is null
+            ? null
+            : new ResourceSnapshotCommandArgumentDynamicLoading
+            {
+                AlwaysLoadOnStart = dynamicLoading.AlwaysLoadOnStart,
+                DependsOnInputs = dynamicLoading.DependsOnInputs?.ToArray()
+            };
     }
 
     /// <summary>

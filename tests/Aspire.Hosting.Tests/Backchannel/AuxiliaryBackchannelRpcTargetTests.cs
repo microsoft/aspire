@@ -225,7 +225,13 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                                 new("mode", "Secondary")
                             ],
                             Disabled = true,
-                            MaxLength = 128
+                            MaxLength = 128,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                AlwaysLoadOnStart = true,
+                                DependsOnInputs = ["browser"],
+                                LoadCallback = _ => Task.CompletedTask
+                            }
                         }
                     ],
                     Visibility = ResourceCommandVisibility.Api
@@ -308,6 +314,9 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal("Secondary", argumentInput.Options!["mode"]);
         Assert.True(argumentInput.Disabled);
         Assert.Equal(128, argumentInput.MaxLength);
+        Assert.NotNull(argumentInput.DynamicLoading);
+        Assert.True(argumentInput.DynamicLoading.AlwaysLoadOnStart);
+        Assert.Equal("browser", Assert.Single(argumentInput.DynamicLoading.DependsOnInputs!));
         Assert.Equal(nameof(ResourceCommandVisibility.Api), startCommand.Visibility);
         Assert.Contains(snapshot.Commands, c => c.Name == "stop" && c.DisplayName == "Stop" && c.Description == "Stop the resource" && c.State == "Disabled");
         Assert.Contains(snapshot.Commands, c => c.Name == "restart" && c.DisplayName == "Restart" && c.Description == null && c.State == "Hidden");
@@ -1298,6 +1307,150 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Equal("#submit", capturedArguments.GetString("selector"));
         Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
         Assert.True(capturedArguments.GetBoolean("snapshotAfter"));
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_ReturnsLoadedArgumentInputsWhenRequested()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "configure",
+            displayName: "Configure",
+            executeCommand: _ => Task.FromResult(CommandResults.Success()),
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "browser",
+                        InputType = InputType.Choice,
+                        Required = true,
+                        Options =
+                        [
+                            new("Chrome", "Chrome")
+                        ]
+                    },
+                    new InteractionInput
+                    {
+                        Name = "profile",
+                        InputType = InputType.Choice,
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            DependsOnInputs = ["browser"],
+                            LoadCallback = context =>
+                            {
+                                context.Input.Options =
+                                [
+                                    new($"{context.AllInputs.GetString("browser")}-Default", "Default profile")
+                                ];
+                                return Task.CompletedTask;
+                            }
+                        }
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "configure",
+            ValidateOnly = true,
+            ReturnArgumentInputs = true,
+            Arguments = JsonSerializer.SerializeToNode(new { browser = "Chrome" })
+        }).DefaultTimeout();
+
+        Assert.True(response.Success);
+        var profileInput = Assert.Single(response.ArgumentInputs!, input => input.Name == "profile");
+        Assert.Equal("Chrome-Default", Assert.Single(profileInput.Options!).Key);
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_AllowsArgumentsEnabledByDynamicLoading()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "configure",
+            displayName: "Configure",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "category",
+                        InputType = InputType.Choice,
+                        Required = true,
+                        Options =
+                        [
+                            new("fruit", "Fruit")
+                        ]
+                    },
+                    new InteractionInput
+                    {
+                        Name = "item",
+                        InputType = InputType.Choice,
+                        Required = true,
+                        Disabled = true,
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            DependsOnInputs = ["category"],
+                            LoadCallback = context =>
+                            {
+                                context.Input.Disabled = context.AllInputs.GetString("category") is not "fruit";
+                                context.Input.Options =
+                                [
+                                    new("banana", "Banana")
+                                ];
+                                return Task.CompletedTask;
+                            }
+                        }
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "configure",
+            Arguments = JsonSerializer.SerializeToNode(new { category = "fruit", item = "banana" })
+        }).DefaultTimeout();
+
+        Assert.True(response.Success, response.Message);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("banana", capturedArguments.GetString("item"));
 
         await app.StopAsync().DefaultTimeout();
     }

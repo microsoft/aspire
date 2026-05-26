@@ -29,11 +29,13 @@ import { isLinkableUrl } from '../utils/urlSchemes';
 import {
     AppHostDataRepository,
     AppHostDisplayInfo,
+    ResourceCommandArgumentInputJson,
     ResourceJson,
     ViewMode,
     shortenPaths,
 } from './AppHostDataRepository';
-import { collectResourceCommandArguments, hasSecretResourceCommandArguments } from './ResourceCommandArguments';
+import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
+import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
 
 type TreeElement = AppHostItem | PidItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | HealthChecksGroupItem | HealthCheckItem;
 
@@ -785,12 +787,15 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        const additionalArgs = await collectResourceCommandArguments(selected.label, selected.command, { secretWarningState: this._secretWarningState });
-        if (additionalArgs === undefined) {
+        const commandArguments = await collectResourceCommandArguments(selected.label, selected.command, {
+            secretWarningState: this._secretWarningState,
+            loadDynamicArguments: values => this._loadResourceCommandArguments(element, selected.label, values),
+        });
+        if (commandArguments === undefined) {
             return;
         }
 
-        this._runResourceCommand(element, `"${selected.label}"`, additionalArgs, hasSecretResourceCommandArguments(selected.command));
+        this._runResourceCommand(element, `"${selected.label}"`, commandArguments.args, commandArguments.containsSecret);
     }
 
     async copyAppHostPath(element: AppHostItem): Promise<void> {
@@ -831,6 +836,21 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
         this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" ${command} --apphost "${appHost.appHostPath}"`, true, additionalArgs, { redactAdditionalArgs });
+    }
+
+    private async _loadResourceCommandArguments(element: ResourceItem, commandName: string, values: readonly ResourceCommandArgumentValue[]): Promise<ResourceCommandArgumentInputJson[] | undefined> {
+        const appHostPath = this._repository.viewMode === 'workspace'
+            ? this._repository.workspaceAppHostPath
+            : this._findAppHostForResource(element)?.appHostPath;
+
+        const loader = createResourceCommandArgumentLoader({
+            cliExecutionProvider: this._terminalProvider,
+            resourceName: element.resource.name,
+            commandName,
+            appHostPath: appHostPath ?? undefined,
+        });
+
+        return await loader(values);
     }
 
     private _findAppHostForResource(element: ResourceItem): AppHostDisplayInfo | undefined {

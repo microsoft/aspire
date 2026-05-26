@@ -882,7 +882,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             CommandName = commandName,
             Arguments = options.Arguments,
             ValidateOnly = options.ValidateOnly,
-            NonInteractive = options.NonInteractive
+            NonInteractive = options.NonInteractive,
+            ReturnArgumentInputs = options.ReturnArgumentInputs
         };
 
         var response = await rpc.InvokeWithProfilingAsync<ExecuteResourceCommandResponse>(

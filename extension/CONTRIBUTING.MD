@@ -3,7 +3,7 @@
 ## Install Prerequisites
 
 - Node.js (LTS version)
-- NPM and yarn accessible in the PATH
+- Yarn accessible in the PATH
 - Visual Studio Code (latest) or Visual Studio Code Insiders
 - [Aspire CLI](https://aspire.dev/get-started/install-cli/) must be installed and available in the PATH
 
@@ -26,16 +26,12 @@ You can use the `Aspire: Extension settings` command to open VS Code settings di
 
 ## Updating dependency overrides
 
-The extension is built with both **npm** and **yarn**, so `package.json` carries two parallel pin mechanisms:
+The extension is built with **yarn**, so `package.json` uses `resolutions` for transitive dependency pins and `yarn.lock` is the authoritative lockfile.
 
-- `overrides` — consumed by npm when generating `package-lock.json`
-- `resolutions` — consumed by yarn when generating `yarn.lock`
-
-When pinning a transitive dependency (e.g. to address a security advisory), add the pin to **both** sections and regenerate **both** lockfiles in the same change:
+When pinning a transitive dependency (e.g. to address a security advisory), add the pin to `resolutions` and regenerate `yarn.lock` in the same change:
 
 ```bash
-npm install
 yarn install
 ```
 
-Keeping the two sections and the two lockfiles in sync prevents drift between the npm-resolved and yarn-resolved dependency graphs.
+The build rejects public npm registry URLs in `yarn.lock`; ensure regenerated entries resolve through the internal `dotnet-public-npm` feed.

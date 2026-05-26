@@ -100,6 +100,8 @@ namespace Aspire.Cli.Resources {
     internal static string MappingRemovedFormat => ResourceManager.GetString("MappingRemovedFormat", resourceCulture);
     internal static string MappingRetainedFormat => ResourceManager.GetString("MappingRetainedFormat", resourceCulture);
     internal static string FallbackParsingWarning => ResourceManager.GetString("FallbackParsingWarning", resourceCulture);
+    internal static string UpdateChannelStepDescriptionFormat => ResourceManager.GetString("UpdateChannelStepDescriptionFormat", resourceCulture);
+    internal static string ChannelNonePlaceholder => ResourceManager.GetString("ChannelNonePlaceholder", resourceCulture);
     internal static string NoAppHostFoundUpdateCliPrompt => ResourceManager.GetString("NoAppHostFoundUpdateCliPrompt", resourceCulture);
     internal static string UpdateCliAfterProjectUpdatePrompt => ResourceManager.GetString("UpdateCliAfterProjectUpdatePrompt", resourceCulture);
     internal static string UpdateCliBeforeGuestProjectUpdatePrompt => ResourceManager.GetString("UpdateCliBeforeGuestProjectUpdatePrompt", resourceCulture);

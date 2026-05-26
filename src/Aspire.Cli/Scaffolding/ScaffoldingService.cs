@@ -81,10 +81,15 @@ internal sealed class ScaffoldingService : IScaffoldingService
             config.SdkVersion = context.SdkVersion;
         }
 
-        // Persist the channel only when the caller explicitly resolved one (Explicit `--channel`,
-        // or NewCommand's identity-match against a registered Explicit channel — see
-        // `CliTemplateFactory.EmptyTemplate.cs` for how `ScaffoldContext.Channel` is sourced).
-        // Do NOT fall back to `CliExecutionContext.IdentityChannel`: an identity that isn't a
+        // Persist the channel only when the caller explicitly resolved one. Callers must validate
+        // the channel against the registered `IPackagingService` channels and only pass an Explicit
+        // channel name. Today that means either:
+        //   - an explicit `--channel` flag,
+        //   - NewCommand's identity-match against a registered Explicit channel (see
+        //     `CliTemplateFactory.EmptyTemplate.cs` for how `ScaffoldContext.Channel` is sourced),
+        //   - InitCommand's polyglot path resolving `CliExecutionContext.IdentityChannel` through
+        //     `IPackagingService.GetChannelsAsync` (see `InitCommand.ResolvePersistableChannelNameAsync`).
+        // Do NOT fall back to a raw `CliExecutionContext.IdentityChannel`: an identity that isn't a
         // registered channel (e.g. `staging` on a CLI without the staging feature flag, or `pr-<N>`
         // on a machine without the matching hive) would otherwise pin a channel name that no
         // PSM rule can satisfy. When unset, `PrebuiltAppHostServer` aggregates sources from

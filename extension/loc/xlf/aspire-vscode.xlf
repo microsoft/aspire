@@ -238,6 +238,9 @@
     <trans-unit id="aspire-vscode.strings.failedToInspectRuntimeConfig">
       <source xml:lang="en">Failed to inspect runtimeconfig for {0}: {1}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsFailed">
+      <source xml:lang="en">Failed to load dynamic command inputs. Run this command from the Aspire Dashboard or Aspire CLI instead.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceOpenFailed">
       <source xml:lang="en">Failed to open AppHost source file: {0}</source>
     </trans-unit>
@@ -520,17 +523,26 @@
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsUnsupported">
+      <source xml:lang="en">This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandSecretWarning">
       <source xml:lang="en">This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.fieldRequired">
       <source xml:lang="en">This field is required.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.unableToAddFolderToWorkspace">
+      <source xml:lang="en">Unable to add folder to workspace: {0}</source>
+    </trans-unit>
     <trans-unit id="command.updateSelf">
       <source xml:lang="en">Update Aspire CLI</source>
     </trans-unit>
     <trans-unit id="command.update">
       <source xml:lang="en">Update integrations</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandLoadingDynamicInputs">
+      <source xml:lang="en">Updating command inputs...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandCustomChoice">
       <source xml:lang="en">Use &quot;{0}&quot;</source>
