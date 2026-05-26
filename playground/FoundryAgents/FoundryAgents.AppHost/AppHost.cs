@@ -68,7 +68,8 @@ var jokerAgent = project.AddPromptAgent("joker-agent", chat,
         You are a hilarious comedian. Tell jokes, be witty, and make people laugh.
         If someone asks you to analyze something, use the code interpreter to
         create funny charts or calculations about the topic.
-        """);
+        """)
+    .WithTool(codeInterpreter);
 
 builder.AddProject<Projects.PromptAgentChat>("chat-app")
     .WithExternalHttpEndpoints()
