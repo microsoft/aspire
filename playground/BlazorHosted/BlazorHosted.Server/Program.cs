@@ -4,6 +4,30 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
+// Filter out OTLP proxy traffic from tracing to prevent a feedback loop:
+// YARP forwards /_otlp/* requests to the dashboard, and without filtering,
+// those forwarding requests would themselves be traced and exported — creating
+// recursive telemetry entries in the dashboard.
+builder.Services.PostConfigure<OpenTelemetry.Instrumentation.AspNetCore.AspNetCoreTraceInstrumentationOptions>(options =>
+{
+    var previous = options.Filter;
+    options.Filter = context =>
+    {
+        var path = context.Request.Path.Value;
+        return (previous is null || previous(context))
+            && (path is null || !path.Contains("/_otlp/", StringComparison.Ordinal));
+    };
+});
+
+builder.Services.PostConfigure<OpenTelemetry.Instrumentation.Http.HttpClientTraceInstrumentationOptions>(options =>
+{
+    var previous = options.FilterHttpRequestMessage;
+    options.FilterHttpRequestMessage = request =>
+        (previous is null || previous(request))
+        && (request.RequestUri is null
+            || !request.RequestUri.AbsolutePath.StartsWith("/v1/", StringComparison.Ordinal));
+});
+
 builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
 
