@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Updates TypeScript AppHost GA docs; aligns with .aspire/modules path from polyglot SDK consolidation (microsoft/aspire#17145)",
+  "mergedAt": "2026-05-26T18:14:48Z",
+  "number": 1057,
+  "runDate": "2026-05-26T18:52:29Z",
+  "status": "included",
+  "title": "Update TypeScript AppHost GA docs"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The AzDO release pipeline (`microsoft-aspire-Release-To-NuGet`) now installs the GitHub CLI before running release tasks, fixing failures in the `Upload CLI Assets to GitHub Release` job on `NetCore1ESPool-Internal` Windows agents where `gh` was not on PATH.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-05-26T18:05:19Z",
+  "lastMergedAt": "2026-05-26T18:05:19Z",
+  "name": "Fix GitHub CLI missing on AzDO release agent",
+  "owner": "radical",
+  "prs": [
+    17478
+  ]
+}

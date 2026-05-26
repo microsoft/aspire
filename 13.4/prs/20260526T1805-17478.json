@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Bug fix: install GitHub CLI on AzDO release agent for the upload CLI assets job",
+  "mergedAt": "2026-05-26T18:05:19Z",
+  "number": 17478,
+  "runDate": "2026-05-26T18:52:29Z",
+  "status": "included",
+  "title": "fix(release): install GitHub CLI on the AzDO release agent"
+}

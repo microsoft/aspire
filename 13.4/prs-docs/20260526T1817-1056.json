@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents async method chaining in TypeScript AppHosts (microsoft/aspire#17400)",
+  "mergedAt": "2026-05-26T18:17:27Z",
+  "number": 1056,
+  "runDate": "2026-05-26T18:52:29Z",
+  "status": "included",
+  "title": "[docs] Document async chaining support in TypeScript AppHosts"
+}
