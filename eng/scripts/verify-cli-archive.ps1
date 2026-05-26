@@ -6,7 +6,7 @@
     This script:
     1. Cleans ~/.aspire to ensure no stale state
     2. Extracts the CLI archive to a temp location
-    3. Verifies the archive shape contains the native CLI payload and no install-route sidecar
+    3. Verifies the archive shape contains the native CLI payload and no install-source sidecar
     4. Runs 'aspire --version' to validate the binary executes
     5. Runs 'aspire new aspire-starter' to test C# starter creation
     6. Cleans up temp directories
@@ -96,8 +96,8 @@ function Get-ArchiveRoot {
 }
 
 function Test-ArchiveSidecar {
-    # Per-RID CLI archives must ship sidecar-free; each install route writes
-    # its own .aspire-install.json. See docs/specs/install-routes.md.
+    # Per-RID CLI archives must ship sidecar-free; each install source writes
+    # its own .aspire-install.json. See docs/specs/install-sources.md.
     param(
         [Parameter(Mandatory = $true)][string]$ExtractDir,
         [Parameter(Mandatory = $true)][string]$ArchiveFileName
@@ -112,9 +112,9 @@ function Test-ArchiveSidecar {
     $strays = Get-ChildItem -Path $ExtractDir -Recurse -File -Filter '.aspire-install.json' -Force -ErrorAction SilentlyContinue
     if ($strays) {
         $strayPaths = $strays | ForEach-Object { $_.FullName.Substring($ExtractDir.Length + 1).Replace('\', '/') }
-        throw "$ridFamily-* archive '$ArchiveFileName' must not contain '.aspire-install.json' (per-RID archives are shared across install routes; each route authors its own sidecar after extraction). Found: $($strayPaths -join ', ')"
+        throw "$ridFamily-* archive '$ArchiveFileName' must not contain '.aspire-install.json' (per-RID archives are shared across install sources; each source authors its own sidecar after extraction). Found: $($strayPaths -join ', ')"
     }
-    Write-Step "$ridFamily-* archive correctly omits the install-route sidecar."
+    Write-Step "$ridFamily-* archive correctly omits the install-source sidecar."
 }
 
 function Test-CSharpStarterProject {

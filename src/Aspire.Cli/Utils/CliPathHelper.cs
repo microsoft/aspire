@@ -44,7 +44,7 @@ internal static class CliPathHelper
     {
         var effectiveProcessPath = processPath ?? Environment.ProcessPath;
 
-        return TryGetAspireHomeDirectoryFromInstallRoute(effectiveProcessPath, logger)
+        return TryGetAspireHomeDirectoryFromInstallSource(effectiveProcessPath, logger)
             ?? GetDefaultAspireHomeDirectory();
     }
 
@@ -107,7 +107,7 @@ internal static class CliPathHelper
         return length >= hex.Length ? hex : hex[..length];
     }
 
-    internal static string? TryGetAspireHomeDirectoryFromInstallRoute(string? processPath, ILogger? logger = null)
+    internal static string? TryGetAspireHomeDirectoryFromInstallSource(string? processPath, ILogger? logger = null)
     {
         if (string.IsNullOrEmpty(processPath))
         {

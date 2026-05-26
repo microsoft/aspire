@@ -250,7 +250,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
         Assert.Contains("built-nugets-for-", result.Output);
         Assert.Contains("dotnet tool install --global Aspire.Cli", result.Output);
         Assert.DoesNotContain("config set channel", result.Output);
-        Assert.DoesNotContain("route sidecar", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("source sidecar", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("dogfood/pr-12345/bin", result.Output);
         Assert.DoesNotContain(".dotnet/tools", result.Output);
     }
@@ -481,7 +481,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
     [Fact]
     [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
-    public async Task Bash_ToolMode_PrInstall_DoesNotWritePRRouteSidecar()
+    public async Task Bash_ToolMode_PrInstall_DoesNotWritePRSourceSidecar()
     {
         using var env = new TestEnvironment();
         var mockGhPath = await env.CreateMockGhScriptAsync(_testOutput);
@@ -504,7 +504,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-12345", "bin", ".aspire-install.json");
-        Assert.False(File.Exists(sidecarPath), $"Tool mode must not write the PR-route sidecar at {sidecarPath}.");
+        Assert.False(File.Exists(sidecarPath), $"Tool mode must not write the PR-source sidecar at {sidecarPath}.");
         // Tool mode now populates the PR hive so `aspire new`/`aspire run` can
         // resolve the PR version of Aspire.AppHost.Sdk and friends.
         var prHive = Path.Combine(env.MockHome, ".aspire", "hives", "pr-12345", "packages");
@@ -829,7 +829,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
         Assert.Contains("built-nugets-for-", result.Output);
         Assert.Contains("dotnet tool install --global Aspire.Cli", result.Output);
         Assert.DoesNotContain("config set channel", result.Output);
-        Assert.DoesNotContain("route sidecar", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("source sidecar", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("dogfood", result.Output);
         Assert.DoesNotContain(".dotnet", result.Output);
     }
@@ -1025,7 +1025,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task Ps_ToolMode_PrInstall_DoesNotWritePRRouteSidecar()
+    public async Task Ps_ToolMode_PrInstall_DoesNotWritePRSourceSidecar()
     {
         using var env = new TestEnvironment();
         var mockGhPath = await env.CreateMockGhScriptAsync(_testOutput);
@@ -1048,7 +1048,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-12345", "bin", ".aspire-install.json");
-        Assert.False(File.Exists(sidecarPath), $"Tool mode must not write the PR-route sidecar at {sidecarPath}.");
+        Assert.False(File.Exists(sidecarPath), $"Tool mode must not write the PR-source sidecar at {sidecarPath}.");
         // Tool mode now populates the PR hive so `aspire new`/`aspire run` can
         // resolve the PR version of Aspire.AppHost.Sdk and friends.
         var prHive = Path.Combine(env.MockHome, ".aspire", "hives", "pr-12345", "packages");

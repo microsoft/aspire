@@ -9,9 +9,9 @@ namespace Aspire.Cli.Tests.Acquisition;
 
 /// <summary>
 /// Behavior tests for <see cref="InstallSidecarReader"/>. The sidecar contract
-/// is documented in <c>docs/specs/install-routes.md</c>: a single-field JSON
+/// is documented in <c>docs/specs/install-sources.md</c>: a single-field JSON
 /// file named <c>.aspire-install.json</c> with shape
-/// <c>{ "source": "&lt;route&gt;" }</c> living next to the CLI binary.
+/// <c>{ "source": "&lt;source&gt;" }</c> living next to the CLI binary.
 /// </summary>
 public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
 {
@@ -19,7 +19,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [InlineData("script", "Script")]
     [InlineData("pr", "Pr")]
     [InlineData("winget", "Winget")]
-    [InlineData("brew", "Brew")]
+    [InlineData("brew", "Homebrew")]
     [InlineData("dotnet-tool", "DotnetTool")]
     [InlineData("localhive", "LocalHive")]
     public void TryRead_ParsesEachKnownSource(string wireValue, string expectedEnumName)
@@ -108,13 +108,13 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
 
     [Theory]
     [InlineData("{\"source\":\"\"}",          "",             "empty source string")]
-    [InlineData("{\"source\":\"future-route\"}", "future-route", "unknown but well-formed source")]
+    [InlineData("{\"source\":\"future-source\"}", "future-source", "unknown but well-formed source")]
     [InlineData("[\"script\"]",               "",             "non-object root element")]
     [InlineData("{\"source\": 42}",           "",             "non-string source field")]
     public void TryRead_UnknownOrMalformedSource_ReturnsUnknownEnumWithRawSourcePreserved(string sidecarBody, string expectedRawSource, string scenario)
     {
         // All four shapes round-trip via the parser as InstallSource.Unknown so
-        // a future-route or otherwise-unrecognized sidecar never blocks the
+        // a future-source or otherwise-unrecognized sidecar never blocks the
         // discovery walk. RawSource preserves the literal wire value so a
         // future client can re-interpret it without re-reading the file.
         _ = scenario; // surfaced in test name for debuggability
@@ -207,7 +207,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [InlineData("Script", "script")]
     [InlineData("Pr", "pr")]
     [InlineData("Winget", "winget")]
-    [InlineData("Brew", "brew")]
+    [InlineData("Homebrew", "brew")]
     [InlineData("DotnetTool", "dotnet-tool")]
     [InlineData("LocalHive", "localhive")]
     public void ToWireString_RoundTripsWithParseInstallSource(string enumName, string expectedWire)

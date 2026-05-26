@@ -24,9 +24,9 @@ internal sealed class InstallSidecarReader : IInstallSidecarReader
     }
 
     /// <summary>
-    /// Well-known file name of the sidecar that each install route writes
+    /// Well-known file name of the sidecar that each install source writes
     /// next to the CLI binary. Matches the contract in
-    /// <c>docs/specs/install-routes.md</c>.
+    /// <c>docs/specs/install-sources.md</c>.
     /// </summary>
     public const string SidecarFileName = ".aspire-install.json";
 
