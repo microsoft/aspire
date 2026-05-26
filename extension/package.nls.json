@@ -107,6 +107,8 @@
   "aspire-vscode.strings.yesLabel": "Yes",
   "aspire-vscode.strings.noLabel": "No",
   "aspire-vscode.strings.invalidLaunchConfiguration": "Invalid launch configuration for {0}.",
+  "aspire-vscode.strings.goDisplayName": "Go: {0}",
+  "aspire-vscode.strings.goLabel": "Go",
   "aspire-vscode.strings.noAppHostInWorkspace": "No AppHost found in the Aspire settings file.",
   "aspire-vscode.strings.dashboard": "Dashboard",
   "aspire-vscode.strings.codespaces": "Codespaces",
