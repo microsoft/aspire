@@ -55,27 +55,27 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("script")]
     [InlineData("localhive")]
-    public void TryGetAspireHomeDirectoryFromInstallRoute_SharedPrefixRoute_ReturnsInstallPrefix(string source)
+    public void TryGetAspireHomeDirectoryFromInstallSource_SharedPrefixSource_ReturnsInstallPrefix(string source)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire");
         var binDir = Path.Combine(installPrefix, "bin");
         var binaryPath = WriteBinaryWithSidecar(binDir, source);
 
-        var result = CliPathHelper.TryGetAspireHomeDirectoryFromInstallRoute(binaryPath);
+        var result = CliPathHelper.TryGetAspireHomeDirectoryFromInstallSource(binaryPath);
 
         Assert.Equal(installPrefix, result);
     }
 
     [Fact]
-    public void TryGetAspireHomeDirectoryFromInstallRoute_PrRoute_ReturnsOuterInstallPrefix()
+    public void TryGetAspireHomeDirectoryFromInstallSource_PrSource_ReturnsOuterInstallPrefix()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
         var binDir = Path.Combine(installPrefix, "dogfood", "pr-17159", "bin");
         var binaryPath = WriteBinaryWithSidecar(binDir, "pr");
 
-        var result = CliPathHelper.TryGetAspireHomeDirectoryFromInstallRoute(binaryPath);
+        var result = CliPathHelper.TryGetAspireHomeDirectoryFromInstallSource(binaryPath);
 
         Assert.Equal(installPrefix, result);
     }
@@ -85,18 +85,18 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [InlineData("winget")]
     [InlineData("dotnet-tool")]
     [InlineData("unknown")]
-    public void TryGetAspireHomeDirectoryFromInstallRoute_PackageManagerOrUnknownRoute_ReturnsNull(string source)
+    public void TryGetAspireHomeDirectoryFromInstallSource_PackageManagerOrUnknownSource_ReturnsNull(string source)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var binaryPath = WriteBinaryWithSidecar(workspace.WorkspaceRoot.FullName, source);
 
-        var result = CliPathHelper.TryGetAspireHomeDirectoryFromInstallRoute(binaryPath);
+        var result = CliPathHelper.TryGetAspireHomeDirectoryFromInstallSource(binaryPath);
 
         Assert.Null(result);
     }
 
     [Fact]
-    public void GetAspireHomeDirectory_PrRoute_UsesOuterInstallPrefix()
+    public void GetAspireHomeDirectory_PrSource_UsesOuterInstallPrefix()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "portable");
@@ -263,7 +263,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
 
     [Fact]
     [SkipOnPlatform(TestPlatforms.Windows | TestPlatforms.Linux, "Firmlink propagation only applies on macOS.")]
-    public void GetAspireHomeDirectory_OnMacOS_PrRouteWithFirmlinkedProcessPath_ReturnsUnfirmlinkedPrefix()
+    public void GetAspireHomeDirectory_OnMacOS_PrSourceWithFirmlinkedProcessPath_ReturnsUnfirmlinkedPrefix()
     {
         // Bug B regression: when Environment.ProcessPath comes back firmlinked (/private/var/...),
         // every derivation hanging off it (AspireHome → HivesDirectory → PackagingService source path)

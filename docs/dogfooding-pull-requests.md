@@ -329,9 +329,9 @@ The file is scoped to the solution directory and only affects projects under it.
 
 The Homebrew cask (`eng/homebrew/aspire.rb.template`) installs Aspire entirely
 inside the Caskroom version directory — `brew uninstall aspire` removes
-the binary and the route sidecar end-to-end. The cask intentionally carries
-no `zap` stanza, because `~/.aspire/` is a shared prefix with the script-route
-and PR-route installers and a brew-driven recursive delete would clobber state
+the binary and the source sidecar end-to-end. The cask intentionally carries
+no `zap` stanza, because `~/.aspire/` is a shared prefix with the script-source
+and PR-source installers and a brew-driven recursive delete would clobber state
 those installers still own.
 
 If you installed via the Homebrew cask before this change, you may have a
@@ -343,7 +343,7 @@ Clean it up manually once after upgrading the cask:
 rm -rf ~/.aspire/installs/brew-stable
 ```
 
-NuGet hives under `~/.aspire/hives/` and any script-route or PR-route
+NuGet hives under `~/.aspire/hives/` and any script-source or PR-source
 binaries under `~/.aspire/bin/` and `~/.aspire/dogfood/` are not touched by
 the cask in either direction; manage those with the steps above.
 

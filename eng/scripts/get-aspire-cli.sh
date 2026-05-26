@@ -1053,13 +1053,13 @@ main() {
         exit 1
     fi
 
-    # Write the script-route install-source sidecar next to the binary.
+    # Write the script-source install-source sidecar next to the binary.
     # Under --dry-run, print the target path and skip the write.
-    # Authorship contract: docs/specs/install-routes.md.
+    # Authorship contract: docs/specs/install-sources.md.
     local sidecar_path
     sidecar_path="$INSTALL_PATH/.aspire-install.json"
     if [[ "$DRY_RUN" == true ]]; then
-        printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
+        printf 'DRYRUN: would write source sidecar to: %s\n' "$sidecar_path"
     else
         mkdir -p "$INSTALL_PATH"
         printf '{"source":"script"}\n' > "$sidecar_path"

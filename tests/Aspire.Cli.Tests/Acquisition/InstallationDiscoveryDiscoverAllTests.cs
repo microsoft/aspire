@@ -33,7 +33,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     {
         // A binary on $PATH with no .aspire-install.json next to it must not be
         // spawned. The user-installed binary on PATH is the most dangerous case:
-        // if a user runs `aspire doctor`, we cannot execute arbitrary
+        // if a user runs `aspire --info`, we cannot execute arbitrary
         // same-named binaries we happened to find.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var pathDir = Path.Combine(workspace.WorkspaceRoot.FullName, "no-sidecar-bin");
@@ -53,7 +53,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             string.Equals(r.CanonicalPath, noSidecarBinary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal(InstallationInfoStatus.NotProbed, noSidecarRow.Status);
         var expectedSidecarPath = Path.Combine(pathDir, InstallSidecarReader.SidecarFileName);
-        Assert.Equal($"No install-route sidecar found at {expectedSidecarPath}; peer was not probed.", noSidecarRow.StatusReason);
+        Assert.Equal($"No install-source sidecar found at {expectedSidecarPath}; peer was not probed.", noSidecarRow.StatusReason);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             Assert.DoesNotContain(probe.ProbedPaths, p => string.Equals(p, binary, StringComparison.Ordinal));
             var row = Assert.Single(results, r => string.Equals(r.CanonicalPath, binary, StringComparison.Ordinal));
             Assert.Equal(InstallationInfoStatus.NotProbed, row.Status);
-            Assert.Equal($"Install-route sidecar at {sidecarPath} could not be read or parsed; peer was not probed.", row.StatusReason);
+            Assert.Equal($"Install-source sidecar at {sidecarPath} could not be read or parsed; peer was not probed.", row.StatusReason);
         }
         finally
         {
@@ -114,13 +114,13 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var row = Assert.Single(results, r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal(InstallationInfoStatus.NotProbed, row.Status);
-        Assert.Equal($"Install-route sidecar at {sidecarPath} could not be read or parsed; peer was not probed.", row.StatusReason);
+        Assert.Equal($"Install-source sidecar at {sidecarPath} could not be read or parsed; peer was not probed.", row.StatusReason);
     }
 
     [Fact]
     public async Task DiscoverAllAsync_TrustedSidecar_IsSpawnedAndDecoratedWithDiscoveredPath()
     {
-        // A binary with a script-route sidecar in its directory has enough
+        // A binary with a script-source sidecar in its directory has enough
         // install metadata to be probed. The peer probe is called, and its returned
         // InstallationInfo is merged with the discovered path so the row
         // displayed to the user matches what `which` would show.
@@ -137,7 +137,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
                 Path = "/peer-says/aspire",
                 Version = "12.5.0",
                 Channel = "stable",
-                Route = "script",
+                Source = "script",
                 Status = InstallationInfoStatus.Ok,
             }),
         });
@@ -212,7 +212,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task DiscoverAllAsync_UnknownSidecarSource_WithSuccessfulProbe_ProbesAndSurfacesRawRoute()
+    public async Task DiscoverAllAsync_UnknownSidecarSource_WithSuccessfulProbe_ProbesAndSurfacesRawSource()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bin");
@@ -237,13 +237,13 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var row = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal(InstallationInfoStatus.Ok, row.Status);
-        Assert.Equal("apt", row.Route);
+        Assert.Equal("apt", row.Source);
         Assert.Equal("13.1.0", row.Version);
         Assert.Equal("daily", row.Channel);
     }
 
     [Fact]
-    public async Task DiscoverAllAsync_UnknownSidecarSource_WithFailedProbe_ProbesAndSurfacesFailedWithRawRoute()
+    public async Task DiscoverAllAsync_UnknownSidecarSource_WithFailedProbe_ProbesAndSurfacesFailedWithRawSource()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bin");
@@ -262,15 +262,15 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var row = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal(InstallationInfoStatus.Failed, row.Status);
-        Assert.Equal("apt", row.Route);
+        Assert.Equal("apt", row.Source);
         Assert.Equal("simulated probe failure", row.StatusReason);
     }
 
     [Fact]
-    public async Task DiscoverAllAsync_PeerProbeFails_RowSurvivesAsFailed_WithRouteIntact()
+    public async Task DiscoverAllAsync_PeerProbeFails_RowSurvivesAsFailed_WithSourceIntact()
     {
         // A peer that fails (timeout / non-zero exit / invalid JSON) is per-row,
-        // not whole-command. The route from the sidecar is still surfaced so the
+        // not whole-command. The source from the sidecar is still surfaced so the
         // user sees "this is a PR install but it wouldn't talk to me", not nothing.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var prDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "dogfood", "pr-9999", "bin");
@@ -289,7 +289,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var row = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal(InstallationInfoStatus.Failed, row.Status);
-        Assert.Equal("pr", row.Route);
+        Assert.Equal("pr", row.Source);
         Assert.Contains("simulated peer hang", row.StatusReason!);
     }
 
@@ -345,7 +345,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         if (hasInstallMetadata)
         {
             Assert.Contains(probe.ProbedPaths, p => string.Equals(p, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
-            Assert.Equal("script", row.Route);
+            Assert.Equal("script", row.Source);
             Assert.Contains("peer returned malformed JSON", row.StatusReason!);
         }
         else
@@ -356,7 +356,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task DiscoverAllAsync_PrRoute_DerivesChannelFromDogfoodPathWhenPeerOmits()
+    public async Task DiscoverAllAsync_PrSource_DerivesChannelFromDogfoodPathWhenPeerOmits()
     {
         // The structural channel for a PR install is `pr-<N>` regardless
         // of whether the older peer's --version output includes channel
@@ -385,12 +385,12 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var prRow = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal("pr-12345", prRow.Channel);
-        Assert.Equal("pr", prRow.Route);
+        Assert.Equal("pr", prRow.Source);
         Assert.Equal("13.4.0-pr.12345.gabcdef", prRow.Version);
     }
 
     [Fact]
-    public async Task DiscoverAllAsync_PrRoute_DoesNotOverwritePeerReportedChannel()
+    public async Task DiscoverAllAsync_PrSource_DoesNotOverwritePeerReportedChannel()
     {
         // When the peer DOES report a channel, the discovery layer must not overwrite it
         // with the path-derived value, even if they happen to match.
@@ -422,14 +422,14 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     }
 
     [Fact]
-    public async Task DiscoverAllAsync_BrewRoute_DerivesPrChannelFromVersionWhenPeerOmits()
+    public async Task DiscoverAllAsync_BrewSource_DerivesPrChannelFromVersionWhenPeerOmits()
     {
-        // Brew-installed PR builds (e.g. from `brew install aspire@pr-N`) live
+        // Homebrew-installed PR builds (e.g. from `homebrew install aspire@pr-N`) live
         // under a path that doesn't carry the `dogfood/pr-<N>/bin` shape, so
         // the path-based derivation can't help. The version string, on the
         // other hand, IS baked at build time as `<x.y.z>-pr.<N>.<hash>` —
-        // discovery should fall back to that signal so older brew peers,
-        // which don't recognize the `doctor --self` self-describe contract,
+        // discovery should fall back to that signal so older homebrew peers,
+        // which don't recognize the `--info --self` self-describe contract,
         // still surface their channel instead of "(unknown)".
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var brewDir = Path.Combine(workspace.WorkspaceRoot.FullName, "Caskroom", "aspire", "13.4.0-pr.17115.gcd700928");
@@ -439,7 +439,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
 
         var probe = new FakePeerInstallProbe(new Dictionary<string, PeerProbeResult>
         {
-            // Older brew peer: doctor --self unsupported, so the probe
+            // Older homebrew peer: --info --self unsupported, so the probe
             // took the --version fallback path and reported version only.
             [binary] = new PeerProbeResult.Ok(new InstallationInfo
             {
@@ -456,12 +456,12 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var brewRow = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Equal("pr-17115", brewRow.Channel);
-        Assert.Equal("brew", brewRow.Route);
+        Assert.Equal("brew", brewRow.Source);
         Assert.Equal("13.4.0-pr.17115.gcd700928", brewRow.Version);
     }
 
     [Fact]
-    public async Task DiscoverAllAsync_BrewRoute_LeavesChannelNullForStableVersion()
+    public async Task DiscoverAllAsync_BrewSource_LeavesChannelNullForStableVersion()
     {
         // Same shape as the previous test, but with a non-PR version. The
         // version-based derivation must return null (we can't recover the
@@ -490,7 +490,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var brewRow = results.Single(r =>
             string.Equals(r.CanonicalPath, binary, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
         Assert.Null(brewRow.Channel);
-        Assert.Equal("brew", brewRow.Route);
+        Assert.Equal("brew", brewRow.Source);
     }
 
     [Theory]
@@ -568,7 +568,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     {
         // When the install metadata check rejects a candidate (no sidecar), the user
         // should see why in --log-level debug output. Without this, an
-        // install that "doesn't show up correctly" in `aspire doctor`
+        // install that "doesn't show up correctly" in `aspire --info`
         // is hard to diagnose.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var pathDir = Path.Combine(workspace.WorkspaceRoot.FullName, "no-sidecar-bin");
@@ -763,7 +763,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
                 Path = binary,
                 Version = "13.4.0",
                 Channel = "stable",
-                Route = "script",
+                Source = "script",
                 Status = InstallationInfoStatus.Ok,
             }),
         });
@@ -793,7 +793,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
                 Path = binary,
                 Version = "13.4.0",
                 Channel = "local",
-                Route = "localhive",
+                Source = "localhive",
                 Status = InstallationInfoStatus.Ok,
             }),
         });
@@ -861,7 +861,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
                 CanonicalPath = binary,
                 Version = "test-version",
                 Channel = "pr-99999",
-                Route = "pr",
+                Source = "pr",
                 Status = InstallationInfoStatus.Ok,
             }),
         });
