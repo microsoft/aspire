@@ -229,9 +229,9 @@ public sealed class AspireExportAttribute : Attribute
     /// complete.
     /// </para>
     /// <para>
-    /// For async exports, this applies to the synchronous invocation path that returns the <see cref="Task"/> or
-    /// <see cref="Task{TResult}"/>. This is important when the async method performs startup work or invokes callbacks
-    /// before its first asynchronous yield.
+    /// For async exports, this applies to the synchronous invocation path that returns the <see cref="Task"/>,
+    /// <see cref="Task{TResult}"/>, <see cref="ValueTask"/>, or <see cref="ValueTask{TResult}"/>. This is important
+    /// when the async method performs startup work or invokes callbacks before its first asynchronous yield.
     /// </para>
     /// <para>
     /// When applied to a type, this setting also applies to exported members discovered from that type unless an individual

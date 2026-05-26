@@ -622,7 +622,7 @@ internal sealed class CapabilityDispatcher
         if (runInvocationOnBackgroundThread)
         {
             // Async-returning exports can execute substantial synchronous setup before returning
-            // their Task. Run that invocation path off the JSON-RPC synchronization context so
+            // their Task or ValueTask. Run that invocation path off the JSON-RPC synchronization context so
             // sync-over-async callback proxies can still receive nested RPC responses.
             return await Task.Run(() => InvokeMethodCore(method, target, methodArgs)).ConfigureAwait(false);
         }
