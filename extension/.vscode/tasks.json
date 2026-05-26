@@ -11,51 +11,91 @@
 				"cwd": "${workspaceFolder}"
 			},
 			"presentation": {
-				"reveal": "silent",
+				"reveal": "always",
+				"panel": "dedicated",
 				"group": "watchers"
 			},
 			"problemMatcher": []
 		},
 		{
-			"label": "extension: watch",
+			"label": "extension: prepare",
 			"type": "shell",
-			"command": "yarn run watch",
+			"command": "yarn run generate-version && yarn run generate-schema && yarn run l10n:export && yarn run l10n:import",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
+			"presentation": {
+				"reveal": "silent",
+				"panel": "dedicated",
+				"group": "watchers"
+			},
+			"problemMatcher": [],
+			"dependsOn": [
+				"yarn: install extension"
+			],
+			"dependsOrder": "sequence"
+		},
+		{
+			"label": "extension: webpack-watch",
+			"type": "shell",
+			// Invoke webpack directly so the $ts-webpack-watch problem matcher
+			// can recognize the "compiled" line. Going through `yarn run watch`
+			// triggers the prewatch lifecycle (which we run separately as
+			// "extension: prepare") and mangles stdout so the matcher never
+			// signals "ready", causing VS Code to hang on preLaunchTask.
+			"command": "${workspaceFolder}/node_modules/.bin/webpack --watch",
 			"options": {
 				"cwd": "${workspaceFolder}"
 			},
 			"isBackground": true,
 			"problemMatcher": "$ts-webpack-watch",
 			"presentation": {
-				"reveal": "never",
+				"reveal": "silent",
+				"panel": "dedicated",
 				"group": "watchers"
 			},
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
 			"dependsOn": [
-				"yarn: install extension"
+				"extension: prepare"
 			],
 			"dependsOrder": "sequence"
 		},
 		{
-			"label": "extension: watch-tests",
+			"label": "extension: watch",
+			"dependsOn": [
+				"extension: webpack-watch"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "extension: tsc-watch-tests",
 			"type": "shell",
-			"command": "yarn run watch-tests",
+			"command": "${workspaceFolder}/node_modules/.bin/tsc -p . -w --outDir out",
 			"options": {
 				"cwd": "${workspaceFolder}"
 			},
 			"isBackground": true,
 			"problemMatcher": "$tsc-watch",
 			"presentation": {
-				"reveal": "never",
+				"reveal": "silent",
+				"panel": "dedicated",
 				"group": "watchers"
 			},
-			"group": "build",
 			"dependsOn": [
-				"yarn: install extension"
+				"extension: prepare"
 			],
 			"dependsOrder": "sequence"
+		},
+		{
+			"label": "extension: watch-tests",
+			"dependsOn": [
+				"extension: tsc-watch-tests"
+			],
+			"group": "build",
+			"problemMatcher": []
 		},
 		{
 			"label": "tasks: watch-tests extension",
@@ -63,8 +103,9 @@
 				"extension: watch",
 				"extension: watch-tests"
 			],
-			"problemMatcher": [],
+			"problemMatcher": []
 		}
 	]
 }
+
 
