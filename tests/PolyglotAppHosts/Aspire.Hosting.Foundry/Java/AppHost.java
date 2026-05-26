@@ -62,7 +62,7 @@ void main() throws Exception {
         var funcTool = project.addFunctionTool("func-tool", "myFunc", "{}");
 
         // Prompt Agent
-        var _promptAgent = project.addPromptAgent(chat, "prompt-agent");
+        var _promptAgent = project.addPromptAgent("prompt-agent", chat);
         _promptAgent.withTool(codeInterpreter);
         _promptAgent.withTool(fileSearch);
         _promptAgent.withTool(webSearch);

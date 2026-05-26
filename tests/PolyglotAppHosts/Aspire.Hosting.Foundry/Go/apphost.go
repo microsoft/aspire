@@ -82,7 +82,7 @@ func main() {
 	_ = project.AddFabricTool("fabric-tool", []string{"workspace-id"})
 	_ = project.AddAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q")
 	_ = project.AddFunctionTool("func-tool", "myFunc", "{}")
-	_ = project.AddPromptAgent(chat, "prompt-agent")
+	_ = project.AddPromptAgent("prompt-agent", chat)
 
 	builderProjectFoundry := builder.AddFoundry("builder-project-foundry")
 	builderProject := builderProjectFoundry.AddProject("builder-project")

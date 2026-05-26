@@ -66,7 +66,7 @@ const azFunc = await project.addAzureFunctionTool('az-func-tool', 'myFunction', 
 const funcTool = await project.addFunctionTool('func-tool', 'myFunc', '{}');
 
 // Prompt Agent
-const _promptAgent = await project.addPromptAgent(chat, 'prompt-agent');
+const _promptAgent = await project.addPromptAgent('prompt-agent', chat);
 await _promptAgent.withTool(codeInterpreter);
 await _promptAgent.withTool(fileSearch);
 await _promptAgent.withTool(webSearch);
