@@ -256,6 +256,7 @@ internal static class CliTestHelper
         services.AddTransient<TelemetryTracesCommand>();
         services.AddTransient<ExportCommand>();
         services.AddTransient<ExtensionInternalCommand>();
+        services.AddTransient<InfoOptionAction>();
         services.AddTransient<WaitCommand>();
         services.AddTransient<RestoreCommand>();
         services.AddTransient<SdkCommand>();
@@ -280,6 +281,7 @@ internal static class CliTestHelper
         services.AddTransient<RenderCommand>();
 #endif
         services.AddTransient(options.AppHostBackchannelFactory);
+        services.AddTransient<HiveEnumerator>();
 
         return services;
     }

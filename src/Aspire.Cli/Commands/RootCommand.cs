@@ -3,11 +3,12 @@
 
 using System.CommandLine;
 using System.CommandLine.Help;
+using System.CommandLine.Parsing;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
 #if DEBUG
-using System.Globalization;
 using System.Diagnostics;
 #endif
 
@@ -47,6 +48,64 @@ internal sealed class RootCommand : BaseRootCommand
     {
         Description = RootCommandStrings.NoLogoArgumentDescription,
         Recursive = true
+    };
+
+    /// <summary>
+    /// Root-level <c>--info</c> flag that prints the running CLI's version,
+    /// channel, and the list of Aspire CLI installs discovered on this machine.
+    /// Root-only (non-recursive): <c>aspire --info</c> fires the install-info
+    /// surface, while <c>aspire &lt;subcommand&gt; --info</c> is a separate
+    /// operation — the unmatched <c>--info</c> token does not bind at
+    /// subcommand scope, the action does not fire, and the subcommand runs
+    /// normally. Keeping install enumeration root-only avoids the recursive-option
+    /// / subcommand-local <c>--format</c> shadowing trap, where a recursive
+    /// root <c>--format</c> would be quietly swallowed by a subcommand's own
+    /// <c>--format</c> option. Wired to <see cref="InfoOptionAction"/> in the
+    /// constructor so it short-circuits subcommand routing when set on root
+    /// (the same way <c>--help</c> and <c>--version</c> do). Per-instance (not
+    /// static): the option carries the <see cref="InfoOptionAction"/> bound to
+    /// *this* <see cref="RootCommand"/>'s service provider, so concurrent tests
+    /// that each build their own <see cref="RootCommand"/> don't fight over
+    /// the <see cref="Option.Action"/> mutation.
+    /// </summary>
+    public readonly Option<bool> InfoOption = new(CommonOptionNames.Info)
+    {
+        Description = RootCommandStrings.InfoArgumentDescription,
+    };
+
+    /// <summary>
+    /// Hidden modifier for <see cref="InfoOption"/>. When set, the action
+    /// emits only the running CLI's row instead of the full install table.
+    /// Reused as the cross-version peer-probe contract: in JSON mode the
+    /// output is a single-element <see cref="Acquisition.InstallationInfo"/> array
+    /// (see <see cref="Acquisition.PeerInstallProbe"/>). Root-only to match
+    /// <see cref="InfoOption"/>. Per-instance for the same reason as
+    /// <see cref="InfoOption"/>: the "requires <c>--info</c>" validator added
+    /// in the constructor would otherwise accumulate across concurrent
+    /// <see cref="RootCommand"/> constructions.
+    /// </summary>
+    public readonly Option<bool> InfoSelfOption = new("--self")
+    {
+        Hidden = true
+    };
+
+    /// <summary>
+    /// Hidden output-format modifier for <see cref="InfoOption"/>. Accepts
+    /// <c>list</c> (the default text rendering) or <c>json</c>. Hidden because
+    /// it is only meaningful when paired with <c>--info</c>. Root-only to
+    /// match <see cref="InfoOption"/>: keeping <c>--format</c> non-recursive
+    /// here avoids shadowing subcommand-local <c>--format</c> options (e.g.
+    /// <c>aspire doctor --format json</c>, <c>aspire run --format json</c>),
+    /// which both define their own <c>--format</c> with a different value set.
+    /// Per-instance for the same reason as <see cref="InfoOption"/>: the
+    /// "requires <c>--info</c>" validator added in the constructor would
+    /// otherwise accumulate across concurrent <see cref="RootCommand"/>
+    /// constructions.
+    /// </summary>
+    public readonly Option<InfoOutputFormat> InfoFormatOption = new("--format")
+    {
+        Description = RootCommandStrings.InfoFormatArgumentDescription,
+        Hidden = true
     };
 
     public static readonly Option<bool> BannerOption = new(CommonOptionNames.Banner)
@@ -174,7 +233,8 @@ internal sealed class RootCommand : BaseRootCommand
         ExtensionInternalCommand extensionInternalCommand,
         IBundleService bundleService,
         IInteractionService interactionService,
-        IAnsiConsole ansiConsole)
+        IAnsiConsole ansiConsole,
+        InfoOptionAction infoOptionAction)
         : base(RootCommandStrings.Description)
     {
         _interactionService = interactionService;
@@ -210,6 +270,9 @@ internal sealed class RootCommand : BaseRootCommand
         Options.Add(BannerOption);
         Options.Add(WaitForDebuggerOption);
         Options.Add(CliWaitForDebuggerOption);
+        Options.Add(InfoOption);
+        Options.Add(InfoSelfOption);
+        Options.Add(InfoFormatOption);
         if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
         {
             Options.Add(StartDebugSessionOption);
@@ -217,6 +280,18 @@ internal sealed class RootCommand : BaseRootCommand
         Options.Add(CaptureProfileOption);
         Options.Add(CaptureProfileOutputOption);
         Options.Add(CaptureProfileDelayOption);
+
+        // Wire the --info action so it short-circuits subcommand routing the
+        // same way --help / --version do. Also gate --self and --format on
+        // --info via validators so `aspire --self` and `aspire --format json`
+        // (the only shapes that can reach these root-only options without
+        // also setting --info) fail parse loudly instead of falling through
+        // to grouped help.
+        infoOptionAction.BindOptions(InfoSelfOption, InfoFormatOption);
+        InfoOption.Action = infoOptionAction;
+        var infoOption = InfoOption;
+        InfoSelfOption.Validators.Add(result => ValidateRequiresInfo(result, InfoSelfOption, infoOption));
+        InfoFormatOption.Validators.Add(result => ValidateRequiresInfo(result, InfoFormatOption, infoOption));
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
         this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>
@@ -292,5 +367,28 @@ internal sealed class RootCommand : BaseRootCommand
             }
         }
 
+    }
+
+    /// <summary>
+    /// Fails parse when <paramref name="option"/> is supplied without
+    /// <paramref name="infoOption"/>. <see cref="InfoSelfOption"/> and
+    /// <see cref="InfoFormatOption"/> are only meaningful as modifiers on
+    /// <c>--info</c>; without this validator <c>aspire --self</c> or
+    /// <c>aspire --format json</c> would parse cleanly and either fall
+    /// through to grouped help or — worse, for <c>--format</c> — swallow
+    /// values intended for a subcommand option.
+    /// </summary>
+    private static void ValidateRequiresInfo(OptionResult result, Option option, Option<bool> infoOption)
+    {
+        if (result.Implicit)
+        {
+            return;
+        }
+
+        var info = result.Parent?.GetResult(infoOption);
+        if (info is null || info.Implicit)
+        {
+            result.AddError(string.Format(CultureInfo.CurrentCulture, RootCommandStrings.InfoOptionRequiresInfo, option.Name));
+        }
     }
 }

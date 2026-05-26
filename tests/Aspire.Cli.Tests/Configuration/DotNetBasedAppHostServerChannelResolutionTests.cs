@@ -18,7 +18,7 @@ namespace Aspire.Cli.Tests.Configuration;
 /// per-project channel is set. A global-channel read fallback (previously
 /// <c>IConfigurationService.GetConfigurationAsync("channel", ...)</c>) was removed in
 /// PR1; these tests pin the post-fix contract so a regression can't quietly re-introduce
-/// cross-route channel contamination.
+/// cross-source channel contamination.
 /// </summary>
 public class DotNetBasedAppHostServerChannelResolutionTests(ITestOutputHelper outputHelper)
 {

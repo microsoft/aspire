@@ -12,7 +12,7 @@ namespace Aspire.Cli.Acquisition;
 
 /// <summary>
 /// Default <see cref="IPeerInstallProbe"/>. Spawns the peer with
-/// <c>doctor --self --format json</c>, enforces a hard timeout, captures stdout
+/// <c>--info --self --format json</c>, enforces a hard timeout, captures stdout
 /// up to a byte cap, and kills the entire process tree on timeout so a
 /// hung peer cannot survive past the parent's lifetime.
 /// </summary>
@@ -71,14 +71,14 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
             return new PeerProbeResult.Failed("Binary not found.");
         }
 
-        // Primary path: ask the peer to self-describe via `doctor --self --format json`.
+        // Primary path: ask the peer to self-describe via `--info --self --format json`.
         // `--self` is required: without it the peer would run a full discovery
         // walk and probe back into us (and into every other peer it finds),
         // turning a single discovery invocation into a recursive fan-out
         // bounded only by the per-level timeout. `--format json` is
         // required so the peer emits a machine-readable row (the human
         // table layout is the default when `--format` is omitted).
-        var primary = await SpawnAndCaptureAsync(binaryPath, ["doctor", "--self", "--format", "json"], cancellationToken).ConfigureAwait(false);
+        var primary = await SpawnAndCaptureAsync(binaryPath, ["--info", "--self", "--format", "json"], cancellationToken).ConfigureAwait(false);
         if (primary.Cancelled)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -95,11 +95,11 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
         }
 
         // Fallback path. We reach here for:
-        //   - peer exited non-zero (common: peer predates `doctor --self`
+        //   - peer exited non-zero (common: peer predates `--info --self`
         //     and System.CommandLine rejected the unknown option),
         //   - peer emitted blank/whitespace-only stdout,
         //   - peer emitted JSON we couldn't parse as the expected rich shape.
-        // Older peers without `doctor --self` can't report their channel
+        // Older peers without `--info --self` can't report their channel
         // here, but `InstallationDiscovery` recovers `pr-<N>` from the
         // reported informational version string so the user-facing table
         // still shows the channel for PR builds.
@@ -128,7 +128,7 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
             return new PeerProbeResult.Failed(DescribePrimaryFailure(primary, alsoTriedVersion: true));
         }
 
-        // Partial install details: version only. Route is overlaid by InstallationDiscovery
+        // Partial install details: version only. Source is overlaid by InstallationDiscovery
         // from the locally-readable sidecar. Channel intentionally null — we can't
         // read assembly metadata
         // from outside an AOT binary, and the older peer has no surface that

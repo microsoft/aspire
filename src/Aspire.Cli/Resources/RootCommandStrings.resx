@@ -150,6 +150,15 @@
   <data name="NonInteractiveArgumentDescription" xml:space="preserve">
     <value>Run the command in non-interactive mode, disabling all interactive prompts and spinners</value>
   </data>
+  <data name="InfoArgumentDescription" xml:space="preserve">
+    <value>Print the running CLI's version, channel, and the list of Aspire CLI installs discovered on this machine</value>
+  </data>
+  <data name="InfoFormatArgumentDescription" xml:space="preserve">
+    <value>Output format for `--info`</value>
+  </data>
+  <data name="InfoOptionRequiresInfo" xml:space="preserve">
+    <value>Option `{0}` is only valid when `--info` is also specified.</value>
+  </data>
   <data name="FirstTimeUseTelemetryNotice" xml:space="preserve">
     <value>Telemetry
 ---------

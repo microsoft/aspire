@@ -13,6 +13,7 @@ internal static class CommonOptionNames
     public const string Help = "--help";
     public const string HelpShort = "-h";
     public const string HelpAlt = "-?";
+    public const string Info = "--info";
     public const string NoLogo = "--nologo";
     public const string Banner = "--banner";
     public const string Debug = "--debug";
@@ -23,8 +24,11 @@ internal static class CommonOptionNames
     public const string StartDebugSession = "--start-debug-session";
 
     /// <summary>
-    /// Options that represent informational commands (e.g. --version, --help) which should
-    /// opt out of telemetry and suppress first-run experience.
+    /// Options that represent informational commands (e.g. --version, --help, --info) which
+    /// should opt out of telemetry and suppress the first-run experience. `--info` is included
+    /// because its text form does not consume a `--format json` token (handled separately by
+    /// <c>HasMachineReadableOutputFormat</c>) but must not consume the one-shot first-run sentinel
+    /// or start a tracked telemetry activity.
     /// </summary>
-    public static readonly string[] InformationalOptionNames = [Version, Help, HelpShort, HelpAlt];
+    public static readonly string[] InformationalOptionNames = [Version, Help, HelpShort, HelpAlt, Info];
 }
