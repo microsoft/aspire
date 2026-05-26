@@ -46,9 +46,25 @@ async def get_forecast() -> str:
         return json.dumps({"error": str(e)})
 
 
+def get_project_endpoint() -> str:
+    project_endpoint = os.environ.get("PROJMYPROJECT_URI")
+    if project_endpoint:
+        return project_endpoint
+
+    connection_string = os.environ.get("ConnectionStrings__projmyproject", "")
+    # Aspire connection strings use key/value pairs such as:
+    #   Endpoint=https://<account>.services.ai.azure.com/api/projects/<project>;...
+    for segment in connection_string.split(";"):
+        key, separator, value = segment.partition("=")
+        if separator and key == "Endpoint" and value:
+            return value
+
+    raise RuntimeError("PROJMYPROJECT_URI or ConnectionStrings__projmyproject with an Endpoint value is required.")
+
+
 def main():
     """Main function to run the agent as a web server."""
-    project_endpoint = os.environ.get("PROJMYPROJECT_URI")
+    project_endpoint = get_project_endpoint()
     deployment_name = os.environ.get("CHAT_MODELNAME", "chat")
 
     client = FoundryChatClient(
