@@ -28,6 +28,12 @@ DRY_RUN=false
 INSTALL_EXTENSION=false
 USE_INSIDERS=false
 SKIP_PATH=false
+UNINSTALL=false
+UNINSTALL_CHANNEL=""
+UNINSTALL_ALL=false
+UNINSTALL_YES=false
+REMOVE_SHARED_INSTALL=false
+QUALITY_EXPLICIT=false
 DEFAULT_QUALITY="release"
 EXTENSION_ARTIFACT_NAME="aspire-vscode.vsix.zip"
 
@@ -59,6 +65,11 @@ USAGE:
     --install-extension         Install VS Code extension along with the CLI
     --use-insiders              Install extension to VS Code Insiders instead of VS Code (requires --install-extension)
     --skip-path                 Do not add the install path to PATH environment variable (useful for portable installs)
+    --uninstall                 Clean up Aspire CLI state created by this script
+    --channel CHANNEL           Channel/hive label to clean up (stable, staging, daily, pr-<N>, or custom)
+    --all                       Clean pr-*, staging, and daily hives
+    --yes, -y                   Confirm uninstall without prompting
+    --remove-shared-install     Also remove ~/.aspire/bin/aspire plus bundle/version artifacts
     -k, --keep-archive          Keep downloaded archive files and temporary directory after installation
     --dry-run                   Show what would be done without actually performing any actions
     -v, --verbose               Enable verbose output
@@ -112,6 +123,7 @@ parse_args() {
                     exit 1
                 fi
                 QUALITY="$2"
+                QUALITY_EXPLICIT=true
                 shift 2
                 ;;
             --os)
@@ -144,6 +156,31 @@ parse_args() {
                 SKIP_PATH=true
                 shift
                 ;;
+            --uninstall)
+                UNINSTALL=true
+                shift
+                ;;
+            --channel)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    say_error "Option '$1' requires a non-empty value"
+                    say_info "Use --help for usage information."
+                    exit 1
+                fi
+                UNINSTALL_CHANNEL="$2"
+                shift 2
+                ;;
+            --all)
+                UNINSTALL_ALL=true
+                shift
+                ;;
+            --yes|-y)
+                UNINSTALL_YES=true
+                shift
+                ;;
+            --remove-shared-install)
+                REMOVE_SHARED_INSTALL=true
+                shift
+                ;;
             -k|--keep-archive)
                 KEEP_ARCHIVE=true
                 shift
@@ -167,6 +204,129 @@ parse_args() {
                 ;;
         esac
     done
+}
+
+quality_to_channel() {
+    case "$1" in
+        release) printf "stable" ;;
+        staging) printf "staging" ;;
+        dev) printf "daily" ;;
+        *) printf "%s" "$1" ;;
+    esac
+}
+
+remove_path() {
+    local path="$1"
+    local description="${2:-$path}"
+
+    if [[ ! -e "$path" ]]; then
+        say_info "skipped: $path (does not exist)"
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] would remove $description: $path"
+        return 0
+    fi
+
+    rm -rf "$path"
+    say_info "removed: $path"
+}
+
+remove_bundle_layout() {
+    local aspire_home="$1"
+    local bundle_path="$aspire_home/bundle"
+    local versions_root="$aspire_home/versions"
+
+    if [[ -L "$bundle_path" ]]; then
+        local target
+        target="$(readlink "$bundle_path")"
+        if [[ "$target" != /* ]]; then
+            target="$(cd "$(dirname "$bundle_path")" && pwd)/$target"
+        fi
+        case "$target" in
+            "$versions_root"/*)
+                remove_path "$target" "shared bundle version"
+                ;;
+        esac
+    fi
+
+    remove_path "$bundle_path" "shared bundle link"
+}
+
+# Reject channel names that contain path separators or `..` segments so
+# `aspire_home/hives/$channel` cannot resolve outside `aspire_home/hives`.
+validate_channel() {
+    local channel="$1"
+    case "$channel" in
+        ""|*/*|*\\*|..|.|*/..|../*|*/../*)
+            say_error "Invalid channel name '$channel'."
+            return 1
+            ;;
+    esac
+    if [[ "$channel" == *".."* ]]; then
+        say_error "Invalid channel name '$channel'."
+        return 1
+    fi
+    return 0
+}
+
+run_uninstall() {
+    local install_path="$1"
+    local aspire_home
+    aspire_home="$(dirname "$install_path")"
+
+    local -a channels=()
+    if [[ "$UNINSTALL_ALL" == true ]]; then
+        if [[ -d "$aspire_home/hives" ]]; then
+            while IFS= read -r hive; do
+                local name
+                name="$(basename "$hive")"
+                if [[ "$name" == pr-* || "$name" == "staging" || "$name" == "daily" ]]; then
+                    channels+=("$name")
+                fi
+            done < <(find "$aspire_home/hives" -mindepth 1 -maxdepth 1 -type d | sort)
+        fi
+    else
+        local channel="$UNINSTALL_CHANNEL"
+        # Only infer the channel from --quality when the user passed --quality
+        # explicitly; the default quality must not silently target ~/.aspire/hives/stable.
+        if [[ -z "$channel" && "$QUALITY_EXPLICIT" == true && -n "$QUALITY" ]]; then
+            channel="$(quality_to_channel "$QUALITY")"
+        fi
+        if [[ -z "$channel" ]]; then
+            say_error "Uninstall requires --channel or --all when the channel cannot be inferred."
+            return 1
+        fi
+        validate_channel "$channel" || return 1
+        channels+=("$channel")
+    fi
+
+    if [[ "$DRY_RUN" != true && "$UNINSTALL_YES" != true ]]; then
+        say_error "Uninstall requires --yes unless --dry-run is specified."
+        return 1
+    fi
+
+    if [[ ${#channels[@]} -eq 0 ]]; then
+        say_info "No matching Aspire CLI cleanup targets were found."
+        return 0
+    fi
+
+    for channel in "${channels[@]}"; do
+        remove_path "$aspire_home/hives/$channel" "hive $channel"
+        if [[ "$channel" == pr-* ]]; then
+            remove_path "$aspire_home/dogfood/$channel" "dogfood install $channel"
+        fi
+    done
+
+    if [[ "$REMOVE_SHARED_INSTALL" == true ]]; then
+        remove_path "$install_path/aspire" "shared script binary"
+        remove_path "$install_path/aspire.exe" "shared script binary"
+        remove_path "$install_path/.aspire-install.json" "shared script sidecar"
+        remove_bundle_layout "$aspire_home"
+    else
+        say_info "Shared script install artifacts were left in place. Pass --remove-shared-install to remove $install_path/aspire and the matching bundle/versions layout."
+    fi
 }
 
 # Function for verbose logging
@@ -1019,6 +1179,11 @@ main() {
         INSTALL_PATH_UNEXPANDED="$INSTALL_PATH"
     fi
 
+    if [[ "$UNINSTALL" == true ]]; then
+        run_uninstall "$INSTALL_PATH"
+        exit $?
+    fi
+
     # Create a temporary directory for downloads
     if [[ "$DRY_RUN" == true ]]; then
         temp_dir="/tmp/aspire-cli-dry-run"
@@ -1053,13 +1218,13 @@ main() {
         exit 1
     fi
 
-    # Write the script-route install-source sidecar next to the binary.
+    # Write the script-source install-source sidecar next to the binary.
     # Under --dry-run, print the target path and skip the write.
-    # Authorship contract: docs/specs/install-routes.md.
+    # Authorship contract: docs/specs/install-sources.md.
     local sidecar_path
     sidecar_path="$INSTALL_PATH/.aspire-install.json"
     if [[ "$DRY_RUN" == true ]]; then
-        printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
+        printf 'DRYRUN: would write source sidecar to: %s\n' "$sidecar_path"
     else
         mkdir -p "$INSTALL_PATH"
         printf '{"source":"script"}\n' > "$sidecar_path"

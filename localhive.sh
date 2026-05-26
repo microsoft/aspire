@@ -466,10 +466,10 @@ if [[ $SKIP_CLI -eq 0 ]]; then
       exit 1
     fi
 
-    # Stamp the install-route sidecar so `aspire info` / `aspire uninstall`
+    # Stamp the install-source sidecar so install discovery
     # can identify this binary as a locally-built (`localhive`) install.
-    # The format matches docs/specs/install-routes.md exactly; localhive
-    # shares the script-route layout (binary under <prefix>/bin/, bundle
+    # The format matches docs/specs/install-sources.md exactly; localhive
+    # shares the script-source layout (binary under <prefix>/bin/, bundle
     # extracted at parent-of-bin).
     printf '%s' '{"source":"localhive"}' > "$CLI_BIN_DIR/.aspire-install.json"
 

@@ -66,6 +66,51 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task UninstallWithoutChannelOrAllOrQuality_FailsWithoutSilentlyTargetingDefaultQualityChannel()
+    {
+        // Without -Channel/-All/-Quality, the script must refuse rather than
+        // infer "stable" from the install default quality and quietly delete
+        // it. The default-quality fallback in Start-AspireCliInstallation
+        // runs before the uninstall dispatch, so the script must explicitly
+        // track whether -Quality was bound (mirrors QUALITY_EXPLICIT in the
+        // shell script).
+        using var env = new TestEnvironment();
+        var aspireHome = Path.Combine(env.TempDirectory, "aspire");
+        var customPath = Path.Combine(aspireHome, "bin");
+        var stableHive = Path.Combine(aspireHome, "hives", "stable");
+        Directory.CreateDirectory(Path.Combine(stableHive, "packages"));
+
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "-Uninstall",
+            "-InstallPath", customPath,
+            "-Yes");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("-Channel or -All", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.True(Directory.Exists(stableHive));
+    }
+
+    [Fact]
+    public async Task UninstallWhatIfWithQuality_ShowsInferredChannelAndSharedInstallSkip()
+    {
+        using var env = new TestEnvironment();
+        var customPath = Path.Combine(env.TempDirectory, "aspire", "bin");
+        Directory.CreateDirectory(Path.Combine(env.TempDirectory, "aspire", "hives", "staging", "packages"));
+
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "-Uninstall",
+            "-Quality", "staging",
+            "-InstallPath", customPath,
+            "-WhatIf");
+
+        result.EnsureSuccessful();
+        Assert.Contains("hive staging", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("RemoveSharedInstall", result.Output);
+    }
+
+    [Fact]
     public async Task AllMainParameters_ShownInHelp()
     {
         using var env = new TestEnvironment();
@@ -263,7 +308,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
             $"install.ps1 must not create global aspire.config.json; found at {configPath}.");
     }
 
-    // Under -WhatIf the release-route script must NOT write the script-route
+    // Under -WhatIf the release-source script must NOT write the script-source
     // sidecar at <prefix>/.aspire-install.json. The describe-but-do-not-do
     // contract requires the script to print a "What if:" message naming the path
     // it would write, then return without touching the filesystem. A previous
@@ -271,7 +316,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
     // can leave a stale source=script marker visible to BundleService when
     // the install was never actually performed.
     [Fact]
-    public async Task WhatIf_DoesNotWriteScriptRouteSidecar_AndAnnouncesPath()
+    public async Task WhatIf_DoesNotWriteScriptSourceSidecar_AndAnnouncesPath()
     {
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
@@ -280,16 +325,16 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
-        Assert.Contains($"What if: Route sidecar would be written to: {sidecarPath}", result.Output);
+        Assert.Contains($"What if: Source sidecar would be written to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under -WhatIf, but found one at {sidecarPath}");
     }
 
-    // The release-route script must not mutate route sidecars under -WhatIf,
+    // The release-source script must not mutate source sidecars under -WhatIf,
     // regardless of the configured quality.
     [Fact]
-    public async Task WhatIf_DevQuality_DoesNotWriteScriptRouteSidecar()
+    public async Task WhatIf_DevQuality_DoesNotWriteScriptSourceSidecar()
     {
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
@@ -298,7 +343,7 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
-        Assert.Contains($"What if: Route sidecar would be written to: {sidecarPath}", result.Output);
+        Assert.Contains($"What if: Source sidecar would be written to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under -WhatIf, but found one at {sidecarPath}");

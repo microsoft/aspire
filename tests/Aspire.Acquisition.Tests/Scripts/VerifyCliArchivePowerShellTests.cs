@@ -33,7 +33,7 @@ public class VerifyCliArchivePowerShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         Assert.Contains("aspire mock v1.0", result.Output);
         Assert.Contains("'aspire new aspire-starter' created project successfully", result.Output);
-        Assert.Contains("linux-* archive correctly omits the install-route sidecar", result.Output);
+        Assert.Contains("linux-* archive correctly omits the install-source sidecar", result.Output);
         Assert.Contains("All verification checks passed", result.Output);
     }
 
@@ -54,7 +54,7 @@ public class VerifyCliArchivePowerShellTests(ITestOutputHelper testOutput)
         // The exact error wording is part of the verifier's user-facing contract; see
         // eng/scripts/verify-cli-archive.ps1 Test-ArchiveSidecar.
         Assert.Contains(".aspire-install.json", result.Output);
-        Assert.Contains("per-RID archives are shared across install routes", result.Output);
+        Assert.Contains("per-RID archives are shared across install sources", result.Output);
     }
 
     [Fact]
@@ -80,6 +80,6 @@ public class VerifyCliArchivePowerShellTests(ITestOutputHelper testOutput)
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains(".aspire-install.json", result.Output);
-        Assert.Contains("per-RID archives are shared across install routes", result.Output);
+        Assert.Contains("per-RID archives are shared across install sources", result.Output);
     }
 }

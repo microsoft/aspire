@@ -4,7 +4,7 @@
 namespace Aspire.Cli.Acquisition;
 
 /// <summary>
-/// Result of reading an install-route sidecar from a binary directory.
+/// Result of reading an install-source sidecar from a binary directory.
 /// </summary>
 /// <param name="SidecarPath">
 /// Absolute path of the sidecar file that was read. Always populated for
@@ -12,8 +12,8 @@ namespace Aspire.Cli.Acquisition;
 /// resolved sidecar path.
 /// </param>
 /// <param name="Source">
-/// Parsed install route. <see cref="InstallSource.Unknown"/> when the sidecar
-/// exists but its <c>source</c> field does not match a known route.
+/// Parsed install source. <see cref="InstallSource.Unknown"/> when the sidecar
+/// exists but its <c>source</c> field does not match a known source.
 /// </param>
 /// <param name="RawSource">
 /// The literal <c>source</c> string from the sidecar (may be a value not yet
@@ -23,7 +23,7 @@ namespace Aspire.Cli.Acquisition;
 internal sealed record InstallSidecarInfo(string SidecarPath, InstallSource Source, string RawSource);
 
 /// <summary>
-/// Result of attempting to read an install-route sidecar.
+/// Result of attempting to read an install-source sidecar.
 /// </summary>
 /// <param name="SidecarPath">
 /// Path of the sidecar file that was considered. Absolute when the binary
@@ -46,14 +46,13 @@ internal abstract record InstallSidecarReadResult(string SidecarPath)
 }
 
 /// <summary>
-/// Reads the install-route sidecar (<c>.aspire-install.json</c>) that an
-/// install route writes next to the CLI binary. The sidecar identifies the
-/// installation route so callers (e.g. <c>BundleService</c>,
-/// <c>aspire doctor</c>, <c>aspire uninstall</c>) can branch behavior without
-/// path-shape heuristics.
+/// Reads the install-source sidecar (<c>.aspire-install.json</c>) that an
+/// install source writes next to the CLI binary. The sidecar identifies the
+/// installation source so callers (e.g. <c>BundleService</c>,
+/// <c>aspire installs</c>) can branch behavior without path-shape heuristics.
 /// </summary>
 /// <remarks>
-/// See <c>docs/specs/install-routes.md</c> for the file contract. The reader
+/// See <c>docs/specs/install-sources.md</c> for the file contract. The reader
 /// is AOT-safe: parsing uses <c>JsonDocument</c> instead of reflection-based
 /// deserialization.
 /// </remarks>

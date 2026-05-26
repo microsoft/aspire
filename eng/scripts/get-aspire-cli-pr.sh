@@ -46,6 +46,11 @@ HIVE_ONLY=false
 SKIP_EXTENSION_INSTALL=false
 USE_INSIDERS=false
 SKIP_PATH=false
+UNINSTALL=false
+UNINSTALL_CHANNEL=""
+UNINSTALL_ALL=false
+UNINSTALL_YES=false
+REMOVE_SHARED_INSTALL=false
 HOST_OS="unset"
 
 # Function to show help
@@ -98,6 +103,11 @@ USAGE:
     --skip-extension.           Skip VS Code extension download and installation
     --use-insiders              Install extension to VS Code Insiders instead of VS Code
     --skip-path                 Do not add the install path to PATH environment variable (useful for portable installs)
+    --uninstall                 Clean up Aspire CLI state created by this PR script
+    --channel CHANNEL           Channel/hive label to clean up (defaults to pr-<PR_NUMBER> when supplied)
+    --all                       Clean pr-*, staging, and daily hives
+    --yes, -y                   Confirm uninstall without prompting
+    --remove-shared-install     Also remove shared ~/.aspire/bin plus bundle/version artifacts
     -v, --verbose               Enable verbose output
     -k, --keep-archive          Keep downloaded archive files after installation
     --dry-run                   Show what would be done without performing actions
@@ -158,7 +168,9 @@ parse_args() {
     fi
 
     # First argument can be a PR number, --run-id, or --local-dir for direct artifact installation
-    if [[ "$1" == "--run-id" || "$1" == "-r" ]]; then
+    if [[ "$1" == "--uninstall" ]]; then
+        PR_NUMBER=""
+    elif [[ "$1" == "--run-id" || "$1" == "-r" ]]; then
         # No PR number — install directly from workflow run ID
         PR_NUMBER=""
     elif [[ "$1" == "--local-dir" ]]; then
@@ -282,6 +294,31 @@ parse_args() {
                 SKIP_PATH=true
                 shift
                 ;;
+            --uninstall)
+                UNINSTALL=true
+                shift
+                ;;
+            --channel)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    say_error "Option '$1' requires a non-empty value"
+                    say_info "Use --help for usage information."
+                    exit 1
+                fi
+                UNINSTALL_CHANNEL="$2"
+                shift 2
+                ;;
+            --all)
+                UNINSTALL_ALL=true
+                shift
+                ;;
+            --yes|-y)
+                UNINSTALL_YES=true
+                shift
+                ;;
+            --remove-shared-install)
+                REMOVE_SHARED_INSTALL=true
+                shift
+                ;;
             --dry-run)
                 DRY_RUN=true
                 shift
@@ -297,6 +334,120 @@ parse_args() {
                 ;;
         esac
     done
+}
+
+remove_path() {
+    local path="$1"
+    local description="${2:-$path}"
+
+    if [[ ! -e "$path" ]]; then
+        say_info "skipped: $path (does not exist)"
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] would remove $description: $path"
+        return 0
+    fi
+
+    rm -rf "$path"
+    say_info "removed: $path"
+}
+
+remove_bundle_layout() {
+    local install_prefix="$1"
+    local bundle_path="$install_prefix/bundle"
+    local versions_root="$install_prefix/versions"
+
+    if [[ -L "$bundle_path" ]]; then
+        local target
+        target="$(readlink "$bundle_path")"
+        if [[ "$target" != /* ]]; then
+            target="$(cd "$(dirname "$bundle_path")" && pwd)/$target"
+        fi
+        case "$target" in
+            "$versions_root"/*)
+                remove_path "$target" "shared bundle version"
+                ;;
+        esac
+    fi
+
+    remove_path "$bundle_path" "shared bundle link"
+}
+
+# Reject channel names that contain path separators or `..` segments so
+# `$install_prefix/hives/$channel` cannot resolve outside `$install_prefix/hives`.
+# Mirrors validate_channel in get-aspire-cli.sh and the C# CliCleanupService.ValidateChannel.
+validate_channel() {
+    local channel="$1"
+    case "$channel" in
+        ""|*/*|*\\*|..|.|*/..|../*|*/../*)
+            say_error "Invalid channel name '$channel'."
+            return 1
+            ;;
+    esac
+    if [[ "$channel" == *".."* ]]; then
+        say_error "Invalid channel name '$channel'."
+        return 1
+    fi
+    return 0
+}
+
+run_uninstall() {
+    local install_prefix="$1"
+    local -a channels=()
+    if [[ "$UNINSTALL_ALL" == true ]]; then
+        if [[ -d "$install_prefix/hives" ]]; then
+            while IFS= read -r hive; do
+                local name
+                name="$(basename "$hive")"
+                if [[ "$name" == pr-* || "$name" == "staging" || "$name" == "daily" ]]; then
+                    channels+=("$name")
+                fi
+            done < <(find "$install_prefix/hives" -mindepth 1 -maxdepth 1 -type d | sort)
+        fi
+    else
+        local channel="$UNINSTALL_CHANNEL"
+        if [[ -z "$channel" && -n "$HIVE_LABEL" ]]; then
+            channel="$HIVE_LABEL"
+        elif [[ -z "$channel" && -n "$PR_NUMBER" ]]; then
+            channel="pr-$PR_NUMBER"
+        fi
+        if [[ -z "$channel" ]]; then
+            say_error "Uninstall requires a PR number, --channel, or --all when the channel cannot be inferred."
+            return 1
+        fi
+        if ! validate_channel "$channel"; then
+            return 1
+        fi
+        channels+=("$channel")
+    fi
+
+    if [[ "$DRY_RUN" != true && "$UNINSTALL_YES" != true ]]; then
+        say_error "Uninstall requires --yes unless --dry-run is specified."
+        return 1
+    fi
+
+    if [[ ${#channels[@]} -eq 0 ]]; then
+        say_info "No matching Aspire CLI cleanup targets were found."
+        return 0
+    fi
+
+    for channel in "${channels[@]}"; do
+        remove_path "$install_prefix/hives/$channel" "hive $channel"
+        if [[ "$channel" == pr-* ]]; then
+            remove_path "$install_prefix/dogfood/$channel" "dogfood install $channel"
+        fi
+    done
+
+    if [[ "$REMOVE_SHARED_INSTALL" == true ]]; then
+        remove_path "$install_prefix/bin/aspire" "shared script binary"
+        remove_path "$install_prefix/bin/aspire.exe" "shared script binary"
+        remove_path "$install_prefix/bin/.aspire-install.json" "shared script sidecar"
+        remove_bundle_layout "$install_prefix"
+    else
+        say_info "Shared script install artifacts were left in place. Pass --remove-shared-install to remove $install_prefix/bin/aspire and the matching bundle/versions layout."
+    fi
 }
 
 # =============================================================================
@@ -1436,7 +1587,7 @@ install_aspire_cli_from_binary() {
 
 # Computes the CLI install directory. PR installs are isolated under
 # <prefix>/dogfood/pr-<N>/bin; without PR_NUMBER, falls back to the shared
-# script-route bin dir.
+# script-source bin dir.
 compute_cli_install_dir() {
     if [[ -n "$PR_NUMBER" ]]; then
         printf '%s' "$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
@@ -1449,13 +1600,13 @@ compute_cli_install_dir() {
 # <install_prefix>/dogfood/pr-<N>/bin/.aspire-install.json. The sidecar marks
 # the install as PR-sourced so downstream consumers (e.g. 'aspire update')
 # know not to assume the stable script source. Per-RID archives produced
-# by eng/clipack are shared across routes and ship without a baked sidecar;
-# this write is the PR-route's authoritative author. If a future or
+# by eng/clipack are shared across sources and ship without a baked sidecar;
+# this write is the PR-source's authoritative author. If a future or
 # external archive ever smuggles a sidecar at the same path, this write
 # overwrites it by design. Under --dry-run the script is describe-but-do-
 # not-do: print the path it would write to and skip the filesystem mutation
 # so a real user's sidecar is never overwritten.
-write_pr_route_sidecar() {
+write_pr_source_sidecar() {
     local install_prefix="$1"
     local pr_number="$2"
 
@@ -1464,7 +1615,7 @@ write_pr_route_sidecar() {
     local sidecar_content='{"source":"pr"}'
 
     if [[ "$DRY_RUN" == true ]]; then
-        printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
+        printf 'DRYRUN: would write source sidecar to: %s\n' "$sidecar_path"
     else
         mkdir -p "$sidecar_dir"
         printf '%s\n' "$sidecar_content" > "$sidecar_path"
@@ -1513,8 +1664,8 @@ install_from_local_dir() {
 
     say_info "Installing from local directory: $local_dir"
 
-    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
-    # don't collide with the script-route prefix or with other PR installs.
+    # PR-source installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
+    # don't collide with the script-source prefix or with other PR installs.
     # Hives remain shared under <prefix>/hives/<label>/packages.
     local cli_install_dir
     cli_install_dir="$(compute_cli_install_dir)"
@@ -1620,7 +1771,7 @@ install_from_local_dir() {
     # PR installs from archives get a sidecar. --local-dir installs are unmanaged, and
     # dotnet-tool packages embed their own source=dotnet-tool sidecar.
     if [[ "$HIVE_ONLY" != true && "$INSTALL_MODE" == "archive" && -n "$PR_NUMBER" ]]; then
-        write_pr_route_sidecar "$INSTALL_PREFIX" "$PR_NUMBER"
+        write_pr_source_sidecar "$INSTALL_PREFIX" "$PR_NUMBER"
     fi
 
 }
@@ -1661,8 +1812,8 @@ download_and_install_from_pr() {
 
     say_info "Using workflow run https://github.com/${REPO}/actions/runs/$workflow_run_id"
 
-    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
-    # don't collide with the script-route prefix or with other PR installs.
+    # PR-source installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
+    # don't collide with the script-source prefix or with other PR installs.
     # Hives remain shared under <prefix>/hives/<label>/packages.
     local cli_install_dir
     cli_install_dir="$(compute_cli_install_dir)"
@@ -1781,10 +1932,10 @@ download_and_install_from_pr() {
         fi
     fi
 
-    # Write the PR-route sidecar only for installs from archives. Tool-mode packages
+    # Write the PR-source sidecar only for installs from archives. Tool-mode packages
     # carry their own source=dotnet-tool sidecar.
     if [[ "$HIVE_ONLY" != true && "$INSTALL_MODE" == "archive" && -n "$PR_NUMBER" ]]; then
-        write_pr_route_sidecar "$INSTALL_PREFIX" "$PR_NUMBER"
+        write_pr_source_sidecar "$INSTALL_PREFIX" "$PR_NUMBER"
     fi
 
 }
@@ -1842,11 +1993,6 @@ main() {
         exit 1
     fi
 
-    # Check gh dependency (not needed for --local-dir mode)
-    if [[ -z "$LOCAL_DIR" ]]; then
-        check_gh_dependency
-    fi
-
     # Set default install prefix if not provided
     if [[ -z "$INSTALL_PREFIX" ]]; then
         INSTALL_PREFIX="$HOME/.aspire"
@@ -1855,9 +2001,19 @@ main() {
         INSTALL_PREFIX_UNEXPANDED="$INSTALL_PREFIX"
     fi
 
+    if [[ "$UNINSTALL" == true ]]; then
+        run_uninstall "$INSTALL_PREFIX"
+        exit $?
+    fi
+
+    # Check gh dependency (not needed for --local-dir mode)
+    if [[ -z "$LOCAL_DIR" ]]; then
+        check_gh_dependency
+    fi
+
     # Set paths based on install prefix.
-    # PR-route installs go under $INSTALL_PREFIX/dogfood/pr-<N>/bin to isolate them from
-    # the script-route prefix and from other PR installs.
+    # PR-source installs go under $INSTALL_PREFIX/dogfood/pr-<N>/bin to isolate them from
+    # the script-source prefix and from other PR installs.
     if [[ -n "$PR_NUMBER" ]]; then
         cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
         INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/dogfood/pr-$PR_NUMBER/bin"

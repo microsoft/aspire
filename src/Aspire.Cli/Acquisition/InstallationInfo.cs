@@ -8,13 +8,13 @@ namespace Aspire.Cli.Acquisition;
 
 /// <summary>
 /// Describes one Aspire CLI installation, as surfaced by
-/// <c>aspire doctor --format json</c>. Each entry corresponds to a single
+/// <c>aspire installs list --format json</c>. Each entry corresponds to a single
 /// binary either running this process or discovered on the system.
 /// </summary>
 /// <remarks>
 /// <para>
-/// The JSON shape is part of the <c>installations</c> property in the
-/// <c>aspire doctor --format json</c> contract. Fields use camelCase wire names via
+/// The JSON shape is part of the <c>aspire installs --self --format json</c> and
+/// <c>aspire installs list --format json</c> contracts. Fields use camelCase wire names via
 /// <see cref="JsonPropertyNameAttribute"/> applied explicitly here so the
 /// schema stays decoupled from the project-wide camelCase policy: another
 /// process may parse this output across CLI versions and we don't want to
@@ -64,14 +64,14 @@ internal sealed record InstallationInfo
     public string? Channel { get; init; }
 
     /// <summary>
-    /// Install route as recorded by the route's own sidecar
+    /// Install source as recorded by the source's own sidecar
     /// (<c>.aspire-install.json</c>). Wire string from
     /// <see cref="InstallSourceExtensions.ToWireString"/>. May be
     /// <see langword="null"/> for PATH discoveries whose install metadata
     /// sidecar is missing or invalid — see <see cref="Status"/>.
     /// </summary>
-    [JsonPropertyName("route")]
-    public string? Route { get; init; }
+    [JsonPropertyName("source")]
+    public string? Source { get; init; }
 
     /// <summary>
     /// Relationship between this binary and the user's <c>$PATH</c>.
@@ -131,7 +131,7 @@ internal static class InstallationPathStatus
 }
 
 /// <summary>
-/// Parses rows from the doctor installation discovery wire contract.
+/// Parses rows from the install discovery wire contract.
 /// </summary>
 internal static class InstallationInfoParser
 {
@@ -161,7 +161,7 @@ internal static class InstallationInfoParser
             CanonicalPath = GetOptionalString("canonicalPath"),
             Version = GetOptionalString("version"),
             Channel = GetOptionalString("channel"),
-            Route = GetOptionalString("route"),
+            Source = GetOptionalString("source"),
             PathStatus = pathStatus,
             Status = GetStringOr("status", InstallationInfoStatus.Ok),
             StatusReason = GetOptionalString("statusReason"),

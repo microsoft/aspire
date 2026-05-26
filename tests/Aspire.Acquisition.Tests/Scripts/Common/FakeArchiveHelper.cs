@@ -84,7 +84,7 @@ public static class FakeArchiveHelper
     /// </summary>
     /// <param name="includeStraySidecar">When true, adds a <c>.aspire-install.json</c>
     /// at the archive root so the verifier's sidecar-rejection contract can be
-    /// asserted; see <c>docs/specs/install-routes.md</c>.</param>
+    /// asserted; see <c>docs/specs/install-sources.md</c>.</param>
     /// <param name="nestAspireUnderSubdir">When true, places the <c>aspire</c> binary
     /// under a single subdirectory inside the archive rather than at the root. This
     /// exercises <c>Get-ArchiveRoot</c>'s single-subdirectory branch and confirms the
@@ -119,7 +119,7 @@ public static class FakeArchiveHelper
 
             if (includeStraySidecar)
             {
-                // Per docs/specs/install-routes.md, per-RID archives must ship
+                // Per docs/specs/install-sources.md, per-RID archives must ship
                 // sidecar-free. The verifier rejects archives that contain a
                 // .aspire-install.json at the archive root.
                 var sidecarPath = Path.Combine(contentDir, ".aspire-install.json");

@@ -179,6 +179,22 @@ param(
     [Parameter(HelpMessage = "Do not add the install path to PATH environment variable (useful for portable installs)")]
     [switch]$SkipPath,
 
+    [Parameter(HelpMessage = "Clean up Aspire CLI state created by this PR script")]
+    [switch]$Uninstall,
+
+    [Parameter(HelpMessage = "Channel/hive label to clean up")]
+    [string]$Channel = "",
+
+    [Parameter(HelpMessage = "Clean pr-*, staging, and daily hives")]
+    [switch]$All,
+
+    [Parameter(HelpMessage = "Confirm uninstall without prompting")]
+    [Alias("y")]
+    [switch]$Yes,
+
+    [Parameter(HelpMessage = "Also remove shared ~/.aspire/bin plus bundle/version artifacts")]
+    [switch]$RemoveSharedInstall,
+
     [Parameter(HelpMessage = "Keep downloaded archive files after installation")]
     [switch]$KeepArchive,
 
@@ -878,6 +894,172 @@ function Get-InstallPrefix {
     return Get-DefaultInstallPrefix
 }
 
+function Remove-CleanupPath {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Path,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Description
+    )
+
+    if (-not (Test-Path -LiteralPath $Path)) {
+        Write-Message "skipped: $Path (does not exist)" -Level Info
+        return
+    }
+
+    if ($PSCmdlet.ShouldProcess($Path, "Remove $Description")) {
+        try {
+            # Without -ErrorAction Stop, Remove-Item failures (permission
+            # denied, file in use, etc.) are non-terminating errors. Without
+            # the explicit try/catch, execution would fall through to the
+            # "removed:" log line below, hiding the failure and producing a
+            # success-looking exit while the path is still on disk.
+            Remove-Item -LiteralPath $Path -Recurse -Force -ErrorAction Stop
+            Write-Message "removed: $Path" -Level Info
+        }
+        catch {
+            Write-Message "failed: $Path ($($_.Exception.Message))" -Level Error
+            throw
+        }
+    }
+    else {
+        Write-Message "What if: would remove ${Description}: $Path" -Level Info
+    }
+}
+
+# Reject channel names that contain path separators or '..' segments so
+# $ResolvedInstallPrefix\hives\<channel> cannot resolve outside
+# $ResolvedInstallPrefix\hives. Mirrors validate_channel in
+# get-aspire-cli.sh and the C# CliCleanupService.ValidateChannel.
+function Test-UninstallChannel {
+    param([string]$ChannelName)
+    if ([string]::IsNullOrWhiteSpace($ChannelName)) { return $false }
+    if ($ChannelName.Contains('/') -or $ChannelName.Contains('\')) { return $false }
+    if ($ChannelName -eq '.' -or $ChannelName -eq '..') { return $false }
+    if ($ChannelName.Contains('..')) { return $false }
+    return $true
+}
+
+function Get-BundleVersionTarget {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallPrefix
+    )
+
+    $bundlePath = Join-Path $InstallPrefix "bundle"
+    if (-not (Test-Path -LiteralPath $bundlePath)) {
+        return $null
+    }
+
+    # Get-Item without -ErrorAction Stop emits non-terminating errors on
+    # permission denied / IO failure, $bundleItem becomes $null, and the
+    # function returns $null. Remove-BundleLayout would then delete just the
+    # bundle symlink and silently strand the versions/<v>/ tree — the same
+    # silent-failure pattern Remove-CleanupPath was hardened against.
+    try {
+        $bundleItem = Get-Item -LiteralPath $bundlePath -Force -ErrorAction Stop
+    }
+    catch [System.Management.Automation.ItemNotFoundException] {
+        # TOCTOU between Test-Path and Get-Item — bundle just disappeared. No-op.
+        return $null
+    }
+    if (-not $bundleItem.LinkType -or -not $bundleItem.Target) {
+        return $null
+    }
+
+    $targetPath = $bundleItem.Target
+    if (-not [System.IO.Path]::IsPathRooted($targetPath)) {
+        $targetPath = [System.IO.Path]::GetFullPath((Join-Path (Split-Path -Parent $bundlePath) $targetPath))
+    }
+
+    $versionsRoot = [System.IO.Path]::GetFullPath((Join-Path $InstallPrefix "versions"))
+    $normalizedTarget = [System.IO.Path]::GetFullPath($targetPath)
+    if ($normalizedTarget.StartsWith($versionsRoot + [System.IO.Path]::DirectorySeparatorChar, [StringComparison]::Ordinal)) {
+        return $normalizedTarget
+    }
+
+    return $null
+}
+
+function Remove-BundleLayout {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallPrefix
+    )
+
+    $versionTarget = Get-BundleVersionTarget -InstallPrefix $InstallPrefix
+    if ($versionTarget) {
+        Remove-CleanupPath -Path $versionTarget -Description "shared bundle version"
+    }
+
+    Remove-CleanupPath -Path (Join-Path $InstallPrefix "bundle") -Description "shared bundle link"
+}
+
+function Start-AspireCliUninstall {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ResolvedInstallPrefix
+    )
+
+    $channels = @()
+    if ($All) {
+        $hivesRoot = Join-Path $ResolvedInstallPrefix "hives"
+        if (Test-Path -LiteralPath $hivesRoot -PathType Container) {
+            $channels = Get-ChildItem -LiteralPath $hivesRoot -Directory |
+                Where-Object { $_.Name -like "pr-*" -or $_.Name -eq "staging" -or $_.Name -eq "daily" } |
+                Sort-Object Name |
+                ForEach-Object { $_.Name }
+        }
+    }
+    else {
+        $targetChannel = $Channel
+        if ([string]::IsNullOrWhiteSpace($targetChannel) -and -not [string]::IsNullOrWhiteSpace($HiveLabel)) {
+            $targetChannel = $HiveLabel
+        }
+        elseif ([string]::IsNullOrWhiteSpace($targetChannel) -and $PRNumber -gt 0) {
+            $targetChannel = "pr-$PRNumber"
+        }
+        if ([string]::IsNullOrWhiteSpace($targetChannel)) {
+            throw "Uninstall requires a PR number, -Channel, or -All when the channel cannot be inferred."
+        }
+        if (-not (Test-UninstallChannel -ChannelName $targetChannel)) {
+            throw "Invalid -Channel value '$targetChannel'. Channel names must not contain path separators or '..'."
+        }
+        $channels = @($targetChannel)
+    }
+
+    if (-not $WhatIfPreference -and -not $Yes) {
+        throw "Uninstall requires -Yes unless -WhatIf is specified."
+    }
+
+    if ($channels.Count -eq 0) {
+        Write-Message "No matching Aspire CLI cleanup targets were found." -Level Info
+        return
+    }
+
+    foreach ($targetChannel in $channels) {
+        Remove-CleanupPath -Path (Join-Path (Join-Path $ResolvedInstallPrefix "hives") $targetChannel) -Description "hive $targetChannel"
+        if ($targetChannel.StartsWith("pr-", [StringComparison]::Ordinal)) {
+            Remove-CleanupPath -Path (Join-Path (Join-Path $ResolvedInstallPrefix "dogfood") $targetChannel) -Description "dogfood install $targetChannel"
+        }
+    }
+
+    if ($RemoveSharedInstall) {
+        Remove-CleanupPath -Path (Join-Path (Join-Path $ResolvedInstallPrefix "bin") "aspire") -Description "shared script binary"
+        Remove-CleanupPath -Path (Join-Path (Join-Path $ResolvedInstallPrefix "bin") "aspire.exe") -Description "shared script binary"
+        Remove-CleanupPath -Path (Join-Path (Join-Path $ResolvedInstallPrefix "bin") ".aspire-install.json") -Description "shared script sidecar"
+        Remove-BundleLayout -InstallPrefix $ResolvedInstallPrefix
+    }
+    else {
+        Write-Message "Shared script install artifacts were left in place. Pass -RemoveSharedInstall to remove $ResolvedInstallPrefix/bin/aspire and the matching bundle/versions layout." -Level Info
+    }
+}
+
 # Function to make GitHub API calls with proper error handling
 function Invoke-GitHubAPICall {
     [CmdletBinding()]
@@ -1539,11 +1721,11 @@ function Test-InstallerModeEnvironment {
     }
 }
 
-# Writes the PR-route install-source sidecar (.aspire-install.json) next to
+# Writes the PR-source install-source sidecar (.aspire-install.json) next to
 # the installed binary. Under -WhatIf, prints the target path and skips the
 # write so a real user's sidecar is never overwritten by a describe pass.
-# Authorship contract: docs/specs/install-routes.md.
-function Write-PRRouteSidecar {
+# Authorship contract: docs/specs/install-sources.md.
+function Write-PRSourceSidecar {
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Mandatory = $true)]
@@ -1557,12 +1739,12 @@ function Write-PRRouteSidecar {
     $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
     $sidecarContent = "{""source"":""pr""}`n"
 
-    if ($PSCmdlet.ShouldProcess($sidecarPath, "Write route sidecar")) {
+    if ($PSCmdlet.ShouldProcess($sidecarPath, "Write source sidecar")) {
         [System.IO.Directory]::CreateDirectory($sidecarDir) | Out-Null
         [System.IO.File]::WriteAllText($sidecarPath, $sidecarContent)
     }
     else {
-        Write-Host "What if: Route sidecar would be written to: $sidecarPath"
+        Write-Host "What if: Source sidecar would be written to: $sidecarPath"
     }
 }
 
@@ -1701,8 +1883,8 @@ function Start-InstallFromLocalDir {
     Write-Message "Installing from local directory: $LocalDirPath" -Level Info
 
     # Set installation paths.
-    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
-    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # PR-source installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
+    # collide with the script-source prefix or with other PR installs. Hives remain shared
     # under <prefix>/hives/<label>/packages.
     $cliBinDir = if ($PRNumber -gt 0) {
         Join-Path (Join-Path (Join-Path $resolvedInstallPrefix "dogfood") "pr-$PRNumber") "bin"
@@ -1791,7 +1973,7 @@ function Start-InstallFromLocalDir {
     # PR installs from archives get a sidecar; --local-dir installs are unmanaged,
     # and dotnet-tool packages embed their own source=dotnet-tool sidecar.
     if (-not $HiveOnly -and $InstallMode -eq 'Archive' -and $PRNumber -gt 0) {
-        Write-PRRouteSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
+        Write-PRSourceSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
     }
 
     # Update PATH environment variables
@@ -1837,8 +2019,8 @@ function Start-DownloadAndInstall {
     Write-Message "Using workflow run https://github.com/$Script:Repository/actions/runs/$runId" -Level Info
 
     # Set installation paths.
-    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
-    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # PR-source installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
+    # collide with the script-source prefix or with other PR installs. Hives remain shared
     # under <prefix>/hives/<label>/packages.
     $cliBinDir = if ($PRNumber -gt 0) {
         Join-Path (Join-Path (Join-Path $resolvedInstallPrefix "dogfood") "pr-$PRNumber") "bin"
@@ -1927,7 +2109,7 @@ function Start-DownloadAndInstall {
     }
 
     if (-not $HiveOnly -and $InstallMode -eq 'Archive' -and $PRNumber -gt 0) {
-        Write-PRRouteSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
+        Write-PRSourceSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
     }
 
     # Update PATH environment variables
@@ -2038,13 +2220,20 @@ OPTIONS:
         Test-InstallerModeEnvironment
     }
 
+    # Set default install prefix if not provided. Uninstall uses only local state and
+    # must not require GitHub CLI access.
+    $resolvedInstallPrefix = Get-InstallPrefix -InstallPrefix $InstallPath
+
+    if ($Uninstall) {
+        Start-AspireCliUninstall -ResolvedInstallPrefix $resolvedInstallPrefix
+        $exitCode = 0
+        return
+    }
+
     # Check gh dependency (not needed for -LocalDir mode)
     if (-not $LocalDir) {
         Test-GitHubCLIDependency
     }
-
-    # Set default install prefix if not provided
-    $resolvedInstallPrefix = Get-InstallPrefix -InstallPrefix $InstallPath
 
     # Create a temporary directory for downloads
     $tempDir = New-TempDirectory -Prefix "aspire-cli-pr-download"

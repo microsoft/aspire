@@ -269,6 +269,31 @@ public class PathLookupHelperTests
     }
 
     [Fact]
+    public void FindAllFullPathsFromPath_WithPathExtensions_ReturnsFilesystemCasingOnWindows()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Assert.Skip("Windows filesystem casing is only observable on Windows.");
+            return;
+        }
+
+        using var tempDirectory = new TestTempDirectory();
+        var binPath = Path.Combine(tempDirectory.Path, "bin");
+        Directory.CreateDirectory(binPath);
+        var actualPath = Path.Combine(binPath, "aspire.exe");
+        File.WriteAllText(actualPath, string.Empty);
+
+        var result = PathLookupHelper.FindAllFullPathsFromPath(
+            "aspire",
+            binPath,
+            Path.PathSeparator,
+            File.Exists,
+            [".EXE"]);
+
+        Assert.Equal([actualPath], result);
+    }
+
+    [Fact]
     public void FindFullPathFromPath_UsesCorrectPathSeparator()
     {
         // Arrange - use platform-agnostic paths for testing

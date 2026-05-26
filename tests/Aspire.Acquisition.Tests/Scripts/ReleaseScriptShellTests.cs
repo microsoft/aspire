@@ -79,6 +79,75 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         Assert.Contains(customPath, result.Output);
     }
 
+    [Fact]
+    public async Task UninstallDryRunWithQuality_ShowsInferredChannelAndSharedInstallSkip()
+    {
+        using var env = new TestEnvironment();
+        var customPath = Path.Combine(env.TempDirectory, "aspire", "bin");
+        Directory.CreateDirectory(Path.Combine(env.TempDirectory, "aspire", "hives", "staging", "packages"));
+
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "--uninstall",
+            "--quality", "staging",
+            "--install-path", customPath,
+            "--dry-run");
+
+        result.EnsureSuccessful();
+        Assert.Contains("hive staging", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--remove-shared-install", result.Output);
+    }
+
+    [Fact]
+    public async Task UninstallWithRemoveSharedInstall_DeletesSharedArtifacts()
+    {
+        using var env = new TestEnvironment();
+        var aspireHome = Path.Combine(env.TempDirectory, "aspire");
+        var customPath = Path.Combine(aspireHome, "bin");
+        Directory.CreateDirectory(Path.Combine(aspireHome, "hives", "daily", "packages"));
+        Directory.CreateDirectory(Path.Combine(aspireHome, "bundle"));
+        Directory.CreateDirectory(Path.Combine(aspireHome, "versions", "v1"));
+        Directory.CreateDirectory(customPath);
+        var binaryPath = Path.Combine(customPath, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(binaryPath, "");
+
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "--uninstall",
+            "--quality", "dev",
+            "--install-path", customPath,
+            "--yes",
+            "--remove-shared-install");
+
+        result.EnsureSuccessful();
+        Assert.False(Directory.Exists(Path.Combine(aspireHome, "hives", "daily")));
+        Assert.False(File.Exists(binaryPath));
+        Assert.False(Directory.Exists(Path.Combine(aspireHome, "bundle")));
+        Assert.True(Directory.Exists(Path.Combine(aspireHome, "versions", "v1")));
+    }
+
+    [Fact]
+    public async Task UninstallWithoutChannelOrAll_FailsWithoutSilentlyTargetingDefaultQualityChannel()
+    {
+        // Without --channel/--all/--quality, the script must refuse rather than
+        // infer "stable" from the default quality and quietly delete it.
+        using var env = new TestEnvironment();
+        var aspireHome = Path.Combine(env.TempDirectory, "aspire");
+        var customPath = Path.Combine(aspireHome, "bin");
+        var stableHive = Path.Combine(aspireHome, "hives", "stable");
+        Directory.CreateDirectory(Path.Combine(stableHive, "packages"));
+
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "--uninstall",
+            "--install-path", customPath,
+            "--yes");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("--channel or --all", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.True(Directory.Exists(stableHive));
+    }
+
     [Theory]
     [InlineData("--verbose")]
     [InlineData("-v")]
@@ -214,7 +283,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
             $"install.sh must not create global aspire.config.json; found at {configPath}.");
     }
 
-    // Under --dry-run the release-route script must NOT write the script-route
+    // Under --dry-run the release-source script must NOT write the script-source
     // sidecar at <prefix>/.aspire-install.json. The describe-but-do-not-do
     // contract requires the script to print a DRYRUN message naming the path it
     // would write, then return without touching the filesystem. A previous
@@ -222,7 +291,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
     // stale source=script marker visible to BundleService when the install
     // was never actually performed.
     [Fact]
-    public async Task DryRun_DoesNotWriteScriptRouteSidecar_AndAnnouncesPath()
+    public async Task DryRun_DoesNotWriteScriptSourceSidecar_AndAnnouncesPath()
     {
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
@@ -231,18 +300,18 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
-        Assert.Contains($"DRYRUN: would write route sidecar to: {sidecarPath}", result.Output);
+        Assert.Contains($"DRYRUN: would write source sidecar to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under --dry-run, but found one at {sidecarPath}");
     }
 
-    // The release-route script must not mutate route sidecars under --dry-run,
+    // The release-source script must not mutate source sidecars under --dry-run,
     // regardless of the configured quality. This guards the dry-run contract on
     // the 'dev' quality path, which historically took a slightly different
     // code branch in the script body.
     [Fact]
-    public async Task DryRun_DevQuality_DoesNotWriteScriptRouteSidecar()
+    public async Task DryRun_DevQuality_DoesNotWriteScriptSourceSidecar()
     {
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
@@ -251,7 +320,7 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
-        Assert.Contains($"DRYRUN: would write route sidecar to: {sidecarPath}", result.Output);
+        Assert.Contains($"DRYRUN: would write source sidecar to: {sidecarPath}", result.Output);
         Assert.False(
             File.Exists(sidecarPath),
             $"Expected no sidecar to be written under --dry-run, but found one at {sidecarPath}");

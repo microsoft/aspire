@@ -3,6 +3,7 @@
 
 using System.Text;
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Uninstall;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
@@ -230,6 +231,9 @@ internal static class CliTestHelper
         services.AddTransient<DoCommand>();
         services.AddTransient<PublishCommand>();
         services.AddTransient<ConfigCommand>();
+        services.AddTransient<InstallsCommand>();
+        services.AddTransient<HivesCommand>();
+        services.AddTransient<UninstallCommand>();
         services.AddTransient<CacheCommand>();
         services.AddTransient<CertificatesCommand>();
         services.AddTransient<CertificatesCleanCommand>();
@@ -278,6 +282,8 @@ internal static class CliTestHelper
         services.AddTransient<RenderCommand>();
 #endif
         services.AddTransient(options.AppHostBackchannelFactory);
+        services.AddTransient<HiveEnumerator>();
+        services.AddTransient<CliCleanupService>();
 
         return services;
     }
