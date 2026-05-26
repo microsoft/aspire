@@ -51,15 +51,7 @@ def get_project_endpoint() -> str:
     if project_endpoint:
         return project_endpoint
 
-    connection_string = os.environ.get("ConnectionStrings__projmyproject", "")
-    # Aspire connection strings use key/value pairs such as:
-    #   Endpoint=https://<account>.services.ai.azure.com/api/projects/<project>;...
-    for segment in connection_string.split(";"):
-        key, separator, value = segment.partition("=")
-        if separator and key == "Endpoint" and value:
-            return value
-
-    raise RuntimeError("PROJMYPROJECT_URI or ConnectionStrings__projmyproject with an Endpoint value is required.")
+    raise RuntimeError("PROJMYPROJECT_URI is required.")
 
 
 def main():
