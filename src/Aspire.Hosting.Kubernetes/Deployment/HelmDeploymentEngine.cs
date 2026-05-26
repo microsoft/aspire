@@ -120,23 +120,30 @@ internal static partial class HelmDeploymentEngine
         var model = factoryContext.PipelineContext.Model;
         var steps = new List<PipelineStep>();
 
-        // Step 0: Check prerequisites — verify Helm CLI is available
+        // Step 0: Check prerequisites — verify Helm CLI is available and meets the
+        // minimum supported version. Doing this once per environment, before any
+        // helm invocation in either the main chart deploy or AddHelmChart(...) flows,
+        // turns confusing low-level errors (unknown-flag, deprecated-flag, raw
+        // spawn errors) into a single actionable message.
         var checkPrereqStep = new PipelineStep
         {
             Name = $"check-helm-prereqs-{environment.Name}",
             Description = $"Verifies Helm CLI is available for {environment.Name}.",
-            Action = ctx =>
+            Action = async ctx =>
             {
                 var helmPath = PathLookupHelper.FindFullPathFromPath("helm");
                 if (helmPath is null)
                 {
                     throw new InvalidOperationException(
-                        "Helm CLI not found. Install it from https://helm.sh/docs/intro/install/ " +
+                        $"Helm CLI not found. Aspire requires Helm {HelmVersionValidator.MinimumHelmVersion} or later. " +
+                        "Install it from https://helm.sh/docs/intro/install/ " +
                         "and ensure it is available on your PATH.");
                 }
 
                 ctx.Logger.LogDebug("Helm CLI found at: {HelmPath}", helmPath);
-                return Task.CompletedTask;
+
+                var helmRunner = ctx.Services.GetRequiredService<IHelmRunner>();
+                await HelmVersionValidator.EnsureMinimumVersionAsync(helmRunner, ctx.CancellationToken).ConfigureAwait(false);
             }
         };
         steps.Add(checkPrereqStep);
@@ -415,19 +422,9 @@ internal static partial class HelmDeploymentEngine
             {
                 var helmRunner = context.Services.GetRequiredService<IHelmRunner>();
 
-                // Verify helm is available
-                try
-                {
-                    var versionExitCode = await helmRunner.RunAsync("version --short", cancellationToken: context.CancellationToken).ConfigureAwait(false);
-                    if (versionExitCode != 0)
-                    {
-                        throw new InvalidOperationException("'helm' is installed but returned an error. Ensure 'helm' is properly configured and your cluster is accessible.");
-                    }
-                }
-                catch (Exception ex) when (ex is not InvalidOperationException and not OperationCanceledException)
-                {
-                    throw new InvalidOperationException("'helm' was not found. Please install 'helm' and ensure it is available on your PATH to deploy to Kubernetes.", ex);
-                }
+                // Helm presence + version validation already ran in
+                // check-helm-prereqs-{env}, which is a transitive predecessor of this
+                // step. No need to re-verify here.
 
                 var valuesFilePath = Path.Combine(outputPath, "values.yaml");
                 var arguments = new StringBuilder();

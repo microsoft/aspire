@@ -1686,28 +1686,6 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         Assert.Contains(completedSteps, s => s.CompletionText.Contains("Nothing to destroy", StringComparison.OrdinalIgnoreCase));
     }
 
-    private sealed class FakeHelmRunner : IHelmRunner
-    {
-        public bool WasUninstallCalled { get; private set; }
-        public string? LastArguments { get; private set; }
-        public int ExitCode { get; set; }
-
-        public Task<int> RunAsync(
-            string arguments,
-            string? workingDirectory = null,
-            Action<string>? onOutputData = null,
-            Action<string>? onErrorData = null,
-            CancellationToken cancellationToken = default)
-        {
-            LastArguments = arguments;
-            if (arguments.StartsWith("uninstall", StringComparison.OrdinalIgnoreCase))
-            {
-                WasUninstallCalled = true;
-            }
-            return Task.FromResult(ExitCode);
-        }
-    }
-
     [Fact]
     public async Task DestroyHelm_WhenUninstallFails_PreservesState()
     {
