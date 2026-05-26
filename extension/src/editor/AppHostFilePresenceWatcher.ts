@@ -22,13 +22,15 @@ export class AppHostFilePresenceWatcher implements vscode.Disposable {
     private readonly _disposables: vscode.Disposable[] = [];
     private _lastValue = false;
     private _changeTimer: NodeJS.Timeout | undefined;
+    private _updateVersion = 0;
+    private _updateTask: Promise<void> = Promise.resolve();
 
     constructor(private readonly _repository: AppHostDataRepository) {
         this._disposables.push(
-            vscode.window.onDidChangeVisibleTextEditors(() => this._update()),
+            vscode.window.onDidChangeVisibleTextEditors(() => this._queueUpdate()),
             vscode.workspace.onDidChangeTextDocument(e => this._onTextDocumentChanged(e)),
         );
-        this._update();
+        this._queueUpdate();
     }
 
     private _onTextDocumentChanged(event: vscode.TextDocumentChangeEvent): void {
@@ -47,12 +49,21 @@ export class AppHostFilePresenceWatcher implements vscode.Disposable {
         }
         this._changeTimer = setTimeout(() => {
             this._changeTimer = undefined;
-            this._update();
+            this._queueUpdate();
         }, AppHostFilePresenceWatcher._changeDebounceMs);
     }
 
-    private _update(): void {
-        const value = this._anyVisibleEditorIsAppHost();
+    private _queueUpdate(): void {
+        const version = ++this._updateVersion;
+        this._updateTask = this._update(version);
+    }
+
+    private async _update(version: number): Promise<void> {
+        const value = await this._anyVisibleEditorIsAppHost();
+        if (version !== this._updateVersion) {
+            return;
+        }
+
         if (value === this._lastValue) {
             return;
         }
@@ -60,9 +71,9 @@ export class AppHostFilePresenceWatcher implements vscode.Disposable {
         this._repository.setAppHostFileOpen(value);
     }
 
-    private _anyVisibleEditorIsAppHost(): boolean {
+    private async _anyVisibleEditorIsAppHost(): Promise<boolean> {
         for (const editor of vscode.window.visibleTextEditors) {
-            if (getParserForDocument(editor.document)) {
+            if (await getParserForDocument(editor.document)) {
                 return true;
             }
         }
