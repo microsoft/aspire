@@ -105,6 +105,8 @@ The Microsoft Foundry resource exposes the following connection properties:
 | `AIInferenceUri` | The AI inference endpoint URI, with the format `https://<resource_name>.services.ai.azure.com/models` when targeting Azure or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
 | `Key` | The API key when using Foundry Local |
 
+See [Migrate from Azure AI Inference to Azure OpenAI in Azure AI Foundry Models](https://learn.microsoft.com/azure/foundry/how-to/model-inference-to-openai-migration?tabs=openai) for guidance on which URI to use based on the SDK used by your application.
+
 ### Microsoft Foundry deployment
 
 The Microsoft Foundry deployment resource inherits all properties from its parent Microsoft Foundry resource and adds:
