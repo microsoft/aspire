@@ -288,9 +288,8 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         var scripts = EnsureJsonObject(packageJson, "scripts");
-        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(rootDirectory, _logger);
         var relativeAppHostDirectory = PathNormalizer.NormalizePathForStorage(Path.GetRelativePath(rootDirectory.FullName, appHostDirectory.FullName));
-        var preservedScriptNames = AddRootTypeScriptAppHostDelegateScripts(scripts, toolchain, relativeAppHostDirectory);
+        var preservedScriptNames = AddRootTypeScriptAppHostDelegateScripts(scripts, appHostDirectory, relativeAppHostDirectory, _logger);
 
         if (preservedScriptNames.Count > 0)
         {
@@ -312,6 +311,12 @@ internal sealed class ScaffoldingService : IScaffoldingService
         AddRootTypeScriptAppHostDelegateScript(scripts, toolchain, relativeAppHostDirectory, "aspire:dev", ref preservedScriptNames);
 
         return preservedScriptNames ?? [];
+    }
+
+    internal static IReadOnlyList<string> AddRootTypeScriptAppHostDelegateScripts(JsonObject scripts, DirectoryInfo appHostDirectory, string relativeAppHostDirectory, ILogger? logger)
+    {
+        var toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, logger);
+        return AddRootTypeScriptAppHostDelegateScripts(scripts, toolchain, relativeAppHostDirectory);
     }
 
     internal static string SerializePackageJson(JsonObject packageJson, string existingContent)
