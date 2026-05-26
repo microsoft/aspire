@@ -526,18 +526,4 @@ extends:
               parameters:
                 version: $(aspireVersion)
                 channel: $(installerChannel)
-                artifactVersion: $(aspireArtifactVersion)
                 archiveRoot: $(Pipeline.Workspace)/native-archives
-                # The cask URL points at github.com/microsoft/aspire/releases/
-                # download/v#{version}/..., which only exists after the
-                # release pipeline's PublishReleaseAssetsJob uploads assets.
-                # Source-build prep would 404 on `brew audit --online` /
-                # `brew install` if it ran in LiveRelease mode, so we always
-                # run in LiveArchives mode here: SHA256 is computed directly
-                # from the local --archive-root tarballs and `brew audit` is
-                # invoked without `--online` (see eng/homebrew/validate-cask-
-                # artifact.sh:156-183 for why the --online-gated audit methods
-                # are dropped wholesale). The release pipeline's
-                # HomebrewValidateJob then runs the full online audit + real
-                # install against the live release URL.
-                skipUrlValidation: true

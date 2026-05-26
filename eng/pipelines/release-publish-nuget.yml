@@ -666,6 +666,12 @@ extends:
                   } else {
                     Write-Host " (uploaded after GitHub Tasks job)"
                   }
+                  Write-Host "║ Homebrew Val:   ${{ parameters.SkipHomebrewValidation }}" -NoNewline
+                  if ("${{ parameters.SkipHomebrewValidation }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } else {
+                    Write-Host " (validates cask against live GH release after asset upload)"
+                  }
                   Write-Host "╚═══════════════════════════════════════════════════════════════╝"
                   Write-Host ""
                 displayName: 'Print Summary'

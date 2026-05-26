@@ -572,10 +572,13 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
 
         var result = await cmd.ExecuteAsync(
             "--version", "13.3.0",
-            "--artifact-version", "13.3.0",
             "--channel", "stable",
             "--archive-root", archiveRoot,
-            "--output-dir", Path.Combine(env.TempDirectory, "homebrew-output"));
+            "--output-dir", Path.Combine(env.TempDirectory, "homebrew-output"),
+            // The default mode is LiveArchives, which doesn't run brew install/uninstall.
+            // This test exercises the install-then-fail-then-uninstall path, so it must
+            // opt into LiveRelease explicitly.
+            "--validation-mode", "LiveRelease");
 
         Assert.NotEqual(0, result.ExitCode);
         var brewLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "brew.log"));
@@ -597,7 +600,6 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
 
         var result = await cmd.ExecuteAsync(
             "--version", "13.3.0",
-            "--artifact-version", "13.3.0-pr.1234.abc",
             "--channel", "prerelease",
             "--archive-root", archiveRoot,
             "--output-dir", outputDir,
@@ -616,10 +618,11 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
 
         // LiveArchives mode must drop `--online` and add `--no-signing` to `brew audit`,
         // because the cask URL points at a github.com/microsoft/aspire release that does
-        // not exist yet at source-build time. See eng/homebrew/validate-cask-artifact.sh
-        // lines 156-183 for the full rationale; this assertion locks the contract so a
-        // regression in the mode selection surfaces here rather than silently failing
-        // (or worse, silently succeeding) in the source-build prepare stage.
+        // not exist yet at source-build time. See the `audit_args` block in
+        // eng/homebrew/validate-cask-artifact.sh for the full rationale; this assertion
+        // locks the contract so a regression in the mode selection surfaces here rather
+        // than silently failing (or worse, silently succeeding) in the source-build
+        // prepare stage.
         var brewLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "brew.log"));
         Assert.Contains("audit --cask --no-signing local/aspire/aspire", brewLog);
         Assert.DoesNotContain("audit --cask --online", brewLog);
