@@ -117,6 +117,43 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public void DiscoverLayout_FallsBackToAspireHomeWhenLayoutIsNotRelativeToCli()
+    {
+        // Simulates a sidecar-less install where the CLI binary lives somewhere
+        // unrelated to the extracted bundle (e.g. a Nix store / read-only path)
+        // and the bundle is extracted to $ASPIRE_HOME.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var binaryDir = Path.Combine(workspace.WorkspaceRoot.FullName, "opt", "aspire", "bin");
+        Directory.CreateDirectory(binaryDir);
+        var binaryPath = Path.Combine(binaryDir, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(binaryPath, "stub");
+
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, "home", ".aspire");
+        CreateValidBundleLayout(aspireHome);
+
+        var originalAspireHome = Environment.GetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome);
+
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+            {
+                ProcessPathOverride = binaryPath
+            };
+
+            var layout = discovery.DiscoverLayout();
+
+            Assert.NotNull(layout);
+            Assert.Equal(aspireHome, layout!.LayoutPath);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, originalAspireHome);
+        }
+    }
+
     private static void CreateValidBundleLayout(string layoutRoot)
     {
         var bundleDir = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
