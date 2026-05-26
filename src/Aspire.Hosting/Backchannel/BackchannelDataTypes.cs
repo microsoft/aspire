@@ -49,6 +49,11 @@ internal static class AuxiliaryBackchannelCapabilities
     /// Version 3 capabilities: Batched console log streaming and AppHost startup readiness wait.
     /// </summary>
     public const string V3 = "aux.v3";
+
+    /// <summary>
+    /// Version 4 capabilities: JSON-valued resource properties when requested by the client.
+    /// </summary>
+    public const string V4 = "aux.v4";
 }
 
 /// <summary>
@@ -240,11 +245,17 @@ internal sealed class GetResourcesRequest : BackchannelRequest
     /// </summary>
     public string? Filter { get; init; }
 
+    /// <summary>
+    /// Gets the auxiliary backchannel capabilities supported by the client.
+    /// </summary>
+    public string[] ClientCapabilities { get; init; } = [];
+
     /// <inheritdoc />
     public override GetResourcesRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
     {
         TraceContext = traceContext,
-        Filter = Filter
+        Filter = Filter,
+        ClientCapabilities = ClientCapabilities
     };
 }
 
@@ -269,11 +280,17 @@ internal sealed class WatchResourcesRequest : BackchannelRequest
     /// </summary>
     public string? Filter { get; init; }
 
+    /// <summary>
+    /// Gets the auxiliary backchannel capabilities supported by the client.
+    /// </summary>
+    public string[] ClientCapabilities { get; init; } = [];
+
     /// <inheritdoc />
     public override WatchResourcesRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
     {
         TraceContext = traceContext,
-        Filter = Filter
+        Filter = Filter,
+        ClientCapabilities = ClientCapabilities
     };
 }
 

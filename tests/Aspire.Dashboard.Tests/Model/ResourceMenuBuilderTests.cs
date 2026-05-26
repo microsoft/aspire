@@ -252,7 +252,7 @@ public sealed class ResourceMenuBuilderTests
     }
 
     [Fact]
-    public void AddMenuItems_ShowStartCommandFalse_FiltersStartCommand()
+    public void AddMenuItems_IncludesStartCommandLikeOtherVisibleCommands()
     {
         var startCommand = new CommandViewModel(
             CommandViewModel.StartCommand,
@@ -289,12 +289,12 @@ public sealed class ResourceMenuBuilderTests
             (_, _) => false,
             showViewDetails: false,
             showConsoleLogsItem: false,
-            showUrls: false,
-            showStartCommand: false);
+            showUrls: false);
 
         Assert.Collection(menuItems,
             e => Assert.Equal("Localized:ExportJson", e.Text),
             e => Assert.True(e.IsDivider),
+            e => Assert.Equal("Start", e.Text),
             e => Assert.Equal("Stop", e.Text));
     }
 
