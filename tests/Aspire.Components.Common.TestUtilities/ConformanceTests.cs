@@ -385,10 +385,18 @@ public abstract class ConformanceTests<TService, TOptions>
         Assert.Contains(healthReport.Entries, entry => entry.Value.Status == expected);
     }
 
+    // Component ConfigurationSchema.json files don't declare $schema, so JsonSchema.Net 9.x
+    // defaults to Draft 2020-12 (where `definitions` was replaced by `$defs`) and rejects
+    // the older keywords. Pin the build to Draft 7 explicitly so existing schemas keep working.
+    // Use a fresh local SchemaRegistry per call so re-loading the same schema across tests
+    // doesn't fail with "Overwriting registered schemas is not permitted" against the global registry.
+    private static BuildOptions CreateBuildOptions() =>
+        new() { Dialect = Dialect.Draft07, SchemaRegistry = new SchemaRegistry() };
+
     [Fact]
     public void ConfigurationSchemaValidJsonConfigTest()
     {
-        var schema = JsonSchema.FromFile(JsonSchemaPath);
+        var schema = JsonSchema.FromFile(JsonSchemaPath, CreateBuildOptions());
         // JsonSchema.Net 8.x changed JsonSchema.Evaluate to take JsonElement instead of JsonNode.
         using var config = JsonDocument.Parse(ValidJsonConfig);
 
@@ -400,7 +408,7 @@ public abstract class ConformanceTests<TService, TOptions>
     [Fact]
     public void ConfigurationSchemaInvalidJsonConfigTest()
     {
-        var schema = JsonSchema.FromFile(JsonSchemaPath);
+        var schema = JsonSchema.FromFile(JsonSchemaPath, CreateBuildOptions());
 
         foreach ((string json, string error) in InvalidJsonToErrorMessage)
         {
