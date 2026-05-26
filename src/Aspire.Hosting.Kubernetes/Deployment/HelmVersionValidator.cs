@@ -29,7 +29,7 @@ internal static partial class HelmVersionValidator
 
     private const string InstallDocsUrl = "https://helm.sh/docs/intro/install/";
 
-    // `helm version --short --client` returns a single line in the shape
+    // `helm version --short` returns a single line in the shape
     //   v4.2.0+gfa15ec0
     //   v4.0.0
     //   v3.18.0+gb88f836
@@ -40,10 +40,17 @@ internal static partial class HelmVersionValidator
     private static partial Regex HelmVersionRegex();
 
     /// <summary>
-    /// Runs <c>helm version --short --client</c>, parses the SemVer, and throws
+    /// Runs <c>helm version --short</c>, parses the SemVer, and throws
     /// <see cref="InvalidOperationException"/> if the installed version is older than
     /// <see cref="MinimumHelmVersion"/> or if the output cannot be parsed.
     /// </summary>
+    /// <remarks>
+    /// We deliberately do not pass <c>--client</c>. That flag existed in Helm 2 (where
+    /// Tiller meant there was a separate server version), was kept as a no-op in
+    /// Helm 3, and was removed entirely in Helm 4 — which is our minimum. Passing
+    /// <c>--client</c> against Helm 4 fails with <c>Error: unknown flag: --client</c>,
+    /// which is exactly the cryptic failure mode this validator exists to prevent.
+    /// </remarks>
     public static async Task EnsureMinimumVersionAsync(
         IHelmRunner helmRunner,
         CancellationToken cancellationToken)
@@ -57,7 +64,7 @@ internal static partial class HelmVersionValidator
         try
         {
             exitCode = await helmRunner.RunAsync(
-                "version --short --client",
+                "version --short",
                 onOutputData: line => stdout.AppendLine(line),
                 onErrorData: line => stderr.AppendLine(line),
                 cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -68,7 +75,7 @@ internal static partial class HelmVersionValidator
             // PATH on some platforms, permission denied, etc.). The prereq step's PATH
             // lookup runs before us, so this is a defensive fallback.
             throw new InvalidOperationException(
-                $"Failed to invoke 'helm version --short --client'. Install Helm {MinimumHelmVersion} or later from {InstallDocsUrl} and ensure it is available on your PATH.",
+                $"Failed to invoke 'helm version --short'. Install Helm {MinimumHelmVersion} or later from {InstallDocsUrl} and ensure it is available on your PATH.",
                 ex);
         }
 
@@ -77,14 +84,14 @@ internal static partial class HelmVersionValidator
             var errorText = stderr.ToString().Trim();
             var detail = string.IsNullOrEmpty(errorText) ? $"exit code {exitCode}" : errorText;
             throw new InvalidOperationException(
-                $"'helm version --short --client' failed ({detail}). Aspire requires Helm {MinimumHelmVersion} or later. See {InstallDocsUrl}.");
+                $"'helm version --short' failed ({detail}). Aspire requires Helm {MinimumHelmVersion} or later. See {InstallDocsUrl}.");
         }
 
         var rawOutput = stdout.ToString().Trim();
         if (!TryParseHelmVersion(rawOutput, out var detected))
         {
             throw new InvalidOperationException(
-                $"Could not parse Helm version from 'helm version --short --client' output: '{rawOutput}'. Aspire requires Helm {MinimumHelmVersion} or later. See {InstallDocsUrl}.");
+                $"Could not parse Helm version from 'helm version --short' output: '{rawOutput}'. Aspire requires Helm {MinimumHelmVersion} or later. See {InstallDocsUrl}.");
         }
 
         if (detected < MinimumHelmVersion)
