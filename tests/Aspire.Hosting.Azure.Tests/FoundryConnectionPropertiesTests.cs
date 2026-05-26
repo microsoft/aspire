@@ -22,6 +22,11 @@ public class FoundryConnectionPropertiesTests
             {
                 Assert.Equal("Uri", property.Key);
                 Assert.Equal("{aifoundry.outputs.aiFoundryApiEndpoint}", property.Value.ValueExpression);
+            },
+            property =>
+            {
+                Assert.Equal("EndpointAIInference", property.Key);
+                Assert.Equal("{aifoundry.outputs.aiFoundryApiEndpoint}models", property.Value.ValueExpression);
             });
     }
 

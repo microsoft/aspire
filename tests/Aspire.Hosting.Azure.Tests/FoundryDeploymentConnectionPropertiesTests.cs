@@ -70,6 +70,11 @@ public class FoundryDeploymentConnectionPropertiesTests
             },
             property =>
             {
+                Assert.Equal("EndpointAIInference", property.Key);
+                Assert.Equal("{aifoundry.outputs.aiFoundryApiEndpoint}models", property.Value.ValueExpression);
+            },
+            property =>
+            {
                 Assert.Equal("ModelName", property.Key);
                 // Should be FoundryModel.Microsoft.Phi4.Format but assigned dynamically
                 Assert.Equal("chat", property.Value.ValueExpression);
