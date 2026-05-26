@@ -599,17 +599,17 @@
       "view/item/context": [
         {
           "command": "aspire-vscode.openDashboard",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "inline"
         },
         {
           "command": "aspire-vscode.expandAll",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "inline"
         },
         {
           "command": "aspire-vscode.openAppHostSource",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "1_open@1"
         },
         {
@@ -669,7 +669,7 @@
         },
         {
           "command": "aspire-vscode.viewAppHostSource",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost)$/",
           "group": "1_open@2"
         },
         {

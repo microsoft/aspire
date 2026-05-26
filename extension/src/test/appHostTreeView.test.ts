@@ -660,6 +660,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         const result = provider.findAppHostElement(hostPath);
 
         assert.ok(result, 'Expected to find a WorkspaceResourcesItem');
+        assert.strictEqual(result.contextValue, 'workspaceResources');
         provider.dispose();
     });
 
@@ -728,6 +729,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
         assert.ok(appHostItem, 'Expected a workspace AppHost item');
         assert.strictEqual(appHostItem.label, 'AppHost.csproj');
+        assert.strictEqual(appHostItem.contextValue, 'workspaceResources:hasAppHost');
         assert.strictEqual(appHostChildren.length, 2);
         assert.ok(result, 'Expected to find the zero-resource workspace AppHost');
         provider.dispose();
@@ -1055,33 +1057,39 @@ suite('viewAppHostLogFile', () => {
         sandbox.restore();
     });
 
-    test('does nothing when element is null', async () => {
+    test('shows warning when element is null', async () => {
         const provider = makeTreeProvider([]);
         const openTextDocStub = sandbox.stub(vscode.workspace, 'openTextDocument');
+        const warningStub = sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined as any);
 
         await provider.viewAppHostLogFile(null);
 
         assert.strictEqual(openTextDocStub.called, false);
+        assert.ok(warningStub.calledOnce);
         provider.dispose();
     });
 
-    test('does nothing when element is empty string', async () => {
+    test('shows warning when element is empty string', async () => {
         const provider = makeTreeProvider([]);
         const openTextDocStub = sandbox.stub(vscode.workspace, 'openTextDocument');
+        const warningStub = sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined as any);
 
         await provider.viewAppHostLogFile('');
 
         assert.strictEqual(openTextDocStub.called, false);
+        assert.ok(warningStub.calledOnce);
         provider.dispose();
     });
 
-    test('does nothing when element is a number', async () => {
+    test('shows warning when element is a number', async () => {
         const provider = makeTreeProvider([]);
         const openTextDocStub = sandbox.stub(vscode.workspace, 'openTextDocument');
+        const warningStub = sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined as any);
 
         await provider.viewAppHostLogFile(42);
 
         assert.strictEqual(openTextDocStub.called, false);
+        assert.ok(warningStub.calledOnce);
         provider.dispose();
     });
 
@@ -1107,6 +1115,7 @@ suite('viewAppHostLogFile', () => {
         await provider.viewAppHostLogFile('/nonexistent/path.log');
 
         assert.ok(warningStub.calledOnce);
+        assert.match(warningStub.firstCall.args[0], /File not found/);
         provider.dispose();
     });
 });
@@ -1152,6 +1161,46 @@ suite('viewAppHostSource', () => {
         provider.dispose();
     });
 
+    test('lazily registers content provider once and updates already opened source document', async () => {
+        const appHosts = [
+            makeAppHost({ appHostPid: 999, appHostPath: '/repo/App.csproj', dashboardUrl: 'https://old.example' }),
+        ];
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'global' as ViewMode,
+            appHosts,
+            workspaceResources: [],
+            workspaceAppHostPath: undefined,
+            workspaceAppHostName: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider());
+        const registerStub = sandbox.stub(vscode.workspace, 'registerTextDocumentContentProvider').returns({ dispose: () => { } });
+        const fakeDoc = { uri: vscode.Uri.parse('aspire-source:AppHost-999.json') } as vscode.TextDocument;
+        sandbox.stub(vscode.workspace, 'openTextDocument').resolves(fakeDoc);
+        sandbox.stub(vscode.window, 'showTextDocument').resolves(undefined as any);
+        const changedUris: string[] = [];
+        const changeSubscription = provider.onDidChange(uri => changedUris.push(uri.toString()));
+
+        assert.strictEqual(registerStub.called, false);
+
+        let [appHostItem] = provider.getChildren();
+        await provider.viewAppHostSource(appHostItem as any);
+
+        appHosts[0] = makeAppHost({ appHostPid: 999, appHostPath: '/repo/App.csproj', dashboardUrl: 'https://new.example' });
+        [appHostItem] = provider.getChildren();
+        await provider.viewAppHostSource(appHostItem as any);
+
+        const uri = vscode.Uri.parse('aspire-source:AppHost-999.json');
+        const content = provider.provideTextDocumentContent(uri);
+        const parsed = JSON.parse(content);
+        assert.strictEqual(parsed.dashboardUrl, 'https://new.example');
+        assert.ok(registerStub.calledOnce);
+        assert.deepStrictEqual(changedUris, [uri.toString(), uri.toString()]);
+        changeSubscription.dispose();
+        provider.dispose();
+    });
+
     test('provideTextDocumentContent returns empty string for unknown URI', () => {
         const provider = makeTreeProvider([]);
         const uri = vscode.Uri.parse('aspire-source:Unknown.json');
@@ -1162,13 +1211,15 @@ suite('viewAppHostSource', () => {
         provider.dispose();
     });
 
-    test('does nothing when element is undefined', async () => {
+    test('shows warning when element is undefined', async () => {
         const provider = makeTreeProvider([]);
         const openTextDocStub = sandbox.stub(vscode.workspace, 'openTextDocument');
+        const warningStub = sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined as any);
 
         await provider.viewAppHostSource(undefined);
 
         assert.strictEqual(openTextDocStub.called, false);
+        assert.ok(warningStub.calledOnce);
         provider.dispose();
     });
 });

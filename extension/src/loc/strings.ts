@@ -127,7 +127,8 @@ export const selectFileTitle = vscode.l10n.t('Select file');
 export const enterPipelineStep = vscode.l10n.t('Enter the pipeline step to execute');
 export const appHostSourceNotFound = vscode.l10n.t('Could not determine the AppHost source file to open.');
 export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed to open AppHost source file: {0}', path);
-export const logFileOpenFailed = (path: string) => vscode.l10n.t('Failed to open AppHost log file: {0}', path);
+export const logFilePathInvalid = vscode.l10n.t('Could not determine the AppHost log file to open.');
+export const logFileOpenFailed = (path: string, error: string) => vscode.l10n.t('Failed to open AppHost log file {0}: {1}', path, error);
 export const logFileLabel = vscode.l10n.t('AppHost logs');
 
 // CodeLens strings.

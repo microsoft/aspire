@@ -136,6 +136,8 @@
   "aspire-vscode.strings.aspireRestoreFailedStatusBar": "Aspire restore failed (click to retry)",
   "aspire-vscode.strings.appHostSourceNotFound": "Could not determine the AppHost source file to open.",
   "aspire-vscode.strings.appHostSourceOpenFailed": "Failed to open AppHost source file: {0}",
+  "aspire-vscode.strings.logFilePathInvalid": "Could not determine the AppHost log file to open.",
+  "aspire-vscode.strings.logFileOpenFailed": "Failed to open AppHost log file {0}: {1}",
   "viewsContainers.aspirePanel.title": "Aspire",
   "views.runningAppHosts.name": "Running AppHosts",
   "views.runningAppHosts.loading": "Searching for running AppHosts...",

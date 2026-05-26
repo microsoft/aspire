@@ -19,6 +19,7 @@ import {
     appHostSourceNotFound,
     appHostSourceOpenFailed,
     logFileOpenFailed,
+    logFilePathInvalid,
     healthChecksLabel,
     healthCheckDescription,
     resourceDescriptionHealth,
@@ -92,7 +93,7 @@ class WorkspaceResourcesItem extends vscode.TreeItem {
         super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.Expanded);
         this.id = 'workspace-resources';
         this.iconPath = appHostIcon(appHostPath);
-        this.contextValue = 'workspaceResources';
+        this.contextValue = appHost ? 'workspaceResources:hasAppHost' : 'workspaceResources';
         this.description = resourceCountDescription(resources.length);
         this.tooltip = appHostDescription;
     }
@@ -347,11 +348,11 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     readonly onDidChange = this._onDidChangeContent.event;
 
     private readonly _dataSubscription: vscode.Disposable;
-    private readonly _contentProviderRegistration: vscode.Disposable;
+    private _contentProviderRegistration: vscode.Disposable | undefined;
     private readonly _appHostSourceContents = new Map<string, string>();
     private _treeView: vscode.TreeView<TreeElement> | undefined;
 
-    private readonly _documentCloseSubscription: vscode.Disposable;
+    private _documentCloseSubscription: vscode.Disposable | undefined;
 
     constructor(
         private readonly _repository: AppHostDataRepository,
@@ -361,16 +362,23 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         this._dataSubscription = this._repository.onDidChangeData(() => {
             this._onDidChangeTreeData.fire();
         });
+    }
+
+    provideTextDocumentContent(uri: vscode.Uri): string {
+        return this._appHostSourceContents.get(uri.toString()) ?? '';
+    }
+
+    private _ensureContentProviderRegistered(): void {
+        if (this._contentProviderRegistration) {
+            return;
+        }
+
         this._contentProviderRegistration = vscode.workspace.registerTextDocumentContentProvider('aspire-source', this);
         this._documentCloseSubscription = vscode.workspace.onDidCloseTextDocument(doc => {
             if (doc.uri.scheme === 'aspire-source') {
                 this._appHostSourceContents.delete(doc.uri.toString());
             }
         });
-    }
-
-    provideTextDocumentContent(uri: vscode.Uri): string {
-        return this._appHostSourceContents.get(uri.toString()) ?? '';
     }
 
     get appHosts(): readonly AppHostDisplayInfo[] {
@@ -395,8 +403,8 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     dispose(): void {
         this._dataSubscription.dispose();
-        this._contentProviderRegistration.dispose();
-        this._documentCloseSubscription.dispose();
+        this._contentProviderRegistration?.dispose();
+        this._documentCloseSubscription?.dispose();
         this._onDidChangeTreeData.dispose();
         this._onDidChangeContent.dispose();
     }
@@ -804,14 +812,15 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     async viewAppHostLogFile(element: unknown): Promise<void> {
         const filePath = element instanceof LogFileItem ? element.logFilePath : element as string;
         if (!filePath || typeof filePath !== 'string') {
+            vscode.window.showWarningMessage(logFilePathInvalid);
             return;
         }
         try {
             const uri = vscode.Uri.file(filePath);
             const document = await vscode.workspace.openTextDocument(uri);
             await vscode.window.showTextDocument(document, { preview: false });
-        } catch {
-            vscode.window.showWarningMessage(logFileOpenFailed(filePath));
+        } catch (error) {
+            vscode.window.showWarningMessage(logFileOpenFailed(filePath, getErrorMessage(error)));
         }
     }
 
@@ -836,10 +845,12 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             appHost = element.appHost;
         }
         if (!appHost) {
+            vscode.window.showWarningMessage(appHostSourceNotFound);
             return;
         }
         const json = JSON.stringify(appHost, null, 2);
         const uri = vscode.Uri.parse(`aspire-source:AppHost-${appHost.appHostPid}.json`);
+        this._ensureContentProviderRegistered();
         this._appHostSourceContents.set(uri.toString(), json);
         this._onDidChangeContent.fire(uri);
         const document = await vscode.workspace.openTextDocument(uri);
@@ -891,4 +902,8 @@ function getBaseDashboardUrl(resourceDashboardUrl: string | null): string | null
     }
     const idx = resourceDashboardUrl.indexOf('/?resource=');
     return idx >= 0 ? resourceDashboardUrl.substring(0, idx) : resourceDashboardUrl;
+}
+
+function getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
