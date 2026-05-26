@@ -25,7 +25,7 @@ public class FoundryConnectionPropertiesTests
             },
             property =>
             {
-                Assert.Equal("AI_INFERENCE_URI", property.Key);
+                Assert.Equal("AIInferenceUri", property.Key);
                 Assert.Equal("{aifoundry.outputs.aiFoundryApiEndpoint}models", property.Value.ValueExpression);
             });
     }
@@ -51,7 +51,7 @@ public class FoundryConnectionPropertiesTests
             },
             property =>
             {
-                Assert.Equal("AI_INFERENCE_URI", property.Key);
+                Assert.Equal("AIInferenceUri", property.Key);
                 Assert.Equal("http://localhost:8080/", property.Value.ValueExpression);
             },
             property =>

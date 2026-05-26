@@ -102,7 +102,7 @@ The Microsoft Foundry resource exposes the following connection properties:
 | Property Name | Description |
 |---------------|-------------|
 | `Uri` | The endpoint URI for the Microsoft Foundry resource, with the format `https://<resource_name>.services.ai.azure.com/` or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
-| `AI_INFERENCE_URI` | The AI inference endpoint URI, with the format `https://<resource_name>.services.ai.azure.com/models` when targeting Azure or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
+| `AIInferenceUri` | The AI inference endpoint URI, with the format `https://<resource_name>.services.ai.azure.com/models` when targeting Azure or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
 | `Key` | The API key when using Foundry Local |
 
 ### Microsoft Foundry deployment

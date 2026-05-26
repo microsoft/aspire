@@ -88,6 +88,6 @@ public class ProjectWithReferenceTests
         Assert.Contains(envVars, kvp =>
             kvp.Key == "CHAT_URI");
         Assert.Contains(envVars, kvp =>
-            kvp.Key == "CHAT_AI_INFERENCE_URI" && kvp.Value == "{test-account.outputs.aiFoundryApiEndpoint}models");
+            kvp.Key == "CHAT_AIINFERENCEURI" && kvp.Value == "{test-account.outputs.aiFoundryApiEndpoint}models");
     }
 }
