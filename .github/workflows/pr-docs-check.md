@@ -1265,6 +1265,23 @@ trust the diff for identifiers and ask the SME via the
 Keep the changes focused on the significant user-facing change that triggered this
 workflow. Prefer updating the smallest correct set of pages over broad speculative edits.
 
+### Reliability guardrails for generated doc edits (hard requirements)
+
+Before you emit `create_pull_request`, ensure your docs patch is operationally
+safe for the workflow's safe-output handler:
+
+1. Keep the docs diff intentionally small and targeted. Avoid broad mechanical
+   rewrites, whole-tree reformatting, or "touch many files" sweeps.
+2. Do not produce a docs change set that touches more than 100 files. The
+   safe-output `create_pull_request` path enforces this cap and will fail the
+   run when exceeded.
+3. If your planned docs update would require a large/unstable patch (for
+   example, many-file churn or likely merge/3-way patch conflicts), do not emit
+   `create_pull_request`. Instead emit `report_incomplete` with:
+   - the concrete blocker (`too_many_files`, `patch_conflict_risk`, etc.),
+   - the files/areas involved,
+   - the smallest recommended manual follow-up.
+
 Ensure all changes follow the doc-writer skill guidelines from Step 7. Include:
 - Proper frontmatter (`title`, `description`)
 - Required Starlight component imports
@@ -1326,6 +1343,16 @@ with:
 - `summary`: a short markdown summary (1–3 sentences plus optional bullet list)
   of the documentation changes made. List the files modified or created. Do **not**
   describe links here — the workflow injects the drafted PR's URL automatically.
+
+### Locked source PR handling (required)
+
+Before emitting `notify_source_pr`, query the source PR issue state and check
+whether it is locked (`locked: true`).
+
+- If `locked: false`, emit `notify_source_pr` normally.
+- If `locked: true`, **do not** emit `notify_source_pr` (commenting will fail and
+  fail the workflow). Emit a `noop` safe output instead, with a summary that the
+  source PR is locked and includes the docs decision/result.
 
 > [!IMPORTANT]
 > Do **not** try to compose the drafted PR's URL or PR number yourself in the
