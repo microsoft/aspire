@@ -26,7 +26,7 @@ var app = builder.AddUvicornApp("app", "./app", "main:app")
     .WithReference(project)
     .WithReference(deployment)
     .WaitFor(deployment)
-    .PublishAsHostedAgent(project, (opts) =>
+    .WithComputeEnvironment(project, (opts) =>
     {
         opts.Description = "Foundry Agent Basic Example";
         opts.Metadata["managed-by"] = "aspire-foundry";

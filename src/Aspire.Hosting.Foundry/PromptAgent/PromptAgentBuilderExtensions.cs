@@ -34,8 +34,8 @@ public static class PromptAgentBuilderExtensions
     /// </remarks>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry project resource.</param>
     /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
-    /// <param name="model">The model deployment to use for this agent.</param>
     /// <param name="name">The name of the prompt agent. This will be the agent name in Foundry.</param>
+    /// <param name="model">The model deployment to use for this agent.</param>
     /// <param name="instructions">Optional system instructions for the agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the prompt agent resource.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
@@ -49,7 +49,7 @@ public static class PromptAgentBuilderExtensions
     /// var aiSearch = project.AddAISearchTool("search").WithReference(searchResource);
     /// var codeInterp = project.AddCodeInterpreterTool("code-interp");
     ///
-    /// project.AddPromptAgent(chat, "joker-agent",
+    /// project.AddPromptAgent("joker-agent", chat,
     ///     instructions: "You are good at telling jokes.")
     ///     .WithTool(bing)
     ///     .WithTool(aiSearch)
@@ -59,8 +59,8 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<AzurePromptAgentResource> AddPromptAgent(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        IResourceBuilder<FoundryDeploymentResource> model,
         string name,
+        IResourceBuilder<FoundryDeploymentResource> model,
         string? instructions = null)
     {
         ArgumentNullException.ThrowIfNull(project);

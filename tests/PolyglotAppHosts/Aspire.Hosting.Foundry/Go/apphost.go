@@ -119,7 +119,7 @@ server.listen(port, '127.0.0.1');
 `,
 		})
 
-	hostedAgent.PublishAsHostedAgent(&aspire.PublishAsHostedAgentOptions{
+	hostedAgent.WithComputeEnvironment(&aspire.WithComputeEnvironmentOptions{
 		Project: &project,
 		Configure: func(cfg aspire.HostedAgentConfiguration) {
 			cfg.SetDescription("Validation hosted agent")

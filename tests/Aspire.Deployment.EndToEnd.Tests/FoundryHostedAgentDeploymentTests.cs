@@ -98,7 +98,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
             await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 6: Create a dedicated .NET hosted agent project
-            // PublishAsHostedAgent requires a proper agent application, not a standard apiservice.
+            // WithComputeEnvironment requires a proper agent application, not a standard apiservice.
             output.WriteLine("Step 6: Creating .NET hosted agent project...");
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var hostedAgentDir = Path.Combine(projectDir, "DotNetHostedAgent");
@@ -210,7 +210,7 @@ public sealed class FoundryHostedAgentDeploymentTests(ITestOutputHelper output)
 
                 builder.AddProject<Projects.DotNetHostedAgent>("dotnet-hosted-agent")
                     .WithReference(chat).WaitFor(chat)
-                    .PublishAsHostedAgent(foundryProject);
+                    .WithComputeEnvironment(foundryProject);
 
                 builder.Build().Run();
                 """);

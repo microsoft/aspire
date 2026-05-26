@@ -106,7 +106,7 @@ server.listen(port, '127.0.0.1');
 """
             });
 
-        hostedAgent.publishAsHostedAgent(new PublishAsHostedAgentOptions()
+        hostedAgent.withComputeEnvironment(new WithComputeEnvironmentOptions()
             .project(project)
             .configure((configuration) -> {
                 configuration.setDescription("Validation hosted agent");
