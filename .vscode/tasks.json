@@ -38,23 +38,29 @@
 		{
 			"label": "extension: watch",
 			"type": "shell",
-			// Invoke webpack directly so the $ts-webpack-watch problem matcher
-			// can recognize the "compiled" line. Going through `yarn run watch`
-			// triggers the prewatch lifecycle (which we run separately as
-			// "extension: prepare") and mangles stdout so the matcher never
-			// signals "ready", causing VS Code to hang on preLaunchTask.
-			//
-			// Keep this as the direct background task (not a compound wrapper).
-			// VS Code's preLaunchTask requires the referenced task itself to be
-			// the background task whose problemMatcher signals "ready"; wrapping
-			// it in a compound breaks that signal and the debug session never
-			// launches.
-			"command": "${workspaceFolder}/extension/node_modules/.bin/webpack --watch",
+			// Run webpack directly (not via `yarn run watch`) so its stdout
+			// reaches VS Code's problem-matcher unmangled. Prepend a marker so
+			// the matcher's beginsPattern always fires before webpack prints
+			// "compiled", regardless of warning ordering.
+			"command": "echo '[extension: watch] starting webpack' && ${workspaceFolder}/extension/node_modules/.bin/webpack --watch",
 			"options": {
 				"cwd": "${workspaceFolder}/extension"
 			},
 			"isBackground": true,
-			"problemMatcher": "$ts-webpack-watch",
+			"problemMatcher": {
+				"owner": "webpack",
+				"fileLocation": "absolute",
+				"pattern": {
+					"regexp": "^ERROR in (.*)$",
+					"file": 1,
+					"message": 1
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": "\\[extension: watch\\] starting webpack|^assets? by|^Recompil",
+					"endsPattern": "^webpack [\\d.]+ compiled"
+				}
+			},
 			"presentation": {
 				"reveal": "silent",
 				"panel": "dedicated",
