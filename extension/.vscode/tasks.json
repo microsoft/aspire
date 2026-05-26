@@ -51,14 +51,12 @@
 				"owner": "webpack",
 				"fileLocation": "absolute",
 				"pattern": {
-					"regexp": "^ERROR in (.*)$",
-					"file": 1,
-					"message": 1
+					"regexp": "a^"
 				},
 				"background": {
 					"activeOnStart": true,
-					"beginsPattern": "\\[extension: watch\\] starting webpack|^assets? by|^Recompil",
-					"endsPattern": "^webpack [\\d.]+ compiled"
+					"beginsPattern": "\\[extension: watch\\] starting webpack|\\[webpack-cli\\] Compiler starting",
+					"endsPattern": "^webpack [\\d.]+ compiled (successfully|with \\d+ warnings?) in \\d+ ms$"
 				}
 			},
 			"presentation": {
@@ -105,5 +103,4 @@
 		}
 	]
 }
-
 
