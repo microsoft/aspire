@@ -85,4 +85,37 @@ public class HelmVersionValidatorTests
 
         Assert.Contains("https://helm.sh/docs/intro/install/", ex.Message, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task EnsureMinimumVersionAsync_DoesNotPassClientFlag()
+    {
+        // Regression: --client was removed in Helm 4 (the minimum version Aspire
+        // requires), so passing it makes the validator's own probe fail with
+        // "Error: unknown flag: --client" against the very baseline it is meant
+        // to validate.
+        var runner = new RecordingHelmRunner();
+        await HelmVersionValidator.EnsureMinimumVersionAsync(runner, CancellationToken.None);
+
+        Assert.NotNull(runner.LastArguments);
+        Assert.DoesNotContain("--client", runner.LastArguments, StringComparison.Ordinal);
+        Assert.Contains("version", runner.LastArguments, StringComparison.Ordinal);
+        Assert.Contains("--short", runner.LastArguments, StringComparison.Ordinal);
+    }
+
+    private sealed class RecordingHelmRunner : IHelmRunner
+    {
+        public string? LastArguments { get; private set; }
+
+        public Task<int> RunAsync(
+            string arguments,
+            string? workingDirectory = null,
+            Action<string>? onOutputData = null,
+            Action<string>? onErrorData = null,
+            CancellationToken cancellationToken = default)
+        {
+            LastArguments = arguments;
+            onOutputData?.Invoke("v4.2.0+gfa15ec0");
+            return Task.FromResult(0);
+        }
+    }
 }
