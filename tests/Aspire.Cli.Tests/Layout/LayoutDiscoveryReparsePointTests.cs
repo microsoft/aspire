@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Layout;
+using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
@@ -14,6 +15,15 @@ namespace Aspire.Cli.Tests.LayoutTests;
 /// whose <c>bundle/</c> entry is a reparse point pointing at a versioned subdirectory
 /// (the new on-disk shape introduced for transactional installs).
 /// </summary>
+/// <remarks>
+/// The Aspire-home fallback test mutates the process-wide <c>ASPIRE_HOME</c> environment
+/// variable, which is also read by <see cref="CliPathHelper.GetDefaultAspireHomeDirectory()"/>
+/// and indirectly by <c>BundleService.ComputeDefaultExtractDir</c>. xUnit runs test classes
+/// in parallel by default, so without joining <see cref="EnvVarMutatingTestCollection"/> a
+/// concurrent reader in another suite could observe the temporary override and assert against
+/// the wrong path. Disabling parallelization across the mutating tests prevents that race.
+/// </remarks>
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
 {
     [Fact]
