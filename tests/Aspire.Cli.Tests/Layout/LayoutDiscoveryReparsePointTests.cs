@@ -164,6 +164,53 @@ public class LayoutDiscoveryReparsePointTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public void DiscoverLayout_PrefersRelativeLayoutOverAspireHomeLayout()
+    {
+        // The Aspire-home probe is the last fallback in DiscoverLayout so that
+        // package-managed or sidecar-owned installs (winget/brew/dotnet-tool/script/
+        // pr/localhive) — which already colocate the bundle next to or above the
+        // CLI binary — are never shadowed by a stale or differently-versioned
+        // layout left over in $HOME/.aspire from an earlier sidecar-less run.
+        // This regression test pins that ordering: when both layouts exist, the
+        // relative-to-CLI layout wins.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Colocated (relative) layout: CLI in {layoutRoot}/bin/aspire with the
+        // bundle as a sibling of bin/.
+        var relativeLayoutRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "colocated");
+        var binDir = Path.Combine(relativeLayoutRoot, "bin");
+        Directory.CreateDirectory(binDir);
+        var binaryPath = Path.Combine(binDir, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(binaryPath, "stub");
+        CreateValidBundleLayout(relativeLayoutRoot);
+
+        // Competing $ASPIRE_HOME layout: also valid but should not be selected.
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, "home", ".aspire");
+        CreateValidBundleLayout(aspireHome);
+
+        var originalAspireHome = Environment.GetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome);
+
+            var discovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+            {
+                ProcessPathOverride = binaryPath
+            };
+
+            var layout = discovery.DiscoverLayout();
+
+            Assert.NotNull(layout);
+            Assert.Equal(relativeLayoutRoot, layout!.LayoutPath);
+            Assert.NotEqual(aspireHome, layout.LayoutPath);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, originalAspireHome);
+        }
+    }
+
     private static void CreateValidBundleLayout(string layoutRoot)
     {
         var bundleDir = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
