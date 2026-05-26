@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Fixes a bug where aspire update could break TypeScript AppHost projects by advancing the SDK version before regeneration completed. The CLI now preflights updates against the target SDK version and prompts for a CLI upgrade when the target SDK is newer than the running CLI, and only persists config changes after regeneration succeeds.",
-  "docsPrs": [],
+  "docsPrs": [
+    1067
+  ],
   "docsRequired": false,
   "emoji": "🔄",
   "firstMergedAt": "2026-05-19T17:19:07Z",

@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix: channel not persisted in aspire.config.json on init/update with non-stable CLI",
+  "mergedAt": "2026-05-26T03:31:24Z",
+  "number": 17452,
+  "runDate": "2026-05-26T05:25:04Z",
+  "status": "included",
+  "title": "fix(cli): persist channel in aspire.config.json on init and update"
+}

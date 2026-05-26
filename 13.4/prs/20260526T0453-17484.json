@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only changes to fix CLI E2E test result recording; no user-visible change",
+  "mergedAt": "2026-05-26T04:53:30Z",
+  "number": 17484,
+  "runDate": "2026-05-26T05:25:04Z",
+  "status": "excluded",
+  "title": "Eliminate Unknown CLI E2E test results in PR comment"
+}

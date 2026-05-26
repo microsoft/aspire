@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "DCP now uses ASP.NET Core developer certificate TLS files on macOS and Linux, enabling the same cross-platform HTTPS developer experience previously only available on Windows via certificate thumbprint. The opt-out env var ASPIRE_DCP_USE_DEVELOPER_CERTIFICATE=false preserves the old ephemeral certificate behavior.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd10",
+  "firstMergedAt": "2026-05-26T04:18:02Z",
+  "lastMergedAt": "2026-05-26T04:18:02Z",
+  "name": "DCP dev cert TLS file support for macOS and Linux",
+  "owner": "danegsta",
+  "prs": [
+    17449
+  ]
+}

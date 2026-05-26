@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Documents TypeScript AppHost upgrade ordering issue (microsoft/aspire#17077, #17100); matched to fix-guest-apphost-update-with-older-cli entry",
+  "mergedAt": "2026-05-26T04:35:36Z",
+  "number": 1067,
+  "runDate": "2026-05-26T05:25:04Z",
+  "status": "included",
+  "title": "Warn TS AppHost users to run `aspire update --self` first in 13.4 release notes"
+}
