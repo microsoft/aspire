@@ -6,12 +6,12 @@ using Aspire.Cli.Commands;
 namespace Aspire.Cli.Tests.Commands;
 
 // `SetupCommand.GetDefaultInstallPath` returns parent-of-binary regardless of
-// install route — distinct from the route-aware `BundleService.GetDefaultExtractDir`
-// used by auto-extract. These tests pin the route-independent contract.
+// install source — distinct from the source-aware `BundleService.GetDefaultExtractDir`
+// used by auto-extract. These tests pin the source-independent contract.
 public class SetupCommandTests
 {
     [Fact]
-    public void GetDefaultInstallPath_ScriptRouteLayout_ReturnsParentOfBinaryDirectory()
+    public void GetDefaultInstallPath_ScriptSourceLayout_ReturnsParentOfBinaryDirectory()
     {
         var processPath = Path.Combine("home", ".aspire", "bin", "aspire");
 
@@ -21,7 +21,7 @@ public class SetupCommandTests
     }
 
     [Fact]
-    public void GetDefaultInstallPath_PRRouteLayout_ReturnsParentOfBinaryDirectory()
+    public void GetDefaultInstallPath_PRSourceLayout_ReturnsParentOfBinaryDirectory()
     {
         var processPath = Path.Combine("home", ".aspire", "dogfood", "pr-12345", "bin", "aspire");
 
@@ -31,9 +31,9 @@ public class SetupCommandTests
     }
 
     [Fact]
-    public void GetDefaultInstallPath_ManagedRouteFlatLayout_ReturnsParentOfBinaryDirectory()
+    public void GetDefaultInstallPath_ManagedSourceFlatLayout_ReturnsParentOfBinaryDirectory()
     {
-        // Managed-route layout is flat (no bin/ subdir). `BundleService.GetDefaultExtractDir`
+        // Managed-source layout is flat (no bin/ subdir). `BundleService.GetDefaultExtractDir`
         // diverges here and keeps the payload inside the binary's dir so package-manager uninstall reaches it.
         var processPath = Path.Combine("Program Files", "WindowsApps", "Microsoft.Aspire_xyz", "aspire.exe");
 

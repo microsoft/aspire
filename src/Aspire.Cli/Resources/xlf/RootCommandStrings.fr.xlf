@@ -52,6 +52,21 @@ The Aspire CLI collects usage data. It is collected by Microsoft and is used to 
 Read more about Aspire CLI telemetry: {0}</target>
         <note>{0} is a clickable URL</note>
       </trans-unit>
+      <trans-unit id="InfoArgumentDescription">
+        <source>Print the running CLI's version, channel, and the list of Aspire CLI installs discovered on this machine</source>
+        <target state="new">Print the running CLI's version, channel, and the list of Aspire CLI installs discovered on this machine</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InfoFormatArgumentDescription">
+        <source>Output format for `--info`</source>
+        <target state="new">Output format for `--info`</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InfoOptionRequiresInfo">
+        <source>Option `{0}` is only valid when `--info` is also specified.</source>
+        <target state="new">Option `{0}` is only valid when `--info` is also specified.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoLogoArgumentDescription">
         <source>Suppress the startup banner and telemetry notice</source>
         <target state="needs-review-translation">Supprimer la bannière de démarrage et la notification de télémétrie.</target>

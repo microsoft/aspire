@@ -474,6 +474,57 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 
 `status` is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
 
+### `aspire --info`
+
+`aspire --info --format json` emits a JSON object combining the running CLI's version, its identity channel, and the list of Aspire CLI installs and orphan package hives that the running CLI can discover:
+
+```json
+{
+  "version": "13.2.0",
+  "channel": "stable",
+  "installs": [
+    {
+      "id": "script",
+      "kind": "script",
+      "channel": "stable",
+      "path": "/home/user/.aspire/bin/aspire",
+      "hive": "/home/user/.aspire/hives/stable",
+      "status": "active"
+    },
+    {
+      "id": "pr-17400",
+      "kind": "orphan-hive",
+      "channel": "pr-17400",
+      "hive": "/home/user/.aspire/hives/pr-17400",
+      "status": "no install found",
+      "statusReason": "No discovered install reports this hive's channel."
+    },
+    {
+      "id": "stable",
+      "kind": "homebrew",
+      "channel": "stable",
+      "path": "/opt/homebrew/Caskroom/aspire/13.2.0/aspire",
+      "status": "active",
+      "managedBy": "homebrew"
+    },
+    {
+      "id": "pr-17500",
+      "kind": "pr",
+      "channel": "pr-17500",
+      "path": "/home/user/.aspire/dogfood/pr-17500/bin/aspire",
+      "status": "failed",
+      "statusReason": "Peer probe exited with code 137 (SIGKILL)."
+    }
+  ]
+}
+```
+
+`installs[*].status` uses the install-discovery status (`active`, `shadowed`, `notOnPath`, `failed`, `notProbed`) or `no install found` for orphan hives. When the row has a human-readable reason (failed probes, orphan hives), it rides on the separate `statusReason` field — the `status` value itself stays enum-shaped so programmatic consumers can `switch` on it.
+
+The top-level `channel` is the running CLI's identity (`local`, `stable`, `staging`, `daily`, or `pr-<N>`). It is omitted from the JSON output when the running binary has missing or invalid `AspireCliChannel` assembly metadata; the command still exits 0 so users can use `aspire --info` to diagnose a broken binary. The `installs` array is always present, possibly empty.
+
+`aspire --info --self --format json` is a hidden modifier used by the install-discovery peer-probe path so a newer CLI can ask a peer CLI to describe itself. Its output is a single-element array whose row carries the running CLI's own install metadata — `path`, `canonicalPath`, `version`, `channel`, `source`, `pathStatus`, `status`, and `statusReason`. That row shape is *distinct from* the `installs[*]` rows above: it has neither the `id`/`kind`/`hive`/`managedBy` aggregate-table fields nor the per-row sort projection. It is the internal cross-version contract between Aspire CLI builds and is not a stable surface for external tooling; it may change without notice.
+
 ### `aspire config info`
 
 `aspire config info --json` is a hidden tooling command that emits configuration paths, feature metadata, settings schemas, and advertised CLI capabilities:

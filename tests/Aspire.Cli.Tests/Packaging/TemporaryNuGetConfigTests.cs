@@ -180,7 +180,7 @@ public class TemporaryNuGetConfigTests
         // will accept after its own internal canonicalization (e.g. on macOS the
         // upstream caller must strip /private/var → /var before constructing the
         // PackageMapping — see CliPathHelper.StripMacOSFirmlinkPrefix and the
-        // GetAspireHomeDirectory_OnMacOS_PrRouteWithFirmlinkedProcessPath test).
+        // GetAspireHomeDirectory_OnMacOS_PrSourceWithFirmlinkedProcessPath test).
         // This test only pins the writer's symmetry contract.
         var mappings = new PackageMapping[]
         {
