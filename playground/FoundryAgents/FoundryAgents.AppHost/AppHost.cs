@@ -10,8 +10,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var aca = builder.AddAzureContainerAppEnvironment("env");
 
-var foundry = builder.AddFoundry("aifmyfoundry16");
-var project = foundry.AddProject("projmyproject16")
+var foundry = builder.AddFoundry("aifmyfoundry");
+var project = foundry.AddProject("projmyproject")
     // workaround for https://github.com/microsoft/aspire/issues/15971
     .ConfigureInfrastructure(infra =>
     {
@@ -28,18 +28,18 @@ var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41);
 
 // --- Prompt agent tools ---
 
-// var search = builder.AddAzureSearch("search")
-//     .ConfigureInfrastructure(infra =>
-//     {
-//         var searchService = infra.GetProvisionableResources()
-//             .OfType<Azure.Provisioning.Search.SearchService>()
-//             .Single();
-//         searchService.SearchSkuName = Azure.Provisioning.Search.SearchServiceSkuName.Free;
-//     });
-// var aiSearchTool = project.AddAISearchTool("aisearch-tool", indexName: "default")
-//     .WithReference(search);
+var search = builder.AddAzureSearch("search")
+    .ConfigureInfrastructure(infra =>
+    {
+        var searchService = infra.GetProvisionableResources()
+            .OfType<Azure.Provisioning.Search.SearchService>()
+            .Single();
+        searchService.SearchSkuName = Azure.Provisioning.Search.SearchServiceSkuName.Free;
+    });
+var aiSearchTool = project.AddAISearchTool("aisearch-tool", indexName: "default")
+    .WithReference(search);
 
-// var codeInterpreter = project.AddCodeInterpreterTool("code-interp");
+var codeInterpreter = project.AddCodeInterpreterTool("code-interp");
 
 builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
     .WithUv()
@@ -53,15 +53,15 @@ builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
 
 // --- Prompt Agents ---
 
-// var researchAgent = project.AddPromptAgent("research-agent", chat,
-//     instructions: """
-//         You are a research assistant. When asked a question:
-//         1. Use Bing grounding to search the web for current information
-//         2. Use the code interpreter to analyze data or perform calculations
-//         Always cite your sources and be thorough in your analysis.
-//         """)
-//     .WithTool(aiSearchTool)
-//     .WithTool(codeInterpreter);
+var researchAgent = project.AddPromptAgent("research-agent", chat,
+    instructions: """
+        You are a research assistant. When asked a question:
+        1. Use Bing grounding to search the web for current information
+        2. Use the code interpreter to analyze data or perform calculations
+        Always cite your sources and be thorough in your analysis.
+        """)
+    .WithTool(aiSearchTool)
+    .WithTool(codeInterpreter);
 
 var jokerAgent = project.AddPromptAgent("joker-agent", chat,
     instructions: """
@@ -70,10 +70,10 @@ var jokerAgent = project.AddPromptAgent("joker-agent", chat,
         create funny charts or calculations about the topic.
         """);
 
-// builder.AddProject<Projects.PromptAgentChat>("chat-app")
-//     .WithExternalHttpEndpoints()
-//     .WithComputeEnvironment(aca)
-//     .WithReference(jokerAgent).WaitFor(jokerAgent)
-//     .WithReference(researchAgent).WaitFor(researchAgent);
+builder.AddProject<Projects.PromptAgentChat>("chat-app")
+    .WithExternalHttpEndpoints()
+    .WithComputeEnvironment(aca)
+    .WithReference(jokerAgent).WaitFor(jokerAgent)
+    .WithReference(researchAgent).WaitFor(researchAgent);
 
 builder.Build().Run();

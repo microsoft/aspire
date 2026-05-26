@@ -48,7 +48,7 @@ async def get_forecast() -> str:
 
 def main():
     """Main function to run the agent as a web server."""
-    project_endpoint = os.environ.get("ConnectionStrings__projmyproject16", "")
+    project_endpoint = os.environ.get("ConnectionStrings__projmyproject", "")
     deployment_name = os.environ.get("CHAT_MODELNAME", "chat")
 
     # Parse endpoint from connection string format if needed (Endpoint=https://...)
