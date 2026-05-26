@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Azure role assignment preparation is now idempotent: shared resources such as Storage or SignalR no longer fail with duplicate role-assignment resources when multiple projects reference the same target during the BeforeStart pipeline and again on publish or deploy.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔁",
+  "firstMergedAt": "2026-05-26T08:08:39Z",
+  "lastMergedAt": "2026-05-26T08:08:39Z",
+  "name": "Fix Azure role assignment preparation idempotency",
+  "owner": "davidfowl",
+  "prs": [
+    17494
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sliekens",
+  "comment": "Bug fix: Docker Compose .env file generation now resolves arbitrary IValueProvider sources; community contribution",
+  "mergedAt": "2026-05-26T08:10:42Z",
+  "number": 17471,
+  "runDate": "2026-05-26T09:13:37Z",
+  "status": "included",
+  "title": "Support arbitrary IValueProvider sources in Docker Compose .env file generation"
+}

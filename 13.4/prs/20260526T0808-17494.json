@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix: Azure role assignment preparation now idempotent, preventing duplicate resources when multiple projects reference the same Azure resource",
+  "mergedAt": "2026-05-26T08:08:39Z",
+  "number": 17494,
+  "runDate": "2026-05-26T09:13:31Z",
+  "status": "included",
+  "title": "Fix Azure role assignment preparation idempotency"
+}

@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@sliekens"
+  ],
+  "description": "Docker Compose .env file generation now resolves any IValueProvider source instead of only ParameterResource and ContainerImageReference. Custom resource types implementing IValueProvider that were previously silently ignored will now have their values correctly written to the .env file.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-05-26T08:10:42Z",
+  "lastMergedAt": "2026-05-26T08:10:42Z",
+  "name": "Fix Docker Compose .env arbitrary IValueProvider source resolution",
+  "owner": "davidfowl",
+  "prs": [
+    17471
+  ]
+}
