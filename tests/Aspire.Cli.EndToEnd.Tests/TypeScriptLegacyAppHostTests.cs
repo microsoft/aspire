@@ -82,7 +82,7 @@ public sealed class TypeScriptLegacyAppHostTests(ITestOutputHelper output)
         // Step 4: Type-check apphost.ts against its tsconfig. This proves the rewritten
         // `.js` import specifiers in the generated files resolve correctly against the
         // legacy `.modules/` folder — the contract the conversion enforces.
-        await auto.TypeAsync("npx tsc --noEmit -p tsconfig.apphost.json");
+        await auto.TypeAsync("npx --no-install tsc --noEmit -p tsconfig.apphost.json");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
