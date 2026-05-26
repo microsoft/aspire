@@ -212,8 +212,7 @@ internal sealed class AzureResourcePreparer(
 
                         foreach (var roleAssignmentResource in roleAssignmentResources)
                         {
-                            appModel.Resources.Add(roleAssignmentResource);
-                            prerequisiteResources.Add(roleAssignmentResource);
+                            prerequisiteResources.Add(AddOrGetRoleAssignmentResource(appModel, roleAssignmentResource));
                         }
                     }
                 }
@@ -221,10 +220,7 @@ internal sealed class AzureResourcePreparer(
                 // Add prerequisite infrastructure resources on the compute resource.
                 // Deployment infrastructure subscribers will transfer these to deployment target References
                 // so AzureBicepResource dependency wiring can apply provision ordering.
-                if (prerequisiteResources.Count > 0)
-                {
-                    resource.Annotations.Add(new DeploymentPrerequisitesAnnotation(prerequisiteResources));
-                }
+                AddDeploymentPrerequisitesAnnotation(resource, prerequisiteResources);
             }
 
             if (executionContext.IsRunMode)
@@ -393,11 +389,55 @@ internal sealed class AzureResourcePreparer(
         {
             var roleAssignmentResource = CreateGlobalRoleAssignmentsResource(azureResource, roles);
 
+            roleAssignmentResource = AddOrGetRoleAssignmentResource(appModel, roleAssignmentResource);
+
+            if (!azureResource.Annotations.OfType<RoleAssignmentResourceAnnotation>().Any(a => a.RolesResource == roleAssignmentResource))
+            {
+                azureResource.Annotations.Add(new RoleAssignmentResourceAnnotation(roleAssignmentResource));
+            }
+
+            if (!roleAssignmentResource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(a => a.Resource == azureResource && a.Type == KnownRelationshipTypes.Parent))
+            {
+                roleAssignmentResource.Annotations.Add(new ResourceRelationshipAnnotation(azureResource, KnownRelationshipTypes.Parent));
+            }
+        }
+    }
+
+    private static AzureRoleAssignmentResource AddOrGetRoleAssignmentResource(DistributedApplicationModel appModel, AzureRoleAssignmentResource roleAssignmentResource)
+    {
+        if (!appModel.Resources.TryGetByName(roleAssignmentResource.Name, out var existingResource))
+        {
             appModel.Resources.Add(roleAssignmentResource);
+            return roleAssignmentResource;
+        }
 
-            azureResource.Annotations.Add(new RoleAssignmentResourceAnnotation(roleAssignmentResource));
+        if (existingResource is AzureRoleAssignmentResource existingRoleAssignmentResource &&
+            existingRoleAssignmentResource.TargetAzureResource == roleAssignmentResource.TargetAzureResource &&
+            existingRoleAssignmentResource.OwnerResource == roleAssignmentResource.OwnerResource &&
+            existingRoleAssignmentResource.IdentityResource == roleAssignmentResource.IdentityResource)
+        {
+            return existingRoleAssignmentResource;
+        }
 
-            roleAssignmentResource.Annotations.Add(new ResourceRelationshipAnnotation(azureResource, KnownRelationshipTypes.Parent));
+        appModel.Resources.Add(roleAssignmentResource);
+        return roleAssignmentResource;
+    }
+
+    private static void AddDeploymentPrerequisitesAnnotation(IResource resource, HashSet<AzureBicepResource> prerequisiteResources)
+    {
+        if (prerequisiteResources.Count == 0)
+        {
+            return;
+        }
+
+        if (resource.TryGetAnnotationsOfType<DeploymentPrerequisitesAnnotation>(out var existingAnnotations))
+        {
+            prerequisiteResources.ExceptWith(existingAnnotations.SelectMany(a => a.Resources));
+        }
+
+        if (prerequisiteResources.Count > 0)
+        {
+            resource.Annotations.Add(new DeploymentPrerequisitesAnnotation(prerequisiteResources));
         }
     }
 

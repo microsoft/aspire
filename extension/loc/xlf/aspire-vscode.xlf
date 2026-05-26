@@ -112,14 +112,17 @@
     <trans-unit id="command.copyAppHostPath">
       <source xml:lang="en">Copy AppHost path</source>
     </trans-unit>
-    <trans-unit id="command.copyPid">
-      <source xml:lang="en">Copy ID</source>
+    <trans-unit id="command.copyLogFilePath">
+      <source xml:lang="en">Copy Path</source>
     </trans-unit>
     <trans-unit id="command.copyEndpointUrl">
       <source xml:lang="en">Copy URL</source>
     </trans-unit>
     <trans-unit id="command.copyResourceName">
       <source xml:lang="en">Copy resource name</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.logFilePathInvalid">
+      <source xml:lang="en">Could not determine the AppHost log file to open.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceNotFound">
       <source xml:lang="en">Could not determine the AppHost source file to open.</source>
@@ -241,6 +244,9 @@
     <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsFailed">
       <source xml:lang="en">Failed to load dynamic command inputs. Run this command from the Aspire Dashboard or Aspire CLI instead.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.logFileOpenFailed">
+      <source xml:lang="en">Failed to open AppHost log file {0}: {1}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceOpenFailed">
       <source xml:lang="en">Failed to open AppHost source file: {0}</source>
     </trans-unit>
@@ -357,6 +363,9 @@
     </trans-unit>
     <trans-unit id="extension.description">
       <source xml:lang="en">Official Aspire extension for Visual Studio Code</source>
+    </trans-unit>
+    <trans-unit id="command.viewAppHostLogFile">
+      <source xml:lang="en">Open AppHost logs file</source>
     </trans-unit>
     <trans-unit id="command.openAppHostSource">
       <source xml:lang="en">Open AppHost source</source>
@@ -564,6 +573,9 @@
     </trans-unit>
     <trans-unit id="command.viewResourceLogs">
       <source xml:lang="en">View logs</source>
+    </trans-unit>
+    <trans-unit id="command.viewAppHostSource">
+      <source xml:lang="en">View source</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.watchProject">
       <source xml:lang="en">Watch {0} ({1})</source>

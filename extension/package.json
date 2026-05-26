@@ -345,10 +345,10 @@
         "icon": "$(clippy)"
       },
       {
-        "command": "aspire-vscode.copyPid",
-        "title": "%command.copyPid%",
+        "command": "aspire-vscode.viewAppHostSource",
+        "title": "%command.viewAppHostSource%",
         "category": "Aspire",
-        "icon": "$(clippy)"
+        "icon": "$(json)"
       },
       {
         "command": "aspire-vscode.switchToGlobalView",
@@ -412,6 +412,18 @@
         "title": "%command.expandAll%",
         "category": "Aspire",
         "icon": "$(expand-all)"
+      },
+      {
+        "command": "aspire-vscode.viewAppHostLogFile",
+        "title": "%command.viewAppHostLogFile%",
+        "category": "Aspire",
+        "icon": "$(output)"
+      },
+      {
+        "command": "aspire-vscode.copyLogFilePath",
+        "title": "%command.copyLogFilePath%",
+        "category": "Aspire",
+        "icon": "$(clippy)"
       }
     ],
     "jsonValidation": [
@@ -551,11 +563,19 @@
           "when": "false"
         },
         {
-          "command": "aspire-vscode.copyPid",
+          "command": "aspire-vscode.viewAppHostSource",
           "when": "false"
         },
         {
           "command": "aspire-vscode.expandAll",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.viewAppHostLogFile",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.copyLogFilePath",
           "when": "false"
         }
       ],
@@ -579,17 +599,17 @@
       "view/item/context": [
         {
           "command": "aspire-vscode.openDashboard",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "inline"
         },
         {
           "command": "aspire-vscode.expandAll",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "inline"
         },
         {
           "command": "aspire-vscode.openAppHostSource",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "1_open@1"
         },
         {
@@ -648,9 +668,19 @@
           "group": "3_info@2"
         },
         {
-          "command": "aspire-vscode.copyPid",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem == pidItem",
-          "group": "1_clipboard@1"
+          "command": "aspire-vscode.viewAppHostSource",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost)$/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "aspire-vscode.viewAppHostLogFile",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem == logFileItem",
+          "group": "1_open@1"
+        },
+        {
+          "command": "aspire-vscode.copyLogFilePath",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem == logFileItem",
+          "group": "3_clipboard@1"
         }
       ]
     },

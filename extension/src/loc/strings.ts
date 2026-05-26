@@ -55,8 +55,6 @@ export const processExceptionOccurred = (error: string, command: string) => vsco
 // Aspire panel strings
 export const pidDescription = (pid: number) => vscode.l10n.t('PID: {0}', pid);
 export const dashboardLabel = vscode.l10n.t('Dashboard');
-export const cliPidLabel = (pid: number) => vscode.l10n.t('CLI PID: {0}', pid);
-export const appHostPidLabel = (pid: number) => vscode.l10n.t('AppHost PID: {0}', pid);
 export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fetching running AppHosts: {0}', error);
 export const aspireDescribeMinimumVersion = '13.2.0';
 export const aspireCliDescribeNotSupported = (version: string) => vscode.l10n.t('Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.', version);
@@ -132,6 +130,9 @@ export const selectFileTitle = vscode.l10n.t('Select file');
 export const enterPipelineStep = vscode.l10n.t('Enter the pipeline step to execute');
 export const appHostSourceNotFound = vscode.l10n.t('Could not determine the AppHost source file to open.');
 export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed to open AppHost source file: {0}', path);
+export const logFilePathInvalid = vscode.l10n.t('Could not determine the AppHost log file to open.');
+export const logFileOpenFailed = (path: string, error: string) => vscode.l10n.t('Failed to open AppHost log file {0}: {1}', path, error);
+export const logFileLabel = vscode.l10n.t('AppHost logs');
 
 // CodeLens strings.
 // The "\u200A" between the codicon and the label is U+200A HAIR SPACE; it adds

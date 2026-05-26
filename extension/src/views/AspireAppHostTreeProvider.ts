@@ -6,8 +6,6 @@ import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConst
 import {
     pidDescription,
     dashboardLabel,
-    cliPidLabel,
-    appHostPidLabel,
     resourcesGroupLabel,
     noCommandsAvailable,
     selectCommandPlaceholder,
@@ -20,10 +18,13 @@ import {
     tooltipEndpoints,
     appHostSourceNotFound,
     appHostSourceOpenFailed,
+    logFileOpenFailed,
+    logFilePathInvalid,
     healthChecksLabel,
     healthCheckDescription,
     resourceDescriptionHealth,
     resourceDescriptionExitCode,
+    logFileLabel,
 } from '../loc/strings';
 import { isLinkableUrl } from '../utils/urlSchemes';
 import {
@@ -37,7 +38,7 @@ import {
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
 
-type TreeElement = AppHostItem | PidItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | HealthChecksGroupItem | HealthCheckItem;
+type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem;
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -94,17 +95,9 @@ class WorkspaceResourcesItem extends vscode.TreeItem {
         super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.Expanded);
         this.id = 'workspace-resources';
         this.iconPath = appHostIcon(appHostPath);
-        this.contextValue = 'workspaceResources';
+        this.contextValue = appHost ? 'workspaceResources:hasAppHost' : 'workspaceResources';
         this.description = resourceCountDescription(resources.length);
         this.tooltip = appHostDescription;
-    }
-}
-
-class PidItem extends vscode.TreeItem {
-    constructor(public readonly pid: number, label: string, icon: string) {
-        super(label, vscode.TreeItemCollapsibleState.None);
-        this.iconPath = new vscode.ThemeIcon(icon);
-        this.contextValue = 'pidItem';
     }
 }
 
@@ -126,6 +119,20 @@ class EndpointUrlItem extends vscode.TreeItem {
             this.iconPath = new vscode.ThemeIcon('radio-tower');
             this.contextValue = 'endpointUrlNonHttp';
         }
+    }
+}
+
+class LogFileItem extends vscode.TreeItem {
+    constructor(public readonly logFilePath: string) {
+        super(logFileLabel, vscode.TreeItemCollapsibleState.None);
+        this.tooltip = logFilePath;
+        this.iconPath = new vscode.ThemeIcon('output');
+        this.contextValue = 'logFileItem';
+        this.command = {
+            command: 'aspire-vscode.viewAppHostLogFile',
+            title: logFileLabel,
+            arguments: [logFilePath]
+        };
     }
 }
 
@@ -335,12 +342,19 @@ function buildResourceTooltip(resource: ResourceJson): vscode.MarkdownString {
  * Pure tree-view renderer.  All data comes from the AppHostDataRepository;
  * this class handles only tree rendering and resource command execution.
  */
-export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeElement> {
+export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeElement>, vscode.TextDocumentContentProvider {
     private readonly _onDidChangeTreeData = new vscode.EventEmitter<TreeElement | undefined | void>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
+    private readonly _onDidChangeContent = new vscode.EventEmitter<vscode.Uri>();
+    readonly onDidChange = this._onDidChangeContent.event;
+
     private readonly _dataSubscription: vscode.Disposable;
+    private _contentProviderRegistration: vscode.Disposable | undefined;
+    private readonly _appHostSourceContents = new Map<string, string>();
     private _treeView: vscode.TreeView<TreeElement> | undefined;
+
+    private _documentCloseSubscription: vscode.Disposable | undefined;
 
     constructor(
         private readonly _repository: AppHostDataRepository,
@@ -349,6 +363,23 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     ) {
         this._dataSubscription = this._repository.onDidChangeData(() => {
             this._onDidChangeTreeData.fire();
+        });
+    }
+
+    provideTextDocumentContent(uri: vscode.Uri): string {
+        return this._appHostSourceContents.get(uri.toString()) ?? '';
+    }
+
+    private _ensureContentProviderRegistered(): void {
+        if (this._contentProviderRegistration) {
+            return;
+        }
+
+        this._contentProviderRegistration = vscode.workspace.registerTextDocumentContentProvider('aspire-source', this);
+        this._documentCloseSubscription = vscode.workspace.onDidCloseTextDocument(doc => {
+            if (doc.uri.scheme === 'aspire-source') {
+                this._appHostSourceContents.delete(doc.uri.toString());
+            }
         });
     }
 
@@ -374,7 +405,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     dispose(): void {
         this._dataSubscription.dispose();
+        this._contentProviderRegistration?.dispose();
+        this._documentCloseSubscription?.dispose();
         this._onDidChangeTreeData.dispose();
+        this._onDidChangeContent.dispose();
     }
 
     setTreeView(treeView: vscode.TreeView<TreeElement>): void {
@@ -518,20 +552,8 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 items.push(new EndpointUrlItem(element.dashboardUrl, dashboardLabel));
             }
 
-            if (element.appHost) {
-                items.push(new PidItem(
-                    element.appHost.appHostPid,
-                    appHostPidLabel(element.appHost.appHostPid),
-                    'terminal',
-                ));
-
-                if (element.appHost.cliPid !== null) {
-                    items.push(new PidItem(
-                        element.appHost.cliPid,
-                        cliPidLabel(element.appHost.cliPid),
-                        'terminal-cmd',
-                    ));
-                }
+            if (element.appHost?.logFilePath) {
+                items.push(new LogFileItem(element.appHost.logFilePath));
             }
 
             // Show only top-level resources (those without a parent)
@@ -572,25 +594,15 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         if (element instanceof AppHostItem) {
-            const items: (PidItem | EndpointUrlItem | ResourcesGroupItem)[] = [];
+            const items: (EndpointUrlItem | ResourcesGroupItem | LogFileItem)[] = [];
             const appHost = element.appHost;
 
             if (appHost.dashboardUrl) {
                 items.push(new EndpointUrlItem(appHost.dashboardUrl, dashboardLabel));
             }
 
-            items.push(new PidItem(
-                appHost.appHostPid,
-                appHostPidLabel(appHost.appHostPid),
-                'terminal',
-            ));
-
-            if (appHost.cliPid !== null) {
-                items.push(new PidItem(
-                    appHost.cliPid,
-                    cliPidLabel(appHost.cliPid),
-                    'terminal-cmd',
-                ));
+            if (appHost.logFilePath) {
+                items.push(new LogFileItem(appHost.logFilePath));
             }
 
             if (appHost.resources && appHost.resources.length > 0) {
@@ -802,6 +814,25 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         await vscode.env.clipboard.writeText(element.appHost.appHostPath);
     }
 
+    async viewAppHostLogFile(element: unknown): Promise<void> {
+        const filePath = element instanceof LogFileItem ? element.logFilePath : element as string;
+        if (!filePath || typeof filePath !== 'string') {
+            vscode.window.showWarningMessage(logFilePathInvalid);
+            return;
+        }
+        try {
+            const uri = vscode.Uri.file(filePath);
+            const document = await vscode.workspace.openTextDocument(uri);
+            await vscode.window.showTextDocument(document, { preview: false });
+        } catch (error) {
+            vscode.window.showWarningMessage(logFileOpenFailed(filePath, getErrorMessage(error)));
+        }
+    }
+
+    async copyLogFilePath(element: LogFileItem): Promise<void> {
+        await vscode.env.clipboard.writeText(element.logFilePath);
+    }
+
     async copyEndpointUrl(element: EndpointUrlItem): Promise<void> {
         await vscode.env.clipboard.writeText(element.url);
     }
@@ -811,8 +842,24 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         await vscode.env.clipboard.writeText(name);
     }
 
-    async copyPid(element: PidItem): Promise<void> {
-        await vscode.env.clipboard.writeText(element.pid.toString());
+    async viewAppHostSource(element?: AppHostItem | WorkspaceResourcesItem): Promise<void> {
+        let appHost: AppHostDisplayInfo | undefined;
+        if (element instanceof AppHostItem) {
+            appHost = element.appHost;
+        } else if (element instanceof WorkspaceResourcesItem) {
+            appHost = element.appHost;
+        }
+        if (!appHost) {
+            vscode.window.showWarningMessage(appHostSourceNotFound);
+            return;
+        }
+        const json = JSON.stringify(appHost, null, 2);
+        const uri = vscode.Uri.parse(`aspire-source:AppHost-${appHost.appHostPid}.json`);
+        this._ensureContentProviderRegistered();
+        this._appHostSourceContents.set(uri.toString(), json);
+        this._onDidChangeContent.fire(uri);
+        const document = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(document, { preview: true });
     }
 
     openInExternalBrowser(element: EndpointUrlItem): void {
@@ -875,4 +922,8 @@ function getBaseDashboardUrl(resourceDashboardUrl: string | null): string | null
     }
     const idx = resourceDashboardUrl.indexOf('/?resource=');
     return idx >= 0 ? resourceDashboardUrl.substring(0, idx) : resourceDashboardUrl;
+}
+
+function getErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }

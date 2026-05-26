@@ -22,6 +22,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         // Activity names describe AppHost/DCP orchestration work. Keep names stable
         // because profiling exports are queried across CLI and AppHost versions.
         public const string DcpRunApplication = "aspire.hosting.dcp.run_application";
+        public const string DcpPrepareTlsCertificate = "aspire.hosting.dcp.prepare_tls_certificate";
         public const string AppHostProcessStartup = "aspire.hosting.apphost.process_startup";
         public const string AppHostStart = "aspire.hosting.apphost.start";
         public const string AppHostBeforeStart = "aspire.hosting.apphost.before_start";
@@ -110,6 +111,10 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         public const string DcpKubernetesClientWaitMilliseconds = "aspire.dcp.kubernetes_client.wait_ms";
         public const string DcpKubernetesClientAlreadyInitialized = "aspire.dcp.kubernetes_client_already_initialized";
         public const string DcpKubernetesClientInitialized = "aspire.dcp.kubernetes_client.initialized";
+        public const string DcpTlsDeveloperCertificateEnabled = "aspire.dcp.tls.developer_certificate.enabled";
+        public const string DcpTlsCertificateMode = "aspire.dcp.tls.certificate.mode";
+        public const string DcpTlsCertificatePrepared = "aspire.dcp.tls.certificate.prepared";
+        public const string DcpTlsCertificateResult = "aspire.dcp.tls.certificate.result";
         public const string BackchannelSocketPath = "aspire.hosting.backchannel.socket.path";
         public const string PreviousResourceState = "aspire.resource.previous_state";
         public const string PreviousResourceHealthStatus = "aspire.resource.previous_health_status";
@@ -170,6 +175,12 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         public const string DashboardUrlSourceNone = "none";
         public const string DashboardUrlSourceResource = "resource";
         public const string DashboardUrlSourceConfiguration = "configuration";
+        public const string DcpTlsCertificateModeFiles = "files";
+        public const string DcpTlsCertificateModeThumbprint = "thumbprint";
+        public const string DcpTlsCertificateResultMissingThumbprint = "missing_thumbprint";
+        public const string DcpTlsCertificateResultNoCertificate = "no_certificate";
+        public const string DcpTlsCertificateResultNoPrivateKeyCertificate = "no_private_key_certificate";
+        public const string DcpTlsCertificateResultPrepared = "prepared";
     }
 
     internal static class Annotations
@@ -251,6 +262,13 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
     {
         var activity = StartActivity(configuration, Activities.DcpRunApplication);
         activity.SetResourceCount(resourceCount);
+        return activity;
+    }
+
+    public static ActivityScope StartDcpPrepareTlsCertificate(IConfiguration? configuration)
+    {
+        var activity = StartActivity(configuration, Activities.DcpPrepareTlsCertificate);
+        activity.SetDcpTlsDeveloperCertificateEnabled(true);
         return activity;
     }
 
@@ -884,6 +902,19 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         {
             SetTag(Tags.DcpApiOperation, operationType.ToString());
             SetTag(Tags.DcpResourceKind, resourceType);
+        }
+
+        public void SetDcpTlsDeveloperCertificateEnabled(bool enabled) => SetTag(Tags.DcpTlsDeveloperCertificateEnabled, enabled);
+
+        public void SetDcpTlsCertificateResult(string result, string? mode = null, bool prepared = false)
+        {
+            SetTag(Tags.DcpTlsCertificateResult, result);
+            SetTag(Tags.DcpTlsCertificatePrepared, prepared);
+
+            if (!string.IsNullOrEmpty(mode))
+            {
+                SetTag(Tags.DcpTlsCertificateMode, mode);
+            }
         }
 
         public void SetAppHostEntryPoint(string entryPoint) => SetTag(Tags.AppHostEntryPoint, entryPoint);
