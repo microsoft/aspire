@@ -4,103 +4,42 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "yarn: install extension",
-			"type": "shell",
-			"command": "yarn install",
-			"options": {
-				"cwd": "${workspaceFolder}/extension"
-			},
-			"presentation": {
-				"reveal": "always",
-				"panel": "dedicated",
-				"group": "watchers"
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "extension: prepare",
-			"type": "shell",
-			"command": "yarn run generate-version && yarn run generate-schema && yarn run l10n:export && yarn run l10n:import",
-			"options": {
-				"cwd": "${workspaceFolder}/extension"
-			},
-			"presentation": {
-				"reveal": "silent",
-				"panel": "dedicated",
-				"group": "watchers"
-			},
-			"problemMatcher": [],
-			"dependsOn": [
-				"yarn: install extension"
-			],
-			"dependsOrder": "sequence"
-		},
-		{
-			"label": "extension: watch",
-			"type": "shell",
-			// Run webpack directly (not via `yarn run watch`) so its stdout
-			// reaches VS Code's problem-matcher unmangled. Prepend a marker so
-			// the matcher's beginsPattern always fires before webpack prints
-			// "compiled", regardless of warning ordering.
-			"command": "echo '[extension: watch] starting webpack' && ${workspaceFolder}/extension/node_modules/.bin/webpack --watch",
-			"options": {
-				"cwd": "${workspaceFolder}/extension"
-			},
+			"type": "npm",
+			"script": "watch",
+			"problemMatcher": "$ts-webpack-watch",
 			"isBackground": true,
-			"problemMatcher": {
-				"owner": "webpack",
-				"fileLocation": "absolute",
-				"pattern": {
-					"regexp": "a^"
-				},
-				"background": {
-					"activeOnStart": true,
-					"beginsPattern": "\\[extension: watch\\] starting webpack|\\[webpack-cli\\] Compiler starting",
-					"endsPattern": "^webpack [\\d.]+ compiled (successfully|with \\d+ warnings?) in \\d+ ms$"
-				}
-			},
 			"presentation": {
-				"reveal": "silent",
-				"panel": "dedicated",
+				"reveal": "never",
 				"group": "watchers"
 			},
 			"group": {
 				"kind": "build",
 				"isDefault": true
 			},
-			"dependsOn": [
-				"extension: prepare"
-			],
-			"dependsOrder": "sequence"
+			"label": "npm: watch extension",
+      "path": "extension",
 		},
 		{
-			"label": "extension: watch-tests",
-			"type": "shell",
-			"command": "${workspaceFolder}/extension/node_modules/.bin/tsc -p . -w --outDir out",
-			"options": {
-				"cwd": "${workspaceFolder}/extension"
-			},
-			"isBackground": true,
+			"type": "npm",
+			"script": "watch-tests",
 			"problemMatcher": "$tsc-watch",
+			"isBackground": true,
 			"presentation": {
-				"reveal": "silent",
-				"panel": "dedicated",
+				"reveal": "never",
 				"group": "watchers"
 			},
 			"group": "build",
-			"dependsOn": [
-				"extension: prepare"
-			],
-			"dependsOrder": "sequence"
+			"label": "npm: watch-tests extension",
+      "path": "extension",
 		},
 		{
 			"label": "tasks: watch-tests extension",
 			"dependsOn": [
-				"extension: watch",
-				"extension: watch-tests"
+				"npm: watch",
+				"npm: watch-tests"
 			],
-			"problemMatcher": []
+			"problemMatcher": [],
+      "path": "extension"
 		}
 	]
 }
-
