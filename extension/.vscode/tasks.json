@@ -17,10 +17,14 @@
 			"problemMatcher": []
 		},
 		{
-			"type": "npm",
-			"script": "watch",
-			"problemMatcher": "$ts-webpack-watch",
+			"label": "extension: watch",
+			"type": "shell",
+			"command": "yarn run watch",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
 			"isBackground": true,
+			"problemMatcher": "$ts-webpack-watch",
 			"presentation": {
 				"reveal": "never",
 				"group": "watchers"
@@ -29,23 +33,25 @@
 				"kind": "build",
 				"isDefault": true
 			},
-			"label": "npm: watch extension",
 			"dependsOn": [
 				"yarn: install extension"
 			],
 			"dependsOrder": "sequence"
 		},
 		{
-			"type": "npm",
-			"script": "watch-tests",
-			"problemMatcher": "$tsc-watch",
+			"label": "extension: watch-tests",
+			"type": "shell",
+			"command": "yarn run watch-tests",
+			"options": {
+				"cwd": "${workspaceFolder}"
+			},
 			"isBackground": true,
+			"problemMatcher": "$tsc-watch",
 			"presentation": {
 				"reveal": "never",
 				"group": "watchers"
 			},
 			"group": "build",
-			"label": "npm: watch-tests extension",
 			"dependsOn": [
 				"yarn: install extension"
 			],
@@ -54,10 +60,11 @@
 		{
 			"label": "tasks: watch-tests extension",
 			"dependsOn": [
-				"npm: watch",
-				"npm: watch-tests"
+				"extension: watch",
+				"extension: watch-tests"
 			],
 			"problemMatcher": [],
 		}
 	]
 }
+
