@@ -568,7 +568,9 @@ suite('AppHostDataRepository', () => {
                     status: 'possibly-unbuildable',
                 },
             ]));
-            await waitForAppHostDiscovery();
+            await waitForCondition(
+                () => repository.workspaceAppHostPath === '/workspace/apps/Store/AppHost.csproj',
+                'buildable AppHost discovery did not finish');
 
             assert.strictEqual(repository.viewMode, 'workspace');
             assert.strictEqual(repository.workspaceAppHostPath, '/workspace/apps/Store/AppHost.csproj');
