@@ -5,20 +5,9 @@ using Aspire.Dashboard.Model.Otlp;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
-public sealed class GetTracesRequest
+public sealed class WatchLogsRequest
 {
     public required ResourceKey? ResourceKey { get; init; }
-    public required int StartIndex { get; init; }
-    public required int Count { get; init; }
     public required List<TelemetryFilter> Filters { get; init; }
-    public string? TraceNameFilterText { get; init; }
     public string[]? TextFragments { get; init; }
-
-    public static GetTracesRequest ForResourceKey(ResourceKey resourceKey) => new()
-    {
-        ResourceKey = resourceKey,
-        StartIndex = 0,
-        Count = int.MaxValue,
-        Filters = []
-    };
 }

@@ -176,15 +176,6 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SearchOptionDescription", resourceCulture);
             }
         }
-
-        /// <summary>
-        ///   Looks up a localized string similar to Filter by minimum span duration in milliseconds.
-        /// </summary>
-        internal static string MinimumDurationOptionDescription {
-            get {
-                return ResourceManager.GetString("MinimumDurationOptionDescription", resourceCulture);
-            }
-        }
         
         /// <summary>
         ///   Looks up a localized string similar to The --limit value must be a positive number..

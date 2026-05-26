@@ -75,10 +75,13 @@ public class FieldTelemetryFilter : TelemetryFilter
         {
             FilterCondition.Equals => (a, b) => string.Equals(a, b, StringComparisons.OtlpFieldValue),
             FilterCondition.Contains => (a, b) => a != null && a.Contains(b, StringComparisons.OtlpFieldValue),
-            // Condition.GreaterThan => (a, b) => a > b,
-            // Condition.LessThan => (a, b) => a < b,
-            // Condition.GreaterThanOrEqual => (a, b) => a >= b,
-            // Condition.LessThanOrEqual => (a, b) => a <= b,
+            // Comparison operators are only meaningful for numeric fields. For string fields,
+            // never match — following the same approach as GitHub search, which only allows
+            // comparison operators on known numeric qualifiers.
+            FilterCondition.GreaterThan => static (a, b) => false,
+            FilterCondition.LessThan => static (a, b) => false,
+            FilterCondition.GreaterThanOrEqual => static (a, b) => false,
+            FilterCondition.LessThanOrEqual => static (a, b) => false,
             FilterCondition.NotEqual => (a, b) => !string.Equals(a, b, StringComparisons.OtlpFieldValue),
             FilterCondition.NotContains => (a, b) => a != null && !a.Contains(b, StringComparisons.OtlpFieldValue),
             _ => throw new ArgumentOutOfRangeException(nameof(c), c, null)
