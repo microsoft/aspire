@@ -219,6 +219,10 @@ internal static partial class HelmDeploymentEngine
             },
             DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
         };
+        // Destroy invokes `helm uninstall`, so it needs the same version-validated
+        // Helm as the deploy path. Otherwise a missing or too-old Helm surfaces as
+        // a raw process-spawn or unknown-flag error during teardown.
+        helmDestroyStep.DependsOn($"check-helm-prereqs-{environment.Name}");
         helmDestroyStep.RequiredBy(WellKnownPipelineSteps.Destroy);
         steps.Add(helmDestroyStep);
 
@@ -230,6 +234,7 @@ internal static partial class HelmDeploymentEngine
             Tags = [HelmUninstallTag],
             Action = ctx => HelmUninstallAsync(ctx, environment)
         };
+        helmUninstallStep.DependsOn($"check-helm-prereqs-{environment.Name}");
         steps.Add(helmUninstallStep);
 
         return Task.FromResult<IReadOnlyList<PipelineStep>>(steps);

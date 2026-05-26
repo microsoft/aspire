@@ -533,6 +533,42 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task HelmDestroyAndUninstallSteps_DependOnCheckHelmPrereqs()
+    {
+        // Regression coverage for PR #17491 review feedback: destroy and uninstall
+        // also invoke `helm`, so they must gate on the same prereq check as deploy.
+        // Otherwise a missing or too-old Helm surfaces as a raw spawn / unknown-flag
+        // error during teardown instead of the actionable validator message.
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            tempDir.Path,
+            step: WellKnownPipelineSteps.Diagnostics);
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        builder.AddKubernetesEnvironment("env");
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var logs = mockActivityReporter.LoggedMessages
+            .Where(s => s.StepTitle == "diagnostics")
+            .Select(s => s.Message)
+            .ToList();
+
+        var destroyLines = logs.Where(l => l.Contains("destroy-helm-env")).ToList();
+        Assert.Contains(destroyLines, msg => msg.Contains("check-helm-prereqs-env"));
+
+        var uninstallLines = logs.Where(l => l.Contains("helm-uninstall-env")).ToList();
+        Assert.Contains(uninstallLines, msg => msg.Contains("check-helm-prereqs-env"));
+    }
+
+    [Fact]
     public async Task MultipleContainersGenerateMultiplePrintSummarySteps()
     {
         using var tempDir = new TestTempDirectory();

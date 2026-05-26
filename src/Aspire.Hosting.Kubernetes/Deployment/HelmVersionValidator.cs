@@ -33,9 +33,11 @@ internal static partial class HelmVersionValidator
     //   v4.2.0+gfa15ec0
     //   v4.0.0
     //   v3.18.0+gb88f836
-    // Match the leading optional `v` followed by MAJOR.MINOR.PATCH; ignore any
-    // `+gitsha` build metadata. Anchored at the start because some shells/wrappers
-    // can prepend banner lines.
+    // Match the optional `v` followed by MAJOR.MINOR.PATCH; ignore any `+gitsha`
+    // build metadata. Intentionally unanchored: some shells / wrappers (oh-my-zsh
+    // plugins, asdf shims, alias output, etc.) can prefix banner or shim lines
+    // before the actual version token, so we accept the first valid token anywhere
+    // in the captured output rather than requiring it at column 0.
     [GeneratedRegex(@"v?(?<major>\d+)\.(?<minor>\d+)\.(?<patch>\d+)")]
     private static partial Regex HelmVersionRegex();
 
