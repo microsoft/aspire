@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Blazor.Tests;
 
@@ -294,12 +295,12 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             .ProxyBlazorTelemetry();
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
-        var (_, logMessages) = await GetEnvironmentVariablesWithLogs(blazorApp, builder);
+        var (_, sink) = await GetEnvironmentVariablesWithLogs(blazorApp, builder);
 
-        Assert.Contains(logMessages, msg =>
+        Assert.Contains(sink.Writes, msg =>
             msg.LogLevel == LogLevel.Warning &&
-            msg.Message.Contains("OTLP telemetry proxying was requested") &&
-            msg.Message.Contains("WASM client telemetry will not be forwarded"));
+            msg.Message?.Contains("OTLP telemetry proxying was requested") == true &&
+            msg.Message?.Contains("WASM client telemetry will not be forwarded") == true);
     }
 
     [Fact]
@@ -313,11 +314,51 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             .ProxyBlazorTelemetry();
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
-        var (_, logMessages) = await GetEnvironmentVariablesWithLogs(blazorApp, builder);
+        var (_, sink) = await GetEnvironmentVariablesWithLogs(blazorApp, builder);
 
-        Assert.DoesNotContain(logMessages, msg =>
+        Assert.DoesNotContain(sink.Writes, msg =>
             msg.LogLevel == LogLevel.Warning &&
-            msg.Message.Contains("OTLP telemetry proxying was requested"));
+            msg.Message?.Contains("OTLP telemetry proxying was requested") == true);
+    }
+
+    [Fact]
+    public async Task WithBlazorClientApp_LogsWarning_WhenOtlpEndpointNotResolvable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+        gateway.WithBlazorClientApp(wasmApp, proxyTelemetry: true);
+
+        var (_, sink) = await GetEnvironmentVariablesWithLogs(gateway.Resource, builder);
+
+        Assert.Contains(sink.Writes, msg =>
+            msg.LogLevel == LogLevel.Warning &&
+            msg.Message?.Contains("OTLP telemetry proxying was requested") == true &&
+            msg.Message?.Contains("WASM client telemetry will not be forwarded") == true);
+    }
+
+    [Fact]
+    public async Task WithBlazorClientApp_DoesNotLogWarning_WhenOtlpEndpointIsConfigured()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+        gateway.WithBlazorClientApp(wasmApp, proxyTelemetry: true);
+
+        var (_, sink) = await GetEnvironmentVariablesWithLogs(gateway.Resource, builder);
+
+        Assert.DoesNotContain(sink.Writes, msg =>
+            msg.LogLevel == LogLevel.Warning &&
+            msg.Message?.Contains("OTLP telemetry proxying was requested") == true);
     }
 
     private static async Task<Dictionary<string, object>> GetEnvironmentVariables(
@@ -327,20 +368,21 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         return env;
     }
 
-    private static async Task<(Dictionary<string, object> Env, List<LogMessage> Logs)> GetEnvironmentVariablesWithLogs(
+    private static async Task<(Dictionary<string, object> Env, TestSink Sink)> GetEnvironmentVariablesWithLogs(
         IResource resource, IDistributedApplicationBuilder builder)
     {
         var env = new Dictionary<string, object>();
-        var logs = new List<LogMessage>();
+        var sink = new TestSink();
+        var logger = new TestLogger(string.Empty, sink, enabled: true);
         var context = new EnvironmentCallbackContext(builder.ExecutionContext, resource, env)
         {
-            Logger = new ListLogger(logs)
+            Logger = logger
         };
         foreach (var callback in resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
         {
             await callback.Callback(context).ConfigureAwait(false);
         }
-        return (env, logs);
+        return (env, sink);
     }
 
     private static string ResolveManifestExpression(object value)
@@ -357,19 +399,5 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         public string ProjectPath => "TestProject/TestProject.csproj";
 
         public LaunchSettings LaunchSettings { get; } = new();
-    }
-
-    private sealed record LogMessage(LogLevel LogLevel, string Message);
-
-    private sealed class ListLogger(List<LogMessage> messages) : ILogger
-    {
-        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
-
-        public bool IsEnabled(LogLevel logLevel) => true;
-
-        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-        {
-            messages.Add(new LogMessage(logLevel, formatter(state, exception)));
-        }
     }
 }
