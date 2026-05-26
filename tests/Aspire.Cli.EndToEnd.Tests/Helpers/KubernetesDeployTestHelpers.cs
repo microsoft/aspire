@@ -11,9 +11,9 @@ namespace Aspire.Cli.EndToEnd.Tests.Helpers;
 /// </summary>
 internal static class KubernetesDeployTestHelpers
 {
-    private static string KindVersion => Environment.GetEnvironmentVariable("KIND_VERSION") ?? "v0.31.0";
-    private static string HelmVersion => Environment.GetEnvironmentVariable("HELM_VERSION") ?? "v3.17.3";
-    private static string KubectlVersion => Environment.GetEnvironmentVariable("KUBECTL_VERSION") ?? "v1.34.3";
+    private static string KindVersion => KubernetesE2EVersions.KindVersion;
+    private static string HelmVersion => KubernetesE2EVersions.HelmVersion;
+    private static string KubectlVersion => KubernetesE2EVersions.KubectlVersion;
 
     /// <summary>
     /// Generates a unique KinD cluster name (max 32 chars).
