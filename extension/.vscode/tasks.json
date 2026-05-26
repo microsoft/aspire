@@ -36,13 +36,19 @@
 			"dependsOrder": "sequence"
 		},
 		{
-			"label": "extension: webpack-watch",
+			"label": "extension: watch",
 			"type": "shell",
 			// Invoke webpack directly so the $ts-webpack-watch problem matcher
 			// can recognize the "compiled" line. Going through `yarn run watch`
 			// triggers the prewatch lifecycle (which we run separately as
 			// "extension: prepare") and mangles stdout so the matcher never
 			// signals "ready", causing VS Code to hang on preLaunchTask.
+			//
+			// Keep this as the direct background task (not a compound wrapper).
+			// VS Code's preLaunchTask requires the referenced task itself to be
+			// the background task whose problemMatcher signals "ready"; wrapping
+			// it in a compound breaks that signal and the debug session never
+			// launches.
 			"command": "${workspaceFolder}/node_modules/.bin/webpack --watch",
 			"options": {
 				"cwd": "${workspaceFolder}"
@@ -54,24 +60,17 @@
 				"panel": "dedicated",
 				"group": "watchers"
 			},
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
 			"dependsOn": [
 				"extension: prepare"
 			],
 			"dependsOrder": "sequence"
 		},
 		{
-			"label": "extension: watch",
-			"dependsOn": [
-				"extension: webpack-watch"
-			],
-			"group": {
-				"kind": "build",
-				"isDefault": true
-			},
-			"problemMatcher": []
-		},
-		{
-			"label": "extension: tsc-watch-tests",
+			"label": "extension: watch-tests",
 			"type": "shell",
 			"command": "${workspaceFolder}/node_modules/.bin/tsc -p . -w --outDir out",
 			"options": {
@@ -84,18 +83,11 @@
 				"panel": "dedicated",
 				"group": "watchers"
 			},
+			"group": "build",
 			"dependsOn": [
 				"extension: prepare"
 			],
 			"dependsOrder": "sequence"
-		},
-		{
-			"label": "extension: watch-tests",
-			"dependsOn": [
-				"extension: tsc-watch-tests"
-			],
-			"group": "build",
-			"problemMatcher": []
 		},
 		{
 			"label": "tasks: watch-tests extension",
