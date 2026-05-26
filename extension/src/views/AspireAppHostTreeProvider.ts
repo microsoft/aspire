@@ -315,7 +315,14 @@ function buildResourceTooltip(resource: ResourceJson): vscode.MarkdownString {
         if (reports) {
             const entries = Object.entries(reports).sort(([a], [b]) => a.localeCompare(b));
             for (const [name, report] of entries) {
-                const icon = report.status === HealthStatus.Healthy ? '$(pass)' : report.status === HealthStatus.Degraded ? '$(warning)' : '$(error)';
+                let icon = '❓';
+                if (report.status === HealthStatus.Healthy) {
+                    icon = '✅';
+                } else if (report.status === HealthStatus.Degraded) {
+                    icon = '⚠️';
+                } else if (report.status === HealthStatus.Unhealthy) {
+                    icon = '❌';
+                }
                 md.appendMarkdown(`${icon} ${name}: ${report.status ?? 'Unknown'}${report.description ? ` - ${report.description}` : ''}\n\n`);
             }
         }
