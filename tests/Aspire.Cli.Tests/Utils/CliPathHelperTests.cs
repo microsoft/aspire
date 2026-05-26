@@ -109,6 +109,25 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GetDefaultAspireHomeDirectory_UsesConfiguredAspireHome()
+    {
+        var result = CliPathHelper.GetDefaultAspireHomeDirectory("/custom/aspire-home", "/home/user");
+
+        Assert.Equal("/custom/aspire-home", result);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void GetDefaultAspireHomeDirectory_WithoutConfiguredAspireHome_UsesUserProfile(string? configuredAspireHome)
+    {
+        var result = CliPathHelper.GetDefaultAspireHomeDirectory(configuredAspireHome, "/home/user");
+
+        Assert.Equal(Path.Combine("/home/user", ".aspire"), result);
+    }
+
+    [Fact]
     public void ResolveSymlinkOrOriginalPath_NonLink_ReturnsOriginalPath()
     {
         const string path = "relative/path/aspire";

@@ -197,9 +197,15 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         var layoutRoot = workspace.WorkspaceRoot.FullName;
         var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
 
-        var v1BinaryPath = CreateFakeCliBinary(Path.Combine(layoutRoot, ".fake-bins"), "aspire-v1", "cli-v1");
-        var v2BinaryPath = CreateFakeCliBinary(Path.Combine(layoutRoot, ".fake-bins"), "aspire-v2", "cli-v2-longer");
+        var binDir = Path.Combine(layoutRoot, ".fake-bins");
+        var v1BinaryPath = CreateFakeCliBinary(binDir, "aspire-v1", "cli-v1");
+        var v2BinaryPath = CreateFakeCliBinary(binDir, "aspire-v2", "cli-v2-longer");
         File.SetLastWriteTimeUtc(v2BinaryPath, File.GetLastWriteTimeUtc(v1BinaryPath).AddHours(1));
+
+        // Drop a script sidecar so EnsureExtractedAndAcquireLayoutAsync resolves the
+        // process-driven extract directory to the parent of the binary directory
+        // (layoutRoot) rather than the default Aspire home.
+        File.WriteAllText(Path.Combine(binDir, ".aspire-install.json"), "{\"source\":\"script\"}");
 
         var v1Service = CreateService(new TestBundlePayloadProvider(CreateFakeBundlePayload("v1")), layoutDiscovery, v1BinaryPath);
         var result1 = await v1Service.ExtractAsync(layoutRoot, force: true);
@@ -280,10 +286,14 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task EnsureExtractedAsync_DotnetToolStorePath_ExtractsToTargetFrameworkDirectory()
+    public async Task EnsureExtractedAsync_DotnetToolStorePath_ExtractsToRidDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var layoutRoot = Path.Combine(
+        // RID-specific dotnet-tool layout: the native binary lives in the
+        // RID-scoped directory inside the tool store. The sidecar declares
+        // source=dotnet-tool so extraction stays at that same RID directory
+        // (binaryDir) rather than falling back to Aspire home.
+        var ridDir = Path.Combine(
             workspace.WorkspaceRoot.FullName,
             ".dotnet",
             "tools",
@@ -293,22 +303,24 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
             "aspire.cli.linux-x64",
             "9.4.0",
             "tools",
-            "net10.0");
+            "net10.0",
+            "linux-x64");
         var processPath = CreateFakeCliBinary(
-            Path.Combine(layoutRoot, "linux-x64"),
+            ridDir,
             BundleDiscovery.GetExecutableFileName("aspire"),
             "native-aot-cli");
+        File.WriteAllText(Path.Combine(ridDir, ".aspire-install.json"), "{\"source\":\"dotnet-tool\"}");
         var payload = CreateFakeBundlePayload();
         var provider = new TestBundlePayloadProvider(payload);
-        var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
+        var layoutDiscovery = new TestLayoutDiscovery(ridDir);
         var service = CreateService(provider, layoutDiscovery, processPath);
 
         await service.EnsureExtractedAsync();
 
-        var bundleLink = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
+        var bundleLink = Path.Combine(ridDir, BundleDiscovery.BundleDirectoryName);
         try
         {
-            Assert.True(ReparsePoint.IsReparsePoint(bundleLink), "bundle/ should be a reparse point under the tool TFM directory");
+            Assert.True(ReparsePoint.IsReparsePoint(bundleLink), "bundle/ should be a reparse point under the tool RID directory");
 
             var managedExe = Path.Combine(bundleLink,
                 BundleDiscovery.ManagedDirectoryName,
@@ -317,7 +329,7 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         }
         finally
         {
-            CleanupReparsePoints(layoutRoot);
+            CleanupReparsePoints(ridDir);
         }
     }
 

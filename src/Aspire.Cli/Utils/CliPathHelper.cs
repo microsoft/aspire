@@ -9,12 +9,26 @@ namespace Aspire.Cli.Utils;
 
 internal static class CliPathHelper
 {
+    internal const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
+
     internal static string GetAspireHomeDirectory(string? processPath = null, ILogger? logger = null)
     {
         var effectiveProcessPath = processPath ?? Environment.ProcessPath;
 
         return TryGetAspireHomeDirectoryFromInstallRoute(effectiveProcessPath, logger)
-            ?? Path.Combine(GetUserProfileDirectory(), ".aspire");
+            ?? GetDefaultAspireHomeDirectory();
+    }
+
+    internal static string GetDefaultAspireHomeDirectory()
+        => GetDefaultAspireHomeDirectory(
+            Environment.GetEnvironmentVariable(AspireHomeEnvironmentVariable),
+            GetUserProfileDirectory());
+
+    internal static string GetDefaultAspireHomeDirectory(string? configuredAspireHome, string userProfileDirectory)
+    {
+        return string.IsNullOrWhiteSpace(configuredAspireHome)
+            ? Path.Combine(userProfileDirectory, ".aspire")
+            : configuredAspireHome;
     }
 
     internal static string? TryGetAspireHomeDirectoryFromInstallRoute(string? processPath, ILogger? logger = null)
