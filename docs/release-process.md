@@ -9,7 +9,11 @@ The Aspire release process involves two main automation components:
 1. **Azure DevOps Pipeline** ([`release-publish-nuget`](https://dev.azure.com/dnceng/internal/_build?definitionId=1600&_a=summary), source: `eng/pipelines/release-publish-nuget.yml`)
    - Publishes NuGet packages to NuGet.org
    - Promotes the build to the GA channel via darc
-   - Submits WinGet and Homebrew installer PRs
+   - Submits WinGet manifest PRs
+   - Validates the Homebrew cask against the live GitHub release
+     (Homebrew cask version bumps themselves are submitted by upstream
+     Homebrew/homebrew-cask's autobump workflow, not by AzDO — see
+     `eng/homebrew/README.md`)
    - Dispatches the GitHub Actions workflow below as the `aspire-repo-bot`
      GitHub App and waits for it to complete
 
@@ -77,9 +81,9 @@ Before starting a release:
    | `SkipNuGetPublish` | Set `true` if re-running after NuGet success | `false` |
    | `SkipChannelPromotion` | Set `true` if re-running after darc success | `false` |
    | `SkipWinGetPublish` | Set `true` if re-running after WinGet success | `false` |
-   | `SkipHomebrewPublish` | Set `true` if re-running after Homebrew success | `false` |
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading aspire-cli-* assets to the GitHub release | `false` |
+   | `SkipHomebrewValidation` | Set `true` if re-running after a successful Homebrew cask validation (validates against the live GH release) | `false` |
    | `GitHubTasksWorkflowRef` | Ref to load `release-github-tasks.yml` from when dispatching. Only affects the workflow source — the release branch/commit are passed via inputs. Override only when testing pipeline changes on a topic branch. | `main` |
    
 4. Select the **Resources** button in the bottom right, then select the source build from the `aspire-build` dropdown
@@ -115,8 +119,8 @@ bot. If a GitHub-side step fails partway through and you need to re-run
 only the GitHub work, you can:
 
 1. Re-run the AzDO pipeline with `SkipNuGetPublish`, `SkipChannelPromotion`,
-   `SkipWinGetPublish`, `SkipHomebrewPublish` all set to `true` (and the
-   appropriate other skips), keeping `SkipGitHubTasks: false`. The
+   `SkipWinGetPublish` all set to `true` (and the appropriate other skips),
+   keeping `SkipGitHubTasks: false`. The
    `GitHubTasks` stage will dispatch the workflow again with the right
    inputs, and the workflow's own `skip_*` idempotency makes the
    completed steps no-ops.
