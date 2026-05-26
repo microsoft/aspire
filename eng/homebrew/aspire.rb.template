@@ -5,15 +5,28 @@ cask "aspire" do
   sha256 arm:   "${SHA256_OSX_ARM64}",
          intel: "${SHA256_OSX_X64}"
 
-  url "https://ci.dot.net/public/aspire/${ARTIFACT_VERSION}/aspire-cli-osx-#{arch}-#{version}.tar.gz",
-      verified: "ci.dot.net/public/aspire/"
+  url "https://github.com/microsoft/aspire/releases/download/v#{version}/aspire-cli-osx-#{arch}-#{version}.tar.gz",
+      verified: "github.com/microsoft/aspire/"
   name "Aspire CLI"
   desc "CLI for building observable, production-ready distributed applications"
   homepage "https://aspire.dev/"
 
+  # The cask URL embeds the same version twice (release tag and filename),
+  # so `brew bump-cask-pr --version=<v>` can rewrite both via a single
+  # substitution. This is what makes the cask autobumpable — see
+  # eng/homebrew/README.md "Submission: upstream autobump".
   livecheck do
-    skip "ci.dot.net artifact storage has no version index; Aspire release automation manages cask updates"
+    url :url
+    strategy :github_latest
   end
+
+  # Aspire CLI is distributed for macOS only via Homebrew cask. Without this,
+  # brew test-bot --only-tap-syntax tries to evaluate the cask on Linux too —
+  # the arch hash above has no Linux keys, so the cask becomes invalid and the
+  # syntax job fails (see Homebrew/homebrew-cask CI: "Invalid cask (Linux on
+  # ...)"). See https://docs.brew.sh/Cask-Cookbook#depends_on for the cross-
+  # platform / single-platform conventions.
+  depends_on :macos
 
   binary "aspire"
 
@@ -22,5 +35,11 @@ cask "aspire" do
     File.write("#{staged_path}/.aspire-install.json", %Q({"source":"brew"}\n))
   end
 
-  # No zap stanza required
+  # Empty by design. Aspire CLI's user state under ~/.aspire/ is intentionally
+  # preserved across uninstall so reinstall picks up existing settings, dev
+  # certs, and telemetry opt-in. The stanza is present (not omitted) so the
+  # Homebrew/homebrew-cask triage workflow does not apply the `missing-zap`
+  # label — see Homebrew/homebrew-cask/.github/workflows/triage.yml
+  # (`missing_content: zap .+\n`).
+  zap trash: []
 end

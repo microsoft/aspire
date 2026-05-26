@@ -18,7 +18,7 @@ Optional:
   --version VERSION            Installer version in the cask and archive filename
   --artifact-version VERSION   Version segment used in the ci.dot.net artifact path
   --archive-root PATH          Root directory containing locally built CLI archives
-  --validation-mode MODE       Full, Offline, or GenerateOnly (default: Full)
+  --validation-mode MODE       LiveRelease or LiveArchives (default: LiveRelease)
   --help                       Show this help message
 EOF
   exit 1
@@ -29,7 +29,7 @@ ARTIFACT_VERSION=""
 CHANNEL=""
 ARCHIVE_ROOT=""
 OUTPUT_DIR=""
-VALIDATION_MODE="Full"
+VALIDATION_MODE="LiveRelease"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -51,11 +51,10 @@ case "$CHANNEL" in
 esac
 
 case "$VALIDATION_MODE" in
-  Full|Offline|GenerateOnly) ;;
-  full) VALIDATION_MODE="Full" ;;
-  offline) VALIDATION_MODE="Offline" ;;
-  generateonly|generate-only) VALIDATION_MODE="GenerateOnly" ;;
-  *) echo "Error: --validation-mode must be Full, Offline, or GenerateOnly." >&2; exit 1 ;;
+  LiveRelease|LiveArchives) ;;
+  liverelease|live-release) VALIDATION_MODE="LiveRelease" ;;
+  livearchives|live-archives) VALIDATION_MODE="LiveArchives" ;;
+  *) echo "Error: --validation-mode must be LiveRelease or LiveArchives." >&2; exit 1 ;;
 esac
 
 if [[ -z "$OUTPUT_DIR" ]]; then
@@ -123,7 +122,11 @@ if [[ -n "$ARCHIVE_ROOT" ]]; then
   args+=(--archive-root "$ARCHIVE_ROOT")
 fi
 
-if [[ "$VALIDATION_MODE" != "Full" ]]; then
+# generate-cask.sh treats LiveRelease as "fetch the published archive bytes
+# over the network to compute SHA256". For LiveArchives (and any other
+# non-LiveRelease mode) we either compute the SHA from a local archive
+# (when --archive-root is set) or skip the SHA fetch and emit placeholders.
+if [[ "$VALIDATION_MODE" != "LiveRelease" ]]; then
   args+=(--skip-url-validation)
 fi
 
@@ -138,14 +141,6 @@ validation_args=(
   --channel "$CHANNEL"
   --validation-mode "$VALIDATION_MODE"
 )
-
-if [[ -n "$ARCHIVE_ROOT" ]]; then
-  validation_args+=(--archive-root "$ARCHIVE_ROOT")
-fi
-
-if [[ "$VALIDATION_MODE" == "Full" ]]; then
-  validation_args+=(--summary-path "$OUTPUT_DIR/validation-summary.json")
-fi
 
 "$SCRIPT_DIR/validate-cask-artifact.sh" "${validation_args[@]}"
 

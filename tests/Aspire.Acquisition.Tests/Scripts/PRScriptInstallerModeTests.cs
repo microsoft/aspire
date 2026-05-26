@@ -157,6 +157,9 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
               style|audit|info)
                 exit 0
                 ;;
+              test-bot)
+                exit 0
+                ;;
               install)
                 create_aspire
                 exit 0
@@ -582,7 +585,7 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
     [Fact]
     [RequiresTools(["ruby"])]
     [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
-    public async Task Bash_PrepareHomebrewCask_Offline_GeneratesCaskWithArchiveHashesAndDogfood()
+    public async Task Bash_PrepareHomebrewCask_LiveArchives_GeneratesCaskWithArchiveHashesAndDogfood()
     {
         using var env = new TestEnvironment();
         var archiveRoot = Path.Combine(env.TempDirectory, "archives");
@@ -598,17 +601,28 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
             "--channel", "prerelease",
             "--archive-root", archiveRoot,
             "--output-dir", outputDir,
-            "--validation-mode", "Offline");
+            "--validation-mode", "LiveArchives");
 
         result.EnsureSuccessful();
 
         var cask = await File.ReadAllTextAsync(Path.Combine(outputDir, "aspire.rb"));
         Assert.Contains("version \"13.3.0\"", cask);
-        Assert.Contains("https://ci.dot.net/public/aspire/13.3.0-pr.1234.abc/aspire-cli-osx-#{arch}-#{version}.tar.gz", cask);
+        Assert.Contains("https://github.com/microsoft/aspire/releases/download/v#{version}/aspire-cli-osx-#{arch}-#{version}.tar.gz", cask);
+        Assert.Contains("verified: \"github.com/microsoft/aspire/\"", cask);
         Assert.Contains((await GetSha256HexAsync(Path.Combine(archiveRoot, "aspire-cli-osx-arm64-13.3.0.tar.gz"))).ToLowerInvariant(), cask);
         Assert.Contains((await GetSha256HexAsync(Path.Combine(archiveRoot, "aspire-cli-osx-x64-13.3.0.tar.gz"))).ToLowerInvariant(), cask);
         Assert.DoesNotContain("${", cask);
         Assert.True(File.Exists(Path.Combine(outputDir, "dogfood.sh")));
+
+        // LiveArchives mode must drop `--online` and add `--no-signing` to `brew audit`,
+        // because the cask URL points at a github.com/microsoft/aspire release that does
+        // not exist yet at source-build time. See eng/homebrew/validate-cask-artifact.sh
+        // lines 156-183 for the full rationale; this assertion locks the contract so a
+        // regression in the mode selection surfaces here rather than silently failing
+        // (or worse, silently succeeding) in the source-build prepare stage.
+        var brewLog = await File.ReadAllTextAsync(Path.Combine(env.TempDirectory, "brew.log"));
+        Assert.Contains("audit --cask --no-signing local/aspire/aspire", brewLog);
+        Assert.DoesNotContain("audit --cask --online", brewLog);
     }
 
     [Fact]

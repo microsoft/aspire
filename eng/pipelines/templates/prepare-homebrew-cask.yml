@@ -35,9 +35,9 @@ steps:
 
       # Casks are generated for every channel. The artifact is a CI-only build
       # output consumed by dogfooders via 'brew install --cask <local-path>'.
-      # Public Homebrew publishing is gated separately by publish-homebrew.yml in
-      # the release-publish pipeline, which downloads 'homebrew-cask-stable' by
-      # name — so prerelease artifacts can never reach the public tap.
+      # Public Homebrew publishing for the stable cask is handled by upstream
+      # Homebrew/homebrew-cask's autobump workflow (see eng/homebrew/README.md)
+      # — this pipeline does not push to the public tap.
       artifactName="homebrew-cask-$channel"
 
       echo "Version: $version"
@@ -56,9 +56,9 @@ steps:
       # Default to 'false' so a missing SKIP_URL_VALIDATION never trips `set -u`
       # if a future caller forgets to thread the parameter through.
       skipUrlValidation="$(printf '%s' "${SKIP_URL_VALIDATION:-false}" | tr '[:upper:]' '[:lower:]')"
-      validationMode="Full"
+      validationMode="LiveRelease"
       if [ "$skipUrlValidation" = "true" ]; then
-        validationMode="Offline"
+        validationMode="LiveArchives"
       fi
 
       args=(
