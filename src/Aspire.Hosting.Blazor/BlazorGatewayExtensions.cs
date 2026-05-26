@@ -212,6 +212,20 @@ public static class BlazorGatewayExtensions
                 var gatewayEndpoint = httpsGatewayEndpoint ?? httpGatewayEndpoint
                     ?? throw new InvalidOperationException($"The gateway '{gateway.Resource.Name}' must define an HTTP or HTTPS endpoint.");
 
+                // Resolve the HTTP OTLP endpoint for WASM client proxying.
+                // WASM clients use HTTP/protobuf (not gRPC), so we need the HTTP endpoint.
+                // First try to resolve from the dashboard resource model (handles randomized ports
+                // and isolated mode). Fall back to configuration for cases where the dashboard
+                // resource isn't in the model (e.g. external dashboard).
+                var httpOtlpEndpointUrl = ResolveHttpOtlpEndpointUrl(context, gateway.ApplicationBuilder.Configuration);
+
+                if (httpOtlpEndpointUrl is null && registeredApps.Any(a => a.ProxyBlazorTelemetry))
+                {
+                    context.Logger.LogWarning(
+                        "OTLP telemetry proxying was requested but no dashboard HTTP endpoint could be resolved. " +
+                        "WASM client telemetry will not be forwarded.");
+                }
+
                 if (context.ExecutionContext.IsPublishMode)
                 {
                     ConfigurePublishEnvironment(context, registeredApps, gatewayEndpoint, httpGatewayEndpoint);
@@ -241,20 +255,6 @@ public static class BlazorGatewayExtensions
                 var mergedRuntimePath = Path.Combine(outputDir, "merged.staticwebassets.runtime.json");
                 await EndpointsManifestTransformer.MergeRuntimeManifestsAsync(manifests, mergedRuntimePath, context.Logger, context.CancellationToken).ConfigureAwait(false);
                 context.EnvironmentVariables["staticWebAssets"] = mergedRuntimePath;
-
-                // Resolve the HTTP OTLP endpoint for WASM client proxying.
-                // WASM clients use HTTP/protobuf (not gRPC), so we need the HTTP endpoint.
-                // First try to resolve from the dashboard resource model (handles randomized ports
-                // and isolated mode). Fall back to configuration for cases where the dashboard
-                // resource isn't in the model (e.g. external dashboard).
-                var httpOtlpEndpointUrl = ResolveHttpOtlpEndpointUrl(context, gateway.ApplicationBuilder.Configuration);
-
-                if (httpOtlpEndpointUrl is null && registeredApps.Any(a => a.ProxyBlazorTelemetry))
-                {
-                    context.Logger.LogWarning(
-                        "OTLP telemetry proxying was requested but no dashboard HTTP endpoint could be resolved. " +
-                        "WASM client telemetry will not be forwarded.");
-                }
 
                 GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint, httpOtlpEndpointUrl);
             });
