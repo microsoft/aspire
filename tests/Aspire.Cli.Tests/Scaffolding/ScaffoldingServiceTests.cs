@@ -113,6 +113,44 @@ public class ScaffoldingServiceTests
     }
 
     [Fact]
+    public void AddRootTypeScriptAppHostDelegateScripts_AddsMissingScriptsWithSelectedToolchain()
+    {
+        var scripts = JsonNode.Parse("""{ "test": "vitest" }""")!.AsObject();
+
+        var preservedScriptNames = ScaffoldingService.AddRootTypeScriptAppHostDelegateScripts(
+            scripts,
+            TypeScriptAppHostToolchain.Pnpm,
+            "apps/web/aspire-apphost");
+
+        Assert.Empty(preservedScriptNames);
+        Assert.Equal("vitest", scripts["test"]?.GetValue<string>());
+        Assert.Equal("pnpm --dir apps/web/aspire-apphost run aspire:start", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("pnpm --dir apps/web/aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("pnpm --dir apps/web/aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void AddRootTypeScriptAppHostDelegateScripts_PreservesExistingAspireScripts()
+    {
+        var scripts = JsonNode.Parse("""
+            {
+              "aspire:start": "custom-start",
+              "aspire:build": "npm --prefix aspire-apphost run aspire:build"
+            }
+            """)!.AsObject();
+
+        var preservedScriptNames = ScaffoldingService.AddRootTypeScriptAppHostDelegateScripts(
+            scripts,
+            TypeScriptAppHostToolchain.Npm,
+            "aspire-apphost");
+
+        Assert.Equal(["aspire:start"], preservedScriptNames);
+        Assert.Equal("custom-start", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("npm --prefix aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("npm --prefix aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void GetScaffoldedAppHostRelativePath_UsesActualScaffoldedFile_WhenDefaultFileNameDiffers()
     {
         var rootDirectory = Directory.CreateTempSubdirectory();
