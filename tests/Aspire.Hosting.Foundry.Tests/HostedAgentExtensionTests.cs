@@ -148,6 +148,20 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void WithComputeEnvironment_WithoutProject_CreatesDefaultProject()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .WithComputeEnvironment();
+
+        builder.Build();
+
+        var project = builder.Resources.OfType<AzureCognitiveServicesProjectResource>().SingleOrDefault();
+        Assert.NotNull(project);
+    }
+
+    [Fact]
     public async Task FoundryProject_DefaultRegistryDoesNotAddGlobalRegistryTargets()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
