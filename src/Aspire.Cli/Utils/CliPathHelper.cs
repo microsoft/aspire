@@ -11,7 +11,7 @@ internal static class CliPathHelper
 {
     internal const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
 
-    // The maximum age before a leftover cli.sock.* file in the runtime sockets directory is
+    // The maximum age before a leftover CLI socket file in the runtime sockets directory is
     // pruned. 24 hours is comfortably longer than any legitimate Aspire CLI run and short enough
     // that stale entries don't pile up indefinitely after crashes (see issue #16709).
     internal static readonly TimeSpan s_staleSocketThreshold = TimeSpan.FromHours(24);
@@ -236,7 +236,8 @@ internal static class CliPathHelper
         var now = (timeProvider ?? TimeProvider.System).GetUtcNow();
         var deleted = 0;
 
-        foreach (var path in Directory.EnumerateFiles(socketDirectory, "cli.sock.*"))
+        var socketFileSearchPattern = BackchannelConstants.ComputeSocketFileSearchPattern("cli.sock");
+        foreach (var path in Directory.EnumerateFiles(socketDirectory, socketFileSearchPattern))
         {
             try
             {

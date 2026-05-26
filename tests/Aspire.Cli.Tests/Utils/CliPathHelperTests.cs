@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.Time.Testing;
 
 namespace Aspire.Cli.Tests.Utils;
@@ -301,19 +302,21 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CleanupStaleCliSockets_DeletesFilesOlderThanThreshold()
     {
-        var tempDir = Directory.CreateTempSubdirectory("aspire-cli-sockets-");
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-cli-sockets-");
         try
         {
-            var staleFile = Path.Combine(tempDir.FullName, "cli.sock.stale");
+            var staleFile = BackchannelConstants.ComputeCliSocketPath(tempRoot.FullName, "cli.sock");
+            Directory.CreateDirectory(Path.GetDirectoryName(staleFile)!);
             File.WriteAllText(staleFile, string.Empty);
-            var freshFile = Path.Combine(tempDir.FullName, "cli.sock.fresh");
+            var freshFile = BackchannelConstants.ComputeCliSocketPath(tempRoot.FullName, "cli.sock");
             File.WriteAllText(freshFile, string.Empty);
 
             var fakeTime = new FakeTimeProvider(DateTimeOffset.UtcNow);
             File.SetLastWriteTimeUtc(staleFile, fakeTime.GetUtcNow().UtcDateTime - TimeSpan.FromHours(48));
             File.SetLastWriteTimeUtc(freshFile, fakeTime.GetUtcNow().UtcDateTime - TimeSpan.FromMinutes(5));
 
-            var deleted = CliPathHelper.CleanupStaleCliSockets(tempDir.FullName, TimeSpan.FromHours(24), fakeTime);
+            var socketDirectory = Path.GetDirectoryName(staleFile)!;
+            var deleted = CliPathHelper.CleanupStaleCliSockets(socketDirectory, TimeSpan.FromHours(24), fakeTime);
 
             Assert.Equal(1, deleted);
             Assert.False(File.Exists(staleFile));
@@ -321,26 +324,28 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
         }
         finally
         {
-            tempDir.Delete(recursive: true);
+            tempRoot.Delete(recursive: true);
         }
     }
 
     [Fact]
     public void CleanupStaleCliSockets_OnlyMatchesCliSockPrefix()
     {
-        var tempDir = Directory.CreateTempSubdirectory("aspire-cli-sockets-");
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-cli-sockets-");
         try
         {
-            var matching = Path.Combine(tempDir.FullName, "cli.sock.abc123");
+            var matching = BackchannelConstants.ComputeCliSocketPath(tempRoot.FullName, "cli.sock");
+            Directory.CreateDirectory(Path.GetDirectoryName(matching)!);
             File.WriteAllText(matching, string.Empty);
-            var unrelated = Path.Combine(tempDir.FullName, "apphost.sock.xyz");
+            var unrelated = BackchannelConstants.ComputeCliSocketPath(tempRoot.FullName, "apphost.sock");
             File.WriteAllText(unrelated, string.Empty);
 
             var fakeTime = new FakeTimeProvider(DateTimeOffset.UtcNow);
             File.SetLastWriteTimeUtc(matching, fakeTime.GetUtcNow().UtcDateTime - TimeSpan.FromHours(48));
             File.SetLastWriteTimeUtc(unrelated, fakeTime.GetUtcNow().UtcDateTime - TimeSpan.FromHours(48));
 
-            var deleted = CliPathHelper.CleanupStaleCliSockets(tempDir.FullName, TimeSpan.FromHours(24), fakeTime);
+            var socketDirectory = Path.GetDirectoryName(matching)!;
+            var deleted = CliPathHelper.CleanupStaleCliSockets(socketDirectory, TimeSpan.FromHours(24), fakeTime);
 
             Assert.Equal(1, deleted);
             Assert.False(File.Exists(matching));
@@ -348,7 +353,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
         }
         finally
         {
-            tempDir.Delete(recursive: true);
+            tempRoot.Delete(recursive: true);
         }
     }
 
