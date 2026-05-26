@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Build infrastructure fix: switched VS Code extension to Yarn-only restore to fix internal AzDO builds — no user-facing change",
+  "mergedAt": "2026-05-25T23:48:12Z",
+  "number": 17474,
+  "runDate": "2026-05-26T00:38:09Z",
+  "status": "excluded",
+  "title": "Use Yarn-only restore for VS Code extension"
+}

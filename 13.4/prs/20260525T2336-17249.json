@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "New feature: resource commands can now define dynamic inputs that change based on earlier answers",
+  "mergedAt": "2026-05-25T23:36:25Z",
+  "number": 17249,
+  "runDate": "2026-05-26T00:38:09Z",
+  "status": "included",
+  "title": "Support dynamic resource command inputs"
+}

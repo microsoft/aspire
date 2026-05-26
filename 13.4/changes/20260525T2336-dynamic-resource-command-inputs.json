@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Resource commands can now define dynamic inputs whose enabled state, default values, or choice options depend on earlier answers. This metadata flows from the hosting model through the CLI and VS Code extension so tool clients can prompt users correctly.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🎛️",
+  "firstMergedAt": "2026-05-25T23:36:25Z",
+  "lastMergedAt": "2026-05-25T23:36:25Z",
+  "name": "Dynamic inputs for resource commands",
+  "owner": "davidfowl",
+  "prs": [
+    17249
+  ]
+}
