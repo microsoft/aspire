@@ -1609,7 +1609,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal("9.2.0", scaffoldSdkVersion);
+        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), scaffoldSdkVersion);
         Assert.Equal("stable", scaffoldChannel);
     }
 
@@ -1810,7 +1810,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(buildAndGenerateCalled);
         Assert.Equal("daily", channelSeenByProject);
-        Assert.Equal("9.2.0", sdkVersionSeenByProject);
+        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), sdkVersionSeenByProject);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", LanguageInfo.GeneratedFolderName, "aspire.mts")));
     }
 

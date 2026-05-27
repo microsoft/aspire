@@ -177,6 +177,34 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return selected.LanguageId;
     }
 
+    private static NuGetPackage? TryGetCurrentCliTemplateVersionPackage(PackageChannel selectedChannel, NuGetPackage[] packages, bool hasPrHives)
+    {
+        if (VersionHelper.TryGetCurrentCliVersionMatch(
+            packages,
+            p => p.Version,
+            out var cliVersionPackage,
+            channelName: selectedChannel.Name,
+            hasPrHives: hasPrHives))
+        {
+            return cliVersionPackage;
+        }
+
+        if (packages.Length > 0 &&
+            selectedChannel.Type is PackageChannelType.Explicit &&
+            !VersionHelper.IsLocalBuildChannel(selectedChannel.Name))
+        {
+            // Prerelease channels can filter out the shipped stable package even when the feed can restore it.
+            return new NuGetPackage
+            {
+                Id = TemplateNuGetConfigService.TemplatesPackageName,
+                Version = VersionHelper.GetDefaultSdkVersion(),
+                Source = selectedChannel.SourceDetails
+            };
+        }
+
+        return null;
+    }
+
     private async Task<(bool Success, string? LanguageId)> ResolveSelectedLanguageAsync(ITemplate template, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var explicitLanguageId = ParseExplicitLanguageId(parseResult);
@@ -379,14 +407,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                         .ToArray();
                     var hasPrHives = ExecutionContext.GetHiveCount() > 0;
 
-                    NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
-                        packages,
-                        p => p.Version,
-                        out var cliVersionPackage,
-                        channelName: selectedChannel.Name,
-                        hasPrHives: hasPrHives)
-                        ? cliVersionPackage
-                        : null;
+                    var package = TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives);
 
                     package ??= packages
                         .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)

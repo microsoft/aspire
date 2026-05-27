@@ -116,12 +116,9 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// <summary>
     /// Channel-resolution contract: when the running CLI's identity is a non-local channel
     /// (daily / staging / stable) and no <c>--channel</c> is passed, <c>aspire new</c> must
-    /// resolve the template version from the channel whose name matches the identity — not
-    /// from the Implicit (nuget.org) channel. Without this, a daily/staging CLI silently
-    /// resolves a stable nuget.org template while the per-project channel pin (written by
-    /// the template factories) still points at the channel-specific feed — yielding an
-    /// inconsistent project that <c>aspire restore</c> rejects with "Unable to find a stable
-    /// package".
+    /// resolve the channel whose name matches the identity — not the Implicit (nuget.org)
+    /// channel — while still pinning the template version to the current CLI/SDK version.
+    /// The bundled server and restored Aspire packages must stay on the same version.
     /// </summary>
     [Theory]
     [InlineData(PackageChannelNames.Daily, "13.4.0-preview.1.99999.1")]
@@ -133,8 +130,20 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             channelOptionArg: null,
             identityChannelVersion: identityChannelVersion);
 
-        Assert.Equal(identityChannelVersion, captured.Version);
+        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), captured.Version);
         Assert.Equal(identityChannel, captured.Channel);
+    }
+
+    [Fact]
+    public async Task NewCommand_NoChannelArg_DailyChannelWithoutExactCliVersion_PinsTemplateToCurrentCliVersion()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Daily,
+            channelOptionArg: null,
+            identityChannelVersion: "13.5.0-preview.1.99999.1");
+
+        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), captured.Version);
+        Assert.Equal(PackageChannelNames.Daily, captured.Channel);
     }
 
     /// <summary>
@@ -180,8 +189,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// <summary>
     /// Issue #17121 regression guard: a staging-identity CLI should have a registered
     /// staging channel from <c>PackagingService.GetChannelsAsync</c>, so <c>aspire new</c>
-    /// resolves templates from staging instead of falling back to the Implicit NuGet.org
-    /// channel.
+    /// resolves the channel from staging instead of falling back to the Implicit NuGet.org
+    /// channel, while keeping the template version pinned to the current CLI.
     /// </summary>
     [Fact]
     public async Task NewCommand_NoChannelArg_StagingIdentityWithStagingChannelRegistered_ResolvesTemplateFromStaging()
@@ -191,14 +200,15 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             channelOptionArg: null,
             identityChannelVersion: "13.4.0-rc.1.99999.1");
 
-        Assert.Equal("13.4.0-rc.1.99999.1", captured.Version);
+        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), captured.Version);
         Assert.Equal(PackageChannelNames.Staging, captured.Channel);
     }
 
     /// <summary>
     /// Explicit <c>--channel</c> must always override the running CLI's identity channel —
     /// so a developer on a daily CLI can still scaffold a stable-channel project for
-    /// reproduction or migration testing.
+    /// reproduction or migration testing. The template version still stays pinned to the
+    /// current CLI so restored Aspire packages match the bundled server.
     /// </summary>
     [Fact]
     public async Task NewCommand_ExplicitChannelArg_OverridesIdentityChannel()
@@ -208,7 +218,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             channelOptionArg: PackageChannelNames.Stable,
             identityChannelVersion: "13.4.0-preview.1.99999.1");
 
-        Assert.Equal("13.5.0", captured.Version); // stable channel version
+        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), captured.Version);
         Assert.Equal(PackageChannelNames.Stable, captured.Channel);
     }
 
