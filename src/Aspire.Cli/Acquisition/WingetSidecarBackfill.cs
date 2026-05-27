@@ -82,6 +82,17 @@ internal sealed class WingetSidecarBackfill
     /// </summary>
     public void EnsureSidecar(string binaryDir)
     {
+        // The back-fill exists solely to amortize a HKCU + HKLM Uninstall hive walk
+        // that only makes sense on Windows; on Linux/macOS there is no registry to
+        // probe and IWindowsRegistryReader resolves to a no-op stub. Writing a
+        // negative-result sentinel on non-Windows would still drop a stray
+        // .aspire-install.json next to the running binary (e.g. under the dotnet
+        // global-tools store) with no corresponding benefit, so exit before any IO.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         if (string.IsNullOrEmpty(binaryDir))
         {
             return;

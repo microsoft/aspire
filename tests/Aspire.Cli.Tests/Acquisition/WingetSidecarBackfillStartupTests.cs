@@ -32,6 +32,8 @@ public class WingetSidecarBackfillStartupTests
     [Fact]
     public void TryEnsureWingetSidecar_InvokesBackfillAgainstProcessBinaryDirectory()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "WingetSidecarBackfill is a Windows-only back-fill; off Windows it early-returns before resolving DI.");
+
         var sidecarPath = AssertBackfillReachableFromTestRunner();
 
         var registry = new CapturingWindowsRegistryReader();
@@ -61,6 +63,8 @@ public class WingetSidecarBackfillStartupTests
     [Fact]
     public void TryEnsureWingetSidecar_SwallowsRegistryReaderException()
     {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "WingetSidecarBackfill is a Windows-only back-fill; off Windows it early-returns before consulting the registry reader, so a throwing reader is unreachable.");
+
         var sidecarPath = AssertBackfillReachableFromTestRunner();
 
         using var provider = BuildMinimalProvider(new ThrowingWindowsRegistryReader());
