@@ -653,10 +653,20 @@ public class Program
     /// before any code reads it.
     /// </summary>
     internal static void TryEnsureWingetSidecar(IServiceProvider sp)
+        => TryEnsureWingetSidecar(sp, Environment.ProcessPath);
+
+    /// <summary>
+    /// Test seam for <see cref="TryEnsureWingetSidecar(IServiceProvider)"/>:
+    /// takes the running binary path as an explicit parameter so tests can
+    /// target a temp directory instead of <see cref="Environment.ProcessPath"/>,
+    /// which would otherwise land the sidecar in the testhost binary directory
+    /// and silently bias parallel tests that read from the same location.
+    /// Production callers go through the single-arg overload.
+    /// </summary>
+    internal static void TryEnsureWingetSidecar(IServiceProvider sp, string? processPath)
     {
         try
         {
-            var processPath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(processPath))
             {
                 return;
@@ -668,7 +678,7 @@ public class Program
                 return;
             }
 
-            sp.GetRequiredService<WingetSidecarBackfill>().EnsureSidecar(binaryDir);
+            sp.GetRequiredService<WingetSidecarBackfill>().EnsureSidecar(binaryDir, processPath);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

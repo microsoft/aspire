@@ -81,6 +81,16 @@ internal sealed class WingetSidecarBackfill
     /// Idempotent: an existing sidecar is never overwritten.
     /// </summary>
     public void EnsureSidecar(string binaryDir)
+        => EnsureSidecar(binaryDir, Environment.ProcessPath);
+
+    /// <summary>
+    /// Test seam for <see cref="EnsureSidecar(string)"/>: takes the running
+    /// binary path as an explicit parameter rather than reading
+    /// <see cref="Environment.ProcessPath"/>, so tests can pin both the write
+    /// target and the registry-probe argument to a controlled value. Production
+    /// callers go through the single-arg overload.
+    /// </summary>
+    internal void EnsureSidecar(string binaryDir, string? processPath)
     {
         // The back-fill exists solely to amortize a HKCU + HKLM Uninstall hive walk
         // that only makes sense on Windows; on Linux/macOS there is no registry to
@@ -104,7 +114,6 @@ internal sealed class WingetSidecarBackfill
             return;
         }
 
-        var processPath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(processPath))
         {
             return;
