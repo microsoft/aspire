@@ -586,6 +586,8 @@ Each test class runs as a separate CI job via the unified `TestEnumerationRunshe
 
 When CLI E2E tests fail in CI, follow these steps to diagnose the issue:
 
+> **Flaky test investigation:** for recurring/intermittent failures, see [`troubleshooting.md`](./troubleshooting.md) for a catalog of known flake classes (Y/n input race, prompt-counter desync, etc.) and the recipes to identify them from `.cast` recordings.
+
 ### Quick Start: Download and Play Recordings
 
 The fastest way to debug a CLI E2E test failure is to download and play the asciinema recording.
