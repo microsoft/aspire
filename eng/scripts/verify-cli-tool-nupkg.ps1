@@ -226,7 +226,7 @@ try {
     }
 
     # The RID-specific tool nupkg is always installed via `dotnet tool install -g`.
-    # The sidecar's source must pin to 'dotnet-tool' so the CLI can source
+    # The sidecar's source must pin to 'dotnet-tool' so the CLI can route
     # `aspire update --self` to the correct delegating command. Other source
     # values would mis-identify the install and break self-update.
     if ([string]$sidecarJson.source -ne 'dotnet-tool') {

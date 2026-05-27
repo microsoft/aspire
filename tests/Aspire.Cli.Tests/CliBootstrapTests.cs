@@ -24,6 +24,13 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
 
     private static async Task<IHost> BuildHostAsync()
     {
+        // On Windows, resolving CliExecutionContext through the host built here
+        // fires WingetSidecarBackfill via the singleton factory at Program.cs:350-379,
+        // which writes a `.aspire-install.json` sentinel into the testhost binary
+        // directory. The write is idempotent and harmless to these tests, but any
+        // future test that reads sidecars from `Environment.ProcessPath`'s directory
+        // should expect this side effect — or use a per-test temp directory and the
+        // two-arg test-seam overload of `TryEnsureWingetSidecar`/`EnsureSidecar`.
         var loggingOptions = Program.ParseLoggingOptions([]);
         var errorWriter = new TestStartupErrorWriter();
         var logBufferContext = new ConsoleLogBufferContext();
