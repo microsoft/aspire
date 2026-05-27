@@ -56,8 +56,12 @@ public sealed class ListStepsTests(ITestOutputHelper output)
                 throw new InvalidOperationException(
                     "aspire do --list-steps regressed: pipeline executed and crashed instead of surfacing the friendly validation error.");
             }
-            return s.ContainsText("aspire do deploy --list-steps")
-                && s.ContainsText("aspire.dev/reference/cli/commands/aspire-do");
+            // Match short fragments that are unlikely to straddle a wrap boundary in a narrow
+            // terminal. The full error message is a single long sentence, so asserting on the
+            // raw URL (or any 30+ char run) is flaky because the screen buffer inserts wrap
+            // newlines that defeat ContainsText's literal substring match.
+            return s.ContainsText("required when using --list-steps")
+                && s.ContainsText("aspire.dev/");
         }, timeout: TimeSpan.FromMinutes(2),
             description: "waiting for friendly error with example and docs link");
 

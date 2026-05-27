@@ -35,20 +35,29 @@ internal sealed class DoCommand : PipelineCommandBase
         {
             var step = result.GetValue(_stepArgument);
             var listSteps = result.GetValue(s_listStepsOption);
-            if (string.IsNullOrEmpty(step) && !ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
+            if (!string.IsNullOrEmpty(step))
             {
-                if (listSteps)
-                {
-                    // `aspire do --list-steps` with no step has no meaningful scope: the listing for
-                    // `do` is always relative to a target step. Surface a friendly error pointing at
-                    // common starting steps and the docs rather than launching the AppHost and
-                    // crashing mid-pipeline (see https://github.com/microsoft/aspire/issues/17526).
-                    result.AddError(DoCommandStrings.ListStepsRequiresStep);
-                }
-                else
-                {
-                    result.AddError(DoCommandStrings.StepArgumentRequired);
-                }
+                return;
+            }
+
+            if (listSteps)
+            {
+                // `aspire do --list-steps` with no step has no meaningful scope: the listing for
+                // `do` is always relative to a target step. Surface a friendly error pointing at
+                // common starting steps and the docs rather than launching the AppHost and
+                // crashing mid-pipeline (see https://github.com/microsoft/aspire/issues/17526).
+                // This applies in the extension host too because `--list-steps` does not flow
+                // through the interactive step prompt in GetRunArgumentsAsync, so without this
+                // error the extension would still hit the original crash path.
+                result.AddError(DoCommandStrings.ListStepsRequiresStep);
+                return;
+            }
+
+            // For a plain `aspire do` invocation, the extension host prompts the user for a step
+            // later in GetRunArgumentsAsync, so don't add a validation error there.
+            if (!ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
+            {
+                result.AddError(DoCommandStrings.StepArgumentRequired);
             }
         });
     }

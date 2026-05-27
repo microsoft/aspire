@@ -7,6 +7,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Backchannel;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -356,6 +357,35 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("aspire do deploy --list-steps", combined);
         Assert.Contains("build", combined);
         Assert.Contains("publish", combined);
+        Assert.Contains("https://aspire.dev/reference/cli/commands/aspire-do/", combined);
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsAndNoStepArgumentInExtensionHostShowsFriendlyError()
+    {
+        // The extension host bypasses the plain `aspire do` step requirement because
+        // GetRunArgumentsAsync prompts the user interactively. But `--list-steps` does
+        // not flow through that prompt, so without the validator firing the extension
+        // would still hit the original crash from https://github.com/microsoft/aspire/issues/17526.
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            options.ConfigurationCallback += config =>
+            {
+                config[KnownConfigNames.ExtensionDebugSessionId] = "test-session-id";
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do --list-steps");
+
+        Assert.NotEmpty(result.Errors);
+        var combined = string.Join("\n", result.Errors.Select(e => e.Message));
+        Assert.Contains("--list-steps", combined);
         Assert.Contains("https://aspire.dev/reference/cli/commands/aspire-do/", combined);
     }
 
