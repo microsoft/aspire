@@ -122,5 +122,23 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("StepArgumentDescription", resourceCulture);
             }
         }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The &apos;step&apos; argument is required..
+        /// </summary>
+        public static string StepArgumentRequired {
+            get {
+                return ResourceManager.GetString("StepArgumentRequired", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to The &apos;step&apos; argument is required when using --list-steps. Specify the step you want to inspect, for example: &apos;aspire do {0} --list-steps&apos; or &apos;aspire do {1} --list-steps&apos;..
+        /// </summary>
+        public static string ListStepsRequiresStep {
+            get {
+                return ResourceManager.GetString("ListStepsRequiresStep", resourceCulture);
+            }
+        }
     }
 }

@@ -35,9 +35,24 @@ internal sealed class DoCommand : PipelineCommandBase
         {
             var step = result.GetValue(_stepArgument);
             var listSteps = result.GetValue(s_listStepsOption);
-            if (string.IsNullOrEmpty(step) && !listSteps && !ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
+            if (string.IsNullOrEmpty(step) && !ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
             {
-                result.AddError("The 'step' argument is required when not using --list-steps.");
+                if (listSteps)
+                {
+                    // `aspire do --list-steps` with no step has no meaningful scope: the listing for
+                    // `do` is always relative to a target step. Surface a friendly error pointing at
+                    // concrete well-known step names rather than launching the AppHost and crashing
+                    // mid-pipeline (see https://github.com/microsoft/aspire/issues/17526).
+                    result.AddError(string.Format(
+                        System.Globalization.CultureInfo.CurrentCulture,
+                        DoCommandStrings.ListStepsRequiresStep,
+                        "deploy",
+                        "publish"));
+                }
+                else
+                {
+                    result.AddError(DoCommandStrings.StepArgumentRequired);
+                }
             }
         });
     }
