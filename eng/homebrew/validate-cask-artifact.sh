@@ -55,12 +55,13 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+shopt -s nocasematch
 case "$VALIDATION_MODE" in
-  LiveRelease|LiveArchives) ;;
-  liverelease|live-release) VALIDATION_MODE="LiveRelease" ;;
-  livearchives|live-archives) VALIDATION_MODE="LiveArchives" ;;
+  liverelease)  VALIDATION_MODE="LiveRelease" ;;
+  livearchives) VALIDATION_MODE="LiveArchives" ;;
   *) echo "Error: --validation-mode must be LiveRelease or LiveArchives." >&2; exit 1 ;;
 esac
+shopt -u nocasematch
 
 case "$CHANNEL" in
   stable|prerelease) ;;

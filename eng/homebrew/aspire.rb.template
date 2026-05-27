@@ -11,10 +11,8 @@ cask "aspire" do
   desc "CLI for building observable, production-ready distributed applications"
   homepage "https://aspire.dev/"
 
-  # The cask URL embeds the same version twice (release tag and filename),
-  # so `brew bump-cask-pr --version=<v>` can rewrite both via a single
-  # substitution. This is what makes the cask autobumpable — see
-  # eng/homebrew/README.md "Submission: upstream autobump".
+  # livecheck drives upstream Homebrew/homebrew-cask's autobump detection —
+  # see eng/homebrew/README.md "Submission: upstream autobump".
   livecheck do
     url :url
     strategy :github_latest
@@ -30,14 +28,17 @@ cask "aspire" do
 
   binary "aspire"
 
-  # Write the sidecar file
+  # The sidecar tells the CLI which install channel placed this binary, so
+  # behaviors like self-update can route through `brew` instead of overwriting
+  # the cask payload. See docs/specs/install-routes.md.
   postflight do
     File.write("#{staged_path}/.aspire-install.json", %Q({"source":"brew"}\n))
   end
 
-  # Empty by design. Aspire CLI's user state under ~/.aspire/ is intentionally
-  # preserved across uninstall so reinstall picks up existing settings, dev
-  # certs, and telemetry opt-in. The stanza is present (not omitted) so the
+  # Empty by design. `~/.aspire/` is shared user state across all Aspire CLI
+  # install channels (brew cask, winget, dotnet-tool, script install). A brew
+  # uninstall must not delete it — that would corrupt a parallel install from
+  # another channel. The stanza is present (not omitted) so the
   # Homebrew/homebrew-cask triage workflow does not apply the `missing-zap`
   # label — see Homebrew/homebrew-cask/.github/workflows/triage.yml
   # (`missing_content: zap .+\n`).

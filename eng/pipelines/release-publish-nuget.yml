@@ -11,12 +11,6 @@
 # 6. Uploads aspire-cli-* archives from the source build's BlobArtifacts
 #    onto the GitHub Release as the aspire-repo-bot
 #
-# Homebrew cask bumps for Homebrew/homebrew-cask are NOT submitted from
-# this pipeline. Bumps are handled by upstream Homebrew/homebrew-cask's
-# autobump workflow, which runs `brew bump --auto` on a 3-hour schedule
-# and detects new versions via the cask's livecheck block. See
-# eng/homebrew/README.md.
-#
 # For full documentation, see: docs/release-process.md
 
 trigger: none  # Manual trigger only

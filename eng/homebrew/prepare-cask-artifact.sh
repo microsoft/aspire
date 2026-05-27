@@ -52,12 +52,13 @@ case "$CHANNEL" in
   *) echo "Error: --channel must be 'stable' or 'prerelease'." >&2; exit 1 ;;
 esac
 
+shopt -s nocasematch
 case "$VALIDATION_MODE" in
-  LiveRelease|LiveArchives) ;;
-  liverelease|live-release) VALIDATION_MODE="LiveRelease" ;;
-  livearchives|live-archives) VALIDATION_MODE="LiveArchives" ;;
+  liverelease)  VALIDATION_MODE="LiveRelease" ;;
+  livearchives) VALIDATION_MODE="LiveArchives" ;;
   *) echo "Error: --validation-mode must be LiveRelease or LiveArchives." >&2; exit 1 ;;
 esac
+shopt -u nocasematch
 
 if [[ -z "$OUTPUT_DIR" ]]; then
   echo "Error: --output-dir is required." >&2
