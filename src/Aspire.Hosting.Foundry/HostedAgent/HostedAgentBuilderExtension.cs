@@ -205,28 +205,7 @@ public static class HostedAgentResourceBuilderExtensions
                     {
                         Path = "/responses"
                     }.ToString();
-                    // ctx.Urls.Add(new()
-                    // {
-                    //     DisplayText = "Liveness probe",
-                    //     Url = new UriBuilder(http.Url)
-                    //     {
-                    //         Path = "/liveness"
-                    //     }.ToString(),
-                    //     Endpoint = http.Endpoint,
-                    //     DisplayLocation = UrlDisplayLocation.DetailsOnly
-                    // });
-                    // ctx.Urls.Add(new()
-                    // {
-                    //     DisplayText = "Readiness probe",
-                    //     Url = new UriBuilder(http.Url)
-                    //     {
-                    //         Path = "/readiness"
-                    //     }.ToString(),
-                    //     Endpoint = http.Endpoint,
-                    //     DisplayLocation = UrlDisplayLocation.DetailsOnly
-                    // });
                 })
-                // .WithHttpHealthCheck("/liveness")
                 .WithHttpCommand(
                     path: "/responses",
                     displayName: "Send Message",
