@@ -204,6 +204,12 @@ internal static partial class HelmDeploymentEngine
                 // Use saved state for the confirmation message (more accurate than recomputing)
                 var @namespace = savedNamespace ?? "default";
                 await ConfirmDestroyAsync(ctx, $"Uninstall Helm release '{savedReleaseName}' from namespace '{@namespace}'? This action cannot be undone.").ConfigureAwait(false);
+
+                var helmRunner = ctx.Services.GetRequiredService<IHelmRunner>();
+                // Defer the prereq check until state exists so `aspire destroy` against a
+                // never-deployed environment can still report "Nothing to destroy" without
+                // requiring Helm on PATH.
+                await HelmVersionValidator.EnsureMinimumVersionAsync(helmRunner, ctx.CancellationToken).ConfigureAwait(false);
                 await HelmUninstallAsync(ctx, environment, savedReleaseName, @namespace).ConfigureAwait(false);
 
                 ctx.Summary.Add("🗑️ Helm Release", savedReleaseName);
@@ -214,10 +220,6 @@ internal static partial class HelmDeploymentEngine
             },
             DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
         };
-        // Destroy invokes `helm uninstall`, so it needs the same version-validated
-        // Helm as the deploy path. Otherwise a missing or too-old Helm surfaces as
-        // a raw process-spawn or unknown-flag error during teardown.
-        helmDestroyStep.DependsOn($"check-helm-prereqs-{environment.Name}");
         helmDestroyStep.RequiredBy(WellKnownPipelineSteps.Destroy);
         steps.Add(helmDestroyStep);
 
