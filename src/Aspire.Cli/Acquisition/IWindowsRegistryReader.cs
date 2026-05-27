@@ -10,7 +10,7 @@ namespace Aspire.Cli.Acquisition;
 /// <summary>
 /// Probes Windows-specific facts that identify whether the currently running
 /// CLI binary was placed by a winget portable install. Used by
-/// <see cref="WingetFirstRunProbe"/>; abstracted for testability.
+/// <see cref="WingetSidecarBackfill"/>; abstracted for testability.
 /// </summary>
 internal interface IWindowsRegistryReader
 {
