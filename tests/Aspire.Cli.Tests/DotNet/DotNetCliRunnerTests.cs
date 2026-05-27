@@ -800,13 +800,17 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunAsyncLaunchesAppHostInExtensionHostIfConnected()
+    public async Task RunAsyncKeepsExtensionLaunchedAppHostAliveUntilCanceled()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
-        var launchAppHostCalledTcs = new TaskCompletionSource();
+        var launchAppHostCalledTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var backchannel = new TestAppHostBackchannel
+        {
+            ConnectAsyncCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
         TestExtensionInteractionService? testExtensionInteractionService = null;
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -826,25 +830,37 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             {
                 HasCapabilityAsyncCallback = (c, _) => Task.FromResult(c is "devkit" or "project"),
             };
-            options.AppHostBackchannelFactory = _ => new TestAppHostBackchannel();
+            options.AppHostBackchannelFactory = _ => backchannel;
         });
 
         using var provider = services.BuildServiceProvider();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
+        var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var cancellationTokenSource = new CancellationTokenSource();
 
-        var exitCode = await runner.RunAsync(
+        var runTask = runner.RunAsync(
             projectFile: projectFile,
             watch: false,
             noBuild: false,
             noRestore: false,
             args: [],
-            env: null,
-            backchannelCompletionSource: new TaskCompletionSource<IAppHostCliBackchannel>(),
+            env: new Dictionary<string, string>
+            {
+                [KnownConfigNames.UnixSocketPath] = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.sock")
+            },
+            backchannelCompletionSource,
             options: new ProcessInvocationOptions(),
-            cancellationToken: CancellationToken.None).DefaultTimeout();
+            cancellationToken: cancellationTokenSource.Token);
 
         await launchAppHostCalledTcs.Task.DefaultTimeout();
-        Assert.Equal(CliExitCodes.Success, exitCode);
+        await backchannel.ConnectAsyncCalled.Task.DefaultTimeout();
+        Assert.Same(backchannel, await backchannelCompletionSource.Task.DefaultTimeout());
+
+        var completedTask = await Task.WhenAny(runTask, Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken));
+        Assert.NotSame(runTask, completedTask);
+
+        await cancellationTokenSource.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask);
     }
 
     [Fact]
@@ -876,23 +892,20 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
         var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        var exitCode = await runner.RunAsync(
-            projectFile: projectFile,
-            watch: false,
-            noBuild: false,
-            noRestore: false,
-            args: [],
-            env: new Dictionary<string, string>
-            {
-                [KnownConfigNames.UnixSocketPath] = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.sock")
-            },
-            backchannelCompletionSource,
-            new ProcessInvocationOptions(),
-            CancellationToken.None).DefaultTimeout();
-
-        Assert.Equal(CliExitCodes.Success, exitCode);
         var exception = await Assert.ThrowsAsync<TimeoutException>(
-            () => backchannelCompletionSource.Task.WaitAsync(TimeSpan.FromSeconds(3)));
+            () => runner.RunAsync(
+                projectFile: projectFile,
+                watch: false,
+                noBuild: false,
+                noRestore: false,
+                args: [],
+                env: new Dictionary<string, string>
+                {
+                    [KnownConfigNames.UnixSocketPath] = Path.Combine(workspace.WorkspaceRoot.FullName, "cli.sock")
+                },
+                backchannelCompletionSource,
+                new ProcessInvocationOptions(),
+                CancellationToken.None).DefaultTimeout());
         Assert.Contains("Timed out waiting for AppHost backchannel", exception.Message);
     }
 

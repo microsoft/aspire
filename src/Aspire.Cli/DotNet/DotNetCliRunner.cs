@@ -160,7 +160,13 @@ internal sealed class DotNetCliRunner(
                     execution.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList(),
                     options.StartDebugSession);
 
-                _ = StartBackchannelAsync(null, socketPath!, backchannelCompletionSource, backchannelParentContext, cancellationToken);
+                await StartBackchannelAsync(null, socketPath!, backchannelCompletionSource, backchannelParentContext, cancellationToken).ConfigureAwait(false);
+                await backchannelCompletionSource.Task.ConfigureAwait(false);
+
+                // The extension launched the AppHost process, so there is no local Process to await.
+                // Keep this CLI process alive because it owns the AppHost backchannel; the extension
+                // will stop the CLI through the RPC endpoint when the managed debug session ends.
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
 
                 return CliExitCodes.Success;
             }
