@@ -20,6 +20,13 @@ namespace Aspire.Cli.Backchannel;
 /// </summary>
 internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 {
+    private static readonly string[] s_clientCapabilities =
+    [
+        AuxiliaryBackchannelCapabilities.V1,
+        AuxiliaryBackchannelCapabilities.V2,
+        AuxiliaryBackchannelCapabilities.V3
+    ];
+
     private readonly ILogger _logger;
     private JsonRpc? _rpc;
     private bool _disposed;
@@ -332,6 +339,22 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <inheritdoc />
     public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
     {
+        if (SupportsV2)
+        {
+            var response = await GetResourcesV2Async(new GetResourcesRequest
+            {
+                ClientCapabilities = s_clientCapabilities
+            }, cancellationToken).ConfigureAwait(false);
+            var snapshots = response.Resources.ToList();
+
+            if (!includeHidden)
+            {
+                snapshots = snapshots.Where(s => !ResourceSnapshotMapper.IsHiddenResource(s)).ToList();
+            }
+
+            return snapshots.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
         var rpc = EnsureConnected();
 
         _logger.LogDebug("Getting resource snapshots");
@@ -363,6 +386,24 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <inheritdoc />
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        if (SupportsV2)
+        {
+            await foreach (var snapshot in WatchResourcesV2Async(new WatchResourcesRequest
+            {
+                ClientCapabilities = s_clientCapabilities
+            }, cancellationToken).ConfigureAwait(false))
+            {
+                if (!includeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
+                {
+                    continue;
+                }
+
+                yield return snapshot;
+            }
+
+            yield break;
+        }
+
         var rpc = EnsureConnected();
 
         _logger.LogDebug("Starting resource snapshots watch");
@@ -555,6 +596,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <returns>The resources response.</returns>
     public async Task<GetResourcesResponse> GetResourcesV2Async(GetResourcesRequest? request = null, CancellationToken cancellationToken = default)
     {
+        request = AddClientCapabilities(request);
+
         if (!SupportsV2)
         {
             // Fall back to v1
@@ -596,6 +639,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         WatchResourcesRequest? request = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        request = AddClientCapabilities(request);
+
         if (!SupportsV2)
         {
             // Fall back to v1
@@ -639,6 +684,30 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         {
             yield return snapshot;
         }
+    }
+
+    private static GetResourcesRequest AddClientCapabilities(GetResourcesRequest? request)
+    {
+        return request is null
+            ? new GetResourcesRequest { ClientCapabilities = s_clientCapabilities }
+            : new GetResourcesRequest
+            {
+                TraceContext = request.TraceContext,
+                Filter = request.Filter,
+                ClientCapabilities = s_clientCapabilities
+            };
+    }
+
+    private static WatchResourcesRequest AddClientCapabilities(WatchResourcesRequest? request)
+    {
+        return request is null
+            ? new WatchResourcesRequest { ClientCapabilities = s_clientCapabilities }
+            : new WatchResourcesRequest
+            {
+                TraceContext = request.TraceContext,
+                Filter = request.Filter,
+                ClientCapabilities = s_clientCapabilities
+            };
     }
 
     /// <summary>

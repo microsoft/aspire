@@ -205,11 +205,29 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Installed {0} skill ({1})..
+        ///   Looks up a localized string similar to Installed Aspire agent skills:.
         /// </summary>
-        internal static string InitCommand_InstalledSkill {
+        internal static string InitCommand_InstalledSkillsSummary {
             get {
-                return ResourceManager.GetString("InitCommand_InstalledSkill", resourceCulture);
+                return ResourceManager.GetString("InitCommand_InstalledSkillsSummary", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skills: {0}.
+        /// </summary>
+        internal static string InitCommand_InstalledSkillsSummarySkills {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledSkillsSummarySkills", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Locations: {0}.
+        /// </summary>
+        internal static string InitCommand_InstalledSkillsSummaryLocations {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledSkillsSummaryLocations", resourceCulture);
             }
         }
 
@@ -358,7 +376,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached bundle is available..
+        ///   Looks up a localized string similar to Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available..
         /// </summary>
         internal static string AspireSkillsInstaller_GitHubUnavailable {
             get {
@@ -372,6 +390,69 @@ namespace Aspire.Cli.Resources {
         internal static string AspireSkillsInstaller_InvalidBundle {
             get {
                 return ResourceManager.GetString("AspireSkillsInstaller_InvalidBundle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills bundle metadata is invalid: {0}.
+        /// </summary>
+        internal static string AspireSkillsInstaller_InvalidMetadata {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_InvalidMetadata", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a version..
+        /// </summary>
+        internal static string AspireSkillsInstaller_MissingMetadataVersion {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataVersion", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'..
+        /// </summary>
+        internal static string AspireSkillsInstaller_MetadataRepositoryMismatch {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_MetadataRepositoryMismatch", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a GitHub release tag..
+        /// </summary>
+        internal static string AspireSkillsInstaller_MissingMetadataTag {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataTag", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a release asset name..
+        /// </summary>
+        internal static string AspireSkillsInstaller_MissingMetadataAssetName {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataAssetName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify the release asset SHA-256 hash..
+        /// </summary>
+        internal static string AspireSkillsInstaller_MissingMetadataSha256 {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataSha256", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'..
+        /// </summary>
+        internal static string AspireSkillsInstaller_ArchiveHashVerificationFailed {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_ArchiveHashVerificationFailed", resourceCulture);
             }
         }
 

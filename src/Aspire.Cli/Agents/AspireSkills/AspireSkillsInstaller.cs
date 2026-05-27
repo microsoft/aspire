@@ -6,6 +6,7 @@ using System.Formats.Tar;
 using System.Globalization;
 using System.IO.Compression;
 using System.Net;
+using System.Security.Cryptography;
 using System.Text.Json;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
@@ -21,6 +22,7 @@ namespace Aspire.Cli.Agents.AspireSkills;
 internal sealed class AspireSkillsInstaller(
     IGitHubArtifactAttestationVerifier githubArtifactAttestationVerifier,
     IHttpClientFactory httpClientFactory,
+    IEmbeddedAspireSkillsBundleProvider embeddedBundleProvider,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
     IConfiguration configuration,
@@ -31,7 +33,7 @@ internal sealed class AspireSkillsInstaller(
     internal const string GitHubRepository = "microsoft/aspire-skills";
     internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
     internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";
-    internal const string ExpectedBuildType = "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1";
+    internal const string ExpectedBuildType = "https://actions.github.io/buildtypes/workflow/v1";
     internal const string DisablePackageValidationKey = "disableAspireSkillsPackageValidation";
     internal const string VersionOverrideKey = "aspireSkillsVersion";
     internal const string MaxCacheAgeKey = "AspireSkillsMaxCacheAgeSeconds";
@@ -46,7 +48,6 @@ internal sealed class AspireSkillsInstaller(
             AgentCommandStrings.AspireSkillsInstaller_InstallingStatus,
             () => InstallCoreAsync(cancellationToken));
     }
-
     private async Task<AspireSkillsInstallResult> InstallCoreAsync(CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartReportedActivity("AspireSkillsInstaller.Install");
@@ -80,12 +81,24 @@ internal sealed class AspireSkillsInstaller(
 
         if (githubResult.Status == AcquisitionStatus.Failed)
         {
-            activity?.SetStatus(ActivityStatusCode.Error, githubResult.Message);
-            return AspireSkillsInstallResult.Failed(githubResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_InvalidBundle);
+            logger.LogDebug("Aspire skills GitHub acquisition failed for version {Version}; falling back to embedded snapshot. Failure: {Failure}", effectiveVersion, githubResult.Message);
         }
 
-        activity?.SetStatus(ActivityStatusCode.Error, "GitHub acquisition is unavailable.");
-        return AspireSkillsInstallResult.Failed(AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable);
+        var embeddedResult = await InstallFromEmbeddedAsync(cacheRoot, effectiveVersion, activity, cancellationToken).ConfigureAwait(false);
+        if (embeddedResult.Status == AcquisitionStatus.Installed)
+        {
+            CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
+            return AspireSkillsInstallResult.Installed(embeddedResult.Bundle!);
+        }
+
+        var failureMessage = embeddedResult.Status == AcquisitionStatus.Failed
+            ? embeddedResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable
+            : githubResult.Status == AcquisitionStatus.Failed
+                ? githubResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable
+                : AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable;
+
+        activity?.SetStatus(ActivityStatusCode.Error, failureMessage);
+        return AspireSkillsInstallResult.Failed(failureMessage);
     }
 
     private async Task<AcquisitionResult> InstallFromGitHubAsync(
@@ -164,6 +177,134 @@ internal sealed class AspireSkillsInstaller(
         finally
         {
             TryDeleteDirectory(tempDir);
+        }
+    }
+
+    private async Task<AcquisitionResult> InstallFromEmbeddedAsync(
+        string cacheRoot,
+        string version,
+        Activity? activity,
+        CancellationToken cancellationToken)
+    {
+        var metadata = embeddedBundleProvider.Metadata;
+        if (metadata is null)
+        {
+            logger.LogDebug("No embedded Aspire skills bundle metadata is available.");
+            return AcquisitionResult.Unavailable();
+        }
+
+        if (ValidateEmbeddedMetadata(metadata) is { } metadataError)
+        {
+            return AcquisitionResult.Failed(string.Format(
+                CultureInfo.CurrentCulture,
+                AgentCommandStrings.AspireSkillsInstaller_InvalidMetadata,
+                metadataError));
+        }
+
+        if (!string.Equals(metadata.Version, version, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogDebug(
+                "Embedded Aspire skills bundle version {EmbeddedVersion} does not match requested version {Version}.",
+                metadata.Version,
+                version);
+            return AcquisitionResult.Unavailable();
+        }
+
+        var tempDir = Path.Combine(cacheRoot, $".embedded-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var archivePath = Path.Combine(tempDir, GetSafeFileName(metadata.AssetName!));
+            var archiveStream = embeddedBundleProvider.OpenArchive();
+            if (archiveStream is null)
+            {
+                logger.LogDebug("Embedded Aspire skills archive is unavailable for version {Version}.", version);
+                return AcquisitionResult.Unavailable();
+            }
+
+            await using (archiveStream)
+            {
+                await using var fileStream = File.Create(archivePath);
+                await archiveStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
+            }
+
+            ValidateArchiveSha256(archivePath, metadata.Sha256!);
+
+            try
+            {
+                var bundle = await CacheArchiveAsync(cacheRoot, archivePath, version, cancellationToken).ConfigureAwait(false);
+                activity?.SetTag("aspire.skills.source", "embedded");
+                activity?.SetTag("aspire.skills.cache_hit", false);
+                return AcquisitionResult.Installed(bundle);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
+            {
+                logger.LogWarning(ex, "Embedded Aspire skills bundle {AssetName} is invalid.", metadata.AssetName);
+                return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            logger.LogDebug(ex, "Embedded Aspire skills bundle could not be staged for version {Version}.", version);
+            return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
+        }
+        finally
+        {
+            TryDeleteDirectory(tempDir);
+        }
+    }
+
+    private static string? ValidateEmbeddedMetadata(EmbeddedAspireSkillsBundleMetadata metadata)
+    {
+        if (string.IsNullOrWhiteSpace(metadata.Version))
+        {
+            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataVersion;
+        }
+
+        if (!string.Equals(metadata.Repository, GitHubRepository, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Format(
+                CultureInfo.CurrentCulture,
+                AgentCommandStrings.AspireSkillsInstaller_MetadataRepositoryMismatch,
+                metadata.Repository,
+                GitHubRepository);
+        }
+
+        if (string.IsNullOrWhiteSpace(metadata.Tag))
+        {
+            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataTag;
+        }
+
+        if (string.IsNullOrWhiteSpace(metadata.AssetName))
+        {
+            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataAssetName;
+        }
+
+        if (string.IsNullOrWhiteSpace(metadata.Sha256))
+        {
+            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataSha256;
+        }
+
+        return null;
+    }
+
+    private static void ValidateArchiveSha256(string archivePath, string expectedSha256)
+    {
+        var expectedHash = AspireSkillsBundle.NormalizeSha256(expectedSha256);
+        string actualHash;
+        using (var stream = File.OpenRead(archivePath))
+        {
+            actualHash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+        }
+
+        if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.CurrentCulture,
+                AgentCommandStrings.AspireSkillsInstaller_ArchiveHashVerificationFailed,
+                expectedHash,
+                actualHash));
         }
     }
 

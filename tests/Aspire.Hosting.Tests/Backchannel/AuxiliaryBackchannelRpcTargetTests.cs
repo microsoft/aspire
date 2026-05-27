@@ -332,6 +332,91 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_MapsNonStringPropertiesAsStringsForLegacyCallers()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            Properties =
+            [
+                new ResourcePropertySnapshot("number", 42),
+                new ResourcePropertySnapshot("flag", true),
+                new ResourcePropertySnapshot("list", new[] { "one", "two" }),
+                new ResourcePropertySnapshot("ConnectionString", "secret-value") { IsSensitive = true }
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result);
+        Assert.Equal("42", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["number"]).GetValue<string>());
+        Assert.Equal(bool.TrueString, Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["flag"]).GetValue<string>());
+        Assert.Equal("one,two", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["list"]).GetValue<string>());
+        Assert.Null(snapshot.Properties["ConnectionString"]);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+    }
+
+    [Fact]
+    public async Task GetResourcesAsync_MapsNonStringPropertiesAsJsonForV3Callers()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            Properties =
+            [
+                new ResourcePropertySnapshot("number", 42),
+                new ResourcePropertySnapshot("flag", true),
+                new ResourcePropertySnapshot("list", new[] { "one", "two" }),
+                new ResourcePropertySnapshot("ConnectionString", "secret-value") { IsSensitive = true }
+            ]
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.GetResourcesAsync(new GetResourcesRequest
+        {
+            ClientCapabilities = [AuxiliaryBackchannelCapabilities.V3]
+        }).DefaultTimeout();
+
+        var snapshot = Assert.Single(response.Resources);
+        Assert.Equal(42, Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["number"]).GetValue<int>());
+        Assert.True(Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["flag"]).GetValue<bool>());
+        var list = Assert.IsAssignableFrom<JsonArray>(snapshot.Properties["list"]);
+        Assert.Collection(
+            list,
+            value => Assert.Equal("one", value?.GetValue<string>()),
+            value => Assert.Equal("two", value?.GetValue<string>()));
+        Assert.Null(snapshot.Properties["ConnectionString"]);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+    }
+
+    [Fact]
     public async Task WaitForResourceAsync_AcceptsResourceId()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

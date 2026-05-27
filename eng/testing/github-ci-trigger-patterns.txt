@@ -33,7 +33,7 @@ eng/test-configuration.json
 Aspire-Core.slnf
 
 .github/instructions/**
-.github/skills/**
+.agents/skills/**
 
 # GitHub workflow files that do not affect the CI build or test process
 .github/workflows/apply-test-attributes.yml

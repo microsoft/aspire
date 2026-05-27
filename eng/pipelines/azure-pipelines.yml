@@ -526,6 +526,4 @@ extends:
               parameters:
                 version: $(aspireVersion)
                 channel: $(installerChannel)
-                artifactVersion: $(aspireArtifactVersion)
                 archiveRoot: $(Pipeline.Workspace)/native-archives
-                skipUrlValidation: ${{ ne(variables['_PackagesPublished'], 'true') }}

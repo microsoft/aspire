@@ -57,6 +57,22 @@ internal sealed class SkillBundleFile
 }
 
 /// <summary>
+/// Describes the Aspire skills bundle archive embedded in the CLI.
+/// </summary>
+internal sealed class EmbeddedAspireSkillsBundleMetadata
+{
+    public string? Version { get; init; }
+
+    public string? Repository { get; init; }
+
+    public string? Tag { get; init; }
+
+    public string? AssetName { get; init; }
+
+    public string? Sha256 { get; init; }
+}
+
+/// <summary>
 /// Source-generation context for Aspire skills bundle JSON.
 /// </summary>
 [JsonSourceGenerationOptions(
@@ -65,6 +81,7 @@ internal sealed class SkillBundleFile
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(SkillBundleManifest))]
+[JsonSerializable(typeof(EmbeddedAspireSkillsBundleMetadata))]
 internal sealed partial class AspireSkillsJsonSerializerContext : JsonSerializerContext
 {
 }

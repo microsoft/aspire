@@ -46,7 +46,6 @@ jobs:
           --channel prerelease
           --archive-root "${GITHUB_WORKSPACE}/native-archives"
           --output-dir "${GITHUB_WORKSPACE}/artifacts/installers/homebrew-cask"
-          --validation-mode Offline
 
       - name: Dogfood install (real winget install)
         if: ${{ inputs.installer == 'winget' }}

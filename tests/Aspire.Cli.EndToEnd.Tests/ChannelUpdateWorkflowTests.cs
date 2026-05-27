@@ -467,8 +467,13 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
         if (sawUpdatePrompt)
         {
+            // Type "n" to decline. Do NOT send Enter — the Spectre.Console [Y/n] confirmation
+            // prompt accepts a single character. Sending Enter risks a race: if aspire update
+            // returns from its line-reader on the "n" keystroke and tears down before the Enter
+            // is dequeued, bash receives the Enter and executes a phantom blank command,
+            // advancing CMDCOUNT and desyncing the test counter from the shell counter.
+            // See .agents/skills/cli-e2e-testing/troubleshooting.md for the full failure pattern.
             await auto.TypeAsync("n");
-            await auto.EnterAsync();
         }
 
         await auto.WaitForSuccessPromptAsync(counter);

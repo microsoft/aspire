@@ -17,7 +17,7 @@ namespace Aspire.Cli.Tests.Commands;
 public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public async Task AgentInitCommand_UsesNormalizedDisplayPath_WhenInstallingUserLevelSkill()
+    public async Task AgentInitCommand_SummarizesNormalizedDisplayPath_WhenInstallingUserLevelSkill()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var homeDirectory = workspace.CreateDirectory("fake-home");
@@ -44,13 +44,60 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);
+        var expectedSummary = string.Join(Environment.NewLine,
+            AgentCommandStrings.InitCommand_InstalledSkillsSummary,
+            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills, SkillDefinition.Aspire.Name)}",
+            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, ".agents/skills, ~/.agents/skills")}");
+
         Assert.Contains(
             interactionService.DisplayedMessages,
-            displayedMessage => displayedMessage.Message == string.Format(
+            displayedMessage => displayedMessage.Emoji.Equals(KnownEmojis.Robot) && displayedMessage.Message == expectedSummary);
+        Assert.DoesNotContain(
+            interactionService.DisplayedMessages,
+            displayedMessage => displayedMessage.Message.Contains("Installed aspire skill", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_SummarizesDefaultSkillsOnce()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var homeDirectory = workspace.CreateDirectory("fake-home");
+        var interactionService = new TestInteractionService();
+        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
+        interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
+            .Where(choice => choice switch
+            {
+                SkillLocation location => location == SkillLocation.Standard,
+                SkillDefinition skill => skill.IsDefault,
+                _ => false
+            })
+            .ToList();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace.WorkspaceRoot, homeDirectory);
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("agent init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+
+        var expectedSummary = string.Join(Environment.NewLine,
+            AgentCommandStrings.InitCommand_InstalledSkillsSummary,
+            $"  {string.Format(
                 CultureInfo.CurrentCulture,
-                AgentCommandStrings.InitCommand_InstalledSkill,
-                SkillDefinition.Aspire.Name,
-                "~/.agents/skills/aspire"));
+                AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
+                string.Join(", ", SkillDefinition.All.Where(static skill => skill.IsDefault).Select(static skill => skill.Name)))}",
+            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, ".agents/skills, ~/.agents/skills")}");
+        var message = Assert.Single(interactionService.DisplayedMessages, displayedMessage => displayedMessage.Emoji.Equals(KnownEmojis.Robot));
+        Assert.Equal(expectedSummary, message.Message);
+        Assert.DoesNotContain(
+            interactionService.DisplayedMessages,
+            displayedMessage => displayedMessage.Message.Contains("Installed aspire skill", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -222,7 +269,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_WithUnavailableAspireSkillsBundle_Fails()
+    public async Task AgentInitCommand_NonInteractive_WithUnavailableAspireSkillsBundle_WarnsAndSucceedsWithoutSelectedAspireSkills()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         const string installFailureMessage = "Aspire skills bundle is unavailable.";
@@ -242,9 +289,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
-        Assert.Contains(installFailureMessage, interactionService.DisplayedErrors);
-        Assert.Empty(interactionService.DisplayedSuccess);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.DoesNotContain(installFailureMessage, interactionService.DisplayedErrors);
+        Assert.Contains(
+            interactionService.DisplayedMessages,
+            message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == installFailureMessage);
+        Assert.Contains(McpCommandStrings.InitCommand_ConfigurationComplete, interactionService.DisplayedSuccess);
     }
 
     [Fact]
