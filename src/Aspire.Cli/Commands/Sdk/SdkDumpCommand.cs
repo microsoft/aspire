@@ -366,7 +366,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
             return new IntegrationDumpResult(integration.Name, Success: true, HasErrors: capabilities.Diagnostics.Exists(d => d.Severity == "Error"));
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or RemoteInvocationException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException or RemoteInvocationException or AppHostCodeGenerationException)
         {
             _logger.LogWarning(ex, "Failed to dump capabilities for integration {IntegrationName}", integration.Name);
             return new IntegrationDumpResult(integration.Name, Success: false, HasErrors: false, ex.Message);
