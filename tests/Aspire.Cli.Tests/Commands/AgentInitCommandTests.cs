@@ -27,7 +27,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             .Where(choice => choice switch
             {
                 SkillLocation location => location == SkillLocation.Standard,
-                SkillDefinition skill => skill == SkillDefinition.Aspire,
+                SkillDefinition skill => skill.HasName(CommonAgentApplicators.AspireSkillName),
                 _ => false
             })
             .ToList();
@@ -46,7 +46,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         var expectedSummary = string.Join(Environment.NewLine,
             AgentCommandStrings.InitCommand_InstalledSkillsSummary,
-            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills, SkillDefinition.Aspire.Name)}",
+            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills, CommonAgentApplicators.AspireSkillName)}",
             $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, ".agents/skills, ~/.agents/skills")}");
 
         Assert.Contains(
@@ -64,14 +64,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var homeDirectory = workspace.CreateDirectory("fake-home");
         var interactionService = new TestInteractionService();
         interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
-        interactionService.PromptForSelectionsCallback = (_, choices, _, _) => choices.Cast<object>()
-            .Where(choice => choice switch
-            {
-                SkillLocation location => location == SkillLocation.Standard,
-                SkillDefinition skill => skill.IsDefault,
-                _ => false
-            })
-            .ToList();
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
@@ -91,7 +83,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             $"  {string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
-                string.Join(", ", SkillDefinition.All.Where(static skill => skill.IsDefault).Select(static skill => skill.Name)))}",
+                $"{CommonAgentApplicators.AspireSkillName}, {CommonAgentApplicators.AspireDeploymentSkillName}")}",
             $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, ".agents/skills, ~/.agents/skills")}");
         var message = Assert.Single(interactionService.DisplayedMessages, displayedMessage => displayedMessage.Emoji.Equals(KnownEmojis.Robot));
         Assert.Equal(expectedSummary, message.Message);
@@ -113,7 +105,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             .Where(choice => choice switch
             {
                 SkillLocation location => location == SkillLocation.Standard,
-                SkillDefinition skill => skill == SkillDefinition.Aspire,
+                SkillDefinition skill => skill.HasName(CommonAgentApplicators.AspireSkillName),
                 _ => false
             })
             .ToList();
@@ -130,7 +122,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
 
-        var expectedSkillDirectoryPath = Path.Combine(invalidRootFilePath, ".agents", "skills", SkillDefinition.Aspire.Name);
+        var expectedSkillDirectoryPath = Path.Combine(invalidRootFilePath, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
         Assert.Contains(
             interactionService.DisplayedErrors,
             message => message.Contains(expectedSkillDirectoryPath, StringComparison.Ordinal));
@@ -152,19 +144,89 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         // Exit code is InvalidCommand because FakeNpmRunner cannot resolve Playwright CLI in tests.
         Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
 
-        // Verify that the Aspire skills were installed to all locations
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspireify", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "skills", "aspire", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "skills", "aspireify", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "skills", "aspire-deployment", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "skills", "aspire", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "skills", "aspireify", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "skills", "aspire-deployment", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".opencode", "skill", "aspire", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".opencode", "skill", "aspireify", "SKILL.md")));
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".opencode", "skill", "aspire-deployment", "SKILL.md")));
+        var expectedSkillNames = new[]
+        {
+            CommonAgentApplicators.AspireSkillName,
+            CommonAgentApplicators.AspireifySkillName,
+            CommonAgentApplicators.AspireDeploymentSkillName,
+            FakeAspireSkillsInstaller.AspireInitSkillName,
+            FakeAspireSkillsInstaller.AspireMonitoringSkillName,
+            FakeAspireSkillsInstaller.AspireOrchestrationSkillName
+        };
+        var expectedSkillDirectories = new[]
+        {
+            Path.Combine(".agents", "skills"),
+            Path.Combine(".claude", "skills"),
+            Path.Combine(".github", "skills"),
+            Path.Combine(".opencode", "skill")
+        };
+
+        foreach (var relativeSkillDirectory in expectedSkillDirectories)
+        {
+            foreach (var skillName in expectedSkillNames)
+            {
+                AssertSkillFileExists(workspace.WorkspaceRoot, relativeSkillDirectory, skillName);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_InteractiveSkillPrompt_IncludesAllBundleSkills()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var promptedSkillNames = new List<string>();
+        var interactionService = new TestInteractionService();
+        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
+        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
+        {
+            var items = choices.Cast<object>().ToList();
+            if (items.FirstOrDefault() is SkillLocation)
+            {
+                return [SkillLocation.Standard];
+            }
+
+            promptedSkillNames.AddRange(items.OfType<SkillDefinition>().Select(static skill => skill.Name));
+            return [];
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("agent init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(CommonAgentApplicators.AspireSkillName, promptedSkillNames);
+        Assert.Contains(CommonAgentApplicators.AspireifySkillName, promptedSkillNames);
+        Assert.Contains(CommonAgentApplicators.AspireDeploymentSkillName, promptedSkillNames);
+        Assert.Contains(FakeAspireSkillsInstaller.AspireInitSkillName, promptedSkillNames);
+        Assert.Contains(FakeAspireSkillsInstaller.AspireMonitoringSkillName, promptedSkillNames);
+        Assert.Contains(FakeAspireSkillsInstaller.AspireOrchestrationSkillName, promptedSkillNames);
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_NonInteractive_WithSpecificBundleSkill_InstallsSkillFiles()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations all --skills {FakeAspireSkillsInstaller.AspireMonitoringSkillName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".claude", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".github", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".opencode", "skill"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
     }
 
     [Fact]
@@ -216,16 +278,13 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        // Default Aspire skills are installed. Playwright is not default so it is not selected.
+        // Default Aspire skills are installed. Aspireify and Playwright are not selected by the standalone default.
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Verify the default Aspire skills were installed
-        var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
-        Assert.True(File.Exists(aspireSkillPath), $"Expected skill file at {aspireSkillPath}");
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspireify", "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath), $"Expected skill file at {aspireifySkillPath}");
-        var deploymentSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
-        Assert.True(File.Exists(deploymentSkillPath), $"Expected skill file at {deploymentSkillPath}");
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireDeploymentSkillName);
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
 
     [Fact]
@@ -259,13 +318,10 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Verify that the default Aspire skills were installed under the working directory
-        var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
-        Assert.True(File.Exists(aspireSkillPath), $"Expected skill file at {aspireSkillPath}");
-        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspireify", "SKILL.md");
-        Assert.True(File.Exists(aspireifySkillPath), $"Expected skill file at {aspireifySkillPath}");
-        var deploymentSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
-        Assert.True(File.Exists(deploymentSkillPath), $"Expected skill file at {deploymentSkillPath}");
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireDeploymentSkillName);
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
+        Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
 
     [Fact]
@@ -331,6 +387,33 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PromptAndChainAsync_WithIncludeAspireifyDefault_SelectsAspireify()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AgentInitCommand>();
+
+        var result = await command.PromptAndChainAsync(
+            interactionService,
+            CliExitCodes.Success,
+            workspace.WorkspaceRoot,
+            PromptBinding.CreateDefault(true),
+            AgentInitSkillDefaultMode.IncludeAspireify,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, result.ExitCode);
+        Assert.Contains(result.SelectedSkills, static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireifySkillName);
+    }
+
+    [Fact]
     public async Task AgentInitCommand_NonInteractive_WithNoneSkills_SucceedsWithNoSkillsInstalled()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -346,7 +429,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         // No skills selected, so no skill files should be created
-        var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire");
+        var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireSkillName);
         Assert.False(Directory.Exists(aspireSkillPath), $"Expected no aspire skill directory but found {aspireSkillPath}");
     }
 
@@ -365,6 +448,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    private static void AssertSkillFileExists(DirectoryInfo workspaceRoot, string relativeSkillDirectory, string skillName)
+    {
+        var skillPath = Path.Combine(workspaceRoot.FullName, relativeSkillDirectory, skillName, "SKILL.md");
+        Assert.True(File.Exists(skillPath), $"Expected skill file at {skillPath}");
     }
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo homeDirectory)

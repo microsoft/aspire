@@ -49,6 +49,10 @@ internal sealed class FakeNpmProvenanceChecker : INpmProvenanceChecker
 /// </summary>
 internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 {
+    internal const string AspireInitSkillName = "aspire-init";
+    internal const string AspireMonitoringSkillName = "aspire-monitoring";
+    internal const string AspireOrchestrationSkillName = "aspire-orchestration";
+
     private readonly DirectoryInfo _bundleDirectory;
     private readonly AspireSkillsInstallResult? _result;
 
@@ -113,7 +117,34 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
 
                 # Aspire Deployment
                 """,
-            [(CommonAgentApplicators.AspireDeploymentSkillName, Path.Combine("references", "preflight.md"))] = "# Preflight"
+            [(CommonAgentApplicators.AspireDeploymentSkillName, Path.Combine("references", "preflight.md"))] = "# Preflight",
+            [(AspireInitSkillName, "SKILL.md")] =
+                """
+                ---
+                name: aspire-init
+                description: "First-run flow for adding Aspire to a repo"
+                ---
+
+                # Aspire Init
+                """,
+            [(AspireMonitoringSkillName, "SKILL.md")] =
+                """
+                ---
+                name: aspire-monitoring
+                description: "Observe Aspire apps with logs, traces, metrics, and resource state"
+                ---
+
+                # Aspire Monitoring
+                """,
+            [(AspireOrchestrationSkillName, "SKILL.md")] =
+                """
+                ---
+                name: aspire-orchestration
+                description: "Manage Aspire AppHost lifecycle and resource commands"
+                ---
+
+                # Aspire Orchestration
+                """
         };
 
         foreach (var ((skillName, relativePath), content) in files)
@@ -134,8 +165,11 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             Skills =
             [
                 CreateSkill(CommonAgentApplicators.AspireSkillName, isDefault: true, ["evals"], files),
-                CreateSkill(CommonAgentApplicators.AspireifySkillName, isDefault: true, [], files),
-                CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, isDefault: true, [], files)
+                CreateSkill(CommonAgentApplicators.AspireifySkillName, isDefault: true, ["evals"], files),
+                CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, isDefault: true, ["evals"], files),
+                CreateSkill(AspireInitSkillName, isDefault: false, ["evals"], files),
+                CreateSkill(AspireMonitoringSkillName, isDefault: false, ["evals"], files),
+                CreateSkill(AspireOrchestrationSkillName, isDefault: false, ["evals"], files)
             ]
         };
 

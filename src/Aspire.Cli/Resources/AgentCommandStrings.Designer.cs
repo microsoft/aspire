@@ -547,7 +547,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'.
+        ///   Looks up a localized string similar to Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'.
         /// </summary>
         internal static string InitCommand_SkillsOptionDescription {
             get {

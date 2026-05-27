@@ -11,30 +11,8 @@ namespace Aspire.Cli.Agents;
 /// Represents a skill that can be installed into a skill location.
 /// </summary>
 [DebuggerDisplay("Name = {Name}, Description = {Description}, IsDefault = {IsDefault}")]
-internal sealed class SkillDefinition
+internal sealed class SkillDefinition : IEquatable<SkillDefinition>
 {
-    /// <summary>
-    /// The Aspire skill for CLI commands and workflows.
-    /// </summary>
-    public static readonly SkillDefinition Aspire = new(
-        CommonAgentApplicators.AspireSkillName,
-        AgentCommandStrings.SkillDescription_Aspire,
-        skillContent: null,
-        sourceKind: SkillSourceKind.AspireSkillsBundle,
-        installExcludedRelativePaths: [Path.Combine("evals")],
-        isDefault: true);
-
-    /// <summary>
-    /// The Aspire deployment skill for target selection, preflight, publish, and deploy workflows.
-    /// </summary>
-    public static readonly SkillDefinition AspireDeployment = new(
-        CommonAgentApplicators.AspireDeploymentSkillName,
-        AgentCommandStrings.SkillDescription_AspireDeployment,
-        skillContent: null,
-        sourceKind: SkillSourceKind.AspireSkillsBundle,
-        installExcludedRelativePaths: [],
-        isDefault: true);
-
     /// <summary>
     /// The Playwright CLI skill for browser automation.
     /// </summary>
@@ -59,17 +37,25 @@ internal sealed class SkillDefinition
         isDefault: false,
         applicableLanguages: [KnownLanguageId.CSharp]);
 
-    /// <summary>
-    /// One-time skill for completing Aspire initialization.
-    /// Installed by <c>aspire init</c> to scan the repo, wire up the AppHost, and configure dependencies.
-    /// </summary>
-    public static readonly SkillDefinition Aspireify = new(
-        CommonAgentApplicators.AspireifySkillName,
-        AgentCommandStrings.SkillDescription_Aspireify,
-        skillContent: null,
-        sourceKind: SkillSourceKind.AspireSkillsBundle,
-        installExcludedRelativePaths: [],
-        isDefault: true);
+    internal static SkillDefinition CreateAspireSkillsBundle(
+        string name,
+        string description,
+        bool isDefault,
+        IReadOnlyList<string>? installExcludedRelativePaths = null,
+        IReadOnlyList<string>? applicableLanguages = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        ArgumentException.ThrowIfNullOrWhiteSpace(description);
+
+        return new(
+            name,
+            description,
+            skillContent: null,
+            sourceKind: SkillSourceKind.AspireSkillsBundle,
+            installExcludedRelativePaths: installExcludedRelativePaths ?? [],
+            isDefault,
+            applicableLanguages);
+    }
 
     private SkillDefinition(string name, string description, string? skillContent, SkillSourceKind sourceKind, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
     {
@@ -161,6 +147,11 @@ internal sealed class SkillDefinition
         return ApplicableLanguages.Any(l => string.Equals(l, detectedLanguage.Value.Value, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>
+    /// Returns whether this skill has the specified name.
+    /// </summary>
+    public bool HasName(string name) => string.Equals(Name, name, StringComparison.Ordinal);
+
     private static bool PathMatchesOrIsUnder(string relativePath, string excludedPath)
     {
         if (string.Equals(relativePath, excludedPath, StringComparison.Ordinal))
@@ -177,9 +168,18 @@ internal sealed class SkillDefinition
     }
 
     /// <summary>
-    /// Gets all available skill definitions.
+    /// Gets CLI-defined skills that are not sourced from the Aspire skills bundle.
     /// </summary>
-    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, Aspireify, AspireDeployment, PlaywrightCli, DotnetInspect];
+    public static IReadOnlyList<SkillDefinition> CliDefined { get; } = [PlaywrightCli, DotnetInspect];
+
+    /// <inheritdoc />
+    public bool Equals(SkillDefinition? other) => other is not null && string.Equals(Name, other.Name, StringComparison.Ordinal);
+
+    /// <inheritdoc />
+    public override bool Equals(object? obj) => obj is SkillDefinition other && Equals(other);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Name);
 
     /// <inheritdoc />
     public override string ToString() => Name;

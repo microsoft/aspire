@@ -19,6 +19,8 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class AspireSkillsInstallerTests
 {
+    private const string AspireSkillDescription = "Aspire CLI commands and workflows for distributed apps";
+
     private const string GitHubReleaseAssetBuildType = "https://actions.github.io/buildtypes/workflow/v1";
 
     [Fact]
@@ -318,7 +320,7 @@ public class AspireSkillsInstallerTests
 
     private static async Task CreateCachedBundleAsync(string bundleDirectory)
     {
-        var skillDirectory = Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name);
+        var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName);
         Directory.CreateDirectory(skillDirectory);
 
         var skillPath = Path.Combine(skillDirectory, "SKILL.md");
@@ -340,8 +342,8 @@ public class AspireSkillsInstallerTests
             [
                 new SkillBundleSkill
                 {
-                    Name = SkillDefinition.Aspire.Name,
-                    Description = SkillDefinition.Aspire.Description,
+                    Name = CommonAgentApplicators.AspireSkillName,
+                    Description = AspireSkillDescription,
                     IsDefault = true,
                     Files =
                     [

@@ -10,6 +10,20 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class AspireSkillsBundleTests
 {
+    private const string AspireSkillDescription = "Aspire CLI commands and workflows for distributed apps";
+    private const string AspireifySkillDescription = "One-time setup: wire up AppHost with discovered projects";
+
+    private static SkillDefinition AspireSkillDefinition => SkillDefinition.CreateAspireSkillsBundle(
+        CommonAgentApplicators.AspireSkillName,
+        AspireSkillDescription,
+        isDefault: true,
+        installExcludedRelativePaths: ["evals"]);
+
+    private static SkillDefinition AspireifySkillDefinition => SkillDefinition.CreateAspireSkillsBundle(
+        CommonAgentApplicators.AspireifySkillName,
+        AspireifySkillDescription,
+        isDefault: true);
+
     [Fact]
     public async Task LoadAsync_ValidatesManifestAndReturnsInstallableFiles()
     {
@@ -25,12 +39,41 @@ public class AspireSkillsBundleTests
             });
 
             var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
-            var files = await bundle.GetSkillFilesAsync(SkillDefinition.Aspire, CancellationToken.None);
+            var files = await bundle.GetSkillFilesAsync(AspireSkillDefinition, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
             Assert.Contains(files, file => file.RelativePath == "SKILL.md");
             Assert.Contains(files, file => file.RelativePath == Path.Combine("references", "app-commands.md"));
             Assert.DoesNotContain(files, file => file.RelativePath == Path.Combine("evals", "evals.json"));
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task GetSkillDefinitions_ReturnsManifestSkills()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            await CreateBundleAsync(bundleDirectory, new Dictionary<string, string>
+            {
+                ["SKILL.md"] = CreateSkillFileContent(),
+                ["references/app-commands.md"] = "# App commands"
+            });
+
+            var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
+            var skill = Assert.Single(bundle.GetSkillDefinitions());
+
+            Assert.Equal(CommonAgentApplicators.AspireSkillName, skill.Name);
+            Assert.Equal(AspireSkillDescription, skill.Description);
+            Assert.True(skill.IsDefault);
+            Assert.Equal(SkillSourceKind.AspireSkillsBundle, skill.SourceKind);
+            Assert.Equal(["evals"], skill.InstallExcludedRelativePaths);
+            Assert.Empty(skill.ApplicableLanguages);
         }
         finally
         {
@@ -87,8 +130,8 @@ public class AspireSkillsBundleTests
     public async Task LoadAsync_ThrowsWhenFilePathEscapesSkillRoot()
     {
         var bundleDirectory = CreateTempDirectory();
-        Directory.CreateDirectory(Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name));
-        await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name, "SKILL.md"), CreateSkillFileContent());
+        Directory.CreateDirectory(Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName));
+        await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md"), CreateSkillFileContent());
 
         try
         {
@@ -100,8 +143,8 @@ public class AspireSkillsBundleTests
                 [
                     new SkillBundleSkill
                     {
-                        Name = SkillDefinition.Aspire.Name,
-                        Description = SkillDefinition.Aspire.Description,
+                        Name = CommonAgentApplicators.AspireSkillName,
+                        Description = AspireSkillDescription,
                         IsDefault = true,
                         Files =
                         [
@@ -131,10 +174,10 @@ public class AspireSkillsBundleTests
     public async Task GetSkillFilesAsync_TreatsMissingOptionalPathArraysAsEmpty()
     {
         var bundleDirectory = CreateTempDirectory();
-        var skillDirectory = Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspireify.Name);
+        var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireifySkillName);
         Directory.CreateDirectory(skillDirectory);
         var skillPath = Path.Combine(skillDirectory, "SKILL.md");
-        var skillContent = CreateSkillFileContent(SkillDefinition.Aspireify.Name, SkillDefinition.Aspireify.Description, "# Aspireify");
+        var skillContent = CreateSkillFileContent(CommonAgentApplicators.AspireifySkillName, AspireifySkillDescription, "# Aspireify");
         await File.WriteAllTextAsync(skillPath, skillContent);
 
         try
@@ -149,8 +192,8 @@ public class AspireSkillsBundleTests
                   },
                   "skills": [
                     {
-                      "name": "{{SkillDefinition.Aspireify.Name}}",
-                      "description": "{{SkillDefinition.Aspireify.Description}}",
+                      "name": "{{CommonAgentApplicators.AspireifySkillName}}",
+                      "description": "{{AspireifySkillDescription}}",
                       "isDefault": true,
                       "files": [
                         { "relativePath": "SKILL.md", "sha256": "{{ComputeSha256(skillPath)}}" }
@@ -162,7 +205,7 @@ public class AspireSkillsBundleTests
             await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
 
             var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
-            var files = await bundle.GetSkillFilesAsync(SkillDefinition.Aspireify, CancellationToken.None);
+            var files = await bundle.GetSkillFilesAsync(AspireifySkillDefinition, CancellationToken.None);
 
             var skillFile = Assert.Single(files);
             Assert.Equal("SKILL.md", skillFile.RelativePath);
@@ -178,7 +221,7 @@ public class AspireSkillsBundleTests
     public async Task LoadAsync_ThrowsWhenSupportsAreMissing()
     {
         var bundleDirectory = CreateTempDirectory();
-        var skillDirectory = Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name);
+        var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName);
         Directory.CreateDirectory(skillDirectory);
         var skillPath = Path.Combine(skillDirectory, "SKILL.md");
         await File.WriteAllTextAsync(skillPath, CreateSkillFileContent());
@@ -192,8 +235,8 @@ public class AspireSkillsBundleTests
                 [
                     new SkillBundleSkill
                     {
-                        Name = SkillDefinition.Aspire.Name,
-                        Description = SkillDefinition.Aspire.Description,
+                        Name = CommonAgentApplicators.AspireSkillName,
+                        Description = AspireSkillDescription,
                         IsDefault = true,
                         Files =
                         [
@@ -277,7 +320,7 @@ public class AspireSkillsBundleTests
         string? hashOverride = null,
         SkillBundleSupports? supports = null)
     {
-        var skillDirectory = Path.Combine(bundleDirectory, "skills", SkillDefinition.Aspire.Name);
+        var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName);
         Directory.CreateDirectory(skillDirectory);
 
         foreach (var (relativePath, content) in files)
@@ -295,8 +338,8 @@ public class AspireSkillsBundleTests
             [
                 new SkillBundleSkill
                 {
-                    Name = SkillDefinition.Aspire.Name,
-                    Description = SkillDefinition.Aspire.Description,
+                    Name = CommonAgentApplicators.AspireSkillName,
+                    Description = AspireSkillDescription,
                     IsDefault = true,
                     InstallExcludedRelativePaths = ["evals"],
                     Files = files

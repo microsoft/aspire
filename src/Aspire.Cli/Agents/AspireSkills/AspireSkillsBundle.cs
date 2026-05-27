@@ -107,6 +107,21 @@ internal sealed class AspireSkillsBundle
         return files;
     }
 
+    /// <summary>
+    /// Gets the installable skill definitions declared by the bundle manifest.
+    /// </summary>
+    public IReadOnlyList<SkillDefinition> GetSkillDefinitions()
+    {
+        return _manifest.Skills
+            .Select(static skill => SkillDefinition.CreateAspireSkillsBundle(
+                skill.Name!,
+                skill.Description!,
+                skill.IsDefault,
+                (skill.InstallExcludedRelativePaths ?? []).Select(NormalizeRelativePath).ToArray(),
+                skill.ApplicableLanguages ?? []))
+            .ToList();
+    }
+
     private static void ValidateManifest(
         DirectoryInfo bundleDirectory,
         SkillBundleManifest manifest,
@@ -137,6 +152,11 @@ internal sealed class AspireSkillsBundle
             if (!skillNames.Add(skill.Name))
             {
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle manifest contains duplicate skill '{0}'.", skill.Name));
+            }
+
+            if (string.IsNullOrWhiteSpace(skill.Description))
+            {
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must specify a description.", skill.Name));
             }
 
             if (skill.Files is not { Length: > 0 })

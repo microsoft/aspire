@@ -84,7 +84,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     private static readonly Option<string?> s_skillsOption = new("--skills")
     {
         Description = string.Format(CultureInfo.InvariantCulture, AgentCommandStrings.InitCommand_SkillsOptionDescription,
-            string.Join(",", SkillDefinition.All.Select(s => s.Name)),
+            string.Join(",", SkillDefinition.CliDefined.Select(s => s.Name)),
             ConsoleInteractionService.AllChoice,
             ConsoleInteractionService.NoneChoice)
     };
@@ -102,11 +102,31 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// Prompts the user to run agent init after a successful command, then chains into agent init if accepted.
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
     /// </summary>
+    internal Task<AgentInitExecutionResult> PromptAndChainAsync(
+        IInteractionService interactionService,
+        int previousResultExitCode,
+        DirectoryInfo workspaceRoot,
+        PromptBinding<bool> agentInitBinding,
+        CancellationToken cancellationToken)
+    {
+        return PromptAndChainAsync(
+            interactionService,
+            previousResultExitCode,
+            workspaceRoot,
+            agentInitBinding,
+            AgentInitSkillDefaultMode.Standard,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Prompts the user to run agent init using command-specific default skill selection.
+    /// </summary>
     internal async Task<AgentInitExecutionResult> PromptAndChainAsync(
         IInteractionService interactionService,
         int previousResultExitCode,
         DirectoryInfo workspaceRoot,
         PromptBinding<bool> agentInitBinding,
+        AgentInitSkillDefaultMode defaultSkillMode,
         CancellationToken cancellationToken)
     {
         if (previousResultExitCode != CliExitCodes.Success)
@@ -124,7 +144,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, defaultSkillMode, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -133,7 +153,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
-        var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, cancellationToken);
+        var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, AgentInitSkillDefaultMode.Standard, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
 
@@ -167,7 +187,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         return new DirectoryInfo(workspaceRootPath);
     }
 
-    private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, ParseResult? parseResult, CancellationToken cancellationToken)
+    private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, ParseResult? parseResult, AgentInitSkillDefaultMode defaultSkillMode, CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
         {
@@ -183,11 +203,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         // Detect the AppHost language to determine which skills to offer.
         // When no language is detected (e.g., standalone `aspire agent init`), language-restricted skills are excluded.
         var detectedLanguage = await _languageDiscovery.DetectLanguageRecursiveAsync(workspaceRoot, cancellationToken);
-
-        // Filter skills based on language applicability
-        var availableSkills = SkillDefinition.All
-            .Where(s => s.IsApplicableToLanguage(detectedLanguage))
-            .ToList();
 
         // Apply deprecated config migrations silently (these are fixes, not choices)
         var configUpdates = applicators.Where(a => a.PromptGroup == McpInitPromptGroup.ConfigUpdates).ToList();
@@ -224,11 +239,24 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         // --- Phase 2: Skill and MCP server selection (only if locations were selected) ---
         IReadOnlyList<SkillDefinition> selectedSkills = [];
+        AspireSkillsBundle? aspireSkillsBundle = null;
         AgentEnvironmentApplicator? combinedMcpApplicator = null;
         var mcpApplicators = userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList();
 
         if (selectedLocations.Count > 0)
         {
+            IReadOnlyList<SkillDefinition> availableSkills;
+            if (ShouldSkipBundleCatalogResolution(parseResult))
+            {
+                availableSkills = SkillDefinition.CliDefined
+                    .Where(s => s.IsApplicableToLanguage(detectedLanguage))
+                    .ToList();
+            }
+            else
+            {
+                (availableSkills, aspireSkillsBundle) = await ResolveAvailableSkillsAsync(detectedLanguage, cancellationToken);
+            }
+
             // Build prompt items: skills first, then MCP as a separate non-default item
             var skillChoices = new List<object>();
             skillChoices.AddRange(availableSkills);
@@ -250,10 +278,11 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             }
 
             var preSelectedItems = new List<object>();
-            preSelectedItems.AddRange(availableSkills.Where(s => s.IsDefault));
+            var defaultSkills = GetDefaultSkills(availableSkills, defaultSkillMode);
+            preSelectedItems.AddRange(defaultSkills);
             // MCP is intentionally NOT pre-selected
 
-            var defaultSkillNames = string.Join(",", availableSkills.Where(s => s.IsDefault).Select(s => s.Name));
+            var defaultSkillNames = string.Join(",", defaultSkills.Select(s => s.Name));
             var skillsBinding = parseResult is not null
                 ? PromptBinding.Create(parseResult, s_skillsOption, defaultSkillNames)
                 : PromptBinding.CreateDefault<string?>(defaultSkillNames);
@@ -286,22 +315,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         // Each skill file write is fast (small markdown files), so sequential execution
         // is fine — parallelizing would complicate error handling for no meaningful gain.
         var hasErrors = false;
-        AspireSkillsBundle? aspireSkillsBundle = null;
-        if (selectedLocations.Count > 0 && selectedSkills.Any(static skill => skill.SourceKind is SkillSourceKind.AspireSkillsBundle))
-        {
-            var result = await _aspireSkillsInstaller.InstallAsync(cancellationToken);
-            if (result.Status is AspireSkillsInstallStatus.Installed)
-            {
-                aspireSkillsBundle = result.Bundle;
-            }
-            else
-            {
-                _interactionService.DisplayMessage(KnownEmojis.Warning, result.Message!);
-                selectedSkills = selectedSkills
-                    .Where(static skill => skill.SourceKind is not SkillSourceKind.AspireSkillsBundle)
-                    .ToList();
-            }
-        }
 
         var installedSkills = new List<InstalledSkillSummaryItem>();
 
@@ -425,6 +438,76 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             hasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
             selectedLocations,
             selectedSkills);
+    }
+
+    private async Task<(IReadOnlyList<SkillDefinition> Skills, AspireSkillsBundle? Bundle)> ResolveAvailableSkillsAsync(LanguageId? detectedLanguage, CancellationToken cancellationToken)
+    {
+        var skills = new List<SkillDefinition>();
+        AspireSkillsBundle? bundle = null;
+
+        var result = await _aspireSkillsInstaller.InstallAsync(cancellationToken);
+        if (result.Status is AspireSkillsInstallStatus.Installed)
+        {
+            bundle = result.Bundle ?? throw new InvalidOperationException("Aspire skills installer returned an installed result without a bundle.");
+            skills.AddRange(bundle.GetSkillDefinitions());
+        }
+        else
+        {
+            _interactionService.DisplayMessage(KnownEmojis.Warning, result.Message!);
+        }
+
+        skills.AddRange(SkillDefinition.CliDefined);
+
+        return (skills
+            .Where(s => s.IsApplicableToLanguage(detectedLanguage))
+            .ToList(), bundle);
+    }
+
+    private static bool ShouldSkipBundleCatalogResolution(ParseResult? parseResult)
+    {
+        if (parseResult is null)
+        {
+            return false;
+        }
+
+        var optionResult = parseResult.GetResult(s_skillsOption);
+        if (optionResult is null || optionResult.Implicit)
+        {
+            return false;
+        }
+
+        var value = parseResult.GetValue(s_skillsOption);
+        if (string.Equals(value, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(value) ||
+            string.Equals(value, ConsoleInteractionService.AllChoice, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var selectedSkillNames = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return selectedSkillNames.Length > 0 &&
+               selectedSkillNames.All(name => SkillDefinition.CliDefined.Any(skill => skill.HasName(name)));
+    }
+
+    private static IReadOnlyList<SkillDefinition> GetDefaultSkills(IEnumerable<SkillDefinition> availableSkills, AgentInitSkillDefaultMode defaultSkillMode)
+    {
+        return availableSkills
+            .Where(skill => IsDefaultSkill(skill, defaultSkillMode))
+            .ToList();
+    }
+
+    private static bool IsDefaultSkill(SkillDefinition skill, AgentInitSkillDefaultMode defaultSkillMode)
+    {
+        if (skill.HasName(CommonAgentApplicators.AspireifySkillName))
+        {
+            return defaultSkillMode is AgentInitSkillDefaultMode.IncludeAspireify && skill.IsDefault;
+        }
+
+        return skill.IsDefault;
     }
 
     /// <summary>
@@ -556,3 +639,9 @@ internal readonly record struct AgentInitExecutionResult(
     int ExitCode,
     IReadOnlyList<SkillLocation> SelectedLocations,
     IReadOnlyList<SkillDefinition> SelectedSkills);
+
+internal enum AgentInitSkillDefaultMode
+{
+    Standard,
+    IncludeAspireify
+}
