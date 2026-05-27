@@ -31,7 +31,7 @@ internal sealed class AspireSkillsInstaller(
     internal const string GitHubRepository = "microsoft/aspire-skills";
     internal const string ExpectedSourceRepository = $"https://github.com/{GitHubRepository}";
     internal const string ExpectedWorkflowPath = ".github/workflows/publish.yml";
-    internal const string ExpectedBuildType = "https://slsa-framework.github.io/github-actions-buildtypes/workflow/v1";
+    internal const string ExpectedBuildType = "https://actions.github.io/buildtypes/workflow/v1";
     internal const string DisablePackageValidationKey = "disableAspireSkillsPackageValidation";
     internal const string VersionOverrideKey = "aspireSkillsVersion";
     internal const string MaxCacheAgeKey = "AspireSkillsMaxCacheAgeSeconds";
