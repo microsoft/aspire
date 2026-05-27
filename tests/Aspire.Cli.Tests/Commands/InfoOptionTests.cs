@@ -1416,6 +1416,35 @@ public class InfoOptionTests(ITestOutputHelper outputHelper)
         Assert.Contains("On PATH  active", output);
     }
 
+    [Theory]
+    [InlineData(@"C:\Users\dapine\.aspire\bin\aspire.exe")]
+    [InlineData(@"D:\Tools\Aspire\Aspire.exe")]
+    [InlineData(@"path*with*asterisks")]
+    [InlineData(@"path_with_underscores")]
+    [InlineData(@"path[with]brackets")]
+    public void EscapeMarkdown_RoundTrip_PreservesLiteralText(string raw)
+    {
+        // row.Id falls back to install.Path when an install has no source and no
+        // channel (see InstallationInfoOutput.GetInstallId), so the heading
+        // `**{row.Id}**  {row.Kind}` is rendering arbitrary user-derived strings
+        // through the Markdown pipeline. CommonMark drops the leading `\` from
+        // backslash-escape sequences (`\.` → `.`, `\_` → `_`, etc.), which on a
+        // Windows path mangles `C:\Users\dapine\.aspire\bin\aspire.exe` into
+        // `C:\Users\dapine.aspire\bin\aspire.exe` in the human `--info` output.
+        // The escape helper must produce Markdown whose plain-text rendering
+        // round-trips back to the original literal value.
+        var escaped = InfoOptionAction.EscapeMarkdown(raw);
+        var rendered = Aspire.Cli.Utils.Markdown.MarkdownToSpectreConverter.ConvertToPlainText(escaped).TrimEnd();
+        Assert.Equal(raw, rendered);
+    }
+
+    [Fact]
+    public void EscapeMarkdown_NullOrEmpty_ReturnsEmpty()
+    {
+        Assert.Equal(string.Empty, InfoOptionAction.EscapeMarkdown(null));
+        Assert.Equal(string.Empty, InfoOptionAction.EscapeMarkdown(string.Empty));
+    }
+
     private sealed class ConstantChannelReader(string channel) : IIdentityChannelReader
     {
         public string ReadChannel() => channel;
