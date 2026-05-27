@@ -354,7 +354,11 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         var combined = string.Join("\n", result.Errors.Select(e => e.Message));
         Assert.Contains("--list-steps", combined);
         Assert.Contains("aspire do deploy --list-steps", combined);
-        Assert.Contains("aspire do publish --list-steps", combined);
+        // The error lists well-known step names; spot-check a few from different
+        // categories (publish/deploy/build/destroy) to confirm the list is rendered.
+        Assert.Contains("publish", combined);
+        Assert.Contains("build", combined);
+        Assert.Contains("destroy", combined);
     }
 
     [Fact]

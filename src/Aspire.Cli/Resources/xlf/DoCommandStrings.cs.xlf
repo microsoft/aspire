@@ -13,9 +13,9 @@
         <note />
       </trans-unit>
       <trans-unit id="ListStepsRequiresStep">
-        <source>The 'step' argument is required when using --list-steps. Specify the step you want to inspect, for example: 'aspire do {0} --list-steps' or 'aspire do {1} --list-steps'.</source>
-        <target state="new">The 'step' argument is required when using --list-steps. Specify the step you want to inspect, for example: 'aspire do {0} --list-steps' or 'aspire do {1} --list-steps'.</target>
-        <note>{0} and {1} are well-known pipeline step names such as 'deploy' and 'publish'.</note>
+        <source>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Well-known step names include: {0}.</source>
+        <target state="new">The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Well-known step names include: {0}.</target>
+        <note>{0} is a comma-separated list of well-known pipeline step names.</note>
       </trans-unit>
       <trans-unit id="OperationCanceled">
         <source>The operation was canceled.</source>
