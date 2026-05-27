@@ -1068,10 +1068,12 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
     private static PipelineContext CreateDeployingContext(DistributedApplication app)
     {
+        var services = new PipelineTestServiceProvider(app.Services);
+
         return new PipelineContext(
             app.Services.GetRequiredService<DistributedApplicationModel>(),
             app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
-            app.Services,
+            services,
             app.Services.GetRequiredService<ILogger<DistributedApplicationPipelineTests>>(),
             CancellationToken.None);
     }
@@ -2605,5 +2607,21 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         var deployStep = resolved.Single(s => s.Name == WellKnownPipelineSteps.Deploy);
         Assert.DoesNotContain("transient-step", deployStep.DependsOnSteps);
+    }
+
+    private sealed class PipelineTestServiceProvider(IServiceProvider inner) : IServiceProvider
+    {
+        private const string ContainerRuntimeResolverTypeName = "Aspire.Hosting.Publishing.IContainerRuntimeResolver";
+        private readonly FakeContainerRuntime _containerRuntime = new();
+
+        public object? GetService(Type serviceType)
+        {
+            if (serviceType.FullName == ContainerRuntimeResolverTypeName)
+            {
+                return _containerRuntime;
+            }
+
+            return inner.GetService(serviceType);
+        }
     }
 }
