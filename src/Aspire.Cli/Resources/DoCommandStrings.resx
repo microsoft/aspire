@@ -138,4 +138,11 @@
   <data name="StepArgumentDescription" xml:space="preserve">
     <value>The name of the step to execute</value>
   </data>
+  <data name="StepArgumentRequired" xml:space="preserve">
+    <value>The 'step' argument is required.</value>
+  </data>
+  <data name="ListStepsRequiresStep" xml:space="preserve">
+    <value>The 'step' argument is required when using --list-steps. Specify the step you want to inspect, for example: 'aspire do {0} --list-steps' or 'aspire do {1} --list-steps'.</value>
+    <comment>{0} and {1} are well-known pipeline step names such as 'deploy' and 'publish'.</comment>
+  </data>
 </root>

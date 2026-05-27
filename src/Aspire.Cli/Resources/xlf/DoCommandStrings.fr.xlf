@@ -12,6 +12,11 @@
         <target state="translated">Exécution du pipeline...</target>
         <note />
       </trans-unit>
+      <trans-unit id="ListStepsRequiresStep">
+        <source>The 'step' argument is required when using --list-steps. Specify the step you want to inspect, for example: 'aspire do {0} --list-steps' or 'aspire do {1} --list-steps'.</source>
+        <target state="new">The 'step' argument is required when using --list-steps. Specify the step you want to inspect, for example: 'aspire do {0} --list-steps' or 'aspire do {1} --list-steps'.</target>
+        <note>{0} and {1} are well-known pipeline step names such as 'deploy' and 'publish'.</note>
+      </trans-unit>
       <trans-unit id="OperationCanceled">
         <source>The operation was canceled.</source>
         <target state="translated">L'opération a été annulée.</target>
@@ -35,6 +40,11 @@
       <trans-unit id="StepArgumentDescription">
         <source>The name of the step to execute</source>
         <target state="needs-review-translation">Nom de l’étape à exécuter.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StepArgumentRequired">
+        <source>The 'step' argument is required.</source>
+        <target state="new">The 'step' argument is required.</target>
         <note />
       </trans-unit>
     </body>
