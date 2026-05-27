@@ -60,6 +60,149 @@ public class InfoOptionTests(ITestOutputHelper outputHelper)
         Assert.True(CommonOptionNames.IsInformationalInvocation(args));
     }
 
+    [Theory]
+    // Each value-taking root option must skip its value token so the value
+    // doesn't get mistaken for a subcommand boundary. Without the skip, the
+    // gate misclassifies `aspire --log-level Debug --info` as a real `Debug`
+    // (subcommand) invocation and sends telemetry + shows the first-run banner
+    // for what is actually a diagnostic dump.
+    [InlineData("--log-level", "Debug", "--info")]
+    [InlineData("-l", "Debug", "--info")]
+    [InlineData("--format", "json", "--info")]
+    [InlineData("--format", "list", "--info")]
+    [InlineData("--capture-profile-output", "/tmp/profile.json", "--info")]
+    [InlineData("--capture-profile-delay", "10", "--info")]
+    // Mixed value-taking options before --info.
+    [InlineData("--log-level", "Debug", "--format", "json", "--info")]
+    // `=`-form values are a single token and don't need the skip. The token
+    // starts with `-` so the scan continues past it without flipping
+    // sawSubcommand; the next `--info` is still detected.
+    [InlineData("--log-level=Debug", "--info")]
+    [InlineData("--format=json", "--info")]
+    public void IsInformationalInvocation_ReturnsTrue_ForInfoAfterRootValueTakingOption(params string[] args)
+    {
+        Assert.True(CommonOptionNames.IsInformationalInvocation(args));
+    }
+
+    [Theory]
+    // Bool root options don't take a value token, so the scan just continues
+    // past them and finds the trailing --info. Sanity coverage so a future
+    // refactor that accidentally promotes a bool option into the
+    // value-taking set (or vice versa) regresses one of these.
+    [InlineData("--debug", "--info")]
+    [InlineData("-d", "--info")]
+    [InlineData("--non-interactive", "--info")]
+    [InlineData("--nologo", "--info")]
+    [InlineData("--banner", "--info")]
+    [InlineData("--debug", "--non-interactive", "--info")]
+    public void IsInformationalInvocation_ReturnsTrue_ForInfoAfterRootBoolOption(params string[] args)
+    {
+        Assert.True(CommonOptionNames.IsInformationalInvocation(args));
+    }
+
+    [Fact]
+    public void IsInformationalInvocation_ReturnsTrue_ForInfoBeforeSubcommandToken()
+    {
+        // `aspire --info run` still binds --info at root (subcommand routing is
+        // skipped when a root option's action short-circuits, the same way
+        // `aspire --version run` works). The pre-parse gate must mirror that:
+        // --info before the first subcommand token is informational.
+        Assert.True(CommonOptionNames.IsInformationalInvocation(["--info", "run"]));
+    }
+
+    [Theory]
+    // POSIX end-of-options marker: tokens after `--` are positional / forwarded
+    // and cannot trigger CLI actions. Forwarding examples:
+    //   aspire run -- --info     → AppHost receives --info as an arg
+    //   aspire run -- --help     → AppHost receives --help as an arg
+    // Plus the degenerate `aspire -- --info` where there is no subcommand to
+    // own the forwarded args — still not an informational invocation from the
+    // CLI's perspective.
+    [InlineData("--", "--info")]
+    [InlineData("--", "--help")]
+    [InlineData("--", "-h")]
+    [InlineData("--", "--version")]
+    [InlineData("run", "--", "--info")]
+    [InlineData("run", "--", "--help")]
+    [InlineData("run", "apphost.csproj", "--", "--info")]
+    [InlineData("publish", "--", "--info", "--format", "json")]
+    public void IsInformationalInvocation_ReturnsFalse_AfterEndOfOptionsMarker(params string[] args)
+    {
+        Assert.False(CommonOptionNames.IsInformationalInvocation(args));
+    }
+
+    [Fact]
+    public void IsInformationalInvocation_ReturnsTrue_WhenInfoIsBeforeEndOfOptionsMarker()
+    {
+        // --info comes before `--`, so it still binds at root. The forwarded
+        // tokens that follow don't change the informational classification.
+        Assert.True(CommonOptionNames.IsInformationalInvocation(["--info", "--", "forwarded-arg"]));
+    }
+
+    [Theory]
+    // After the subcommand boundary the value-skipping doesn't matter; --info
+    // is no longer informational regardless of what root options preceded it.
+    [InlineData("--log-level", "Debug", "run", "--info")]
+    [InlineData("--format", "json", "publish", "--info")]
+    [InlineData("--log-level=Debug", "run", "--info")]
+    public void IsInformationalInvocation_ReturnsFalse_WhenInfoFollowsSubcommandEvenAfterRootValueTakingOption(params string[] args)
+    {
+        Assert.False(CommonOptionNames.IsInformationalInvocation(args));
+    }
+
+    [Fact]
+    public void IsInformationalInvocation_ReturnsFalse_ForEmptyArgs()
+    {
+        // No args means "no command" — System.CommandLine renders grouped help
+        // through a separate code path, and there's nothing here to opt out of
+        // telemetry / banner / sentinel for.
+        Assert.False(CommonOptionNames.IsInformationalInvocation([]));
+    }
+
+    [Fact]
+    public void IsInformationalInvocation_ReturnsFalse_ForNullArgs()
+    {
+        Assert.False(CommonOptionNames.IsInformationalInvocation(null));
+    }
+
+    [Fact]
+    public void IsInformationalInvocation_ReturnsFalse_ForValueTakingOptionAtEndOfArgsWithNoInfo()
+    {
+        // `aspire --log-level` is a malformed parse (missing value), but the
+        // gate must still return cleanly: the scan reads "--log-level", sets
+        // skipNext, the loop exits, and we return false because no --info /
+        // --help / --version ever appeared.
+        Assert.False(CommonOptionNames.IsInformationalInvocation(["--log-level"]));
+    }
+
+    [Fact]
+    public void IsInformationalInvocation_ReturnsFalse_ForBareSubcommand()
+    {
+        Assert.False(CommonOptionNames.IsInformationalInvocation(["run"]));
+        Assert.False(CommonOptionNames.IsInformationalInvocation(["run", "apphost.csproj"]));
+    }
+
+    [Fact]
+    public void IsInformationalInvocation_ReturnsFalse_WhenValueLooksLikeInfo()
+    {
+        // Pathological: a value-taking option whose value literally is the
+        // string "--info". `aspire --log-level --info` (where --info is the
+        // VALUE for --log-level, not a real option request) — the scan must
+        // not treat the value token as a root --info because skipNext is set.
+        // System.CommandLine would later reject this parse (--info isn't a
+        // valid LogLevel), but the gate has already correctly returned false.
+        Assert.False(CommonOptionNames.IsInformationalInvocation(["--log-level", "--info"]));
+    }
+
+    [Fact]
+    public void IsInformationalInvocation_ReturnsTrue_ForVersionAtAnyPosition()
+    {
+        // --version is recursive and informational at any depth (before --).
+        Assert.True(CommonOptionNames.IsInformationalInvocation(["--version"]));
+        Assert.True(CommonOptionNames.IsInformationalInvocation(["run", "--version"]));
+        Assert.True(CommonOptionNames.IsInformationalInvocation(["--log-level", "Debug", "--version"]));
+    }
+
     [Fact]
     public async Task Info_Self_Json_ReturnsOnlyRunningInstallationAsArray()
     {
