@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.CommandLine.Invocation;
+using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
@@ -152,7 +153,15 @@ internal sealed class InfoOptionAction : AsynchronousCommandLineAction
 
         foreach (var row in rows)
         {
-            _interactionService.DisplayMarkdown($"**{row.Id}**  {row.Kind}");
+            // row.Id and row.Kind are derived from install metadata that can
+            // include user/environment paths. For sidecar-less installs, row.Id
+            // falls back to install.Path (see InstallationInfoOutput.GetInstallId),
+            // which on Windows looks like `C:\Users\<user>\.aspire\bin\aspire.exe`.
+            // CommonMark treats `\` followed by ASCII punctuation as an escape
+            // and drops the backslash, so an unescaped path renders as
+            // `C:\Users\<user>.aspire\bin\aspire.exe`. Escape Markdown special
+            // characters in both fields before they reach the renderer.
+            _interactionService.DisplayMarkdown($"**{EscapeMarkdown(row.Id)}**  {EscapeMarkdown(row.Kind)}");
             DisplayField("Status", row.Status);
             DisplayField("Channel", row.Channel);
             DisplayField("Version", row.Version);
@@ -219,5 +228,44 @@ internal sealed class InfoOptionAction : AsynchronousCommandLineAction
         }
 
         _interactionService.DisplayPlainText($"  {name,-8} {value}");
+    }
+
+    /// <summary>
+    /// Escapes a value so it can be safely embedded in the Markdown text
+    /// passed to <see cref="IInteractionService.DisplayMarkdown"/> without
+    /// being interpreted as formatting or a CommonMark escape sequence.
+    /// </summary>
+    /// <remarks>
+    /// CommonMark allows any ASCII punctuation character to be backslash-escaped
+    /// (<see href="https://spec.commonmark.org/0.31.2/#backslash-escapes"/>),
+    /// and the renderer silently drops the backslash. Without this, a value like
+    /// <c>C:\Users\dapine\.aspire\bin\aspire.exe</c> renders as
+    /// <c>C:\Users\dapine.aspire\bin\aspire.exe</c> because the renderer treats
+    /// each <c>\</c> followed by punctuation as an escape. Prefix each ASCII
+    /// punctuation character with <c>\</c> so the renderer emits the literal
+    /// character.
+    /// </remarks>
+    internal static string EscapeMarkdown(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+        {
+            return value ?? string.Empty;
+        }
+
+        var sb = new StringBuilder(value.Length + 8);
+        foreach (var c in value)
+        {
+            if (c is >= '!' and <= '/'
+                or >= ':' and <= '@'
+                or >= '[' and <= '`'
+                or >= '{' and <= '~')
+            {
+                sb.Append('\\');
+            }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
     }
 }
