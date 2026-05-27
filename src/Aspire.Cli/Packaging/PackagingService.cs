@@ -50,6 +50,11 @@ internal class PackagingService : IPackagingService
     private readonly IConfiguration _configuration;
     private readonly ILogger<PackagingService> _logger;
     private readonly Func<string?> _processPathProvider;
+    // Predicate used by staging-channel synthesis to decide whether the running CLI is built
+    // from a stable-shaped version (no semver prerelease tag). Defaults to inspecting the
+    // current Aspire.Cli assembly's InformationalVersion; tests inject a deterministic value
+    // because the version baked into the test-host assembly varies by build configuration.
+    private readonly Func<bool> _isStableShapedCliVersion;
 
     // Cached result of the staging-channel availability check. The inputs (CLI identity,
     // overrideStagingFeed, StagingChannelEnabled feature) are effectively static for the
@@ -64,7 +69,8 @@ internal class PackagingService : IPackagingService
         IFeatures features,
         IConfiguration configuration,
         ILogger<PackagingService> logger,
-        Func<string?>? processPathProvider = null)
+        Func<string?>? processPathProvider = null,
+        Func<bool>? isStableShapedCliVersion = null)
     {
         _executionContext = executionContext;
         _nuGetPackageCache = nuGetPackageCache;
@@ -72,6 +78,7 @@ internal class PackagingService : IPackagingService
         _configuration = configuration;
         _logger = logger;
         _processPathProvider = processPathProvider ?? (() => Environment.ProcessPath);
+        _isStableShapedCliVersion = isStableShapedCliVersion ?? IsStableShapedCliVersionFromAssembly;
         _stagingUnavailableReasonCache = new Lazy<string?>(ComputeStagingChannelUnavailableReason);
     }
 
@@ -133,7 +140,46 @@ internal class PackagingService : IPackagingService
         var stagingFeatureEnabled = _features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
         if (stagingFeatureEnabled || stagingChannelConfigured || stagingChannelRequested || stagingIdentityChannel)
         {
-            var defaultQuality = stagingChannelConfigured || stagingChannelRequested || stagingIdentityChannel ? PackageChannelQuality.Both : PackageChannelQuality.Stable;
+            // Default quality selection rules (per staging entry point):
+            //   - Explicit user opt-in (`stagingChannelConfigured`, `stagingChannelRequested`): Both.
+            //     The user picked staging deliberately; they get the broadest matching window.
+            //   - `stagingFeatureEnabled` only (no other staging signal): Stable. Preserves the
+            //     pre-existing behavior of the staging feature flag.
+            //   - `stagingIdentityChannel` (the running CLI itself self-identifies as staging):
+            //     depends on the CLI build's version shape.
+            //       * Stable-shaped (e.g. "13.4.0", produced during release stabilization when
+            //         StabilizePackageVersion=true) → Stable. The shared dotnet9 daily feed only
+            //         carries prerelease-tagged 13.4.0-preview.* builds, so defaulting to Both
+            //         would route Aspire.* to dotnet9 and fail to resolve the just-shipped
+            //         stable-shaped packages — the bug from
+            //         https://github.com/microsoft/aspire/issues/17527. Routing to Stable selects
+            //         the SHA-derived darc-pub-microsoft-aspire-<hash> feed, where the
+            //         stabilizing build's packages actually live.
+            //       * Prerelease-shaped (e.g. "13.4.0-preview.1.123") → Both. SHA-specific darc
+            //         feeds are only created for stable release-branch builds, so prerelease CLIs
+            //         must use the shared daily feed; the historical Both default is correct.
+            PackageChannelQuality defaultQuality;
+            if (stagingIdentityChannel)
+            {
+                // When the running CLI's identity itself is staging, the synthesized channel's
+                // quality MUST follow the CLI build's version shape regardless of how synthesis
+                // was triggered. `init` and many other commands pass requestedChannelName=staging
+                // when identity is staging, so checking `stagingChannelRequested` first would
+                // short-circuit this path and re-introduce the #17527 misroute on stabilizing
+                // builds.
+                defaultQuality = _isStableShapedCliVersion()
+                    ? PackageChannelQuality.Stable
+                    : PackageChannelQuality.Both;
+            }
+            else if (stagingChannelConfigured || stagingChannelRequested)
+            {
+                defaultQuality = PackageChannelQuality.Both;
+            }
+            else
+            {
+                defaultQuality = PackageChannelQuality.Stable;
+            }
+
             var stagingChannel = CreateStagingChannel(defaultQuality);
             if (stagingChannel is not null)
             {
@@ -214,6 +260,23 @@ internal class PackagingService : IPackagingService
 
         var packagesDirectory = new DirectoryInfo(Path.Combine(installPrefix.FullName, "hives", identityChannel, "packages"));
         return packagesDirectory.Exists ? packagesDirectory : null;
+    }
+
+    // Returns true when the running CLI's version is stable-shaped (no semver prerelease tag).
+    // Used by the staging-channel synthesis to route stabilizing builds to the SHA-derived darc
+    // feed instead of the shared dotnet9 daily feed. Falls back to false on any error so we
+    // preserve the historical Both/shared-feed behavior rather than silently misrouting.
+    private static bool IsStableShapedCliVersionFromAssembly()
+    {
+        try
+        {
+            var version = VersionHelper.GetDefaultSdkVersion();
+            return !string.IsNullOrEmpty(version) && !version.Contains('-');
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private PackageChannel? CreateStagingChannel(PackageChannelQuality defaultQuality)
