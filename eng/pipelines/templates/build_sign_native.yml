@@ -92,71 +92,24 @@ jobs:
           # be visible here, and there is no other AzDO consumer of this value.
           # The variable is job-scoped (no isOutput=true) since it is consumed by
           # a later step in the same job.
+          #
+          # The cascade itself lives in eng/scripts/compute-cli-channel.ps1 so it
+          # can be unit-tested by ComputeCliChannelTests; this step only resolves
+          # DotNetFinalVersionKind (which needs the in-tree dotnet + Versions.props)
+          # and forwards AzDO build context to the script.
           - pwsh: |
               $ErrorActionPreference = 'Stop'
-              $reason = '$(Build.Reason)'
-              $sourceBranch = '$(Build.SourceBranch)'
-              $prNumber = '$(System.PullRequest.PullRequestNumber)'
-              # Template-time substitution: the value is the resolved
-              # aspireCliChannelOverride parameter literal, never a runtime
-              # variable. Quoting protects an empty/default value.
-              $override = '${{ parameters.aspireCliChannelOverride }}'
-              Write-Host "Build.Reason: '$reason'"
-              Write-Host "Build.SourceBranch: '$sourceBranch'"
-              Write-Host "System.PullRequest.PullRequestNumber: '$prNumber'"
-              Write-Host "aspireCliChannelOverride: '$override'"
-
               $versionKind = & "$(Build.SourcesDirectory)/$(dotnetScript)" msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
               $versionKind = $versionKind.Trim()
-              Write-Host "DotNetFinalVersionKind: '$versionKind'"
-
-              if ($override -and $override -ne 'auto') {
-                # Operator override path. Validate against the same accepted set
-                # that IdentityChannelReader.IsValidChannel enforces at CLI startup
-                # so a typo here fails the pipeline step rather than producing a
-                # binary that refuses to boot. pr-<N> is intentionally excluded
-                # from the override set — PR builds always come from the
-                # PullRequest reason arm below.
-                if ($override -notin @('stable', 'staging', 'daily')) {
-                  throw "aspireCliChannelOverride='$override' is not one of: auto, stable, staging, daily."
-                }
-                $channel = $override.ToLowerInvariant()
-              }
-              elseif ($reason -eq 'PullRequest') {
-                # Defense in depth: validate digit-only PR number rather than just
-                # non-emptiness. If the agent ever returns the literal macro string
-                # (e.g. '$(System.PullRequest.PullRequestNumber)' unresolved) this
-                # catches it at compute time rather than letting an invalid
-                # AspireCliChannel value reach the build and be rejected later by
-                # IdentityChannelReader.IsValidChannel — clearer failure attribution.
-                if ($prNumber -notmatch '^\d+$') {
-                  throw "Build.Reason is 'PullRequest' but System.PullRequest.PullRequestNumber was not a numeric PR number: '$prNumber'."
-                }
-                # Bake the resolved hive label directly into AspireCliChannel. The CLI
-                # consumes this verbatim and avoids the legacy "pr" + parsed-PrNumber join.
-                $channel = "pr-$prNumber"
-              } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
-                # Release/internal-release branches always produce staging artifacts —
-                # they are published to the staging feed for dogfooding and only later
-                # promoted to nuget.org. This must be checked BEFORE the
-                # `versionKind == release` arm, because a release-branch build also sets
-                # StabilizePackageVersion=true (→ DotNetFinalVersionKind=release) once
-                # we are stabilizing for ship. Without this ordering, the stabilized
-                # staging build would bake AspireCliChannel=stable and `aspire init`
-                # would drop a nuget.config with no staging feed mapping, causing
-                # `aspire add` to resolve Aspire.* packages from nuget.org (older
-                # versions) or fail to resolve the +sha-pinned Aspire.AppHost.Sdk.
-                # See https://github.com/microsoft/aspire/issues/17527.
-                $channel = 'staging'
-              } elseif ($versionKind -eq 'release') {
-                $channel = 'stable'
-              } else {
-                # main and any other branch fall through to daily
-                $channel = 'daily'
-              }
-
-              Write-Host "Aspire CLI channel: $channel"
-              Write-Host "##vso[task.setvariable variable=aspireCliChannel]$channel"
+              # Template-time substitution for $Override: the value is the resolved
+              # aspireCliChannelOverride parameter literal, never a runtime variable.
+              # Quoting protects an empty/default value.
+              & "$(Build.SourcesDirectory)/eng/scripts/compute-cli-channel.ps1" `
+                -Reason '$(Build.Reason)' `
+                -SourceBranch '$(Build.SourceBranch)' `
+                -PrNumber '$(System.PullRequest.PullRequestNumber)' `
+                -Override '${{ parameters.aspireCliChannelOverride }}' `
+                -VersionKind $versionKind
             name: computeCliChannel
             displayName: 🟣Determine Aspire CLI channel
 
