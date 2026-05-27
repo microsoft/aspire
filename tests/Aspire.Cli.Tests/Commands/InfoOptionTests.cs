@@ -981,6 +981,13 @@ public class InfoOptionTests(ITestOutputHelper outputHelper)
         var result = command.Parse("--self");
 
         Assert.NotEmpty(result.Errors);
+        // The validator formats the offending option using `option.Name`,
+        // which System.CommandLine returns including the leading `--` (e.g.
+        // `--self`). Pin the rendered text so a future System.CommandLine
+        // upgrade that changed Name semantics to strip the dashes — and
+        // therefore produced the ungrammatical message "Option `self` is
+        // only valid when ..." — would surface here.
+        Assert.Contains(result.Errors, e => e.Message.Contains("`--self`", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -999,6 +1006,10 @@ public class InfoOptionTests(ITestOutputHelper outputHelper)
         var result = command.Parse("--format json");
 
         Assert.NotEmpty(result.Errors);
+        // See the matching assertion in Info_SelfWithoutInfo_FailsParse: pin
+        // the rendered text so an SCL `Name`-semantics change can't silently
+        // strip the leading `--` from the displayed option token.
+        Assert.Contains(result.Errors, e => e.Message.Contains("`--format`", StringComparison.Ordinal));
     }
 
     [Fact]
