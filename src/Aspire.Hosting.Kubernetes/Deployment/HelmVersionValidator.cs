@@ -74,10 +74,11 @@ internal static partial class HelmVersionValidator
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // ProcessUtil throws when the process itself can't be spawned (helm not on
-            // PATH on some platforms, permission denied, etc.). The prereq step's PATH
-            // lookup runs before us, so this is a defensive fallback.
+            // PATH, permission denied, etc.). The exception message from the runner
+            // is typically a low-level "No such file or directory" or
+            // "permission denied" that doesn't tell users what to do, so wrap it.
             throw new InvalidOperationException(
-                $"Failed to invoke 'helm version --short'. Install Helm {MinimumHelmVersion} or later from {InstallDocsUrl} and ensure it is available on your PATH.",
+                $"Helm CLI not found or could not be invoked. Aspire requires Helm {MinimumHelmVersion} or later. Install it from {InstallDocsUrl} and ensure it is available on your PATH.",
                 ex);
         }
 

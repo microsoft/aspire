@@ -569,6 +569,44 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task PerChartHelmUninstallStep_DependsOnCheckHelmPrereqs()
+    {
+        // Regression coverage for PR #17491 review feedback: per-chart
+        // `helm-uninstall-{name}` steps created by `AddHelmChart(...).WithDestroy()`
+        // must depend on `check-helm-prereqs-{env}`. The install side is covered
+        // transitively (via `helm-deploy-{env}`), but the uninstall side previously
+        // only set `DependsOnSteps = [DestroyPrereq]`, so a missing or too-old
+        // Helm during chart teardown would bypass the validator and surface as
+        // the cryptic spawn / unknown-flag error this PR exists to prevent.
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            tempDir.Path,
+            step: WellKnownPipelineSteps.Diagnostics);
+        var mockActivityReporter = new TestPipelineActivityReporter(output);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+        builder.Services.AddSingleton<IPipelineActivityReporter>(mockActivityReporter);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        k8s.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1")
+            .WithDestroy();
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var logs = mockActivityReporter.LoggedMessages
+            .Where(s => s.StepTitle == "diagnostics")
+            .Select(s => s.Message)
+            .ToList();
+
+        var chartUninstallLines = logs.Where(l => l.Contains("helm-uninstall-podinfo")).ToList();
+        Assert.NotEmpty(chartUninstallLines);
+        Assert.Contains(chartUninstallLines, msg => msg.Contains("check-helm-prereqs-env"));
+    }
+
+    [Fact]
     public async Task MultipleContainersGenerateMultiplePrintSummarySteps()
     {
         using var tempDir = new TestTempDirectory();
