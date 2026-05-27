@@ -69,6 +69,12 @@ public sealed class ComputeCliChannelTests
         // build_sign_native.yml; a refactor that drops it would silently break
         // every later step that reads $(aspireCliChannel). Pin it explicitly.
         Assert.Contains($"##vso[task.setvariable variable=aspireCliChannel]{expectedChannel}", result.Output);
+        // The build tag is the consumer contract for release-publish-nuget.yml's
+        // GA ship-build guard: it asserts the selected source build's tags
+        // include `aspire-cli-channel - stable` before publishing to nuget.org.
+        // A refactor that drops this tag emission would silently disable the
+        // guard and re-introduce the risk that PR #17528 / issue #17527 closed.
+        Assert.Contains($"##vso[build.addbuildtag]aspire-cli-channel - {expectedChannel}", result.Output);
     }
 
     [Fact]

@@ -92,6 +92,14 @@ Write-Host "Aspire CLI channel: $channel"
 # same job read the resolved value via $(aspireCliChannel). Non-AzDO callers
 # (tests, ad-hoc dev runs) ignore the prefix.
 Write-Host "##vso[task.setvariable variable=aspireCliChannel]$channel"
+# Tag the source build with the resolved channel so release-publish-nuget
+# can verify the channel of the build it's about to ship without inspecting
+# binary metadata. The tag shape mirrors the existing `release-version - X.Y.Z`
+# tag emitted by azure-pipelines.yml so the consumer can use the same
+# tag-fetch REST API call. `build.addbuildtag` is idempotent across jobs
+# in the same build, so the per-RID `build_sign_native` invocations all
+# setting the same tag is safe — AzDO dedupes them on the build.
+Write-Host "##vso[build.addbuildtag]aspire-cli-channel - $channel"
 # Emit the channel on stdout so callers can capture it via $(pwsh -File ...)
 # without parsing Write-Host diagnostics or AzDO logging-command prefixes.
 Write-Output $channel
