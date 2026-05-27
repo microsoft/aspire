@@ -22,12 +22,12 @@ These instructions will get you ready to contribute to this project. If you just
   - [`ci-test-failures`](#ci-test-failures)
 - [Development environments](#development-environments)
   - [Using VS Code](#using-vs-code)
-    - [Using Visual Studio](#using-visual-studio)
-  - [Area-specific guidance](#area-specific-guidance)
-    - [Localization](#localization)
-    - [Integrations](#integrations)
-    - [Native build](#native-build)
-    - [Building the VS Code extension](#building-the-vs-code-extension)
+  - [Using Visual Studio](#using-visual-studio)
+- [Area-specific guidance](#area-specific-guidance)
+  - [Localization](#localization)
+  - [Integrations](#integrations)
+  - [Native build](#native-build)
+  - [Building the VS Code extension](#building-the-vs-code-extension)
 - [Trying your changes locally](#trying-your-changes-locally)
   - [Generating local NuGet packages](#generating-local-nuget-packages)
   - [Creating a local Aspire build with `localhive`](#creating-a-local-aspire-build-with-localhive)
@@ -107,6 +107,9 @@ To test changes from a specific pull request locally, see [dogfooding-pull-reque
 Aspire uses GitHub Copilot automatic code review on pull requests. We expect Copilot review comments to be reviewed and addressed before merging, either by making the requested change or by explaining why a suggested change is not needed.
 
 The Aspire repository also includes custom Copilot skills that team members and automation may run on PRs, even when the PR author is not using an AI coding agent. Contributors can get a head start by running the key skills before requesting review:
+
+> [!NOTE]
+> AI-based code review and end-to-end testing can help find issues earlier, but they are not a replacement for human review and manual testing. Contributors are still responsible for understanding their changes and verifying the scenarios they affect.
 
 ### [`code-review`](/.github/skills/code-review/SKILL.md)
 
