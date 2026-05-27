@@ -121,7 +121,7 @@ The Aspire VS Code extension lives under `extension/`. To build the extension th
 
 ```bash
 ./build.sh --build-extension  # macOS/Linux
-.\build.cmd --build-extension # Windows
+.\build.cmd /p:BuildExtension=true # Windows
 ```
 
 This runs the `extension/Extension.proj` build, installs extension dependencies with the checked-in `yarn.lock`, compiles the extension, and creates the VSIX artifacts under `artifacts/packages/Debug/vscode`.
