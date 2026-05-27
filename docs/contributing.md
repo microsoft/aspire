@@ -15,7 +15,7 @@ These instructions will get you ready to contribute to this project. If you just
   - [Running tests](#running-tests)
   - [Quarantined and outerloop tests](#quarantined-and-outerloop-tests)
   - [Testing pull request changes](#testing-pull-request-changes)
-- [Contributing with AI assistance](#contributing-with-ai-assistance)
+- [Coding Agents](#coding-agents)
   - [`code-review`](#code-review)
   - [`pr-testing`](#pr-testing)
   - [`cli-e2e-testing`](#cli-e2e-testing)
@@ -102,7 +102,7 @@ dotnet test --no-launch-profile -- \
 
 To test changes from a specific pull request locally, see [dogfooding-pull-requests.md](/docs/dogfooding-pull-requests.md) for instructions on installing Aspire CLI and NuGet packages built by that PR's CI run.
 
-## Contributing with AI assistance
+## Coding Agents
 
 Aspire uses GitHub Copilot automatic code review on pull requests. We expect Copilot review comments to be reviewed and addressed before merging, either by making the requested change or by explaining why a suggested change is not needed.
 
