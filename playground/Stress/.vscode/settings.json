@@ -1,0 +1,5 @@
+{
+    "aspire.enableAspireCliDebugLogging": true,
+    "aspire.enableAspireDcpDebugLogging": true,
+    "aspire.aspireCliExecutablePath": "/Volumes/DevDrive/source/repos/aspire-adamint/artifacts/bin/Aspire.Cli/Debug/net10.0/aspire"
+}
