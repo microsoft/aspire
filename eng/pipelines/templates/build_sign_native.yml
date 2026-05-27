@@ -105,10 +105,21 @@ jobs:
                 # Bake the resolved hive label directly into AspireCliChannel. The CLI
                 # consumes this verbatim and avoids the legacy "pr" + parsed-PrNumber join.
                 $channel = "pr-$prNumber"
+              } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
+                # Release/internal-release branches always produce staging artifacts —
+                # they are published to the staging feed for dogfooding and only later
+                # promoted to nuget.org. This must be checked BEFORE the
+                # `versionKind == release` arm, because a release-branch build also sets
+                # StabilizePackageVersion=true (→ DotNetFinalVersionKind=release) once
+                # we are stabilizing for ship. Without this ordering, the stabilized
+                # staging build would bake AspireCliChannel=stable and `aspire init`
+                # would drop a nuget.config with no staging feed mapping, causing
+                # `aspire add` to resolve Aspire.* packages from nuget.org (older
+                # versions) or fail to resolve the +sha-pinned Aspire.AppHost.Sdk.
+                # See https://github.com/microsoft/aspire/issues/17527.
+                $channel = 'staging'
               } elseif ($versionKind -eq 'release') {
                 $channel = 'stable'
-              } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
-                $channel = 'staging'
               } else {
                 # main and any other branch fall through to daily
                 $channel = 'daily'
