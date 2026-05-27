@@ -8,6 +8,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
@@ -212,6 +213,27 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
+    /// A shipped CLI must prefer its own SDK/template version from an explicitly selected
+    /// non-local channel instead of floating to a newer daily/staging package from the same feed.
+    /// </summary>
+    [Theory]
+    [InlineData(PackageChannelNames.Daily)]
+    [InlineData(PackageChannelNames.Staging)]
+    public async Task NewCommand_ExplicitPrereleaseChannel_PrefersCurrentCliVersionWhenAvailable(string channelName)
+    {
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: channelName,
+            channelOptionArg: channelName,
+            identityChannelVersion: cliVersion,
+            identityChannelVersions: ["99.0.0-preview.1", cliVersion]);
+
+        Assert.Equal(cliVersion, captured.Version);
+        Assert.Equal(channelName, captured.Channel);
+    }
+
+    /// <summary>
     /// Invokes <see cref="NewCommand"/> with a fake CLI-runtime template that captures the
     /// <see cref="TemplateInputs"/> handed to it. This is the contract surface the four
     /// shipping CLI templates (TS/Python/Go starter + empty AppHost) all read from. Its
@@ -228,7 +250,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     private async Task<CapturedTemplateInputs> CaptureTemplateInputsAsync(
         string identityChannel,
         string? channelOptionArg,
-        string? identityChannelVersion)
+        string? identityChannelVersion,
+        IEnumerable<string>? identityChannelVersions = null)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -260,7 +283,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
 
             options.TemplateProviderFactory = _ => new SingleTemplateProvider(fakeTemplate);
 
-            options.PackagingServiceFactory = _ => BuildPackagingService(identityChannel, identityChannelVersion);
+            options.PackagingServiceFactory = _ => BuildPackagingService(identityChannel, identityChannelVersion, identityChannelVersions);
         });
 
         using var serviceProvider = services.BuildServiceProvider();
@@ -280,8 +303,14 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// pr-* explicit channels), but with deterministic per-channel template versions so
     /// tests can identify which channel won resolution.
     /// </summary>
-    private static IPackagingService BuildPackagingService(string identityChannel, string? identityChannelVersion)
+    private static IPackagingService BuildPackagingService(
+        string identityChannel,
+        string? identityChannelVersion,
+        IEnumerable<string>? identityChannelVersions)
     {
+        var identityVersions = identityChannelVersions?.ToArray()
+            ?? (identityChannelVersion is null ? [] : [identityChannelVersion]);
+
         // Implicit channel always returns the stable token so a "fell-through to Implicit"
         // outcome is distinguishable from an identity-channel pickup.
         var implicitCache = new FakeNuGetPackageCache
@@ -313,7 +342,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         // Register a non-stable explicit channel matching the identity, when the test
         // scenario calls for it. Deliberately omitted in the "identity not registered"
         // case so fallback to Implicit can be observed.
-        var isDailyOrStaging = identityChannelVersion is not null &&
+        var isDailyOrStaging = identityVersions.Length > 0 &&
             !string.Equals(identityChannel, PackageChannelNames.Stable, StringComparison.OrdinalIgnoreCase) &&
             !identityChannel.StartsWith("pr-", StringComparison.OrdinalIgnoreCase);
         if (isDailyOrStaging)
@@ -322,7 +351,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             {
                 GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
                     Task.FromResult<IEnumerable<NuGetPackage>>(
-                        [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = identityChannelVersion! }])
+                        identityVersions.Select(version => new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = version }))
             };
             channels.Add(PackageChannel.CreateExplicitChannel(
                 identityChannel,
