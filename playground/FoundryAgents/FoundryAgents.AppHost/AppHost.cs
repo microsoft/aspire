@@ -44,11 +44,13 @@ var codeInterpreter = project.AddCodeInterpreterTool("code-interp");
 builder.AddPythonApp("weather-hosted-agent", "../app", "main.py")
     .WithUv()
     .WithReference(project).WithReference(chat).WaitFor(chat)
+    .AsHostedAgent()
     .WithComputeEnvironment(project);
 
 builder.AddProject<Projects.DotNetHostedAgent>("proj-dotnet-hosted-agent")
     .WithHttpEndpoint(targetPort: 9000)
     .WithReference(project).WithReference(chat).WaitFor(chat)
+    .AsHostedAgent()
     .WithComputeEnvironment(project);
 
 // --- Prompt Agents ---

@@ -106,6 +106,7 @@ server.listen(port, '127.0.0.1');
 """
             });
 
+        hostedAgent.asHostedAgent();
         hostedAgent.withComputeEnvironment(new WithComputeEnvironmentOptions()
             .project(project)
             .configure((configuration) -> {

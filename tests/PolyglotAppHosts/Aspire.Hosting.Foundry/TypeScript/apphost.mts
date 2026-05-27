@@ -110,6 +110,7 @@ server.listen(port, '127.0.0.1');
 `
     ]);
 
+await hostedAgent.asHostedAgent();
 await hostedAgent.withComputeEnvironment({
     project,
     configure: async (configuration) => {

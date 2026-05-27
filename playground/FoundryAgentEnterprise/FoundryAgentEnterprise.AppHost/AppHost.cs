@@ -26,6 +26,7 @@ var app = builder.AddUvicornApp("app", "./app", "main:app")
     .WithReference(project)
     .WithReference(deployment)
     .WaitFor(deployment)
+    .AsHostedAgent()
     .WithComputeEnvironment(project, (opts) =>
     {
         opts.Description = "Foundry Agent Basic Example";

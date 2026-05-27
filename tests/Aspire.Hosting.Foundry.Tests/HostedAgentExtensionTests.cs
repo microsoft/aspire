@@ -12,14 +12,12 @@ namespace Aspire.Hosting.Foundry.Tests;
 public class HostedAgentExtensionTests
 {
     [Fact]
-    public void WithComputeEnvironment_InRunMode_AddsHttpEndpoint()
+    public void AsHostedAgent_InRunMode_AddsHttpEndpoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .WithComputeEnvironment(project);
+            .AsHostedAgent();
 
         builder.Build();
 
@@ -29,15 +27,13 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void WithComputeEnvironment_InRunMode_PreservesExistingHttpEndpointTargetPort()
+    public void AsHostedAgent_InRunMode_PreservesExistingHttpEndpointTargetPort()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
             .WithHttpEndpoint(targetPort: 5000)
-            .WithComputeEnvironment(project);
+            .AsHostedAgent();
 
         builder.Build();
 
@@ -49,14 +45,12 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void WithComputeEnvironment_InRunMode_DoesNotHardCodePort()
+    public void AsHostedAgent_InRunMode_DoesNotHardCodePort()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .WithComputeEnvironment(project);
+            .AsHostedAgent();
 
         builder.Build();
 
@@ -66,21 +60,21 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void WithComputeEnvironment_InRunMode_ConfiguresHealthCheck()
+    public void AsHostedAgent_InRunMode_ConfiguresSendMessageCommand()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .WithComputeEnvironment(project);
+            .AsHostedAgent();
 
         builder.Build();
 
-        // The resource should have a health check annotation from WithHttpHealthCheck
         var resource = builder.Resources.Single(r => r.Name == "agent");
-        var healthAnnotation = resource.Annotations.OfType<HealthCheckAnnotation>().FirstOrDefault();
-        Assert.NotNull(healthAnnotation);
+        var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.Equal("Send Message", command.DisplayName);
+        Assert.Equal("Agents", command.IconName);
+        Assert.Equal(IconVariant.Regular, command.IconVariant);
+        Assert.True(command.IsHighlighted);
     }
 
     [Fact]
