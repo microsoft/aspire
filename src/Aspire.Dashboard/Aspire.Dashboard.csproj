@@ -28,6 +28,7 @@
 
     <!-- Bundle optimization: disable web.config generation -->
     <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+    <UserSecretsId>2791e2f0-c707-4aa3-b0ea-3ae39909ae04</UserSecretsId>
   </PropertyGroup>
 
   <PropertyGroup>

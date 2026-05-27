@@ -33,6 +33,18 @@ internal static class TargetLocationInterceptor
             path = originalTargetLocation;
         }
 
+        // Strip the base path prefix so comparisons work when running behind a reverse proxy with a path base.
+        var baseUri = new Uri(appBaseUri, UriKind.Absolute);
+        var basePath = baseUri.AbsolutePath.TrimEnd('/');
+        if (!string.IsNullOrEmpty(basePath) && path.StartsWith(basePath, StringComparison.OrdinalIgnoreCase))
+        {
+            path = path[basePath.Length..];
+            if (path.Length == 0)
+            {
+                path = "/";
+            }
+        }
+
         if (string.Equals(path, ResourcesPath, StringComparisons.UrlPath))
         {
             newTargetLocation = StructuredLogsPath;

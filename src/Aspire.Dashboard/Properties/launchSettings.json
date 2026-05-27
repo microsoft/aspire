@@ -4,7 +4,15 @@
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:4317",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:4318",
+        "Dashboard__Otlp__AuthMode": "Unsecured",
+        "Dashboard__Frontend__AuthMode": "OpenIdConnect",
+        "Dashboard__PathBase": "/sandbox/us/",
+        "ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED": "true",
+        "Authentication__Schemes__OpenIdConnect__ClientId": "b70cf320-5ea9-4335-8dd2-10b5582f9085",
+        "Authentication__Schemes__OpenIdConnect__Authority": "https://login.microsoftonline.com/18dbeab7-bf8c-4d67-967c-dc4213ad4017/v2.0"
       },
       "applicationUrl": "https://localhost:15888"
     },
@@ -14,7 +22,14 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:4317",
-        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:4318"
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:4318",
+        "Dashboard__Otlp__AuthMode": "Unsecured",
+        "Dashboard__Frontend__AuthMode": "OpenIdConnect",
+        "Dashboard__PathBase": "/sandbox/us/",
+        "ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED": "true",
+        "Authentication__Schemes__OpenIdConnect__ClientId": "b70cf320-5ea9-4335-8dd2-10b5582f9085",
+        "Authentication__Schemes__OpenIdConnect__Authority": "https://login.microsoftonline.com/18dbeab7-bf8c-4d67-967c-dc4213ad4017/v2.0"
+
       },
       "applicationUrl": "http://localhost:15889"
     },
@@ -25,9 +40,13 @@
         "ASPNETCORE_ENVIRONMENT": "Development",
         "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:4317",
         "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:4318",
+        "Dashboard__Otlp__AuthMode": "Unsecured",
         "ASPIRE_DASHBOARD_API_ENABLED": "true",
-        "DASHBOARD__API__PRIMARYAPIKEY": "12345678",
-        "DASHBOARD__API__AUTHMODE": "ApiKey"
+        "Dashboard__Frontend__AuthMode": "OpenIdConnect",
+        "Dashboard__PathBase": "/sandbox/us/",
+        "ASPIRE_DASHBOARD_FORWARDEDHEADERS_ENABLED": "true",
+        "Authentication__Schemes__OpenIdConnect__ClientId": "b70cf320-5ea9-4335-8dd2-10b5582f9085",
+        "Authentication__Schemes__OpenIdConnect__Authority": "https://login.microsoftonline.com/18dbeab7-bf8c-4d67-967c-dc4213ad4017/v2.0"
       },
       "applicationUrl": "http://localhost:15889"
     }

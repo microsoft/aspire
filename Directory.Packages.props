@@ -86,8 +86,10 @@
     <PackageVersion Include="AspNetCore.HealthChecks.SqlServer" Version="9.0.0" />
     <PackageVersion Include="AspNetCore.HealthChecks.Uris" Version="9.0.0" />
     <!-- MSBuild dependencies -->
-    <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="17.9.5" /> <!-- This should not be updated, so we support older VS versions -->
-    <PackageVersion Include="Microsoft.IO.Redist" Version="6.1.3" /> <!-- Pinned transitive dependency to address vulnerability. This is a transitive dependency of Microsoft.Build.Utilities.Core -->
+    <PackageVersion Include="Microsoft.Build.Utilities.Core" Version="17.9.5" />
+    <!-- This should not be updated, so we support older VS versions -->
+    <PackageVersion Include="Microsoft.IO.Redist" Version="6.1.3" />
+    <!-- Pinned transitive dependency to address vulnerability. This is a transitive dependency of Microsoft.Build.Utilities.Core -->
     <!-- NuGet dependencies -->
     <PackageVersion Include="NuGet.Commands" Version="7.6.0" />
     <PackageVersion Include="NuGet.ProjectModel" Version="7.6.0" />
@@ -113,7 +115,8 @@
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.1" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.1" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components.Icons" Version="4.14.1" />
-    <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" /> <!-- No stable release available -->
+    <PackageVersion Include="Milvus.Client" Version="2.3.0-preview.1" />
+    <!-- No stable release available -->
     <PackageVersion Include="ModelContextProtocol" Version="1.3.0" />
     <PackageVersion Include="MongoDB.Driver" Version="3.8.1" />
     <PackageVersion Include="MongoDB.Driver.Core.Extensions.DiagnosticSources" Version="3.0.0" />
@@ -123,6 +126,7 @@
     <PackageVersion Include="NCrontab.Signed" Version="3.4.0" />
     <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.2" />
     <PackageVersion Include="OpenAI" Version="2.10.0" />
+    <PackageVersion Include="OpenTelemetry" Version="1.15.3" />
     <PackageVersion Include="Oracle.ManagedDataAccess.OpenTelemetry" Version="23.26.200" />
     <PackageVersion Include="Polly.Core" Version="8.6.6" />
     <PackageVersion Include="Polly.Extensions" Version="8.6.6" />
@@ -193,7 +197,6 @@
     <!-- https://github.com/Azure/azure-cosmos-dotnet-v3/pull/3313 -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />
   </ItemGroup>
-
   <!-- This group is for packages that are common between net8, net9, and net10.
        The dependencies on this group should not be updated manually and should instead use arcade's dependency flow to get updated.-->
   <ItemGroup>
@@ -225,7 +228,6 @@
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="$(SystemSecurityCryptographyPkcsVersion)" />
     <PackageVersion Include="System.Text.Json" Version="$(SystemTextJsonPreviewVersion)" />
   </ItemGroup>
-
   <!-- The following groups are for packages that need to switch based on the .NET TFM being used.
        The dependencies on any of these two groups should not be updated manually and should instead use arcade's dependency flow to get updated.-->
   <ItemGroup>

@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Utils;
+using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Model;
@@ -15,16 +16,18 @@ public interface IThemeResolver
     Task<ThemeSettings> GetThemeSettingsAsync(CancellationToken cancellationToken);
 }
 
-public sealed class BrowserThemeResolver(IJSRuntime jsRuntime) : IThemeResolver, IAsyncDisposable
+public sealed class BrowserThemeResolver(IJSRuntime jsRuntime, NavigationManager navigationManager) : IThemeResolver, IAsyncDisposable
 {
     private readonly IJSRuntime _jsRuntime = jsRuntime;
+    private readonly NavigationManager _navigationManager = navigationManager;
     private IJSObjectReference? _jsModule;
 
     public async Task<ThemeSettings> GetThemeSettingsAsync(CancellationToken cancellationToken)
     {
         if (_jsModule == null)
         {
-            _jsModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", "/js/app-theme.js").ConfigureAwait(false);
+            var baseUri = _navigationManager.BaseUri;
+            _jsModule = await _jsRuntime.InvokeAsync<IJSObjectReference>("import", $"{baseUri}js/app-theme.js").ConfigureAwait(false);
         }
 
         var currentThemeTask = _jsModule.InvokeAsync<string>("getCurrentTheme", cancellationToken);

@@ -437,17 +437,39 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             });
         });
 
+        // Use Forwarded Headers middleware if configured. Must run before UsePathBase
+        // so the request scheme and host are corrected for downstream middleware (e.g., OIDC redirect_uri).
+        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
+        {
+            _app.UseForwardedHeaders();
+        }
+
+        // Support running behind a reverse proxy with a path prefix (e.g., /sandbox/us/).
+        var pathBase = builder.Configuration["Dashboard:PathBase"];
+        if (!string.IsNullOrEmpty(pathBase))
+        {
+            _app.UsePathBase(pathBase.TrimEnd('/'));
+        }
+
         // Redirect browser directly to /structuredlogs address if the dashboard is running without a resource service.
         // This is done to avoid immediately navigating in the Blazor app.
+        // Only applies to Frontend (browser) connections — OTLP telemetry requests must not be redirected.
         _app.Use(async (context, next) =>
         {
-            if (context.Request.Path.Equals(TargetLocationInterceptor.ResourcesPath, StringComparisons.UrlPath))
+            var connectionTypeFeature = context.Features.Get<IConnectionTypeFeature>();
+            var isFrontend = connectionTypeFeature == null || connectionTypeFeature.ConnectionTypes.Contains(ConnectionType.Frontend);
+
+            if (isFrontend && context.Request.Method == HttpMethods.Get)
             {
-                var client = context.RequestServices.GetRequiredService<IDashboardClient>();
-                if (!client.IsEnabled)
+                if (context.Request.Path.Equals(TargetLocationInterceptor.ResourcesPath, StringComparisons.UrlPath)
+                    || context.Request.Path.Value == string.Empty)
                 {
-                    context.Response.Redirect(TargetLocationInterceptor.StructuredLogsPath);
-                    return;
+                    var client = context.RequestServices.GetRequiredService<IDashboardClient>();
+                    if (!client.IsEnabled)
+                    {
+                        context.Response.Redirect(context.Request.PathBase + TargetLocationInterceptor.StructuredLogsPath);
+                        return;
+                    }
                 }
             }
 
@@ -497,20 +519,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             }
         });
 
-        // Use Forwarded Headers middleware if configured.
-        if (builder.Configuration.GetBool(DashboardConfigNames.ForwardedHeaders.ConfigKey) ?? false)
-        {
-            _app.UseForwardedHeaders();
-        }
-
         _app.UseAuthorization();
 
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
         _app.UseAntiforgery();
 
-        _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
-
-        // OTLP HTTP services.
         _app.MapHttpOtlpApi(dashboardOptions.Otlp);
 
         // OTLP gRPC services.
@@ -520,6 +533,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         _app.MapTelemetryApi(dashboardOptions);
         _app.MapDashboardApi(dashboardOptions);
+
+        _app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+
         _app.MapDashboardHealthChecks();
     }
 
@@ -806,6 +822,25 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                     options.ResponseType = OpenIdConnectResponseType.Code;
 
                     options.SignInScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+
+                    options.Events = new()
+                    {
+                        OnRedirectToIdentityProvider = context =>
+                        {
+                            // If this is an AJAX/fetch/SignalR request, return 401 instead of redirecting.
+                            // This prevents "Unsafe attempt to load URL" errors when Blazor's SignalR
+                            // connection or background fetches trigger an auth challenge.
+                            if (string.Equals(context.Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase)
+                                || context.Request.Headers.Accept.ToString().Contains("application/json")
+                                || !string.IsNullOrEmpty(context.Request.Headers["blazor-enhanced-nav"]))
+                            {
+                                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                                context.HandleResponse();
+                            }
+
+                            return Task.CompletedTask;
+                        }
+                    };
 
                     // Scopes "openid" and "profile" are added by default, but need to be re-added
                     // in case configuration exists for Authentication:Schemes:OpenIdConnect:Scope.

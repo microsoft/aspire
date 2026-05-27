@@ -1,10 +1,11 @@
-﻿<!DOCTYPE html>
+﻿@inject IConfiguration Configuration
+<!DOCTYPE html>
 <html lang="@System.Globalization.CultureInfo.CurrentUICulture.Name">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
-    <base href="/" />
+    <base href="@(Configuration["Dashboard:PathBase"] ?? "/")" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
     <link rel="stylesheet" href="_content/Microsoft.FluentUI.AspNetCore.Components/css/reboot.css" />
     <link rel="stylesheet" href="css/app.css" />

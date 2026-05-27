@@ -80,6 +80,7 @@
     <Project Path="src/Aspire.Hosting.Valkey/Aspire.Hosting.Valkey.csproj" />
     <Project Path="src/Aspire.Hosting.Yarp/Aspire.Hosting.Yarp.csproj" />
     <Project Path="src/Aspire.Hosting/Aspire.Hosting.csproj" />
+    <Project Path="src/Aspire.ProxyAuth/Aspire.DashboardProxyAuth.csproj" />
     <Project Path="src/Aspire.TypeSystem/Aspire.TypeSystem.csproj" />
     <Project Path="src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj" />
   </Folder>

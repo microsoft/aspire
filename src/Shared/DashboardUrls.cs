@@ -18,7 +18,7 @@ internal static class DashboardUrls
 
     public static string ResourcesUrl(string? resource = null, string? view = null, string? hiddenTypes = null, string? hiddenStates = null, string? hiddenHealthStates = null)
     {
-        var url = $"/{ResourcesBasePath}";
+        var url = $"{ResourcesBasePath}";
         if (resource != null)
         {
             url = AddQueryString(url, "resource", resource);
@@ -45,7 +45,7 @@ internal static class DashboardUrls
 
     public static string ConsoleLogsUrl(string? resource = null)
     {
-        var url = $"/{ConsoleLogBasePath}";
+        var url = $"{ConsoleLogBasePath}";
         if (resource != null)
         {
             url += $"/resource/{Uri.EscapeDataString(resource)}";
@@ -56,7 +56,7 @@ internal static class DashboardUrls
 
     public static string MetricsUrl(string? resource = null, string? meter = null, string? instrument = null, int? duration = null, string? view = null)
     {
-        var url = $"/{MetricsBasePath}";
+        var url = $"{MetricsBasePath}";
         if (resource != null)
         {
             url += $"/resource/{Uri.EscapeDataString(resource)}";
@@ -84,7 +84,7 @@ internal static class DashboardUrls
 
     public static string StructuredLogsUrl(string? resource = null, string? logLevel = null, string? filters = null, string? traceId = null, string? spanId = null, long? logEntryId = null)
     {
-        var url = $"/{StructuredLogsBasePath}";
+        var url = $"{StructuredLogsBasePath}";
         if (resource != null)
         {
             url += $"/resource/{Uri.EscapeDataString(resource)}";
@@ -118,7 +118,7 @@ internal static class DashboardUrls
 
     public static string TracesUrl(string? resource = null, string? type = null, string? filters = null)
     {
-        var url = $"/{TracesBasePath}";
+        var url = $"{TracesBasePath}";
         if (resource != null)
         {
             url += $"/resource/{Uri.EscapeDataString(resource)}";
@@ -140,7 +140,7 @@ internal static class DashboardUrls
 
     public static string TraceDetailUrl(string traceId, string? spanId = null)
     {
-        var url = $"/{TracesBasePath}/detail/{Uri.EscapeDataString(traceId)}";
+        var url = $"{TracesBasePath}/detail/{Uri.EscapeDataString(traceId)}";
         if (spanId != null)
         {
             url = AddQueryString(url, "spanId", spanId);
@@ -151,7 +151,7 @@ internal static class DashboardUrls
 
     public static string LoginUrl(string? returnUrl = null, string? token = null)
     {
-        var url = $"/{LoginBasePath}";
+        var url = $"{LoginBasePath}";
         if (returnUrl != null)
         {
             url = AddQueryString(url, "returnUrl", returnUrl);
@@ -166,7 +166,7 @@ internal static class DashboardUrls
 
     public static string SetLanguageUrl(string language, string redirectUrl)
     {
-        var url = "/api/set-language";
+        var url = "api/set-language";
         url = AddQueryString(url, "language", language);
         url = AddQueryString(url, "redirectUrl", redirectUrl);
 
