@@ -2616,7 +2616,7 @@ public class DistributedApplicationPipelineTests(ITestOutputHelper testOutputHel
 
         public object? GetService(Type serviceType)
         {
-            if (serviceType.FullName == ContainerRuntimeResolverTypeName)
+            if (string.Equals(serviceType.FullName, ContainerRuntimeResolverTypeName, StringComparison.Ordinal))
             {
                 return _containerRuntime;
             }
