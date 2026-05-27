@@ -48,7 +48,6 @@
     <Project Path="src/Aspire.Cli/Aspire.Cli.csproj" />
     <Project Path="src/Aspire.Dashboard/Aspire.Dashboard.csproj" />
     <Project Path="src/Aspire.Hosting.Analyzers/Aspire.Hosting.Analyzers.csproj" />
-    <Project Path="src/Aspire.Hosting.Integration.Analyzers/Aspire.Hosting.Integration.Analyzers.csproj" />
     <Project Path="src/Aspire.Hosting.AppHost/Aspire.Hosting.AppHost.csproj" />
     <Project Path="src/Aspire.Hosting.Browsers/Aspire.Hosting.Browsers.csproj" />
     <Project Path="src/Aspire.Hosting.DevTunnels/Aspire.Hosting.DevTunnels.csproj" />
@@ -56,6 +55,9 @@
     <Project Path="src/Aspire.Hosting.EntityFrameworkCore/Aspire.Hosting.EntityFrameworkCore.csproj" />
     <Project Path="src/Aspire.Hosting.Garnet/Aspire.Hosting.Garnet.csproj" />
     <Project Path="src/Aspire.Hosting.GitHub.Models/Aspire.Hosting.GitHub.Models.csproj" />
+    <Project Path="src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj" />
+    <Project Path="src/Aspire.Hosting.Integration.Analyzers/Aspire.Hosting.Integration.Analyzers.csproj" />
+    <Project Path="src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj" />
     <Project Path="src/Aspire.Hosting.Kafka/Aspire.Hosting.Kafka.csproj" />
     <Project Path="src/Aspire.Hosting.Keycloak/Aspire.Hosting.Keycloak.csproj" />
     <Project Path="src/Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.csproj" />
@@ -64,8 +66,6 @@
     <Project Path="src/Aspire.Hosting.MongoDB/Aspire.Hosting.MongoDB.csproj" />
     <Project Path="src/Aspire.Hosting.MySql/Aspire.Hosting.MySql.csproj" />
     <Project Path="src/Aspire.Hosting.Nats/Aspire.Hosting.Nats.csproj" />
-    <Project Path="src/Aspire.Hosting.Go/Aspire.Hosting.Go.csproj" />
-    <Project Path="src/Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.csproj" />
     <Project Path="src/Aspire.Hosting.OpenAI/Aspire.Hosting.OpenAI.csproj" />
     <Project Path="src/Aspire.Hosting.Oracle/Aspire.Hosting.Oracle.csproj" />
     <Project Path="src/Aspire.Hosting.Orleans/Aspire.Hosting.Orleans.csproj" />
@@ -80,12 +80,12 @@
     <Project Path="src/Aspire.Hosting.Valkey/Aspire.Hosting.Valkey.csproj" />
     <Project Path="src/Aspire.Hosting.Yarp/Aspire.Hosting.Yarp.csproj" />
     <Project Path="src/Aspire.Hosting/Aspire.Hosting.csproj" />
+    <Project Path="src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj" />
     <Project Path="src/Aspire.ProxyAuth/Aspire.DashboardProxyAuth.csproj" />
     <Project Path="src/Aspire.TypeSystem/Aspire.TypeSystem.csproj" />
-    <Project Path="src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj" />
+    <Project Path="src/FakeTelemetry/FakeTelemetry.csproj" />
   </Folder>
   <Folder Name="/Hosting/Azure/">
-    <Project Path="src/Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.AppConfiguration/Aspire.Hosting.Azure.AppConfiguration.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.ApplicationInsights/Aspire.Hosting.Azure.ApplicationInsights.csproj" />
@@ -110,6 +110,7 @@
     <Project Path="src/Aspire.Hosting.Azure.Storage/Aspire.Hosting.Azure.Storage.csproj" />
     <Project Path="src/Aspire.Hosting.Azure.WebPubSub/Aspire.Hosting.Azure.WebPubSub.csproj" />
     <Project Path="src/Aspire.Hosting.Azure/Aspire.Hosting.Azure.csproj" />
+    <Project Path="src/Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.csproj" />
   </Folder>
   <Folder Name="/playground/">
     <File Path="playground/.editorconfig" />
@@ -153,11 +154,11 @@
     <Project Path="playground/AzureFunctionsWithDts/AzureFunctionsWithDts.Functions/AzureFunctionsWithDts.Functions.csproj" />
   </Folder>
   <Folder Name="/playground/ProjectResourceExtensions/">
-    <Project Path="playground/ProjectResourceExtensions/ProjectResourceExtensions.AppHost/ProjectResourceExtensions.AppHost.csproj" />
-    <Project Path="playground/ProjectResourceExtensions/StandardService/StandardService.csproj" />
+    <Project Path="playground/ProjectResourceExtensions/AzureFunctionsService/AzureFunctionsService.csproj" />
     <Project Path="playground/ProjectResourceExtensions/CustomDebugService/CustomDebugService.csproj" />
     <Project Path="playground/ProjectResourceExtensions/FakeIntegrationLibrary/FakeIntegrationLibrary.csproj" />
-    <Project Path="playground/ProjectResourceExtensions/AzureFunctionsService/AzureFunctionsService.csproj" />
+    <Project Path="playground/ProjectResourceExtensions/ProjectResourceExtensions.AppHost/ProjectResourceExtensions.AppHost.csproj" />
+    <Project Path="playground/ProjectResourceExtensions/StandardService/StandardService.csproj" />
   </Folder>
   <Folder Name="/playground/AzureKusto/">
     <Project Path="playground/AzureKusto/AzureKusto.AppHost/AzureKusto.AppHost.csproj" />
@@ -409,11 +410,11 @@
     <File Path="src/Schema/aspire-8.0.json" />
   </Folder>
   <Folder Name="/src/">
-    <Project Path="src/Aspire.Hosting.CodeGeneration.TypeScript/Aspire.Hosting.CodeGeneration.TypeScript.csproj" />
-    <Project Path="src/Aspire.Hosting.CodeGeneration.Python/Aspire.Hosting.CodeGeneration.Python.csproj" />
     <Project Path="src/Aspire.Hosting.CodeGeneration.Go/Aspire.Hosting.CodeGeneration.Go.csproj" />
     <Project Path="src/Aspire.Hosting.CodeGeneration.Java/Aspire.Hosting.CodeGeneration.Java.csproj" />
+    <Project Path="src/Aspire.Hosting.CodeGeneration.Python/Aspire.Hosting.CodeGeneration.Python.csproj" />
     <Project Path="src/Aspire.Hosting.CodeGeneration.Rust/Aspire.Hosting.CodeGeneration.Rust.csproj" />
+    <Project Path="src/Aspire.Hosting.CodeGeneration.TypeScript/Aspire.Hosting.CodeGeneration.TypeScript.csproj" />
     <Project Path="src/Aspire.Hosting.RemoteHost/Aspire.Hosting.RemoteHost.csproj" />
     <Project Path="src/Aspire.Managed/Aspire.Managed.csproj" />
   </Folder>
@@ -432,8 +433,8 @@
     <Project Path="tests/QuarantineTools.Tests/QuarantineTools.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Cli/">
-    <Project Path="tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj" />
     <Project Path="tests/Aspire.Acquisition.Tests/Aspire.Acquisition.Tests.csproj" />
+    <Project Path="tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj" />
     <Project Path="tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Components/">
@@ -484,18 +485,25 @@
   </Folder>
   <Folder Name="/tests/Hosting/">
     <Project Path="tests/Aspire.Hosting.Analyzers.Tests/Aspire.Hosting.Analyzers.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.Foundry.Tests/Aspire.Hosting.Foundry.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.Azure.Kusto.Tests/Aspire.Hosting.Azure.Kusto.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Kubernetes.Tests/Aspire.Hosting.Azure.Kubernetes.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Azure.Kusto.Tests/Aspire.Hosting.Azure.Kusto.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Azure.Tests/Aspire.Hosting.Azure.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Browsers.Tests/Aspire.Hosting.Browsers.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.Go.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.Java.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.Python.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.Rust.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Containers.Tests/Aspire.Hosting.Containers.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.DevTunnels.Tests/Aspire.Hosting.DevTunnels.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.DotnetTool.Tests/Aspire.Hosting.DotnetTool.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Docker.Tests/Aspire.Hosting.Docker.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.DotnetTool.Tests/Aspire.Hosting.DotnetTool.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.EntityFrameworkCore.Tests/Aspire.Hosting.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Foundry.Tests/Aspire.Hosting.Foundry.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Garnet.Tests/Aspire.Hosting.Garnet.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.GitHub.Models.Tests/Aspire.Hosting.GitHub.Models.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.Go.Tests/Aspire.Hosting.Go.Tests.csproj" />
+    <Project Path="tests/Aspire.Hosting.JavaScript.Tests/Aspire.Hosting.JavaScript.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Kafka.Tests/Aspire.Hosting.Kafka.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Keycloak.Tests/Aspire.Hosting.Keycloak.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Kubernetes.Tests/Aspire.Hosting.Kubernetes.Tests.csproj" />
@@ -503,8 +511,6 @@
     <Project Path="tests/Aspire.Hosting.MongoDB.Tests/Aspire.Hosting.MongoDB.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.MySql.Tests/Aspire.Hosting.MySql.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Nats.Tests/Aspire.Hosting.Nats.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.Go.Tests/Aspire.Hosting.Go.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.JavaScript.Tests/Aspire.Hosting.JavaScript.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.OpenAI.Tests/Aspire.Hosting.OpenAI.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Oracle.Tests/Aspire.Hosting.Oracle.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.PostgreSQL.Tests/Aspire.Hosting.PostgreSQL.Tests.csproj" />
@@ -513,11 +519,6 @@
     <Project Path="tests/Aspire.Hosting.RabbitMQ.Tests/Aspire.Hosting.RabbitMQ.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Redis.Tests/Aspire.Hosting.Redis.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.RemoteHost.Tests/Aspire.Hosting.RemoteHost.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.Python.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.Go.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.Java.Tests.csproj" />
-    <Project Path="tests/Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.Rust.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Seq.Tests/Aspire.Hosting.Seq.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.SqlServer.Tests/Aspire.Hosting.SqlServer.Tests.csproj" />
     <Project Path="tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj" />
@@ -541,8 +542,8 @@
   </Folder>
   <Folder Name="/Tools/">
     <Project Path="src/Tools/ConfigurationSchemaGenerator/ConfigurationSchemaGenerator.csproj" />
-    <Project Path="tools/AspireMcpTools/AspireMcpTools.csproj" />
     <Project Path="tools/Aspire.TestTools/Aspire.TestTools.csproj" />
+    <Project Path="tools/AspireMcpTools/AspireMcpTools.csproj" />
     <Project Path="tools/CreateFailingTestIssue/CreateFailingTestIssue.csproj" />
     <Project Path="tools/CreateLayout/CreateLayout.csproj" />
     <Project Path="tools/GenerateTestSummary/GenerateTestSummary.csproj" />

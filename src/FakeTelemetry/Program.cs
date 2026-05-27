@@ -63,7 +63,7 @@ using var meterProvider = Sdk.CreateMeterProviderBuilder()
     .AddConsoleExporter()
     .Build();
 
-using var loggerFactory
+using var loggerFactory = LoggerFactory.Create(logging =>
 {
     logging.AddOpenTelemetry(o =>
     {
