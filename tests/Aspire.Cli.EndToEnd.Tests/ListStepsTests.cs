@@ -57,9 +57,9 @@ public sealed class ListStepsTests(ITestOutputHelper output)
                     "aspire do --list-steps regressed: pipeline executed and crashed instead of surfacing the friendly validation error.");
             }
             return s.ContainsText("aspire do deploy --list-steps")
-                && s.ContainsText("Well-known step names include:");
+                && s.ContainsText("aspire.dev/reference/cli/commands/aspire-do");
         }, timeout: TimeSpan.FromMinutes(2),
-            description: "waiting for friendly error listing well-known steps and an example");
+            description: "waiting for friendly error with example and docs link");
 
         // The validation error returns a non-zero exit code, but the shell prompt should come back.
         await auto.WaitForAnyPromptAsync(counter);
