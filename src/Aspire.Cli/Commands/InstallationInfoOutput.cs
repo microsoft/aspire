@@ -241,9 +241,27 @@ internal static class InstallationInfoOutput
             return id;
         }
 
-        count++;
+        // Increment the per-base counter and verify the suffixed candidate is
+        // not itself already taken. Without this loop, two rows can collide
+        // when one row's natural base id happens to match another row's
+        // disambiguation suffix — e.g. two installs reporting channel "stable"
+        // produce ids "stable" and "stable-2", and an orphan-hive directory
+        // literally named "stable-2" (hive names are arbitrary user-controlled
+        // directory names under ~/.aspire/hives/) would otherwise mint a
+        // second "stable-2" because the suffix was never recorded in `ids`.
+        // We record both the bumped per-base counter and the candidate itself
+        // so future bases can't recreate the suffix.
+        string candidate;
+        do
+        {
+            count++;
+            candidate = $"{id}-{count}";
+        }
+        while (ids.ContainsKey(candidate));
+
         ids[id] = count;
-        return $"{id}-{count}";
+        ids[candidate] = 1;
+        return candidate;
     }
 
     private static string GetInstallKind(InstallationInfo install)
