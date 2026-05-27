@@ -195,7 +195,10 @@ internal sealed class AspireSkillsInstaller(
 
         if (ValidateEmbeddedMetadata(metadata) is { } metadataError)
         {
-            return AcquisitionResult.Failed($"Embedded Aspire skills bundle metadata is invalid: {metadataError}");
+            return AcquisitionResult.Failed(string.Format(
+                CultureInfo.CurrentCulture,
+                AgentCommandStrings.AspireSkillsInstaller_InvalidMetadata,
+                metadataError));
         }
 
         if (!string.Equals(metadata.Version, version, StringComparison.OrdinalIgnoreCase))
@@ -256,27 +259,31 @@ internal sealed class AspireSkillsInstaller(
     {
         if (string.IsNullOrWhiteSpace(metadata.Version))
         {
-            return "Embedded Aspire skills metadata must specify a version.";
+            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataVersion;
         }
 
         if (!string.Equals(metadata.Repository, GitHubRepository, StringComparison.OrdinalIgnoreCase))
         {
-            return string.Format(CultureInfo.InvariantCulture, "Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'.", metadata.Repository, GitHubRepository);
+            return string.Format(
+                CultureInfo.CurrentCulture,
+                AgentCommandStrings.AspireSkillsInstaller_MetadataRepositoryMismatch,
+                metadata.Repository,
+                GitHubRepository);
         }
 
         if (string.IsNullOrWhiteSpace(metadata.Tag))
         {
-            return "Embedded Aspire skills metadata must specify a GitHub release tag.";
+            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataTag;
         }
 
         if (string.IsNullOrWhiteSpace(metadata.AssetName))
         {
-            return "Embedded Aspire skills metadata must specify a release asset name.";
+            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataAssetName;
         }
 
         if (string.IsNullOrWhiteSpace(metadata.Sha256))
         {
-            return "Embedded Aspire skills metadata must specify the release asset SHA-256 hash.";
+            return AgentCommandStrings.AspireSkillsInstaller_MissingMetadataSha256;
         }
 
         return null;
@@ -294,8 +301,8 @@ internal sealed class AspireSkillsInstaller(
         if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(string.Format(
-                CultureInfo.InvariantCulture,
-                "Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.",
+                CultureInfo.CurrentCulture,
+                AgentCommandStrings.AspireSkillsInstaller_ArchiveHashVerificationFailed,
                 expectedHash,
                 actualHash));
         }
