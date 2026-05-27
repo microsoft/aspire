@@ -4,7 +4,7 @@
 # 1. Downloads signed packages from a specified build
 # 2. Publishes packages to NuGet.org
 # 3. Promotes the build to the Aspire GA channel via darc
-# 4. Submits WinGet manifests and Homebrew cask PRs
+# 4. Submits WinGet manifests
 # 5. Dispatches the release-github-tasks GitHub Actions workflow as the
 #    aspire-repo-bot GitHub App (tag, GitHub Release, merge-back PR,
 #    baseline PR) and waits for it to complete
@@ -62,11 +62,6 @@ parameters:
     type: boolean
     default: true
 
-  - name: SkipHomebrewPublish
-    displayName: '[Advanced] Skip Homebrew Publishing (re-run after success)'
-    type: boolean
-    default: true
-
   - name: SkipGitHubTasks
     displayName: '[Advanced] Skip GitHub Tasks dispatch (re-run after success)'
     type: boolean
@@ -74,6 +69,11 @@ parameters:
 
   - name: SkipReleaseAssets
     displayName: '[Advanced] Skip CLI asset upload to GitHub Release (re-run after success)'
+    type: boolean
+    default: false
+
+  - name: SkipHomebrewValidation
+    displayName: '[Advanced] Skip Homebrew cask validation against live GitHub release (re-run after success)'
     type: boolean
     default: false
 
@@ -94,7 +94,7 @@ variables:
   # Variable group containing secrets (VscePublishToken for future use)
   # Note: NuGet publishing uses service connection 'NuGet.org - dotnet/aspire' instead of API key
   - group: Aspire-Release-Secrets
-  # Variable group containing aspire-winget-bot-pat and aspire-homebrew-bot-pat for WinGet and Homebrew publishing
+  # Variable group containing aspire-winget-bot-pat for WinGet publishing
   - group: Aspire-Secrets
 
 resources:
@@ -155,11 +155,6 @@ extends:
                     displayName: 'Publish WinGet Manifests'
                     targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
                     artifactName: 'winget-manifests-stable'
-                - ${{ if eq(parameters.SkipHomebrewPublish, false) }}:
-                  - output: pipelineArtifact
-                    displayName: 'Publish Homebrew Cask'
-                    targetPath: '$(Pipeline.Workspace)/installers/homebrew-cask-stable'
-                    artifactName: 'homebrew-cask-stable'
             steps:
               - checkout: none
 
@@ -277,11 +272,6 @@ extends:
                   displayName: 'Download WinGet Manifests from Source Build'
                   artifact: winget-manifests-stable
 
-              - ${{ if eq(parameters.SkipHomebrewPublish, false) }}:
-                - download: aspire-build
-                  displayName: 'Download Homebrew Cask from Source Build'
-                  artifact: homebrew-cask-stable
-
               # Move artifacts to expected location for output
               - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
                 - powershell: |
@@ -319,12 +309,11 @@ extends:
 
               # Copy installer artifacts to expected locations for output.
               # Entries whose source directory doesn't exist are silently skipped, which
-              # handles re-runs where SkipWinGetPublish/SkipHomebrewPublish caused the
-              # corresponding download step to be omitted.
+              # handles re-runs where SkipWinGetPublish caused the corresponding
+              # download step to be omitted.
               - powershell: |
                   $artifacts = @(
-                    @{ Name = 'winget-manifests-stable'; Source = '$(Pipeline.Workspace)/aspire-build/winget-manifests-stable'; Target = '$(Pipeline.Workspace)/installers/winget-manifests-stable' },
-                    @{ Name = 'homebrew-cask-stable'; Source = '$(Pipeline.Workspace)/aspire-build/homebrew-cask-stable'; Target = '$(Pipeline.Workspace)/installers/homebrew-cask-stable' }
+                    @{ Name = 'winget-manifests-stable'; Source = '$(Pipeline.Workspace)/aspire-build/winget-manifests-stable'; Target = '$(Pipeline.Workspace)/installers/winget-manifests-stable' }
                   )
 
                   foreach ($artifact in $artifacts) {
@@ -655,7 +644,6 @@ extends:
                     Write-Host " (EXECUTED)"
                   }
                   Write-Host "║ WinGet:         (runs in parallel after this job)"
-                  Write-Host "║ Homebrew:       (runs in parallel after this job)"
                   Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
                   if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
                     Write-Host " (SKIPPED)"
@@ -671,6 +659,12 @@ extends:
                     Write-Host " (verify only; no upload in dry-run)"
                   } else {
                     Write-Host " (uploaded after GitHub Tasks job)"
+                  }
+                  Write-Host "║ Homebrew Val:   ${{ parameters.SkipHomebrewValidation }}" -NoNewline
+                  if ("${{ parameters.SkipHomebrewValidation }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } else {
+                    Write-Host " (validates cask against live GH release after asset upload)"
                   }
                   Write-Host "╚═══════════════════════════════════════════════════════════════╝"
                   Write-Host ""
@@ -705,35 +699,9 @@ extends:
                   packageIdentifier: Microsoft.Aspire
                   dryRun: ${{ parameters.DryRun }}
 
-          # ===== HOMEBREW PUBLISHING =====
-          - job: HomebrewJob
-            displayName: 'Submit Homebrew Release Cask'
-            dependsOn: ReleaseJob
-            condition: |
-              and(
-                in(dependencies.ReleaseJob.result, 'Succeeded', 'SucceededWithIssues'),
-                eq('${{ parameters.SkipHomebrewPublish }}', 'false')
-              )
-            timeoutInMinutes: 30
-            pool:
-              name: NetCore1ESPool-Internal
-              image: windows.vs2026preview.scout.amd64
-              os: windows
-            templateContext:
-              type: releaseJob
-              isProduction: true
-              inputs:
-                - input: pipelineArtifact
-                  artifactName: homebrew-cask-stable
-                  targetPath: '$(Pipeline.Workspace)/homebrew/homebrew-cask-stable'
-            steps:
-              - template: /eng/pipelines/templates/publish-homebrew.yml@self
-                parameters:
-                  caskArtifactPath: $(Pipeline.Workspace)/homebrew/homebrew-cask-stable
-                  dryRun: ${{ parameters.DryRun }}
-
       # ===== STAGE 3: GITHUB TASKS =====
-      # Two responsibilities, both running as the aspire-repo-bot GitHub App:
+      # Three responsibilities, all running as (or against) the aspire-repo-bot
+      # GitHub App:
       #
       #   1. DispatchGitHubTasksJob — dispatches the release-github-tasks
       #      GitHub Actions workflow (tag, GitHub Release, merge-back PR,
@@ -745,22 +713,31 @@ extends:
       #      and uploads them as assets on the GitHub release that the
       #      dispatch job just created.
       #
-      # Each job has its own skip flag (SkipGitHubTasks / SkipReleaseAssets)
-      # so partial-failure re-runs can recover either piece independently:
+      #   3. HomebrewValidateJob — runs the full upstream-equivalent cask
+      #      validation (`brew audit --cask --online --signing` + real
+      #      `brew install`/`brew uninstall`) against the cask generated by
+      #      the source build, with the live GitHub release URL it points
+      #      at. This is the moment when the URL is actually reachable —
+      #      the source-build prepare stage can only validate offline because
+      #      the GitHub release for the version being built does not exist
+      #      yet. Catches problems that would otherwise only surface to
+      #      end users (or block Homebrew/homebrew-cask's autobump PR).
       #
-      #   | SkipGitHubTasks | SkipReleaseAssets | Behavior                        |
-      #   |-----------------|-------------------|---------------------------------|
-      #   | false           | false             | Full path (default release)     |
-      #   | true            | false             | Skip dispatch, upload assets    |
-      #   | true            | true              | Skip the whole stage            |
-      #   | false           | true              | Dispatch only, no asset upload  |
+      # Each job has its own skip flag (SkipGitHubTasks / SkipReleaseAssets /
+      # SkipHomebrewValidation) so partial-failure re-runs can recover any
+      # piece independently. Skipping all three skips the stage entirely.
       #
       # DryRun behavior: this stage still runs when DryRun=true. DryRun is
       # propagated to the GH workflow as dry_run=true (keeps it from
       # creating tags/releases/PRs) and to the asset script (downloads and
-      # verifies SHA512s but skips the gh release upload). This lets a
-      # release manager validate the full AzDO → GitHub path end-to-end
-      # without performing a real release.
+      # verifies SHA512s but skips the gh release upload). HomebrewValidateJob
+      # also runs under DryRun — it does not publish anything, it only audits
+      # and `brew install`/`brew uninstall` against a public URL. If the
+      # release for the version being validated does not yet exist (DryRun,
+      # or a re-run after assets were already uploaded), the job is expected
+      # to surface that as a real failure rather than be silently skipped.
+      # This lets a release manager validate the full AzDO → GitHub path
+      # end-to-end without performing a real release.
       - stage: GitHubTasks
         displayName: 'Dispatch GitHub Release Tasks'
         # PrepareArtifacts is listed explicitly (in addition to Release) so the
@@ -778,7 +755,8 @@ extends:
             in(dependencies.Release.result, 'Succeeded', 'SucceededWithIssues'),
             or(
               eq('${{ parameters.SkipGitHubTasks }}', 'false'),
-              eq('${{ parameters.SkipReleaseAssets }}', 'false')
+              eq('${{ parameters.SkipReleaseAssets }}', 'false'),
+              eq('${{ parameters.SkipHomebrewValidation }}', 'false')
             )
           )
         jobs:
@@ -894,7 +872,7 @@ extends:
                 fetchDepth: 1
 
               # Download aspire-cli-* archives from the source build. Matches
-              # the existing PackageArtifacts/winget/homebrew download pattern.
+              # the existing PackageArtifacts/winget download pattern.
               - download: aspire-build
                 displayName: 'Download aspire-cli-* from Source Build'
                 artifact: BlobArtifacts
@@ -991,3 +969,61 @@ extends:
                 env:
                   ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
                   ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
+
+          # Validate the generated Homebrew cask against the live GitHub
+          # release. Runs `brew audit --cask --online --signing` and a real
+          # `brew install`/`brew uninstall` against the cask file produced by
+          # the source build. The cask URL points at
+          # github.com/microsoft/aspire/releases/download/v#{version}/..., so
+          # the release for the version being built must already exist for
+          # this job to pass — normally that happens earlier in this stage
+          # via PublishReleaseAssetsJob. The dependsOn below is purely
+          # temporal; the cask artifact itself comes from the aspire-build
+          # resource, not from PublishReleaseAssetsJob. Accepting 'Skipped'
+          # alongside Succeeded lets you re-run with SkipReleaseAssets=true
+          # against a previously uploaded release; if the release is missing
+          # the job is expected to fail loudly rather than be silently
+          # gated out.
+          #
+          # Modeled on PublishReleaseAssetsJob (regular buildJob with checkout
+          # + a `download: aspire-build` step) rather than WingetJob's
+          # releaseJob + templateContext.inputs pattern, because we need both
+          # to check out the repo (for eng/homebrew/validate-cask-artifact.sh)
+          # and to consume an artifact from the source build — and 1ES PT's
+          # releaseJob enforces `checkout: none`.
+          - job: HomebrewValidateJob
+            displayName: 'Validate Homebrew Cask against live release'
+            dependsOn: PublishReleaseAssetsJob
+            condition: |
+              and(
+                eq('${{ parameters.SkipHomebrewValidation }}', 'false'),
+                in(dependencies.PublishReleaseAssetsJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
+              )
+            timeoutInMinutes: 30
+            pool:
+              name: Azure Pipelines
+              vmImage: macOS-latest-internal
+              os: macOS
+            steps:
+              - checkout: self
+                displayName: 'Checkout repo (for validate-cask-artifact.sh)'
+                fetchDepth: 1
+
+              - download: aspire-build
+                displayName: 'Download Homebrew Cask from Source Build'
+                artifact: homebrew-cask-stable
+
+              - bash: |
+                  set -euo pipefail
+                  cask_file="$(Pipeline.Workspace)/aspire-build/homebrew-cask-stable/aspire.rb"
+                  if [[ ! -f "$cask_file" ]]; then
+                    echo "##[error]Expected cask file not found: $cask_file"
+                    ls -la "$(Pipeline.Workspace)/aspire-build/homebrew-cask-stable" || true
+                    exit 1
+                  fi
+
+                  "$(Build.SourcesDirectory)/eng/homebrew/validate-cask-artifact.sh" \
+                    --cask-file "$cask_file" \
+                    --channel stable \
+                    --validation-mode LiveRelease
+                displayName: '🟣Validate cask against live GitHub release'

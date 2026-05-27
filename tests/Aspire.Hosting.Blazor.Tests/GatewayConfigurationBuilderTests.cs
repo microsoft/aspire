@@ -323,7 +323,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var configResponse = (IManifestExpressionProvider)env["ClientApps__store__ConfigResponse"];
         var manifestExpression = configResponse.ValueExpression;
-        Assert.DoesNotContain("ASPIRE_OTLP_PATH_BASE", manifestExpression);
+        Assert.DoesNotContain("OTEL_EXPORTER_OTLP_ENDPOINT", manifestExpression);
     }
 
     [Fact]
@@ -462,7 +462,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         // OTLP path base is emitted so the WASM client can resolve it against
         // the page's origin, avoiding cross-origin issues.
-        Assert.Contains("ASPIRE_OTLP_PATH_BASE", configJson);
+        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
         Assert.Contains("/_otlp", configJson);
 
         // Service discovery emits both schemes so the client can pick the right one.

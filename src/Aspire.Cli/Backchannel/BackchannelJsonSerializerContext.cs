@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Projects;
 using Aspire.TypeSystem;
 using Spectre.Console;
 using StreamJsonRpc;
@@ -62,6 +63,9 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(JsonNode))]
 [JsonSerializable(typeof(CapabilitiesInfo))]
 [JsonSerializable(typeof(CommonErrorData))]
+[JsonSerializable(typeof(AppHostCodeGenerationDiagnostic))]
+[JsonSerializable(typeof(AppHostLoadedAssemblyInfo))]
+[JsonSerializable(typeof(List<AppHostLoadedAssemblyInfo>))]
 // V2 API request/response types
 [JsonSerializable(typeof(GetCapabilitiesRequest))]
 [JsonSerializable(typeof(BackchannelTraceContext))]

@@ -275,7 +275,7 @@ dotnet hex1b terminal attach <id>
 Generate this skill file for a repository so AI agents know how to use the CLI.
 
 ```bash
-# Write skill file to .github/skills/hex1b/SKILL.md
+# Write skill file to .agents/skills/hex1b/SKILL.md
 dotnet hex1b agent init
 
 # Specify a different repo root

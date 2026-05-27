@@ -416,5 +416,41 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InvalidJsonInConfigFile", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them..
+        /// </summary>
+        public static string CodegenVersionSkewWarning {
+            get {
+                return ResourceManager.GetString("CodegenVersionSkewWarning", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again..
+        /// </summary>
+        public static string CodegenIncompatibleSdkSummary {
+            get {
+                return ResourceManager.GetString("CodegenIncompatibleSdkSummary", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run with '--debug' for full diagnostic details..
+        /// </summary>
+        public static string CodegenDebugHint {
+            get {
+                return ResourceManager.GetString("CodegenDebugHint", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Diagnostic details:.
+        /// </summary>
+        public static string CodegenDebugHeader {
+            get {
+                return ResourceManager.GetString("CodegenDebugHeader", resourceCulture);
+            }
+        }
     }
 }

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -118,7 +119,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public async Task<GetResourcesResponse> GetResourcesAsync(GetResourcesRequest? request = null, CancellationToken cancellationToken = default)
     {
         using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetResourcesAsync), streaming: false, request?.TraceContext);
-        var snapshots = await GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false);
+        var snapshots = await GetResourceSnapshotsAsync(SupportsJsonResourceProperties(request?.ClientCapabilities), cancellationToken).ConfigureAwait(false);
 
         // Apply filter if specified
         if (!string.IsNullOrEmpty(request?.Filter))
@@ -147,7 +148,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         try
         {
-            await foreach (var snapshot in WatchResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false))
+            await foreach (var snapshot in WatchResourceSnapshotsAsync(SupportsJsonResourceProperties(request?.ClientCapabilities), cancellationToken).ConfigureAwait(false))
             {
                 // Apply filter if specified
                 if (!string.IsNullOrEmpty(filter) && !snapshot.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
@@ -735,6 +736,11 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>A list of resource snapshots.</returns>
     public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(CancellationToken cancellationToken = default)
     {
+        return await GetResourceSnapshotsAsync(resourcePropertiesAsJson: false, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool resourcePropertiesAsJson, CancellationToken cancellationToken)
+    {
         var appModel = serviceProvider.GetRequiredService<DistributedApplicationModel>();
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
         var results = new List<ResourceSnapshot>();
@@ -754,7 +760,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             if (notificationService.TryGetCurrentState(resourceName, out var resourceEvent))
             {
-                var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, cancellationToken).ConfigureAwait(false);
+                var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, cancellationToken).ConfigureAwait(false);
                 if (snapshot is not null)
                 {
                     results.Add(snapshot);
@@ -770,13 +776,23 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>An async enumerable of resource snapshots as they change.</returns>
     public async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync([EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        await foreach (var snapshot in WatchResourceSnapshotsAsync(resourcePropertiesAsJson: false, cancellationToken).ConfigureAwait(false))
+        {
+            yield return snapshot;
+        }
+    }
+
+    private async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(
+        bool resourcePropertiesAsJson,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
 
         var resourceEvents = notificationService.WatchAsync(cancellationToken);
 
         await foreach (var resourceEvent in resourceEvents.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, cancellationToken).ConfigureAwait(false);
+            var snapshot = await CreateResourceSnapshotFromEventAsync(resourceEvent, resourcePropertiesAsJson, cancellationToken).ConfigureAwait(false);
             if (snapshot is not null)
             {
                 yield return snapshot;
@@ -786,6 +802,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
     private async Task<ResourceSnapshot?> CreateResourceSnapshotFromEventAsync(
         ResourceEvent resourceEvent,
+        bool resourcePropertiesAsJson,
         CancellationToken cancellationToken)
     {
         var resource = resourceEvent.Resource;
@@ -881,7 +898,9 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 continue;
             }
 
-            properties[prop.Name] = ConvertPropertyValueToJsonNode(prop.Value);
+            properties[prop.Name] = resourcePropertiesAsJson
+                ? ConvertPropertyValueToJsonNode(prop.Value)
+                : ConvertPropertyValueToLegacyJsonNode(prop.Value);
 
             if (string.Equals(prop.Name, KnownProperties.Resource.WaitingFor, StringComparisons.ResourcePropertyName))
             {
@@ -971,6 +990,43 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         };
     }
 
+    private static JsonNode? ConvertPropertyValueToLegacyJsonNode(object? value)
+    {
+        var stringValue = ConvertPropertyValueToString(value);
+
+        return stringValue is null ? null : JsonValue.Create(stringValue);
+    }
+
+    private static string? ConvertPropertyValueToString(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            JsonValue jsonValue when jsonValue.TryGetValue<string>(out var stringValue) => stringValue,
+            JsonValue jsonValue when jsonValue.TryGetValue<bool>(out var boolValue) => boolValue.ToString(CultureInfo.InvariantCulture),
+            JsonValue jsonValue when jsonValue.TryGetValue<IFormattable>(out var formattableValue) => formattableValue.ToString(null, CultureInfo.InvariantCulture),
+            JsonNode jsonNode => jsonNode.ToJsonString(),
+            string stringValue => stringValue,
+            IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+            System.Collections.IEnumerable enumerable => ConvertEnumerablePropertyValueToString(enumerable),
+            _ => value.ToString()
+        };
+    }
+
+    private static string ConvertEnumerablePropertyValueToString(System.Collections.IEnumerable enumerable)
+    {
+        var values = new List<string>();
+        foreach (var value in enumerable)
+        {
+            if (ConvertPropertyValueToString(value) is { } stringValue)
+            {
+                values.Add(stringValue);
+            }
+        }
+
+        return string.Join(',', values);
+    }
+
     private static JsonArray ConvertEnumerablePropertyValueToJsonArray(System.Collections.IEnumerable enumerable)
     {
         var array = new JsonArray();
@@ -980,6 +1036,11 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         }
 
         return array;
+    }
+
+    private static bool SupportsJsonResourceProperties(string[]? clientCapabilities)
+    {
+        return clientCapabilities?.Contains(AuxiliaryBackchannelCapabilities.V3, StringComparer.Ordinal) == true;
     }
 
     private static string[]? GetStringArrayPropertyValue(object? value)
