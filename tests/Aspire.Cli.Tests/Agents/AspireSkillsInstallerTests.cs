@@ -19,6 +19,8 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class AspireSkillsInstallerTests
 {
+    private const string GitHubReleaseAssetBuildType = "https://actions.github.io/buildtypes/workflow/v1";
+
     [Fact]
     public async Task InstallAsync_WhenValidBundleIsCached_UsesCacheWithoutNetwork()
     {
@@ -120,6 +122,11 @@ public class AspireSkillsInstallerTests
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.True(attestationVerifier.VerifyCalled);
+            Assert.Equal(AspireSkillsInstaller.GitHubRepository, attestationVerifier.Repository);
+            Assert.Equal(AspireSkillsInstaller.ExpectedSourceRepository, attestationVerifier.ExpectedSourceRepository);
+            Assert.Equal(AspireSkillsInstaller.ExpectedWorkflowPath, attestationVerifier.ExpectedWorkflowPath);
+            Assert.Equal(GitHubReleaseAssetBuildType, attestationVerifier.ExpectedBuildType);
+            Assert.Equal(AspireSkillsInstaller.Version, attestationVerifier.ExpectedVersion);
             Assert.NotNull(releaseRequestUri);
             Assert.NotNull(assetRequestUri);
             Assert.Contains("/microsoft/aspire-skills/releases/tags/v0.0.1", releaseRequestUri.AbsolutePath);
@@ -298,6 +305,16 @@ public class AspireSkillsInstallerTests
     {
         public bool VerifyCalled { get; private set; }
 
+        public string? Repository { get; private set; }
+
+        public string? ExpectedSourceRepository { get; private set; }
+
+        public string? ExpectedWorkflowPath { get; private set; }
+
+        public string? ExpectedBuildType { get; private set; }
+
+        public string? ExpectedVersion { get; private set; }
+
         public ProvenanceVerificationResult Result { get; init; } = new()
         {
             Outcome = ProvenanceVerificationOutcome.Verified,
@@ -314,6 +331,12 @@ public class AspireSkillsInstallerTests
             CancellationToken cancellationToken)
         {
             VerifyCalled = true;
+            Repository = repository;
+            ExpectedSourceRepository = expectedSourceRepository;
+            ExpectedWorkflowPath = expectedWorkflowPath;
+            ExpectedBuildType = expectedBuildType;
+            ExpectedVersion = expectedVersion;
+
             return Task.FromResult(Result);
         }
     }

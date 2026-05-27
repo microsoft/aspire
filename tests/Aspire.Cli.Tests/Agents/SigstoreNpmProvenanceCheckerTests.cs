@@ -9,6 +9,8 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class SigstoreNpmProvenanceCheckerTests
 {
+    private const string GitHubReleaseAssetBuildType = "https://actions.github.io/buildtypes/workflow/v1";
+
     #region ExtractSlsaBundleJson Tests
 
     [Fact]
@@ -257,6 +259,59 @@ public class SigstoreNpmProvenanceCheckerTests
             refInfo => refInfo.Kind == "tags");
 
         Assert.Equal(ProvenanceVerificationOutcome.Verified, result.Outcome);
+    }
+
+    [Fact]
+    public void VerifyProvenanceFields_WithGitHubReleaseAssetBuildType_ReturnsVerified()
+    {
+        var provenance = new NpmProvenanceData
+        {
+            SourceRepository = "https://github.com/microsoft/aspire-skills",
+            WorkflowPath = ".github/workflows/publish.yml",
+            BuildType = GitHubReleaseAssetBuildType,
+            WorkflowRef = "refs/tags/v0.0.1",
+            BuilderId = "https://github.com/microsoft/aspire-skills/.github/workflows/publish.yml@refs/tags/v0.0.1"
+        };
+
+        var result = SigstoreNpmProvenanceChecker.VerifyProvenanceFields(
+            provenance,
+            "https://github.com/microsoft/aspire-skills",
+            ".github/workflows/publish.yml",
+            GitHubReleaseAssetBuildType,
+            refInfo => string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
+                       string.Equals(refInfo.Name, "v0.0.1", StringComparison.Ordinal));
+
+        Assert.Equal(ProvenanceVerificationOutcome.Verified, result.Outcome);
+    }
+
+    [Theory]
+    [InlineData("https://github.com/evil/aspire-skills", ".github/workflows/publish.yml", "refs/tags/v0.0.1", nameof(ProvenanceVerificationOutcome.SourceRepositoryMismatch))]
+    [InlineData("https://github.com/microsoft/aspire-skills", ".github/workflows/evil.yml", "refs/tags/v0.0.1", nameof(ProvenanceVerificationOutcome.WorkflowMismatch))]
+    [InlineData("https://github.com/microsoft/aspire-skills", ".github/workflows/publish.yml", "refs/heads/main", nameof(ProvenanceVerificationOutcome.WorkflowRefMismatch))]
+    public void VerifyProvenanceFields_WithGitHubReleaseAssetBuildType_RejectsUnexpectedProvenance(
+        string sourceRepository,
+        string workflowPath,
+        string workflowRef,
+        string expectedOutcome)
+    {
+        var provenance = new NpmProvenanceData
+        {
+            SourceRepository = sourceRepository,
+            WorkflowPath = workflowPath,
+            BuildType = GitHubReleaseAssetBuildType,
+            WorkflowRef = workflowRef,
+            BuilderId = "https://github.com/microsoft/aspire-skills/.github/workflows/publish.yml@refs/tags/v0.0.1"
+        };
+
+        var result = SigstoreNpmProvenanceChecker.VerifyProvenanceFields(
+            provenance,
+            "https://github.com/microsoft/aspire-skills",
+            ".github/workflows/publish.yml",
+            GitHubReleaseAssetBuildType,
+            refInfo => string.Equals(refInfo.Kind, "tags", StringComparison.Ordinal) &&
+                       string.Equals(refInfo.Name, "v0.0.1", StringComparison.Ordinal));
+
+        Assert.Equal(Enum.Parse<ProvenanceVerificationOutcome>(expectedOutcome), result.Outcome);
     }
 
     [Fact]
