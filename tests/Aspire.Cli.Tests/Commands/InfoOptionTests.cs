@@ -600,6 +600,54 @@ public class InfoOptionTests(ITestOutputHelper outputHelper)
         Assert.Empty(installs);
     }
 
+    [Theory]
+    [InlineData("ASPIRE.EXE")]
+    [InlineData("Aspire.exe")]
+    [InlineData("aspire.EXE")]
+    public async Task Info_Json_IncludesSidecarLessWindowsInstall_WithNonLowercaseFilename(string fileName)
+    {
+        // PathLookupHelper preserves the filesystem's recorded casing on Windows,
+        // and Windows command lookup is case-insensitive — installs whose on-disk
+        // executable is e.g. `Aspire.exe` or `ASPIRE.EXE` are real and must not be
+        // filtered out as "not an Aspire binary" just because IsDisplayableInstall
+        // is comparing strings.
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "Windows command lookup is the only path where case-insensitive filename matching applies.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        var installPath = $@"C:\Tools\Aspire\{fileName}";
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = installPath,
+                CanonicalPath = installPath,
+                Version = "13.2.0",
+                Channel = "10.0",
+                // Source = null — exercises the IsDisplayableInstall fallback that
+                // examines the resolved filename rather than the sidecar.
+                Source = null,
+                PathStatus = InstallationPathStatus.Active,
+                Status = InstallationInfoStatus.Ok,
+            })));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--info --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var payload = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!.AsObject();
+        var installs = payload["installs"]!.AsArray();
+        Assert.Single(installs);
+        Assert.Equal(installPath, installs[0]!["path"]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task Info_ChannelLocal_IsNotTreatedAsFailure()
     {

@@ -203,7 +203,16 @@ internal static class InstallationInfoOutput
         }
 
         var fileName = Path.GetFileName(install.CanonicalPath ?? install.Path ?? string.Empty);
-        var isAspireBinary = fileName is "aspire" or "aspire.exe";
+        // Windows command lookup is case-insensitive and PathLookupHelper preserves
+        // whatever spelling the filesystem records (e.g. `Aspire.exe`, `ASPIRE.EXE`).
+        // Using a case-sensitive match here would silently hide sidecar-less Windows
+        // installs whose on-disk filename is not lowercase. POSIX paths stay
+        // case-sensitive so a deliberately-named `Aspire` script on Linux is still
+        // excluded.
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var isAspireBinary =
+            string.Equals(fileName, "aspire", comparison) ||
+            string.Equals(fileName, "aspire.exe", comparison);
         if (!isAspireBinary)
         {
             logger.LogDebug("Ignoring discovery row path '{Path}' because it has no install source and the resolved filename '{FileName}' is not an Aspire CLI binary.", install.Path, fileName);
