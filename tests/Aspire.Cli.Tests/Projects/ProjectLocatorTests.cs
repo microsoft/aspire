@@ -442,7 +442,12 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         }));
 
         var executionContext = CreateExecutionContext(workingDirectory);
-        var projectLocator = CreateProjectLocator(executionContext);
+        var displayedSubtleMessages = new List<string>();
+        var interactionService = new TestInteractionService
+        {
+            DisplaySubtleMessageCallback = displayedSubtleMessages.Add
+        };
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
 
         var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
             projectFile: null,
@@ -452,6 +457,41 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(settingsAppHostFile.FullName, result.SelectedProjectFile?.FullName);
         Assert.Contains(result.AllProjectFileCandidates, file => file.FullName == settingsAppHostFile.FullName);
+        Assert.Contains(Path.Join("..", "SettingsAppHost.csproj"), displayedSubtleMessages);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileTreatsSettingsAppHostWithoutProjectHandlerAsUnsupported()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var settingsAppHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.custom"));
+        await File.WriteAllTextAsync(settingsAppHostFile.FullName, "Not a supported apphost type");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = "apphost.custom"
+            }
+        }));
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var interactionService = new TestInteractionService();
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
+
+        var exception = await Assert.ThrowsAsync<ProjectLocatorException>(() =>
+            projectLocator.UseOrFindAppHostProjectFileAsync(
+                projectFile: null,
+                multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.None,
+                createSettingsFile: false,
+                CancellationToken.None)).DefaultTimeout();
+
+        Assert.Equal(ProjectLocatorFailureReason.UnsupportedProjects, exception.FailureReason);
+        var warning = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+        Assert.Contains("apphost.custom", warning.Message);
     }
 
     [Fact]

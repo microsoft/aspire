@@ -784,6 +784,13 @@
           "description": "%configuration.aspire.globalAppHostsPollingInterval%",
           "scope": "window"
         },
+        "aspire.appHostDiscoveryTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "description": "%configuration.aspire.appHostDiscoveryTimeoutMs%",
+          "scope": "window"
+        },
         "aspire.enableCodeLens": {
           "type": "boolean",
           "default": true,

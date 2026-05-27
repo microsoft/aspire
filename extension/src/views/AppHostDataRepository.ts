@@ -5,7 +5,7 @@ import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
-import { AppHostCandidate, findAppHostsWithAspireLs, formatAppHostLanguage, isBuildableAppHostCandidate } from '../utils/workspace';
+import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
 
 export interface ResourceUrlJson {
     name: string | null;
@@ -141,7 +141,9 @@ export class AppHostDataRepository {
     private _workspaceAppHostDescription: string | undefined;
     private _workspaceAppHostDiscoveryComplete = false;
     private _workspaceAppHostDiscoveryUsesWorkspaceRoot = false;
-    private _getAppHostsProcess: ChildProcessWithoutNullStreams | undefined;
+    private readonly _appHostDiscoveryChangeDisposable: vscode.Disposable;
+    private readonly _appHostDiscoveryService: AppHostDiscoveryService;
+    private readonly _ownsAppHostDiscoveryService: boolean;
 
     // ── Error state ──
     private _describeErrorMessage: string | undefined;
@@ -155,7 +157,15 @@ export class AppHostDataRepository {
     private readonly _configChangeDisposable: vscode.Disposable;
     private _disposed = false;
 
-    constructor(private readonly _terminalProvider: AspireTerminalProvider) {
+    constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService) {
+        this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider);
+        this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
+        this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
+            const rootFolder = vscode.workspace.workspaceFolders?.[0];
+            if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
+                this._fetchWorkspaceAppHost();
+            }
+        });
         this._fetchWorkspaceAppHost();
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
             if (e.affectsConfiguration('aspire.globalAppHostsPollingInterval') && this._shouldPoll) {
@@ -266,13 +276,12 @@ export class AppHostDataRepository {
         this._disposed = true;
         this._stopPolling();
         this._stopDescribeWatch();
-        if (this._getAppHostsProcess) {
-            const getAppHostsProcess = this._getAppHostsProcess;
-            this._getAppHostsProcess = undefined;
-            this._terminateProcess(getAppHostsProcess, 'aspire ls');
-        }
         this._configChangeDisposable.dispose();
+        this._appHostDiscoveryChangeDisposable.dispose();
         this._onDidChangeData.dispose();
+        if (this._ownsAppHostDiscoveryService) {
+            this._appHostDiscoveryService.dispose();
+        }
     }
 
     // ── PS polling lifecycle ──
@@ -333,29 +342,16 @@ export class AppHostDataRepository {
         const rootFolder = workspaceFolders[0];
         this._workspaceAppHostDiscoveryUsesWorkspaceRoot = true;
 
-        extensionLogOutputChannel.info('Fetching workspace apphost via: aspire ls');
+        extensionLogOutputChannel.info('Fetching workspace apphost via shared AppHost discovery');
 
-        this._terminalProvider.getAspireCliExecutablePath().then(cliPath => {
+        this._appHostDiscoveryService.discover(rootFolder).then(appHosts => {
             if (this._disposed) {
                 return;
             }
 
-            const discovery = findAppHostsWithAspireLs(this._terminalProvider, cliPath, rootFolder);
-            this._getAppHostsProcess = discovery.process;
-            discovery.result.then(result => {
-                if (this._disposed) {
-                    return;
-                }
-
-                this._getAppHostsProcess = undefined;
-                this._workspaceAppHostDiscoveryComplete = true;
-                this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
-            }).catch(error => {
-                this._getAppHostsProcess = undefined;
-                this._workspaceAppHostDiscoveryComplete = true;
-                extensionLogOutputChannel.warn(`aspire ls error: ${error}`);
-                this._syncPolling();
-            });
+            const result = getWorkspaceAppHostProjectSearchResult(rootFolder, appHosts);
+            this._workspaceAppHostDiscoveryComplete = true;
+            this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
         }).catch(error => {
             this._workspaceAppHostDiscoveryComplete = true;
             extensionLogOutputChannel.warn(`Failed to fetch workspace apphost: ${error}`);

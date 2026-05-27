@@ -268,6 +268,12 @@
     <trans-unit id="walkthrough.getStarted.title">
       <source xml:lang="en">Get started with Aspire</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.goLabel">
+      <source xml:lang="en">Go</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.goDisplayName">
+      <source xml:lang="en">Go: {0}</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.enableDebugConfigEnvironmentLogging">
       <source xml:lang="en">Include environment variables when logging debug session configurations. This can help diagnose environment-related issues but may expose sensitive information in logs.</source>
     </trans-unit>
@@ -540,6 +546,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.fieldRequired">
       <source xml:lang="en">This field is required.</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.appHostDiscoveryTimeoutMs">
+      <source xml:lang="en">Timeout in milliseconds for Aspire CLI commands that discover AppHost projects. Minimum: 1000.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.unableToAddFolderToWorkspace">
       <source xml:lang="en">Unable to add folder to workspace: {0}</source>

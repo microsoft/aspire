@@ -50,6 +50,7 @@ suite('AppHostDataRepository', () => {
     let getCliPathStub: sinon.SinonStub;
     let spawnStub: sinon.SinonStub;
     let defaultWorkspaceFoldersStub: sinon.SinonStub;
+    let findFilesStub: sinon.SinonStub;
 
     setup(() => {
         subscriptions = [];
@@ -58,11 +59,13 @@ suite('AppHostDataRepository', () => {
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
         defaultWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
+        findFilesStub = sinon.stub(vscode.workspace, 'findFiles').resolves([]);
     });
 
     teardown(() => {
         spawnStub.restore();
         getCliPathStub.restore();
+        findFilesStub.restore();
         if (defaultWorkspaceFoldersStub.restore) {
             defaultWorkspaceFoldersStub.restore();
         }
@@ -410,7 +413,7 @@ suite('AppHostDataRepository', () => {
                     '/workspace/samples/Store/AppHost.csproj',
                 ],
             }));
-            await waitForMicrotasks();
+            await waitForAppHostDiscovery();
 
             assert.strictEqual(repository.viewMode, 'workspace');
             assert.strictEqual(repository.workspaceAppHostPath, '/workspace/apps/Store/AppHost.csproj');
@@ -439,6 +442,12 @@ suite('AppHostDataRepository', () => {
                     path: configuredAppHostPath,
                 },
             }));
+            findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                const pattern = typeof include === 'string' ? include : include.pattern;
+                return pattern.endsWith('aspire.config.json')
+                    ? [vscode.Uri.file(path.join(workspaceRoot, 'aspire.config.json'))]
+                    : [];
+            });
 
             let getAppHostsLineCallback: ((line: string) => void) | undefined;
             let psOptions: any;
@@ -677,7 +686,7 @@ suite('AppHostDataRepository', () => {
                 selected_project_file: '/workspace/apphost/apphost.cs',
                 all_project_file_candidates: ['/workspace/apphost/apphost.cs'],
             }));
-            await waitForMicrotasks();
+            await waitForAppHostDiscovery();
 
             assert.ok(psOptions);
             assert.deepStrictEqual(psArgs, ['ps', '--follow', '--format', 'json', '--resources']);
@@ -751,7 +760,7 @@ suite('AppHostDataRepository', () => {
                     },
                 ],
             }));
-            await waitForMicrotasks();
+            await waitForAppHostDiscovery();
 
             assert.ok(psOptions);
             psOptions.lineCallback(JSON.stringify([
@@ -822,7 +831,7 @@ suite('AppHostDataRepository', () => {
                     },
                 ],
             }));
-            await waitForMicrotasks();
+            await waitForAppHostDiscovery();
 
             assert.ok(psOptions);
             psOptions.lineCallback(JSON.stringify([]));
@@ -877,7 +886,7 @@ suite('AppHostDataRepository', () => {
                 selected_project_file: '/workspace/labs/ops/apphost.cs',
                 all_project_file_candidates: ['/workspace/labs/ops/apphost.cs'],
             }));
-            await waitForMicrotasks();
+            await waitForAppHostDiscovery();
 
             assert.ok(describeOptions);
             assert.ok(psOptions);
@@ -1310,7 +1319,7 @@ async function waitForAppHostDiscovery(): Promise<void> {
 }
 
 async function waitForCondition(condition: () => boolean, message: string): Promise<void> {
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 100; i++) {
         if (condition()) {
             return;
         }
