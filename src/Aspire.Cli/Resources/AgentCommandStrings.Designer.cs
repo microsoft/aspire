@@ -331,7 +331,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to VS Code / GitHub Copilot (.github/skills/).
+        ///   Looks up a localized string similar to Legacy GitHub Copilot (.github/skills/).
         /// </summary>
         internal static string SkillLocation_GitHubSkillsName {
             get {

@@ -111,19 +111,19 @@ The Aspire repository also includes custom Copilot skills that team members and 
 > [!NOTE]
 > AI-based code review and end-to-end testing can help find issues earlier, but they are not a replacement for human review and manual testing. Contributors are still responsible for understanding their changes and verifying the scenarios they affect.
 
-### [`code-review`](/.github/skills/code-review/SKILL.md)
+### [`code-review`](/.agents/skills/code-review/SKILL.md)
 
 Reviews a PR for high-confidence problems only, such as bugs, security issues, correctness errors, performance regressions, missing boundary error handling, concurrency or resource issues, flaky test patterns, and repository convention violations. It avoids style nits and duplicate review comments.
 
-### [`pr-testing`](/.github/skills/pr-testing/SKILL.md)
+### [`pr-testing`](/.agents/skills/pr-testing/SKILL.md)
 
 Installs the Aspire CLI and packages from a PR's dogfood build, verifies the installed CLI matches the PR head commit, analyzes changed areas, proposes targeted happy-path and negative test scenarios, runs the selected scenarios locally or in the repo container runner, captures evidence, and can produce a PR testing report.
 
-### [`cli-e2e-testing`](/.github/skills/cli-e2e-testing/SKILL.md)
+### [`cli-e2e-testing`](/.agents/skills/cli-e2e-testing/SKILL.md)
 
 Guides Aspire CLI end-to-end test authoring and debugging with Hex1b terminal automation. It covers test structure, local `localhive` archive workflows, Docker-based execution, install modes, prompt detection, and asciinema recordings for failures.
 
-### [`ci-test-failures`](/.github/skills/ci-test-failures/SKILL.md)
+### [`ci-test-failures`](/.agents/skills/ci-test-failures/SKILL.md)
 
 Guides GitHub Actions test-failure diagnosis. It covers downloading failed job logs and artifacts, extracting failed tests from runs, investigating failures without filing issues, and creating or updating failing-test issues with the repo tooling.
 

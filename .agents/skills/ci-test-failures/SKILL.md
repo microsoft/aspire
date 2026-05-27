@@ -555,4 +555,4 @@ Remove-Item tools/scripts/artifact_* -Recurse -Force -ErrorAction SilentlyContin
 
 - `tools/scripts/README.md` - Full documentation
 - `tools/scripts/Heartbeat.cs` - System monitoring tool for diagnosing hangs
-- `.github/skills/cli-e2e-testing/SKILL.md` - CLI E2E test troubleshooting
+- `.agents/skills/cli-e2e-testing/SKILL.md` - CLI E2E test troubleshooting

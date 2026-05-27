@@ -151,7 +151,7 @@
     <value>Required for Claude Code</value>
   </data>
   <data name="SkillLocation_GitHubSkillsName" xml:space="preserve">
-    <value>VS Code / GitHub Copilot (.github/skills/)</value>
+    <value>Legacy GitHub Copilot (.github/skills/)</value>
   </data>
   <data name="SkillLocation_GitHubSkillsDescription" xml:space="preserve">
     <value>Legacy location for GitHub Copilot skills</value>

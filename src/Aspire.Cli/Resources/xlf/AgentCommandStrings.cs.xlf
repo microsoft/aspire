@@ -183,8 +183,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SkillLocation_GitHubSkillsName">
-        <source>VS Code / GitHub Copilot (.github/skills/)</source>
-        <target state="new">VS Code / GitHub Copilot (.github/skills/)</target>
+        <source>Legacy GitHub Copilot (.github/skills/)</source>
+        <target state="new">Legacy GitHub Copilot (.github/skills/)</target>
         <note />
       </trans-unit>
       <trans-unit id="SkillLocation_OpenCodeDescription">
