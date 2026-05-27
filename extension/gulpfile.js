@@ -1,4 +1,4 @@
-const { execSync } = require('child_process');
+const { execFileSync } = require('child_process');
 const gulp = require('gulp');
 const path = require('path');
 const fs = require('fs');
@@ -40,7 +40,8 @@ const exportL10n = (done) => {
 
 		// Step 1: Export strings from source files to bundle.l10n.json
 		console.log('Exporting l10n strings from source files...');
-		execSync(`npx @vscode/l10n-dev export --outDir ${l10nDir} ./src`, {
+		const l10nDevBin = path.join(rootDir, 'node_modules', '.bin', process.platform === 'win32' ? 'vscode-l10n-dev.cmd' : 'vscode-l10n-dev');
+		execFileSync(l10nDevBin, ['export', '--outDir', l10nDir, './src'], {
 			cwd: rootDir,
 			stdio: 'inherit'
 		});

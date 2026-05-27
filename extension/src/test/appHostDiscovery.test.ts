@@ -223,6 +223,9 @@ suite('AppHost discovery', () => {
 
         test('times out hung CLI process and allows retry', async () => {
             stubFileSystemWatchers(sandbox);
+            sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+                get: <T>(key: string, defaultValue: T) => key === 'appHostDiscoveryTimeoutMs' ? 5000 as T : defaultValue,
+            } as vscode.WorkspaceConfiguration);
             const clock = sandbox.useFakeTimers();
             const killedArgs: string[][] = [];
             let hangCli = true;
@@ -248,11 +251,11 @@ suite('AppHost discovery', () => {
                 const discovery = service.discover(workspaceFolder);
                 await waitForMicrotasks();
 
-                await clock.tickAsync(30_000);
+                await clock.tickAsync(5_000);
                 await waitForMicrotasks();
-                await clock.tickAsync(30_000);
+                await clock.tickAsync(5_000);
 
-                await assert.rejects(discovery, /timed out after 30 seconds/);
+                await assert.rejects(discovery, /timed out after 5 seconds/);
                 assert.deepStrictEqual(killedArgs, [
                     ['ls', '--format', 'json'],
                     ['extension', 'get-apphosts'],

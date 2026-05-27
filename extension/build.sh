@@ -38,7 +38,7 @@ cd "$SCRIPT_DIR"
 
 echo ""
 echo "Running yarn install..."
-yarn install --immutable
+yarn install --frozen-lockfile --non-interactive
 
 echo ""
 echo "Running yarn compile..."

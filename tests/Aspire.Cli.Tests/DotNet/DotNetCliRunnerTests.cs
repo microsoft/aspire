@@ -800,7 +800,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task RunAsyncKeepsExtensionLaunchedAppHostAliveUntilCanceled()
+    public async Task RunAsyncKeepsExtensionLaunchedAppHostAliveUntilBackchannelDisconnects()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
@@ -836,7 +836,6 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var runner = provider.GetRequiredService<IDotNetCliRunner>();
         var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var cancellationTokenSource = new CancellationTokenSource();
 
         var runTask = runner.RunAsync(
             projectFile: projectFile,
@@ -850,7 +849,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             },
             backchannelCompletionSource,
             options: new ProcessInvocationOptions(),
-            cancellationToken: cancellationTokenSource.Token);
+            cancellationToken: CancellationToken.None);
 
         await launchAppHostCalledTcs.Task.DefaultTimeout();
         await backchannel.ConnectAsyncCalled.Task.DefaultTimeout();
@@ -859,8 +858,8 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         var completedTask = await Task.WhenAny(runTask, Task.Delay(TimeSpan.FromMilliseconds(100), TestContext.Current.CancellationToken));
         Assert.NotSame(runTask, completedTask);
 
-        await cancellationTokenSource.CancelAsync();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => runTask);
+        backchannel.DisconnectCompletionSource.SetResult();
+        Assert.Equal(CliExitCodes.Success, await runTask.DefaultTimeout());
     }
 
     [Fact]

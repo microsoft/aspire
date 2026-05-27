@@ -41,7 +41,7 @@ Set-Location $PSScriptRoot
 
 Write-Host ""
 Write-Host "Running yarn install..."
-yarn install --immutable
+yarn install --frozen-lockfile --non-interactive
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "yarn install failed with exit code $LASTEXITCODE"

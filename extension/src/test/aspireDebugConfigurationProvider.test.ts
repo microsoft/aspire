@@ -105,7 +105,7 @@ suite('AspireDebugConfigurationProvider', () => {
         assert.strictEqual(configs[0].program, projectPath);
     });
 
-    test('does not provide dynamic launch config when active file is not an AppHost candidate', async () => {
+    test('provides default dynamic launch config when active file is not an AppHost candidate', async () => {
         const folder = createWorkspaceFolder(tempDir);
         const programPath = path.join(tempDir, 'Web', 'Program.cs');
         const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(programPath, null));
@@ -113,10 +113,11 @@ suite('AspireDebugConfigurationProvider', () => {
 
         const configs = await provider.provideDebugConfigurations(folder);
 
-        assert.deepStrictEqual(configs, []);
+        assert.strictEqual(configs.length, 1);
+        assert.strictEqual(configs[0].program, folder.uri.fsPath);
     });
 
-    test('does not provide dynamic launch config when discovery fails', async () => {
+    test('provides default dynamic launch config when discovery fails', async () => {
         const folder = createWorkspaceFolder(tempDir);
         const programPath = path.join(tempDir, 'AppHost', 'Program.cs');
         const provider = new AspireDebugConfigurationProvider(createFailingAppHostDiscoveryService());
@@ -124,7 +125,19 @@ suite('AspireDebugConfigurationProvider', () => {
 
         const configs = await provider.provideDebugConfigurations(folder);
 
-        assert.deepStrictEqual(configs, []);
+        assert.strictEqual(configs.length, 1);
+        assert.strictEqual(configs[0].program, folder.uri.fsPath);
+    });
+
+    test('provides default dynamic launch config when there is no active editor', async () => {
+        const folder = createWorkspaceFolder(tempDir);
+        const provider = new AspireDebugConfigurationProvider(createAppHostDiscoveryService(folder.uri.fsPath, null));
+        sandbox.stub(vscode.window, 'activeTextEditor').value(undefined);
+
+        const configs = await provider.provideDebugConfigurations(folder);
+
+        assert.strictEqual(configs.length, 1);
+        assert.strictEqual(configs[0].program, folder.uri.fsPath);
     });
 
     test('leaves launch config program unchanged when debug target resolution fails', async () => {

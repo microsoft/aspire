@@ -444,7 +444,7 @@ internal sealed class ProjectLocator(
 
             async Task AddSettingsAppHostCandidateAsync()
             {
-                var settingsAppHost = await GetAppHostFromSettingsAsync(searchDirectory, searchParentDirectories: true, cancellationToken).ConfigureAwait(false);
+                var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories: true, silent: true, cancellationToken).ConfigureAwait(false);
                 if (settingsAppHost is null)
                 {
                     return;
@@ -462,24 +462,49 @@ internal sealed class ProjectLocator(
                 var handler = projectFactory.TryGetProject(settingsAppHost);
                 if (handler is null)
                 {
+                    var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, settingsAppHost.FullName);
+                    if (displayProgress)
+                    {
+                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, relativePath));
+                    }
+
+                    logger.LogDebug("Skipping configured AppHost project {SettingsAppHost} because no project handler was found.", settingsAppHost.FullName);
+                    hasUnsupportedProjects = true;
                     return;
                 }
 
                 var validationResult = await handler.ValidateAppHostAsync(settingsAppHost, cancellationToken).ConfigureAwait(false);
+                var settingsAppHostRelativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, settingsAppHost.FullName);
                 if (validationResult.IsValid)
                 {
+                    if (displayProgress)
+                    {
+                        interactionService.DisplaySubtleMessage(settingsAppHostRelativePath);
+                    }
+
                     var appHostProject = new AppHostProjectCandidate(settingsAppHost, handler.LanguageId);
                     appHostProjects.Add(appHostProject);
                     await ReportCandidateFoundAsync(appHostProject, cancellationToken).ConfigureAwait(false);
                 }
                 else if (validationResult.IsPossiblyUnbuildable)
                 {
+                    if (displayProgress)
+                    {
+                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, settingsAppHostRelativePath));
+                    }
+
                     var appHostProject = new AppHostProjectCandidate(settingsAppHost, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable);
                     unbuildableSuspectedAppHostProjects.Add(appHostProject);
                     await ReportCandidateFoundAsync(appHostProject, cancellationToken).ConfigureAwait(false);
                 }
                 else if (validationResult.IsUnsupported)
                 {
+                    if (displayProgress)
+                    {
+                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileUnsupportedInCurrentEnvironment, settingsAppHostRelativePath));
+                    }
+
+                    logger.LogDebug("Skipping unsupported configured AppHost project {SettingsAppHost}", settingsAppHost.FullName);
                     hasUnsupportedProjects = true;
                 }
             }

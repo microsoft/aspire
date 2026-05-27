@@ -7,6 +7,7 @@ import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
+import { getAppHostDiscoveryTimeoutMs } from './settings';
 
 // Mirrors the `aspire ls --format json` candidate shape documented in
 // docs/specs/cli-output-formats.md. Older CLI fallback results are adapted into
@@ -39,8 +40,6 @@ interface LegacyAppHostProjectSearchResult {
 const discoveryExcludePattern = '{**/artifacts/**,**/[Bb]in/**,**/[Oo]bj/**,**/node_modules/**,**/.git/**,**/.vs/**,**/.vscode-test/**,**/.idea/**,**/.aspire/modules/**}';
 
 export class AppHostDiscoveryService implements vscode.Disposable {
-    private static readonly _cliDiscoveryTimeoutMs = 30_000;
-
     private readonly _onDidChangeCandidates = new vscode.EventEmitter<vscode.WorkspaceFolder>();
     private readonly _cache = new Map<string, Promise<CandidateAppHostDisplayInfo[]>>();
     private readonly _watchers = new Map<string, vscode.Disposable[]>();
@@ -302,9 +301,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }
 
             this._activeCliProcesses.add(childProcess);
+            const timeoutMs = getAppHostDiscoveryTimeoutMs();
             timeout = setTimeout(() => {
-                cancel(new Error(`aspire ${args.join(' ')} timed out after ${AppHostDiscoveryService._cliDiscoveryTimeoutMs / 1000} seconds.`));
-            }, AppHostDiscoveryService._cliDiscoveryTimeoutMs);
+                cancel(new Error(`aspire ${args.join(' ')} timed out after ${timeoutMs / 1000} seconds.`));
+            }, timeoutMs);
         });
     }
 }

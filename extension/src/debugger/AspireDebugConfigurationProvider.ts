@@ -16,17 +16,17 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
 
         const activeEditor = vscode.window.activeTextEditor;
         if (!activeEditor) {
-            return [];
+            return [this.createDefaultConfiguration(folder)];
         }
 
         const activeEditorFolder = vscode.workspace.getWorkspaceFolder(activeEditor.document.uri);
         if (activeEditorFolder?.uri.toString() !== folder.uri.toString()) {
-            return [];
+            return [this.createDefaultConfiguration(folder)];
         }
 
         const candidate = await this.tryFindCandidateForEditorFile(activeEditor.document.uri.fsPath, folder);
         if (!candidate) {
-            return [];
+            return [this.createDefaultConfiguration(folder)];
         }
 
         return [{
@@ -89,5 +89,14 @@ export class AspireDebugConfigurationProvider implements vscode.DebugConfigurati
             extensionLogOutputChannel.warn(`Failed to resolve AppHost debug target ${filePath}: ${error}`);
             return filePath;
         }
+    }
+
+    private createDefaultConfiguration(folder: vscode.WorkspaceFolder): vscode.DebugConfiguration {
+        return {
+            type: 'aspire',
+            request: 'launch',
+            name: defaultConfigurationName,
+            program: folder.uri.fsPath
+        };
     }
 }

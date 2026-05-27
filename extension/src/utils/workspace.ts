@@ -201,10 +201,7 @@ export async function checkForExistingAppHostPathInWorkspace(appHostDiscoverySer
             extensionLogOutputChannel.error(`Failed to retrieve AppHost projects: ${error}`);
         });
 
-    return {
-        dispose() {
-        }
-    };
+    return null;
 }
 
 async function promptToAddAppHostPathToSettingsFile(result: AppHostProjectSearchResult, settingsFileExists: boolean, settingsFileLocation: vscode.Uri, rootFolder: vscode.WorkspaceFolder, setEnableSettingsFileCreationPromptOnStartup: (value: boolean) => Promise<void>): Promise<void> {
