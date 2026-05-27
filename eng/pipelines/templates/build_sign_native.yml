@@ -120,7 +120,7 @@ jobs:
                 if ($override -notin @('stable', 'staging', 'daily')) {
                   throw "aspireCliChannelOverride='$override' is not one of: auto, stable, staging, daily."
                 }
-                $channel = $override
+                $channel = $override.ToLowerInvariant()
               }
               elseif ($reason -eq 'PullRequest') {
                 # Defense in depth: validate digit-only PR number rather than just
