@@ -137,11 +137,13 @@ public class ReleaseScriptPSFunctionTests(ITestOutputHelper testOutput)
         Assert.Equal(expectedUrl, result.Output.Trim());
     }
 
-    [Fact]
-    public async Task GetAspireCliUrl_WithPrereleaseVersion_ReturnsCiDotNetUrl()
+    [Theory]
+    [InlineData("13.3.0-dev")]
+    [InlineData("13.3.0-preview.1.25366.3")]
+    [InlineData("13.3.0-local")]
+    public async Task GetAspireCliUrl_WithPrereleaseVersion_ReturnsCiDotNetUrl(string version)
     {
         using var env = new TestEnvironment();
-        var version = "13.2.0-preview.1.25366.3";
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
             $"(Get-AspireCliUrl -Version '{version}' -Quality 'release' -RuntimeIdentifier 'linux-x64' -Extension 'tar.gz').ArchiveUrl",
@@ -154,11 +156,13 @@ public class ReleaseScriptPSFunctionTests(ITestOutputHelper testOutput)
         Assert.Equal($"https://ci.dot.net/public/aspire/{version}/aspire-cli-linux-x64-{version}.tar.gz", result.Output.Trim());
     }
 
-    [Fact]
-    public async Task GetAspireCliUrl_WithPrereleaseVersionChecksum_ReturnsCiDotNetChecksumUrl()
+    [Theory]
+    [InlineData("13.3.0-dev")]
+    [InlineData("13.3.0-preview.1.25366.3")]
+    [InlineData("13.3.0-local")]
+    public async Task GetAspireCliUrl_WithPrereleaseVersionChecksum_ReturnsCiDotNetChecksumUrl(string version)
     {
         using var env = new TestEnvironment();
-        var version = "13.2.0-preview.1.25366.3";
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
             $"(Get-AspireCliUrl -Version '{version}' -Quality 'release' -RuntimeIdentifier 'linux-x64' -Extension 'tar.gz').ChecksumUrl",

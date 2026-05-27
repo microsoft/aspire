@@ -137,11 +137,13 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         Assert.Equal(expectedUrl, result.Output.Trim());
     }
 
-    [Fact]
-    public async Task ConstructAspireCliUrl_WithPrereleaseVersion_ReturnsCiDotNetUrl()
+    [Theory]
+    [InlineData("13.3.0-dev")]
+    [InlineData("13.3.0-preview.1.25366.3")]
+    [InlineData("13.3.0-local")]
+    public async Task ConstructAspireCliUrl_WithPrereleaseVersion_ReturnsCiDotNetUrl(string version)
     {
         using var env = new TestEnvironment();
-        var version = "13.2.0-preview.1.25366.3";
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
             $"construct_aspire_cli_url '{version}' 'release' 'linux-x64' 'tar.gz'",
@@ -157,11 +159,13 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         Assert.Contains("linux-x64", url);
     }
 
-    [Fact]
-    public async Task ConstructAspireCliUrl_WithPrereleaseVersionAndChecksum_ReturnsCiDotNetChecksumUrl()
+    [Theory]
+    [InlineData("13.3.0-dev")]
+    [InlineData("13.3.0-preview.1.25366.3")]
+    [InlineData("13.3.0-local")]
+    public async Task ConstructAspireCliUrl_WithPrereleaseVersionAndChecksum_ReturnsCiDotNetChecksumUrl(string version)
     {
         using var env = new TestEnvironment();
-        var version = "13.2.0-preview.1.25366.3";
         using var cmd = new ScriptFunctionCommand(
             s_releaseScript,
             $"construct_aspire_cli_url '{version}' 'release' 'linux-x64' 'tar.gz' 'true'",

@@ -323,7 +323,10 @@ validate_content_type() {
         #
         #   HTTP/2 200
         #   content-type: application/octet-stream
-        # GitHub release assets use this shape, so only validate the final response.
+        # GitHub documents release asset downloads as either 200 OK or 302 Found.
+        # The 302 is an HTML redirect page, but the final 200 response is the
+        # archive/checksum, so validate only that block.
+        # See: https://docs.github.com/rest/releases/assets#get-a-release-asset
         local final_headers
         final_headers=$(printf "%s\n" "$headers" | awk '
             /^HTTP(\/| )[0-9]/ {
