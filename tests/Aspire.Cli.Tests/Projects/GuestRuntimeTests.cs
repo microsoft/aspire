@@ -823,6 +823,53 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProcessGuestLauncher_ClosesChildStdinSoReadsObserveEof()
+    {
+        // Regression coverage for https://github.com/microsoft/aspire/issues/16791.
+        // Before this fix, ProcessGuestLauncher did not redirect/close stdin, so a child
+        // process (e.g. `npm install` postinstall scripts on macOS) inherited the parent
+        // CLI's TTY and any stdin read blocked forever - making `aspire new` for the
+        // TypeScript starter appear to stall.
+        var launcher = new ProcessGuestLauncher(
+            "test",
+            _loggerFactory.CreateLogger<ProcessGuestLauncher>());
+
+        string command;
+        string[] args;
+        if (OperatingSystem.IsWindows())
+        {
+            // `set /p` reads a line from stdin. With redirected+closed stdin it sees EOF and
+            // exits immediately. With an inherited or open-empty stdin it would block.
+            command = "cmd.exe";
+            args = ["/c", "set /p line=<nul & echo eof"];
+        }
+        else
+        {
+            // `read` returns non-zero on EOF; the script prints `eof` and exits.
+            command = "sh";
+            args = ["-c", "if read line; then echo got-input; else echo eof; fi"];
+        }
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var stopwatch = Stopwatch.StartNew();
+
+        var (exitCode, output) = await launcher.LaunchAsync(
+            command,
+            args,
+            new DirectoryInfo(Path.GetTempPath()),
+            new Dictionary<string, string>(),
+            cts.Token);
+
+        stopwatch.Stop();
+
+        Assert.False(cts.IsCancellationRequested,
+            $"Child process did not exit on its own within 10s - stdin may not have been closed. Elapsed: {stopwatch.Elapsed}.");
+        Assert.Equal(0, exitCode);
+        var lines = output?.GetLines().Select(l => l.Line).ToArray() ?? [];
+        Assert.Contains(lines, l => l.Contains("eof", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task ProcessGuestLauncher_KillsProcessAndReturnsOnCancellation()
     {
         // Regression coverage for the AppHost system teardown path: when the AppHost server's
