@@ -2053,7 +2053,7 @@ public class DcpExecutorTests
 
         await executor.RunApplicationAsync();
 
-        var exe = Assert.Single(kubernetes.CreatedResources.OfType<Executable>());
+        var exe = Assert.Single(kubernetes.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "proj");
         Assert.True(exe.TryGetProjectLaunchConfiguration(out var plc));
         Assert.NotNull(plc);
         Assert.NotNull(plc!.ServerReadyAction);
@@ -2094,7 +2094,7 @@ public class DcpExecutorTests
 
         await executor.RunApplicationAsync();
 
-        var exe = Assert.Single(kubernetes.CreatedResources.OfType<Executable>());
+        var exe = Assert.Single(kubernetes.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "proj");
         Assert.True(exe.TryGetProjectLaunchConfiguration(out var plc));
         Assert.NotNull(plc);
         Assert.NotNull(plc!.ServerReadyAction);
