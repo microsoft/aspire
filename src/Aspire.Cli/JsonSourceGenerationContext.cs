@@ -55,7 +55,7 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(List<CandidateAppHostDisplayInfo>))]
 [JsonSerializable(typeof(InstallationInfo))]
 [JsonSerializable(typeof(InstallationInfo[]))]
-[JsonSerializable(typeof(List<InstallListItem>))]
+[JsonSerializable(typeof(List<InstallationInfo>))]
 [JsonSerializable(typeof(InfoOutput))]
 [JsonSerializable(typeof(AppHostInfoCacheEntry))]
 [JsonSerializable(typeof(AppHostProjectInspectionOutput))]
