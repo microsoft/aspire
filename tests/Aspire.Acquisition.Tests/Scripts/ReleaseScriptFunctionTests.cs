@@ -153,10 +153,7 @@ public class ReleaseScriptFunctionTests(ITestOutputHelper testOutput)
         var result = await cmd.ExecuteAsync();
 
         result.EnsureSuccessful();
-        var url = result.Output.Trim();
-        Assert.Contains("ci.dot.net/public/aspire", url);
-        Assert.Contains(version, url);
-        Assert.Contains("linux-x64", url);
+        Assert.Equal($"https://ci.dot.net/public/aspire/{version}/aspire-cli-linux-x64-{version}.tar.gz", result.Output.Trim());
     }
 
     [Theory]

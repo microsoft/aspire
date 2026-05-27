@@ -816,7 +816,7 @@ construct_aspire_cli_url() {
             # For checksum URLs, use the public-checksums URL
             base_url="https://ci.dot.net/public-checksums/aspire"
         else
-            base_url="https://ci.dot.net/public/aspire/"
+            base_url="https://ci.dot.net/public/aspire"
         fi
 
         printf "${base_url}/${version}/aspire-cli-${rid}-${version}.${extension}"
