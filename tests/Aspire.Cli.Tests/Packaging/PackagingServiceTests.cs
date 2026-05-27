@@ -65,7 +65,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
                 [PackagingService.OverrideStagingFeedConfigKey] = "https://example.com/nuget/v3/index.json"
             })
             .Build();
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance, isStableShapedCliVersion: () => false);
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
 
@@ -80,6 +80,35 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
         Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingOnStableShapedCli_DefaultsToStableQuality()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17527: during release
+        // stabilization the staging CLI ships with a stable-shaped version (e.g. "13.4.0"). The
+        // shared dotnet9 daily feed only carries prerelease-tagged 13.4.0-preview.* packages,
+        // so a stabilizing staging CLI must route Aspire.* to the SHA-derived darc-pub-aspire-<hash>
+        // feed instead — which requires defaulting the synthesized staging channel quality to
+        // Stable (so useSharedFeed in CreateStagingChannel resolves false).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideStagingFeedConfigKey] = "https://example.com/nuget/v3/index.json"
+            })
+            .Build();
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance, isStableShapedCliVersion: () => true);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
     }
 
     [Fact]
