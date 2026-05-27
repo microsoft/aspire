@@ -700,7 +700,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             Assert.NotEmpty(results);
             Assert.Equal(InstallationInfoStatus.Ok, results[0].Status);
             Assert.DoesNotContain(results, info =>
-                info.Path.StartsWith(toolStore, StringComparison.Ordinal) ||
+                (info.Path?.StartsWith(toolStore, StringComparison.Ordinal) ?? false) ||
                 (info.CanonicalPath?.StartsWith(toolStore, StringComparison.Ordinal) ?? false));
         }
         finally

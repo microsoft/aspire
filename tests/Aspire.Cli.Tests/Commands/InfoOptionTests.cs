@@ -353,12 +353,17 @@ public class InfoOptionTests(ITestOutputHelper outputHelper)
                 Assert.Equal("script", row!["id"]!.GetValue<string>());
                 Assert.Equal("script", row["kind"]!.GetValue<string>());
                 Assert.Equal("stable", row["channel"]!.GetValue<string>());
-                Assert.Equal("active", row["status"]!.GetValue<string>());
+                // Status (lifecycle) and pathStatus (PATH-axis) are orthogonal on the wire.
+                // The aggregate previously projected pathStatus into status for OK rows;
+                // unifying the shape with --self drops that projection.
+                Assert.Equal("ok", row["status"]!.GetValue<string>());
+                Assert.Equal("active", row["pathStatus"]!.GetValue<string>());
             },
             row =>
             {
                 Assert.Equal("script-2", row!["id"]!.GetValue<string>());
                 Assert.Equal("failed", row["status"]!.GetValue<string>());
+                Assert.Equal("shadowed", row["pathStatus"]!.GetValue<string>());
                 Assert.Equal("peer probe failed", row["statusReason"]!.GetValue<string>());
             },
             row =>
@@ -366,6 +371,10 @@ public class InfoOptionTests(ITestOutputHelper outputHelper)
                 Assert.Equal("pr-17400", row!["id"]!.GetValue<string>());
                 Assert.Equal("orphan-hive", row["kind"]!.GetValue<string>());
                 Assert.Equal("no install found", row["status"]!.GetValue<string>());
+                // Orphan-hive rows have no installation binary: path is absent (omitted
+                // by WhenWritingNull), hive points at the directory on disk.
+                Assert.Null(row["path"]);
+                Assert.NotNull(row["hive"]);
             });
     }
 
@@ -771,6 +780,284 @@ public class InfoOptionTests(ITestOutputHelper outputHelper)
         Assert.Equal("pr", parsed.Source);
         Assert.Equal(InstallationPathStatus.Active, parsed.PathStatus);
         Assert.Equal(InstallationInfoStatus.Ok, parsed.Status);
+    }
+
+    [Fact]
+    public async Task Info_UnifiedShape_AggregateRowAndSelfRowHaveSameKeys()
+    {
+        // Contract pin: `--info --format json` (installs[*]) and
+        // `--info --self --format json` (bare array element) are the SAME wire
+        // shape — InstallationInfo. A consumer parsing one can use the same
+        // parser for the other. This catches a future drift where someone
+        // introduces a per-surface record type and silently splits the wire
+        // contract again.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = Path.Combine(aspireHome, "bin", "aspire"),
+                CanonicalPath = Path.Combine(aspireHome, "bin", "aspire"),
+                Version = "13.2.0",
+                Channel = "stable",
+                Source = "script",
+                PathStatus = InstallationPathStatus.Active,
+                Status = InstallationInfoStatus.Ok,
+            })));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var aggregateExitCode = await command.Parse("--info --format json").InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, aggregateExitCode);
+        var aggregateRow = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!.AsObject()["installs"]!.AsArray()[0]!.AsObject();
+        var aggregateKeys = aggregateRow.Select(kvp => kvp.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+
+        outputWriter.Logs.Clear();
+
+        var selfExitCode = await command.Parse("--info --self --format json").InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, selfExitCode);
+        var selfRow = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!.AsArray()[0]!.AsObject();
+        var selfKeys = selfRow.Select(kvp => kvp.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+
+        // The aggregate carries `id`/`kind`/`hive`/`managedBy` always (even if
+        // some are absent from a particular row via WhenWritingNull). The
+        // --self surface populates `path`/`canonicalPath`/`version`/`source`/
+        // `pathStatus`/`status` for the running binary. Both row shapes are
+        // drawn from the same record, so any key present on one MUST be a
+        // valid key on the other; the unified shape is the union of fields
+        // the record exposes.
+        var aggregateKeySet = aggregateKeys.ToHashSet(StringComparer.Ordinal);
+        var selfKeySet = selfKeys.ToHashSet(StringComparer.Ordinal);
+        var allowedKeys = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "id", "kind", "path", "canonicalPath", "version", "channel",
+            "source", "hive", "pathStatus", "status", "statusReason", "managedBy",
+        };
+        Assert.Subset(allowedKeys, aggregateKeySet);
+        Assert.Subset(allowedKeys, selfKeySet);
+    }
+
+    [Fact]
+    public async Task Info_Json_StatusAndPathStatusAreOrthogonalForOkInstalls()
+    {
+        // Contract pin: the aggregate previously projected pathStatus
+        // ("active"/"shadowed"/"notOnPath") into the `status` field for OK rows,
+        // which forced JSON consumers to disambiguate two axes from one field
+        // (and made it impossible to distinguish "ok and not on PATH" from
+        // "failed and not probed"). The unified shape exposes both axes
+        // independently: `status` is lifecycle (ok/failed/notProbed/no install
+        // found), `pathStatus` is the PATH-axis. Catches accidental
+        // re-introduction of the projection.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = Path.Combine(aspireHome, "bin", "aspire"),
+                CanonicalPath = Path.Combine(aspireHome, "bin", "aspire"),
+                Channel = "stable",
+                Source = "script",
+                PathStatus = InstallationPathStatus.NotOnPath,
+                Status = InstallationInfoStatus.Ok,
+            })));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse("--info --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var row = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!.AsObject()["installs"]!.AsArray()[0]!;
+        // An OK install that is not on PATH must report status="ok" and pathStatus="notOnPath"
+        // — never status="notOnPath".
+        Assert.Equal("ok", row["status"]!.GetValue<string>());
+        Assert.Equal("notOnPath", row["pathStatus"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Info_Json_OrphanHiveRow_HasNullPathAndPopulatedHive()
+    {
+        // Contract pin: an orphan-hive row describes a hive directory on disk
+        // with no matching CLI binary, so `path` is absent (omitted via
+        // WhenWritingNull). The `hive` field carries the directory; `kind`
+        // is the discriminator. Catches accidental regressions that would
+        // populate a synthetic path.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        Directory.CreateDirectory(Path.Combine(aspireHome, "hives", "pr-17400", "packages"));
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        // No discovered installs — the hive directory is truly orphan.
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = Path.Combine(aspireHome, "bin", "aspire"),
+                CanonicalPath = Path.Combine(aspireHome, "bin", "aspire"),
+                Channel = "stable",
+                Source = "script",
+                PathStatus = InstallationPathStatus.Active,
+                Status = InstallationInfoStatus.Ok,
+            })));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse("--info --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var installs = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!.AsObject()["installs"]!.AsArray();
+        var orphan = Assert.Single(installs, row => row!["kind"]!.GetValue<string>() == "orphan-hive");
+        Assert.Null(orphan!["path"]);
+        Assert.NotNull(orphan["hive"]);
+        Assert.Equal("pr-17400", orphan["channel"]!.GetValue<string>());
+        Assert.Equal("no install found", orphan["status"]!.GetValue<string>());
+        Assert.Equal("notOnPath", orphan["pathStatus"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task Info_Json_SortOrder_ActiveThenShadowedThenNotOnPathThenFailedThenOrphanHive()
+    {
+        // Behavior pin: deterministic row order regardless of discovery yield.
+        // Active installs first (the one a user invokes), then shadowed
+        // (visible but masked), then not-on-PATH-but-ok (probed and usable),
+        // then failed/notProbed (anomalies), then orphan-hives (purely
+        // disk-side, no install). Stable across versions so a scripted
+        // consumer iterating `installs[]` sees the same prioritisation.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        Directory.CreateDirectory(Path.Combine(aspireHome, "hives", "pr-17400", "packages"));
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = Path.Combine(aspireHome, "bin", "aspire"),
+                CanonicalPath = Path.Combine(aspireHome, "bin", "aspire"),
+                Channel = "stable",
+                Source = "script",
+                PathStatus = InstallationPathStatus.Active,
+                Status = InstallationInfoStatus.Ok,
+            },
+            [
+                new InstallationInfo
+                {
+                    Path = Path.Combine(aspireHome, "shadowed", "aspire"),
+                    CanonicalPath = Path.Combine(aspireHome, "shadowed", "aspire"),
+                    Channel = "daily",
+                    Source = "script",
+                    PathStatus = InstallationPathStatus.Shadowed,
+                    Status = InstallationInfoStatus.Ok,
+                },
+                new InstallationInfo
+                {
+                    Path = Path.Combine(aspireHome, "offpath", "aspire"),
+                    CanonicalPath = Path.Combine(aspireHome, "offpath", "aspire"),
+                    Channel = "staging",
+                    Source = "script",
+                    PathStatus = InstallationPathStatus.NotOnPath,
+                    Status = InstallationInfoStatus.Ok,
+                },
+                new InstallationInfo
+                {
+                    Path = Path.Combine(aspireHome, "broken", "aspire"),
+                    CanonicalPath = Path.Combine(aspireHome, "broken", "aspire"),
+                    Channel = "local",
+                    Source = "script",
+                    PathStatus = InstallationPathStatus.NotOnPath,
+                    Status = InstallationInfoStatus.Failed,
+                    StatusReason = "peer probe failed",
+                },
+            ])));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse("--info --format json").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var installs = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!.AsObject()["installs"]!.AsArray();
+        Assert.Collection(installs,
+            row =>
+            {
+                Assert.Equal("ok", row!["status"]!.GetValue<string>());
+                Assert.Equal("active", row["pathStatus"]!.GetValue<string>());
+            },
+            row =>
+            {
+                Assert.Equal("ok", row!["status"]!.GetValue<string>());
+                Assert.Equal("shadowed", row["pathStatus"]!.GetValue<string>());
+            },
+            row =>
+            {
+                Assert.Equal("ok", row!["status"]!.GetValue<string>());
+                Assert.Equal("notOnPath", row["pathStatus"]!.GetValue<string>());
+            },
+            row =>
+            {
+                Assert.Equal("failed", row!["status"]!.GetValue<string>());
+            },
+            row =>
+            {
+                Assert.Equal("orphan-hive", row!["kind"]!.GetValue<string>());
+                Assert.Equal("no install found", row["status"]!.GetValue<string>());
+            });
+    }
+
+    [Fact]
+    public async Task Info_TextRendering_DisplaysStatusAndOnPathSeparately()
+    {
+        // Behavior pin: the human text rendering surfaces both lifecycle and
+        // PATH axes independently (`Status   ok` / `On PATH  active`) rather
+        // than collapsing the two into a single ambiguous Status line. This
+        // mirrors what `--self` has always done; unification extends it to the
+        // aggregate. Catches a future regression where a renderer change drops
+        // one of the two lines.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = Path.Combine(aspireHome, "bin", "aspire"),
+                CanonicalPath = Path.Combine(aspireHome, "bin", "aspire"),
+                Version = "13.2.0",
+                Channel = "stable",
+                Source = "script",
+                PathStatus = InstallationPathStatus.Active,
+                Status = InstallationInfoStatus.Ok,
+            })));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse("--info").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var output = string.Join(Environment.NewLine, outputWriter.Logs);
+        Assert.Contains("Status   ok", output);
+        Assert.Contains("On PATH  active", output);
     }
 
     private sealed class ConstantChannelReader(string channel) : IIdentityChannelReader

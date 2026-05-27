@@ -155,8 +155,10 @@ internal sealed class InfoOptionAction : AsynchronousCommandLineAction
             _interactionService.DisplayMarkdown($"**{row.Id}**  {row.Kind}");
             DisplayField("Status", row.Status);
             DisplayField("Channel", row.Channel);
+            DisplayField("Version", row.Version);
             DisplayField("Path", row.Path);
             DisplayField("Hive", row.Hive);
+            DisplayField("On PATH", row.PathStatus);
             if (row.StatusReason is { Length: > 0 })
             {
                 DisplayField("Reason", row.StatusReason);

@@ -14,7 +14,7 @@ namespace Aspire.Cli.Commands;
 ///   <item><see cref="DescribeSelfSafely"/> — wraps <see cref="IInstallationDiscovery.DescribeSelf"/>
 ///   with the failure-tolerant shape consumed by the peer-probe contract.</item>
 ///   <item><see cref="BuildRowsAsync"/> and friends — classify a discovery walk into
-///   the <see cref="InstallListItem"/> rows surfaced by <c>aspire --info</c>.</item>
+///   the <see cref="InstallationInfo"/> rows surfaced by <c>aspire --info</c>.</item>
 /// </list>
 /// </summary>
 /// <remarks>
@@ -27,15 +27,6 @@ namespace Aspire.Cli.Commands;
 /// </remarks>
 internal static class InstallationInfoOutput
 {
-    /// <summary>
-    /// Wire value for the <c>status</c> field of a hive-only row that has no
-    /// matching discovered install. Single source of truth for both the row
-    /// constructor in <see cref="BuildRowsAsync"/> and the sort-key switch in
-    /// <see cref="GetSortRank"/> so a future rename can't silently split the
-    /// two and demote orphan rows out of their last-sorted bucket.
-    /// </summary>
-    internal const string OrphanHiveStatus = "no install found";
-
     public static IReadOnlyList<InstallationInfo> DescribeSelfSafely(IInstallationDiscovery discovery, ILogger logger)
     {
         try
@@ -55,7 +46,7 @@ internal static class InstallationInfoOutput
         }
     }
 
-    public static async Task<List<InstallListItem>> BuildRowsSafelyAsync(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, ILogger logger, CancellationToken cancellationToken)
+    public static async Task<List<InstallationInfo>> BuildRowsSafelyAsync(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, ILogger logger, CancellationToken cancellationToken)
     {
         try
         {
@@ -75,20 +66,20 @@ internal static class InstallationInfoOutput
             logger.LogWarning(ex, "Install discovery walk failed for `aspire --info`.");
             return
             [
-                new InstallListItem(
-                    Id: "discovery",
-                    Kind: "discovery-failed",
-                    Channel: null,
-                    Path: null,
-                    Hive: null,
-                    Status: InstallationInfoStatus.Failed,
-                    StatusReason: ex.Message,
-                    ManagedBy: null)
+                new InstallationInfo
+                {
+                    Id = "discovery",
+                    Kind = "discovery-failed",
+                    Path = null,
+                    PathStatus = InstallationPathStatus.NotOnPath,
+                    Status = InstallationInfoStatus.Failed,
+                    StatusReason = ex.Message,
+                }
             ];
         }
     }
 
-    public static async Task<List<InstallListItem>> BuildRowsAsync(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, ILogger logger, CancellationToken cancellationToken)
+    public static async Task<List<InstallationInfo>> BuildRowsAsync(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, ILogger logger, CancellationToken cancellationToken)
     {
         var discoveredInstalls = (await installationDiscovery.DiscoverAllAsync(cancellationToken))
             .Where(i => IsDisplayableInstall(i, logger))
@@ -98,32 +89,40 @@ internal static class InstallationInfoOutput
             .Where(c => !string.IsNullOrEmpty(c))
             .ToHashSet(StringComparer.Ordinal);
         var ids = new Dictionary<string, int>(StringComparer.Ordinal);
-        var rows = new List<InstallListItem>();
+        var rows = new List<InstallationInfo>();
 
         foreach (var install in discoveredInstalls)
         {
             var baseId = GetInstallId(install);
             var id = GetUniqueId(baseId, ids, logger);
             var kind = GetInstallKind(install);
-            var status = GetInstallStatus(install);
             var hive = install.Channel is { Length: > 0 } && hiveEnumerator.HasHive(install.Channel)
                 ? hiveEnumerator.GetHivePath(install.Channel)
                 : null;
             var managedBy = GetManagedBy(install);
             logger.LogDebug(
-                "Classified install path '{Path}' as id '{Id}', kind '{Kind}', channel '{Channel}', status '{Status}', hive '{Hive}', managedBy '{ManagedBy}'. Source='{Source}', pathStatus='{PathStatus}', discoveryStatus='{DiscoveryStatus}', reason='{Reason}'.",
+                "Classified install path '{Path}' as id '{Id}', kind '{Kind}', channel '{Channel}', status '{Status}', pathStatus '{PathStatus}', hive '{Hive}', managedBy '{ManagedBy}'. Source='{Source}', reason='{Reason}'.",
                 install.Path,
                 id,
                 kind,
                 install.Channel ?? "(none)",
-                status,
+                install.Status,
+                install.PathStatus,
                 hive ?? "(none)",
                 managedBy ?? "(none)",
                 install.Source ?? "(none)",
-                install.PathStatus,
-                install.Status,
                 install.StatusReason ?? "(none)");
-            rows.Add(new InstallListItem(id, kind, install.Channel, install.Path, hive, status, install.StatusReason, managedBy));
+            // The aggregate row carries the same field set as InstallationInfo;
+            // we keep `Status` and `PathStatus` orthogonal so consumers can
+            // switch on each axis independently. Display-side collapsing
+            // happens in the text renderer (see InfoOptionAction.WriteFullInfoAsync).
+            rows.Add(install with
+            {
+                Id = id,
+                Kind = kind,
+                Hive = hive,
+                ManagedBy = managedBy,
+            });
         }
 
         foreach (var hive in hiveEnumerator.GetHives().Where(h => !installChannels.Contains(h.Name)))
@@ -134,7 +133,19 @@ internal static class InstallationInfoOutput
                 hive.Path,
                 id,
                 hive.Name);
-            rows.Add(new InstallListItem(id, "orphan-hive", hive.Name, null, hive.Path, OrphanHiveStatus, "No discovered install reports this hive's channel.", null));
+            // Orphan-hive rows have no installation binary, so `Path` and most
+            // per-binary fields are null. The hive directory itself is in `Hive`.
+            rows.Add(new InstallationInfo
+            {
+                Id = id,
+                Kind = "orphan-hive",
+                Path = null,
+                Channel = hive.Name,
+                Hive = hive.Path,
+                PathStatus = InstallationPathStatus.NotOnPath,
+                Status = InstallationInfoStatus.NoInstallFound,
+                StatusReason = "No discovered install reports this hive's channel.",
+            });
         }
 
         return rows
@@ -143,15 +154,30 @@ internal static class InstallationInfoOutput
             .ToList();
     }
 
-    private static int GetSortRank(InstallListItem row)
-        => row.Status switch
+    // Sort order: active installs first, then shadowed, then not-on-PATH ok,
+    // then failed / notProbed, then orphan-hives last. Status and PathStatus
+    // are orthogonal on the wire, so the rank function combines both axes.
+    private static int GetSortRank(InstallationInfo row)
+    {
+        if (row.Status is InstallationInfoStatus.NoInstallFound)
+        {
+            return 4;
+        }
+
+        if (row.Status is not InstallationInfoStatus.Ok)
+        {
+            // failed / notProbed / unknown
+            return 3;
+        }
+
+        return row.PathStatus switch
         {
             InstallationPathStatus.Active => 0,
             InstallationPathStatus.Shadowed => 1,
             InstallationPathStatus.NotOnPath => 2,
-            OrphanHiveStatus => 4,
-            _ => 3
+            _ => 3,
         };
+    }
 
     private static string GetInstallId(InstallationInfo install)
     {
@@ -165,7 +191,7 @@ internal static class InstallationInfoOutput
             return install.Channel;
         }
 
-        return install.Source ?? install.Path;
+        return install.Source ?? install.Path ?? "unknown";
     }
 
     private static bool IsDisplayableInstall(InstallationInfo install, ILogger logger)
@@ -176,7 +202,7 @@ internal static class InstallationInfoOutput
             return true;
         }
 
-        var fileName = Path.GetFileName(install.CanonicalPath ?? install.Path);
+        var fileName = Path.GetFileName(install.CanonicalPath ?? install.Path ?? string.Empty);
         var isAspireBinary = fileName is "aspire" or "aspire.exe";
         if (!isAspireBinary)
         {
@@ -231,22 +257,6 @@ internal static class InstallationInfoOutput
             _ => null
         };
 
-    private static string GetInstallStatus(InstallationInfo install)
-    {
-        // Keep `status` enum-shaped so programmatic consumers can switch on it.
-        // For non-Ok rows the discovery status ("failed" / "notProbed") is
-        // surfaced here; the human-readable reason rides on the separate
-        // `statusReason` field (see `docs/specs/cli-output-formats.md`). For Ok
-        // rows the path-status axis is what users actually want to act on, so
-        // we project that into `status` instead of always emitting "ok".
-        if (install.Status != InstallationInfoStatus.Ok)
-        {
-            return install.Status;
-        }
-
-        return install.PathStatus;
-    }
-
     private static IReadOnlyList<InstallationInfo> CreateFailedDiscoveryRow()
     {
         return
@@ -264,27 +274,13 @@ internal static class InstallationInfoOutput
 }
 
 /// <summary>
-/// One row in the <c>aspire --info</c> install table. Surfaced as JSON when
-/// <c>--format json</c> is set.
-/// </summary>
-internal sealed record InstallListItem(
-    [property: JsonPropertyName("id")] string Id,
-    [property: JsonPropertyName("kind")] string Kind,
-    [property: JsonPropertyName("channel")] string? Channel,
-    [property: JsonPropertyName("path")] string? Path,
-    [property: JsonPropertyName("hive")] string? Hive,
-    [property: JsonPropertyName("status")] string Status,
-    [property: JsonPropertyName("statusReason")] string? StatusReason,
-    [property: JsonPropertyName("managedBy")] string? ManagedBy);
-
-/// <summary>
 /// Combined object emitted by <c>aspire --info --format json</c>. The
 /// per-install rows are produced by <see cref="InstallationInfoOutput.BuildRowsAsync"/>.
 /// </summary>
 internal sealed record InfoOutput(
     [property: JsonPropertyName("version")] string? Version,
     [property: JsonPropertyName("channel")] string? Channel,
-    [property: JsonPropertyName("installs")] IReadOnlyList<InstallListItem> Installs);
+    [property: JsonPropertyName("installs")] IReadOnlyList<InstallationInfo> Installs);
 
 /// <summary>
 /// Output format for <c>aspire --info</c>. <c>List</c> is the default text
