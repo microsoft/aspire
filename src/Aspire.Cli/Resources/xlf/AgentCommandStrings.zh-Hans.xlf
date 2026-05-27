@@ -57,9 +57,19 @@
         <target state="new">Installed Playwright CLI.</target>
         <note />
       </trans-unit>
-      <trans-unit id="InitCommand_InstalledSkill">
-        <source>Installed {0} skill ({1}).</source>
-        <target state="new">Installed {0} skill ({1}).</target>
+      <trans-unit id="InitCommand_InstalledSkillsSummary">
+        <source>Installed Aspire agent skills:</source>
+        <target state="new">Installed Aspire agent skills:</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
+        <source>Locations: {0}</source>
+        <target state="new">Locations: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_InstalledSkillsSummarySkills">
+        <source>Skills: {0}</source>
+        <target state="new">Skills: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">

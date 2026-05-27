@@ -108,8 +108,14 @@
   <data name="InitCommand_PlaywrightCliSkipped" xml:space="preserve">
     <value>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</value>
   </data>
-  <data name="InitCommand_InstalledSkill" xml:space="preserve">
-    <value>Installed {0} skill ({1}).</value>
+  <data name="InitCommand_InstalledSkillsSummary" xml:space="preserve">
+    <value>Installed Aspire agent skills:</value>
+  </data>
+  <data name="InitCommand_InstalledSkillsSummarySkills" xml:space="preserve">
+    <value>Skills: {0}</value>
+  </data>
+  <data name="InitCommand_InstalledSkillsSummaryLocations" xml:space="preserve">
+    <value>Locations: {0}</value>
   </data>
   <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
     <value>Failed to install {0} skill at {1}: {2}</value>
