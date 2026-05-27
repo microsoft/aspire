@@ -282,13 +282,13 @@ dotnet build tests/<TestProject>.Tests/<TestProject>.Tests.csproj -v:q
 
 ### 2.3: Run with run-test-repeatedly script
 
-Use the `run-test-repeatedly.sh` (Linux/macOS) or `run-test-repeatedly.ps1` (Windows) script in `.github/skills/fix-flaky-test/`. It runs the test command repeatedly with process cleanup between iterations.
+Use the `run-test-repeatedly.sh` (Linux/macOS) or `run-test-repeatedly.ps1` (Windows) script in `.agents/skills/fix-flaky-test/`. It runs the test command repeatedly with process cleanup between iterations.
 
 **Linux/macOS:**
 
 ```bash
 # Basic usage — run a single test 20 times (stop on first failure)
-./.github/skills/fix-flaky-test/run-test-repeatedly.sh -n 20 -- \
+./.agents/skills/fix-flaky-test/run-test-repeatedly.sh -n 20 -- \
   dotnet test tests/<TestProject>.Tests/<TestProject>.Tests.csproj --no-build \
   -- --filter-method "*.<TestMethodName>" \
   --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
@@ -298,7 +298,7 @@ Use the `run-test-repeatedly.sh` (Linux/macOS) or `run-test-repeatedly.ps1` (Win
 
 ```powershell
 # Basic usage — run a single test 20 times (stop on first failure)
-./.github/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 20 -- dotnet test tests/<TestProject>.Tests/<TestProject>.Tests.csproj --no-build `
+./.agents/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 20 -- dotnet test tests/<TestProject>.Tests/<TestProject>.Tests.csproj --no-build `
   -- --filter-method "*.<TestMethodName>" `
   --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
@@ -309,13 +309,13 @@ Use the `run-test-repeatedly.sh` (Linux/macOS) or `run-test-repeatedly.ps1` (Win
 dotnet build tests/<TestProject>.Tests/<TestProject>.Tests.csproj -v:q /p:RunQuarantinedTests=true
 
 # Linux/macOS
-./.github/skills/fix-flaky-test/run-test-repeatedly.sh -n 20 -- \
+./.agents/skills/fix-flaky-test/run-test-repeatedly.sh -n 20 -- \
   dotnet test tests/<TestProject>.Tests/<TestProject>.Tests.csproj --no-build \
   /p:RunQuarantinedTests=true \
   -- --filter-method "*.<TestMethodName>"
 
 # Windows (PowerShell)
-./.github/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 20 -- dotnet test tests/<TestProject>.Tests/<TestProject>.Tests.csproj --no-build `
+./.agents/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 20 -- dotnet test tests/<TestProject>.Tests/<TestProject>.Tests.csproj --no-build `
   -- --filter-method "*.<TestMethodName>"
 ```
 
@@ -697,11 +697,11 @@ dotnet build tests/<TestProject>.Tests/<TestProject>.Tests.csproj --no-restore -
 
 # Quick local check — same iteration count as reproduction
 # Linux/macOS:
-./.github/skills/fix-flaky-test/run-test-repeatedly.sh -n 20 -- \
+./.agents/skills/fix-flaky-test/run-test-repeatedly.sh -n 20 -- \
   dotnet test tests/<TestProject>.Tests/<TestProject>.Tests.csproj --no-build \
   -- --filter-method "*.<TestMethodName>"
 # Windows (PowerShell):
-# ./.github/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 20 -- dotnet test tests/<TestProject>.Tests/<TestProject>.Tests.csproj --no-build -- --filter-method "*.<TestMethodName>"
+# ./.agents/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 20 -- dotnet test tests/<TestProject>.Tests/<TestProject>.Tests.csproj --no-build -- --filter-method "*.<TestMethodName>"
 ```
 
 If local verification fails, iterate on the fix before going to CI. This saves ~30 minutes per CI round-trip.
@@ -895,7 +895,7 @@ gh pr create --repo microsoft/aspire \
 > **Note:** This PR intentionally does not close #<issue-number>. The test will remain quarantined until a separate unquarantine process confirms it has been stable (zero failures) for a sufficient period. Once stability is confirmed, the test will be unquarantined and the issue will be closed.
 
 ---
-*This fix was generated using the [fix-flaky-test skill](https://github.com/microsoft/aspire/blob/main/.github/skills/fix-flaky-test/SKILL.md).*"
+*This fix was generated using the [fix-flaky-test skill](https://github.com/microsoft/aspire/blob/main/.agents/skills/fix-flaky-test/SKILL.md).*"
 ```
 
 **If `gh pr create` fails** (e.g. permissions error, API failure): Do **NOT** delete the branch or undo the work. Instead:

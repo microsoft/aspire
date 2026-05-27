@@ -371,7 +371,6 @@
     <Project Path="playground/SqlServerEndToEnd/SqlServerEndToEnd.ApiService/SqlServerEndToEnd.ApiService.csproj" />
     <Project Path="playground/SqlServerEndToEnd/SqlServerEndToEnd.AppHost/SqlServerEndToEnd.AppHost.csproj" />
     <Project Path="playground/SqlServerEndToEnd/SqlServerEndToEnd.Common/SqlServerEndToEnd.Common.csproj" />
-    <Project Path="playground/SqlServerEndToEnd/SqlServerEndToEnd.DbSetup/SqlServerEndToEnd.DbSetup.csproj" />
   </Folder>
   <Folder Name="/playground/SqlServerScript/">
     <Project Path="playground/SqlServerScript/AppHost1/AppHost1.csproj" />

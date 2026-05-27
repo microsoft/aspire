@@ -472,7 +472,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             // returns from its line-reader on the "n" keystroke and tears down before the Enter
             // is dequeued, bash receives the Enter and executes a phantom blank command,
             // advancing CMDCOUNT and desyncing the test counter from the shell counter.
-            // See .github/skills/cli-e2e-testing/troubleshooting.md for the full failure pattern.
+            // See .agents/skills/cli-e2e-testing/troubleshooting.md for the full failure pattern.
             await auto.TypeAsync("n");
         }
 

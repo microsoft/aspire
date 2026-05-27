@@ -15,10 +15,10 @@
     (direct invocation from a PowerShell prompt).
 
 .EXAMPLE
-    .github/skills/fix-flaky-test/run-test-repeatedly.ps1 -- dotnet test tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj --no-build -- --filter-method "*.MyTest"
+    .agents/skills/fix-flaky-test/run-test-repeatedly.ps1 -- dotnet test tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj --no-build -- --filter-method "*.MyTest"
 
 .EXAMPLE
-    .github/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 50 --run-all -- dotnet test tests/Foo/Foo.csproj -- --filter-method "*.Bar"
+    .agents/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 50 --run-all -- dotnet test tests/Foo/Foo.csproj -- --filter-method "*.Bar"
 #>
 
 # ---------- defaults ----------
@@ -46,7 +46,7 @@ $i = 0
         }
         '--help' {
             Write-Host @"
-Usage: .github/skills/fix-flaky-test/run-test-repeatedly.ps1 [OPTIONS] -- <test command...>
+Usage: .agents/skills/fix-flaky-test/run-test-repeatedly.ps1 [OPTIONS] -- <test command...>
 
 Runs <test command> repeatedly to validate flaky test fixes.
 Everything after '--' is executed verbatim each iteration.
@@ -57,8 +57,8 @@ Options:
   --help        Show this help message
 
 Examples:
-  .github/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 20 -- dotnet test tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj -- --filter-method "*.MyTest"
-  .github/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 50 --run-all -- dotnet test tests/Foo/Foo.csproj -- --filter-method "*.Bar"
+  .agents/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 20 -- dotnet test tests/Aspire.Hosting.Tests/Aspire.Hosting.Tests.csproj -- --filter-method "*.MyTest"
+  .agents/skills/fix-flaky-test/run-test-repeatedly.ps1 -n 50 --run-all -- dotnet test tests/Foo/Foo.csproj -- --filter-method "*.Bar"
 "@
             exit 0
         }

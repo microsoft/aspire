@@ -21,7 +21,7 @@ External NuGet dependencies (e.g., Hex1b, StackExchange.Redis, Confluent.Kafka) 
 
 ### Companion Script
 
-A single-file C# app is bundled alongside this skill at `.github/skills/dependency-update/MigratePackage.cs`. It uses the Azure DevOps .NET SDK (`PipelinesHttpClient`) with `Azure.Identity` for authentication. Use it to trigger and monitor pipeline runs — it handles prerequisite checks, pipeline triggering, and polling.
+A single-file C# app is bundled alongside this skill at `.agents/skills/dependency-update/MigratePackage.cs`. It uses the Azure DevOps .NET SDK (`PipelinesHttpClient`) with `Azure.Identity` for authentication. Use it to trigger and monitor pipeline runs — it handles prerequisite checks, pipeline triggering, and polling.
 
 ## Understanding User Requests
 
@@ -135,7 +135,7 @@ Use the `ask_user` tool to confirm which packages and versions to proceed with b
 Before triggering pipelines, verify the Azure DevOps tooling is ready:
 
 ```bash
-dotnet .github/skills/dependency-update/MigratePackage.cs -- --check-prereqs
+dotnet .agents/skills/dependency-update/MigratePackage.cs -- --check-prereqs
 ```
 
 If prerequisites fail, guide the user through setup:
@@ -158,7 +158,7 @@ az login --tenant 72f988bf-86f1-41af-91ab-2d7cd011db47
 Run the companion script for each confirmed package. Process **one package at a time**:
 
 ```bash
-dotnet .github/skills/dependency-update/MigratePackage.cs -- "<PackageName>" "<PackageVersion>"
+dotnet .agents/skills/dependency-update/MigratePackage.cs -- "<PackageName>" "<PackageVersion>"
 ```
 
 The script will:
@@ -169,8 +169,8 @@ The script will:
 
 **Example:**
 ```bash
-dotnet .github/skills/dependency-update/MigratePackage.cs -- "Hex1b" "0.49.0"
-dotnet .github/skills/dependency-update/MigratePackage.cs -- "Hex1b.McpServer" "0.49.0"
+dotnet .agents/skills/dependency-update/MigratePackage.cs -- "Hex1b" "0.49.0"
+dotnet .agents/skills/dependency-update/MigratePackage.cs -- "Hex1b.McpServer" "0.49.0"
 ```
 
 **If a pipeline run fails**, stop and report the failure to the user before proceeding with additional packages. Include the Azure DevOps run URL for investigation.

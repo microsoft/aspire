@@ -48,7 +48,7 @@ The repository uses 5 container registries:
 
 ### Companion Script
 
-A single-file C# script is bundled at `.github/skills/update-container-images/UpdateImageTags.cs`. It discovers all `*ImageTags.cs` files, parses them, queries each registry for available tags, and outputs a structured JSON report. **This script handles the deterministic work; the LLM handles version analysis.**
+A single-file C# script is bundled at `.agents/skills/update-container-images/UpdateImageTags.cs`. It discovers all `*ImageTags.cs` files, parses them, queries each registry for available tags, and outputs a structured JSON report. **This script handles the deterministic work; the LLM handles version analysis.**
 
 ## Understanding User Requests
 
@@ -66,7 +66,7 @@ Run the companion script from the repository root to generate a JSON report of a
 
 ```bash
 cd <repo-root>
-dotnet run .github/skills/update-container-images/UpdateImageTags.cs 2>update-tags-stderr.txt 1>update-tags-report.json
+dotnet run .agents/skills/update-container-images/UpdateImageTags.cs 2>update-tags-stderr.txt 1>update-tags-report.json
 ```
 
 Check stderr for any failures:
