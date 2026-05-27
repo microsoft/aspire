@@ -293,6 +293,8 @@ Aspire.Hosting.Foundry/HostedAgentConfiguration.metadata(context: Aspire.Hosting
 Aspire.Hosting.Foundry/HostedAgentConfiguration.setCpu(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration, value: number) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration
 Aspire.Hosting.Foundry/HostedAgentConfiguration.setDescription(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration, value: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration
 Aspire.Hosting.Foundry/HostedAgentConfiguration.setMemory(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration, value: number) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentConfiguration
+Aspire.Hosting.Foundry/asHostedAgent() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting.Foundry/withComputeEnvironmentExecutable(project?: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource, configure?: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting.Foundry/runAsFoundryLocal() -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryResource
 Aspire.Hosting.Foundry/withAppInsights(appInsights: Aspire.Hosting.Azure.ApplicationInsights/Aspire.Hosting.Azure.AzureApplicationInsightsResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource
 Aspire.Hosting.Foundry/withBingReference(bingReference: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.BingGroundingConnectionResource|string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.BingGroundingToolResource

@@ -96,6 +96,10 @@ namespace Aspire.Hosting
 
     public static partial class HostedAgentResourceBuilderExtensions
     {
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> AsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder)
+            where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }
+
         [AspireExport("withComputeEnvironmentExecutable", MethodName = "withComputeEnvironment")]
         public static ApplicationModel.IResourceBuilder<T> WithComputeEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource>? project = null, System.Action<Foundry.HostedAgentConfiguration>? configure = null)
             where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }

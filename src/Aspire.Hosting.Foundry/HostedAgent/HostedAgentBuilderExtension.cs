@@ -17,16 +17,16 @@ public static class HostedAgentResourceBuilderExtensions
 {
 
     /// <summary>
-    /// Configures the resource to run as a hosted agent in Microsoft Foundry.
-    ///
-    /// If a project resource is not provided, the method will attempt to find an existing
-    /// Microsoft Foundry project resource in the application model. If none exists,
-    /// a new project resource (and its parent account resource) will be created automatically.
+    /// Configures the resource to be deployed as a hosted agent in Microsoft Foundry.
     /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="configure">A callback to configure the hosted agent deployment.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
-    /// In run mode, this configures the resource with hosted agent endpoints, health checks,
-    /// and OpenTelemetry settings. In publish mode, the resource is deployed as a hosted agent
-    /// in Microsoft Foundry.
+    /// This method applies in publish mode. Use <see cref="AsHostedAgent{T}(IResourceBuilder{T})"/>
+    /// to configure the resource with local run-mode hosted agent endpoints, dashboard commands,
+    /// and OpenTelemetry settings.
     /// </remarks>
     [AspireExportIgnore(Reason = "Subset of the full WithComputeEnvironment overload which is exported.")]
     public static IResourceBuilder<T> WithComputeEnvironment<T>(
@@ -37,16 +37,24 @@ public static class HostedAgentResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Configures the resource to run as a hosted agent in Microsoft Foundry.
-    ///
-    /// If a project resource is not provided, the method will attempt to find an existing
-    /// Microsoft Foundry project resource in the application model. If none exists,
-    /// a new project resource (and its parent account resource) will be created automatically.
+    /// Configures the resource to be deployed as a hosted agent in Microsoft Foundry.
     /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="project">The Microsoft Foundry project resource to deploy the hosted agent to.</param>
+    /// <param name="configure">A callback to configure the hosted agent deployment.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>
-    /// In run mode, this configures the resource with hosted agent endpoints, health checks,
-    /// and OpenTelemetry settings. In publish mode, the resource is deployed as a hosted agent
-    /// in Microsoft Foundry.
+    /// <para>
+    /// If <paramref name="project"/> is not provided, this method attempts to find an existing Microsoft Foundry
+    /// project resource in the application model. If none exists, a new project resource and parent account resource
+    /// are created automatically.
+    /// </para>
+    /// <para>
+    /// This method applies in publish mode. Use <see cref="AsHostedAgent{T}(IResourceBuilder{T})"/>
+    /// to configure the resource with local run-mode hosted agent endpoints, dashboard commands,
+    /// and OpenTelemetry settings.
+    /// </para>
     /// </remarks>
     [AspireExport("withComputeEnvironmentExecutable", MethodName = "withComputeEnvironment")]
     public static IResourceBuilder<T> WithComputeEnvironment<T>(
@@ -154,13 +162,27 @@ public static class HostedAgentResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Configures a resource to be hosted as an Azure Hosted Agent.
+    /// Configures the resource to run locally as a Microsoft Foundry hosted agent.
     /// </summary>
+    /// <ats-summary>Configures the resource to run locally as a Microsoft Foundry hosted agent.</ats-summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <returns>The resource builder for chaining.</returns>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// This method applies in run mode. It configures the resource with the hosted agent responses endpoint,
+    /// a dashboard command for sending messages to the agent, and OpenTelemetry environment variables expected
+    /// by the Microsoft Foundry agent server SDK.
+    /// </remarks>
+    /// <example>
+    /// <code lang="csharp">
+    /// var agent = builder.AddProject&lt;Projects.AgentService&gt;("agent")
+    ///     .AsHostedAgent();
+    /// </code>
+    /// </example>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
-    public static IResourceBuilder<T> AsHostedAgent<T>(this IResourceBuilder<T> builder) where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    public static IResourceBuilder<T> AsHostedAgent<T>(this IResourceBuilder<T> builder)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
