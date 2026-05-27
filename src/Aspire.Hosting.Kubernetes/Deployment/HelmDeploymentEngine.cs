@@ -125,23 +125,18 @@ internal static partial class HelmDeploymentEngine
         // helm invocation in either the main chart deploy or AddHelmChart(...) flows,
         // turns confusing low-level errors (unknown-flag, deprecated-flag, raw
         // spawn errors) into a single actionable message.
+        //
+        // The validator drives everything through IHelmRunner: a missing binary
+        // surfaces as a spawn failure that the validator wraps with the same
+        // "install Helm" hint, so we deliberately don't do a separate
+        // PathLookupHelper probe here. That also lets tests inject a fake runner
+        // without needing real Helm on PATH.
         var checkPrereqStep = new PipelineStep
         {
             Name = $"check-helm-prereqs-{environment.Name}",
             Description = $"Verifies Helm CLI is available for {environment.Name}.",
             Action = async ctx =>
             {
-                var helmPath = PathLookupHelper.FindFullPathFromPath("helm");
-                if (helmPath is null)
-                {
-                    throw new InvalidOperationException(
-                        $"Helm CLI not found. Aspire requires Helm {HelmVersionValidator.MinimumHelmVersion} or later. " +
-                        "Install it from https://helm.sh/docs/intro/install/ " +
-                        "and ensure it is available on your PATH.");
-                }
-
-                ctx.Logger.LogDebug("Helm CLI found at: {HelmPath}", helmPath);
-
                 var helmRunner = ctx.Services.GetRequiredService<IHelmRunner>();
                 await HelmVersionValidator.EnsureMinimumVersionAsync(helmRunner, ctx.CancellationToken).ConfigureAwait(false);
             }

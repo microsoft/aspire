@@ -41,7 +41,7 @@ internal sealed class FakeHelmRunner : IHelmRunner
         LastArguments = arguments;
 
         // Match any `helm version ...` probe (the validator passes
-        // `version --short --client`).
+        // `version --short`).
         if (arguments.StartsWith("version", StringComparison.OrdinalIgnoreCase))
         {
             if (onOutputData is not null && !string.IsNullOrEmpty(VersionOutput))
