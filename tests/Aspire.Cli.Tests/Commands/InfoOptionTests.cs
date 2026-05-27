@@ -522,6 +522,74 @@ public class InfoOptionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task Info_Json_DisambiguatorReservesSuffixedIdsToAvoidCollisionWithNaturalIds()
+    {
+        // Regression guard: previously the unique-id minter only counted
+        // collisions on the base id and never reserved the suffixed name.
+        // Two installs sharing channel "stable" produced ids "stable" and
+        // "stable-2", and an orphan-hive directory literally named "stable-2"
+        // (hive directory names are arbitrary, not constrained to the
+        // IdentityChannelReader allowlist on the enumeration path) silently
+        // got the same id "stable-2", violating the uniqueness invariant of
+        // the `id` field that JSON consumers use as a key.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        Directory.CreateDirectory(Path.Combine(aspireHome, "hives", "stable-2", "packages"));
+
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = Path.Combine(aspireHome, "bin", "aspire"),
+                CanonicalPath = Path.Combine(aspireHome, "bin", "aspire"),
+                Version = "13.2.0",
+                Channel = "stable",
+                // Source is intentionally not "script": GetInstallId short-circuits
+                // to the literal "script" for script-sourced installs, which would
+                // hide the channel-keyed disambiguation path this test exercises.
+                Source = "winget",
+                PathStatus = InstallationPathStatus.Active,
+                Status = InstallationInfoStatus.Ok
+            },
+            [
+                new InstallationInfo
+                {
+                    Path = Path.Combine(aspireHome, "other", "aspire"),
+                    CanonicalPath = Path.Combine(aspireHome, "other", "aspire"),
+                    Version = "13.2.0",
+                    Channel = "stable",
+                    Source = "winget",
+                    PathStatus = InstallationPathStatus.Shadowed,
+                    Status = InstallationInfoStatus.Ok
+                }
+            ])));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--info --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var payload = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!.AsObject();
+        var installs = payload["installs"]!.AsArray();
+        var ids = installs.Select(row => row!["id"]!.GetValue<string>()).ToList();
+        Assert.Equal(3, ids.Count);
+        Assert.Equal(ids.Count, ids.Distinct(StringComparer.Ordinal).Count());
+        // The orphan-hive row whose natural id collides with the disambiguation
+        // suffix must receive its own disambiguated id rather than silently
+        // sharing "stable-2" with the second install.
+        Assert.Contains("stable", ids);
+        Assert.Contains("stable-2", ids);
+        Assert.Contains(ids, id => id.StartsWith("stable-2-", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task Info_DiscoveryWalkFails_StillExitsZero_AndEmitsFailureRow()
     {
         // Matches the tolerant posture of the channel-read and self-version
