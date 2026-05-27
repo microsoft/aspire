@@ -169,9 +169,9 @@ internal static class CliTestHelper
         services.AddSingleton<IInstallSidecarReader, InstallSidecarReader>();
         services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
         services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
-        services.AddSingleton<WingetFirstRunProbe>();
+        services.AddSingleton<WingetSidecarBackfill>();
         // Always register the null reader by default so unit tests don't reach into the
-        // actual user registry through WingetFirstRunProbe on Windows. Tests that need
+        // actual user registry through WingetSidecarBackfill on Windows. Tests that need
         // the real reader (or a fake) should replace the registration explicitly.
         services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
         // IdentityChannelReader for AspireVersionCheck (doctor) — uses the same

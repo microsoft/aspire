@@ -346,7 +346,7 @@ public class Program
         {
             builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
         }
-        builder.Services.AddSingleton<WingetFirstRunProbe>();
+        builder.Services.AddSingleton<WingetSidecarBackfill>();
         builder.Services.AddSingleton(sp =>
         {
             var channelReader = sp.GetRequiredService<IIdentityChannelReader>();
@@ -362,18 +362,19 @@ public class Program
             // resolution point moves. InfoOptionAction bypasses this entirely
             // by injecting IIdentityChannelReader and handling failure itself.
             var lazyChannel = new Lazy<string>(channelReader.ReadChannel, LazyThreadSafetyMode.ExecutionAndPublication);
-            // Self-heal the install-source sidecar before anything reads it.
-            // WingetFirstRunProbe is a one-shot writer (no-op on non-Windows or
-            // when the running binary isn't a winget portable install). Running
-            // it here, inside the CliExecutionContext factory, guarantees the
-            // sidecar is stamped before BuildCliExecutionContext below resolves
-            // the install-aware Aspire home, before BundleService computes its
-            // extract dir, and before `aspire --info --self` reads `Source`.
-            // Without this, the first invocation from a fresh winget install
-            // would fall back to the legacy user-profile home and miss the
-            // source row, even though the sidecar would appear on subsequent
-            // runs. The probe is idempotent, so the worst case here is a no-op.
-            TryRunWingetFirstRunProbe(sp);
+            // Back-fill the install-source sidecar before anything reads it.
+            // WingetSidecarBackfill writes {"source":"winget"} when the running
+            // binary is a winget portable install, and a {"backfilled":true}
+            // sentinel otherwise so the registry walk runs at most once per
+            // install location. Either write guarantees the sidecar is present
+            // before BuildCliExecutionContext below resolves the install-aware
+            // Aspire home, before BundleService computes its extract dir, and
+            // before `aspire --info --self` reads `Source`. Without this,
+            // the first invocation from a fresh winget install would fall back
+            // to the legacy user-profile home and miss the source row even
+            // though the sidecar would appear on subsequent runs. The back-fill
+            // is idempotent and skips the registry walk on every later startup.
+            TryEnsureWingetSidecar(sp);
             return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath, lazyChannel);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
@@ -645,12 +646,13 @@ public class Program
     }
 
     /// <summary>
-    /// Invokes <see cref="WingetFirstRunProbe.Run(string)"/> for the running binary's
-    /// directory, swallowing any failure so a misbehaving probe can never block CLI startup.
-    /// Called from the <see cref="CliExecutionContext"/> DI factory so the sidecar is
-    /// stamped before any code reads it.
+    /// Invokes <see cref="WingetSidecarBackfill.EnsureSidecar(string)"/> for the
+    /// running binary's directory, swallowing any failure so a misbehaving
+    /// back-fill can never block CLI startup. Called from the
+    /// <see cref="CliExecutionContext"/> DI factory so the sidecar is present
+    /// before any code reads it.
     /// </summary>
-    internal static void TryRunWingetFirstRunProbe(IServiceProvider sp)
+    internal static void TryEnsureWingetSidecar(IServiceProvider sp)
     {
         try
         {
@@ -666,16 +668,16 @@ public class Program
                 return;
             }
 
-            sp.GetRequiredService<WingetFirstRunProbe>().Run(binaryDir);
+            sp.GetRequiredService<WingetSidecarBackfill>().EnsureSidecar(binaryDir);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // The probe is best-effort startup hygiene: a stamping failure must
+            // Back-fill is best-effort startup hygiene: a write failure must
             // never block the rest of the CLI from starting. Log and continue —
-            // the worst case is that an unstamped winget install surfaces as an
+            // the worst case is that an unstamped install surfaces as an
             // unknown source until the next invocation retries.
-            var logger = sp.GetService<ILogger<WingetFirstRunProbe>>();
-            logger?.LogWarning(ex, "Winget first-run install sidecar probe failed during CLI startup.");
+            var logger = sp.GetService<ILogger<WingetSidecarBackfill>>();
+            logger?.LogWarning(ex, "Winget install-source sidecar back-fill failed during CLI startup.");
         }
     }
 

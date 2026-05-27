@@ -44,7 +44,7 @@ the default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`).
 | Source       | Archive shape                          | Sidecar writer                                                      |
 |-------------|----------------------------------------|---------------------------------------------------------------------|
 | Homebrew    | shared per-RID tarball                 | cask `postflight` block in `eng/homebrew/aspire.rb.template`        |
-| winget      | shared per-RID zip                     | CLI first-run probe (`WingetFirstRunProbe`) — uses the WinGet portable ARP registry entry to confirm the running binary was placed by winget, then stamps the sidecar |
+| winget      | shared per-RID zip                     | CLI sidecar back-fill (`WingetSidecarBackfill`) — uses the WinGet portable ARP registry entry to confirm the running binary was placed by winget, then stamps the sidecar |
 | script      | shared per-RID archive                 | `eng/scripts/get-aspire-cli.{sh,ps1}` (post-extraction)             |
 | PR script   | shared per-RID archive                 | `eng/scripts/get-aspire-cli-pr.{sh,ps1}` (post-extraction)          |
 | dotnet-tool | source-exclusive nupkg                  | payload-embedded (staged by `Aspire.Cli.csproj` `_PreparePreBuiltCliBinaryForPackTool`) |
