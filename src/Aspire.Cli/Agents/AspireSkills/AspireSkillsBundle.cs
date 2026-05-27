@@ -141,13 +141,15 @@ internal sealed class AspireSkillsBundle
             throw new InvalidOperationException("Aspire skills bundle manifest must contain at least one skill.");
         }
 
-        var skillNames = new HashSet<string>(StringComparer.Ordinal);
+        var skillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var skill in skills)
         {
             if (string.IsNullOrWhiteSpace(skill.Name))
             {
                 throw new InvalidOperationException("Aspire skills bundle manifest contains a skill without a name.");
             }
+
+            ValidateSkillName(skill.Name);
 
             if (!skillNames.Add(skill.Name))
             {
@@ -173,6 +175,18 @@ internal sealed class AspireSkillsBundle
             {
                 ValidateFile(bundleDirectory, skill.Name, file);
             }
+        }
+    }
+
+    private static void ValidateSkillName(string skillName)
+    {
+        if (Path.IsPathRooted(skillName) ||
+            skillName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+            skillName.Contains('/') ||
+            skillName.Contains('\\') ||
+            skillName is "." or "..")
+        {
+            throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill name '{0}' is not safe.", skillName));
         }
     }
 

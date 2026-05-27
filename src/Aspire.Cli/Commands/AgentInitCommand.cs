@@ -292,7 +292,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 skillChoices,
                 item => item switch
                 {
-                    SkillDefinition skill => $"{skill.Name} — {skill.Description}",
+                    SkillDefinition skill => $"{skill.Name.EscapeMarkup()} — {skill.Description.EscapeMarkup()}",
                     AgentEnvironmentApplicator app => $"[bold]{app.Description}[/] [dim]{AgentCommandStrings.InitCommand_ConfiguresDetectedAgentEnvironments}[/]",
                     _ => item.ToString()!
                 },
