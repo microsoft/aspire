@@ -424,8 +424,6 @@ export async function selectWorkspaceAppHostPath(workspaceFolder: vscode.Workspa
         if (candidate) {
             return candidate.path;
         }
-
-        return configuredPath;
     }
 
     return candidates.length === 1 ? candidates[0].path : undefined;

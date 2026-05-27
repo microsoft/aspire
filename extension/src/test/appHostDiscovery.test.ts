@@ -1,11 +1,13 @@
 /// <reference types="mocha" />
 
 import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
-import { AppHostDiscoveryService, findCandidateForEditorFile, getDebugTargetForCandidate } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, findCandidateForEditorFile, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 
 suite('AppHost discovery', () => {
@@ -264,6 +266,39 @@ suite('AppHost discovery', () => {
             finally {
                 service.dispose();
                 clock.restore();
+            }
+        });
+
+        test('selects configured path that matches a later discovered candidate', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                const workspaceFolder = makeWorkspaceFolder(tempDir);
+                const firstConfigPath = path.join(tempDir, 'First', 'aspire.config.json');
+                const secondConfigPath = path.join(tempDir, 'Second', 'aspire.config.json');
+                const matchingAppHostPath = path.join(tempDir, 'Second', 'AppHost', 'AppHost.csproj');
+
+                fs.mkdirSync(path.dirname(firstConfigPath), { recursive: true });
+                fs.mkdirSync(path.dirname(secondConfigPath), { recursive: true });
+                fs.writeFileSync(firstConfigPath, JSON.stringify({ appHost: { path: 'Missing/AppHost.csproj' } }));
+                fs.writeFileSync(secondConfigPath, JSON.stringify({ appHost: { path: 'AppHost/AppHost.csproj' } }));
+
+                sandbox.stub(vscode.workspace, 'findFiles').callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('aspire.config.json')
+                        ? [vscode.Uri.file(firstConfigPath), vscode.Uri.file(secondConfigPath)]
+                        : [];
+                });
+
+                const selectedPath = await selectWorkspaceAppHostPath(workspaceFolder, [{
+                    path: matchingAppHostPath,
+                    language: 'csharp',
+                    status: 'buildable',
+                }]);
+
+                assert.strictEqual(selectedPath, matchingAppHostPath);
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
             }
         });
     });
