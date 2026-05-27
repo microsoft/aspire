@@ -297,6 +297,12 @@
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-32.png" Link="Mcp\Resources\aspire-32.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-48.png" Link="Mcp\Resources\aspire-48.png" />
     <EmbeddedResource Include="$(SharedDir)Mcp\Resources\aspire-64.png" Link="Mcp\Resources\aspire-64.png" />
+    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills-v0.0.1.tgz" LogicalName="aspire-skills.bundle.tgz">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills.metadata.json" LogicalName="aspire-skills.metadata.json">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
   </ItemGroup>
 
 

@@ -12,6 +12,11 @@
         <target state="translated">パイプラインを実行しています...</target>
         <note />
       </trans-unit>
+      <trans-unit id="ListStepsRequiresStep">
+        <source>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</source>
+        <target state="new">The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="OperationCanceled">
         <source>The operation was canceled.</source>
         <target state="translated">操作は取り消されました。</target>
@@ -35,6 +40,11 @@
       <trans-unit id="StepArgumentDescription">
         <source>The name of the step to execute</source>
         <target state="needs-review-translation">実行するステップの名前です。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StepArgumentRequired">
+        <source>The 'step' argument is required.</source>
+        <target state="new">The 'step' argument is required.</target>
         <note />
       </trans-unit>
     </body>

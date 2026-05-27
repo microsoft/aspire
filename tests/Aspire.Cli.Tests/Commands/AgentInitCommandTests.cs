@@ -269,7 +269,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_WithUnavailableAspireSkillsBundle_Fails()
+    public async Task AgentInitCommand_NonInteractive_WithUnavailableAspireSkillsBundle_WarnsAndSucceedsWithoutSelectedAspireSkills()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         const string installFailureMessage = "Aspire skills bundle is unavailable.";
@@ -289,9 +289,12 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
-        Assert.Contains(installFailureMessage, interactionService.DisplayedErrors);
-        Assert.Empty(interactionService.DisplayedSuccess);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.DoesNotContain(installFailureMessage, interactionService.DisplayedErrors);
+        Assert.Contains(
+            interactionService.DisplayedMessages,
+            message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == installFailureMessage);
+        Assert.Contains(McpCommandStrings.InitCommand_ConfigurationComplete, interactionService.DisplayedSuccess);
     }
 
     [Fact]

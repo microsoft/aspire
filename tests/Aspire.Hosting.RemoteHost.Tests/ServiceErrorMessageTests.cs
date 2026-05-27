@@ -95,7 +95,7 @@ public class ServiceErrorMessageTests
         var atsContextFactory = new AtsContextFactory(loader, NullLogger<AtsContextFactory>.Instance, telemetry);
 
         var lang = new LanguageService(auth, langResolver, NullLogger<LanguageService>.Instance, telemetry);
-        var code = new CodeGenerationService(auth, atsContextFactory, codeResolver, NullLogger<CodeGenerationService>.Instance, telemetry);
+        var code = new CodeGenerationService(auth, atsContextFactory, codeResolver, loader, NullLogger<CodeGenerationService>.Instance, telemetry);
         return (lang, code);
     }
 
@@ -130,7 +130,7 @@ public class ServiceErrorMessageTests
 
         var auth = CreateAuthenticatedState();
         var atsContextFactory = new AtsContextFactory(loader, NullLogger<AtsContextFactory>.Instance, telemetry);
-        return new CodeGenerationService(auth, atsContextFactory, codeResolver, NullLogger<CodeGenerationService>.Instance, telemetry);
+        return new CodeGenerationService(auth, atsContextFactory, codeResolver, loader, NullLogger<CodeGenerationService>.Instance, telemetry);
     }
 
     // The default state is "authenticated" when no JsonRpcAuthToken is present in configuration.
