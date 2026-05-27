@@ -29,6 +29,10 @@ inputs:
     description: 'Set to true if the branch is already pushed remotely (skips commit/push)'
     required: false
     default: 'false'
+  draft:
+    description: 'Create the pull request as a draft'
+    required: false
+    default: 'false'
 outputs:
   pull-request-number:
     description: 'The pull request number'
@@ -91,6 +95,7 @@ runs:
         PR_TITLE: ${{ inputs.title }}
         PR_BODY: ${{ inputs.body }}
         LABELS: ${{ inputs.labels }}
+        DRAFT: ${{ inputs.draft }}
       run: |
         # Check if a PR already exists for this branch
         EXISTING_PR=$(gh pr list --head "$BRANCH" --base "$BASE" --json number,url --jq '.[0] // empty')
@@ -133,12 +138,18 @@ runs:
           trap 'rm -f "$BODY_FILE"' EXIT
           printf '%s\n' "$PR_BODY" > "$BODY_FILE"
 
+          DRAFT_ARGS=()
+          if [ "$DRAFT" = "true" ]; then
+            DRAFT_ARGS+=(--draft)
+          fi
+
           # Create the pull request without eval — all args are properly quoted
           PR_URL=$(gh pr create \
             --title "$PR_TITLE" \
             --body-file "$BODY_FILE" \
             --base "$BASE" \
             --head "$BRANCH" \
+            "${DRAFT_ARGS[@]}" \
             "${LABEL_ARGS[@]}")
 
           rm -f "$BODY_FILE"
