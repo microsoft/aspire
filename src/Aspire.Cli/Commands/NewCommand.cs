@@ -101,9 +101,15 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_versionOption);
         Options.Add(s_suppressAgentInitOption);
 
-        // Customize description based on whether staging channel is enabled
+        // Customize description based on whether staging channel is enabled.
+        // Read ExecutionContext.IdentityChannel defensively: a binary with broken
+        // AspireCliChannel metadata throws here, and NewCommand is constructed as
+        // part of the RootCommand DI graph on every invocation — including the
+        // diagnostic surfaces (`aspire --info`, `aspire --help`) where we must
+        // not crash. Falling back to the non-staging description is acceptable
+        // because the option still works either way; only the help text differs.
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration)
-            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
+            || TryIsIdentityChannelStaging(executionContext);
         _channelOption = new Option<string?>("--channel")
         {
             Description = isStagingEnabled
@@ -481,6 +487,32 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return template.Runtime is TemplateRuntime.Cli;
     }
 
+    /// <summary>
+    /// Returns <see langword="true"/> when the running CLI's identity channel
+    /// is the staging channel. Wraps the <see cref="CliExecutionContext.IdentityChannel"/>
+    /// read in a tolerant try/catch so a binary with broken
+    /// <c>AspireCliChannel</c> assembly metadata does not crash
+    /// <see cref="NewCommand"/> construction — and through it the
+    /// <c>RootCommand</c> DI graph that <c>aspire --info</c> and
+    /// <c>aspire --help</c> resolve. Mirrors the posture of
+    /// <see cref="InfoOptionAction"/>'s channel-read helper. The fallback
+    /// (<see langword="false"/>) is benign: only the <c>--channel</c> option's
+    /// help text loses its staging-channel mention; the option itself still
+    /// works.
+    /// </summary>
+    private static bool TryIsIdentityChannelStaging(CliExecutionContext executionContext)
+    {
+        try
+        {
+            return string.Equals(executionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _ = ex;
+            return false;
+        }
+    }
+
 }
 
 internal interface INewCommandPrompter
@@ -639,6 +671,7 @@ internal class NewCommandPrompter(IInteractionService interactionService) : INew
             cancellationToken: cancellationToken
         );
     }
+
 }
 
 internal static partial class ProjectNameValidator

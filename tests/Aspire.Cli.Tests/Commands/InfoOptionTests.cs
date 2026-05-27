@@ -574,6 +574,92 @@ public class InfoOptionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task Info_ChannelLazyThrows_RootCommandStillResolves_AndInfoExitsZero()
+    {
+        // Production wiring: the CliExecutionContext DI factory in Program.cs wraps
+        // IIdentityChannelReader.ReadChannel() in a Lazy<string> on the context's
+        // IdentityChannelLazy property. The Lazy<>'s Value throws on first access
+        // when AspireCliChannel assembly metadata is missing or invalid. Any
+        // consumer that reads CliExecutionContext.IdentityChannel during DI graph
+        // construction therefore propagates the exception up the RootCommand
+        // resolution chain — which is the exact failure mode `aspire --info` must
+        // survive. NewCommand and UpdateCommand constructors both read the channel
+        // to pick a help-text variant; this test pins their tolerant fallback so
+        // a future refactor that re-introduces an eager read regresses the test.
+        // The sibling Info_ChannelReadFailure_* tests pin InfoOptionAction's own
+        // direct-injection read; together they cover both paths the production
+        // wiring exposes.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+            options.CliExecutionContextFactory = _ => CreateExecutionContextWithThrowingChannelLazy(workspace);
+        });
+        services.Replace(ServiceDescriptor.Singleton<IIdentityChannelReader>(_ => new ThrowingChannelReader()));
+        services.Replace(ServiceDescriptor.Singleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            new InstallationInfo
+            {
+                Path = "/broken/aspire",
+                CanonicalPath = "/broken/aspire",
+                Version = "13.2.0",
+                Channel = null,
+                Source = "script",
+                PathStatus = InstallationPathStatus.NotOnPath,
+                Status = InstallationInfoStatus.Ok,
+            })));
+        using var provider = services.BuildServiceProvider();
+
+        // The central assertion: resolving RootCommand pulls every subcommand
+        // into existence (NewCommand, UpdateCommand, ...). If any ctor reads
+        // CliExecutionContext.IdentityChannel without tolerating a throw, this
+        // line surfaces the bug — exactly as `aspire --info` would on a binary
+        // with broken AspireCliChannel metadata in production.
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("--info --format json");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var payload = JsonNode.Parse(string.Join(Environment.NewLine, outputWriter.Logs))!.AsObject();
+        Assert.False(payload.ContainsKey("channel"));
+    }
+
+    private static CliExecutionContext CreateExecutionContextWithThrowingChannelLazy(TemporaryWorkspace workspace)
+    {
+        // Mirrors Program.BuildCliExecutionContext: the production factory sets
+        // IdentityChannelLazy to wrap IIdentityChannelReader.ReadChannel(), and
+        // CliExecutionContext.IdentityChannel forwards to lazy.Value when the
+        // lazy is non-null. A Lazy that throws inside its factory delegate
+        // throws the same exception on every Value access (ExecutionAndPublication
+        // caches the failure), which matches the production behavior of a
+        // binary with persistently broken channel metadata.
+        var root = workspace.WorkspaceRoot.FullName;
+        var hivesDirectory = new DirectoryInfo(Path.Combine(root, ".aspire", "hives"));
+        var homeDirectory = new DirectoryInfo(Path.Combine(root, ".home"));
+        var cacheDirectory = new DirectoryInfo(Path.Combine(root, ".aspire", "cache"));
+        var sdksDirectory = new DirectoryInfo(Path.Combine(root, ".aspire", "sdks"));
+        var logsDirectory = new DirectoryInfo(Path.Combine(root, ".aspire", "logs"));
+        var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
+
+        return new CliExecutionContext(
+            workspace.WorkspaceRoot,
+            hivesDirectory,
+            cacheDirectory,
+            sdksDirectory,
+            logsDirectory,
+            logFilePath,
+            debugMode: false,
+            homeDirectory: homeDirectory)
+        {
+            IdentityChannelLazy = new Lazy<string>(
+                () => throw new InvalidOperationException("AspireCliChannel assembly metadata is missing."),
+                LazyThreadSafetyMode.ExecutionAndPublication),
+        };
+    }
+
+    [Fact]
     public async Task Info_LogsClassificationReasons()
     {
         // Operational logs from the row-builder are operationally important
