@@ -101,9 +101,11 @@ suite('AppHost discovery', () => {
 
     suite('service', () => {
         let sandbox: sinon.SinonSandbox;
+        let findFilesStub: sinon.SinonStub;
 
         setup(() => {
             sandbox = sinon.createSandbox();
+            findFilesStub = sandbox.stub(vscode.workspace, 'findFiles').resolves([]);
         });
 
         teardown(() => {
@@ -272,6 +274,124 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('keeps valid aspire ls candidates when future entries have unexpected shape', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                options?.stdoutCallback?.(JSON.stringify([
+                    {
+                        path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 'buildable',
+                    },
+                    {
+                        path: buildPath('workspace', 'Future', 'AppHost.csproj'),
+                        language: 'csharp',
+                        status: 42,
+                        extraMetadata: true,
+                    },
+                ]));
+                options?.exitCallback?.(0);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                const result = await service.discover(makeWorkspaceFolder(buildPath('workspace')));
+
+                assert.deepStrictEqual(result, [{
+                    path: buildPath('workspace', 'AppHost', 'AppHost.csproj'),
+                    language: 'csharp',
+                    status: 'buildable',
+                }]);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('reports both aspire ls and legacy fallback errors when discovery fails', async () => {
+            stubFileSystemWatchers(sandbox);
+            sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args = [], options) => {
+                options?.stderrCallback?.(`${args.join(' ')} failed`);
+                options?.exitCallback?.(1);
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+            try {
+                await assert.rejects(
+                    service.discover(makeWorkspaceFolder(buildPath('workspace'))),
+                    /aspire ls discovery failed: ls --format json failed\naspire extension get-apphosts fallback failed: extension get-apphosts failed/);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
+        test('selects configured path from recursive config during service discovery', async () => {
+            const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
+            try {
+                stubFileSystemWatchers(sandbox);
+                const firstConfigPath = path.join(tempDir, 'First', 'aspire.config.json');
+                const secondConfigPath = path.join(tempDir, 'Second', 'aspire.config.json');
+                const matchingAppHostPath = path.join(tempDir, 'Second', 'AppHost', 'AppHost.csproj');
+                const otherAppHostPath = path.join(tempDir, 'Other', 'AppHost', 'AppHost.csproj');
+
+                fs.mkdirSync(path.dirname(firstConfigPath), { recursive: true });
+                fs.mkdirSync(path.dirname(secondConfigPath), { recursive: true });
+                fs.writeFileSync(firstConfigPath, JSON.stringify({ appHost: { path: 'Missing/AppHost.csproj' } }));
+                fs.writeFileSync(secondConfigPath, JSON.stringify({ appHost: { path: 'AppHost/AppHost.csproj' } }));
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                    const pattern = typeof include === 'string' ? include : include.pattern;
+                    return pattern.endsWith('aspire.config.json')
+                        ? [vscode.Uri.file(firstConfigPath), vscode.Uri.file(secondConfigPath)]
+                        : [];
+                });
+                sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
+                    options?.stdoutCallback?.(JSON.stringify([
+                        {
+                            path: otherAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                        {
+                            path: matchingAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                        },
+                    ]));
+                    options?.exitCallback?.(0);
+                    return { kill: () => { } } as any;
+                });
+                const service = new AppHostDiscoveryService(makeTerminalProvider());
+
+                try {
+                    const result = await service.discover(makeWorkspaceFolder(tempDir));
+
+                    assert.deepStrictEqual(result, [
+                        {
+                            path: otherAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                            selected: false,
+                        },
+                        {
+                            path: matchingAppHostPath,
+                            language: 'csharp',
+                            status: 'buildable',
+                            selected: true,
+                        },
+                    ]);
+                }
+                finally {
+                    service.dispose();
+                }
+            }
+            finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
         test('selects configured path that matches a later discovered candidate', async () => {
             const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-apphost-discovery-'));
             try {
@@ -285,7 +405,7 @@ suite('AppHost discovery', () => {
                 fs.writeFileSync(firstConfigPath, JSON.stringify({ appHost: { path: 'Missing/AppHost.csproj' } }));
                 fs.writeFileSync(secondConfigPath, JSON.stringify({ appHost: { path: 'AppHost/AppHost.csproj' } }));
 
-                sandbox.stub(vscode.workspace, 'findFiles').callsFake(async (include: vscode.GlobPattern) => {
+                findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
                     const pattern = typeof include === 'string' ? include : include.pattern;
                     return pattern.endsWith('aspire.config.json')
                         ? [vscode.Uri.file(firstConfigPath), vscode.Uri.file(secondConfigPath)]

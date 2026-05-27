@@ -1,5 +1,4 @@
 import * as path from 'path';
-import * as fs from 'fs';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from '../debugger/languages/cli';
@@ -121,10 +120,16 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         }
         catch (error) {
             this._throwIfDisposed();
-            extensionLogOutputChannel.warn(`aspire ls discovery failed, falling back to aspire extension get-apphosts: ${error}`);
-            const appHosts = await this._discoverWithLegacyGetAppHosts(workspaceFolder);
-            extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire extension get-apphosts`);
-            return appHosts;
+            extensionLogOutputChannel.warn(`aspire ls discovery failed, falling back to aspire extension get-apphosts: ${formatErrorMessage(error)}`);
+            try {
+                const appHosts = await this._discoverWithLegacyGetAppHosts(workspaceFolder);
+                extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire extension get-apphosts`);
+                return appHosts;
+            }
+            catch (fallbackError) {
+                this._throwIfDisposed();
+                throw new Error(`aspire ls discovery failed: ${formatErrorMessage(error)}\naspire extension get-apphosts fallback failed: ${formatErrorMessage(fallbackError)}`);
+            }
         }
     }
 
@@ -202,7 +207,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             return candidates;
         }
 
-        const configuredPath = await findRootConfiguredAppHostPath(workspaceFolder);
+        const configuredPaths = await findConfiguredAppHostPaths(workspaceFolder);
+        const configuredPath = configuredPaths.find(configuredPath => candidates.some(candidate => isSamePath(candidate.path, configuredPath)))
+            ?? configuredPaths[0];
         if (!configuredPath) {
             return candidates;
         }
@@ -365,33 +372,6 @@ export function getWorkspaceAppHostProjectSearchResult(workspaceFolder: vscode.W
     };
 }
 
-async function findRootConfiguredAppHostPath(workspaceFolder: vscode.WorkspaceFolder): Promise<string | undefined> {
-    const configUris = [
-        vscode.Uri.joinPath(workspaceFolder.uri, aspireConfigFileName),
-        vscode.Uri.joinPath(workspaceFolder.uri, '.aspire', 'settings.json'),
-    ];
-
-    for (const uri of configUris) {
-        if (!fs.existsSync(uri.fsPath)) {
-            continue;
-        }
-
-        try {
-            const json = await readJsonFile(uri);
-            const appHostPath = getAppHostPathFromConfig(json);
-            if (appHostPath) {
-                return path.isAbsolute(appHostPath)
-                    ? appHostPath
-                    : path.join(path.dirname(uri.fsPath), appHostPath);
-            }
-        }
-        catch {
-        }
-    }
-
-    return undefined;
-}
-
 export function isBuildableAppHostCandidate(candidate: AppHostCandidate): boolean {
     return candidate.status === 'buildable';
 }
@@ -430,10 +410,18 @@ export async function selectWorkspaceAppHostPath(workspaceFolder: vscode.Workspa
 }
 
 export async function findConfiguredAppHostPaths(workspaceFolder: vscode.WorkspaceFolder): Promise<string[]> {
-    const [newConfigFiles, legacySettingsFiles] = await Promise.all([
-        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, `**/${aspireConfigFileName}`), discoveryExcludePattern),
-        vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/.aspire/settings.json'), discoveryExcludePattern),
-    ]);
+    let newConfigFiles: vscode.Uri[];
+    let legacySettingsFiles: vscode.Uri[];
+    try {
+        [newConfigFiles, legacySettingsFiles] = await Promise.all([
+            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, `**/${aspireConfigFileName}`), discoveryExcludePattern),
+            vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/.aspire/settings.json'), discoveryExcludePattern),
+        ]);
+    }
+    catch (error) {
+        extensionLogOutputChannel.warn(`Failed to find AppHost configuration files: ${formatErrorMessage(error)}`);
+        return [];
+    }
 
     const newConfigDirs = new Set(newConfigFiles.map(uri => path.dirname(uri.fsPath)));
     const filteredLegacyFiles = legacySettingsFiles.filter(legacyUri => {
@@ -512,8 +500,9 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
                 status: candidate.status,
             }));
 
-        if (appHosts.length !== parsed.length) {
-            throw new Error(`${commandName} returned an unexpected candidate shape.`);
+        const unexpectedCandidateCount = parsed.length - appHosts.length;
+        if (unexpectedCandidateCount > 0) {
+            extensionLogOutputChannel.warn(`${commandName} returned ${unexpectedCandidateCount} candidate(s) with an unexpected shape; ignoring those entries.`);
         }
 
         return appHosts;
@@ -564,6 +553,10 @@ function isLsCandidate(obj: unknown): obj is CandidateAppHostDisplayInfo {
         && typeof (obj as CandidateAppHostDisplayInfo).path === 'string'
         && typeof (obj as CandidateAppHostDisplayInfo).language === 'string'
         && typeof (obj as CandidateAppHostDisplayInfo).status === 'string';
+}
+
+function formatErrorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : String(error);
 }
 
 function isLegacyAppHostProjectSearchResult(obj: unknown): obj is LegacyAppHostProjectSearchResult {

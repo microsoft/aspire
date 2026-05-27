@@ -50,6 +50,7 @@ suite('AppHostDataRepository', () => {
     let getCliPathStub: sinon.SinonStub;
     let spawnStub: sinon.SinonStub;
     let defaultWorkspaceFoldersStub: sinon.SinonStub;
+    let findFilesStub: sinon.SinonStub;
 
     setup(() => {
         subscriptions = [];
@@ -58,11 +59,13 @@ suite('AppHostDataRepository', () => {
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
         defaultWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
+        findFilesStub = sinon.stub(vscode.workspace, 'findFiles').resolves([]);
     });
 
     teardown(() => {
         spawnStub.restore();
         getCliPathStub.restore();
+        findFilesStub.restore();
         if (defaultWorkspaceFoldersStub.restore) {
             defaultWorkspaceFoldersStub.restore();
         }
@@ -439,6 +442,12 @@ suite('AppHostDataRepository', () => {
                     path: configuredAppHostPath,
                 },
             }));
+            findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                const pattern = typeof include === 'string' ? include : include.pattern;
+                return pattern.endsWith('aspire.config.json')
+                    ? [vscode.Uri.file(path.join(workspaceRoot, 'aspire.config.json'))]
+                    : [];
+            });
 
             let getAppHostsLineCallback: ((line: string) => void) | undefined;
             let psOptions: any;
