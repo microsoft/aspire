@@ -13,6 +13,10 @@ internal sealed class FakeHelmRunner : IHelmRunner
 {
     public bool WasUninstallCalled { get; private set; }
 
+    public bool WasVersionCalled { get; private set; }
+
+    public bool ThrowOnVersion { get; set; }
+
     public string? LastArguments { get; private set; }
 
     public int ExitCode { get; set; }
@@ -44,6 +48,13 @@ internal sealed class FakeHelmRunner : IHelmRunner
         // `version --short`).
         if (arguments.StartsWith("version", StringComparison.OrdinalIgnoreCase))
         {
+            WasVersionCalled = true;
+
+            if (ThrowOnVersion)
+            {
+                throw new InvalidOperationException("Helm version should not be probed.");
+            }
+
             if (onOutputData is not null && !string.IsNullOrEmpty(VersionOutput))
             {
                 onOutputData(VersionOutput);

@@ -533,12 +533,12 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task HelmDestroyAndUninstallSteps_DependOnCheckHelmPrereqs()
+    public async Task HelmUninstallStep_DependsOnCheckHelmPrereqs()
     {
-        // Regression coverage for PR #17491 review feedback: destroy and uninstall
-        // also invoke `helm`, so they must gate on the same prereq check as deploy.
-        // Otherwise a missing or too-old Helm surfaces as a raw spawn / unknown-flag
-        // error during teardown instead of the actionable validator message.
+        // Regression coverage for PR #17491 review feedback: direct uninstall
+        // invokes `helm`, so it must gate on the same prereq check as deploy.
+        // `destroy-helm-{env}` defers the check until saved state exists so the
+        // no-state path can still report "Nothing to destroy" without Helm.
         using var tempDir = new TestTempDirectory();
 
         var builder = TestDistributedApplicationBuilder.Create(
@@ -561,11 +561,18 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             .Select(s => s.Message)
             .ToList();
 
-        var destroyLines = logs.Where(l => l.Contains("destroy-helm-env")).ToList();
-        Assert.Contains(destroyLines, msg => msg.Contains("check-helm-prereqs-env"));
+        var diagnosticLines = string.Join('\n', logs)
+            .Split('\n')
+            .Select(l => l.Trim())
+            .ToList();
 
-        var uninstallLines = logs.Where(l => l.Contains("helm-uninstall-env")).ToList();
-        Assert.Contains(uninstallLines, msg => msg.Contains("check-helm-prereqs-env"));
+        var destroyTargetLine = diagnosticLines.IndexOf("If targeting 'destroy-helm-env':");
+        Assert.InRange(destroyTargetLine, 0, diagnosticLines.Count - 2);
+        Assert.Equal("Direct dependencies: destroy-prereq", diagnosticLines[destroyTargetLine + 1]);
+
+        var uninstallTargetLine = diagnosticLines.IndexOf("If targeting 'helm-uninstall-env':");
+        Assert.InRange(uninstallTargetLine, 0, diagnosticLines.Count - 2);
+        Assert.Equal("Direct dependencies: check-helm-prereqs-env", diagnosticLines[uninstallTargetLine + 1]);
     }
 
     [Fact]
@@ -1731,7 +1738,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     {
         using var tempDir = new TestTempDirectory();
 
-        var fakeHelm = new FakeHelmRunner();
+        var fakeHelm = new FakeHelmRunner { ThrowOnVersion = true };
         var stateManager = new InMemoryDeploymentStateManager();
         var mockActivityReporter = new TestPipelineActivityReporter(output);
 
@@ -1753,6 +1760,7 @@ public class KubernetesDeployTests(ITestOutputHelper output)
         await app.RunAsync();
 
         // Verify helm was NOT called
+        Assert.False(fakeHelm.WasVersionCalled);
         Assert.False(fakeHelm.WasUninstallCalled);
 
         // Verify it reported nothing to destroy
