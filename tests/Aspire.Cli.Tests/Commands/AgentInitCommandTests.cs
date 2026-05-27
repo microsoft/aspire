@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Commands;
@@ -230,6 +232,75 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AgentInitCommand_NonInteractive_WithCliDefinedSkillDifferentCasing_DoesNotResolveBundle()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string installFailureMessage = "Aspire skills bundle is unavailable.";
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
+                serviceProvider.GetRequiredService<CliExecutionContext>(),
+                AspireSkillsInstallResult.Failed(installFailureMessage));
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations all --skills PLAYWRIGHT-CLI");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.DoesNotContain(
+            interactionService.DisplayedMessages,
+            message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == installFailureMessage);
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_InteractiveSkillPrompt_CliDefinedSkillsWinBundleNameCollisions()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var bundle = await CreateBundleAsync(
+            workspace.WorkspaceRoot,
+            (CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps", true),
+            (SkillDefinition.PlaywrightCli.Name, "Bundle-provided Playwright collision", true));
+        var promptedSkills = new List<SkillDefinition>();
+        var interactionService = new TestInteractionService();
+        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
+        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
+        {
+            var items = choices.Cast<object>().ToList();
+            if (items.FirstOrDefault() is SkillLocation)
+            {
+                return [SkillLocation.Standard];
+            }
+
+            promptedSkills.AddRange(items.OfType<SkillDefinition>());
+            return [];
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
+                serviceProvider.GetRequiredService<CliExecutionContext>(),
+                AspireSkillsInstallResult.Installed(bundle));
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("agent init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var playwrightSkill = Assert.Single(promptedSkills, static skill => skill.HasName(SkillDefinition.PlaywrightCli.Name, StringComparison.OrdinalIgnoreCase));
+        Assert.Same(SkillDefinition.PlaywrightCli, playwrightSkill);
+    }
+
+    [Fact]
     public async Task AgentInitCommand_NonInteractive_WithNoneLocations_SucceedsWithNoSkillsInstalled()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -454,6 +525,64 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     {
         var skillPath = Path.Combine(workspaceRoot.FullName, relativeSkillDirectory, skillName, "SKILL.md");
         Assert.True(File.Exists(skillPath), $"Expected skill file at {skillPath}");
+    }
+
+    private static async Task<AspireSkillsBundle> CreateBundleAsync(DirectoryInfo workspaceRoot, params (string Name, string Description, bool IsDefault)[] skills)
+    {
+        var bundleDirectory = new DirectoryInfo(Path.Combine(workspaceRoot.FullName, $".test-aspire-skills-bundle-{Guid.NewGuid():N}"));
+        Directory.CreateDirectory(bundleDirectory.FullName);
+
+        var manifestSkills = new List<SkillBundleSkill>();
+        foreach (var (name, description, isDefault) in skills)
+        {
+            var skillDirectory = Path.Combine(bundleDirectory.FullName, "skills", name);
+            Directory.CreateDirectory(skillDirectory);
+            var skillPath = Path.Combine(skillDirectory, "SKILL.md");
+            await File.WriteAllTextAsync(skillPath, $$"""
+                ---
+                name: {{name}}
+                description: "{{description}}"
+                ---
+
+                # {{name}}
+                """);
+
+            manifestSkills.Add(new SkillBundleSkill
+            {
+                Name = name,
+                Description = description,
+                IsDefault = isDefault,
+                Files =
+                [
+                    new SkillBundleFile
+                    {
+                        RelativePath = "SKILL.md",
+                        Sha256 = ComputeSha256(skillPath)
+                    }
+                ]
+            });
+        }
+
+        var manifest = new SkillBundleManifest
+        {
+            Version = AspireSkillsInstaller.Version,
+            Supports = new SkillBundleSupports
+            {
+                AspireCli = ">=0.0.0 <999.0.0",
+                AspireSdk = ">=0.0.0 <999.0.0"
+            },
+            Skills = [.. manifestSkills]
+        };
+
+        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+        await File.WriteAllTextAsync(Path.Combine(bundleDirectory.FullName, "skill-manifest.json"), manifestJson);
+        return await AspireSkillsBundle.LoadAsync(bundleDirectory, CancellationToken.None);
+    }
+
+    private static string ComputeSha256(string path)
+    {
+        using var stream = File.OpenRead(path);
+        return Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
     }
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo homeDirectory)

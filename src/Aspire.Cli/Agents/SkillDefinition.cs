@@ -11,7 +11,7 @@ namespace Aspire.Cli.Agents;
 /// Represents a skill that can be installed into a skill location.
 /// </summary>
 [DebuggerDisplay("Name = {Name}, Description = {Description}, IsDefault = {IsDefault}")]
-internal sealed class SkillDefinition : IEquatable<SkillDefinition>
+internal sealed class SkillDefinition
 {
     /// <summary>
     /// The Playwright CLI skill for browser automation.
@@ -150,7 +150,7 @@ internal sealed class SkillDefinition : IEquatable<SkillDefinition>
     /// <summary>
     /// Returns whether this skill has the specified name.
     /// </summary>
-    public bool HasName(string name) => string.Equals(Name, name, StringComparison.Ordinal);
+    public bool HasName(string name, StringComparison comparison = StringComparison.Ordinal) => string.Equals(Name, name, comparison);
 
     private static bool PathMatchesOrIsUnder(string relativePath, string excludedPath)
     {
@@ -171,15 +171,6 @@ internal sealed class SkillDefinition : IEquatable<SkillDefinition>
     /// Gets CLI-defined skills that are not sourced from the Aspire skills bundle.
     /// </summary>
     public static IReadOnlyList<SkillDefinition> CliDefined { get; } = [PlaywrightCli, DotnetInspect];
-
-    /// <inheritdoc />
-    public bool Equals(SkillDefinition? other) => other is not null && string.Equals(Name, other.Name, StringComparison.Ordinal);
-
-    /// <inheritdoc />
-    public override bool Equals(object? obj) => obj is SkillDefinition other && Equals(other);
-
-    /// <inheritdoc />
-    public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Name);
 
     /// <inheritdoc />
     public override string ToString() => Name;

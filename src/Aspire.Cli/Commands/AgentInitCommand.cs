@@ -449,7 +449,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         if (result.Status is AspireSkillsInstallStatus.Installed)
         {
             bundle = result.Bundle ?? throw new InvalidOperationException("Aspire skills installer returned an installed result without a bundle.");
-            skills.AddRange(bundle.GetSkillDefinitions());
+            skills.AddRange(bundle.GetSkillDefinitions().Where(static skill => !IsCliDefinedSkillName(skill.Name)));
         }
         else
         {
@@ -490,7 +490,12 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         var selectedSkillNames = value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         return selectedSkillNames.Length > 0 &&
-               selectedSkillNames.All(name => SkillDefinition.CliDefined.Any(skill => skill.HasName(name)));
+               selectedSkillNames.All(static name => IsCliDefinedSkillName(name));
+    }
+
+    private static bool IsCliDefinedSkillName(string name)
+    {
+        return SkillDefinition.CliDefined.Any(skill => skill.HasName(name, StringComparison.OrdinalIgnoreCase));
     }
 
     private static IReadOnlyList<SkillDefinition> GetDefaultSkills(IEnumerable<SkillDefinition> availableSkills, AgentInitSkillDefaultMode defaultSkillMode)
