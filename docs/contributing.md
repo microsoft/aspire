@@ -22,12 +22,12 @@ These instructions will get you ready to contribute to this project. If you just
   - [`ci-test-failures`](#ci-test-failures)
 - [Development environments](#development-environments)
   - [Using VS Code](#using-vs-code)
-  - [Building the VS Code extension](#building-the-vs-code-extension)
-  - [Using Visual Studio](#using-visual-studio)
-- [Area-specific guidance](#area-specific-guidance)
-  - [Localization](#localization)
-  - [Integrations](#integrations)
-  - [Native build](#native-build)
+    - [Using Visual Studio](#using-visual-studio)
+  - [Area-specific guidance](#area-specific-guidance)
+    - [Localization](#localization)
+    - [Integrations](#integrations)
+    - [Native build](#native-build)
+    - [Building the VS Code extension](#building-the-vs-code-extension)
 - [Trying your changes locally](#trying-your-changes-locally)
   - [Generating local NuGet packages](#generating-local-nuget-packages)
   - [Creating a local Aspire build with `localhive`](#creating-a-local-aspire-build-with-localhive)
@@ -132,27 +132,6 @@ Other repo skills can help with specialized work, but these are the main skills 
 
 Make sure you [build the repo](#build-the-repo) from command line at least once. Then use `./start-code.sh` (macOS and Linux) or `.\start-code.cmd` to start VS Code.
 
-### Building the VS Code extension
-
-The Aspire VS Code extension lives under `extension/`. To build the extension through the repo build, make sure Node.js, yarn, and `vsce` are on your PATH, then run:
-
-```bash
-./build.sh --build-extension  # macOS/Linux
-.\build.cmd /p:BuildExtension=true # Windows
-```
-
-This runs the `extension/Extension.proj` build, installs extension dependencies with the checked-in `yarn.lock`, compiles the extension, and creates the VSIX artifacts under `artifacts/packages/Debug/vscode`.
-
-For extension inner-loop development, you can work directly in the extension folder:
-
-```bash
-cd extension
-yarn install --frozen-lockfile --non-interactive
-yarn compile
-```
-
-Use `yarn watch` while editing TypeScript. When adding or changing user-facing extension text, keep the strings localized in both `extension/package.nls.json` and `extension/src/loc/strings.ts`. For VSIX signing and release packaging details, see [extension-signing.md](/docs/extension-signing.md).
-
 ### Using Visual Studio
 
 Make sure you [build the repo](#build-the-repo) from command line at least once using `.\build.cmd` (Windows). Then use `.\startvs.cmd` to start Visual Studio with the correct environment setup.
@@ -187,6 +166,27 @@ The default build includes native builds for `Aspire.Cli` which produces Native 
 By default it builds the CLI native project for the current Runtime Identifier. Specific RIDs can be specified by setting `$(TargetRids)` to a colon separated list like `/p:TargetRids=osx-x64:osx-arm64`.
 
 Native build can be disabled with `/p:SkipNativeBuild=true`. To build only the native bits, use `/p:SkipManagedBuild=true`.
+
+### Building the VS Code extension
+
+The Aspire VS Code extension lives under `extension/`. To build the extension through the repo build, make sure Node.js, yarn, and `vsce` are on your PATH, then run:
+
+```bash
+./build.sh --build-extension  # macOS/Linux
+.\build.cmd /p:BuildExtension=true # Windows
+```
+
+This runs the `extension/Extension.proj` build, installs extension dependencies with the checked-in `yarn.lock`, compiles the extension, and creates the VSIX artifacts under `artifacts/packages/Debug/vscode`.
+
+For extension inner-loop development, you can work directly in the extension folder:
+
+```bash
+cd extension
+yarn install --frozen-lockfile --non-interactive
+yarn compile
+```
+
+Use `yarn watch` while editing TypeScript. When adding or changing user-facing extension text, keep the strings localized in both `extension/package.nls.json` and `extension/src/loc/strings.ts`. For VSIX signing and release packaging details, see [extension-signing.md](/docs/extension-signing.md).
 
 ## Trying your changes locally
 
