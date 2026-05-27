@@ -205,6 +205,49 @@ public class TelemetryConfigurationTests
         Assert.False(manager.HasAzureMonitor);
     }
 
+    [Fact]
+    public void AzureMonitor_Disabled_WhenInfoFlagProvided()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var manager = new TelemetryManager(configuration, ["--info"]);
+
+        Assert.False(manager.HasAzureMonitor);
+    }
+
+    [Theory]
+    [InlineData("run", "--info")]
+    [InlineData("new", "--info")]
+    [InlineData("publish", "--info", "--format", "json")]
+    public void AzureMonitor_Enabled_WhenInfoFlagOnSubcommand(params string[] args)
+    {
+        // --info is intentionally root-only / non-recursive (see InfoOptionTests'
+        // Info_OnSubcommand_DoesNotFireInfoAction). A subcommand invocation that
+        // carries --info is a real subcommand invocation, so reported telemetry
+        // must not be silently opted out for it.
+        var configuration = new ConfigurationBuilder().Build();
+
+        var manager = new TelemetryManager(configuration, args);
+
+        Assert.True(manager.HasAzureMonitor);
+    }
+
+    [Theory]
+    [InlineData("run", "--help")]
+    [InlineData("run", "--version")]
+    [InlineData("publish", "manifest", "--help")]
+    public void AzureMonitor_Disabled_WhenRecursiveInformationalFlagOnSubcommand(params string[] args)
+    {
+        // --help / --version are recursive in System.CommandLine, so e.g.
+        // `aspire run --help` is genuinely a help invocation. The gate must
+        // keep opting out of telemetry for them at any depth.
+        var configuration = new ConfigurationBuilder().Build();
+
+        var manager = new TelemetryManager(configuration, args);
+
+        Assert.False(manager.HasAzureMonitor);
+    }
+
     private static ActivityListener CreateActivityListener(string sourceName)
     {
         var listener = new ActivityListener

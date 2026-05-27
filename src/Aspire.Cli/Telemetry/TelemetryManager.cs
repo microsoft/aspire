@@ -59,7 +59,9 @@ internal sealed class TelemetryManager : IDisposable
     public TelemetryManager(IConfiguration configuration, string[]? args = null)
     {
         // Don't send telemetry for informational commands or if the user has opted out.
-        var hasOptOutArg = args?.Any(a => CommonOptionNames.InformationalOptionNames.Contains(a)) ?? false;
+        // Position-aware so `aspire run --info` (a real `run` invocation; --info is root-only
+        // non-recursive) stays subject to telemetry instead of being silently opted out.
+        var hasOptOutArg = CommonOptionNames.IsInformationalInvocation(args);
         var telemetryOptOut = hasOptOutArg || configuration.GetBool(AspireCliTelemetry.TelemetryOptOutConfigKey, defaultValue: false);
 
         var profilingEnabled =

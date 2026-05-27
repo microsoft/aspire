@@ -16,13 +16,48 @@ namespace Aspire.Cli.Tests.Commands;
 public class InfoOptionTests(ITestOutputHelper outputHelper)
 {
     [Fact]
-    public void Info_IsInformationalOption_SoFirstRunNoticeAndTelemetryAreSuppressed()
+    public void Info_IsInformationalInvocation_SoFirstRunNoticeAndTelemetryAreSuppressed()
     {
-        // Wired via CommonOptionNames so DisplayFirstTimeUseNoticeIfNeededAsync
-        // does not print the banner or consume the one-shot sentinel and the
-        // telemetry manager opts out for `aspire --info` (the text form is the
-        // path not covered by HasMachineReadableOutputFormat).
-        Assert.Contains(CommonOptionNames.Info, CommonOptionNames.InformationalOptionNames);
+        // Wired via CommonOptionNames.IsInformationalInvocation so
+        // DisplayFirstTimeUseNoticeIfNeededAsync does not print the banner or
+        // consume the one-shot sentinel and the telemetry manager opts out for
+        // `aspire --info` (the text form is the path not covered by
+        // HasMachineReadableOutputFormat).
+        Assert.True(CommonOptionNames.IsInformationalInvocation([CommonOptionNames.Info]));
+        Assert.True(CommonOptionNames.IsInformationalInvocation(["--info", "--self"]));
+        Assert.True(CommonOptionNames.IsInformationalInvocation(["--info", "--format", "json"]));
+    }
+
+    [Theory]
+    [InlineData("run", "--info")]
+    [InlineData("run", "apphost.csproj", "--info")]
+    [InlineData("new", "--info")]
+    [InlineData("publish", "--info", "--format", "json")]
+    public void Info_OnSubcommand_IsNotInformationalInvocation(params string[] args)
+    {
+        // --info is wired as a root-only non-recursive option on RootCommand
+        // (see Info_OnSubcommand_DoesNotFireInfoAction). A subcommand
+        // invocation that happens to carry `--info` is a real subcommand
+        // invocation, not an info invocation, and must not silently opt out
+        // of telemetry or skip the one-shot first-run sentinel.
+        Assert.False(CommonOptionNames.IsInformationalInvocation(args));
+    }
+
+    [Theory]
+    [InlineData("run", "--help")]
+    [InlineData("run", "-h")]
+    [InlineData("run", "-?")]
+    [InlineData("run", "--version")]
+    [InlineData("publish", "manifest", "--help")]
+    public void RecursiveInformationalFlags_OnSubcommand_RemainInformational(params string[] args)
+    {
+        // Companion to Info_OnSubcommand_IsNotInformationalInvocation: unlike
+        // --info, --help / --version / -h / -? are recursive in
+        // System.CommandLine — they bind at any depth and genuinely turn the
+        // invocation into a help/version action. The gate must keep treating
+        // them as informational anywhere they appear, otherwise we'd start
+        // creating the first-run sentinel for `aspire run --help`.
+        Assert.True(CommonOptionNames.IsInformationalInvocation(args));
     }
 
     [Fact]
