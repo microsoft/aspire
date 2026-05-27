@@ -3,6 +3,24 @@ parameters:
     displayName: 'Package VS Code Extension as Pre-Release'
     type: boolean
     default: false
+  # Operator-controlled override for the AspireCliChannel baked into native CLI
+  # binaries by build_sign_native.yml. The default 'auto' lets the pipeline pick
+  # stable / staging / daily / pr-<N> from Build.Reason and Build.SourceBranch
+  # (where release/* and internal/release/* branches always resolve to 'staging'
+  # so stabilizing dogfood builds aren't mis-baked as 'stable' — see
+  # https://github.com/microsoft/aspire/issues/17527). Set this to 'stable' when
+  # kicking off the official GA ship build from a release/* branch so the
+  # distributed binary identifies as stable and `aspire init` writes a
+  # nuget.org-only nuget.config matching the promoted package set.
+  - name: aspireCliChannelOverride
+    displayName: 'Aspire CLI channel override (auto = derive from branch; set to stable for the GA ship build)'
+    type: string
+    default: 'auto'
+    values:
+      - auto
+      - stable
+      - staging
+      - daily
 
 trigger:
   batch: true
@@ -158,6 +176,7 @@ extends:
             - osx-x64
           codeSign: true
           teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
             $(_SignArgs)
@@ -173,6 +192,7 @@ extends:
           # no need to sign ELF binaries on linux
           codeSign: false
           teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
             $(_OfficialBuildIdArgs)
@@ -185,6 +205,7 @@ extends:
             - win-arm64
           codeSign: true
           teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
             $(_SignArgs)
