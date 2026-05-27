@@ -37,7 +37,7 @@ internal static class CommonAgentApplicators
     /// </summary>
     /// <param name="context">The scan context.</param>
     /// <param name="installer">The Playwright CLI installer that handles secure installation.</param>
-    /// <param name="skillBaseDirectory">The relative path to the skill base directory for this agent environment (e.g., ".claude/skills", ".agents/skills").</param>
+    /// <param name="skillBaseDirectory">The relative path to the skill base directory for this agent environment (e.g., ".claude/skills", ".github/skills").</param>
     public static void AddPlaywrightCliApplicator(
         AgentEnvironmentScanContext context,
         PlaywrightCliInstaller installer,

@@ -45,7 +45,7 @@ internal sealed class AgentEnvironmentScanContext
     public IReadOnlyList<AgentEnvironmentApplicator> Applicators => _applicators;
 
     /// <summary>
-    /// Registers a skill base directory for an agent environment (e.g., ".claude/skills", ".agents/skills").
+    /// Registers a skill base directory for an agent environment (e.g., ".claude/skills", ".github/skills").
     /// These directories are used to mirror skill files across all detected agent environments.
     /// </summary>
     /// <param name="relativeSkillBaseDir">The relative path to the skill base directory from the repository root.</param>

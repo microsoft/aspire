@@ -35,7 +35,7 @@ internal sealed class SkillLocation
         includeUserLevel: false);
 
     /// <summary>
-    /// Legacy GitHub Copilot <c>.github/skills/</c> location.
+    /// VS Code / GitHub Copilot <c>.github/skills/</c> location.
     /// </summary>
     public static readonly SkillLocation GitHubSkills = new(
         "github",

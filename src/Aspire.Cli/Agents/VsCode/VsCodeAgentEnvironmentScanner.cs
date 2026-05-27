@@ -17,7 +17,7 @@ internal sealed class VsCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
     private const string VsCodeFolderName = ".vscode";
     private const string McpConfigFileName = "mcp.json";
     private const string AspireServerName = "aspire";
-    private static readonly string s_skillBaseDirectory = Path.Combine(".agents", "skills");
+    private static readonly string s_skillBaseDirectory = Path.Combine(".github", "skills");
 
     private readonly IVsCodeCliRunner _vsCodeCliRunner;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;

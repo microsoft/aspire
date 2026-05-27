@@ -17,7 +17,7 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
     private const string CopilotFolderName = ".copilot";
     private const string McpConfigFileName = "mcp-config.json";
     private const string AspireServerName = "aspire";
-    private static readonly string s_skillBaseDirectory = Path.Combine(".agents", "skills");
+    private static readonly string s_skillBaseDirectory = Path.Combine(".github", "skills");
 
     private readonly ICopilotCliRunner _copilotCliRunner;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;

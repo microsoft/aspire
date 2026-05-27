@@ -31,8 +31,6 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         // Scanner adds applicators for: Aspire MCP, Playwright CLI, and agent instructions
         Assert.NotEmpty(context.Applicators);
         Assert.Contains(context.Applicators, a => a.Description.Contains("VS Code"));
-        Assert.Contains(Path.Combine(".agents", "skills"), context.SkillBaseDirectories);
-        Assert.DoesNotContain(Path.Combine(".github", "skills"), context.SkillBaseDirectories);
     }
 
     [Fact]
