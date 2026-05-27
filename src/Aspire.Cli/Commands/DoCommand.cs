@@ -21,30 +21,6 @@ internal sealed class DoCommand : PipelineCommandBase
 
     private readonly Argument<string> _stepArgument;
 
-    // Mirror of Aspire.Hosting.Pipelines.WellKnownPipelineSteps used only for the friendly
-    // validation message when `aspire do --list-steps` is invoked without a step. The CLI
-    // does not reference Aspire.Hosting, so this list is hand-maintained; keep in sync with
-    // src/Aspire.Hosting/Pipelines/WellKnownPipelineSteps.cs. Sorted alphabetically so the
-    // rendered error is easy to scan.
-    private static readonly string[] s_wellKnownStepNames =
-    [
-        "before-start",
-        "build",
-        "build-prereq",
-        "check-container-runtime",
-        "deploy",
-        "deploy-prereq",
-        "destroy",
-        "destroy-prereq",
-        "diagnostics",
-        "process-parameters",
-        "publish",
-        "publish-prereq",
-        "push",
-        "push-prereq",
-        "validate-compute-environments"
-    ];
-
     public DoCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DoCommand> logger, IAnsiConsole ansiConsole)
         : base("do", DoCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
     {
@@ -65,12 +41,9 @@ internal sealed class DoCommand : PipelineCommandBase
                 {
                     // `aspire do --list-steps` with no step has no meaningful scope: the listing for
                     // `do` is always relative to a target step. Surface a friendly error pointing at
-                    // concrete well-known step names rather than launching the AppHost and crashing
-                    // mid-pipeline (see https://github.com/microsoft/aspire/issues/17526).
-                    result.AddError(string.Format(
-                        System.Globalization.CultureInfo.CurrentCulture,
-                        DoCommandStrings.ListStepsRequiresStep,
-                        string.Join(", ", s_wellKnownStepNames)));
+                    // common starting steps and the docs rather than launching the AppHost and
+                    // crashing mid-pipeline (see https://github.com/microsoft/aspire/issues/17526).
+                    result.AddError(DoCommandStrings.ListStepsRequiresStep);
                 }
                 else
                 {

@@ -142,7 +142,6 @@
     <value>The 'step' argument is required.</value>
   </data>
   <data name="ListStepsRequiresStep" xml:space="preserve">
-    <value>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Well-known step names include: {0}.</value>
-    <comment>{0} is a comma-separated list of well-known pipeline step names.</comment>
+    <value>The 'step' argument is required when using --list-steps. Example: 'aspire do deploy --list-steps'. Common starting steps are 'build', 'publish' and 'deploy'. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps.</value>
   </data>
 </root>

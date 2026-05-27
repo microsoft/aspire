@@ -133,7 +133,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to The &apos;step&apos; argument is required when using --list-steps. Example: &apos;aspire do deploy --list-steps&apos;. Well-known step names include: {0}..
+        ///   Looks up a localized string similar to The &apos;step&apos; argument is required when using --list-steps. Example: &apos;aspire do deploy --list-steps&apos;. Common starting steps are &apos;build&apos;, &apos;publish&apos; and &apos;deploy&apos;. See https://aspire.dev/reference/cli/commands/aspire-do/ for the full list of pipeline steps..
         /// </summary>
         public static string ListStepsRequiresStep {
             get {
