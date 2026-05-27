@@ -365,6 +365,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--help")]
     [InlineData("-h")]
     [InlineData("-?")]
+    [InlineData("--info")]
     public async Task InformationalFlag_SuppressesBannerAndDoesNotCreateSentinel(string flag)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -411,6 +412,66 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
         Assert.True(bannerService.WasBannerDisplayed);
         Assert.True(sentinel.WasCreated);
+    }
+
+    [Theory]
+    [InlineData("run", "--info")]
+    [InlineData("new", "--info")]
+    [InlineData("publish", "--info")]
+    public async Task InfoFlagOnSubcommand_CreatesSentinelAndShowsBanner_OnFirstRun(params string[] args)
+    {
+        // Companion to InformationalFlag_SuppressesBannerAndDoesNotCreateSentinel:
+        // --info is root-only / non-recursive (see InfoOptionTests'
+        // Info_OnSubcommand_DoesNotFireInfoAction), so `aspire run --info` is a
+        // real `run` invocation. The first-run gate must therefore create the
+        // sentinel and show the banner instead of silently consuming the
+        // one-shot first-run slot for what looks like an informational invocation.
+        // (Machine-readable invocations like `publish --info --format json` still
+        // suppress banner+sentinel via the separate HasMachineReadableOutputFormat
+        // gate; that's not the path this test pins.)
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
+        var bannerService = new TestBannerService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
+            options.BannerServiceFactory = _ => bannerService;
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, args);
+
+        Assert.True(bannerService.WasBannerDisplayed);
+        Assert.True(sentinel.WasCreated);
+    }
+
+    [Theory]
+    [InlineData("run", "--help")]
+    [InlineData("run", "--version")]
+    [InlineData("publish", "manifest", "--help")]
+    public async Task RecursiveInformationalFlag_OnSubcommand_DoesNotCreateSentinel(params string[] args)
+    {
+        // Recursive informational options (--help / --version / -h / -?) bind at
+        // any depth in System.CommandLine. The first-run gate must keep treating
+        // them as informational at any position to avoid `aspire run --help`
+        // silently consuming the one-shot first-run slot.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sentinel = new TestFirstTimeUseNoticeSentinel { SentinelExists = false };
+        var bannerService = new TestBannerService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
+            options.BannerServiceFactory = _ => bannerService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, args);
+
+        Assert.False(bannerService.WasBannerDisplayed);
+        Assert.False(sentinel.WasCreated);
     }
 
     [Fact]
