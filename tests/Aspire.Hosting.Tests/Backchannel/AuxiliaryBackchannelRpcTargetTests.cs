@@ -371,7 +371,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetResourcesAsync_MapsNonStringPropertiesAsJsonForV4Callers()
+    public async Task GetResourcesAsync_MapsNonStringPropertiesAsJsonForV3Callers()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
 
@@ -400,7 +400,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var response = await target.GetResourcesAsync(new GetResourcesRequest
         {
-            ClientCapabilities = [AuxiliaryBackchannelCapabilities.V4]
+            ClientCapabilities = [AuxiliaryBackchannelCapabilities.V3]
         }).DefaultTimeout();
 
         var snapshot = Assert.Single(response.Resources);

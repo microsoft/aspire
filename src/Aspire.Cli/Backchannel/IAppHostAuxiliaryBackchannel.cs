@@ -47,11 +47,6 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     bool SupportsV3 { get; }
 
     /// <summary>
-    /// Gets a value indicating whether the AppHost supports v4 API.
-    /// </summary>
-    bool SupportsV4 { get; }
-
-    /// <summary>
     /// Gets AppHost information using the v2 API.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>

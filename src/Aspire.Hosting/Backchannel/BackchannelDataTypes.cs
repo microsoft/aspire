@@ -46,14 +46,10 @@ internal static class AuxiliaryBackchannelCapabilities
     public const string V2 = "aux.v2";
 
     /// <summary>
-    /// Version 3 capabilities: Batched console log streaming and AppHost startup readiness wait.
+    /// Version 3 capabilities: Batched console log streaming, AppHost startup readiness wait,
+    /// and JSON-valued resource properties when requested by the client.
     /// </summary>
     public const string V3 = "aux.v3";
-
-    /// <summary>
-    /// Version 4 capabilities: JSON-valued resource properties when requested by the client.
-    /// </summary>
-    public const string V4 = "aux.v4";
 }
 
 /// <summary>

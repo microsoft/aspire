@@ -14,7 +14,7 @@ namespace Aspire.Cli.Tests.Backchannel;
 public class AppHostAuxiliaryBackchannelTests
 {
     [Fact]
-    public async Task GetResourceSnapshotsAsync_SendsClientCapabilitiesWithV4()
+    public async Task GetResourceSnapshotsAsync_SendsClientCapabilitiesWithV3()
     {
         using var server = TestAppHostBackchannelServer.Start();
         using var backchannel = await server.ConnectAsync().DefaultTimeout();
@@ -24,25 +24,25 @@ public class AppHostAuxiliaryBackchannelTests
         var snapshot = Assert.Single(snapshots);
         Assert.Equal("api", snapshot.Name);
         Assert.NotNull(server.Target.GetResourcesRequest);
-        Assert.Contains(AuxiliaryBackchannelCapabilities.V4, server.Target.GetResourcesRequest.ClientCapabilities);
+        Assert.Contains(AuxiliaryBackchannelCapabilities.V3, server.Target.GetResourcesRequest.ClientCapabilities);
     }
 
     [Fact]
-    public async Task WatchResourceSnapshotsAsync_SendsClientCapabilitiesWithV4()
+    public async Task WatchResourceSnapshotsAsync_SendsClientCapabilitiesWithV3()
     {
         using var server = TestAppHostBackchannelServer.Start();
         using var backchannel = await server.ConnectAsync().DefaultTimeout();
 
-        var snapshots = new List<ResourceSnapshot>();
-        await foreach (var snapshot in backchannel.WatchResourceSnapshotsAsync(includeHidden: true).DefaultTimeout())
-        {
-            snapshots.Add(snapshot);
-        }
+        using var watchCancellation = new CancellationTokenSource();
+        await using var enumerator = backchannel.WatchResourceSnapshotsAsync(includeHidden: true, watchCancellation.Token).GetAsyncEnumerator();
 
-        var resource = Assert.Single(snapshots);
+        Assert.True(await enumerator.MoveNextAsync().DefaultTimeout());
+        await watchCancellation.CancelAsync();
+
+        var resource = enumerator.Current;
         Assert.Equal("api", resource.Name);
         Assert.NotNull(server.Target.WatchResourcesRequest);
-        Assert.Contains(AuxiliaryBackchannelCapabilities.V4, server.Target.WatchResourcesRequest.ClientCapabilities);
+        Assert.Contains(AuxiliaryBackchannelCapabilities.V3, server.Target.WatchResourcesRequest.ClientCapabilities);
     }
 
     private sealed class TestAppHostBackchannelServer : IDisposable

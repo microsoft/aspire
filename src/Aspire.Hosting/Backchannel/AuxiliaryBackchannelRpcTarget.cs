@@ -52,7 +52,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return Task.FromResult(new GetCapabilitiesResponse
         {
-            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2, AuxiliaryBackchannelCapabilities.V3, AuxiliaryBackchannelCapabilities.V4]
+            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2, AuxiliaryBackchannelCapabilities.V3]
         });
     }
 
@@ -1040,7 +1040,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
     private static bool SupportsJsonResourceProperties(string[]? clientCapabilities)
     {
-        return clientCapabilities?.Contains(AuxiliaryBackchannelCapabilities.V4, StringComparer.Ordinal) == true;
+        return clientCapabilities?.Contains(AuxiliaryBackchannelCapabilities.V3, StringComparer.Ordinal) == true;
     }
 
     private static string[]? GetStringArrayPropertyValue(object? value)

@@ -24,8 +24,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     [
         AuxiliaryBackchannelCapabilities.V1,
         AuxiliaryBackchannelCapabilities.V2,
-        AuxiliaryBackchannelCapabilities.V3,
-        AuxiliaryBackchannelCapabilities.V4
+        AuxiliaryBackchannelCapabilities.V3
     ];
 
     private readonly ILogger _logger;
@@ -91,9 +90,6 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
     /// <inheritdoc />
     public bool SupportsV3 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V3);
-
-    /// <inheritdoc />
-    public bool SupportsV4 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V4);
 
     /// <summary>
     /// Gets the JSON-RPC proxy for communicating with the AppHost.

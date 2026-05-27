@@ -21,7 +21,6 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;
     public bool SupportsV2 { get; set; } = true;
     public bool SupportsV3 { get; set; }
-    public bool SupportsV4 { get; set; }
 
     /// <summary>
     /// Gets or sets the resource snapshots to return from GetResourceSnapshotsAsync and WatchResourceSnapshotsAsync.
