@@ -289,6 +289,7 @@ public class AspireSkillsInstallerTests
             Assert.Equal(AspireSkillsInstallStatus.Failed, result.Status);
             Assert.NotNull(result.Message);
             Assert.Contains("SHA-256", result.Message, StringComparison.Ordinal);
+            Assert.Contains("0000000000000000000000000000000000000000000000000000000000000000", result.Message, StringComparison.Ordinal);
             Assert.True(embeddedBundleProvider.OpenArchiveCalled);
         }
         finally

@@ -92,18 +92,13 @@ internal sealed class AspireSkillsInstaller(
         }
 
         var failureMessage = embeddedResult.Status == AcquisitionStatus.Failed
-            ? embeddedResult.Message
+            ? embeddedResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable
             : githubResult.Status == AcquisitionStatus.Failed
-                ? githubResult.Message
+                ? githubResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable
                 : AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable;
 
-        if (!string.IsNullOrWhiteSpace(failureMessage))
-        {
-            activity?.SetStatus(ActivityStatusCode.Error, failureMessage);
-            return AspireSkillsInstallResult.Failed(failureMessage);
-        }
-
-        return AspireSkillsInstallResult.Failed(AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable);
+        activity?.SetStatus(ActivityStatusCode.Error, failureMessage);
+        return AspireSkillsInstallResult.Failed(failureMessage);
     }
 
     private async Task<AcquisitionResult> InstallFromGitHubAsync(
@@ -200,7 +195,7 @@ internal sealed class AspireSkillsInstaller(
 
         if (ValidateEmbeddedMetadata(metadata) is { } metadataError)
         {
-            return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, metadataError));
+            return AcquisitionResult.Failed($"Embedded Aspire skills bundle metadata is invalid: {metadataError}");
         }
 
         if (!string.Equals(metadata.Version, version, StringComparison.OrdinalIgnoreCase))
@@ -298,7 +293,11 @@ internal sealed class AspireSkillsInstaller(
 
         if (!string.Equals(expectedHash, actualHash, StringComparison.OrdinalIgnoreCase))
         {
-            throw new InvalidOperationException("Embedded Aspire skills archive failed SHA-256 verification.");
+            throw new InvalidOperationException(string.Format(
+                CultureInfo.InvariantCulture,
+                "Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'.",
+                expectedHash,
+                actualHash));
         }
     }
 

@@ -32,13 +32,13 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ steps.update-token.outputs.token }}
+          VERSION: ${{ inputs.version }}
         run: |
-          $version = '${{ inputs.version }}'
-          if ([string]::IsNullOrWhiteSpace($version)) {
+          if ([string]::IsNullOrWhiteSpace($env:VERSION)) {
             ./eng/scripts/update-aspire-skills-bundle.ps1
           }
           else {
-            ./eng/scripts/update-aspire-skills-bundle.ps1 -Version $version
+            ./eng/scripts/update-aspire-skills-bundle.ps1 -Version $env:VERSION
           }
 
       - name: Restore solution
