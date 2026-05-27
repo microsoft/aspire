@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Fixed several bugs in the EF Migrations pipeline: publish-mode pipeline steps were incorrectly registered as dependencies in run mode causing a startup failure; connection-string resolution now correctly prefers explicit `.WithReference()` over `.WaitFor()` inference; and exit code reading from EFCore operation snapshots was corrected to use the strongly-typed property.",
-  "docsPrs": [],
+  "docsPrs": [
+    1088
+  ],
   "docsRequired": false,
   "emoji": "🐛",
   "firstMergedAt": "2026-05-27T15:41:54Z",

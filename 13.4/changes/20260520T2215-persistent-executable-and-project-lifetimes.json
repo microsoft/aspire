@@ -7,7 +7,8 @@
   "communityContributors": [],
   "description": "Executable and project resources now support persistent lifetimes, enabling stable process, endpoint, and environment behavior across AppHost/DCP restarts. This aligns with the existing persistent container lifetime model and includes updated DCP executable model fields (persistent, start, stop).",
   "docsPrs": [
-    1083
+    1083,
+    1084
   ],
   "docsRequired": true,
   "emoji": "🔄",

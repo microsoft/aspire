@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Documents resource lifetimes (session, persistent, parent-process, resource-scoped) — matched to persistent-executable-and-project-lifetimes entry",
+  "mergedAt": "2026-05-27T18:39:30Z",
+  "number": 1084,
+  "runDate": "2026-05-27T20:48:35Z",
+  "status": "included",
+  "title": "Document Aspire resource lifetimes"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where the 13.4 staging CLI incorrectly identified itself as the stable channel, causing aspire init to write a nuget.config pointing only at nuget.org. Commands such as aspire add would then resolve the prior stable version or fail to find stabilizing packages. The packaging service now correctly detects the channel and routes stable-shaped staging builds to the SHA-derived Aspire staging feed.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-05-27T18:19:52Z",
+  "lastMergedAt": "2026-05-27T18:19:52Z",
+  "name": "Fix staging CLI package feed resolution",
+  "owner": "mitchdenny",
+  "prs": [
+    17528
+  ]
+}

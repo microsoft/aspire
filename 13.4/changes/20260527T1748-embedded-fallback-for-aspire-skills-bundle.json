@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI now falls back to an embedded, validated skills bundle snapshot when GitHub release asset acquisition is unavailable. This ensures agent init commands complete reliably in restricted network environments or when the online source is temporarily unavailable. The resolution order is: existing validated cache → verified GitHub release asset → embedded snapshot.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛡️",
+  "firstMergedAt": "2026-05-27T17:48:32Z",
+  "lastMergedAt": "2026-05-27T17:48:32Z",
+  "name": "Embedded fallback for Aspire skills bundle",
+  "owner": "IEvangelist",
+  "prs": [
+    17548
+  ]
+}

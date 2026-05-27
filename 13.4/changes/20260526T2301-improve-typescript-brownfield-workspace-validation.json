@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "TypeScript brownfield init now preserves existing root aspire:* scripts, adds only missing AppHost delegate scripts when safe, and respects package-manager boundaries between the AppHost package and guest apps.",
-  "docsPrs": [],
+  "docsPrs": [
+    1080
+  ],
   "docsRequired": false,
   "emoji": "🌲",
   "firstMergedAt": "2026-05-26T23:01:07Z",

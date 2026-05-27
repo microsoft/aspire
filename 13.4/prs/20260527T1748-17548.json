@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Backport of #17537 — adds embedded skills bundle fallback when GitHub release asset acquisition is unavailable",
+  "mergedAt": "2026-05-27T17:48:32Z",
+  "number": 17548,
+  "runDate": "2026-05-27T20:48:35Z",
+  "status": "included",
+  "title": "[release/13.4] Add embedded Aspire skills fallback"
+}
