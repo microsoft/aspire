@@ -45,6 +45,20 @@ internal sealed class EFCoreOperationExecutor : IDisposable
     private const string DataPrefix = "data:    ";
     private const string VerbosePrefix = "verbose: ";
 
+    // Process-wide fallback that serializes every `dotnet-ef` invocation driven by this AppHost.
+    // The pipeline-step factory already chains migration generate steps via DependsOnSteps so two
+    // dotnet-ef processes won't run concurrently during `aspire publish`. This semaphore is a
+    // defense-in-depth backstop for:
+    //   - run-mode resource commands (Update Database / Reset Database / ...) that the user can
+    //     trigger from the dashboard on different migration resources at the same time, each on
+    //     its own DotnetToolResource,
+    //   - shared per-user state every dotnet-ef invocation touches: the `dotnet tool exec` cache,
+    //     NuGet restore caches, and MSBuild node-reuse state under %USERPROFILE%, which are not
+    //     safe under concurrent `dotnet ef` runs even when the projects don't overlap.
+    // Held only for the duration of a single dotnet-ef execution; never awaits any other pipeline
+    // step or command, so it cannot deadlock with the pipeline scheduler.
+    private static readonly SemaphoreSlim s_globalDotnetEfLock = new(1, 1);
+
     public EFCoreOperationExecutor(
         ProjectResource startupProjectResource,
         string? targetProjectPath,
@@ -253,6 +267,13 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
         _logger.LogDebug("Executing dotnet tool exec dotnet-ef --yes -- {Args}", string.Join(" ", efArgs));
 
+        // Acquire the global dotnet-ef lock outside the try/catch that maps exceptions to a failed
+        // EFOperationResult: an OperationCanceledException from WaitAsync must propagate so the
+        // caller observes cancellation rather than a generic failure result. Released in `finally`
+        // only when we actually acquired it (lockAcquired is set true after WaitAsync returns).
+        var lockAcquired = false;
+        await s_globalDotnetEfLock.WaitAsync(_cancellationToken).ConfigureAwait(false);
+        lockAcquired = true;
         try
         {
             // Get required services
@@ -349,6 +370,13 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         catch (Exception ex)
         {
             return new EFOperationResult { Success = false, ErrorMessage = $"dotnet-ef command failed: {ex.Message}" };
+        }
+        finally
+        {
+            if (lockAcquired)
+            {
+                s_globalDotnetEfLock.Release();
+            }
         }
     }
 

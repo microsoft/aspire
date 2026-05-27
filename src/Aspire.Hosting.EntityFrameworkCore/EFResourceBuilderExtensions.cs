@@ -214,13 +214,38 @@ public static class EFResourceBuilderExtensions
             ? $"{migrationResource.Name}-generate-migration-script"
             : null;
 
+        var bundleStepName = migrationResource.PublishAsMigrationBundle
+            ? $"{migrationResource.Name}-generate-migration-bundle"
+            : null;
+
+        // Serialize publish-time generate steps across every EFMigrationResource in the model.
+        // Each `dotnet-ef` invocation triggers a `dotnet build` (the bundle step explicitly runs
+        // without `--no-build` because the bundle command needs the build to target a specific
+        // runtime). Two concurrent `dotnet-ef` runs can race on:
+        //   - the shared obj/bin output when two migrations target the same startup project,
+        //   - the per-user `dotnet tool exec` cache (NuGet install + extract) used by every
+        //     DotnetToolResource regardless of project, and
+        //   - the per-user MSBuild node-reuse / NuGet restore caches under %USERPROFILE%.
+        // None of those are safe under concurrent `dotnet-ef` invocations, so we chain ALL
+        // migration generate steps in the model — not just the ones sharing a startup project.
+        //
+        // The chain is built by deterministically ordering sibling migrations by name and pointing
+        // the first step of each migration at the last step of the previous migration. The
+        // graph is therefore: <m1>-script -> <m1>-bundle -> <m2>-script -> <m2>-bundle -> ...
+        // which is acyclic (the per-migration script -> bundle edge already exists and the
+        // cross-migration edge only flows forward in the deterministic ordering).
+        var crossMigrationPredecessor = GetPreviousMigrationLastStepName(context.PipelineContext.Model, migrationResource);
+
         if (migrationResource.PublishAsMigrationScript)
         {
+            List<string> scriptDependsOn = crossMigrationPredecessor is not null ? [crossMigrationPredecessor] : [];
+
             steps.Add(new PipelineStep
             {
                 Name = scriptStepName!,
                 Description = $"Generate EF Core migration SQL script for {migrationResource.Name}",
                 Resource = migrationResource,
+                DependsOnSteps = scriptDependsOn,
                 RequiredBySteps = [WellKnownPipelineSteps.Publish],
                 Action = stepContext => ExecutePublishPipelineOperationAsync(
                     stepContext, migrationResource, "migration script",
@@ -239,7 +264,6 @@ public static class EFResourceBuilderExtensions
 
         if (migrationResource.PublishAsMigrationBundle)
         {
-            var generateStepName = $"{migrationResource.Name}-generate-migration-bundle";
             var publishesContainer = migrationResource.PublishBundleContainer
                 && context.PipelineContext.ExecutionContext.IsPublishMode;
 
@@ -247,12 +271,25 @@ public static class EFResourceBuilderExtensions
                 ? [WellKnownPipelineSteps.Publish, $"build-{migrationResource.Name}"]
                 : [WellKnownPipelineSteps.Publish];
 
+            // Prefer the per-migration script step as the dependency when present (the cross-migration
+            // edge is already attached to the script step in that case). Only attach the cross-migration
+            // edge directly to the bundle step when this migration produces no script step.
+            List<string> bundleDependsOn = [];
+            if (scriptStepName is not null)
+            {
+                bundleDependsOn.Add(scriptStepName);
+            }
+            else if (crossMigrationPredecessor is not null)
+            {
+                bundleDependsOn.Add(crossMigrationPredecessor);
+            }
+
             steps.Add(new PipelineStep
             {
-                Name = generateStepName,
+                Name = bundleStepName!,
                 Description = $"Generate EF Core migration bundle for {migrationResource.Name}",
                 Resource = migrationResource,
-                DependsOnSteps = scriptStepName is not null ? [scriptStepName] : [], // Make sure these don't run in parallel as the underlying tool resource is not thread safe
+                DependsOnSteps = bundleDependsOn,
                 RequiredBySteps = requiredBy,
                 Action = stepContext => ExecutePublishPipelineOperationAsync(
                     stepContext, migrationResource, "migration bundle",
@@ -270,6 +307,47 @@ public static class EFResourceBuilderExtensions
         }
 
         return steps;
+    }
+
+    // Returns the name of the last publish-time step produced by the migration that immediately
+    // precedes <paramref name="current"/> in a stable ordering of all migrations in the model.
+    // Returns null when <paramref name="current"/> is the first such migration (no predecessor)
+    // or the only one.
+    private static string? GetPreviousMigrationLastStepName(DistributedApplicationModel model, EFMigrationResource current)
+    {
+        EFMigrationResource? predecessor = null;
+        foreach (var sibling in model.Resources.OfType<EFMigrationResource>())
+        {
+            if (ReferenceEquals(sibling, current) ||
+                (!sibling.PublishAsMigrationScript && !sibling.PublishAsMigrationBundle))
+            {
+                continue;
+            }
+
+            // Stable ordinal ordering by resource name keeps the chain deterministic regardless
+            // of model traversal order. Only siblings whose name sorts before this one can
+            // possibly act as a predecessor.
+            if (StringComparer.Ordinal.Compare(sibling.Name, current.Name) >= 0)
+            {
+                continue;
+            }
+
+            if (predecessor is null || StringComparer.Ordinal.Compare(sibling.Name, predecessor.Name) > 0)
+            {
+                predecessor = sibling;
+            }
+        }
+
+        if (predecessor is null)
+        {
+            return null;
+        }
+
+        // The bundle step always follows the script step within the same migration, so it is the
+        // last step when present.
+        return predecessor.PublishAsMigrationBundle
+            ? $"{predecessor.Name}-generate-migration-bundle"
+            : $"{predecessor.Name}-generate-migration-script";
     }
 
     private static async Task ExecutePublishPipelineOperationAsync(
