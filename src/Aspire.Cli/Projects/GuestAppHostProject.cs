@@ -1702,6 +1702,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             exception.Diagnostic.MemberName ?? "<none>",
             exception.Diagnostic.RuntimeAspireHostingVersion ?? "<none>",
             exception.Diagnostic.LoadedAssemblies.Count);
+        _logger.LogDebug(
+            "Code generation diagnostic payload: {DiagnosticPayload}",
+            JsonSerializer.Serialize(
+                exception.Diagnostic,
+                BackchannelJsonSerializerContext.Default.AppHostCodeGenerationDiagnostic));
 
         if (!_executionContext.DebugMode)
         {
