@@ -4,36 +4,49 @@ These instructions will get you ready to contribute to this project. If you just
 
 ## Contents
 
-- [Prepare the machine](#prepare-the-machine)
-- [Build the repo](#build-the-repo)
-- [Using the `dotnet` CLI](#using-the-dotnet-cli)
-- [Run TestShop](#run-testshop)
-- [Using VS Code](#using-vs-code)
-- [Building the VS Code extension](#building-the-vs-code-extension)
-- [Using Visual Studio](#using-visual-studio)
-- [Native build](#native-build)
-- [View Dashboard](#view-dashboard)
-- [Localization](#localization)
+- [Getting set up](#getting-set-up)
+  - [Prepare the machine](#prepare-the-machine)
+  - [Using the `dotnet` CLI](#using-the-dotnet-cli)
+  - [Build the repo](#build-the-repo)
+- [Verify your setup](#verify-your-setup)
+  - [Run TestShop](#run-testshop)
+  - [View Dashboard](#view-dashboard)
 - [Testing](#testing)
+  - [Running tests](#running-tests)
+  - [Quarantined and outerloop tests](#quarantined-and-outerloop-tests)
+  - [Testing pull request changes](#testing-pull-request-changes)
 - [Contributing with AI assistance](#contributing-with-ai-assistance)
-- [Integrations](#integrations)
-- [Generating local NuGet packages](#generating-local-nuget-packages)
-- [Creating a local Aspire build with `localhive`](#creating-a-local-aspire-build-with-localhive)
+- [Development environments](#development-environments)
+  - [Using VS Code](#using-vs-code)
+  - [Building the VS Code extension](#building-the-vs-code-extension)
+  - [Using Visual Studio](#using-visual-studio)
+- [Area-specific guidance](#area-specific-guidance)
+  - [Localization](#localization)
+  - [Integrations](#integrations)
+  - [Native build](#native-build)
+- [Trying your changes locally](#trying-your-changes-locally)
+  - [Generating local NuGet packages](#generating-local-nuget-packages)
+  - [Creating a local Aspire build with `localhive`](#creating-a-local-aspire-build-with-localhive)
 - [Tips and known issues](#tips-and-known-issues)
+  - [Package validation](#package-validation)
 
-## Prepare the machine
+## Getting set up
+
+### Prepare the machine
 
 See [machine-requirements.md](/docs/machine-requirements.md).
 
-## Build the repo
-
-First run `./restore.sh` (macOS and Linux) or `.\restore.cmd` (Windows) to install the repo-local .NET SDK. Then build with `./build.sh` (macOS and Linux) or `.\build.cmd` (Windows).
-
-## Using the `dotnet` CLI
+### Using the `dotnet` CLI
 
 After restore, `dotnet` commands run from this repo use the repo-local SDK because `global.json` includes `.dotnet` in the SDK search path. Use `./dotnet.sh` on Unix or `.\dotnet.cmd` on Windows when you need to force the repo-local SDK explicitly.
 
-## Run TestShop
+### Build the repo
+
+First run `./restore.sh` (macOS and Linux) or `.\restore.cmd` (Windows) to install the repo-local .NET SDK. Then build with `./build.sh` (macOS and Linux) or `.\build.cmd` (Windows).
+
+## Verify your setup
+
+### Run TestShop
 
 This will confirm that you're all set up.
 
@@ -50,11 +63,59 @@ Or, if you are using Visual Studio:
 2. Set the Startup Project to be the `AppHost` project (it's under `\playground\TestShop`). Make sure the launch profile is set to "http".
 3. <kbd>F5</kbd> to debug, or <kbd>Ctrl+F5</kbd> to launch without debugging.
 
-## Using VS Code
+### View Dashboard
+
+When you start the sample app in Visual Studio, it will automatically open your browser to show the dashboard.
+
+Otherwise if you are using the command line, when you have the Aspire app running, open the dashboard URL in your browser. The URL is shown in the app's console output like this: `Now listening on: http://localhost:15888`. You can change the default URL in the launchSettings.json file in the AppHost project.
+
+## Testing
+
+### Running tests
+
+To run tests, use the build script:
+
+```bash
+./build.sh --test  # Linux/macOS
+.\build.cmd --test # Windows
+```
+
+### Quarantined and outerloop tests
+
+Flaky tests may be marked as quarantined to prevent them from blocking CI while being investigated and fixed. See [quarantined-tests.md](/docs/quarantined-tests.md) for more information on working with quarantined tests.
+
+Long-running or resource-intensive tests may be marked as outerloop. See [outerloop-tests.md](/docs/outerloop-tests.md) for more information.
+
+When running tests locally or in automated environments, use the test filters to exclude known flaky and outerloop tests:
+
+```bash
+dotnet test --no-launch-profile -- \
+  --filter-not-trait "quarantined=true" \
+  --filter-not-trait "outerloop=true"
+```
+
+### Testing pull request changes
+
+To test changes from a specific pull request locally, see [dogfooding-pull-requests.md](/docs/dogfooding-pull-requests.md) for instructions on installing Aspire CLI and NuGet packages built by that PR's CI run.
+
+## Contributing with AI assistance
+
+Aspire uses GitHub Copilot automatic code review on pull requests. We expect Copilot review comments to be reviewed and addressed before merging, either by making the requested change or by explaining why a suggested change is not needed.
+
+The Aspire repository also includes custom Copilot skills that team members and automation may run on PRs, even when the PR author is not using an AI coding agent. Contributors can get a head start by running the key skills before requesting review:
+
+- [`code-review`](/.github/skills/code-review/SKILL.md) reviews a PR for high-confidence problems only, such as bugs, security issues, correctness errors, performance regressions, missing boundary error handling, concurrency or resource issues, flaky test patterns, and repository convention violations. It avoids style nits and duplicate review comments.
+- [`pr-testing`](/.github/skills/pr-testing/SKILL.md) installs the Aspire CLI and packages from a PR's dogfood build, verifies the installed CLI matches the PR head commit, analyzes changed areas, proposes targeted happy-path and negative test scenarios, runs the selected scenarios locally or in the repo container runner, captures evidence, and can produce a PR testing report.
+
+Other repo skills can help with specialized work, but these two are the main skills the Aspire team uses to evaluate PR quality and dogfoodability.
+
+## Development environments
+
+### Using VS Code
 
 Make sure you [build the repo](#build-the-repo) from command line at least once. Then use `./start-code.sh` (macOS and Linux) or `.\start-code.cmd` to start VS Code.
 
-## Building the VS Code extension
+### Building the VS Code extension
 
 The Aspire VS Code extension lives under `extension/`. To build the extension through the repo build, make sure Node.js, yarn, and `vsce` are on your PATH, then run:
 
@@ -75,25 +136,13 @@ yarn compile
 
 Use `yarn watch` while editing TypeScript. When adding or changing user-facing extension text, keep the strings localized in both `extension/package.nls.json` and `extension/src/loc/strings.ts`. For VSIX signing and release packaging details, see [extension-signing.md](/docs/extension-signing.md).
 
-## Using Visual Studio
+### Using Visual Studio
 
 Make sure you [build the repo](#build-the-repo) from command line at least once using `.\build.cmd` (Windows). Then use `.\startvs.cmd` to start Visual Studio with the correct environment setup.
 
-## Native build
+## Area-specific guidance
 
-The default build includes native builds for `Aspire.Cli` which produces Native AOT binaries for some platforms. These projects are in `eng/clipack/Aspire.Cli.*`.
-
-By default it builds the CLI native project for the current Runtime Identifier. Specific RIDs can be specified by setting `$(TargetRids)` to a colon separated list like `/p:TargetRids=osx-x64:osx-arm64`.
-
-Native build can be disabled with `/p:SkipNativeBuild=true`. To build only the native bits, use `/p:SkipManagedBuild=true`.
-
-## View Dashboard
-
-When you start the sample app in Visual Studio, it will automatically open your browser to show the dashboard.
-
-Otherwise if you are using the command line, when you have the Aspire app running, open the dashboard URL in your browser. The URL is shown in the app's console output like this: `Now listening on: http://localhost:15888`. You can change the default URL in the launchSettings.json file in the AppHost project.
-
-## Localization
+### Localization
 
 If you are contributing to Aspire.Dashboard, please ensure that all strings are localized. If necessary,
 create a new resx file under `src/Aspire.Dashboard/Resources`. To reference a string, ensure the `IStringLocalizer` for the resx file is
@@ -110,51 +159,21 @@ until `OnInitialized`.
 
 The `*.Designer.cs` files are checked in with the matching `*.resx` files. If you add, remove, or rename resources, update the matching designer file too. If the project has an `xlf` directory, run `dotnet build /t:UpdateXlf <path-to-project.csproj>` to update localization files instead of editing `*.xlf` files manually.
 
-## Testing
-
-### Running Tests
-
-To run tests, use the build script:
-
-```bash
-./build.sh --test  # Linux/macOS
-.\build.cmd --test # Windows
-```
-
-### Quarantined Tests
-
-Flaky tests may be marked as quarantined to prevent them from blocking CI while being investigated and fixed. See [quarantined-tests.md](/docs/quarantined-tests.md) for more information on working with quarantined tests.
-
-Long-running or resource-intensive tests may be marked as outerloop. See [outerloop-tests.md](/docs/outerloop-tests.md) for more information.
-
-When running tests locally or in automated environments, use the test filters to exclude known flaky and outerloop tests:
-
-```bash
-dotnet test --no-launch-profile -- \
-  --filter-not-trait "quarantined=true" \
-  --filter-not-trait "outerloop=true"
-```
-
-### Testing Pull Request Changes
-
-To test changes from a specific pull request locally, see [dogfooding-pull-requests.md](/docs/dogfooding-pull-requests.md) for instructions on installing Aspire CLI and NuGet packages built by that PR's CI run.
-
-## Contributing with AI assistance
-
-Aspire uses GitHub Copilot automatic code review on pull requests. We expect Copilot review comments to be reviewed and addressed before merging, either by making the requested change or by explaining why a suggested change is not needed.
-
-The Aspire repository also includes custom Copilot skills that team members and automation may run on PRs, even when the PR author is not using an AI coding agent. Contributors can get a head start by running the key skills before requesting review:
-
-- [`code-review`](/.github/skills/code-review/SKILL.md) reviews a PR for high-confidence problems only, such as bugs, security issues, correctness errors, performance regressions, missing boundary error handling, concurrency or resource issues, flaky test patterns, and repository convention violations. It avoids style nits and duplicate review comments.
-- [`pr-testing`](/.github/skills/pr-testing/SKILL.md) installs the Aspire CLI and packages from a PR's dogfood build, verifies the installed CLI matches the PR head commit, analyzes changed areas, proposes targeted happy-path and negative test scenarios, runs the selected scenarios locally or in the repo container runner, captures evidence, and can produce a PR testing report.
-
-Other repo skills can help with specialized work, but these two are the main skills the Aspire team uses to evaluate PR quality and dogfoodability.
-
-## Integrations
+### Integrations
 
 Please check the [Aspire integrations contribution guidelines](/src/Components/README.md) if you intend to make contributions to a new or existing Aspire integration.
 
-## Generating local NuGet packages
+### Native build
+
+The default build includes native builds for `Aspire.Cli` which produces Native AOT binaries for some platforms. These projects are in `eng/clipack/Aspire.Cli.*`.
+
+By default it builds the CLI native project for the current Runtime Identifier. Specific RIDs can be specified by setting `$(TargetRids)` to a colon separated list like `/p:TargetRids=osx-x64:osx-arm64`.
+
+Native build can be disabled with `/p:SkipNativeBuild=true`. To build only the native bits, use `/p:SkipManagedBuild=true`.
+
+## Trying your changes locally
+
+### Generating local NuGet packages
 
 If you only need package outputs, it can be useful to generate the NuGet packages in a local folder and use it as a package source from a separate Aspire-based project or solution. If you want to validate a complete locally-built Aspire product, including the CLI, templates, package hive, and bundle payload, use [`localhive`](#creating-a-local-aspire-build-with-localhive) instead.
 
@@ -173,7 +192,7 @@ Or edit the `NuGet.config` file and add this line to the `<packageSources>` list
 <add key="aspire-dev" value="my_aspire_folder/artifacts/packages/Debug/Shipping" />
 ```
 
-## Creating a local Aspire build with `localhive`
+### Creating a local Aspire build with `localhive`
 
 Use `localhive` when you want a fully usable Aspire product from your local source tree, not just a folder of NuGet packages. The script builds and packs the Aspire packages, creates an Aspire hive, builds the bundle payload, and installs a locally-built Aspire CLI. The CLI then discovers the hive as a channel, so commands like `aspire new`, `aspire add`, and `aspire init` use the packages produced by your custom build.
 
