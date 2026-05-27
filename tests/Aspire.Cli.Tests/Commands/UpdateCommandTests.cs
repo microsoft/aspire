@@ -2512,9 +2512,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("daily")]
-    [InlineData("stable")]
-    public async Task UpdateCommand_SelfUpdate_NonInteractive_WhenIdentityChannelMatchesKnownChannel_UsesItWithoutPrompting(string identityChannel)
+    [InlineData("daily", "daily")]
+    [InlineData("stable", "stable")]
+    [InlineData("DAILY", "daily")] // case-insensitive match; canonical name from channels
+    public async Task UpdateCommand_SelfUpdate_NonInteractive_WhenIdentityChannelMatchesKnownChannel_UsesItWithoutPrompting(string identityChannel, string expectedChannel)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -2554,7 +2555,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         await result.InvokeAsync().DefaultTimeout();
 
         Assert.False(promptForSelectionInvoked, "Identity-channel match should bypass the channel prompt.");
-        Assert.Equal(identityChannel, capturedChannel);
+        Assert.Equal(expectedChannel, capturedChannel);
     }
 
     [Fact]
@@ -2602,24 +2603,29 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task UpdateCommand_SelfUpdate_NonInteractive_WhenIdentityChannelIsStalePr_DefaultsToStable()
+    public async Task UpdateCommand_SelfUpdate_NonInteractive_WhenIdentityChannelIsStalePr_RequiresExplicitChannel()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var promptForSelectionInvoked = false;
         string? capturedChannel = null;
+        TestInteractionService? interactionService = null;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: "pr-99999");
 
-            options.InteractionServiceFactory = _ => new TestInteractionService()
+            options.InteractionServiceFactory = _ =>
             {
-                PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
+                interactionService = new TestInteractionService()
                 {
-                    promptForSelectionInvoked = true;
-                    return PackageChannelNames.Stable;
-                }
+                    PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
+                    {
+                        promptForSelectionInvoked = true;
+                        return PackageChannelNames.Stable;
+                    }
+                };
+                return interactionService;
             };
 
             options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
@@ -2639,10 +2645,15 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("update --self --non-interactive -y");
 
-        await result.InvokeAsync().DefaultTimeout();
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.False(promptForSelectionInvoked, "Non-interactive mode should not prompt; should default to stable.");
-        Assert.Equal(PackageChannelNames.Stable, capturedChannel);
+        Assert.Equal(CliExitCodes.MissingRequiredArgument, exitCode);
+        Assert.False(promptForSelectionInvoked, "Non-interactive mode should not prompt when channel cannot be resolved.");
+        Assert.Null(capturedChannel);
+        Assert.NotNull(interactionService);
+        Assert.Contains(
+            interactionService.DisplayedErrors,
+            e => e.Contains("--channel", StringComparison.Ordinal) && e.Contains("non-interactive", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

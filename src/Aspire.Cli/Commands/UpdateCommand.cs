@@ -480,21 +480,28 @@ internal sealed class UpdateCommand : BaseCommand
                 ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
                 : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };
 
-            // In non-interactive mode, avoid prompting. Prefer the channel the current CLI
-            // was resolved from when it maps to an update channel; otherwise fall back to stable.
+            // In non-interactive mode, avoid prompting. Prefer the CLI identity channel when it
+            // maps to an update channel; use stable for local dev builds; otherwise require --channel.
             var nonInteractive = parseResult.GetValue(RootCommand.NonInteractiveOption);
             if (nonInteractive)
             {
                 var identityChannel = ExecutionContext.IdentityChannel;
                 if (!string.IsNullOrWhiteSpace(identityChannel)
                     && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName)
-                    && channels.Any(c => string.Equals(c, identityChannel, StringComparisons.ChannelName)))
+                    && channels.FirstOrDefault(c => string.Equals(c, identityChannel, StringComparisons.ChannelName)) is { } matchedChannel)
                 {
-                    channel = identityChannel;
+                    channel = matchedChannel;
+                }
+                else if (string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName))
+                {
+                    channel = PackageChannelNames.Stable;
                 }
                 else
                 {
-                    channel = PackageChannelNames.Stable;
+                    var channelOptionDisplayName = $"'{_channelOption.Name}'";
+                    InteractionService.DisplayError(
+                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.NonInteractiveOptionRequired, channelOptionDisplayName));
+                    throw new NonInteractiveException(channelOptionDisplayName);
                 }
             }
             else
