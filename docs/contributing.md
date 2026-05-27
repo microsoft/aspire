@@ -16,6 +16,10 @@ These instructions will get you ready to contribute to this project. If you just
   - [Quarantined and outerloop tests](#quarantined-and-outerloop-tests)
   - [Testing pull request changes](#testing-pull-request-changes)
 - [Contributing with AI assistance](#contributing-with-ai-assistance)
+  - [`code-review`](#code-review)
+  - [`pr-testing`](#pr-testing)
+  - [`cli-e2e-testing`](#cli-e2e-testing)
+  - [`ci-test-failures`](#ci-test-failures)
 - [Development environments](#development-environments)
   - [Using VS Code](#using-vs-code)
   - [Building the VS Code extension](#building-the-vs-code-extension)
@@ -104,11 +108,23 @@ Aspire uses GitHub Copilot automatic code review on pull requests. We expect Cop
 
 The Aspire repository also includes custom Copilot skills that team members and automation may run on PRs, even when the PR author is not using an AI coding agent. Contributors can get a head start by running the key skills before requesting review:
 
-- [`code-review`](/.github/skills/code-review/SKILL.md) reviews a PR for high-confidence problems only, such as bugs, security issues, correctness errors, performance regressions, missing boundary error handling, concurrency or resource issues, flaky test patterns, and repository convention violations. It avoids style nits and duplicate review comments.
-- [`pr-testing`](/.github/skills/pr-testing/SKILL.md) installs the Aspire CLI and packages from a PR's dogfood build, verifies the installed CLI matches the PR head commit, analyzes changed areas, proposes targeted happy-path and negative test scenarios, runs the selected scenarios locally or in the repo container runner, captures evidence, and can produce a PR testing report.
-- [`cli-e2e-testing`](/.github/skills/cli-e2e-testing/SKILL.md) guides Aspire CLI end-to-end test authoring and debugging with Hex1b terminal automation. It covers test structure, local `localhive` archive workflows, Docker-based execution, install modes, prompt detection, and asciinema recordings for failures.
+### [`code-review`](/.github/skills/code-review/SKILL.md)
 
-Other repo skills can help with specialized work, but these are the main skills the Aspire team uses to evaluate PR quality, dogfoodability, and CLI end-to-end coverage.
+Reviews a PR for high-confidence problems only, such as bugs, security issues, correctness errors, performance regressions, missing boundary error handling, concurrency or resource issues, flaky test patterns, and repository convention violations. It avoids style nits and duplicate review comments.
+
+### [`pr-testing`](/.github/skills/pr-testing/SKILL.md)
+
+Installs the Aspire CLI and packages from a PR's dogfood build, verifies the installed CLI matches the PR head commit, analyzes changed areas, proposes targeted happy-path and negative test scenarios, runs the selected scenarios locally or in the repo container runner, captures evidence, and can produce a PR testing report.
+
+### [`cli-e2e-testing`](/.github/skills/cli-e2e-testing/SKILL.md)
+
+Guides Aspire CLI end-to-end test authoring and debugging with Hex1b terminal automation. It covers test structure, local `localhive` archive workflows, Docker-based execution, install modes, prompt detection, and asciinema recordings for failures.
+
+### [`ci-test-failures`](/.github/skills/ci-test-failures/SKILL.md)
+
+Guides GitHub Actions test-failure diagnosis. It covers downloading failed job logs and artifacts, extracting failed tests from runs, investigating failures without filing issues, and creating or updating failing-test issues with the repo tooling.
+
+Other repo skills can help with specialized work, but these are the main skills the Aspire team uses to evaluate PR quality, dogfoodability, CLI end-to-end coverage, and CI test failures.
 
 ## Development environments
 
