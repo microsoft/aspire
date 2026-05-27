@@ -464,6 +464,7 @@ public class Program
         builder.Services.AddSingleton<Aspire.Cli.Npm.INpmRunner, Aspire.Cli.Npm.NpmRunner>();
         builder.Services.AddHttpClient<Aspire.Cli.Npm.INpmProvenanceChecker, Aspire.Cli.Npm.SigstoreNpmProvenanceChecker>();
         builder.Services.AddHttpClient<IGitHubArtifactAttestationVerifier, GitHubArtifactAttestationVerifier>();
+        builder.Services.AddSingleton<IEmbeddedAspireSkillsBundleProvider, EmbeddedAspireSkillsBundleProvider>();
         builder.Services.AddSingleton<IAspireSkillsInstaller, AspireSkillsInstaller>();
         builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.IPlaywrightCliRunner, Aspire.Cli.Agents.Playwright.PlaywrightCliRunner>();
         builder.Services.AddSingleton<Aspire.Cli.Agents.Playwright.PlaywrightCliInstaller>();

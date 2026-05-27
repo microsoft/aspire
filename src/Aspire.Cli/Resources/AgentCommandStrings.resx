@@ -166,7 +166,7 @@
     <value>Installing Aspire skills...</value>
   </data>
   <data name="AspireSkillsInstaller_GitHubUnavailable" xml:space="preserve">
-    <value>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached bundle is available.</value>
+    <value>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</value>
   </data>
   <data name="AspireSkillsInstaller_InvalidBundle" xml:space="preserve">
     <value>The Aspire skills bundle is invalid: {0}</value>

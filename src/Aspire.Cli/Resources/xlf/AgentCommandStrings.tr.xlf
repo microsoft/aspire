@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="tr" original="../AgentCommandStrings.resx">
     <body>
       <trans-unit id="AspireSkillsInstaller_GitHubUnavailable">
-        <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached bundle is available.</source>
-        <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached bundle is available.</target>
+        <source>Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</source>
+        <target state="new">Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available.</target>
         <note />
       </trans-unit>
       <trans-unit id="ConfigUpdatesSelectPrompt">

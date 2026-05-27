@@ -376,7 +376,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached bundle is available..
+        ///   Looks up a localized string similar to Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available..
         /// </summary>
         internal static string AspireSkillsInstaller_GitHubUnavailable {
             get {

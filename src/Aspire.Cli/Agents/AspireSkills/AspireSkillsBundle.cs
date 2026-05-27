@@ -302,7 +302,7 @@ internal sealed class AspireSkillsBundle
         return Path.Combine(segments);
     }
 
-    private static string NormalizeSha256(string sha256)
+    internal static string NormalizeSha256(string sha256)
     {
         const string prefix = "sha256-";
         return sha256.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
