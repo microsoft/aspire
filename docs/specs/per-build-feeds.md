@@ -704,9 +704,12 @@ not gates that block all other work.
 ### Phase 2 — Sim-publish from CI in parallel with today's pipelines
 
 This is the central phase for getting the **publish layer** right
-before the resolver layer is built on top of it. It intentionally
-runs for **weeks**, not days — the point is to exercise the
-layer below against real builds until it is genuinely trustworthy.
+before the resolver layer is built on top of it. It exits on
+**validation and accumulated confidence**, not on a calendar — we
+move on when the publish layer has been exercised against enough
+real builds, across enough build kinds, with enough green
+signal, that we trust it. Whether that takes a short time or a
+long time is an output of the work, not an input.
 
 - Add the static-feed emit step to existing build pipelines so
   PR, daily, and release builds produce the `feed/` layout as a
@@ -724,13 +727,15 @@ layer below against real builds until it is genuinely trustworthy.
   the blob URL, attestation verification. Surface failures as CI
   signal only — they do not block PRs, but they do block phase
   advancement.
-- Exit criteria: N consecutive weeks of green sim-publishes
-  across all build kinds, including at least one full
-  staging → stable promotion exercised end-to-end against the
-  blob layout (without actually flipping customer-visible
-  pointers). The publish layer must be *boring* — predictable,
-  signed, observable, well-understood — before any consumer
-  layer starts depending on it.
+- Exit criteria are confidence-based, not time-based: green
+  sim-publishes across every build kind we ship (PR, daily,
+  staging-rebuilt-as-stable-candidate, real stable), at least
+  one full staging → stable promotion exercised end-to-end
+  against the blob layout (without flipping customer-visible
+  pointers), and no open critical bugs in the publish path. The
+  publish layer must be *boring* — predictable, signed,
+  observable, well-understood — before any consumer layer starts
+  depending on it.
 
 ### Phase 3 — Pointer files and signing infrastructure
 
@@ -766,11 +771,11 @@ soak period between each step.
    so the next release is the first one to flow through the new
    pipeline.
 5. **`stable` channel.** Last. By the time we get here, every
-   other channel has been on the new infrastructure for months.
-   Customer-visible behavior is unchanged because stable still
-   resolves to nuget.org by default; what changes is the
-   *internal* promotion path that produces those nuget.org
-   uploads.
+   other channel has already been running on the new
+   infrastructure long enough to be uneventful. Customer-visible
+   behavior is unchanged because stable still resolves to
+   nuget.org by default; what changes is the *internal*
+   promotion path that produces those nuget.org uploads.
 
 ### Phase 5 — Merge staging + stable pipelines into one signed-bits pipeline
 
