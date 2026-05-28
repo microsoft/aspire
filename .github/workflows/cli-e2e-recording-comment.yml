@@ -293,53 +293,36 @@ jobs:
               }
 
               const shortNames = [...new Set(Object.values(castSourceMap))];
-              const unmatchedNames = new Set(shortNames);
               console.log(`Looking up jobs for ${shortNames.length} short name(s): ${JSON.stringify(shortNames)}`);
 
-              // Fetch jobs page by page instead of using github.paginate, which fails
-              // with HTTP 500 on large runs (300+ jobs). Use per_page=50 because the
-              // GitHub API returns 502 "Server Error" with per_page=100 when runs have
-              // many jobs (the response payload exceeds an internal size limit).
-              const perPage = 50;
-              let page = 1;
-              const maxPages = 20;
-              while (unmatchedNames.size > 0 && page <= maxPages) {
-                let jobs;
-                try {
-                  const response = await github.rest.actions.listJobsForWorkflowRun({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    run_id: runId,
-                    per_page: perPage,
-                    page: page
-                  });
-                  jobs = response.data.jobs;
-                } catch (pageError) {
-                  console.log(`Page ${page} failed: ${pageError.message} — skipping`);
-                  page++;
-                  continue;
+              // Use per_page=50 because the GitHub API returns 502 "Server Error"
+              // with per_page=100 when runs have many jobs (300+). The response
+              // payload exceeds an internal size limit at larger page sizes.
+              const allJobs = await github.paginate(
+                github.rest.actions.listJobsForWorkflowRun,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: runId,
+                  per_page: 50
                 }
+              );
 
-                console.log(`Page ${page}: ${jobs.length} jobs`);
-                if (jobs.length === 0) break;
+              console.log(`Fetched ${allJobs.length} jobs total`);
 
-                for (const job of jobs) {
-                  if (!job.name) continue;
-                  for (const shortName of unmatchedNames) {
-                    if (job.name.includes(shortName)) {
-                      jobMap[shortName] = { url: job.html_url, id: job.id };
-                      unmatchedNames.delete(shortName);
-                    }
+              for (const job of allJobs) {
+                if (!job.name) continue;
+                for (const shortName of shortNames) {
+                  if (job.name.includes(shortName)) {
+                    jobMap[shortName] = { url: job.html_url, id: job.id };
                   }
                 }
-
-                if (jobs.length < perPage) break;
-                page++;
               }
 
               console.log(`Matched ${Object.keys(jobMap).length}/${shortNames.length} short names to jobs`);
-              if (unmatchedNames.size > 0) {
-                console.log(`Unmatched: ${JSON.stringify([...unmatchedNames])}`);
+              const unmatched = shortNames.filter(n => !jobMap[n]);
+              if (unmatched.length > 0) {
+                console.log(`Unmatched: ${JSON.stringify(unmatched)}`);
               }
             } catch (error) {
               core.error(`Failed to look up job information: ${error.message}`);
