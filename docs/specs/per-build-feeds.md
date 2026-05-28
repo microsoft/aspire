@@ -523,7 +523,16 @@ Per-build-kind identities are separately scoped: a PR-publish
 identity cannot write to `builds/stable/...`; only the GA-promotion
 pipeline can.
 
-### Storage account hardening
+### Storage account hardening (candidate controls)
+
+The controls below are a menu of hardening measures to evaluate
+against a holistic threat model rather than a fixed prescription.
+Not all will be practical or compatible with one another, and the
+final set has to be chosen by weighing operational cost (key
+rotation, network-rule maintenance, CI egress IP churn, recovery
+drills) against the actual attacker capabilities we are defending
+against. The threat model itself is one of the open questions
+below — these are the candidate mitigations once that model lands.
 
 - Account-key auth disabled at the account level.
 - SAS token generation disabled at the account level.
@@ -536,6 +545,12 @@ pipeline can.
   accidental pointer overwrite.
 - Immutability policy on stable-build paths prevents tampering
   with shipped GA bits after publish.
+
+Each of these has tradeoffs: e.g. tight network rules on CI egress
+fight with hosted-runner IP churn; immutability policies fight with
+the ability to redact accidentally-published secrets; anonymous
+blob read trades enumerability for unauthenticated reach. These
+need to be evaluated together, not adopted individually.
 
 ### Pointer files are signed
 
@@ -676,6 +691,18 @@ before we start writing code.
 
 **Security model**
 
+- **Holistic threat model first, controls second.** The hardening
+  list in §Storage account hardening is a menu of *candidates*, not
+  a fixed prescription. We need to enumerate the actual threat
+  actors (compromised contributor, compromised CI runner,
+  compromised storage admin, MITM on the read path, etc.), what
+  each one can do today vs. in the proposed model, and *then*
+  decide which controls are practical and which conflict with each
+  other (immutability vs. secret redaction, tight network rules vs.
+  hosted-runner IP churn, anonymous read vs. enumerability, etc.).
+  Pick the smallest set of controls that genuinely move the needle
+  for the threats we are actually defending against, and
+  document the residual risk for the ones we choose not to mitigate.
 - Confirm fork-PR safety: no code path in the publish workflow
   can be reached from a fork PR's token.
 - AzDO equivalent of GH `workflow_run` — confirm the
