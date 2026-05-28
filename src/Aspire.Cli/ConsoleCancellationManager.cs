@@ -138,7 +138,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
                 // Give the handler a chance to finish gracefully within the configured timeout.
                 // Task.WhenAny completes when either the handler or the delay finishes first,
                 // without propagating exceptions from the losing task.
-                // It's ok that this
+                // It's ok that this delay isn't cancellable. The process is ending.
                 var timeoutTask = Task.Delay(_processTerminationTimeout);
                 if (await Task.WhenAny(startedHandler, timeoutTask).ConfigureAwait(false) == startedHandler)
                 {
