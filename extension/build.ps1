@@ -10,9 +10,10 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# Check for Corepack so the build uses the Yarn Classic version that matches extension/yarn.lock.
-if (-not (Get-Command corepack -ErrorAction SilentlyContinue)) {
-    Write-Error "Error: Corepack is not installed. Please install a Node.js version that includes Corepack."
+# Check for yarn
+if (-not (Get-Command yarn -ErrorAction SilentlyContinue)) {
+    Write-Error "Error: yarn is not installed. Please install yarn first."
+    Write-Host "You can install yarn by running: npm install -g yarn"
     exit 1
 }
 
@@ -40,7 +41,7 @@ Set-Location $PSScriptRoot
 
 Write-Host ""
 Write-Host "Running yarn install..."
-corepack yarn@1.22.22 install --frozen-lockfile --non-interactive
+yarn install --frozen-lockfile --non-interactive
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "yarn install failed with exit code $LASTEXITCODE"
@@ -49,7 +50,7 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ""
 Write-Host "Running yarn compile..."
-corepack yarn@1.22.22 compile
+yarn compile
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "yarn compile failed with exit code $LASTEXITCODE"
