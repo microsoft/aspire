@@ -8,6 +8,7 @@ using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -27,6 +28,7 @@ internal sealed class AspireSkillsInstaller(
     IInteractionService interactionService,
     CliExecutionContext executionContext,
     IConfiguration configuration,
+    IFeatures features,
     AspireCliTelemetry telemetry,
     ILogger<AspireSkillsInstaller> logger) : IAspireSkillsInstaller
 {
@@ -73,16 +75,33 @@ internal sealed class AspireSkillsInstaller(
 
         var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
 
-        var githubResult = await InstallFromGitHubAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
-        if (githubResult.Status == AcquisitionStatus.Installed)
-        {
-            CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
-            return AspireSkillsInstallResult.Installed(githubResult.Bundle!);
-        }
+        // The remote fetch path is opt-in. Ship 13.4 with this disabled so users only
+        // get the embedded snapshot (no unattended network call out to GitHub on every
+        // `aspire agent init`). Toggle the feature on to opt in to the GitHub release path,
+        // which still falls back to the embedded snapshot if the network call fails.
+        var remoteFetchEnabled = features.IsFeatureEnabled(
+            KnownFeatures.AspireSkillsRemoteFetchEnabled,
+            KnownFeatures.GetFeatureMetadata(KnownFeatures.AspireSkillsRemoteFetchEnabled)!.DefaultValue);
+        activity?.SetTag("aspire.skills.remote_fetch_enabled", remoteFetchEnabled);
 
-        if (githubResult.Status == AcquisitionStatus.Failed)
+        AcquisitionResult? githubResult = null;
+        if (remoteFetchEnabled)
         {
-            logger.LogDebug("Aspire skills GitHub acquisition failed for version {Version}; falling back to embedded snapshot. Failure: {Failure}", effectiveVersion, githubResult.Message);
+            githubResult = await InstallFromGitHubAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
+            if (githubResult.Status == AcquisitionStatus.Installed)
+            {
+                CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
+                return AspireSkillsInstallResult.Installed(githubResult.Bundle!);
+            }
+
+            if (githubResult.Status == AcquisitionStatus.Failed)
+            {
+                logger.LogDebug("Aspire skills GitHub acquisition failed for version {Version}; falling back to embedded snapshot. Failure: {Failure}", effectiveVersion, githubResult.Message);
+            }
+        }
+        else
+        {
+            logger.LogDebug("Aspire skills remote fetch feature '{Feature}' is disabled; using the embedded snapshot.", KnownFeatures.AspireSkillsRemoteFetchEnabled);
         }
 
         var embeddedResult = await InstallFromEmbeddedAsync(cacheRoot, effectiveVersion, activity, cancellationToken).ConfigureAwait(false);
@@ -94,8 +113,8 @@ internal sealed class AspireSkillsInstaller(
 
         var failureMessage = embeddedResult.Status == AcquisitionStatus.Failed
             ? embeddedResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable
-            : githubResult.Status == AcquisitionStatus.Failed
-                ? githubResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable
+            : githubResult is { Status: AcquisitionStatus.Failed, Message: { } githubMessage }
+                ? githubMessage
                 : AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable;
 
         activity?.SetStatus(ActivityStatusCode.Error, failureMessage);

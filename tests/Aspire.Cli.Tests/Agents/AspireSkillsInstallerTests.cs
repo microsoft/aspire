@@ -8,6 +8,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Npm;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
@@ -109,6 +110,70 @@ public class AspireSkillsInstallerTests
             Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
             Assert.NotNull(result.Bundle);
             Assert.True(embeddedBundleProvider.OpenArchiveCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenRemoteFetchFeatureIsDisabled_SkipsGitHubAndUsesEmbedded()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
+            // Throw on any HTTP call so we can prove the GitHub path was never invoked.
+            var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when remote fetch is disabled."));
+            var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
+            var installer = CreateInstaller(
+                executionContext,
+                httpMessageHandler: handler,
+                githubArtifactAttestationVerifier: attestationVerifier,
+                embeddedBundleProvider: embeddedBundleProvider,
+                features: features);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.True(embeddedBundleProvider.OpenArchiveCalled);
+            Assert.False(attestationVerifier.VerifyCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenRemoteFetchFeatureIsDisabledAndCacheExists_UsesCacheWithoutNetwork()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var cachedBundleDirectory = Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills", AspireSkillsInstaller.Version);
+            await CreateCachedBundleAsync(cachedBundleDirectory);
+            var attestationVerifier = new TestGitHubArtifactAttestationVerifier();
+            var handler = new MockHttpMessageHandler(_ => throw new InvalidOperationException("HTTP must not be called when cache is used."));
+            var features = new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, false);
+            var installer = CreateInstaller(
+                executionContext,
+                httpMessageHandler: handler,
+                githubArtifactAttestationVerifier: attestationVerifier,
+                features: features);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.False(attestationVerifier.VerifyCalled);
         }
         finally
         {
@@ -374,7 +439,8 @@ public class AspireSkillsInstallerTests
         HttpMessageHandler? httpMessageHandler = null,
         TestGitHubArtifactAttestationVerifier? githubArtifactAttestationVerifier = null,
         IConfiguration? configuration = null,
-        IEmbeddedAspireSkillsBundleProvider? embeddedBundleProvider = null)
+        IEmbeddedAspireSkillsBundleProvider? embeddedBundleProvider = null,
+        IFeatures? features = null)
     {
         return new AspireSkillsInstaller(
             githubArtifactAttestationVerifier ?? new TestGitHubArtifactAttestationVerifier(),
@@ -383,6 +449,10 @@ public class AspireSkillsInstallerTests
             new TestInteractionService(),
             executionContext,
             configuration ?? new ConfigurationBuilder().Build(),
+            // Default existing tests to the remote-fetch-enabled path so they continue to
+            // exercise the GitHub flow without per-test boilerplate. Tests that want to
+            // exercise the production default (flag off) pass an empty TestFeatures.
+            features ?? new TestFeatures().SetFeature(KnownFeatures.AspireSkillsRemoteFetchEnabled, true),
             TestTelemetryHelper.CreateInitializedTelemetry(),
             NullLogger<AspireSkillsInstaller>.Instance);
     }
