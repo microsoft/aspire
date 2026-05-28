@@ -69,11 +69,9 @@ public sealed class CSharpProjectModeInitTests(ITestOutputHelper output)
         File.WriteAllText(solutionPath, "Fake solution file");
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: false, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -113,10 +111,6 @@ public sealed class CSharpProjectModeInitTests(ITestOutputHelper output)
             "dotnet build Test.AppHost/Test.AppHost.csproj",
             counter,
             TimeSpan.FromMinutes(3));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 
     /// <summary>
@@ -152,11 +146,9 @@ public sealed class CSharpProjectModeInitTests(ITestOutputHelper output)
         File.WriteAllText(leftoverPath, LeftoverContent);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: false, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -174,9 +166,5 @@ public sealed class CSharpProjectModeInitTests(ITestOutputHelper output)
             + "Directory.Exists(appHostDirPath) early return so reruns recover the missing config.");
         Assert.True(File.Exists(leftoverPath), $"Pre-existing AppHost file should be preserved: {leftoverPath}");
         Assert.Equal(LeftoverContent, File.ReadAllText(leftoverPath));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 }

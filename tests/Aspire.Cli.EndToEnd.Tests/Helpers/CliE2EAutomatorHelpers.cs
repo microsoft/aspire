@@ -774,7 +774,7 @@ internal static class CliE2EAutomatorHelpers
             throw new InvalidOperationException(
                 workspacePath is null || !ShouldCaptureWorkspaceDiagnostics()
                     ? "aspire start failed. Check terminal output for CLI logs."
-                    : $"aspire start failed. Workspace: {workspacePath}. See _aspire-detach.log, _aspire-cli.log, .aspire-logs, and _aspire-start.json in the captured workspace.");
+                    : $"aspire start failed. Workspace: {workspacePath}. See {DiagnosticsDirectoryName}/ in the captured workspace.");
         }
 
         await auto.TypeAsync(
@@ -833,7 +833,7 @@ internal static class CliE2EAutomatorHelpers
             throw new InvalidOperationException(
                 workspacePath is null || !ShouldCaptureWorkspaceDiagnostics()
                     ? "aspire start did not return a dashboard URL. Check terminal output for detached child and CLI logs."
-                    : $"aspire start did not return a dashboard URL. Workspace: {workspacePath}. See _aspire-detach.log, _aspire-cli.log, .aspire-logs, and _aspire-start.json in the captured workspace.");
+                    : $"aspire start did not return a dashboard URL. Workspace: {workspacePath}. See {DiagnosticsDirectoryName}/ in the captured workspace.");
         }
 
         // Check whether $DASHBOARD_URL was set using variable expansion so the marker
@@ -995,22 +995,29 @@ internal static class CliE2EAutomatorHelpers
         await auto.WaitForSuccessPromptAsync(counter);
     }
 
+    /// <summary>
+    /// The well-known subdirectory name under the workspace where diagnostics are captured.
+    /// Both the in-Docker bash capture and the host-side <see cref="TerminalRun"/> copy use this name.
+    /// </summary>
+    internal const string DiagnosticsDirectoryName = ".aspire-diagnostics";
+
     private static string BuildAspireDiagnosticsCaptureCommand(string destinationExpression)
     {
         // This returns a single bash fragment because it is reused from EXIT traps and failure paths where the helper
         // needs to inject one inline shell command rather than orchestrate several terminal round-trips.
+        // All diagnostics are placed under a single .aspire-diagnostics/ subdirectory so the host-side
+        // capture in TerminalRun can copy one directory instead of enumerating individual files.
+        var diag = $"{destinationExpression}/{DiagnosticsDirectoryName}";
         return
-            $"mkdir -p \"{destinationExpression}\"; " +
-            $"rm -rf \"{destinationExpression}/.aspire-logs\" \"{destinationExpression}/.aspire-packages\" \"{destinationExpression}/.aspire-dcp-logs\"; " +
-            $"cp -r ~/.aspire/logs \"{destinationExpression}/.aspire-logs\" 2>/dev/null || true; " +
-            $"cp -r ~/.aspire/packages \"{destinationExpression}/.aspire-packages\" 2>/dev/null || true; " +
-            $"cp -r ~/.aspire/dcp-logs \"{destinationExpression}/.aspire-dcp-logs\" 2>/dev/null || true; " +
-            $"cp {AspireStartJsonFile} \"{destinationExpression}/_aspire-start.json\" 2>/dev/null || true; " +
-            "DETACH_LOG=$(ls -t ~/.aspire/logs/cli_*detach*.log 2>/dev/null | head -1); " +
-            $"[ -n \"$DETACH_LOG\" ] && cp \"$DETACH_LOG\" \"{destinationExpression}/_aspire-detach.log\" 2>/dev/null || true; " +
-             "CLI_LOG=$(ls -t ~/.aspire/logs/cli_*.log 2>/dev/null | grep -v 'detach' | head -1); " +
-             "if [ -z \"$CLI_LOG\" ]; then CLI_LOG=$(ls -t ~/.aspire/logs/cli_*.log 2>/dev/null | head -1); fi; " +
-             $"[ -n \"$CLI_LOG\" ] && cp \"$CLI_LOG\" \"{destinationExpression}/_aspire-cli.log\" 2>/dev/null || true; ";
+            $"mkdir -p \"{diag}\"; " +
+            $"rm -rf \"{diag}/logs\" \"{diag}/packages\" \"{diag}/dcp-logs\"; " +
+            $"cp -r ~/.aspire/logs \"{diag}/logs\" 2>/dev/null || true; " +
+            $"cp -r ~/.aspire/packages \"{diag}/packages\" 2>/dev/null || true; " +
+            $"cp -r ~/.aspire/dcp-logs \"{diag}/dcp-logs\" 2>/dev/null || true; " +
+            $"cp {AspireStartJsonFile} \"{diag}/aspire-start.json\" 2>/dev/null || true; " +
+            $"echo \"diagnostics: logs=$(find \"{diag}/logs\" -type f 2>/dev/null | wc -l) " +
+            $"packages=$(find \"{diag}/packages\" -type f 2>/dev/null | wc -l) " +
+            $"dcp-logs=$(find \"{diag}/dcp-logs\" -type f 2>/dev/null | wc -l)\"; ";
     }
 
     private static string? GetRegisteredWorkspacePath()

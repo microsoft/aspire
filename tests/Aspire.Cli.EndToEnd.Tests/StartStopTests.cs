@@ -30,71 +30,39 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-        var testBodyFailed = false;
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        try
-        {
-            // Prepare Docker environment (prompt counting, umask, env vars)
-            await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
+        // Prepare Docker environment (prompt counting, umask, env vars)
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
 
-            // Install the Aspire CLI
-            await auto.InstallAspireCliAsync(strategy, counter);
+        // Install the Aspire CLI
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-            // Create a new project using aspire new
-            await auto.AspireNewAsync(projectName, counter);
+        // Create a new project using aspire new
+        await auto.AspireNewAsync(projectName, counter);
 
-            // Navigate to the AppHost directory
-            await auto.TypeAsync($"cd {projectName}/{projectName}.AppHost");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+        // Navigate to the AppHost directory
+        await auto.TypeAsync($"cd {projectName}/{projectName}.AppHost");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
-            // Start the AppHost in the background using aspire start
-            await auto.TypeAsync("aspire start");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+        // Start the AppHost in the background using aspire start
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
 
-            // Stop the AppHost using aspire stop
-            await auto.TypeAsync("aspire stop");
-            await auto.EnterAsync();
-            await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-            await auto.WaitForSuccessPromptAsync(counter);
+        // Stop the AppHost using aspire stop
+        await auto.TypeAsync("aspire stop");
+        await auto.EnterAsync();
+        await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter);
 
-            await auto.ClearScreenAsync(counter);
+        await auto.ClearScreenAsync(counter);
 
-            // Docker network cleanup can lag behind aspire stop on contended CI runners.
-            await auto.ExecuteCommandUntilOutputAsync(counter, $"docker network ls --format json | grep -i -- '{projectName}' | wc -l", "0", timeout: TimeSpan.FromMinutes(5));
-        }
-        catch
-        {
-            testBodyFailed = true;
-            throw;
-        }
-        finally
-        {
-            try
-            {
-                await auto.CaptureAspireDiagnosticsAsync(counter, workspace);
-            }
-            catch { } // Best effort
-
-            try
-            {
-                await auto.TypeAsync("exit");
-                await auto.EnterAsync();
-                await pendingRun;
-            }
-            catch
-            {
-                if (!testBodyFailed)
-                {
-                    throw;
-                }
-            }
-        }
+        // Docker network cleanup can lag behind aspire stop on contended CI runners.
+        await auto.ExecuteCommandUntilOutputAsync(counter, $"docker network ls --format json | grep -i -- '{projectName}' | wc -l", "0", timeout: TimeSpan.FromMinutes(5));
     }
 
     [Fact]
@@ -107,10 +75,9 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         // Prepare Docker environment (prompt counting, umask, env vars)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
@@ -122,12 +89,6 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-
-        // Exit the shell
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
@@ -140,10 +101,9 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         // Prepare Docker environment (prompt counting, umask, env vars)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
@@ -178,12 +138,6 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
-
-        // Exit the shell
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
@@ -196,10 +150,9 @@ public sealed class StartStopTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         // Prepare Docker environment (prompt counting, umask, env vars)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
@@ -249,11 +202,5 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
-
-        // Exit the shell
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

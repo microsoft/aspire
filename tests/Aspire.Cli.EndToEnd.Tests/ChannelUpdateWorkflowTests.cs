@@ -73,11 +73,9 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             variant: CliE2ETestHelpers.DockerfileVariant.Polyglot,
             mountDockerSocket: true,
             workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -210,11 +208,6 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             {
             }
         }
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     // ----------------------------------------------------------------------------------
@@ -251,11 +244,9 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             repoRoot, strategy, output,
             variant: CliE2ETestHelpers.DockerfileVariant.DotNet,
             workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -275,10 +266,6 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         }
 
         await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter, Path.Combine(projectPath, "aspire.config.json"));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 
     [Fact]
@@ -300,11 +287,9 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             repoRoot, strategy, output,
             variant: CliE2ETestHelpers.DockerfileVariant.DotNet,
             workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -321,10 +306,6 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
         await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
         await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter, Path.Combine(projectPath, "aspire.config.json"));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 
     [Fact]
@@ -346,11 +327,9 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             repoRoot, strategy, output,
             variant: CliE2ETestHelpers.DockerfileVariant.Polyglot,
             workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -373,10 +352,6 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         }
 
         await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter, Path.Combine(projectPath, "aspire.config.json"));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 
     /// <summary>

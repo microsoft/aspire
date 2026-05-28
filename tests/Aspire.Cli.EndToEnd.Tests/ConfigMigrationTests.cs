@@ -115,10 +115,9 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -163,10 +162,6 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -182,10 +177,9 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -213,10 +207,6 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete channel -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -232,10 +222,9 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -272,10 +261,6 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete channel -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -293,10 +278,9 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -348,10 +332,6 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -368,10 +348,9 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -432,10 +411,6 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete features.stagingChannelEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -453,10 +428,9 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -521,10 +495,6 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete packages -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -543,10 +513,9 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
 
         var (aspireHomeDir, terminal) = CreateMigrationTerminal(repoRoot, strategy, workspace);
         using var _ = terminal;
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -608,9 +577,5 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

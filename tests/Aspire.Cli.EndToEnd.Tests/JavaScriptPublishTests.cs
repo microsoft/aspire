@@ -31,9 +31,9 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -85,10 +85,6 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         await auto.TypeAsync("docker ps -q --filter label=com.docker.compose.project | xargs -r docker rm -f 2>/dev/null || true");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 
     [Fact]
@@ -103,10 +99,9 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-        var testBodyFailed = false;
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         try
         {
@@ -133,11 +128,6 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             await auto.RunCommandFailFastAsync("aspire run > aspire-run.log 2>&1 & echo $! > aspire-run.pid", counter);
             await auto.RunCommandFailFastAsync("bash verify-runtime.sh", counter, TimeSpan.FromMinutes(2));
         }
-        catch
-        {
-            testBodyFailed = true;
-            throw;
-        }
         finally
         {
             try
@@ -147,29 +137,6 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             catch
             {
                 // Best effort. A failure before aspire run writes its PID leaves no process to stop.
-            }
-
-            try
-            {
-                await auto.CaptureAspireDiagnosticsAsync(counter, workspace);
-            }
-            catch
-            {
-                // Best effort diagnostics capture.
-            }
-
-            try
-            {
-                await auto.TypeAsync("exit");
-                await auto.EnterAsync();
-                await pendingRun;
-            }
-            catch
-            {
-                if (!testBodyFailed)
-                {
-                    throw;
-                }
             }
         }
     }

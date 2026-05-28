@@ -35,11 +35,9 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.Redis.", "Aspire.Hosting.SqlServer."]);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -125,11 +123,6 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         {
             throw new InvalidOperationException("aspire.mts does not contain addSqlServer from Aspire.Hosting.SqlServer");
         }
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
@@ -150,11 +143,9 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             variant: CliE2ETestHelpers.DockerfileVariant.DotNet,
             mountDockerSocket: false,
             workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -257,11 +248,6 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.TypeAsync("npx tsc --noEmit --project tsconfig.apphost.json");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
@@ -279,10 +265,9 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
             variant: CliE2ETestHelpers.DockerfileVariant.DotNet,
             mountDockerSocket: true,
             workspace: workspace);
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -346,12 +331,5 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.AssertResourcesExistAsync(counter, "postgres", "db", "consumer");
 
         await auto.AspireStopAsync(counter);
-
-        await auto.CaptureAspireDiagnosticsAsync(counter, workspace);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }
