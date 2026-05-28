@@ -97,6 +97,11 @@
         <target state="translated">Значение конфигурации обязательно.</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConfiguredAppHostPathHasInvalidCharacters">
+        <source>The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</source>
+        <target state="new">The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</target>
+        <note>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</note>
+      </trans-unit>
       <trans-unit id="CouldNotParseAspireSDKVersion">
         <source>Could not parse Aspire.Hosting package version.</source>
         <target state="translated">Не удалось выполнить разбор версии пакета Aspire.Hosting.</target>

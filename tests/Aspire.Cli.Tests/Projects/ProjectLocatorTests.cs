@@ -2594,6 +2594,225 @@ builder.Build().Run();");
         });
     }
 
+    [Fact]
+    public async Task GetAppHostFromSettings_LegacyFile_WarningNamesSettingsJsonNotAspireConfigJson()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17620.
+        // When the only user-authored config is the legacy .aspire/settings.json and its
+        // appHostPath points at a file that no longer exists, the warning must reference
+        // .aspire/settings.json (the file the user wrote) and must NOT reference
+        // aspire.config.json (which the user never authored).
+        //
+        // The discovery walk (FindAppHostProjectsAsync, the path used by `aspire ls`) is
+        // the user-facing surface that emits this warning via AddSettingsAppHostCandidateAsync.
+        // The probe-style GetAppHostFromSettingsAsync API is intentionally silent so background
+        // feature-detection callers (DotNetSdkCheck, AspireVersionCheck, etc.) don't leak
+        // user-facing output.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var aspireSettingsFile = new FileInfo(Path.Combine(workspaceSettingsDirectory.FullName, "settings.json"));
+
+        using (var writer = aspireSettingsFile.OpenWrite())
+        {
+            await JsonSerializer.SerializeAsync(writer, new
+            {
+                appHostPath = "DoesNotExist/AppHost.csproj"
+            });
+        }
+
+        var interactionService = new TestInteractionService();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
+
+        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var warning = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Equal(KnownEmojis.Warning, warning.Emoji);
+        Assert.Contains(aspireSettingsFile.FullName, warning.Message);
+        Assert.DoesNotContain(AspireConfigFile.FileName, warning.Message);
+    }
+
+    [Fact]
+    public async Task GetAppHostFromSettings_AspireConfigJson_WithNulByteInPath_ReportsValidationErrorAndDoesNotCrash()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17624.
+        // A NUL byte in appHost.path survives JSON deserialization, then would crash
+        // inside Path.Combine / new FileInfo with "Null character in path." surfaced as
+        // a generic "unexpected error". Discovery must instead return null and display
+        // a clear validation error naming the user-authored config file.
+        //
+        // Driven through FindAppHostProjectsAsync (the user-facing `aspire ls` path) so
+        // the validation error surfaces via AddSettingsAppHostCandidateAsync.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        // \u0000 is the escaped NUL byte; the JSON parser preserves it as a literal \0
+        // inside the deserialized string. Writing a raw NUL would test JSON parsing,
+        // not the post-deserialization validation we want to exercise.
+        await File.WriteAllTextAsync(configPath, """
+            { "appHost": { "path": "a\u0000b.csproj" } }
+            """);
+
+        var interactionService = new TestInteractionService();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
+
+        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains(configPath, error);
+        Assert.Contains("appHost.path", error);
+    }
+
+    [Fact]
+    public async Task GetAppHostFromSettings_LegacySettings_WithNulByteInPath_ReportsValidationErrorAndDoesNotCrash()
+    {
+        // Same scenario as the modern-config case above, but for the legacy
+        // .aspire/settings.json reader. Both code paths consume a user-supplied path
+        // string and must validate it before reaching System.IO APIs.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var aspireSettingsFile = new FileInfo(Path.Combine(workspaceSettingsDirectory.FullName, "settings.json"));
+        await File.WriteAllTextAsync(aspireSettingsFile.FullName, """
+            { "appHostPath": "a\u0000b.csproj" }
+            """);
+
+        var interactionService = new TestInteractionService();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
+
+        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains(aspireSettingsFile.FullName, error);
+        Assert.Contains("appHostPath", error);
+    }
+
+    [Fact]
+    public async Task GetAppHostFromSettings_AspireConfigJson_WithEmptyPath_ReportsValidationErrorAndDoesNotCrash()
+    {
+        // Adversarial regression: an empty string for appHost.path is technically valid
+        // JSON but used to fall through the L4 validation with the misleading
+        // "contains characters that are not allowed" message even though it has no
+        // characters at all. Path.Combine(directory, "") collapses to the directory,
+        // which would then surface a "directory is not a file" warning downstream.
+        // The validator now rejects empty paths up front with the corrected message.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            { "appHost": { "path": "" } }
+            """);
+
+        var interactionService = new TestInteractionService();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
+
+        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains(configPath, error);
+        Assert.Contains("appHost.path", error);
+        Assert.Contains("is empty or contains", error);
+    }
+
+    [Fact]
+    public async Task GetAppHostFromSettings_LegacySettings_WithEmptyPath_ReportsValidationErrorAndDoesNotCrash()
+    {
+        // Companion to the modern-config empty-path case above; the legacy reader has
+        // the same gap and must surface the same corrected validation error.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var aspireSettingsFile = new FileInfo(Path.Combine(workspaceSettingsDirectory.FullName, "settings.json"));
+        await File.WriteAllTextAsync(aspireSettingsFile.FullName, """
+            { "appHostPath": "" }
+            """);
+
+        var interactionService = new TestInteractionService();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
+
+        await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains(aspireSettingsFile.FullName, error);
+        Assert.Contains("appHostPath", error);
+        Assert.Contains("is empty or contains", error);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectsAsync_DeduplicatesSettingsCandidateAcrossSymlink()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17626.
+        // When the user's settings file points at an apphost via a symlinked path
+        // (for example /tmp/L5/x.cs on macOS while the canonical path is
+        // /private/tmp/L5/x.cs), the directory walk surfaces the canonical path and the
+        // settings reader surfaces the user-written symbolic path. Plain string
+        // comparison between the two used to produce a duplicate entry; dedupe must now
+        // canonicalize symlinks before comparing.
+        //
+        // To isolate the settings-vs-walk dedupe from the walk's own behaviour, the
+        // symlink target lives in a directory the default discovery filter skips
+        // (node_modules), so the walk only surfaces the real path.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var realAppDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real-app");
+        var realAppHost = new FileInfo(Path.Combine(realAppDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(realAppHost.FullName, "Not a real project file.");
+
+        // node_modules is excluded from DefaultFiltered discovery, so a symlink placed
+        // there is invisible to the walk. The same symlink path used in settings still
+        // resolves through the link to the real apphost file.
+        var nodeModulesDir = workspace.WorkspaceRoot.CreateSubdirectory("node_modules");
+        var linkDirectory = Path.Combine(nodeModulesDir.FullName, "link");
+        try
+        {
+            Directory.CreateSymbolicLink(linkDirectory, realAppDirectory.FullName);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
+        }
+        catch (IOException ex)
+        {
+            Assert.Skip($"Symbolic link creation failed in this environment: {ex.Message}");
+        }
+
+        var pathThroughLink = Path.Combine(linkDirectory, "AppHost.csproj");
+
+        // Sanity-check the test setup: the symlink path must resolve to the real file,
+        // and the two strings must differ — otherwise the test would pass trivially.
+        Assert.True(File.Exists(pathThroughLink), "Symlinked path should resolve to the real apphost file.");
+        Assert.NotEqual(realAppHost.FullName, pathThroughLink);
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var aspireSettingsFile = new FileInfo(Path.Combine(workspaceSettingsDirectory.FullName, "settings.json"));
+        using (var writer = aspireSettingsFile.OpenWrite())
+        {
+            await JsonSerializer.SerializeAsync(writer, new
+            {
+                appHostPath = pathThroughLink
+            });
+        }
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        // Exactly one candidate: the settings-derived path through the symlink must be
+        // recognized as the same file as the walk-discovered real path.
+        Assert.Single(found);
+    }
+
     private static ProjectLocator CreateProjectLocator(
         CliExecutionContext executionContext,
         IInteractionService? interactionService = null,

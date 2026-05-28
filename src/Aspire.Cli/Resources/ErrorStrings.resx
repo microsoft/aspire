@@ -276,4 +276,8 @@
   <data name="CodegenDebugHeader" xml:space="preserve">
     <value>Diagnostic details:</value>
   </data>
+  <data name="ConfiguredAppHostPathHasInvalidCharacters" xml:space="preserve">
+    <value>The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</value>
+    <comment>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</comment>
+  </data>
 </root>

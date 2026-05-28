@@ -83,7 +83,7 @@ internal static class CliTestHelper
 
         var globalSettingsFilePath = Path.Combine(options.WorkingDirectory.FullName, ".aspire", "settings.global.json");
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
-        ConfigurationHelper.RegisterSettingsFiles(configBuilder, options.WorkingDirectory, globalSettingsFile, NullLogger.Instance);
+        ConfigurationHelper.RegisterSettingsFiles(configBuilder, options.WorkingDirectory, globalSettingsFile);
 
         var configuration = configBuilder.Build();
         services.AddSingleton<IConfiguration>(configuration);

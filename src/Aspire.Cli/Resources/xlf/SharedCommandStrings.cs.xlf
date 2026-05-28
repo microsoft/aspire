@@ -73,8 +73,8 @@
         <note>{0} is the number of directories searched so far. {1} is the number of AppHost candidates found so far.</note>
       </trans-unit>
       <trans-unit id="LsStreamOptionDescription">
-        <source>Stream newline-delimited JSON discovery events. Requires --format json</source>
-        <target state="new">Stream newline-delimited JSON discovery events. Requires --format json</target>
+        <source>Stream newline-delimited JSON discovery events in arrival order from parallel discovery (not sorted). Requires --format json</source>
+        <target state="new">Stream newline-delimited JSON discovery events in arrival order from parallel discovery (not sorted). Requires --format json</target>
         <note />
       </trans-unit>
       <trans-unit id="LsStreamRequiresJson">

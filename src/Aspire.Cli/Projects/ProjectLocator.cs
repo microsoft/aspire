@@ -444,7 +444,7 @@ internal sealed class ProjectLocator(
 
             async Task AddSettingsAppHostCandidateAsync()
             {
-                var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories: true, silent: true, cancellationToken).ConfigureAwait(false);
+                var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories: true, silent: false, cancellationToken).ConfigureAwait(false);
                 if (settingsAppHost is null)
                 {
                     return;
@@ -453,8 +453,33 @@ internal sealed class ProjectLocator(
                 var pathComparison = OperatingSystem.IsWindows()
                     ? StringComparison.OrdinalIgnoreCase
                     : StringComparison.Ordinal;
-                if (appHostProjects.Any(candidate => string.Equals(candidate.AppHostFile.FullName, settingsAppHost.FullName, pathComparison))
-                    || unbuildableSuspectedAppHostProjects.Any(candidate => string.Equals(candidate.AppHostFile.FullName, settingsAppHost.FullName, pathComparison)))
+
+                // Canonicalize symlinks before comparing so a settings-derived candidate
+                // like /tmp/L5/x.cs does not produce a duplicate entry next to the
+                // discovery-walked /private/tmp/L5/x.cs on macOS, where /tmp is a symlink
+                // to /private/tmp. See https://github.com/microsoft/aspire/issues/17626.
+                // Resolved paths are used as comparison keys only — the surfaced
+                // AppHostProjectCandidate keeps the original FileInfo so display paths are
+                // unchanged from what the user-authored settings file pointed at.
+                //
+                // Symlink resolution does ~one syscall per path segment, so we keep it
+                // off the hot path: the exact-string compare below short-circuits before
+                // the per-candidate resolve runs at all in the common case (no symlinks
+                // involved). Pre-materializing canonical paths for every candidate would
+                // force the resolve even when the cheap compare would have matched.
+                var settingsCanonicalPath = PathNormalizer.ResolveSymlinks(settingsAppHost.FullName);
+                bool IsDuplicate(AppHostProjectCandidate candidate)
+                {
+                    if (string.Equals(candidate.AppHostFile.FullName, settingsAppHost.FullName, pathComparison))
+                    {
+                        return true;
+                    }
+
+                    var candidateCanonicalPath = PathNormalizer.ResolveSymlinks(candidate.AppHostFile.FullName);
+                    return string.Equals(candidateCanonicalPath, settingsCanonicalPath, pathComparison);
+                }
+
+                if (appHostProjects.Any(IsDuplicate) || unbuildableSuspectedAppHostProjects.Any(IsDuplicate))
                 {
                     return;
                 }
@@ -528,6 +553,10 @@ internal sealed class ProjectLocator(
     public async Task<FileInfo?> GetAppHostFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, CancellationToken cancellationToken = default)
     {
         // Intentionally does not call ValidateAppHostAsync. See interface XML docs for rationale.
+        // Probe-style callers (DotNetSdkCheck, AspireVersionCheck, TypeScriptAppHostToolingCheck,
+        // UpdateCommand, IntegrationPackageSearchService) drive this path and expect a
+        // non-interactive answer; the user-facing legacy-migration warning is emitted from the
+        // discovery walk (AddSettingsAppHostCandidateAsync) instead.
         var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories, silent: true, cancellationToken);
         if (settingsAppHost is null)
         {
@@ -544,9 +573,13 @@ internal sealed class ProjectLocator(
         return settingsAppHost;
     }
 
-    private async Task<FileInfo?> GetValidatedAppHostProjectFileFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, bool silent, CancellationToken cancellationToken)
+    private async Task<FileInfo?> GetValidatedAppHostProjectFileFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, CancellationToken cancellationToken)
     {
-        var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories, silent, cancellationToken);
+        // This is reached from UseOrFindAppHostProjectFileAsync. When the configured
+        // legacy settings point at a missing file we still want the warning to surface,
+        // but the discovery walk that runs afterwards (AddSettingsAppHostCandidateAsync)
+        // will emit the same warning. Stay silent here to avoid a duplicate.
+        var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories, silent: true, cancellationToken);
         if (settingsAppHost is null)
         {
             return null;
@@ -594,11 +627,26 @@ internal sealed class ProjectLocator(
             }
             catch (JsonException ex)
             {
-                interactionService.DisplayError(ex.Message);
+                if (!silent)
+                {
+                    interactionService.DisplayError(ex.Message);
+                }
                 return null;
             }
             if (aspireConfig?.AppHost?.Path is { } configAppHostPath)
             {
+                var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
+
+                // Validate before Path.Combine / new FileInfo, which throw ArgumentException
+                // ("Null character in path." / "Illegal characters in path.") on NUL bytes and
+                // other invalid characters that survive JSON parsing. Without this we surface
+                // as a generic "An unexpected error occurred" — see
+                // https://github.com/microsoft/aspire/issues/17624.
+                if (!IsValidConfiguredAppHostPath(configAppHostPath, configFilePath, "appHost.path", silent))
+                {
+                    return null;
+                }
+
                 var qualifiedPath = Path.IsPathRooted(configAppHostPath)
                     ? configAppHostPath
                     : Path.Combine(searchDirectory.FullName, configAppHostPath);
@@ -612,8 +660,10 @@ internal sealed class ProjectLocator(
                 }
                 else
                 {
-                    var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
-                    interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, configFilePath, qualifiedPath));
+                    if (!silent)
+                    {
+                        interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, configFilePath, qualifiedPath));
+                    }
                     return null;
                 }
             }
@@ -630,6 +680,14 @@ internal sealed class ProjectLocator(
 
                 if (json.RootElement.TryGetProperty("appHostPath", out var appHostPathProperty) && appHostPathProperty.GetString() is { } appHostPath)
                 {
+                    // Mirror the validation on the modern path above so the legacy branch also
+                    // cannot reach Path.Combine with a NUL byte or other Path.GetInvalidPathChars
+                    // value (https://github.com/microsoft/aspire/issues/17624).
+                    if (!IsValidConfiguredAppHostPath(appHostPath, settingsFile.FullName, "appHostPath", silent))
+                    {
+                        return null;
+                    }
+
                     var qualifiedAppHostPath = Path.IsPathRooted(appHostPath) ? appHostPath : Path.Combine(settingsFile.Directory!.FullName, appHostPath);
                     qualifiedAppHostPath = PathNormalizer.NormalizePathForCurrentPlatform(qualifiedAppHostPath);
                     var appHostFile = new FileInfo(qualifiedAppHostPath);
@@ -640,9 +698,14 @@ internal sealed class ProjectLocator(
                     }
                     else
                     {
-                        // AppHost file was specified but doesn't exist, return null to trigger fallback logic
                         if (!silent)
                         {
+                            // Warn against the user-authored file (.aspire/settings.json), not the
+                            // never-authored aspire.config.json. Earlier versions reported
+                            // aspire.config.json because startup eagerly migrated the legacy
+                            // settings (PR #17234); see https://github.com/microsoft/aspire/issues/17620
+                            // for the user-facing impact of pointing users at a file they did
+                            // not create.
                             interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, settingsFile.FullName, qualifiedAppHostPath));
                         }
                         return null;
@@ -659,6 +722,29 @@ internal sealed class ProjectLocator(
                 return null;
             }
         }
+    }
+
+    // Reject empty paths (Path.Combine("", base) collapses to the base directory and surfaces
+    // a misleading "directory doesn't exist" warning downstream) and paths that contain
+    // characters that would crash System.IO APIs. Path.GetInvalidPathChars() includes NUL on
+    // every platform plus the platform-specific set of disallowed characters (e.g. < > | on
+    // Windows). Plain Contains('\0') is included explicitly for readability even though it is
+    // redundant with the IndexOfAny check.
+    private bool IsValidConfiguredAppHostPath(string path, string configFilePath, string fieldName, bool silent)
+    {
+        if (path.Length == 0 || path.Contains('\0') || path.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        {
+            if (!silent)
+            {
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfiguredAppHostPathHasInvalidCharacters, configFilePath, fieldName));
+            }
+            // Log even in silent mode so non-interactive probes (DotNetSdkCheck etc.) leave a
+            // diagnostic trail when they reject a malformed path.
+            logger.LogWarning("Ignoring configured AppHost path in '{ConfigFilePath}' ('{FieldName}') because it is empty or contains invalid characters.", configFilePath, fieldName);
+            return false;
+        }
+
+        return true;
     }
 
     public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default)
@@ -782,7 +868,7 @@ internal sealed class ProjectLocator(
             }
         }
 
-        var settingsAppHost = await GetValidatedAppHostProjectFileFromSettingsAsync(executionContext.WorkingDirectory, searchParentDirectories: true, silent: true, cancellationToken);
+        var settingsAppHost = await GetValidatedAppHostProjectFileFromSettingsAsync(executionContext.WorkingDirectory, searchParentDirectories: true, cancellationToken);
 
         if (settingsAppHost is not null && multipleAppHostProjectsFoundBehavior is not MultipleAppHostProjectsFoundBehavior.None)
         {

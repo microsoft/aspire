@@ -452,5 +452,14 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CodegenDebugHeader", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path..
+        /// </summary>
+        public static string ConfiguredAppHostPathHasInvalidCharacters {
+            get {
+                return ResourceManager.GetString("ConfiguredAppHostPathHasInvalidCharacters", resourceCulture);
+            }
+        }
     }
 }
