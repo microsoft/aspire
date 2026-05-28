@@ -11,6 +11,16 @@ internal static class CliPathHelper
 {
     internal const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
 
+    /// <summary>
+    /// Name of the directory under <c>ASPIRE_HOME</c> that holds NuGet package caches keyed by
+    /// the staging CLI's commit SHA. Two staging builds of the same release branch share the
+    /// same stable-shaped semver (e.g. <c>13.4.0</c>) but ship different SHAs from different
+    /// darc feeds, so each gets its own SHA-keyed subdirectory here to avoid (id,version) cache
+    /// collisions in NuGet. <c>aspire cache clear</c> wipes the SHA subdirectories so users can
+    /// recover wedged staging restores without manual filesystem surgery.
+    /// </summary>
+    internal const string StagingNuGetPackagesFolderName = ".nugetpackages";
+
     // The maximum age before a leftover CLI socket file in the runtime sockets directory is
     // pruned. 24 hours is comfortably longer than any legitimate Aspire CLI run and short enough
     // that stale entries don't pile up indefinitely after crashes (see issue #16709).
@@ -36,6 +46,19 @@ internal static class CliPathHelper
         return string.IsNullOrWhiteSpace(configuredAspireHome)
             ? Path.Combine(userProfileDirectory, ".aspire")
             : configuredAspireHome;
+    }
+
+    /// <summary>
+    /// Returns the absolute path to the staging NuGet package cache root
+    /// (<c>&lt;ASPIRE_HOME&gt;/.nugetpackages</c>). Producers (the
+    /// <c>PrebuiltAppHostServer</c> temp nuget.config) write SHA-keyed subdirectories under
+    /// this root; the <c>aspire cache clear</c> command wipes those subdirectories.
+    /// Centralized here so both call sites agree on the location.
+    /// </summary>
+    internal static string GetStagingNuGetPackagesDirectory(DirectoryInfo aspireHomeDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(aspireHomeDirectory);
+        return Path.Combine(aspireHomeDirectory.FullName, StagingNuGetPackagesFolderName);
     }
 
     internal static string? TryGetAspireHomeDirectoryFromInstallRoute(string? processPath, ILogger? logger = null)

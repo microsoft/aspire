@@ -40,6 +40,14 @@ internal sealed class CacheCommand : ParentCommand
                 filesDeleted += ClearDirectoryContents(ExecutionContext.CacheDirectory);
                 filesDeleted += ClearDirectoryContents(ExecutionContext.SdksDirectory);
                 filesDeleted += ClearDirectoryContents(ExecutionContext.PackagesDirectory);
+                // Wipe the staging NuGet package cache too. Producers (PrebuiltAppHostServer's
+                // temporary nuget.config for the staging channel) deposit SHA-keyed package
+                // caches under <ASPIRE_HOME>/.nugetpackages/<sha>; clearing them lets users
+                // recover wedged staging restores without filesystem surgery. We hand the parent
+                // directory to ClearDirectoryContents so each SHA subdirectory is wiped while
+                // the parent itself stays in place for the next staging restore.
+                filesDeleted += ClearDirectoryContents(
+                    new DirectoryInfo(CliPathHelper.GetStagingNuGetPackagesDirectory(ExecutionContext.AspireHomeDirectory)));
                 filesDeleted += ClearDirectoryContents(
                     ExecutionContext.LogsDirectory,
                     skipFile: f => f.FullName.Equals(currentLogFilePath, StringComparison.OrdinalIgnoreCase));
