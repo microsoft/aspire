@@ -713,7 +713,36 @@ public class AtsMarshallerTests
         Assert.Equal(5, dto.Count);
     }
 
-        [Fact]
+    [Fact]
+    public async Task UnmarshalFromJson_UnmarshalsDtoInitListProperties()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["name"] = "test",
+            ["addressPrefixes"] = new JsonArray("203.0.113.0/24", "198.51.100.0/24"),
+            ["addressPrefixReferences"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = "10.0.0.0/24"
+                    }
+                }
+            }
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithInitListProperties), context);
+
+        var dto = Assert.IsType<DtoWithInitListProperties>(result);
+        Assert.Equal("test", dto.Name);
+        Assert.Equal(["203.0.113.0/24", "198.51.100.0/24"], dto.AddressPrefixes);
+        var reference = Assert.Single(dto.AddressPrefixReferences);
+        Assert.Equal("10.0.0.0/24", await reference.GetValueAsync(default));
+    }
+
+    [Fact]
     public void UnmarshalFromJson_UnmarshalsCustomAtsObjectDto()
     {
         var (marshaller, context) = CreateMarshallerWithContext();
