@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a race condition on Unix/Linux where `aspire stop` would falsely report failure even when the AppHost stopped successfully. The root cause was the shutdown cascade through the launcher CLI \u2014 on Unix, SIGTERM is now sent directly to the AppHost PID so every process is reaped by its actual parent, eliminating the orphan/zombie scenario that caused ~40-second timeouts.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc1b",
+  "firstMergedAt": "2026-05-28T22:12:02Z",
+  "lastMergedAt": "2026-05-28T22:12:02Z",
+  "name": "Fix `aspire stop` falsely reporting failure on Unix",
+  "owner": "danegsta",
+  "prs": [
+    17623
+  ]
+}

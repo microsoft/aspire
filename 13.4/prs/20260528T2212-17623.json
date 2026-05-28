@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of #17612; fixes Unix aspire stop race condition causing false failure reports",
+  "mergedAt": "2026-05-28T22:12:02Z",
+  "number": 17623,
+  "runDate": "2026-05-28T22:38:06Z",
+  "status": "included",
+  "title": "[release/13.4] Fix `aspire stop` falsely reporting failure on Unix"
+}

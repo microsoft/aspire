@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Fixes broken VS Code extension builds due to Corepack network isolation in internal Azure Pipelines",
+  "mergedAt": "2026-05-28T21:09:43Z",
+  "number": 17628,
+  "runDate": "2026-05-28T22:38:06Z",
+  "status": "included",
+  "title": "[release/13.4] Remove Corepack from extension build scripts"
+}

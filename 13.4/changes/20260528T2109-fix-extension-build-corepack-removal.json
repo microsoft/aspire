@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Reverts the Corepack-specific Yarn invocation from the 13.4 release branch VS Code extension build scripts. Internal Azure Pipelines builds blocked `corepack yarn@1.22.22` from downloading Yarn due to network isolation, causing extension builds to fail. The fix invokes the configured `yarn` executable directly while preserving the frozen-lockfile restore path.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔩",
+  "firstMergedAt": "2026-05-28T21:09:43Z",
+  "lastMergedAt": "2026-05-28T21:09:43Z",
+  "name": "Fix VS Code extension build scripts Corepack network failure",
+  "owner": "joperezr",
+  "prs": [
+    17628
+  ]
+}
