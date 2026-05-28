@@ -1609,7 +1609,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), scaffoldSdkVersion);
+        Assert.Equal("9.2.0", scaffoldSdkVersion);
         Assert.Equal("stable", scaffoldChannel);
     }
 

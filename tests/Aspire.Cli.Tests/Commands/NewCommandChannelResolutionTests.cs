@@ -117,20 +117,22 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// Channel-resolution contract: when the running CLI's identity is a non-local channel
     /// (daily / staging / stable) and no <c>--channel</c> is passed, <c>aspire new</c> must
     /// resolve the channel whose name matches the identity — not the Implicit (nuget.org)
-    /// channel — while still pinning the template version to the current CLI/SDK version.
-    /// The bundled server and restored Aspire packages must stay on the same version.
+    /// channel. Prerelease identities (daily/staging) further pin the template version to the
+    /// current CLI/SDK so the bundled server and restored Aspire packages stay on the same
+    /// version; the stable identity falls through to the highest shipped stable package because
+    /// the stable feed doesn't filter the running CLI's version out of search.
     /// </summary>
     [Theory]
-    [InlineData(PackageChannelNames.Daily, "13.4.0-preview.1.99999.1")]
-    [InlineData(PackageChannelNames.Stable, "13.5.0")]
-    public async Task NewCommand_NoChannelArg_ResolvesTemplateFromIdentityChannel(string identityChannel, string identityChannelVersion)
+    [InlineData(PackageChannelNames.Daily, "13.4.0-preview.1.99999.1", null)]
+    [InlineData(PackageChannelNames.Stable, "13.5.0", "13.5.0")]
+    public async Task NewCommand_NoChannelArg_ResolvesTemplateFromIdentityChannel(string identityChannel, string identityChannelVersion, string? expectedVersion)
     {
         var captured = await CaptureTemplateInputsAsync(
             identityChannel: identityChannel,
             channelOptionArg: null,
             identityChannelVersion: identityChannelVersion);
 
-        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), captured.Version);
+        Assert.Equal(expectedVersion ?? VersionHelper.GetDefaultSdkVersion(), captured.Version);
         Assert.Equal(identityChannel, captured.Channel);
     }
 
@@ -205,10 +207,13 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
-    /// Explicit <c>--channel</c> must always override the running CLI's identity channel —
-    /// so a developer on a daily CLI can still scaffold a stable-channel project for
-    /// reproduction or migration testing. The template version still stays pinned to the
-    /// current CLI so restored Aspire packages match the bundled server.
+    /// Explicit <c>--channel stable</c> must always override the running CLI's identity channel —
+    /// so a developer on a daily CLI can still scaffold a stable-channel project for reproduction
+    /// or migration testing. When the CLI's own version is not published on the stable feed
+    /// (a daily-shape or PR-shape build), the resolver falls through to the highest shipped stable
+    /// package rather than forcing the unpublishable CLI version into the generated apphost.
+    /// Pinning to the current CLI version is reserved for prerelease channels — see
+    /// <see cref="NewCommand_ExplicitPrereleaseChannel_PrefersCurrentCliVersionWhenAvailable"/>.
     /// </summary>
     [Fact]
     public async Task NewCommand_ExplicitChannelArg_OverridesIdentityChannel()
@@ -218,7 +223,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             channelOptionArg: PackageChannelNames.Stable,
             identityChannelVersion: "13.4.0-preview.1.99999.1");
 
-        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), captured.Version);
+        // Highest shipped stable from the stable channel feed in the test fixture.
+        Assert.Equal("13.5.0", captured.Version);
         Assert.Equal(PackageChannelNames.Stable, captured.Channel);
     }
 
@@ -241,6 +247,28 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(cliVersion, captured.Version);
         Assert.Equal(channelName, captured.Channel);
+    }
+
+    /// <summary>
+    /// SmokeTest regression guard: when a non-stable-shape CLI (PR build, daily-shape preview, etc.)
+    /// is invoked with <c>--channel stable</c>, the resolver must NOT pin the template to the
+    /// running CLI's version. The CLI's own version is not published on the stable feed, so a
+    /// generated <c>apphost.cs</c> referencing it would fail NuGet restore. The fallback that pins
+    /// to the current CLI version is reserved for prerelease channels (daily, staging) where the
+    /// feed search filter is what hides the otherwise-restorable shipped stable package.
+    /// </summary>
+    [Theory]
+    [InlineData("13.4.0-preview.1.99999.1")] // daily-shape CLI
+    [InlineData("13.4.0-pr.17573.gabc1234")] // PR-shape CLI (e2e SmokeTests scenario)
+    public async Task NewCommand_ExplicitStableChannel_NonStableCliVersion_FallsBackToHighestShippedStable(string identityChannelVersion)
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Daily,
+            channelOptionArg: PackageChannelNames.Stable,
+            identityChannelVersion: identityChannelVersion);
+
+        Assert.Equal("13.5.0", captured.Version);
+        Assert.Equal(PackageChannelNames.Stable, captured.Channel);
     }
 
     /// <summary>
