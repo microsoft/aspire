@@ -246,6 +246,59 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await pendingRun;
     }
 
+    /// <summary>
+    /// Regression guard for the original bug: the bundle ships six skills but only the three
+    /// CLI-hardcoded ones were promptable/installable. End-to-end this means
+    /// <c>aspire agent init --skills all</c> must materialize every SKILL.md that the bundle
+    /// surfaces — including <c>aspire-init</c>, <c>aspire-monitoring</c> and
+    /// <c>aspire-orchestration</c>, which were invisible to the CLI before this change.
+    /// </summary>
+    [Fact]
+    public async Task AgentInitCommand_NonInteractive_WithAllSkills_InstallsEverySkillSurfacedByBundle()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        // Seed the user-level cache with all six bundle skills so the CLI exercises the cached
+        // path without needing the unpublished npm package. The cache fixture is identical to
+        // the published bundle's manifest shape.
+        await SeedAspireSkillsBundleCacheAsync(auto, workspace, counter);
+
+        // Non-interactive: skill locations + skills + workspace root all set via flags. Enumerate
+        // the six bundle skill names explicitly instead of `all` to keep this test focused on the
+        // bundle catalog (passing `all` would also pull in Playwright/dotnet-inspect, which try real
+        // network calls).
+        await auto.TypeAsync("aspire agent init --workspace-root . --skill-locations standard --skills aspire,aspireify,aspire-deployment,aspire-init,aspire-monitoring,aspire-orchestration");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(60));
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
+
+        var skillsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills");
+        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspire", "SKILL.md")), "aspire SKILL.md missing");
+        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspireify", "SKILL.md")), "aspireify SKILL.md missing");
+        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspire-deployment", "SKILL.md")), "aspire-deployment SKILL.md missing");
+        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspire-init", "SKILL.md")), "aspire-init SKILL.md missing");
+        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspire-monitoring", "SKILL.md")), "aspire-monitoring SKILL.md missing");
+        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspire-orchestration", "SKILL.md")), "aspire-orchestration SKILL.md missing");
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
+
     private static async Task SeedAspireSkillsBundleCacheAsync(Hex1bTerminalAutomator auto, TemporaryWorkspace workspace, SequenceCounter counter)
     {
         const string aspireSkillsVersion = "0.0.1";
@@ -261,7 +314,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
               "$cache/skills/aspire/references" \
               "$cache/skills/aspire/evals" \
               "$cache/skills/aspireify" \
-              "$cache/skills/aspire-deployment/references"
+              "$cache/skills/aspire-deployment/references" \
+              "$cache/skills/aspire-init" \
+              "$cache/skills/aspire-monitoring" \
+              "$cache/skills/aspire-orchestration"
 
             cat > "$cache/skills/aspire/SKILL.md" <<'SKILL'
             ---
@@ -295,12 +351,42 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             SKILL
             printf '%s\n' '# Preflight' > "$cache/skills/aspire-deployment/references/preflight.md"
 
+            cat > "$cache/skills/aspire-init/SKILL.md" <<'SKILL'
+            ---
+            name: aspire-init
+            description: "First-run flow for adding Aspire to a repo"
+            ---
+
+            # Aspire Init
+            SKILL
+
+            cat > "$cache/skills/aspire-monitoring/SKILL.md" <<'SKILL'
+            ---
+            name: aspire-monitoring
+            description: "Observe Aspire apps with logs, traces, metrics, and resource state"
+            ---
+
+            # Aspire Monitoring
+            SKILL
+
+            cat > "$cache/skills/aspire-orchestration/SKILL.md" <<'SKILL'
+            ---
+            name: aspire-orchestration
+            description: "Manage Aspire AppHost lifecycle and resource commands"
+            ---
+
+            # Aspire Orchestration
+            SKILL
+
             aspire_skill_hash="$(sha256sum "$cache/skills/aspire/SKILL.md" | awk '{print $1}')"
             aspire_commands_hash="$(sha256sum "$cache/skills/aspire/references/app-commands.md" | awk '{print $1}')"
             aspire_evals_hash="$(sha256sum "$cache/skills/aspire/evals/evals.json" | awk '{print $1}')"
             aspireify_skill_hash="$(sha256sum "$cache/skills/aspireify/SKILL.md" | awk '{print $1}')"
             deployment_skill_hash="$(sha256sum "$cache/skills/aspire-deployment/SKILL.md" | awk '{print $1}')"
             deployment_preflight_hash="$(sha256sum "$cache/skills/aspire-deployment/references/preflight.md" | awk '{print $1}')"
+            init_skill_hash="$(sha256sum "$cache/skills/aspire-init/SKILL.md" | awk '{print $1}')"
+            monitoring_skill_hash="$(sha256sum "$cache/skills/aspire-monitoring/SKILL.md" | awk '{print $1}')"
+            orchestration_skill_hash="$(sha256sum "$cache/skills/aspire-orchestration/SKILL.md" | awk '{print $1}')"
 
             cat > "$cache/skill-manifest.json" <<JSON
             {
@@ -336,6 +422,30 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                   "files": [
                     { "relativePath": "SKILL.md", "sha256": "$deployment_skill_hash" },
                     { "relativePath": "references/preflight.md", "sha256": "$deployment_preflight_hash" }
+                  ]
+                },
+                {
+                  "name": "aspire-init",
+                  "description": "First-run flow for adding Aspire to a repo",
+                  "isDefault": false,
+                  "files": [
+                    { "relativePath": "SKILL.md", "sha256": "$init_skill_hash" }
+                  ]
+                },
+                {
+                  "name": "aspire-monitoring",
+                  "description": "Observe Aspire apps with logs, traces, metrics, and resource state",
+                  "isDefault": false,
+                  "files": [
+                    { "relativePath": "SKILL.md", "sha256": "$monitoring_skill_hash" }
+                  ]
+                },
+                {
+                  "name": "aspire-orchestration",
+                  "description": "Manage Aspire AppHost lifecycle and resource commands",
+                  "isDefault": false,
+                  "files": [
+                    { "relativePath": "SKILL.md", "sha256": "$orchestration_skill_hash" }
                   ]
                 }
               ]

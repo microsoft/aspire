@@ -101,33 +101,18 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// <summary>
     /// Prompts the user to run agent init after a successful command, then chains into agent init if accepted.
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
-    /// </summary>
-    internal Task<AgentInitExecutionResult> PromptAndChainAsync(
-        IInteractionService interactionService,
-        int previousResultExitCode,
-        DirectoryInfo workspaceRoot,
-        PromptBinding<bool> agentInitBinding,
-        CancellationToken cancellationToken)
-    {
-        return PromptAndChainAsync(
-            interactionService,
-            previousResultExitCode,
-            workspaceRoot,
-            agentInitBinding,
-            AgentInitSkillDefaultMode.Standard,
-            cancellationToken);
-    }
-
-    /// <summary>
-    /// Prompts the user to run agent init using command-specific default skill selection.
+    /// When <paramref name="selectByDefault"/> is <see langword="null"/> the bundle author's
+    /// <see cref="SkillDefinition.IsDefault"/> is honored as-is, which is what <c>aspire init</c> wants.
+    /// Other callers (e.g. <c>aspire new</c>) can pass a predicate to additionally filter out skills that
+    /// don't fit their context (such as one-time setup skills after a template has already produced the AppHost).
     /// </summary>
     internal async Task<AgentInitExecutionResult> PromptAndChainAsync(
         IInteractionService interactionService,
         int previousResultExitCode,
         DirectoryInfo workspaceRoot,
         PromptBinding<bool> agentInitBinding,
-        AgentInitSkillDefaultMode defaultSkillMode,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<SkillDefinition, bool>? selectByDefault = null)
     {
         if (previousResultExitCode != CliExitCodes.Success)
         {
@@ -144,7 +129,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         if (runAgentInit)
         {
-            return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, defaultSkillMode, cancellationToken);
+            return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, selectByDefault, cancellationToken);
         }
 
         return new(CliExitCodes.Success, [], []);
@@ -153,9 +138,21 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
-        var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, AgentInitSkillDefaultMode.Standard, cancellationToken);
+        // Standalone `aspire agent init` is typically run against an existing project, so don't
+        // pre-select the one-time aspireify wiring skill even though the bundle marks it as default.
+        // Users can still opt into it from the prompt or via --skills.
+        var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, ExcludeAspireifyFromDefaults, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
+
+    /// <summary>
+    /// Default-skill predicate used by flows that don't want the one-time aspireify wiring
+    /// skill pre-selected — namely <c>aspire new</c> (template already created the AppHost) and
+    /// standalone <c>aspire agent init</c> (typically run against an existing project). The
+    /// skill remains available to opt into from the prompt or via <c>--skills</c>.
+    /// </summary>
+    internal static bool ExcludeAspireifyFromDefaults(SkillDefinition skill)
+        => skill.IsDefault && !skill.HasName(CommonAgentApplicators.AspireifySkillName);
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -187,7 +184,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         return new DirectoryInfo(workspaceRootPath);
     }
 
-    private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, ParseResult? parseResult, AgentInitSkillDefaultMode defaultSkillMode, CancellationToken cancellationToken)
+    private async Task<AgentInitExecutionResult> ExecuteAgentInitAsync(DirectoryInfo workspaceRoot, ParseResult? parseResult, Func<SkillDefinition, bool>? selectByDefault, CancellationToken cancellationToken)
     {
         var context = new AgentEnvironmentScanContext
         {
@@ -283,7 +280,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             }
 
             var preSelectedItems = new List<object>();
-            var defaultSkills = GetDefaultSkills(availableSkills, defaultSkillMode);
+            var defaultSkills = GetDefaultSkills(availableSkills, selectByDefault);
             preSelectedItems.AddRange(defaultSkills);
             // MCP is intentionally NOT pre-selected
 
@@ -554,21 +551,13 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         return simplified;
     }
 
-    private static IReadOnlyList<SkillDefinition> GetDefaultSkills(IEnumerable<SkillDefinition> availableSkills, AgentInitSkillDefaultMode defaultSkillMode)
+    private static IReadOnlyList<SkillDefinition> GetDefaultSkills(IEnumerable<SkillDefinition> availableSkills, Func<SkillDefinition, bool>? selectByDefault)
     {
-        return availableSkills
-            .Where(skill => IsDefaultSkill(skill, defaultSkillMode))
-            .ToList();
-    }
-
-    private static bool IsDefaultSkill(SkillDefinition skill, AgentInitSkillDefaultMode defaultSkillMode)
-    {
-        if (skill.HasName(CommonAgentApplicators.AspireifySkillName))
-        {
-            return defaultSkillMode is AgentInitSkillDefaultMode.IncludeAspireify && skill.IsDefault;
-        }
-
-        return skill.IsDefault;
+        // When the caller doesn't customize default selection, honor the bundle author's intent
+        // (skill.IsDefault). Callers like `aspire new` pass a predicate to additionally filter out
+        // skills that don't fit their flow.
+        var predicate = selectByDefault ?? (static skill => skill.IsDefault);
+        return availableSkills.Where(predicate).ToList();
     }
 
     /// <summary>
@@ -700,9 +689,3 @@ internal readonly record struct AgentInitExecutionResult(
     int ExitCode,
     IReadOnlyList<SkillLocation> SelectedLocations,
     IReadOnlyList<SkillDefinition> SelectedSkills);
-
-internal enum AgentInitSkillDefaultMode
-{
-    Standard,
-    IncludeAspireify
-}
