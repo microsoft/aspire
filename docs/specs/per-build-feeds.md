@@ -114,6 +114,12 @@ A model where:
   contributors and CI agents.
 - **Adding a new channel does not require new branches in the CLI.**
   Channel names become pure indirection; behavior lives in storage.
+  The one acknowledged special case is **local hive** builds, which
+  resolve via a `file://` URL baked at build time rather than via a
+  network pointer fetch — but the custom logic for that case
+  reduces to "if the URL is `file://`, skip the pointer round-trip
+  and use it directly," which is dramatically less than today's
+  hive-discovery, install-prefix-sniffing, and sideload code.
 - **What ships to nuget.org is the exact bytes that were tested in
   staging.** No "we tested an RC and rebuilt for GA" risk.
 
