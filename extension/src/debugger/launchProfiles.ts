@@ -256,12 +256,17 @@ interface ServerReadyAction {
     uriFormat: string;
 }
 
-export function determineServerReadyAction(launchBrowser?: boolean, applicationUrl?: string): ServerReadyAction | undefined {
+export function determineServerReadyAction(launchBrowser?: boolean, applicationUrl?: string, launchUrl?: string): ServerReadyAction | undefined {
     if (!launchBrowser || !applicationUrl) {
         return undefined;
     }
 
     let uriFormat = applicationUrl.includes(';') ? applicationUrl.split(';')[0] : applicationUrl;
+
+    if (launchUrl) {
+        // Ensure launchUrl is an absolute URL by resolving it against the applicationUrl
+        uriFormat = new URL(launchUrl, uriFormat).href;
+    }
 
     return {
         action: "openExternally",

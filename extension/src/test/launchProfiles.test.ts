@@ -515,18 +515,18 @@ suite('Launch Profile Tests', () => {
 
     suite('determineServerReadyAction', () => {
         test('returns undefined when launchBrowser is false', () => {
-            const result = determineServerReadyAction(false, 'https://localhost:5001');
+            const result = determineServerReadyAction(false, 'https://localhost:5001', undefined);
             assert.strictEqual(result, undefined);
         });
 
         test('returns undefined when applicationUrl is undefined', () => {
-            const result = determineServerReadyAction(true, undefined);
+            const result = determineServerReadyAction(true, undefined, undefined);
             assert.strictEqual(result, undefined);
         });
 
         test('returns serverReadyAction when launchBrowser true and applicationUrl provided', () => {
             const applicationUrl = 'https://localhost:5001';
-            const result = determineServerReadyAction(true, applicationUrl);
+            const result = determineServerReadyAction(true, applicationUrl, undefined);
 
             assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
@@ -536,11 +536,33 @@ suite('Launch Profile Tests', () => {
 
         test('returns serverReadyAction with first URL when multiple URLs separated by semicolon', () => {
             const applicationUrl = 'https://localhost:5001;http://localhost:5000';
-            const result = determineServerReadyAction(true, applicationUrl);
+            const result = determineServerReadyAction(true, applicationUrl, undefined);
 
             assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
             assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+        });
+
+        test('returns serverReadyAction with absolute launchUrl', () => {
+            const applicationUrl = 'https://localhost:5001;http://localhost:5000';
+            const launchUrl = 'https://localhost:5001/some/path';
+            const result = determineServerReadyAction(true, applicationUrl, launchUrl);
+
+            assert.notStrictEqual(result, undefined);
+            assert.strictEqual(result?.action, 'openExternally');
+            assert.strictEqual(result?.uriFormat, 'https://localhost:5001/some/path');
+            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
+        });
+
+        test('returns serverReadyAction with relative launchUrl', () => {
+            const applicationUrl = 'https://localhost:5001;http://localhost:5000';
+            const launchUrl = '/some/path';
+            const result = determineServerReadyAction(true, applicationUrl, launchUrl);
+
+            assert.notStrictEqual(result, undefined);
+            assert.strictEqual(result?.action, 'openExternally');
+            assert.strictEqual(result?.uriFormat, 'https://localhost:5001/some/path');
             assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
         });
     });
