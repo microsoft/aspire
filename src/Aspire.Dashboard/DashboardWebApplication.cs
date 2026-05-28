@@ -267,7 +267,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         {
             builder.Services.Configure<ForwardedHeadersOptions>(options =>
             {
-                options.ForwardedHeaders = ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedProto;
+                options.ForwardedHeaders = ForwardedHeaders.XForwardedHost | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedFor;
 
                 // Only loopback proxies are allowed by default. Clear that restriction because forwarders are
                 // being enabled by explicit configuration.
@@ -445,9 +445,19 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
 
         // Support running behind a reverse proxy with a path prefix (e.g., /sandbox/us/).
+        // The proxy sends X-Forwarded-Prefix to communicate the original path base.
         var pathBase = builder.Configuration["Dashboard:PathBase"];
         if (!string.IsNullOrEmpty(pathBase))
         {
+            _app.Use((context, next) =>
+            {
+                if (context.Request.Headers.TryGetValue("X-Forwarded-Prefix", out var forwardedPrefix) && forwardedPrefix.Count > 0)
+                {
+                    context.Request.PathBase = new PathString(forwardedPrefix.ToString().TrimEnd('/'));
+                }
+                return next();
+            });
+            // Also handle direct access (without proxy) where the path includes the prefix.
             _app.UsePathBase(pathBase.TrimEnd('/'));
         }
 
@@ -828,16 +838,41 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                         OnRedirectToIdentityProvider = context =>
                         {
                             // If this is an AJAX/fetch/SignalR request, return 401 instead of redirecting.
-                            // This prevents "Unsafe attempt to load URL" errors when Blazor's SignalR
-                            // connection or background fetches trigger an auth challenge.
                             if (string.Equals(context.Request.Headers["X-Requested-With"], "XMLHttpRequest", StringComparison.OrdinalIgnoreCase)
                                 || context.Request.Headers.Accept.ToString().Contains("application/json")
                                 || !string.IsNullOrEmpty(context.Request.Headers["blazor-enhanced-nav"]))
                             {
                                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
                                 context.HandleResponse();
+                                return Task.CompletedTask;
                             }
 
+                            // Fix redirect URI to include path base. The OIDC middleware uses OriginalPathBase
+                            // which may not reflect our middleware-set PathBase.
+                            var currentPathBase = context.Request.PathBase.Value?.TrimEnd('/');
+                            if (!string.IsNullOrEmpty(currentPathBase) && context.ProtocolMessage.RedirectUri is { } redirectUri)
+                            {
+                                var uri = new Uri(redirectUri);
+                                if (!uri.AbsolutePath.StartsWith(currentPathBase, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    context.ProtocolMessage.RedirectUri = $"{uri.Scheme}://{uri.Authority}{currentPathBase}{uri.AbsolutePath}";
+                                }
+                            }
+
+                            return Task.CompletedTask;
+                        },
+                        OnAuthorizationCodeReceived = context =>
+                        {
+                            // Sync the redirect_uri for token exchange with what was sent to the IdP.
+                            var codePathBase = context.Request.PathBase.Value?.TrimEnd('/');
+                            if (!string.IsNullOrEmpty(codePathBase) && context.TokenEndpointRequest?.RedirectUri is { } tokenRedirectUri)
+                            {
+                                var uri = new Uri(tokenRedirectUri);
+                                if (!uri.AbsolutePath.StartsWith(codePathBase, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    context.TokenEndpointRequest.RedirectUri = $"{uri.Scheme}://{uri.Authority}{codePathBase}{uri.AbsolutePath}";
+                                }
+                            }
                             return Task.CompletedTask;
                         }
                     };
@@ -854,11 +889,22 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                         options.Scope.Add("profile");
                     }
 
-                    // Redirect to resources upon sign-in.
-                    options.CallbackPath = TargetLocationInterceptor.ResourcesPath;
+                    // Use the standard OIDC callback path for redirect URI compatibility.
+                    options.CallbackPath = "/signin-oidc";
 
-                    // Avoid "message.State is null or empty" due to use of CallbackPath above.
+                    // Required when running behind a reverse proxy to prevent infinite redirect loops.
+                    // If the correlation cookie can't be validated, skip the request instead of throwing
+                    // (which would trigger the error page → auth challenge → loop).
                     options.SkipUnrecognizedRequests = true;
+
+                    // Ensure correlation and nonce cookies are sent on the callback request
+                    // regardless of path base configuration.
+                    options.CorrelationCookie.Path = "/";
+                    options.CorrelationCookie.SameSite = SameSiteMode.None;
+                    options.CorrelationCookie.SecurePolicy = CookieSecurePolicy.Always;
+                    options.NonceCookie.Path = "/";
+                    options.NonceCookie.SameSite = SameSiteMode.None;
+                    options.NonceCookie.SecurePolicy = CookieSecurePolicy.Always;
 
                     // Configure additional ClaimActions
                     var claimActions = dashboardOptions.Frontend.OpenIdConnect.ClaimActions;

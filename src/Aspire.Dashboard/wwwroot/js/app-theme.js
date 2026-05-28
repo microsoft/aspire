@@ -7,7 +7,7 @@ import {
     neutralPalette,
     DesignToken,
     neutralFillLayerRestDelta
-} from "/_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js";
+} from "../_content/Microsoft.FluentUI.AspNetCore.Components/Microsoft.FluentUI.AspNetCore.Components.lib.module.js";
 
 const currentThemeCookieName = "currentTheme";
 const themeSettingDark = "Dark";
