@@ -36,7 +36,7 @@ public sealed class EmptyAppHostTemplateTests(ITestOutputHelper output)
         // Start the empty AppHost to verify the scaffolded project works
         await auto.TypeAsync("cd AspireEmptyApp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);

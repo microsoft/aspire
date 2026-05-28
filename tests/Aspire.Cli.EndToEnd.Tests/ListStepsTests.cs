@@ -38,7 +38,7 @@ public sealed class ListStepsTests(ITestOutputHelper output)
         // Navigate to the AppHost project
         await auto.TypeAsync("cd ListStepsApp/ListStepsApp.AppHost");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // 1. Regression for https://github.com/microsoft/aspire/issues/17526:
         //    `aspire do --list-steps` with no step argument should surface a friendly error
@@ -73,7 +73,7 @@ public sealed class ListStepsTests(ITestOutputHelper output)
             s.ContainsText("Depends on:") || s.ContainsText("No dependencies"),
             timeout: TimeSpan.FromMinutes(3),
             description: "waiting for aspire do deploy --list-steps output");
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // 3. `aspire publish --list-steps` lists steps for the publish target.
         await auto.TypeAsync("aspire publish --list-steps");
@@ -82,7 +82,7 @@ public sealed class ListStepsTests(ITestOutputHelper output)
             s.ContainsText("Depends on:") || s.ContainsText("No dependencies"),
             timeout: TimeSpan.FromMinutes(3),
             description: "waiting for aspire publish --list-steps output");
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // 4. `aspire deploy --list-steps` lists steps for the deploy target.
         await auto.TypeAsync("aspire deploy --list-steps");
@@ -91,7 +91,7 @@ public sealed class ListStepsTests(ITestOutputHelper output)
             s.ContainsText("Depends on:") || s.ContainsText("No dependencies"),
             timeout: TimeSpan.FromMinutes(3),
             description: "waiting for aspire deploy --list-steps output");
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Exit the terminal
     }

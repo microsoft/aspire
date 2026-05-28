@@ -293,7 +293,7 @@ internal static class Hex1bAutomatorTestHelpers
     {
         await auto.TypeAsync(command);
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, timeout);
+        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout);
     }
 
     /// <summary>
@@ -334,7 +334,7 @@ internal static class Hex1bAutomatorTestHelpers
 
         await auto.TypeAsync(AspireCliShellCommandHelpers.NumberedPromptSetupCommand);
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(workspacePath)}", counter);
     }

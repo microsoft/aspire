@@ -53,7 +53,7 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
         // Step 2: Navigate into the project and start it
         await auto.TypeAsync("cd TsStarterApp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));
 

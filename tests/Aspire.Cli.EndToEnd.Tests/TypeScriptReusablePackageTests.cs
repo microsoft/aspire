@@ -35,12 +35,12 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
 
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(appDirectory.FullName, workspace)}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // The main app is a normal TypeScript AppHost created by the CLI.
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         var appAppHostPath = Path.Combine(appDirectory.FullName, "apphost.mts");
         Assert.True(File.Exists(appAppHostPath), $"Expected the CLI-created app to contain {appAppHostPath}.");
@@ -48,7 +48,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         var sdkVersion = GetSdkVersion(appDirectory);
         WriteHelperPackageFiles(helperDirectory, helperSourceDirectory, sdkVersion);
@@ -60,12 +60,12 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
 
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(helperDirectory.FullName, workspace)}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         var helperModulesDirectory = Path.Combine(helperDirectory.FullName, ".aspire", "modules");
         Assert.True(Directory.Exists(helperModulesDirectory), $".aspire/modules directory was not created for helper package at {helperModulesDirectory}");
@@ -77,12 +77,12 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
 
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(appDirectory.FullName, workspace)}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("npx tsc --noEmit");
         await auto.EnterAsync();

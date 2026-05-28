@@ -33,24 +33,24 @@ public sealed class CertificatesCommandTests(ITestOutputHelper output)
         // Generate dev certs WITHOUT trust (creates untrusted cert)
         await auto.TypeAsync("dotnet dev-certs https 2>/dev/null || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Configure SSL_CERT_DIR so trust detection works properly on Linux
         await auto.TypeAsync("export SSL_CERT_DIR=\"/etc/ssl/certs:$HOME/.aspnet/dev-certs/trust\"");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Run aspire certs trust — should trust the existing cert
         await auto.TypeAsync("aspire certs trust");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("trusted successfully", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify doctor now shows the certificate as trusted
         await auto.TypeAsync("aspire doctor");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("certificate is trusted", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     [Fact]
@@ -72,23 +72,23 @@ public sealed class CertificatesCommandTests(ITestOutputHelper output)
         // Generate dev certs first
         await auto.TypeAsync("dotnet dev-certs https --trust 2>/dev/null || dotnet dev-certs https");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("export SSL_CERT_DIR=\"/etc/ssl/certs:$HOME/.aspnet/dev-certs/trust\"");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Run aspire certs clean
         await auto.TypeAsync("aspire certs clean");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("cleaned successfully", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify doctor now shows no certificate
         await auto.TypeAsync("aspire doctor");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("No HTTPS development certificate", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     [Fact]
@@ -110,18 +110,18 @@ public sealed class CertificatesCommandTests(ITestOutputHelper output)
         // Configure SSL_CERT_DIR so trust detection works properly
         await auto.TypeAsync("export SSL_CERT_DIR=\"/etc/ssl/certs:$HOME/.aspnet/dev-certs/trust\"");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Run aspire certs trust with NO pre-existing cert — should create and trust
         await auto.TypeAsync("aspire certs trust");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("trusted successfully", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify doctor now shows the certificate as trusted
         await auto.TypeAsync("aspire doctor");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("certificate is trusted", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 }

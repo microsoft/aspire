@@ -40,7 +40,7 @@ public sealed class TypeScriptEmptyAppHostTemplateTests(ITestOutputHelper output
         // Start the empty TypeScript AppHost to verify the scaffolded project works
         await auto.TypeAsync("cd TsEmptyApp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));
 

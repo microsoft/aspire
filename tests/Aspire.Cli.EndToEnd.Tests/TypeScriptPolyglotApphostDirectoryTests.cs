@@ -50,7 +50,7 @@ public sealed class TypeScriptPolyglotApphostDirectoryTests(ITestOutputHelper ou
         // cwd. This is the scenario from issue 16513.
         await auto.TypeAsync("mkdir tsapp && cd tsapp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
         await auto.EnterAsync();
@@ -66,11 +66,11 @@ public sealed class TypeScriptPolyglotApphostDirectoryTests(ITestOutputHelper ou
 
         await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         await auto.TypeAsync("cd viteapp && npm install && cd ..");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
         await auto.EnterAsync();
@@ -97,7 +97,7 @@ public sealed class TypeScriptPolyglotApphostDirectoryTests(ITestOutputHelper ou
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.ClearScreenAsync(counter);
 
@@ -105,11 +105,11 @@ public sealed class TypeScriptPolyglotApphostDirectoryTests(ITestOutputHelper ou
         // AppHost is via the AppHostPath it reported over the backchannel.
         await auto.TypeAsync("cd ..");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("aspire stop --non-interactive --apphost tsapp");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 }

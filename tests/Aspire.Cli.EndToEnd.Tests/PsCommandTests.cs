@@ -38,43 +38,43 @@ public sealed class PsCommandTests(ITestOutputHelper output)
         // Navigate to the AppHost directory
         await auto.TypeAsync("cd AspirePsTestApp/AspirePsTestApp.AppHost");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // First, verify aspire ps shows no running AppHosts
         await auto.TypeAsync("aspire ps");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(SharedCommandStrings.AppHostNotRunning, timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Start the AppHost in the background using aspire start
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Now verify aspire ps shows the running AppHost
         await auto.TypeAsync("aspire ps");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("AspirePsTestApp.AppHost", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Test aspire ps --format json output
         await auto.TypeAsync("aspire ps --format json");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("\"appHostPath\":", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Stop the AppHost using aspire stop
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify aspire ps shows no running AppHosts again after stop
         await auto.TypeAsync("aspire ps");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(SharedCommandStrings.AppHostNotRunning, timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     [Fact]
@@ -104,7 +104,7 @@ public sealed class PsCommandTests(ITestOutputHelper output)
         // transient and erased before WaitUntil polling can observe it.
         await auto.TypeAsync($"aspire ps --format json > {containerOutputFilePath}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify the file contains only the expected JSON output (empty array).
         var content = File.ReadAllText(outputFilePath).Trim();

@@ -51,7 +51,7 @@ public sealed class AgentMcpLogsTests(ITestOutputHelper output)
         // Navigate to the AppHost directory
         await auto.TypeAsync("cd AspireMcpLogsApp/AspireMcpLogsApp.AppHost");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Start the AppHost
         await auto.AspireStartAsync(counter, isolated: isolated);
@@ -60,7 +60,7 @@ public sealed class AgentMcpLogsTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire wait apiservice --status up --timeout 300");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("is up (running).", timeout: TimeSpan.FromMinutes(6));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Call the MCP tool against the running AppHost
         await auto.CallAgentMcpToolAsync(counter, "list_structured_logs", "STRUCTURED LOGS DATA");

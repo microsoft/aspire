@@ -51,19 +51,19 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
         await auto.TypeAsync("dotnet tool list -g");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("aspire.cli", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify aspire is accessible from the dotnet tools path
         await auto.TypeAsync("command -v aspire");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(".dotnet/tools/aspire", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify self-update uses the dotnet tool update path for dotnet tool installs.
         await auto.TypeAsync("aspire update --self");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("dotnet tool update -g Aspire.Cli", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify the installed version matches expectations
         await auto.TypeAsync("aspire --version");
@@ -76,7 +76,7 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
             await auto.WaitUntilTextAsync(strategy.Version, timeout: TimeSpan.FromSeconds(10));
         }
 
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Create a new project using aspire new
         await auto.AspireNewAsync("AspireToolApp", counter);
@@ -100,7 +100,7 @@ public sealed class DotnetToolSmokeTests(ITestOutputHelper output)
 
         // Stop the running apphost with Ctrl+C
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>

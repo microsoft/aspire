@@ -42,7 +42,7 @@ public sealed class PythonReactTemplateTests(ITestOutputHelper output)
         // See https://github.com/microsoft/aspire/issues/15623
         await auto.TypeAsync("cd AspirePyReactApp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 3: Verify the generated TypeScript AppHost builds successfully.
         await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));

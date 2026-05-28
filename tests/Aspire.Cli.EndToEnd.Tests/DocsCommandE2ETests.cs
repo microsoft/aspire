@@ -53,15 +53,15 @@ public sealed class DocsCommandE2ETests(ITestOutputHelper output)
 
         await auto.TypeAsync("python3 -m http.server 18080 --bind 127.0.0.1 >/tmp/docs-server.log 2>&1 &");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("until curl -sf http://127.0.0.1:18080/llms-small.txt >/dev/null; do sleep 1; done");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("export DOCS__LLMSTXTURL=http://127.0.0.1:18080/llms-small.txt");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire --nologo docs get docs-smoke-test");
@@ -89,6 +89,6 @@ public sealed class DocsCommandE2ETests(ITestOutputHelper output)
                 && snapshot.ContainsText("Azure__SubscriptionId")
                 && snapshot.ContainsText("Target Azure subscription");
         }, timeout: TimeSpan.FromSeconds(60), description: "waiting for docs get rendered output");
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 }

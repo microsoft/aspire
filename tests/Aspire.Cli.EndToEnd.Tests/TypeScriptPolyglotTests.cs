@@ -76,7 +76,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Use --no-interactive to skip vite's interactive prompts (rolldown, install now, etc.)
         await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         var viteProjectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "viteapp");
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(viteProjectRoot, toolchain, cleanInstallState: true);
@@ -84,7 +84,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Step 3: Install Vite app dependencies
         await auto.TypeAsync($"cd viteapp && {TypeScriptAppHostToolchainTestHelpers.GetInstallCommand(toolchain)} && cd ..");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 4: Add Aspire.Hosting.JavaScript package
         // When channel is set (CI) and there's only one channel with one version,
@@ -115,7 +115,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         var appHostLockFilePath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
@@ -152,7 +152,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         // Step 8: Stop the apphost
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     [Fact]
@@ -191,14 +191,14 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         var viteProjectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "viteapp");
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(viteProjectRoot, guestToolchain, cleanInstallState: true);
 
         await auto.TypeAsync($"cd viteapp && {TypeScriptAppHostToolchainTestHelpers.GetInstallCommand(guestToolchain)} && cd ..");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
         await auto.EnterAsync();
@@ -221,7 +221,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         var appHostLockFilePath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
@@ -277,7 +277,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
 
         await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetInstallCommand(toolchain));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         var lockFilePath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
@@ -343,11 +343,11 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Create brownfield Vite project
         await auto.TypeAsync("mkdir -p packages/brownfield && cd packages/brownfield");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("npm create -y vite@latest . -- --template vanilla-ts --no-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
         // Capture original package.json scripts and tsconfig before aspire init
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "packages", "brownfield");
@@ -463,6 +463,6 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         }, timeout: TimeSpan.FromMinutes(3), description: "Press CTRL+C message (aspire run started)");
 
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 }

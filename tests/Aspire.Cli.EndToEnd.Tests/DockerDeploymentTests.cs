@@ -43,7 +43,7 @@ public sealed class DockerDeploymentTests(ITestOutputHelper output)
         // Step 2: Navigate into the project directory
         await auto.TypeAsync($"cd {ProjectName}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 3: Add Aspire.Hosting.Docker package using aspire add
         // Pass the package name directly as an argument to avoid interactive selection
@@ -81,7 +81,7 @@ builder.Build().Run();
         // Step 5: Create output directory for deployment artifacts
         await auto.TypeAsync("mkdir -p deploy-output");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 6: Unset ASPIRE_PLAYGROUND before deploy
         // ASPIRE_PLAYGROUND=true takes precedence over --non-interactive in CliHostEnvironment,
@@ -89,30 +89,30 @@ builder.Build().Run();
         // resulting in "Operations with dynamic displays cannot run at the same time" errors.
         await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 7: Run aspire deploy to deploy to Docker Compose
         // This will build the project, generate Docker Compose files, and start the containers
         // Use --non-interactive to avoid any prompts during deployment
         await auto.TypeAsync("aspire deploy -o deploy-output --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(5));
 
         // Step 8: Capture the port from docker ps output for verification
         // We need to parse the port from docker ps to make a web request
         await auto.TypeAsync("docker ps --format '{{.Ports}}' | grep -oE '0\\.0\\.0\\.0:[0-9]+' | head -1 | cut -d: -f2");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 9: Verify the deployment is running with docker ps
         await auto.TypeAsync("docker ps");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 10: Verify the frontend responds from inside its own network namespace.
         await auto.TypeAsync("container=$(docker ps --filter 'name=webfrontend' --format '{{.ID}}' | head -1) && docker run --rm --network container:$container curlimages/curl:8.12.1 -s -o /dev/null -w '%{http_code}' http://localhost:8080 2>/dev/null || echo 'request-failed'");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
 
         // Step 11: Clean up - destroy the deployment using aspire destroy
         await auto.AspireDestroyAsync(counter);
@@ -143,7 +143,7 @@ builder.Build().Run();
         // Step 2: Navigate into the project directory
         await auto.TypeAsync($"cd {ProjectName}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 3: Add Aspire.Hosting.Docker package using aspire add
         // Pass the package name directly as an argument to avoid interactive selection
@@ -181,7 +181,7 @@ builder.Build().Run();
         // Step 5: Create output directory for deployment artifacts
         await auto.TypeAsync("mkdir -p deploy-output");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 6: Unset ASPIRE_PLAYGROUND before deploy
         // ASPIRE_PLAYGROUND=true takes precedence over --non-interactive in CliHostEnvironment,
@@ -189,7 +189,7 @@ builder.Build().Run();
         // resulting in "Operations with dynamic displays cannot run at the same time" errors.
         await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 7: Run aspire deploy to deploy to Docker Compose in INTERACTIVE MODE
         // This test specifically validates that the concurrent ShowStatusAsync fix works correctly
@@ -197,23 +197,23 @@ builder.Build().Run();
         // The fix prevents nested ShowStatusAsync calls from causing Spectre.Console errors.
         await auto.TypeAsync("aspire deploy -o deploy-output");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(5));
 
         // Step 8: Capture the port from docker ps output for verification
         // We need to parse the port from docker ps to make a web request
         await auto.TypeAsync("docker ps --format '{{.Ports}}' | grep -oE '0\\.0\\.0\\.0:[0-9]+' | head -1 | cut -d: -f2");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 9: Verify the deployment is running with docker ps
         await auto.TypeAsync("docker ps");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 10: Verify the frontend responds from inside its own network namespace.
         await auto.TypeAsync("container=$(docker ps --filter 'name=webfrontend' --format '{{.ID}}' | head -1) && docker run --rm --network container:$container curlimages/curl:8.12.1 -s -o /dev/null -w '%{http_code}' http://localhost:8080 2>/dev/null || echo 'request-failed'");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
 
         // Step 11: Clean up - destroy the deployment using aspire destroy
         await auto.AspireDestroyAsync(counter);

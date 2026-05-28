@@ -61,7 +61,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         // Stop the running apphost with Ctrl+C
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     [CaptureWorkspaceOnFailure]

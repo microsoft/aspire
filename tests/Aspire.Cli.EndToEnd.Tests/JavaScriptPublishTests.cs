@@ -68,23 +68,23 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         // Deploy
         await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("aspire deploy --non-interactive");
         await auto.EnterAsync();
         await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(5));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Wait for services and verify — verify.sh captures diagnostics first, then asserts
         await auto.TypeAsync("bash verify.sh");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("ALL_OK", timeout: TimeSpan.FromSeconds(90));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Clean up
         await auto.TypeAsync("docker ps -q --filter label=com.docker.compose.project | xargs -r docker rm -f 2>/dev/null || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
     }
 
     [Fact]

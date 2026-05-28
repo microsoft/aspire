@@ -42,7 +42,7 @@ internal static class CliE2EAutomatorHelpers
         // sequence number and the exit code so waits can synchronize on shell completion instead of timing guesses.
         await auto.TypeAsync(AspireCliShellCommandHelpers.NumberedPromptSetupCommand);
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Set permissive umask
         await auto.RunCommandAsync("umask 000", counter);
@@ -367,7 +367,7 @@ internal static class CliE2EAutomatorHelpers
         if (versionPickerShown)
         {
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
+            await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
             return;
         }
 
@@ -461,7 +461,7 @@ internal static class CliE2EAutomatorHelpers
             await auto.TypeAsync(
                 $"VER=$(aspire --version 2>/dev/null) && BASE_VER=${{VER%%+*}} && echo \"$VER\" && {recordVersionCommand}");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
             return;
         }
 
@@ -608,7 +608,7 @@ internal static class CliE2EAutomatorHelpers
             timeout: TimeSpan.FromSeconds(10),
             description: $"Aspire CLI version containing '{s_expectedStableVersionMarker}' or 'g{shortCommitSha}'");
 
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     internal static async Task VerifyPullRequestCliVersionAsync(
@@ -691,7 +691,7 @@ internal static class CliE2EAutomatorHelpers
     {
         await auto.TypeAsync("aspire config set features:experimentalPolyglot:java true --global --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -766,7 +766,7 @@ internal static class CliE2EAutomatorHelpers
                 "echo '=== END LOG ==='; " +
                 $"cat \"{jsonFile}\"");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             await auto.CaptureRegisteredWorkspaceDiagnosticsAsync(counter);
 
@@ -782,7 +782,7 @@ internal static class CliE2EAutomatorHelpers
             "'s/.*\"dashboardUrl\"[[:space:]]*:[[:space:]]*\"\\(https\\?:\\/\\/[a-z.]*localhost:[0-9]*\\).*/\\1/p' " +
             $"\"{jsonFile}\" | head -1)");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         var dashboardUrlCounter = counter.Value;
         var dashboardUrlFound = false;
@@ -872,7 +872,7 @@ internal static class CliE2EAutomatorHelpers
             "|| echo 'dashboard-http-failed'");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("dashboard-http-200", timeout: TimeSpan.FromSeconds(15));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -884,7 +884,7 @@ internal static class CliE2EAutomatorHelpers
     {
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -951,7 +951,7 @@ internal static class CliE2EAutomatorHelpers
         {
             await auto.TypeAsync("echo diagnostics-available-in-workspace");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
             return;
         }
 
@@ -959,7 +959,7 @@ internal static class CliE2EAutomatorHelpers
 
         await auto.TypeAsync(BuildAspireDiagnosticsCaptureCommand(containerWorkspace) + "echo done");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -974,7 +974,7 @@ internal static class CliE2EAutomatorHelpers
         await auto.TypeAsync("aspire destroy --yes");
         await auto.EnterAsync();
         await auto.WaitForPipelineSuccessAsync(timeout: timeout.Value);
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(1));
     }
 
     private static async Task CaptureRegisteredWorkspaceDiagnosticsAsync(
@@ -992,7 +992,7 @@ internal static class CliE2EAutomatorHelpers
             "echo \"copied-failure-artifacts:$ASPIRE_E2E_WORKSPACE\"; " +
             "fi");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -1060,12 +1060,12 @@ internal static class CliE2EAutomatorHelpers
             "sleep 15; " +
             $"}} | aspire agent mcp{argsFragment} > /tmp/mcp_out.txt 2>/tmp/mcp_err.txt || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
 
         // Dump output for debugging visibility in the recording
         await auto.TypeAsync("cat /tmp/mcp_out.txt | head -50");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Check that the response contains the expected data marker
         await auto.TypeAsync(

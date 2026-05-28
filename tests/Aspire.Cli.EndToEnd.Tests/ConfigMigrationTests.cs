@@ -138,7 +138,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Run any CLI command to trigger global migration in Program.cs.
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Migrated aspire.config.json retains non-channel content (features, sdkVersion).
         AssertFileContains(newConfigPath, "polyglotSupportEnabled");
@@ -161,7 +161,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Cleanup.
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -197,7 +197,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Run CLI. Migration should be skipped because aspire.config.json already exists.
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify aspire.config.json still has "preview" (NOT overwritten with "staging").
         AssertFileContains(newConfigPath, "preview");
@@ -206,7 +206,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Cleanup.
         await auto.TypeAsync("aspire config delete channel -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -244,23 +244,23 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Run CLI. Should not crash despite malformed legacy file.
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify CLI still works by setting and reading a value.
         await auto.TypeAsync("aspire config set channel stable -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("stable", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Cleanup.
         await auto.TypeAsync("aspire config delete channel -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -308,7 +308,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Run CLI to trigger migration.
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Migrated aspire.config.json retains non-channel content (features).
         AssertFileContains(newConfigPath, "polyglotSupportEnabled");
@@ -331,7 +331,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Cleanup.
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -370,13 +370,13 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Set nested config values.
         await auto.TypeAsync("aspire config set channel preview -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("aspire config set features.polyglotSupportEnabled true -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("aspire config set features.stagingChannelEnabled false -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify the file has nested JSON structure (host-side).
         AssertFileContains(newConfigPath, "features", "polyglotSupportEnabled", "preview");
@@ -386,13 +386,13 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("preview", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get features.polyglotSupportEnabled");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("true", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify globalsettings.json was NOT created.
         if (File.Exists(legacyPath))
@@ -404,13 +404,13 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Cleanup.
         await auto.TypeAsync("aspire config delete channel -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("aspire config delete features.stagingChannelEnabled -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -462,7 +462,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Trigger migration.
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Migrated aspire.config.json retains non-channel content (features, packages).
         AssertFileContains(newConfigPath,
@@ -488,13 +488,13 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Cleanup.
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("aspire config delete features.stagingChannelEnabled -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("aspire config delete packages -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>
@@ -526,29 +526,29 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Verify the legacy CLI is installed.
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 2: Set global values using the legacy CLI.
         // In versions before 13.2, this writes to ~/.aspire/globalsettings.json.
         await auto.TypeAsync("aspire config set channel staging -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("aspire config set features.polyglotSupportEnabled true -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify values were persisted by the legacy CLI.
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("staging", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Snapshot which files exist after using the legacy CLI (for debugging).
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("ls -la ~/.aspire/");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 3: Install the new CLI (from this PR), overwriting the legacy CLI.
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -556,7 +556,7 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         // Step 4: Run the new CLI to trigger global migration.
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 5: Verify aspire.config.json exists with migrated values (host-side).
         var newConfigPath = Path.Combine(aspireHomeDir, "aspire.config.json");
@@ -568,14 +568,14 @@ public sealed class ConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("staging", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Cleanup.
         await auto.TypeAsync("aspire config delete channel -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("aspire config delete features.polyglotSupportEnabled -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 }

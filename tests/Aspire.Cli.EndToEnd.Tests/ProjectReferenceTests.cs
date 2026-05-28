@@ -39,7 +39,7 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 2: Create the integration project, update aspire.config.json, and modify apphost.mts
         {
@@ -152,36 +152,36 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
             }
             return s.ContainsText(RunCommandStrings.AppHostStartedSuccessfully);
         }, timeout: TimeSpan.FromMinutes(2), description: "waiting for apphost start success or failure");
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // If start failed, dump the child log for debugging before the test fails
         await auto.TypeAsync("CHILD_LOG=$(ls -t ~/.aspire/logs/cli_*detach*.log 2>/dev/null | head -1) && if [ -n \"$CHILD_LOG\" ]; then echo '=== CHILD LOG ==='; cat \"$CHILD_LOG\"; echo '=== END CHILD LOG ==='; fi");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(10));
 
         // Step 4: Verify the custom integration was code-generated
         await auto.TypeAsync("grep addMyService .aspire/modules/aspire.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("addMyService", timeout: TimeSpan.FromSeconds(5));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 5: Wait for the custom resource to be up
         await auto.TypeAsync("aspire wait my-svc --timeout 60");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(90));
 
         // Step 6: Verify the resource appears in describe
         await auto.TypeAsync("aspire describe my-svc --format json > /tmp/my-svc-describe.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(15));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(15));
         await auto.TypeAsync("cat /tmp/my-svc-describe.json");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("my-svc", timeout: TimeSpan.FromSeconds(5));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 7: Clean up
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 }

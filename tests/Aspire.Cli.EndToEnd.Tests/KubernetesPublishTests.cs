@@ -60,34 +60,34 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
             // Install kind to ~/.local/bin (no sudo required)
             await auto.TypeAsync("mkdir -p ~/.local/bin");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             await auto.TypeAsync($"curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-amd64\"");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
 
             await auto.TypeAsync("chmod +x ~/.local/bin/kind");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Install helm to ~/.local/bin
             await auto.TypeAsync($"curl -sSL https://get.helm.sh/helm-{HelmVersion}-linux-amd64.tar.gz | tar xz -C /tmp");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
 
             await auto.TypeAsync("mv /tmp/linux-amd64/helm ~/.local/bin/helm && rm -rf /tmp/linux-amd64");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Add ~/.local/bin to PATH for this session
             await auto.TypeAsync("export PATH=\"$HOME/.local/bin:$PATH\"");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Verify installations
             await auto.TypeAsync("kind version && helm version --short");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // =====================================================================
             // Phase 2: Create KinD cluster
@@ -96,20 +96,20 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
             // Delete any existing cluster with the same name to ensure a clean state
             await auto.TypeAsync($"kind delete cluster --name={clusterName} || true");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
 
             await auto.TypeAsync($"kind create cluster --name={clusterName} --wait=120s");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(3));
 
             // Verify cluster is ready
             await auto.TypeAsync($"kubectl cluster-info --context kind-{clusterName}");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             await auto.TypeAsync("kubectl get nodes");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // =====================================================================
             // Phase 3: Create Aspire project and generate Helm chart
@@ -121,7 +121,7 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
             // Step 2: Navigate into the project directory
             await auto.TypeAsync($"cd {ProjectName}");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Step 3: Add Aspire.Hosting.Kubernetes package using aspire add
             // Pass the package name directly as an argument to avoid interactive selection
@@ -156,7 +156,7 @@ builder.Build().Run();
             // Step 5: Create output directory for Helm chart artifacts
             await auto.TypeAsync("mkdir -p helm-output");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Step 6: Unset ASPIRE_PLAYGROUND before publish
             // ASPIRE_PLAYGROUND=true takes precedence over --non-interactive in CliHostEnvironment,
@@ -164,35 +164,35 @@ builder.Build().Run();
             // resulting in "Operations with dynamic displays cannot run at the same time" errors.
             await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Step 7: Run aspire publish to generate Helm charts
             // This will build the project and generate Kubernetes manifests as Helm charts
             // Use --non-interactive to avoid any prompts during publishing
             await auto.TypeAsync("aspire publish -o helm-output --non-interactive");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(5));
 
             // Step 8: Verify the Helm chart files were generated
             // Check for Chart.yaml (required Helm chart metadata)
             await auto.TypeAsync("cat helm-output/Chart.yaml");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Step 9: Verify values.yaml exists (Helm values file)
             await auto.TypeAsync("cat helm-output/values.yaml");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Step 10: Verify templates directory exists with Kubernetes manifests
             await auto.TypeAsync("ls -la helm-output/templates/");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Step 11: Display the directory structure for debugging
             await auto.TypeAsync("find helm-output -type f | head -20");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // =====================================================================
             // Phase 4: Build container images using aspire do build
@@ -202,23 +202,23 @@ builder.Build().Run();
             // This uses dotnet publish /t:PublishContainer to build images locally
             await auto.TypeAsync("aspire do build --non-interactive");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(5));
 
             // List the built Docker images to verify they exist
             // The Starter App builds: apiservice:latest and webfrontend:latest
             await auto.TypeAsync("docker images | grep -E 'apiservice|webfrontend'");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Load the built images into the KinD cluster
             // KinD runs containers inside Docker, so we need to load images into the cluster's nodes
             await auto.TypeAsync($"kind load docker-image apiservice:latest --name={clusterName}");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
             await auto.TypeAsync($"kind load docker-image webfrontend:latest --name={clusterName}");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
 
             // =====================================================================
             // Phase 5: Deploy the Helm chart to KinD cluster
@@ -227,17 +227,17 @@ builder.Build().Run();
             // Validate the Helm chart before installing
             await auto.TypeAsync("helm lint helm-output");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Perform a dry-run first to catch any issues
             await auto.TypeAsync("helm install aspire-app helm-output --dry-run");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
 
             // Show the image and port parameters from values.yaml for debugging
             await auto.TypeAsync("cat helm-output/values.yaml | grep -E '_image:|port_'");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Install the Helm chart using the real container images built by Aspire
             // The images are already loaded into KinD, so we use the default values.yaml
@@ -251,32 +251,32 @@ builder.Build().Run();
                 "--set parameters.webfrontend.port_https=8444 " +
                 "--wait --timeout 3m");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(4));
 
             // Verify the Helm release was created and is deployed
             await auto.TypeAsync("helm list");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Check that pods are running
             await auto.TypeAsync("kubectl get pods");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Wait for all pods to be ready (not just created)
             await auto.TypeAsync("kubectl wait --for=condition=Ready pod --all --timeout=120s");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(3));
 
             // Check all Kubernetes resources were created
             await auto.TypeAsync("kubectl get all");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // Show the deployed configmaps and secrets
             await auto.TypeAsync("kubectl get configmaps,secrets");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter);
+            await auto.WaitForSuccessPromptFailFastAsync(counter);
 
             // =====================================================================
             // Phase 6: Cleanup
@@ -288,7 +288,7 @@ builder.Build().Run();
             // Delete the KinD cluster
             await auto.TypeAsync($"kind delete cluster --name={clusterName}");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
         }
         finally
         {

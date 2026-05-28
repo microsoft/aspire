@@ -71,12 +71,12 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
         // apphost.mts lives. The project files stay in place so aspire run can work.
         await auto.TypeAsync("rm -f aspire.config.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         var legacySettingsJson = """{"appHostPath":"../apphost.mts","language":"typescript/nodejs","sdkVersion":"13.2.0","channel":"staging"}""";
         await auto.TypeAsync($"mkdir -p .aspire && echo '{legacySettingsJson}' > .aspire/settings.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 3: Run aspire run to trigger the migration from .aspire/settings.json
         // to aspire.config.json. The migration happens during apphost discovery,
@@ -130,15 +130,15 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
 
         await auto.TypeAsync("cd StaleConfigApp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("sed -i 's/apphost.mts/apphost.ts/g' aspire.config.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(3));
 
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "StaleConfigApp", "aspire.config.json");
         var deadline = DateTime.UtcNow.AddMinutes(1);

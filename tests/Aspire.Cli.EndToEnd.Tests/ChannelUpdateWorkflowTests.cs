@@ -154,7 +154,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         // doesn't block waiting on "Update successful!". Pattern borrowed from CentralPackageManagementTests.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         try
         {
@@ -344,7 +344,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         if (localChannel is not null)
         {
@@ -399,7 +399,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         // "Update successful!". No cleanup needed — each test runs in its own Docker container.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         await PreviewStableUpdateAndDeclineAsync(auto, counter);
 
@@ -451,7 +451,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             await auto.TypeAsync("n");
         }
 
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>

@@ -38,78 +38,78 @@ public sealed class StagingChannelTests(ITestOutputHelper output)
         // Set quality to Prerelease (triggers shared feed mode)
         await auto.TypeAsync("aspire config set overrideStagingQuality Prerelease -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Enable pinned version mode
         await auto.TypeAsync("aspire config set stagingPinToCliVersion true -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Set channel to staging — this alone enables staging channel behavior
         await auto.TypeAsync("aspire config set channel staging -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 2: Verify the settings were persisted in the global config file
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("cat ~/.aspire/aspire.config.json");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("stagingPinToCliVersion", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 3: Verify aspire config get returns the correct values
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("staging", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 4: Verify the CLI version is available (basic smoke test that the CLI works with these settings)
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 5: Switch channel to stable via config set (simulating what update --self does)
         await auto.TypeAsync("aspire config set channel stable -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 6: Verify channel was changed to stable
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("stable", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 7: Switch back to staging
         await auto.TypeAsync("aspire config set channel staging -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 8: Verify channel is staging again and staging settings are still present
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get channel");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("staging", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Verify the staging-specific settings survived the channel switch
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire config get overrideStagingQuality");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Prerelease", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Clean up: remove staging settings to avoid polluting other tests
         await auto.TypeAsync("aspire config delete overrideStagingQuality -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("aspire config delete stagingPinToCliVersion -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("aspire config delete channel -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 }

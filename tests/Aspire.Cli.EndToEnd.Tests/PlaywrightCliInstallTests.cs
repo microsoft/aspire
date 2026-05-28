@@ -43,7 +43,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         // Step 1: Verify playwright-cli is not installed.
         await auto.TypeAsync("playwright-cli --version 2>&1 || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 2: Create an Aspire project (accept all defaults).
         await auto.AspireNewAsync("TestProject", counter);
@@ -51,7 +51,7 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
         // Step 3: Navigate into the project and create .claude folder to trigger Claude Code detection.
         await auto.TypeAsync("cd TestProject && mkdir -p .claude");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 4: Run aspire agent init for Playwright only. This test is about
         // @playwright/cli acquisition, not the Aspire skills bundle.
@@ -60,18 +60,18 @@ public sealed class PlaywrightCliInstallTests(ITestOutputHelper output)
 
         // Wait for installation to complete (this downloads from npm, can take a while)
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 5: Verify playwright-cli is now installed.
         await auto.TypeAsync("playwright-cli --version");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Step 6: Verify the skill file was generated.
         await auto.TypeAsync("ls .claude/skills/playwright-cli/SKILL.md");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SKILL.md", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
     }
 
     /// <summary>

@@ -83,7 +83,7 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
         // for "Update successful!". Same pattern as CentralPackageManagementTests.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Run aspire init non-interactively to scaffold a single-file C# AppHost. We'll
         // overwrite the generated apphost.cs and nuget.config below to set up the bug
@@ -160,7 +160,7 @@ public sealed class UpdateChannelNuGetConfigOrderingTests(ITestOutputHelper outp
         // the timeout. With the fix all package edits land first, then the single deferred
         // restore sees a coherent reference graph and succeeds.
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         // Host-side assertions on the post-update files.
         var updatedAppHostCs = await File.ReadAllTextAsync(appHostCsPath);

@@ -139,7 +139,7 @@ public sealed class KubernetesDeployWithHelmChartTests(ITestOutputHelper output)
             // Check that podinfo pods are running in its own namespace
             await auto.TypeAsync("kubectl get pods -n podinfo -l app.kubernetes.io/name=podinfo");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
 
             // Verify podinfo has 2 replicas as configured
             await auto.TypeAsync(
@@ -149,12 +149,12 @@ public sealed class KubernetesDeployWithHelmChartTests(ITestOutputHelper output)
                 "echo \"FAIL: expected 2 replicas, got $READY\"");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("VERIFY_OK", timeout: TimeSpan.FromSeconds(60));
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(10));
 
             // Verify the Helm release exists
             await auto.TypeAsync("helm list -n podinfo");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
 
             // =====================================================================
             // Phase 6: Cleanup
