@@ -4,7 +4,7 @@ The ATS capability scanner discovers attributes by their **full type name**, not
 
 ## Use the official analyzer package
 
-If your integration project already references `Aspire.Hosting`, you can add the experimental `Aspire.Hosting.Integration.Analyzers` package to get the same authoring diagnostics used by in-repo Aspire integrations:
+If your integration project already references `Aspire.Hosting`, you can add the `Aspire.Hosting.Integration.Analyzers` package to get the same authoring diagnostics used by in-repo Aspire integrations:
 
 ```xml
 <ItemGroup>

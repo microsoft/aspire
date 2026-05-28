@@ -11,7 +11,6 @@ using Microsoft.Extensions.Logging;
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // DockerfileBuilder is experimental
 #pragma warning disable ASPIRECSHARPAPPS001 // AddCSharpApp is experimental
-#pragma warning disable ASPIREATS001 // AspireExportIgnore is experimental
 
 namespace Aspire.Hosting;
 
