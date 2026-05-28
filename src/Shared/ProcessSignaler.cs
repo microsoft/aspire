@@ -30,15 +30,15 @@ internal static partial class ProcessSignaler
         }
     }
 
-    public static void ForceKill(int pid, DateTimeOffset? expectedStartTime, ILogger logger)
+    public static void ForceKill(int pid, DateTimeOffset? expectedStartTime, ILogger logger, bool killEntireProcessTree = false)
     {
         using var process = TryGetRunningProcess(pid, expectedStartTime, logger);
         if (process is { })
         {
-            logger.LogDebug("Killing process {Pid}...", pid);
+            logger.LogDebug("Killing process {Pid} (entireProcessTree={EntireProcessTree})...", pid, killEntireProcessTree);
             try
             {
-                process.Kill(entireProcessTree: false);
+                process.Kill(entireProcessTree: killEntireProcessTree);
             }
             catch (InvalidOperationException)
             {
