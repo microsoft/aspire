@@ -17,7 +17,7 @@ namespace Aspire.Cli;
 internal sealed class ConsoleCancellationManager : IDisposable
 {
     // Standard Unix exit codes: 128 + signal number (SIGINT=2, SIGTERM=15).
-    // SigIntExitCode (130): used when the user presses Ctrl+C (SIGINT).
+    // SigIntExitCode (130): used when the user presses Ctrl+C (SIGINT) or Ctrl+Break/SIGQUIT.
     // SigTermExitCode (143): used when the process receives SIGTERM (e.g. container stop, ProcessExit).
     private const int SigIntExitCode = 130;
     private const int SigTermExitCode = 143;
@@ -26,6 +26,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
     private readonly TimeSpan _processTerminationTimeout;
     private readonly PosixSignalRegistration? _sigIntRegistration;
     private readonly PosixSignalRegistration? _sigTermRegistration;
+    private readonly PosixSignalRegistration? _sigQuitRegistration;
     private readonly CancellationToken _token;
     private ILogger _logger;
     private Task<int>? _startedHandler;
@@ -70,9 +71,17 @@ internal sealed class ConsoleCancellationManager : IDisposable
         {
             _sigIntRegistration = PosixSignalRegistration.Create(PosixSignal.SIGINT, OnPosixSignal);
             _sigTermRegistration = PosixSignalRegistration.Create(PosixSignal.SIGTERM, OnPosixSignal);
+
+            // SIGQUIT maps to CTRL_BREAK_EVENT on Windows. Register it to maintain parity with
+            // Console.CancelKeyPress which handled both Ctrl+C and Ctrl+Break.
+            _sigQuitRegistration = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, OnPosixSignal);
+        }
+        else
+        {
+            // Fall back to Console.CancelKeyPress on platforms that don't support PosixSignalRegistration.
+            Console.CancelKeyPress += OnCancelKeyPress;
         }
 
-        Console.CancelKeyPress += OnCancelKeyPress;
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
     }
 
@@ -83,7 +92,13 @@ internal sealed class ConsoleCancellationManager : IDisposable
     private void OnPosixSignal(PosixSignalContext context)
     {
         context.Cancel = true;
-        Cancel(context.Signal == PosixSignal.SIGINT ? SigIntExitCode : SigTermExitCode);
+        var exitCode = context.Signal switch
+        {
+            PosixSignal.SIGINT => SigIntExitCode,
+            PosixSignal.SIGQUIT => SigIntExitCode,
+            _ => SigTermExitCode
+        };
+        Cancel(exitCode);
     }
 
     private void OnCancelKeyPress(object? sender, ConsoleCancelEventArgs e)
@@ -161,6 +176,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
     {
         _sigIntRegistration?.Dispose();
         _sigTermRegistration?.Dispose();
+        _sigQuitRegistration?.Dispose();
 
         Console.CancelKeyPress -= OnCancelKeyPress;
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;

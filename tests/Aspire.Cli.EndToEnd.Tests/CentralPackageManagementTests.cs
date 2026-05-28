@@ -37,7 +37,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         // from appearing after "Update successful!" and blocking the test.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Set up an old-format AppHost project with CPM that has a PackageVersion
         // for Aspire.Hosting.AppHost. This simulates a pre-migration project where
@@ -93,7 +93,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Apply these changes to NuGet.config?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync(); // confirm "Apply these changes to NuGet.config?" (default: Yes)
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the PackageVersion for Aspire.Hosting.AppHost was removed
         {
@@ -107,11 +107,11 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         // Verify dotnet restore succeeds (would fail with NU1009 without the fix)
         await auto.TypeAsync($"dotnet restore \"{containerAppHostCsprojPath}\"");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(120));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
         // Clean up: re-enable update notifications
         await auto.TypeAsync("aspire config delete features.updateNotificationsEnabled -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
@@ -156,7 +156,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         // from appearing after "Update successful!" and blocking the test.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, "CpmTest");
         var appHostDir = Path.Combine(projectDir, "CpmTest.AppHost");
@@ -203,7 +203,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Apply these changes to NuGet.config?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Now the csproj is on the latest stable SDK. Discover that version from the
         // migrated csproj so we can write a matching orphan PackageVersion entry.
@@ -249,7 +249,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Apply these changes to NuGet.config?", timeout: TimeSpan.FromSeconds(30));
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(120));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
 
         // Verify the orphan PackageVersion was removed from Directory.Packages.props.
         {
@@ -264,11 +264,11 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         // Verify dotnet restore succeeds. Without the fix this fails with NU1009.
         await auto.TypeAsync($"dotnet restore \"{containerAppHostCsprojPath}\"");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(120));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
 
         await auto.TypeAsync("aspire config delete features.updateNotificationsEnabled -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
@@ -322,7 +322,7 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire add Aspire.Hosting.Redis --non-interactive");
         await auto.EnterAsync();
 
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the AppHost project does not end up with a version-pinned Redis PackageReference.
         {
@@ -354,6 +354,6 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
         // Verify dotnet restore succeeds (would fail with NU1008 if AppHost.csproj contained a version)
         await auto.TypeAsync($"dotnet restore \"{containerAppHostCsprojPath}\"");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(120));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
     }
 }

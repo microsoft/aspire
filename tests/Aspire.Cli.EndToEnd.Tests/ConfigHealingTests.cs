@@ -66,12 +66,12 @@ public sealed class ConfigHealingTests(ITestOutputHelper output)
         //    update the config, and start the app successfully
         await auto.TypeAsync("cd HealTest");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("aspire run");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Press CTRL+C to stop the AppHost and exit.", timeout: TimeSpan.FromMinutes(3));
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // 4. Verify the config file was healed (host-side file check)
         if (!File.Exists(configFilePath))

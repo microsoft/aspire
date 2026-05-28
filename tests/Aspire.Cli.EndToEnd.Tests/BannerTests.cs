@@ -38,17 +38,17 @@ public sealed class BannerTests(ITestOutputHelper output)
         // command and so will show the banner.
         await auto.TypeAsync("rm -f ~/.aspire/cli/cli.firstUseSentinel");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("test ! -f ~/.aspire/cli/cli.firstUseSentinel");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire cache clear");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => s.ContainsText(RootCommandStrings.BannerWelcomeText) && s.ContainsText("Telemetry"),
             timeout: TimeSpan.FromSeconds(30), description: "waiting for banner and telemetry notice on first run");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public sealed class BannerTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText(RootCommandStrings.BannerWelcomeText) && s.ContainsText("CLI"),
             timeout: TimeSpan.FromSeconds(30), description: "waiting for banner with version info");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public sealed class BannerTests(ITestOutputHelper output)
         // but use --nologo to suppress the banner
         await auto.TypeAsync("rm -f ~/.aspire/cli/cli.firstUseSentinel");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire --nologo --help");
         await auto.EnterAsync();
@@ -118,6 +118,6 @@ public sealed class BannerTests(ITestOutputHelper output)
             // Only return true once the help hint is visible at the end of the output
             return s.ContainsText(HelpGroupStrings.HelpHint);
         }, timeout: TimeSpan.FromSeconds(30), description: "waiting for help output to complete");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

@@ -40,7 +40,7 @@ public sealed class JavaEmptyAppHostTemplateTests(ITestOutputHelper output)
 
         await auto.TypeAsync("cd JavaEmptyApp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);

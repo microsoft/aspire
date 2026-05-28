@@ -45,19 +45,19 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("mcp") && s.ContainsText("init"),
             timeout: TimeSpan.FromSeconds(30), description: "agent help showing mcp and init subcommands");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 2: aspire agent mcp --help
         await auto.TypeAsync("aspire agent mcp --help");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("aspire agent mcp [options]", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 3: aspire agent init --help
         await auto.TypeAsync("aspire agent init --help");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("aspire agent init [options]", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 4: aspire mcp --help (now shows tools and call subcommands)
         await auto.TypeAsync("aspire mcp --help");
@@ -65,13 +65,13 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("tools") && s.ContainsText("call"),
             timeout: TimeSpan.FromSeconds(30), description: "mcp help showing tools and call subcommands");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 5: aspire mcp tools --help
         await auto.TypeAsync("aspire mcp tools --help");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("aspire mcp tools [options]", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -114,7 +114,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.TypeAsync($"ls -la {containerConfigPath} && pwd");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(".mcp.json", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 2: Run aspire agent init - should detect and auto-migrate deprecated config.
         // Skill installation is not part of this migration coverage, so keep it disabled
@@ -122,7 +122,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire agent init --workspace-root . --skill-locations none --skills none");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Verify config was updated to new format
         // The updated config should contain "agent" and "mcp" but not "start"
@@ -161,7 +161,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("dev-certs") && s.ContainsText("deprecated") && s.ContainsText("aspire agent init"),
             timeout: TimeSpan.FromSeconds(60), description: "doctor output with deprecated warning and fix suggestion");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -211,7 +211,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // the default Aspire skills from the seeded bundle.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify skill files were created (skills are now installed at .agents/skills/ by StandardLocationAgentEnvironmentScanner)
         var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");

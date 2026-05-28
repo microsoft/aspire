@@ -107,7 +107,7 @@ public sealed class CSharpProjectModeInitTests(ITestOutputHelper output)
         // ~/.nuget/packages during init) finishes well under 30 seconds. Using the
         // fail-fast helper so a build failure surfaces immediately via the shell's
         // numbered ERR prompt instead of timing out.
-        await auto.RunCommandFailFastAsync(
+        await auto.RunCommandAsync(
             "dotnet build Test.AppHost/Test.AppHost.csproj",
             counter,
             TimeSpan.FromMinutes(3));

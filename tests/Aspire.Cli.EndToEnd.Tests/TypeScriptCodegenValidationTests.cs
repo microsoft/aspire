@@ -49,7 +49,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
 
@@ -75,7 +75,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         var lockFilePath = Path.Combine(
             workspace.WorkspaceRoot.FullName,
@@ -88,7 +88,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
         await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(toolchain, "tsconfig.apphost.json"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 4: Verify generated SDK files exist.
         var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules");
@@ -155,12 +155,12 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules");
         if (!Directory.Exists(modulesDir))
@@ -192,13 +192,13 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire add Aspire.Hosting.Redis");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Run aspire restore and verify the generated SDK picks up the new exports.
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 4: Verify generated SDK files exist and were refreshed.
         var expectedFiles = new[] { "aspire.mts", "base.mts", "transport.mts" };
@@ -247,7 +247,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
         await auto.TypeAsync("npx tsc --noEmit --project tsconfig.apphost.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 
     [Fact]
@@ -275,17 +275,17 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire add Aspire.Hosting.PostgreSQL");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire restore");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         var newContent = """
@@ -318,7 +318,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         // withReference(db) should accept PromiseLike<T> from the un-awaited addDatabase().
         await auto.TypeAsync("npx tsc --noEmit --project tsconfig.apphost.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         // Validate runtime behavior: aspire start launches the apphost, which calls
         // build() and triggers flushPendingPromises(). If the flush deadlocks (e.g. the

@@ -39,18 +39,18 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         // Navigate to the AppHost directory
         await auto.TypeAsync("cd AspireResourcesTestApp/AspireResourcesTestApp.AppHost");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background using aspire start
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait a bit for resources to stabilize
         await auto.TypeAsync("sleep 5");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Now verify aspire describe shows the running resources (human-readable table)
         await auto.TypeAsync("aspire describe");
@@ -58,24 +58,24 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Name", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitUntilTextAsync("webfrontend", timeout: TimeSpan.FromSeconds(5));
         await auto.WaitUntilTextAsync("apiservice", timeout: TimeSpan.FromSeconds(5));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test aspire describe --format json output - pipe to file to avoid terminal buffer issues
         await auto.TypeAsync("aspire describe --format json > resources.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the JSON file contains expected resources
         await auto.TypeAsync("cat resources.json | grep webfrontend");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("webfrontend", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
@@ -106,7 +106,7 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         // Navigate to the AppHost directory
         await auto.TypeAsync("cd AspireReplicaTestApp/AspireReplicaTestApp.AppHost");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Add .WithReplicas(2) to the apiservice resource in the AppHost
         var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, "AspireReplicaTestApp");
@@ -142,57 +142,57 @@ public sealed class DescribeCommandTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait for resources to stabilize
         await auto.TypeAsync("sleep 10");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 1: aspire describe with friendly name for a non-replicated resource (cache)
         // This should resolve via DisplayName since cache has only one instance
         await auto.TypeAsync("aspire describe cache --format json > cache-describe.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify cache resource was found in the output
         await auto.TypeAsync("cat cache-describe.json | grep cache");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("cache", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 2: Get all resources to find an apiservice replica name
         await auto.TypeAsync("aspire describe --format json > all-resources.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Extract a replica name from the JSON - apiservice replicas have names like apiservice-<suffix>
         await auto.TypeAsync("REPLICA_NAME=$(cat all-resources.json | grep -o '\"name\": *\"apiservice-[a-z0-9]*\"' | head -1 | sed 's/.*\"\\(apiservice-[a-z0-9]*\\)\"/\\1/')");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify we captured a replica name
         await auto.TypeAsync("echo \"Found replica: $REPLICA_NAME\"");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(s => waitForApiserviceReplicaName.Search(s).Count > 0, timeout: TimeSpan.FromSeconds(10), description: "waiting for apiservice replica name");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Test 3: aspire describe with the replica name
         // This should resolve via exact Name match
         await auto.TypeAsync("aspire describe $REPLICA_NAME --format json > replica-describe.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the replica was found and output contains the replica name
         await auto.TypeAsync("cat replica-describe.json | grep apiservice");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(s => waitForApiserviceReplicaName.Search(s).Count > 0, timeout: TimeSpan.FromSeconds(10), description: "waiting for apiservice replica in describe output");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

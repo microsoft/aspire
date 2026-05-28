@@ -43,35 +43,35 @@ public sealed class SecretTypeScriptAppHostTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire secret set MyConfig:ApiKey test-key-123 --apphost apphost.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("set successfully", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire secret set ConnectionStrings:Db Server=localhost --apphost apphost.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("set successfully", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Get
         await auto.TypeAsync("aspire secret get MyConfig:ApiKey --apphost apphost.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("test-key-123", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // List
         await auto.TypeAsync("aspire secret list --apphost apphost.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("ConnectionStrings:Db", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Delete
         await auto.TypeAsync("aspire secret delete MyConfig:ApiKey --apphost apphost.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("deleted successfully", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify deletion
         await auto.TypeAsync("aspire secret list --apphost apphost.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("ConnectionStrings:Db", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

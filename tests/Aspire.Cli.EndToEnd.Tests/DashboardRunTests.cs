@@ -52,7 +52,7 @@ public sealed class DashboardRunTests(ITestOutputHelper output)
         // Set the browser token env var before starting the dashboard
         await auto.TypeAsync($"export DASHBOARD__FRONTEND__BROWSERTOKEN={browserToken}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Store the dashboard log path inside the workspace so it gets captured on failure
         var dashboardLogPath = $"/workspace/{workspace.WorkspaceRoot.Name}/dashboard.log";
@@ -60,27 +60,27 @@ public sealed class DashboardRunTests(ITestOutputHelper output)
         // Start the dashboard in the background with the specified frontend URL
         await auto.TypeAsync($"aspire dashboard run --frontend-url {frontendUrl} > {dashboardLogPath} 2>&1 &");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Store the dashboard PID for cleanup
         await auto.TypeAsync("DASHBOARD_PID=$!");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait for the dashboard to become ready by polling the localhost URL
         await auto.TypeAsync($"for i in $(seq 1 30); do curl -ksSL -o /dev/null -w '%{{http_code}}' {localhostUrl} 2>/dev/null | grep -q 200 && break; sleep 1; done");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
         // Dump dashboard log for debugging visibility in the recording
         await auto.TypeAsync($"echo '=== DASHBOARD LOG ==='; cat {dashboardLogPath}; echo '=== END DASHBOARD LOG ==='");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Dump CLI logs for debugging
         await auto.TypeAsync("echo '=== CLI LOGS ==='; ls -lt ~/.aspire/logs/ 2>/dev/null; CLI_LOG=$(ls -t ~/.aspire/logs/cli_*.log 2>/dev/null | head -1); [ -n \"$CLI_LOG\" ] && tail -50 \"$CLI_LOG\"; echo '=== END CLI LOGS ==='");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Construct the dashboard URL using the known token and the frontend URL.
         // In the dev.localhost variant this exercises the CLI's NormalizeDashboardUrl path end-to-end.
@@ -89,12 +89,12 @@ public sealed class DashboardRunTests(ITestOutputHelper output)
         await auto.TypeAsync($"aspire otel traces --dashboard-url \"{dashboardUrl}\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("No traces found", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: kill the background dashboard process
         await auto.TypeAsync("kill -9 $DASHBOARD_PID 2>/dev/null; wait $DASHBOARD_PID 2>/dev/null; true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class DashboardRunTests(ITestOutputHelper output)
         // Set the browser token env var before starting the dashboard
         await auto.TypeAsync($"export DASHBOARD__FRONTEND__BROWSERTOKEN={browserToken}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Store the dashboard log path inside the workspace so it gets captured on failure
         var dashboardLogPath = $"/workspace/{workspace.WorkspaceRoot.Name}/dashboard.log";
@@ -137,17 +137,17 @@ public sealed class DashboardRunTests(ITestOutputHelper output)
         // Start the dashboard in the background with the specified frontend URL
         await auto.TypeAsync($"aspire dashboard run --frontend-url {frontendUrl} > {dashboardLogPath} 2>&1 &");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Store the dashboard PID for cleanup
         await auto.TypeAsync("DASHBOARD_PID=$!");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait for the dashboard to become ready by polling the localhost URL
         await auto.TypeAsync($"for i in $(seq 1 30); do curl -ksSL -o /dev/null -w '%{{http_code}}' {localhostUrl} 2>/dev/null | grep -q 200 && break; sleep 1; done");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
         // Construct the dashboard URL using the known token and the frontend URL
         var dashboardUrl = $"{frontendUrl}/login?t={browserToken}";
@@ -158,6 +158,6 @@ public sealed class DashboardRunTests(ITestOutputHelper output)
         // Clean up: kill the background dashboard process
         await auto.TypeAsync("kill -9 $DASHBOARD_PID 2>/dev/null; wait $DASHBOARD_PID 2>/dev/null; true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

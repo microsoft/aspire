@@ -74,7 +74,7 @@ public sealed class KubernetesPublishRequiresExternalEndpointTests(ITestOutputHe
         // commands resolve the AppHost via repo-root discovery.
         await auto.TypeAsync($"cd {ProjectName}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // The Kubernetes hosting package is required to compile the AppHost code
         // we're about to write. `aspire add` resolves the version against the
@@ -100,7 +100,7 @@ public sealed class KubernetesPublishRequiresExternalEndpointTests(ITestOutputHe
         // KubernetesPublishTests for full context.
         await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Drive aspire publish. The validation throws an InvalidOperationException
         // during model materialization, so publish should exit with a non-zero code

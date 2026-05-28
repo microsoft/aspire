@@ -36,7 +36,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
         await auto.TypeAsync($"cd {projectName}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
         var content = File.ReadAllText(appHostFilePath);
@@ -57,54 +57,54 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire describe greeting --format json > greeting-unset.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         await auto.TypeAsync("jq -er '.resources[0].state' greeting-unset.json");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("ValueMissing", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire resource greeting set-parameter --value 'Hello world'");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Resource 'greeting' set successfully.", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         await auto.TypeAsync("aspire describe greeting --format json > greeting-set.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         await auto.TypeAsync("jq -er '.resources[0].state' greeting-set.json");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Running", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("jq -er '.resources[0].properties.Value' greeting-set.json");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Hello world", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire resource greeting delete-parameter");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Resource 'greeting' deleted successfully.", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         await auto.TypeAsync("aspire describe greeting --format json > greeting-deleted.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         await auto.TypeAsync("jq -er '.resources[0].state' greeting-deleted.json");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("ValueMissing", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
         await auto.TypeAsync($"cd {projectName}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Read the generated apphost.cs so we can extract the #:sdk line with the
         // resolved version, then replace the entire file with a minimal AppHost
@@ -187,7 +187,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire resource cache needs-interaction");
         await auto.EnterAsync();
@@ -200,12 +200,12 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.TypeAsync($"if [ $? -eq {CliExitCodes.FailedToExecuteResourceCommand} ]; then echo RESOURCE_CMD_EXIT_CODE_CORRECT; else echo RESOURCE_CMD_UNEXPECTED_EXIT_CODE; fi");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("RESOURCE_CMD_EXIT_CODE_CORRECT", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
@@ -229,7 +229,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
         await auto.TypeAsync($"cd {projectName}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Replace the generated apphost.cs with a minimal AppHost that has a
         // command writing to context.Logger before returning a failure result.
@@ -269,7 +269,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Run the failing resource command, capturing stdout and stderr so we can extract the
         // AppHost log path from the "See AppHost logs at <path>" message.
@@ -280,7 +280,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.TypeAsync($"if [ $? -eq {CliExitCodes.FailedToExecuteResourceCommand} ]; then echo RESOURCE_CMD_EXIT_CODE_CORRECT; else echo RESOURCE_CMD_UNEXPECTED_EXIT_CODE; fi");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("RESOURCE_CMD_EXIT_CODE_CORRECT", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Extract the AppHost log file path from the captured output and verify
         // it exists and is non-empty.
@@ -297,14 +297,14 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
             "echo '=== Contents of /tmp/resource-cmd-output.txt ===' && cat /tmp/resource-cmd-output.txt && echo && echo '=== APPHOST_LOG value ===' && echo \"$APPHOST_LOG\" && echo '=== End debug output ===' || true",
             counter);
 
-        await auto.RunCommandFailFastAsync(
+        await auto.RunCommandAsync(
             "test -n \"$APPHOST_LOG\" && test -s \"$APPHOST_LOG\"",
             counter,
             TimeSpan.FromSeconds(10));
 
         // Verify the log file contains the custom log entry written by the
         // command handler via ILogger before returning the failure result.
-        await auto.RunCommandFailFastAsync(
+        await auto.RunCommandAsync(
             "grep -q 'CUSTOM_E2E_LOG_ENTRY_FOR_VERIFICATION' \"$APPHOST_LOG\"",
             counter,
             TimeSpan.FromSeconds(10));
@@ -313,6 +313,6 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

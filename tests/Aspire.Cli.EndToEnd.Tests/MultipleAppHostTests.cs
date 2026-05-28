@@ -39,7 +39,7 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
         // Navigate into the project directory
         await auto.TypeAsync("cd TestApp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // First: launch the apphost with --detach (interactive, no JSON)
         // Just wait for the command to complete (WaitForSuccessPrompt waits for the shell prompt)
@@ -52,7 +52,7 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
         // stderr is left visible in the terminal for debugging if the command fails.
         await auto.TypeAsync("aspire start --format json > output.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.ClearScreenAsync(counter);
 
@@ -60,12 +60,12 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
         await auto.TypeAsync("python3 -c \"import json; data = json.load(open('output.json')); assert 'appHostPath' in data; assert 'appHostPid' in data; print('JSON_VALID')\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("JSON_VALID", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Also cat the file so we can see it in the recording
         await auto.TypeAsync("cat output.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: stop any running instances
         await auto.AspireStopAsync(counter);
@@ -94,11 +94,11 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
 
         await auto.TypeAsync("cd RestartTestApp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.ClearScreenAsync(counter);
 
@@ -106,17 +106,17 @@ public sealed class MultipleAppHostTests(ITestOutputHelper output)
         // emits human-readable progress messages to stderr.
         await auto.TypeAsync("aspire start --format json > output.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.ClearScreenAsync(counter);
 
         await auto.TypeAsync("python3 -c \"import json; data = json.load(open('output.json')); assert 'appHostPath' in data; assert 'appHostPid' in data; print('JSON_VALID')\"");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("JSON_VALID", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire stop --all 2>/dev/null || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

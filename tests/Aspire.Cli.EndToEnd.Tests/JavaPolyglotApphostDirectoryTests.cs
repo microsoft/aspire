@@ -46,7 +46,7 @@ public sealed class JavaPolyglotApphostDirectoryTests(ITestOutputHelper output)
         // rather than through the current working directory.
         await auto.TypeAsync("mkdir javaapp && cd javaapp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire init");
         await auto.EnterAsync();
@@ -60,16 +60,16 @@ public sealed class JavaPolyglotApphostDirectoryTests(ITestOutputHelper output)
 
         await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         await auto.TypeAsync("cd viteapp && npm install && cd ..");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "javaapp", "AppHost.java");
         var newContent = """
@@ -91,7 +91,7 @@ public sealed class JavaPolyglotApphostDirectoryTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.ClearScreenAsync(counter);
 
@@ -101,11 +101,11 @@ public sealed class JavaPolyglotApphostDirectoryTests(ITestOutputHelper output)
         // "AppHost not running at path".
         await auto.TypeAsync("cd ..");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire stop --non-interactive --apphost javaapp");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

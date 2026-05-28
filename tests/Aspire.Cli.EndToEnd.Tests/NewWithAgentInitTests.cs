@@ -49,7 +49,7 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
         // because agent init chains after project creation and looks for environment markers.
         await auto.TypeAsync("mkdir -p .claude");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Run aspire new with the Starter template, going through all prompts manually
         // so we can ACCEPT the agent init prompt instead of declining it.
@@ -144,17 +144,17 @@ public sealed class NewWithAgentInitTests(ITestOutputHelper output)
             }
             return s.ContainsText("configuration complete");
         }, timeout: TimeSpan.FromMinutes(5), description: "agent init configuration complete (no provenance errors)");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify playwright-cli is installed and functional.
         await auto.TypeAsync("playwright-cli --version");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify skill file was generated in the Claude Code location.
         await auto.TypeAsync("ls StarterApp/.claude/skills/playwright-cli/SKILL.md");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("SKILL.md", timeout: TimeSpan.FromSeconds(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

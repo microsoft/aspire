@@ -116,7 +116,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             ? "./.aspire/modules/aspire.mjs"
             : "./.aspire/modules/aspire.js";
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
 
         // Step 3: Add the first package on the non-stable channel. Don't pass --non-interactive — the
         // helper handles both direct success and the "based on NuGet.config" version picker that
@@ -154,7 +154,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         // doesn't block waiting on "Update successful!". Pattern borrowed from CentralPackageManagementTests.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         try
         {
@@ -256,7 +256,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         const string projectName = "ChannelUpdateCsharpInitApp";
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
         Directory.CreateDirectory(projectPath);
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
 
         await auto.AspireInitAsync(counter);
 
@@ -304,7 +304,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             CliE2ETestHelpers.WriteLocalChannelSettings(projectPath, localChannel.SdkVersion);
         }
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
         await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter, Path.Combine(projectPath, "aspire.config.json"));
     }
 
@@ -339,12 +339,12 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         const string projectName = "ChannelUpdateTsInitApp";
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
         Directory.CreateDirectory(projectPath);
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         if (localChannel is not null)
         {
@@ -399,7 +399,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         // "Update successful!". No cleanup needed — each test runs in its own Docker container.
         await auto.TypeAsync("aspire config set features.updateNotificationsEnabled false -g");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await PreviewStableUpdateAndDeclineAsync(auto, counter);
 
@@ -451,7 +451,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             await auto.TypeAsync("n");
         }
 
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>

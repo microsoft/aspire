@@ -42,16 +42,16 @@ public sealed class JavaPolyglotTests(ITestOutputHelper output)
 
         await auto.TypeAsync("npm create -y vite@latest viteapp -- --template vanilla-ts --no-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         await auto.TypeAsync("cd viteapp && npm install && cd ..");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("The package Aspire.Hosting.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.java");
         var newContent = """
@@ -73,6 +73,6 @@ public sealed class JavaPolyglotTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Press CTRL+C to stop the AppHost and exit.", timeout: TimeSpan.FromMinutes(3));
 
         await auto.Ctrl().KeyAsync(Hex1b.Input.Hex1bKey.C);
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }

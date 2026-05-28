@@ -41,18 +41,18 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         // Generate and trust dev certs inside the container (Docker images don't have them by default)
         await auto.TypeAsync("dotnet dev-certs https --trust 2>/dev/null || dotnet dev-certs https");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Unset SSL_CERT_DIR to trigger partial trust detection on Linux
         await auto.TypeAsync("unset SSL_CERT_DIR");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("aspire doctor");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
             s => s.ContainsText("dev-certs") && s.ContainsText("partially trusted"),
             timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with partial trust warning");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
@@ -75,12 +75,12 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         // Generate and trust dev certs inside the container (Docker images don't have them by default)
         await auto.TypeAsync("dotnet dev-certs https --trust 2>/dev/null || dotnet dev-certs https");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Set SSL_CERT_DIR to include dev-certs trust path for full trust
         await auto.TypeAsync("export SSL_CERT_DIR=\"/etc/ssl/certs:$HOME/.aspnet/dev-certs/trust\"");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
         await auto.TypeAsync("aspire doctor");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(s =>
@@ -94,7 +94,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
             return s.ContainsText("certificate is trusted");
         }, timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with trusted certificate");
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Theory]
@@ -120,12 +120,12 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
         if (TypeScriptAppHostToolchainTestHelpers.UsesCorepack(toolchain))
         {
-            await auto.RunCommandFailFastAsync(
+            await auto.RunCommandAsync(
                 $"COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack prepare {TypeScriptAppHostToolchainTestHelpers.GetPackageManager(toolchain)} --activate",
                 counter,
                 TimeSpan.FromMinutes(2));
@@ -138,7 +138,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         await auto.TypeAsync("""mkdir -p ./doctor-path && ln -sf "$(command -v aspire)" ./doctor-path/aspire && ln -sf "$(command -v dotnet)" ./doctor-path/dotnet && if command -v docker >/dev/null 2>&1; then ln -sf "$(command -v docker)" ./doctor-path/docker; fi && export PATH="$PWD/doctor-path" """);
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire doctor");
         await auto.EnterAsync();

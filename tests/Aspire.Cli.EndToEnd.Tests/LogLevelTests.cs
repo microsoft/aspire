@@ -38,13 +38,13 @@ public sealed class LogLevelTests(ITestOutputHelper output)
         // Navigate to the AppHost directory
         await auto.TypeAsync("cd LogLevelApp");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost with --log-level trace so both the CLI and the
         // AppHost produce trace-level output in the CLI log file.
         await auto.TypeAsync("aspire start --log-level trace");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(3));
 
         // Stop the AppHost so the log file is flushed and closed.
         await auto.AspireStopAsync(counter);
@@ -56,16 +56,16 @@ public sealed class LogLevelTests(ITestOutputHelper output)
                 "if [ -z \"$DETACH_LOG\" ]; then DETACH_LOG=$(ls -t ~/.aspire/logs/cli_*.log 2>/dev/null | head -1); fi; " +
                 "echo \"LOG_FILE:$DETACH_LOG\"");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Check for trace-level AppHost log entry (format: [TRCE] [AppHost/...])
-        await auto.RunCommandFailFastAsync(
+        await auto.RunCommandAsync(
                 "test -n \"$DETACH_LOG\" && grep -q '\\[TRCE\\] \\[AppHost/' \"$DETACH_LOG\"",
                 counter,
                 TimeSpan.FromSeconds(10));
 
         // Check for trace-level CLI log entry from the Features category
-        await auto.RunCommandFailFastAsync(
+        await auto.RunCommandAsync(
                 "test -n \"$DETACH_LOG\" && grep -q '\\[TRCE\\] \\[Features\\]' \"$DETACH_LOG\"",
                 counter,
                 TimeSpan.FromSeconds(10));

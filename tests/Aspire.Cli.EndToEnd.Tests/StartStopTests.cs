@@ -46,18 +46,18 @@ public sealed class StartStopTests(ITestOutputHelper output)
         // Navigate to the AppHost directory
         await auto.TypeAsync($"cd {projectName}/{projectName}.AppHost");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background using aspire start
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.ClearScreenAsync(counter);
 
@@ -88,7 +88,7 @@ public sealed class StartStopTests(ITestOutputHelper output)
         // Run aspire stop with no running AppHost - should exit with code 0
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [Fact]
@@ -117,12 +117,12 @@ public sealed class StartStopTests(ITestOutputHelper output)
         // Navigate to the AppHost directory
         await auto.TypeAsync("cd AspireAddTestApp/AspireAddTestApp.AppHost");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in detached mode (locks the project file)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Add a package while the AppHost is running - this should auto-stop the
         // running instance before modifying the project, then succeed.
@@ -130,14 +130,14 @@ public sealed class StartStopTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire add mongodb --non-interactive");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("was added successfully.", timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: stop if still running (the add command may have stopped it)
         // aspire stop should return successfully whether the app host is still running
         // or was already stopped by the preceding add command.
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
     }
 
     [Fact]
@@ -166,12 +166,12 @@ public sealed class StartStopTests(ITestOutputHelper output)
         // Navigate to the AppHost directory
         await auto.TypeAsync("cd AspireAddInteractiveApp/AspireAddInteractiveApp.AppHost");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in detached mode (locks the project file)
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Run aspire add interactively (no integration argument) while AppHost is running.
         // This exercises the interactive package selection flow and verifies the
@@ -194,13 +194,13 @@ public sealed class StartStopTests(ITestOutputHelper output)
         }
 
         await auto.WaitUntilTextAsync("was added successfully.", timeout: TimeSpan.FromMinutes(2));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up: stop if still running
         // aspire stop should return successfully whether the app host is still running
         // or was already stopped by the preceding add command.
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
     }
 }

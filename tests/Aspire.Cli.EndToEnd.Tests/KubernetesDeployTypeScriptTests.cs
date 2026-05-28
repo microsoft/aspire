@@ -57,7 +57,7 @@ public sealed class KubernetesDeployTypeScriptTests(ITestOutputHelper output)
 
             await auto.TypeAsync($"cd {ProjectName}");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptFailFastAsync(counter);
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // Add Kubernetes hosting package
             await auto.TypeAsync("aspire add Aspire.Hosting.Kubernetes");
@@ -68,7 +68,7 @@ public sealed class KubernetesDeployTypeScriptTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire restore");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
-            await auto.WaitForSuccessPromptFailFastAsync(counter);
+            await auto.WaitForSuccessPromptAsync(counter);
 
             // =====================================================================
             // Phase 3: Modify apphost.mts to add Kubernetes environment
@@ -128,7 +128,7 @@ await builder.build().run();
             // Verify pods are running in the namespace
             await auto.TypeAsync($"kubectl get pods -n {k8sNamespace} --no-headers");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromSeconds(30));
+            await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromSeconds(30));
 
             // =====================================================================
             // Phase 6: Cleanup

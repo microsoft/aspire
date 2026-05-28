@@ -46,7 +46,7 @@ public sealed class OtelLogsTests(ITestOutputHelper output)
         // Navigate to the AppHost directory
         await auto.TypeAsync("cd AspireOtelLogsApp/AspireOtelLogsApp.AppHost");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background
         await auto.AspireStartAsync(counter, isolated: isolated);
@@ -55,17 +55,17 @@ public sealed class OtelLogsTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire wait apiservice --status up --timeout 300");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("is up (running).", timeout: TimeSpan.FromMinutes(6));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Run aspire otel logs and capture output to a file
         await auto.TypeAsync("aspire otel logs > otel_logs.txt 2>&1");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify the output contains structured log entries with apiservice content
         await auto.TypeAsync("cat otel_logs.txt | head -20");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Assert structured logs are present and contain apiservice entries
         await auto.TypeAsync("if [ ! -r otel_logs.txt ]; then echo 'OTEL_LOGS_FILE_UNREADABLE'; elif grep -q 'apiservice' otel_logs.txt; then echo 'STRUCTURED_LOGS_PRESENT'; else echo 'STRUCTURED_LOGS_MISSING'; fi");
@@ -76,7 +76,7 @@ public sealed class OtelLogsTests(ITestOutputHelper output)
         // Also verify JSON format works and contains structured data
         await auto.TypeAsync("aspire otel logs --format json > otel_logs_json.txt 2>&1");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify JSON output contains resourceLogs key
         await auto.TypeAsync("grep -q 'resourceLogs' otel_logs_json.txt && echo 'JSON_STRUCTURED_LOGS_PRESENT' || echo 'JSON_STRUCTURED_LOGS_MISSING'");

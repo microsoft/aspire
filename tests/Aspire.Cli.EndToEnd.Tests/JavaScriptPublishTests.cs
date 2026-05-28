@@ -68,23 +68,23 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         // Deploy
         await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire deploy --non-interactive");
         await auto.EnterAsync();
         await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(5));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Wait for services and verify — verify.sh captures diagnostics first, then asserts
         await auto.TypeAsync("bash verify.sh");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("ALL_OK", timeout: TimeSpan.FromSeconds(90));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clean up
         await auto.TypeAsync("docker ps -q --filter label=com.docker.compose.project | xargs -r docker rm -f 2>/dev/null || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
     }
 
     [Fact]
@@ -108,7 +108,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             await auto.PrepareDockerEnvironmentAsync(counter, workspace);
             await auto.InstallAspireCliAsync(strategy, counter);
 
-            await auto.RunCommandFailFastAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
 
             if (localChannel is not null)
             {
@@ -123,10 +123,10 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             WriteRuntimeAppHost(workspace);
             WriteRuntimeVerificationScript(workspace);
 
-            await auto.RunCommandFailFastAsync("unset ASPIRE_PLAYGROUND", counter);
+            await auto.RunCommandAsync("unset ASPIRE_PLAYGROUND", counter);
 
-            await auto.RunCommandFailFastAsync("aspire run > aspire-run.log 2>&1 & echo $! > aspire-run.pid", counter);
-            await auto.RunCommandFailFastAsync("bash verify-runtime.sh", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync("aspire run > aspire-run.log 2>&1 & echo $! > aspire-run.pid", counter);
+            await auto.RunCommandAsync("bash verify-runtime.sh", counter, TimeSpan.FromMinutes(2));
         }
         finally
         {

@@ -42,7 +42,7 @@ internal static class CliE2EAutomatorHelpers
         // sequence number and the exit code so waits can synchronize on shell completion instead of timing guesses.
         await auto.TypeAsync(AspireCliShellCommandHelpers.NumberedPromptSetupCommand);
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Set permissive umask
         await auto.RunCommandAsync("umask 000", counter);
@@ -106,7 +106,7 @@ internal static class CliE2EAutomatorHelpers
 
             case CliInstallMode.PullRequest:
                 var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetPullRequestInstallCommand(prNumber, AspireCliShellCommandHelpers.DockerPullRequestInstallCommandPrefix),
                     counter,
                     TimeSpan.FromSeconds(300));
@@ -114,7 +114,7 @@ internal static class CliE2EAutomatorHelpers
                 break;
 
             case CliInstallMode.LocalArchive:
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetLocalArchiveInstallCommand("/tmp/aspire-cli-archives", AspireCliShellCommandHelpers.DockerPullRequestInstallCommandPrefix),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -122,7 +122,7 @@ internal static class CliE2EAutomatorHelpers
                 break;
 
             case CliInstallMode.InstallScript:
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetInstallScriptCommand(strategy, AspireCliShellCommandHelpers.DockerInstallScriptCommandPrefix),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -131,7 +131,7 @@ internal static class CliE2EAutomatorHelpers
 
             case CliInstallMode.DotnetTool:
                 await auto.SourceDotnetToolEnvironmentAsync(counter);
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -367,7 +367,7 @@ internal static class CliE2EAutomatorHelpers
         if (versionPickerShown)
         {
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptFailFastAsync(counter, effectiveTimeout);
+            await auto.WaitForSuccessPromptAsync(counter, effectiveTimeout);
             return;
         }
 
@@ -404,7 +404,7 @@ internal static class CliE2EAutomatorHelpers
             case CliInstallMode.LocalArchive:
                 var archiveDir = strategy.ArchiveDir ?? throw new InvalidOperationException("LocalArchive strategy is missing the archive directory.");
                 var localDirPrScript = AspireCliShellCommandHelpers.QuoteBashArg(Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "scripts", "get-aspire-cli-pr.sh"));
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetLocalArchiveInstallCommand(archiveDir, $"bash {localDirPrScript}"),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -413,7 +413,7 @@ internal static class CliE2EAutomatorHelpers
 
             case CliInstallMode.InstallScript:
                 var getAspireCliScript = AspireCliShellCommandHelpers.QuoteBashArg(Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "scripts", "get-aspire-cli.sh"));
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetInstallScriptCommand(strategy, $"bash {getAspireCliScript}"),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -461,7 +461,7 @@ internal static class CliE2EAutomatorHelpers
             await auto.TypeAsync(
                 $"VER=$(aspire --version 2>/dev/null) && BASE_VER=${{VER%%+*}} && echo \"$VER\" && {recordVersionCommand}");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
             return;
         }
 
@@ -568,7 +568,7 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter)
     {
         var command = AspireCliShellCommandHelpers.GetPullRequestInstallCommand(prNumber, AspireCliShellCommandHelpers.MainPullRequestInstallCommandPrefix);
-        await auto.RunCommandFailFastAsync(command, counter, TimeSpan.FromSeconds(300));
+        await auto.RunCommandAsync(command, counter, TimeSpan.FromSeconds(300));
     }
 
     /// <summary>
@@ -608,7 +608,7 @@ internal static class CliE2EAutomatorHelpers
             timeout: TimeSpan.FromSeconds(10),
             description: $"Aspire CLI version containing '{s_expectedStableVersionMarker}' or 'g{shortCommitSha}'");
 
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     internal static async Task VerifyPullRequestCliVersionAsync(
@@ -691,7 +691,7 @@ internal static class CliE2EAutomatorHelpers
     {
         await auto.TypeAsync("aspire config set features:experimentalPolyglot:java true --global --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -705,7 +705,7 @@ internal static class CliE2EAutomatorHelpers
         var command = AspireCliShellCommandHelpers.GetInstallScriptCommand(
             CliInstallStrategy.FromVersion(version),
             AspireCliShellCommandHelpers.MainInstallScriptCommandPrefix);
-        await auto.RunCommandFailFastAsync(command, counter, TimeSpan.FromSeconds(300));
+        await auto.RunCommandAsync(command, counter, TimeSpan.FromSeconds(300));
     }
 
     /// <summary>
@@ -766,7 +766,7 @@ internal static class CliE2EAutomatorHelpers
                 "echo '=== END LOG ==='; " +
                 $"cat \"{jsonFile}\"");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptFailFastAsync(counter);
+            await auto.WaitForSuccessPromptAsync(counter);
 
             await auto.CaptureRegisteredWorkspaceDiagnosticsAsync(counter);
 
@@ -782,7 +782,7 @@ internal static class CliE2EAutomatorHelpers
             "'s/.*\"dashboardUrl\"[[:space:]]*:[[:space:]]*\"\\(https\\?:\\/\\/[a-z.]*localhost:[0-9]*\\).*/\\1/p' " +
             $"\"{jsonFile}\" | head -1)");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         var dashboardUrlCounter = counter.Value;
         var dashboardUrlFound = false;
@@ -872,7 +872,7 @@ internal static class CliE2EAutomatorHelpers
             "|| echo 'dashboard-http-failed'");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("dashboard-http-200", timeout: TimeSpan.FromSeconds(15));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -884,7 +884,7 @@ internal static class CliE2EAutomatorHelpers
     {
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -951,7 +951,7 @@ internal static class CliE2EAutomatorHelpers
         {
             await auto.TypeAsync("echo diagnostics-available-in-workspace");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptFailFastAsync(counter);
+            await auto.WaitForSuccessPromptAsync(counter);
             return;
         }
 
@@ -959,7 +959,7 @@ internal static class CliE2EAutomatorHelpers
 
         await auto.TypeAsync(BuildAspireDiagnosticsCaptureCommand(containerWorkspace) + "echo done");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -974,7 +974,7 @@ internal static class CliE2EAutomatorHelpers
         await auto.TypeAsync("aspire destroy --yes");
         await auto.EnterAsync();
         await auto.WaitForPipelineSuccessAsync(timeout: timeout.Value);
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(1));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
     }
 
     private static async Task CaptureRegisteredWorkspaceDiagnosticsAsync(
@@ -992,7 +992,7 @@ internal static class CliE2EAutomatorHelpers
             "echo \"copied-failure-artifacts:$ASPIRE_E2E_WORKSPACE\"; " +
             "fi");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -1060,12 +1060,12 @@ internal static class CliE2EAutomatorHelpers
             "sleep 15; " +
             $"}} | aspire agent mcp{argsFragment} > /tmp/mcp_out.txt 2>/tmp/mcp_err.txt || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
         // Dump output for debugging visibility in the recording
         await auto.TypeAsync("cat /tmp/mcp_out.txt | head -50");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Check that the response contains the expected data marker
         await auto.TypeAsync(

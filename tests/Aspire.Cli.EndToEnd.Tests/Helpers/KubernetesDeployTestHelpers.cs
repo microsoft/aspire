@@ -32,31 +32,31 @@ internal static class KubernetesDeployTestHelpers
     {
         await auto.TypeAsync("mkdir -p ~/.local/bin");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Download KinD if not already installed — GitHub CDN can transiently return HTML instead of a binary.
         await auto.TypeAsync($"command -v kind >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kind; for i in 1 2 3; do curl -sSLo ~/.local/bin/kind \"https://github.com/kubernetes-sigs/kind/releases/download/{KindVersion}/kind-linux-amd64\" && chmod +x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1 && break; echo \"Retry $i: KinD download failed, retrying in 5s...\"; rm -f ~/.local/bin/kind; sleep 5; done; test -x ~/.local/bin/kind && ~/.local/bin/kind version >/dev/null 2>&1; }}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         // Download Helm if not already installed
         await auto.TypeAsync($"command -v helm >/dev/null 2>&1 || {{ for i in 1 2 3; do curl -sSL https://get.helm.sh/helm-{HelmVersion}-linux-amd64.tar.gz | tar xz -C /tmp && test -f /tmp/linux-amd64/helm && break; echo \"Retry $i: Helm download failed, retrying in 5s...\"; sleep 5; done && mv /tmp/linux-amd64/helm ~/.local/bin/helm && rm -rf /tmp/linux-amd64; }}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         // Download kubectl if not already installed
         await auto.TypeAsync($"command -v kubectl >/dev/null 2>&1 || {{ rm -f ~/.local/bin/kubectl; for i in 1 2 3; do curl -sSLo ~/.local/bin/kubectl \"https://dl.k8s.io/release/{KubectlVersion}/bin/linux/amd64/kubectl\" && chmod +x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1 && break; echo \"Retry $i: kubectl download failed, retrying in 5s...\"; rm -f ~/.local/bin/kubectl; sleep 5; done; test -x ~/.local/bin/kubectl && ~/.local/bin/kubectl version --client >/dev/null 2>&1; }}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(90));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(90));
 
         await auto.TypeAsync("export PATH=\"$HOME/.local/bin:$PATH\"");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify all three binaries are functional
         await auto.TypeAsync("kind version && helm version --short && kubectl version --client --short 2>/dev/null || kubectl version --client");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -71,29 +71,29 @@ internal static class KubernetesDeployTestHelpers
         // Delete any leftover cluster with the same name
         await auto.TypeAsync($"kind delete cluster --name={clusterName} 2>/dev/null || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
         // Start or reuse a local Docker registry at localhost:5001
         await auto.TypeAsync("docker inspect -f '{{.State.Running}}' kind-registry 2>/dev/null || docker run -d --restart=always -p 5001:5000 --network bridge --name kind-registry registry:2");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Create the cluster (no containerd config patches — registry is configured post-creation via hosts.toml)
         await auto.TypeAsync($"kind create cluster --name={clusterName} --wait=120s");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 
         // Connect registry to cluster network
         await auto.TypeAsync($"docker network connect \"kind\" kind-registry 2>/dev/null || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // The cluster is created by the host Docker daemon, so the default kubeconfig points kubectl at a
         // localhost-published API server port that is not reachable from inside the helper container. Join the
         // helper container to the kind network and switch kubectl to the cluster's internal control-plane endpoint.
         await auto.TypeAsync($"docker network connect \"kind\" \"$(hostname)\" 2>/dev/null || true && kind export kubeconfig --name={clusterName} --internal >/dev/null");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Configure containerd on each node to resolve localhost:5001 via the registry container.
         // This uses the config_path approach required by containerd v2+ (shipped in KinD v0.31.0+).
@@ -103,7 +103,7 @@ internal static class KubernetesDeployTestHelpers
             "echo '  capabilities = [\"pull\", \"resolve\"]' | docker exec -i \"$node\" tee -a /etc/containerd/certs.d/localhost:5001/hosts.toml > /dev/null; " +
             "done");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Create a ConfigMap so KinD knows about the local registry
         await auto.TypeAsync("cat > /tmp/local-registry-cm.yaml << 'CMEOF'");
@@ -126,16 +126,16 @@ internal static class KubernetesDeployTestHelpers
         await auto.EnterAsync();
         await auto.TypeAsync("CMEOF");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("kubectl apply -f /tmp/local-registry-cm.yaml");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify cluster is ready
         await auto.TypeAsync($"kubectl cluster-info --context kind-{clusterName}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
@@ -235,7 +235,7 @@ internal static class KubernetesDeployTestHelpers
         // Step 2: cd into the project
         await auto.TypeAsync($"cd {projectName}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Add hosting packages via aspire add (handles version selection)
         foreach (var package in appHostHostingPackages)
@@ -250,7 +250,7 @@ internal static class KubernetesDeployTestHelpers
         {
             await auto.TypeAsync($"dotnet add {projectName}.ApiService package {package} --prerelease");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
         }
 
         // Step 5: Inject custom AppHost.cs and ApiService/Program.cs into the template-created project
@@ -297,7 +297,7 @@ internal static class KubernetesDeployTestHelpers
 
         // Wait for pipeline completion
         await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(10));
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
     }
 
     /// <summary>
@@ -315,12 +315,12 @@ internal static class KubernetesDeployTestHelpers
         // Wait for all pods to be ready in the namespace
         await auto.TypeAsync($"kubectl wait --for=condition=Ready pod --all -n {@namespace} --timeout=180s");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(4));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
 
         // Show pod status for debugging
         await auto.TypeAsync($"kubectl get pods -n {@namespace}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Show server pod logs for debugging connectivity issues
         await auto.TypeAsync($"kubectl logs -n {@namespace} -l app={serviceName} --tail=50 2>&1 || true");
@@ -335,12 +335,12 @@ internal static class KubernetesDeployTestHelpers
         // Port-forward in background
         await auto.TypeAsync($"kubectl port-forward -n {@namespace} svc/{serviceName}-service {localPort}:8080 &");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Brief pause for port-forward to establish
         await auto.TypeAsync("sleep 3");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Curl the test endpoint with retries, looking for "PASSED" in response body.
         // Database containers (Postgres, MySQL, SQL Server) may need 60-120s to fully initialize,
@@ -353,7 +353,7 @@ internal static class KubernetesDeployTestHelpers
 
         // Wait for the VERIFY_OK marker to appear
         await auto.WaitUntilTextAsync("VERIFY_OK", timeout: TimeSpan.FromMinutes(4));
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         // Kill the port-forward background process
         await auto.TypeAsync("kill %1 2>/dev/null || true");
@@ -371,11 +371,11 @@ internal static class KubernetesDeployTestHelpers
     {
         await auto.TypeAsync($"kind delete cluster --name={clusterName} 2>/dev/null || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromSeconds(60));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
         await auto.TypeAsync("docker rm -f kind-registry 2>/dev/null || true");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>

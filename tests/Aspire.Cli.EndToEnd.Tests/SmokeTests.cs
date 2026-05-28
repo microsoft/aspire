@@ -61,7 +61,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         // Stop the running apphost with Ctrl+C
         await auto.Ctrl().KeyAsync(Hex1bKey.C);
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     [CaptureWorkspaceOnFailure]
@@ -95,7 +95,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         output.WriteLine($"Stable AppHost SDK version: {appHostSdkVersion}");
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
     }
@@ -132,7 +132,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         output.WriteLine("Stable TypeScript AppHost config verified.");
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
     }

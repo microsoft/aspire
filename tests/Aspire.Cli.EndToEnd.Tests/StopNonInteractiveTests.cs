@@ -40,13 +40,13 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         // Navigate to the AppHost directory
         await auto.TypeAsync("cd TestStopApp/TestStopApp.AppHost");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Start the AppHost in the background using aspire start
         await auto.TypeAsync("aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen to avoid matching old patterns
         await auto.ClearScreenAsync(counter);
@@ -55,13 +55,13 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         // so --apphost must resolve it to the AppHost project.
         await auto.TypeAsync("cd ../..");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Stop the AppHost using aspire stop --non-interactive --apphost with a directory path.
         await auto.TypeAsync("aspire stop --non-interactive --apphost TestStopApp");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
         await auto.ClearScreenAsync(counter);
@@ -102,7 +102,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await auto.TypeAsync("cd App1/App1.AppHost && aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen before starting second apphost
         await auto.ClearScreenAsync(counter);
@@ -111,7 +111,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await auto.TypeAsync("cd ../../App2/App2.AppHost && aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
         await auto.ClearScreenAsync(counter);
@@ -120,7 +120,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop --non-interactive --all");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
         await auto.ClearScreenAsync(counter);
@@ -162,7 +162,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await auto.TypeAsync("cd App1/App1.AppHost && aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen before starting second apphost
         await auto.ClearScreenAsync(counter);
@@ -171,12 +171,12 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await auto.TypeAsync("cd ../../App2/App2.AppHost && aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Navigate to workspace root (unrelated to any AppHost directory)
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(workspace.WorkspaceRoot.FullName, workspace)}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
         await auto.ClearScreenAsync(counter);
@@ -185,7 +185,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop --non-interactive --all");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
         await auto.ClearScreenAsync(counter);
@@ -227,7 +227,7 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await auto.TypeAsync("cd App1/App1.AppHost && aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen before starting second apphost
         await auto.ClearScreenAsync(counter);
@@ -236,12 +236,12 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await auto.TypeAsync("cd ../../App2/App2.AppHost && aspire start");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Navigate to workspace root
         await auto.TypeAsync($"cd {CliE2ETestHelpers.ToContainerPath(workspace.WorkspaceRoot.FullName, workspace)}");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Clear screen
         await auto.ClearScreenAsync(counter);
@@ -261,6 +261,6 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop --all");
         await auto.EnterAsync();
         await auto.WaitUntilAppHostStoppedSuccessfullyAsync(timeout: TimeSpan.FromMinutes(1));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }
