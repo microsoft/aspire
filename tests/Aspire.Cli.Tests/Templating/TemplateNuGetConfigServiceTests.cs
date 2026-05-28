@@ -7,6 +7,7 @@ using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Xml.Linq;
 
 namespace Aspire.Cli.Tests.Templating;
@@ -453,7 +454,8 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
             executionContext ?? TestExecutionContextFactory.CreateTestContext(),
             packagingService ?? MockPackagingServiceFactory.Create(),
             new StubTemplateVersionPrompter(),
-            new StubCliHostEnvironment());
+            new StubCliHostEnvironment(),
+            NullLogger<TemplateNuGetConfigService>.Instance);
     }
 
     private sealed class StubTemplateVersionPrompter : Aspire.Cli.Commands.ITemplateVersionPrompter

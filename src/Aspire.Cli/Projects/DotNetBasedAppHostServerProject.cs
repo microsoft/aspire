@@ -432,6 +432,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         };
 
         var exitCode = await _dotNetCliRunner.BuildAsync(projectFile, noRestore: false, options, cancellationToken);
+        AppHostPackageDiagnostics.LogRestoredPackageVersionsFromAssetsFile(
+            _logger,
+            Path.Combine(_projectModelPath, "obj", "project.assets.json"),
+            manifestPath: null);
 
         return (exitCode == 0, outputCollector);
     }
@@ -445,6 +449,11 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         CancellationToken cancellationToken = default)
     {
         var (_, channelName) = await CreateProjectFilesAsync(integrations, requestedChannel, packageSourceOverride, cancellationToken);
+        _logger.LogDebug(
+            "Preparing in-repo AppHost server project. ProjectFile: {ProjectFile}, ChannelName: {ChannelName}, PackageReferences: {PackageReferences}",
+            GetProjectFilePath(),
+            channelName,
+            AppHostPackageDiagnostics.FormatTrackedPackageVersions(integrations.Where(static i => i.IsPackageReference).Select(static i => (i.Name, i.Version))));
         var (buildSuccess, buildOutput) = await BuildAsync(cancellationToken);
 
         if (!buildSuccess)

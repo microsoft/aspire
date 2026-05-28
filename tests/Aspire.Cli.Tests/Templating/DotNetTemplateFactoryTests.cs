@@ -16,6 +16,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
+using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 
@@ -351,7 +352,13 @@ public class DotNetTemplateFactoryTests
         sdkInstaller ??= new TestDotNetSdkInstaller();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
-        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment);
+        var templateNuGetConfigService = new TemplateNuGetConfigService(
+            interactionService,
+            executionContext,
+            packagingService,
+            prompter,
+            hostEnvironment,
+            NullLogger<TemplateNuGetConfigService>.Instance);
 
         return new DotNetTemplateFactory(
             interactionService,

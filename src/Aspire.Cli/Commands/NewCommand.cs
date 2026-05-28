@@ -15,6 +15,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -33,6 +34,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     private readonly IPackagingService _packagingService;
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly ILogger<NewCommand> _logger;
 
     internal static readonly Option<string?> s_nameOption = new("--name", "-n")
     {
@@ -85,7 +87,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         IPackagingService packagingService,
         AgentInitCommand agentInitCommand,
         ICliHostEnvironment hostEnvironment,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILogger<NewCommand> logger)
         : base("new", NewCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _prompter = prompter;
@@ -94,6 +97,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         _packagingService = packagingService;
         _agentInitCommand = agentInitCommand;
         _hostEnvironment = hostEnvironment;
+        _logger = logger;
 
         Options.Add(s_nameOption);
         Options.Add(s_outputOption);
@@ -177,7 +181,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return selected.LanguageId;
     }
 
-    private static NuGetPackage? TryGetCurrentCliTemplateVersionPackage(PackageChannel selectedChannel, NuGetPackage[] packages, bool hasPrHives)
+    private static TemplateVersionSelection? TryGetCurrentCliTemplateVersionPackage(PackageChannel selectedChannel, NuGetPackage[] packages, bool hasPrHives)
     {
         if (VersionHelper.TryGetCurrentCliVersionMatch(
             packages,
@@ -186,7 +190,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             channelName: selectedChannel.Name,
             hasPrHives: hasPrHives))
         {
-            return cliVersionPackage;
+            return new TemplateVersionSelection(cliVersionPackage, "exact current CLI match");
         }
 
         if (packages.Length > 0 &&
@@ -194,12 +198,12 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             !VersionHelper.IsLocalBuildChannel(selectedChannel.Name))
         {
             // Prerelease channels can filter out the shipped stable package even when the feed can restore it.
-            return new NuGetPackage
+            return new TemplateVersionSelection(new NuGetPackage
             {
                 Id = TemplateNuGetConfigService.TemplatesPackageName,
                 Version = VersionHelper.GetDefaultSdkVersion(),
                 Source = selectedChannel.SourceDetails
-            };
+            }, "current CLI pin");
         }
 
         return null;
@@ -334,6 +338,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         public string? ErrorMessage { get; init; }
     }
 
+    private sealed record TemplateVersionSelection(NuGetPackage Package, string Reason);
+
     private async Task<ResolveTemplateVersionResult> ResolveCliTemplateVersionAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         return await InteractionService.ShowStatusAsync(
@@ -372,6 +378,13 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                         ?? channels.FirstOrDefault()
                     : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparisons.ChannelName));
 
+                _logger.LogDebug(
+                    "Resolving Aspire project template package. RequestedChannel: {RequestedChannel}, IdentityChannel: {IdentityChannel}, SelectedChannel: {SelectedChannel}, AvailableChannels: {AvailableChannels}",
+                    configuredChannelName,
+                    ExecutionContext.IdentityChannel,
+                    selectedChannel?.Name,
+                    string.Join(", ", channels.Select(static c => $"{c.Name} ({c.Type})")));
+
                 if (selectedChannel is null)
                 {
                     string errorMessage;
@@ -407,11 +420,19 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                         .ToArray();
                     var hasPrHives = ExecutionContext.GetHiveCount() > 0;
 
-                    var package = TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives);
+                    LogTemplatePackageCandidates(selectedChannel, packages);
 
-                    package ??= packages
-                        .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
-                        .FirstOrDefault();
+                    var selection = TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives);
+                    var package = selection?.Package;
+                    var selectionReason = selection?.Reason;
+
+                    if (package is null)
+                    {
+                        package = packages
+                            .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
+                            .FirstOrDefault();
+                        selectionReason = "latest fallback";
+                    }
 
                     if (package is null)
                     {
@@ -422,6 +443,13 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     // (stable/nuget.org) should not be written so aspire add uses its default behavior.
                     var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
 
+                    _logger.LogInformation(
+                        "Selected Aspire project template package {TemplatePackageVersion} from channel {ChannelName} ({ChannelType}). Reason: {SelectionReason}",
+                        package.Version,
+                        selectedChannel.Name,
+                        selectedChannel.Type,
+                        selectionReason);
+
                     return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
                 }
                 catch (NuGetPackageCacheException ex)
@@ -429,6 +457,25 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     return new ResolveTemplateVersionResult { ErrorMessage = ex.Message };
                 }
             });
+    }
+
+    private void LogTemplatePackageCandidates(PackageChannel selectedChannel, IReadOnlyList<NuGetPackage> packages)
+    {
+        if (!_logger.IsEnabled(LogLevel.Debug))
+        {
+            return;
+        }
+
+        var preview = packages
+            .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
+            .Take(5)
+            .Select(static p => $"{p.Version} ({PackageSourceRedactor.RedactForDisplay(p.Source)})");
+        _logger.LogDebug(
+            "Template package resolution found {CandidateCount} candidate package(s) in channel {ChannelName}. Preview: {CandidatePreview}{AdditionalCandidateCount}",
+            packages.Count,
+            selectedChannel.Name,
+            string.Join(", ", preview),
+            packages.Count > 5 ? $" (+{packages.Count - 5} more)" : string.Empty);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)

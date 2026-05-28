@@ -1,12 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.IO.Pipes;
 using System.Net.Sockets;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
+using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
 
 namespace Aspire.Cli.Projects;
@@ -20,16 +23,19 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
     // The backchannel listener registers handlers without a connection name, so this value
     // is purely for grouping client-side spans/metrics in the trace.
     private const string ConnectionName = "remotehost";
+    private static readonly TimeSpan s_slowOperationWarningThreshold = TimeSpan.FromSeconds(5);
 
     private readonly Stream _stream;
     private readonly JsonRpc _jsonRpc;
     private readonly ProfilingTelemetry? _profilingTelemetry;
+    private readonly ILogger? _logger;
 
-    private AppHostRpcClient(Stream stream, JsonRpc jsonRpc, ProfilingTelemetry? profilingTelemetry)
+    private AppHostRpcClient(Stream stream, JsonRpc jsonRpc, ProfilingTelemetry? profilingTelemetry, ILogger? logger)
     {
         _stream = stream;
         _jsonRpc = jsonRpc;
         _profilingTelemetry = profilingTelemetry;
+        _logger = logger;
     }
 
     /// <summary>
@@ -39,11 +45,26 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
         string socketPath,
         string authenticationToken,
         ProfilingTelemetry? profilingTelemetry,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        ILogger? logger = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(authenticationToken);
 
-        var stream = await ConnectToServerAsync(socketPath, cancellationToken);
+        var connectionStopwatch = Stopwatch.StartNew();
+        logger?.LogDebug("Connecting to AppHost RPC transport. SocketPath: {SocketPath}", socketPath);
+
+        var stream = await DiagnosticLogging.WaitWithSlowWarningAsync(
+            ConnectToServerAsync(socketPath, cancellationToken, logger),
+            s_slowOperationWarningThreshold,
+            () => logger?.LogWarning(
+                "Still waiting to connect to AppHost RPC transport after {ElapsedSeconds} seconds. SocketPath: {SocketPath}",
+                s_slowOperationWarningThreshold.TotalSeconds,
+                socketPath)).ConfigureAwait(false);
+        logger?.LogDebug(
+            "Connected to AppHost RPC transport after {ElapsedMilliseconds} ms. SocketPath: {SocketPath}",
+            connectionStopwatch.ElapsedMilliseconds,
+            socketPath);
+
         JsonRpc? jsonRpc = null;
 
         try
@@ -56,21 +77,36 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
             };
             jsonRpc.StartListening();
 
-            var authenticated = await jsonRpc.InvokeWithProfilingAsync<bool>(
-                profilingTelemetry,
-                ConnectionName,
-                "authenticate",
-                [authenticationToken],
-                cancellationToken).ConfigureAwait(false);
+            var authenticationStopwatch = Stopwatch.StartNew();
+            logger?.LogDebug("Authenticating AppHost RPC connection. SocketPath: {SocketPath}", socketPath);
+
+            var authenticated = await DiagnosticLogging.WaitWithSlowWarningAsync(
+                jsonRpc.InvokeWithProfilingAsync<bool>(
+                    profilingTelemetry,
+                    ConnectionName,
+                    "authenticate",
+                    [authenticationToken],
+                    cancellationToken),
+                s_slowOperationWarningThreshold,
+                () => logger?.LogWarning(
+                    "Still waiting for AppHost RPC authentication after {ElapsedSeconds} seconds. SocketPath: {SocketPath}",
+                    s_slowOperationWarningThreshold.TotalSeconds,
+                    socketPath)).ConfigureAwait(false);
             if (!authenticated)
             {
                 throw new InvalidOperationException("Failed to authenticate to the AppHost server.");
             }
 
-            return new AppHostRpcClient(stream, jsonRpc, profilingTelemetry);
+            logger?.LogDebug(
+                "Authenticated AppHost RPC connection after {ElapsedMilliseconds} ms. SocketPath: {SocketPath}",
+                authenticationStopwatch.ElapsedMilliseconds,
+                socketPath);
+
+            return new AppHostRpcClient(stream, jsonRpc, profilingTelemetry, logger);
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogDebug(ex, "Failed to connect or authenticate AppHost RPC connection. SocketPath: {SocketPath}", socketPath);
             jsonRpc?.Dispose();
             await stream.DisposeAsync();
             throw;
@@ -111,11 +147,11 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
 
     /// <inheritdoc />
     public Task<T> InvokeAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
-        => _jsonRpc.InvokeWithProfilingAsync<T>(_profilingTelemetry, ConnectionName, methodName, parameters, cancellationToken);
+        => InvokeRpcWithDiagnosticsAsync<T>(methodName, parameters, cancellationToken);
 
     /// <inheritdoc />
     public Task InvokeAsync(string methodName, object?[] parameters, CancellationToken cancellationToken)
-        => _jsonRpc.InvokeWithProfilingAsync(_profilingTelemetry, ConnectionName, methodName, parameters, cancellationToken);
+        => InvokeRpcWithDiagnosticsAsync(methodName, parameters, cancellationToken);
 
     /// <summary>
     /// Invokes a code-generation RPC method and rethrows structured load/type failures as
@@ -126,7 +162,7 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
     {
         try
         {
-            return await _jsonRpc.InvokeWithProfilingAsync<T>(_profilingTelemetry, ConnectionName, methodName, parameters, cancellationToken).ConfigureAwait(false);
+            return await InvokeRpcWithDiagnosticsAsync<T>(methodName, parameters, cancellationToken).ConfigureAwait(false);
         }
         catch (RemoteInvocationException ex) when (ex.ErrorCode == AppHostCodeGenerationErrorCodes.IncompatibleAspireSdk)
         {
@@ -138,6 +174,46 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
 
             throw new AppHostCodeGenerationException(ex.Message, diagnostic, ex);
         }
+    }
+
+    private async Task<T> InvokeRpcWithDiagnosticsAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        _logger?.LogDebug("Invoking AppHost RPC method {MethodName}.", methodName);
+
+        var result = await DiagnosticLogging.WaitWithSlowWarningAsync(
+            _jsonRpc.InvokeWithProfilingAsync<T>(_profilingTelemetry, ConnectionName, methodName, parameters, cancellationToken),
+            s_slowOperationWarningThreshold,
+            () => _logger?.LogWarning(
+                "Still waiting for AppHost RPC method {MethodName} after {ElapsedSeconds} seconds.",
+                methodName,
+                s_slowOperationWarningThreshold.TotalSeconds)).ConfigureAwait(false);
+
+        _logger?.LogDebug(
+            "Completed AppHost RPC method {MethodName} after {ElapsedMilliseconds} ms.",
+            methodName,
+            stopwatch.ElapsedMilliseconds);
+
+        return result;
+    }
+
+    private async Task InvokeRpcWithDiagnosticsAsync(string methodName, object?[] parameters, CancellationToken cancellationToken)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        _logger?.LogDebug("Invoking AppHost RPC method {MethodName}.", methodName);
+
+        await DiagnosticLogging.WaitWithSlowWarningAsync(
+            _jsonRpc.InvokeWithProfilingAsync(_profilingTelemetry, ConnectionName, methodName, parameters, cancellationToken),
+            s_slowOperationWarningThreshold,
+            () => _logger?.LogWarning(
+                "Still waiting for AppHost RPC method {MethodName} after {ElapsedSeconds} seconds.",
+                methodName,
+                s_slowOperationWarningThreshold.TotalSeconds)).ConfigureAwait(false);
+
+        _logger?.LogDebug(
+            "Completed AppHost RPC method {MethodName} after {ElapsedMilliseconds} ms.",
+            methodName,
+            stopwatch.ElapsedMilliseconds);
     }
 
     /// <summary>
@@ -178,7 +254,7 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
     /// <summary>
     /// Connects to the RPC server using platform-appropriate transport.
     /// </summary>
-    private static async Task<Stream> ConnectToServerAsync(string socketPath, CancellationToken cancellationToken)
+    private static async Task<Stream> ConnectToServerAsync(string socketPath, CancellationToken cancellationToken, ILogger? logger)
     {
         var startTime = DateTimeOffset.UtcNow;
         const int ConnectionTimeoutSeconds = 30;
@@ -193,6 +269,7 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
                     try
                     {
                         await pipeClient.ConnectAsync(cancellationToken).ConfigureAwait(false);
+                        logger?.LogDebug("Connected to AppHost RPC named pipe. SocketPath: {SocketPath}", socketPath);
                         return pipeClient;
                     }
                     catch (TimeoutException)
@@ -205,6 +282,7 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
                     }
                 }
 
+                logger?.LogWarning("Timed out connecting to AppHost RPC named pipe after {ConnectionTimeoutSeconds} seconds. SocketPath: {SocketPath}", ConnectionTimeoutSeconds, socketPath);
                 throw new InvalidOperationException($"Failed to connect to RPC server at {socketPath}");
             }
             catch
@@ -225,6 +303,7 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
                     try
                     {
                         await socket.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
+                        logger?.LogDebug("Connected to AppHost RPC Unix domain socket. SocketPath: {SocketPath}", socketPath);
                         return new NetworkStream(socket, ownsSocket: true);
                     }
                     catch (SocketException)
@@ -233,6 +312,7 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
                     }
                 }
 
+                logger?.LogWarning("Timed out connecting to AppHost RPC Unix domain socket after {ConnectionTimeoutSeconds} seconds. SocketPath: {SocketPath}", ConnectionTimeoutSeconds, socketPath);
                 throw new InvalidOperationException($"Failed to connect to RPC server at {socketPath}");
             }
             catch
@@ -249,9 +329,16 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
 /// </summary>
 internal sealed class AppHostRpcClientFactory : IAppHostRpcClientFactory
 {
+    private readonly ILogger<AppHostRpcClient> _logger;
+
+    public AppHostRpcClientFactory(ILogger<AppHostRpcClient> logger)
+    {
+        _logger = logger;
+    }
+
     /// <inheritdoc />
     public async Task<IAppHostRpcClient> ConnectAsync(string socketPath, string authenticationToken, CancellationToken cancellationToken)
     {
-        return await AppHostRpcClient.ConnectAsync(socketPath, authenticationToken, profilingTelemetry: null, cancellationToken).ConfigureAwait(false);
+        return await AppHostRpcClient.ConnectAsync(socketPath, authenticationToken, profilingTelemetry: null, cancellationToken, _logger).ConfigureAwait(false);
     }
 }
