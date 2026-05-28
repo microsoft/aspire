@@ -49,7 +49,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
     /// Sets the logger instance used for diagnostic messages during signal handling.
     /// Call this once the logging infrastructure is available.
     /// </summary>
-    internal void SetLogger(ILogger logger) => _logger = logger;
+    internal void SetLogger(ILogger logger) => Volatile.Write(ref _logger, logger);
 
     public ConsoleCancellationManager(TimeSpan processTerminationTimeout)
     {
@@ -136,7 +136,9 @@ internal sealed class ConsoleCancellationManager : IDisposable
             if (startedHandler is not null)
             {
                 // Give the handler a chance to finish gracefully within the configured timeout.
-                // Use a wrapper Task so we can await with timeout without propagating exceptions.
+                // Task.WhenAny completes when either the handler or the delay finishes first,
+                // without propagating exceptions from the losing task.
+                // It's ok that this
                 var timeoutTask = Task.Delay(_processTerminationTimeout);
                 if (await Task.WhenAny(startedHandler, timeoutTask).ConfigureAwait(false) == startedHandler)
                 {
