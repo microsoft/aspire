@@ -464,9 +464,8 @@ public class FrontendBrowserTokenAuthTests
         // Assert
         var l = testSink.Writes.Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName).ToList();
 
-        // The container message is now part of the summary log message.
-        var summaryLog = l.Single(w => ((string?)LogTestHelpers.GetValue(w, "{OriginalFormat}"))?.StartsWith("Aspire Dashboard") == true);
-        var containerMessage = "URLs may need changes depending on how network access to the container is configured.";
-        Assert.Contains(containerMessage, summaryLog.Message);
+        // The container message is a separate log entry from the summary.
+        var containerLog = l.Single(w => w.Message == "Dashboard is running in a container. Access the dashboard from the host using port forwarding.");
+        Assert.NotNull(containerLog);
     }
 }
