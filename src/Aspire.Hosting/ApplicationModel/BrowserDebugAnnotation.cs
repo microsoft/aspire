@@ -4,10 +4,11 @@
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Marks a resource (gateway or host) as serving a browser-debuggable WebAssembly client.
-/// At orchestration time, an <c>IdeSession</c> DCP resource is created for each annotation,
-/// initially in "Initial" state. When the user invokes "Debug in Browser", the orchestrator
-/// transitions the IdeSession to "Starting" and DCP initiates the IDE debug session.
+/// Marks a resource as serving a browser-debuggable WebAssembly client.
+/// A hidden child <see cref="ExecutableResource"/> is created for the debugger;
+/// when the user clicks "Debug in Browser", the child resource is started via DCP
+/// with ExecutionType=IDE and a browser launch configuration, causing the IDE
+/// to open a debug-enabled browser navigated to the app URL.
 /// </summary>
 /// <param name="clientProjectPath">Absolute path to the WASM client <c>.csproj</c> for IDE symbol resolution.</param>
 /// <param name="relativePath">
@@ -28,8 +29,8 @@ internal sealed class BrowserDebugAnnotation(string clientProjectPath, string? r
     public string? RelativePath { get; } = relativePath;
 
     /// <summary>
-    /// The DCP IdeSession name assigned to this annotation during orchestration.
-    /// Set by the executor after creating the IdeSession resource.
+    /// The name of the child debugger resource created for this annotation.
+    /// Set during resource registration so the command handler can reference it.
     /// </summary>
-    internal string? IdeSessionName { get; set; }
+    internal string? DebuggerResourceName { get; set; }
 }

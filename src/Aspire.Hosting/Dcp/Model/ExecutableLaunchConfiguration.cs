@@ -43,22 +43,30 @@ internal sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfigurati
 }
 
 /// <summary>
-/// Launch configuration for browser-based debugging (e.g., Blazor WebAssembly).
-/// The IDE receives this and launches a debug-enabled browser navigated to the app URL,
-/// then connects a debug proxy (e.g., BrowserDebugProxy for .NET WASM) via CDP.
+/// Launch configuration for browser-based debugging.
+/// The IDE receives this via PUT /run_session, launches a browser navigated to the URL,
+/// and attaches a debug adapter (determined by the <see cref="Browser"/> field).
 /// </summary>
-internal sealed class BrowserDebugLaunchConfiguration() : ExecutableLaunchConfiguration("browser-debug")
+internal sealed class BrowserLaunchConfiguration() : ExecutableLaunchConfiguration("browser")
 {
     /// <summary>
-    /// Absolute path to the WASM client .csproj file.
-    /// The IDE uses this to locate assemblies, PDBs, and source files for symbol resolution.
+    /// URL where the application is served. The IDE navigates the debug browser here.
     /// </summary>
-    [JsonPropertyName("project_path")]
-    public string ProjectPath { get; set; } = string.Empty;
+    [JsonPropertyName("url")]
+    public string Url { get; set; } = string.Empty;
 
     /// <summary>
-    /// URL where the WASM application is served. The IDE navigates the debug browser here.
+    /// Root path for source resolution.
+    /// For JS apps this is the web root directory; for Blazor WASM it is the .csproj path.
     /// </summary>
-    [JsonPropertyName("app_url")]
-    public string AppUrl { get; set; } = string.Empty;
+    [JsonPropertyName("web_root")]
+    public string WebRoot { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Browser/debug adapter type. The IDE extension maps this to a VS Code debug adapter.
+    /// Standard values: "msedge", "chrome". For Blazor WASM debugging use "blazor-webassembly"
+    /// (requires extension support). Defaults to "msedge".
+    /// </summary>
+    [JsonPropertyName("browser")]
+    public string Browser { get; set; } = "msedge";
 }

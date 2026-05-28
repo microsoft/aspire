@@ -3,10 +3,6 @@
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Dcp;
-using Aspire.Hosting.Orchestrator;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -73,9 +69,9 @@ public static class BlazorHostedExtensions
     }
 
     /// <summary>
-    /// Enables WebAssembly debugging for a hosted Blazor client project. Adds a
-    /// <see cref="BrowserDebugAnnotation"/> so DCP creates an <c>IdeSession</c> resource
-    /// for the WASM client, and registers a "Debug in Browser" command on the host resource.
+    /// Enables WebAssembly debugging for a hosted Blazor client project. Creates a hidden
+    /// child debugger resource that launches a debug browser via DCP/IDE when the user
+    /// clicks "Debug in Browser" on the host resource.
     /// </summary>
     /// <typeparam name="TClientProject">The client project metadata type (from the .Client project).</typeparam>
     /// <param name="host">The host resource builder.</param>
@@ -94,9 +90,9 @@ public static class BlazorHostedExtensions
     }
 
     /// <summary>
-    /// Enables WebAssembly debugging for a hosted Blazor client project. Adds a
-    /// <see cref="BrowserDebugAnnotation"/> so DCP creates an <c>IdeSession</c> resource
-    /// for the WASM client, and registers a "Debug in Browser" command on the host resource.
+    /// Enables WebAssembly debugging for a hosted Blazor client project. Creates a hidden
+    /// child debugger resource that launches a debug browser via DCP/IDE when the user
+    /// clicks "Debug in Browser" on the host resource.
     /// </summary>
     /// <param name="host">The host resource builder.</param>
     /// <param name="clientProjectPath">Path to the WASM client .csproj file (absolute or relative to AppHost directory).</param>
@@ -114,43 +110,7 @@ public static class BlazorHostedExtensions
             ? clientProjectPath
             : Path.GetFullPath(Path.Combine(host.ApplicationBuilder.AppHostDirectory, clientProjectPath));
 
-        // The app URL for a hosted scenario is the host's own endpoint (no path prefix needed).
-        var debugAnnotation = new BrowserDebugAnnotation(resolvedPath);
-        host.WithAnnotation(debugAnnotation);
-
-        // Register "Debug in Browser" command on the host resource.
-        host.WithCommand(
-            name: "debug-in-browser",
-            displayName: "Debug in Browser (WASM)",
-            executeCommand: async context =>
-            {
-                var sessionName = debugAnnotation.IdeSessionName;
-                if (sessionName is null)
-                {
-                    return new ExecuteCommandResult { Success = false, Message = "Debug session has not been initialized yet." };
-                }
-
-                var orchestrator = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
-                await orchestrator.LaunchBrowserDebugSessionAsync(sessionName, context.CancellationToken).ConfigureAwait(false);
-                return CommandResults.Success();
-            },
-            commandOptions: new()
-            {
-                UpdateState = ctx =>
-                {
-                    var configuration = ctx.ServiceProvider.GetRequiredService<IConfiguration>();
-                    if (string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar]))
-                    {
-                        return ResourceCommandState.Hidden;
-                    }
-
-                    return ctx.ResourceSnapshot.State?.Text == KnownResourceStates.Running
-                        ? ResourceCommandState.Enabled
-                        : ResourceCommandState.Disabled;
-                },
-                IconName = "BugArrowCounterclockwise",
-                IsHighlighted = true
-            });
+        AddBrowserDebuggerResource(host, resolvedPath, relativePath: null);
 
         return host;
     }
@@ -166,49 +126,13 @@ public static class BlazorHostedExtensions
 
         annotation.IsInitialized = true;
 
-        // Register "Debug in Browser" command for the hosted WASM client automatically,
+        // Register "Debug in Browser" for the hosted WASM client automatically,
         // unless ProxyWasmDebugging was already called explicitly (which adds its own annotation).
-        // In the hosted model, the server project hosts the WASM client — use the server's
-        // project path so the IDE can resolve the client assembly from its references.
         if (!host.ApplicationBuilder.ExecutionContext.IsPublishMode
             && !host.Resource.TryGetAnnotationsOfType<BrowserDebugAnnotation>(out _))
         {
             var projectMetadata = host.Resource.GetProjectMetadata();
-            var debugAnnotation = new BrowserDebugAnnotation(projectMetadata.ProjectPath);
-            host.WithAnnotation(debugAnnotation);
-
-            host.WithCommand(
-                name: "debug-in-browser",
-                displayName: "Debug in Browser (WASM)",
-                executeCommand: async context =>
-                {
-                    var sessionName = debugAnnotation.IdeSessionName;
-                    if (sessionName is null)
-                    {
-                        return new ExecuteCommandResult { Success = false, Message = "Debug session has not been initialized yet." };
-                    }
-
-                    var orch = context.ServiceProvider.GetRequiredService<ApplicationOrchestrator>();
-                    await orch.LaunchBrowserDebugSessionAsync(sessionName, context.CancellationToken).ConfigureAwait(false);
-                    return CommandResults.Success();
-                },
-                commandOptions: new()
-                {
-                    UpdateState = ctx =>
-                    {
-                        var configuration = ctx.ServiceProvider.GetRequiredService<IConfiguration>();
-                        if (string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar]))
-                        {
-                            return ResourceCommandState.Hidden;
-                        }
-
-                        return ctx.ResourceSnapshot.State?.Text == KnownResourceStates.Running
-                            ? ResourceCommandState.Enabled
-                            : ResourceCommandState.Disabled;
-                    },
-                    IconName = "BugArrowCounterclockwise",
-                    IsHighlighted = true
-                });
+            AddBrowserDebuggerResource(host, projectMetadata.ProjectPath, relativePath: null);
         }
 
         host.WithEnvironment(context =>
@@ -265,6 +189,19 @@ public static class BlazorHostedExtensions
     {
         var endpoint = resource.GetEndpoint(endpointName);
         return endpoint.Exists ? endpoint : null;
+    }
+
+    private static void AddBrowserDebuggerResource(
+        IResourceBuilder<ProjectResource> host,
+        string clientProjectPath,
+        string? relativePath)
+    {
+        BrowserDebuggerHelper.AddBrowserDebuggerResource(
+            host.ApplicationBuilder,
+            host.Resource,
+            host,
+            clientProjectPath,
+            relativePath);
     }
 }
 
