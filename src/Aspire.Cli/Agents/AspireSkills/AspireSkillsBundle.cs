@@ -41,13 +41,24 @@ internal sealed class AspireSkillsBundle
             bundleDirectory,
             VersionHelper.GetDefaultSdkVersion(),
             VersionHelper.GetDefaultSdkVersion(),
+            skipCompatibilityCheck: false,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static Task<AspireSkillsBundle> LoadAsync(
+        DirectoryInfo bundleDirectory,
+        string currentCliVersion,
+        string currentSdkVersion,
+        CancellationToken cancellationToken)
+    {
+        return LoadAsync(bundleDirectory, currentCliVersion, currentSdkVersion, skipCompatibilityCheck: false, cancellationToken);
     }
 
     internal static async Task<AspireSkillsBundle> LoadAsync(
         DirectoryInfo bundleDirectory,
         string currentCliVersion,
         string currentSdkVersion,
+        bool skipCompatibilityCheck,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(bundleDirectory);
@@ -71,7 +82,7 @@ internal sealed class AspireSkillsBundle
             throw new InvalidOperationException("Aspire skills bundle manifest is empty or invalid.");
         }
 
-        ValidateManifest(bundleDirectory, manifest, currentCliVersion, currentSdkVersion);
+        ValidateManifest(bundleDirectory, manifest, currentCliVersion, currentSdkVersion, skipCompatibilityCheck);
 
         return new AspireSkillsBundle(bundleDirectory, manifest);
     }
@@ -126,14 +137,25 @@ internal sealed class AspireSkillsBundle
         DirectoryInfo bundleDirectory,
         SkillBundleManifest manifest,
         string currentCliVersion,
-        string currentSdkVersion)
+        string currentSdkVersion,
+        bool skipCompatibilityCheck)
     {
         if (string.IsNullOrWhiteSpace(manifest.Version))
         {
             throw new InvalidOperationException("Aspire skills bundle manifest must specify a version.");
         }
 
-        ValidateCompatibility(manifest.Supports, currentCliVersion, currentSdkVersion);
+        // The bundle's `supports` range gates whether a bundle pulled fresh from GitHub
+        // is allowed at runtime. For bundles we already trust locally — the snapshot
+        // embedded in the CLI binary, and bundles already written to our own cache —
+        // we skip the range check because the CLI's effective version may have moved
+        // past the snapshot's stamped range (e.g., a dogfood build of 13.5.x using a
+        // bundle whose supports declares ">=13.4.0 <13.5.0"). The bundle's `version`
+        // field plus the version-keyed cache directory still gate matching content.
+        if (!skipCompatibilityCheck)
+        {
+            ValidateCompatibility(manifest.Supports, currentCliVersion, currentSdkVersion);
+        }
 
         var skills = manifest.Skills;
         if (skills is not { Length: > 0 })

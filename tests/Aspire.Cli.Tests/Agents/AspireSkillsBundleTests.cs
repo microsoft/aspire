@@ -390,6 +390,62 @@ public class AspireSkillsBundleTests
         }
     }
 
+    [Fact]
+    public async Task LoadAsync_SkipCompatibilityCheck_AllowsBundleOutsideSupportsRange()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            await CreateBundleAsync(
+                bundleDirectory,
+                new Dictionary<string, string> { ["SKILL.md"] = CreateSkillFileContent() },
+                supports: new SkillBundleSupports { AspireCli = ">=13.4.0 <13.5.0" });
+
+            var bundle = await AspireSkillsBundle.LoadAsync(
+                new DirectoryInfo(bundleDirectory),
+                currentCliVersion: "13.5.0-pr.17553.gca8e5ace",
+                currentSdkVersion: "13.5.0",
+                skipCompatibilityCheck: true,
+                CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LoadAsync_SkipCompatibilityCheck_StillRejectsOtherInvariants()
+    {
+        var bundleDirectory = CreateTempDirectory();
+
+        try
+        {
+            await CreateBundleAsync(
+                bundleDirectory,
+                new Dictionary<string, string> { ["SKILL.md"] = CreateSkillFileContent() });
+
+            // Truncate the bundled SKILL.md so the SHA-256 in the manifest no longer matches.
+            // The compatibility skip must not bypass content verification.
+            var skillPath = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
+            await File.WriteAllTextAsync(skillPath, "tampered");
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(
+                new DirectoryInfo(bundleDirectory),
+                currentCliVersion: "13.5.0",
+                currentSdkVersion: "13.5.0",
+                skipCompatibilityCheck: true,
+                CancellationToken.None));
+        }
+        finally
+        {
+            Directory.Delete(bundleDirectory, recursive: true);
+        }
+    }
+
     private static async Task CreateBundleAsync(
         string bundleDirectory,
         Dictionary<string, string> files,

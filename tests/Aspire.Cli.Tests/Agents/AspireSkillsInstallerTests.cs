@@ -300,6 +300,75 @@ public class AspireSkillsInstallerTests
         }
     }
 
+    [Fact]
+    public async Task InstallAsync_WhenEmbeddedBundleSupportsRangeExcludesCurrentCli_StillUsesEmbeddedBundle()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            // Simulate a CLI prerelease whose version falls outside the embedded snapshot's
+            // declared `supports` range (e.g., a 13.5.x dogfood build paired with a snapshot
+            // stamped ">=13.4.0 <13.5.0"). The embedded path must still install the bundle —
+            // otherwise an offline user with a version-mismatched embedded snapshot would lose
+            // access to all bundled skills.
+            var staleSupports = new SkillBundleSupports
+            {
+                AspireCli = ">=0.0.1 <0.0.2",
+                AspireSdk = ">=0.0.1 <0.0.2"
+            };
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync(supports: staleSupports);
+            var installer = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.True(embeddedBundleProvider.OpenArchiveCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task InstallAsync_WhenCachedBundleSupportsRangeExcludesCurrentCli_StillUsesCache()
+    {
+        var rootDirectory = CreateTempDirectory();
+
+        try
+        {
+            var executionContext = TestExecutionContextHelper.CreateExecutionContext(new DirectoryInfo(rootDirectory));
+            var cachedBundleDirectory = Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills", AspireSkillsInstaller.Version);
+
+            // The cache is written by the installer itself (either from GitHub or from the
+            // embedded snapshot), so the bundle's `supports` range is not the right
+            // invalidation signal — bundle version is. A stale `supports` on a cached entry
+            // must not force a re-install on every invocation.
+            await CreateCachedBundleAsync(
+                cachedBundleDirectory,
+                supports: new SkillBundleSupports
+                {
+                    AspireCli = ">=0.0.1 <0.0.2",
+                    AspireSdk = ">=0.0.1 <0.0.2"
+                });
+            var embeddedBundleProvider = await CreateEmbeddedBundleProviderAsync();
+            var installer = CreateInstaller(executionContext, embeddedBundleProvider: embeddedBundleProvider);
+
+            var result = await installer.InstallAsync(CancellationToken.None);
+
+            Assert.Equal(AspireSkillsInstallStatus.Installed, result.Status);
+            Assert.NotNull(result.Bundle);
+            Assert.False(embeddedBundleProvider.OpenArchiveCalled);
+        }
+        finally
+        {
+            Directory.Delete(rootDirectory, recursive: true);
+        }
+    }
+
     private static AspireSkillsInstaller CreateInstaller(
         CliExecutionContext executionContext,
         HttpMessageHandler? httpMessageHandler = null,
@@ -318,7 +387,7 @@ public class AspireSkillsInstallerTests
             NullLogger<AspireSkillsInstaller>.Instance);
     }
 
-    private static async Task CreateCachedBundleAsync(string bundleDirectory)
+    private static async Task CreateCachedBundleAsync(string bundleDirectory, SkillBundleSupports? supports = null)
     {
         var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName);
         Directory.CreateDirectory(skillDirectory);
@@ -337,7 +406,7 @@ public class AspireSkillsInstallerTests
         var manifest = new SkillBundleManifest
         {
             Version = AspireSkillsInstaller.Version,
-            Supports = CreateSupports(),
+            Supports = supports ?? CreateSupports(),
             Skills =
             [
                 new SkillBundleSkill
@@ -370,14 +439,14 @@ public class AspireSkillsInstallerTests
         };
     }
 
-    private static async Task<byte[]> CreateBundleArchiveBytesAsync()
+    private static async Task<byte[]> CreateBundleArchiveBytesAsync(SkillBundleSupports? supports = null)
     {
         var rootDirectory = CreateTempDirectory();
 
         try
         {
             var bundleDirectory = Path.Combine(rootDirectory, $"aspire-skills-v{AspireSkillsInstaller.Version}");
-            await CreateCachedBundleAsync(bundleDirectory);
+            await CreateCachedBundleAsync(bundleDirectory, supports);
 
             await using var archiveStream = new MemoryStream();
             await using (var gzipStream = new GZipStream(archiveStream, CompressionLevel.SmallestSize, leaveOpen: true))
@@ -404,9 +473,9 @@ public class AspireSkillsInstallerTests
         return Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
     }
 
-    private static async Task<TestEmbeddedAspireSkillsBundleProvider> CreateEmbeddedBundleProviderAsync()
+    private static async Task<TestEmbeddedAspireSkillsBundleProvider> CreateEmbeddedBundleProviderAsync(SkillBundleSupports? supports = null)
     {
-        var archiveBytes = await CreateBundleArchiveBytesAsync();
+        var archiveBytes = await CreateBundleArchiveBytesAsync(supports);
         return new TestEmbeddedAspireSkillsBundleProvider
         {
             Metadata = new EmbeddedAspireSkillsBundleMetadata
