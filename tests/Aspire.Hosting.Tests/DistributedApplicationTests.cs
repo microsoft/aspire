@@ -11,6 +11,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Hosting.Dashboard;
 using Aspire.TestUtilities;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
@@ -1430,6 +1431,33 @@ public class DistributedApplicationTests
         {
             Assert.NotNull(envVars);
             return Assert.Single(envVars, e => e.Name == name).Value;
+        }
+    }
+
+    [Fact]
+    public async Task StartAsync_ResourceServiceEndpointUrl_PassedToDashboardServiceHost()
+    {
+        const string testName = "dashboard-resource-service-endpoint-url";
+        var resourceServicePort = await Network.GetAvailablePortAsync();
+        var configuredResourceServiceUrl = $"http://localhost:{resourceServicePort}";
+        var args = new string[] {
+            $"{KnownConfigNames.ResourceServiceEndpointUrl}={configuredResourceServiceUrl}"
+        };
+        using var testProgram = CreateTestProgram(testName, args: args, disableDashboard: false);
+
+        await using var app = testProgram.Build();
+
+        var dashboardServiceHost = app.Services.GetRequiredService<DashboardServiceHost>();
+        await ((IHostedService)dashboardServiceHost).StartAsync(CancellationToken.None);
+
+        try
+        {
+            var resourceServiceUri = await dashboardServiceHost.GetResourceServiceUriAsync();
+            Assert.Equal(configuredResourceServiceUrl, resourceServiceUri.TrimEnd('/'));
+        }
+        finally
+        {
+            await ((IHostedService)dashboardServiceHost).StopAsync(CancellationToken.None);
         }
     }
 
