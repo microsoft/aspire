@@ -1,12 +1,12 @@
 # Aspire.Hosting.Integration.Analyzers package
 
-Provides experimental Roslyn analyzers for Aspire hosting integration authors building ATS and polyglot-friendly extensions outside the Aspire repo.
+Provides Roslyn analyzers for Aspire hosting integration authors building ATS and polyglot-friendly extensions outside the Aspire repo.
 
 ## Getting started
 
 ### Install the package
 
-In your integration project, install the experimental analyzer package with [NuGet](https://www.nuget.org):
+In your integration project, install the analyzer package with [NuGet](https://www.nuget.org):
 
 ```dotnetcli
 dotnet add package Aspire.Hosting.Integration.Analyzers --prerelease
