@@ -418,7 +418,10 @@ internal sealed class BundleService(
             InstallSourceExtensions.ScriptWire
                 or InstallSourceExtensions.PrWire
                 or InstallSourceExtensions.LocalHiveWire => Path.GetDirectoryName(binaryDir) ?? binaryDir,
-            _ => Path.GetDirectoryName(binaryDir) ?? binaryDir,
+            // Sidecar-less binaries can be installed in arbitrary locations, including
+            // read-only package stores. Default to user-owned Aspire home unless a
+            // route-specific sidecar explicitly opts in to colocated extraction.
+            _ => CliPathHelper.GetDefaultAspireHomeDirectory(),
         };
     }
 

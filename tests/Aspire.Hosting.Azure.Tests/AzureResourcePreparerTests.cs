@@ -8,6 +8,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Azure.Provisioning.KeyVault;
+using Azure.Provisioning.SignalR;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -297,6 +298,90 @@ public class AzureResourcePreparerTests
             app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<AzureRoleAssignmentResource>(),
             resource => resource.TargetAzureResource == storage.Resource);
         Assert.Same(api.Resource, storageRoleAssignment.OwnerResource);
+    }
+
+    [Fact]
+    public async Task RoleAssignmentsAreNotDuplicatedWhenBeforeStartRunsBeforePublishPipeline()
+    {
+        const string inspectRoleAssignmentsStepName = "inspect-signalr-role-assignments";
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: inspectRoleAssignmentsStepName);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var signalR = builder.AddAzureSignalR("signalr");
+
+        var serviceA = builder.AddProject<Project>("service-a", launchProfileName: null)
+            .WithReference(signalR)
+            .WithRoleAssignments(signalR, SignalRBuiltInRole.SignalRContributor);
+
+        var serviceB = builder.AddProject<Project>("service-b", launchProfileName: null)
+            .WithReference(signalR)
+            .WithRoleAssignments(signalR, SignalRBuiltInRole.SignalRContributor);
+
+        List<AzureRoleAssignmentResource>? signalRRoleAssignments = null;
+        builder.Pipeline.AddStep(
+            inspectRoleAssignmentsStepName,
+            context =>
+            {
+                signalRRoleAssignments =
+                    [.. context.Model.Resources
+                        .OfType<AzureRoleAssignmentResource>()
+                        .Where(resource => resource.TargetAzureResource == signalR.Resource)
+                        .OrderBy(resource => resource.Name, StringComparer.Ordinal)];
+
+                return Task.CompletedTask;
+            },
+            dependsOn: WellKnownPipelineSteps.BeforeStart);
+
+        using var app = builder.Build();
+        await app.RunAsync().WaitAsync(TimeSpan.FromSeconds(30));
+
+        Assert.NotNull(signalRRoleAssignments);
+        Assert.Collection(signalRRoleAssignments,
+            resource =>
+            {
+                Assert.Equal("service-a-roles-signalr", resource.Name);
+                Assert.Same(signalR.Resource, resource.TargetAzureResource);
+                Assert.Same(serviceA.Resource, resource.OwnerResource);
+            },
+            resource =>
+            {
+                Assert.Equal("service-b-roles-signalr", resource.Name);
+                Assert.Same(signalR.Resource, resource.TargetAzureResource);
+                Assert.Same(serviceB.Resource, resource.OwnerResource);
+            });
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        Assert.Collection(
+            model.Resources
+                .OfType<ProjectResource>()
+                .OrderBy(resource => resource.Name, StringComparer.Ordinal),
+            resource => Assert.Single(resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>()),
+            resource => Assert.Single(resource.Annotations.OfType<DeploymentPrerequisitesAnnotation>()));
+    }
+
+    [Fact]
+    public async Task GlobalRoleAssignmentsAreNotDuplicatedWhenBeforeStartRunsTwice()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var storage = builder.AddAzureStorage("storage");
+        var blobs = storage.AddBlobs("blobs");
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithReference(blobs);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var storageRoles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), resource => resource.Name == "storage-roles");
+        Assert.Same(storage.Resource, storageRoles.TargetAzureResource);
+        Assert.Null(storageRoles.OwnerResource);
+        Assert.Single(storage.Resource.Annotations.OfType<RoleAssignmentResourceAnnotation>());
+        Assert.Single(storageRoles.Annotations.OfType<ResourceRelationshipAnnotation>());
     }
 
     [Fact]

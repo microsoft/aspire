@@ -20,8 +20,8 @@ public sealed class KubernetesPublishTests(ITestOutputHelper output)
     private const string ProjectName = "AspireKubernetesPublishTest";
     private const string ClusterNamePrefix = "aspire-e2e";
 
-    private static string KindVersion => Environment.GetEnvironmentVariable("KIND_VERSION") ?? "v0.31.0";
-    private static string HelmVersion => Environment.GetEnvironmentVariable("HELM_VERSION") ?? "v3.17.3";
+    private static string KindVersion => KubernetesE2EVersions.KindVersion;
+    private static string HelmVersion => KubernetesE2EVersions.HelmVersion;
 
     private static string GenerateUniqueClusterName() =>
         $"{ClusterNamePrefix}-{Guid.NewGuid():N}"[..32]; // KinD cluster names max 32 chars

@@ -94,6 +94,13 @@ internal static class CliE2ETestHelpers
     }
 
     /// <summary>
+    /// Resolves the test method name for naming a recording file. See
+    /// <see cref="Hex1bTestHelpers.ResolveTestMethodName"/> for the full rationale.
+    /// </summary>
+    private static string ResolveTestMethodName(string callerMemberName)
+        => Hex1bTestHelpers.ResolveTestMethodName(callerMemberName);
+
+    /// <summary>
     /// Creates a headless Hex1b terminal configured for E2E testing with asciinema recording.
     /// Uses default dimensions of 160x48 unless overridden.
     /// </summary>
@@ -103,7 +110,14 @@ internal static class CliE2ETestHelpers
     /// <returns>A configured <see cref="Hex1bTerminal"/> instance. Caller is responsible for disposal.</returns>
     internal static Hex1bTerminal CreateTestTerminal(int width = 160, int height = 48, [CallerMemberName] string testName = "")
     {
-        var recordingPath = GetTestResultsRecordingPath(testName);
+        // Prefer the xUnit-reported test method name so that when a [Fact]/[Theory]
+        // delegates into a private helper (e.g. *Core methods), the .cast file is
+        // still named after the public test the TRX records an outcome for. Without
+        // this, `[CallerMemberName]` captures the helper, the recording filename has
+        // no matching TRX entry, and the recording-comment workflow tags the test as
+        // "Unknown".
+        var resolvedTestName = ResolveTestMethodName(testName);
+        var recordingPath = GetTestResultsRecordingPath(resolvedTestName);
         RegisterCaptureFile("recording.cast", recordingPath);
         return Hex1bTerminal.CreateBuilder()
             .WithHeadless()
@@ -162,6 +176,9 @@ internal static class CliE2ETestHelpers
         int height = 48,
         [CallerMemberName] string testName = "")
     {
+        // See CreateTestTerminal above for why we prefer the xUnit-reported test
+        // method name over `[CallerMemberName]`.
+        testName = ResolveTestMethodName(testName);
         var recordingPath = GetTestResultsRecordingPath(testName);
         RegisterCaptureFile("recording.cast", recordingPath);
         var dockerfilePath = GetDockerfilePath(repoRoot, variant);
@@ -334,6 +351,9 @@ internal static class CliE2ETestHelpers
         int height = 48,
         [CallerMemberName] string testName = "")
     {
+        // See CreateTestTerminal above for why we prefer the xUnit-reported test
+        // method name over `[CallerMemberName]`.
+        testName = ResolveTestMethodName(testName);
         var recordingPath = GetTestResultsRecordingPath(testName);
         RegisterCaptureFile("recording.cast", recordingPath);
 

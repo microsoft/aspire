@@ -48,12 +48,8 @@ async def get_forecast() -> str:
 
 def main():
     """Main function to run the agent as a web server."""
-    project_endpoint = os.environ.get("PROJ_MYPROJECT_URI") or os.environ.get("ConnectionStrings__projmyproject", "")
+    project_endpoint = os.environ["PROJMYPROJECT_URI"]
     deployment_name = os.environ.get("CHAT_MODELNAME", "chat")
-
-    # Parse endpoint from connection string format if needed (Endpoint=https://...)
-    if project_endpoint.startswith("Endpoint="):
-        project_endpoint = project_endpoint.split("Endpoint=", 1)[1].split(";")[0]
 
     client = FoundryChatClient(
         project_endpoint=project_endpoint,

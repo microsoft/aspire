@@ -45,6 +45,17 @@ export function isPythonLaunchConfiguration(obj: any): obj is PythonLaunchConfig
     return obj && obj.type === 'python';
 }
 
+export interface GoLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "go";
+    program?: string;
+    working_directory?: string;
+    build_flags?: string;
+}
+
+export function isGoLaunchConfiguration(obj: any): obj is GoLaunchConfiguration {
+    return obj && obj.type === 'go';
+}
+
 export interface NodeLaunchConfiguration extends ExecutableLaunchConfiguration {
     type: "node"; // Provided by VS Code's built-in js-debug, no extension needed
     script_path?: string;

@@ -4,7 +4,7 @@
     <ExtensionSrcDir>$(MSBuildThisFileDirectory)</ExtensionSrcDir>
   </PropertyGroup>
 
-  <Target Name="BuildAndPackageExtension" BeforeTargets="Build" DependsOnTargets="CheckYarnInstalled;CheckVsceInstalled">
+  <Target Name="BuildAndPackageExtension" BeforeTargets="Build" DependsOnTargets="ValidateYarnLockRegistries;CheckYarnInstalled;CheckVsceInstalled">
     <PropertyGroup>
       <_PackageJsonPath>$([MSBuild]::NormalizePath($(ExtensionSrcDir), 'package.json'))</_PackageJsonPath>
     </PropertyGroup>
@@ -31,12 +31,12 @@
     <!-- Override package.json version if ExtensionVersionOverride is set, saving original first -->
     <Copy SourceFiles="$(_PackageJsonPath)" DestinationFiles="$(_PackageJsonPath).bak"
           Condition="'$(ExtensionVersionOverride)' != ''" />
-    <Exec Command="npm version &quot;$(ExtensionVersionOverride)&quot; --no-git-tag-version"
+    <Exec Command="yarn version --new-version &quot;$(ExtensionVersionOverride)&quot; --no-git-tag-version"
           Condition="'$(ExtensionVersionOverride)' != ''"
           WorkingDirectory="$(ExtensionSrcDir)" />
 
     <!-- Install dependencies and compile -->
-    <Exec Command="yarn install" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="yarn install --frozen-lockfile --non-interactive" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
     <Exec Command="yarn compile" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
 
     <!-- Make extension directory -->
@@ -65,6 +65,26 @@
     <Message Importance="high" Text="  VSIX: $(_VsixPath)" />
     <Message Importance="high" Text="  Manifest: $(_ManifestPath)" />
     <Message Importance="high" Text="  (Signature will be created by signing/signVsix.proj during signing phase)" />
+  </Target>
+
+  <Target Name="ValidateYarnLockRegistries">
+    <PropertyGroup>
+      <_YarnLockPath>$([MSBuild]::NormalizePath($(ExtensionSrcDir), 'yarn.lock'))</_YarnLockPath>
+    </PropertyGroup>
+
+    <Error Text="$(_YarnLockPath) not found. Cannot restore the extension with a frozen lockfile." Condition="!Exists('$(_YarnLockPath)')" />
+
+    <ReadLinesFromFile File="$(_YarnLockPath)">
+      <Output TaskParameter="Lines" ItemName="_YarnLockLine" />
+    </ReadLinesFromFile>
+
+    <ItemGroup>
+      <_PublicNpmRegistryLine Include="@(_YarnLockLine)" Condition="$([System.String]::Copy('%(_YarnLockLine.Identity)').Contains('registry.npmjs.org')) Or $([System.String]::Copy('%(_YarnLockLine.Identity)').Contains('registry.yarnpkg.com'))" />
+    </ItemGroup>
+
+    <Error
+      Text="extension/yarn.lock contains public npm registry URLs. Regenerate it using the internal dotnet-public-npm feed before building. Offending lines: @(_PublicNpmRegistryLine, '; ')"
+      Condition="'@(_PublicNpmRegistryLine)' != ''" />
   </Target>
 
   <Target Name="CheckYarnInstalled">

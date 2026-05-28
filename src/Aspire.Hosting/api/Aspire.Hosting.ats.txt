@@ -20,6 +20,7 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression [ExposeProperties]
@@ -323,6 +324,7 @@ Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.builder(context
 Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext) -> cancellationToken
 Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.services(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting.ApplicationModel/DockerfileFactoryContext.resource(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting.ApplicationModel/EndpointReference.endpointName(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> string
 Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> string
 Aspire.Hosting.ApplicationModel/EndpointReference.excludeReferenceEndpoint(context: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> boolean
@@ -444,6 +446,7 @@ Aspire.Hosting/addContainerRegistry(name: string, endpoint: string|Aspire.Hostin
 Aspire.Hosting/addCSharpApp(name: string, path: string, options?: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource
 Aspire.Hosting/addDockerfile(name: string, contextPath: string, dockerfilePath?: string, stage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/addDockerfileBuilder(name: string, contextPath: string, callback: callback, stage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
+Aspire.Hosting/addDockerfileFactory(name: string, contextPath: string, dockerfileFactory: callback, stage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/addDotnetTool(name: string, packageId: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource
 Aspire.Hosting/addEventingSubscriber(subscribe: callback) -> void
 Aspire.Hosting/addExecutable(name: string, command: string, workingDirectory: string, args: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
@@ -627,11 +630,12 @@ Aspire.Hosting/withDeveloperCertificateTrust(trust: boolean) -> Aspire.Hosting/A
 Aspire.Hosting/withDockerfile(contextPath: string, dockerfilePath?: string, stage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withDockerfileBaseImage(buildImage?: string, runtimeImage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withDockerfileBuilder(contextPath: string, callback: callback, stage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
+Aspire.Hosting/withDockerfileFactory(contextPath: string, dockerfileFactory: callback, stage?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withEndpoint(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: enum:System.Net.Sockets.ProtocolType) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withEndpointCallback(endpointName: string, callback: callback, createIfNotExists?: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withEndpointProxySupport(proxyEnabled: boolean) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting/withEntrypoint(entrypoint: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
-Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
+Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ExternalServiceResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withEnvironmentCallback(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withEnvironmentVariablesConfig() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder
 Aspire.Hosting/withExecutableCommand(command: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource

@@ -6,6 +6,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
@@ -27,6 +28,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 {
     private readonly IInteractionService _interactionService;
     private readonly IAgentEnvironmentDetector _agentEnvironmentDetector;
+    private readonly IAspireSkillsInstaller _aspireSkillsInstaller;
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly IGitRepository _gitRepository;
     private readonly ILanguageDiscovery _languageDiscovery;
@@ -47,6 +49,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         IAgentEnvironmentDetector agentEnvironmentDetector,
+        IAspireSkillsInstaller aspireSkillsInstaller,
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
@@ -55,6 +58,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     {
         _interactionService = interactionService;
         _agentEnvironmentDetector = agentEnvironmentDetector;
+        _aspireSkillsInstaller = aspireSkillsInstaller;
         _playwrightCliInstaller = playwrightCliInstaller;
         _gitRepository = gitRepository;
         _languageDiscovery = languageDiscovery;
@@ -282,6 +286,25 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         // Each skill file write is fast (small markdown files), so sequential execution
         // is fine — parallelizing would complicate error handling for no meaningful gain.
         var hasErrors = false;
+        AspireSkillsBundle? aspireSkillsBundle = null;
+        if (selectedLocations.Count > 0 && selectedSkills.Any(static skill => skill.SourceKind is SkillSourceKind.AspireSkillsBundle))
+        {
+            var result = await _aspireSkillsInstaller.InstallAsync(cancellationToken);
+            if (result.Status is AspireSkillsInstallStatus.Installed)
+            {
+                aspireSkillsBundle = result.Bundle;
+            }
+            else
+            {
+                _interactionService.DisplayMessage(KnownEmojis.Warning, result.Message!);
+                selectedSkills = selectedSkills
+                    .Where(static skill => skill.SourceKind is not SkillSourceKind.AspireSkillsBundle)
+                    .ToList();
+            }
+        }
+
+        var installedSkills = new List<InstalledSkillSummaryItem>();
+
         foreach (var location in selectedLocations)
         {
             context.AddSkillBaseDirectory(location.RelativeSkillDirectory);
@@ -289,29 +312,48 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             foreach (var skill in selectedSkills)
             {
                 // Playwright CLI is installed via PlaywrightCliInstaller, not as a static skill file
-                if (skill.SkillContent is null && skill.EmbeddedResourceRoot is null)
+                if (!skill.HasInstallableFiles)
                 {
                     continue;
                 }
 
-                hasErrors |= !await InstallSkillAsync(
+                if (skill.SourceKind is SkillSourceKind.AspireSkillsBundle && aspireSkillsBundle is null)
+                {
+                    continue;
+                }
+
+                var installResult = await InstallSkillAsync(
                     workspaceRoot,
                     location.RelativeSkillDirectory,
                     skill,
+                    aspireSkillsBundle,
                     isUserLevel: false,
                     cancellationToken);
+                hasErrors |= !installResult.Succeeded;
+                if (installResult.UpdatedSkill is not null)
+                {
+                    installedSkills.Add(installResult.UpdatedSkill);
+                }
 
                 if (location.IncludeUserLevel)
                 {
-                    hasErrors |= !await InstallSkillAsync(
+                    installResult = await InstallSkillAsync(
                         ExecutionContext.HomeDirectory,
                         location.RelativeSkillDirectory,
                         skill,
+                        aspireSkillsBundle,
                         isUserLevel: true,
                         cancellationToken);
+                    hasErrors |= !installResult.Succeeded;
+                    if (installResult.UpdatedSkill is not null)
+                    {
+                        installedSkills.Add(installResult.UpdatedSkill);
+                    }
                 }
             }
         }
+
+        DisplayInstalledSkillsSummary(installedSkills);
 
         // --- Phase 4: Handle Playwright CLI (installs binary + mirrors skill files to registered directories) ---
         var selectedSkillDirs = selectedLocations.Select(l => l.RelativeSkillDirectory).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -388,11 +430,12 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// <summary>
     /// Installs the files for a skill at the specified location, creating or updating them as needed.
     /// </summary>
-    /// <returns><c>true</c> if successful, <c>false</c> if an error occurred.</returns>
-    private async Task<bool> InstallSkillAsync(
+    /// <returns>The install result, including the skill/location pair when files were updated.</returns>
+    private async Task<SkillInstallResult> InstallSkillAsync(
         DirectoryInfo rootDirectory,
         string relativeSkillDirectory,
         SkillDefinition skill,
+        AspireSkillsBundle? aspireSkillsBundle,
         bool isUserLevel,
         CancellationToken cancellationToken)
     {
@@ -401,7 +444,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         try
         {
-            var skillFiles = await GetSkillFilesAsync(skill, cancellationToken);
+            var skillFiles = await GetSkillFilesAsync(skill, aspireSkillsBundle, cancellationToken);
             var anyFileUpdated = false;
 
             foreach (var skillFile in skillFiles)
@@ -428,39 +471,85 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
             if (!anyFileUpdated)
             {
-                return true;
+                return new(Succeeded: true, UpdatedSkill: null);
             }
 
-            var displayRelativeSkillPath = relativeSkillPath
-                .Replace(Path.DirectorySeparatorChar, '/')
-                .Replace(Path.AltDirectorySeparatorChar, '/');
-            var displayPath = isUserLevel ? $"~/{displayRelativeSkillPath}" : displayRelativeSkillPath;
-            _interactionService.DisplayMessage(KnownEmojis.Robot,
-                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkill, skill.Name, displayPath));
-            return true;
+            var displayLocation = GetDisplaySkillDirectory(relativeSkillDirectory, isUserLevel);
+            return new(Succeeded: true, new InstalledSkillSummaryItem(skill.Name, displayLocation));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             _interactionService.DisplayError(
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_FailedToInstallSkill, skill.Name, fullSkillDirectoryPath, ex.Message));
-            return false;
+            return new(Succeeded: false, UpdatedSkill: null);
         }
     }
 
-    private static async Task<IReadOnlyList<SkillAssetFile>> GetSkillFilesAsync(SkillDefinition skill, CancellationToken cancellationToken)
+    private void DisplayInstalledSkillsSummary(IReadOnlyList<InstalledSkillSummaryItem> installedSkills)
+    {
+        if (installedSkills.Count == 0)
+        {
+            return;
+        }
+
+        var skillNames = string.Join(", ", GetUniqueValues(installedSkills.Select(static installedSkill => installedSkill.SkillName)));
+        var locations = string.Join(", ", GetUniqueValues(installedSkills.Select(static installedSkill => installedSkill.DisplayLocation)));
+        var message = string.Join(Environment.NewLine,
+            AgentCommandStrings.InitCommand_InstalledSkillsSummary,
+            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills, skillNames)}",
+            $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, locations)}");
+
+        _interactionService.DisplayMessage(KnownEmojis.Robot, message);
+    }
+
+    private static IReadOnlyList<string> GetUniqueValues(IEnumerable<string> values)
+    {
+        var uniqueValues = new List<string>();
+        var seenValues = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var value in values)
+        {
+            if (seenValues.Add(value))
+            {
+                uniqueValues.Add(value);
+            }
+        }
+
+        return uniqueValues;
+    }
+
+    private static string GetDisplaySkillDirectory(string relativeSkillDirectory, bool isUserLevel)
+    {
+        var displayRelativeSkillDirectory = relativeSkillDirectory
+            .Replace(Path.DirectorySeparatorChar, '/')
+            .Replace(Path.AltDirectorySeparatorChar, '/');
+
+        return isUserLevel ? $"~/{displayRelativeSkillDirectory}" : displayRelativeSkillDirectory;
+    }
+
+    private static async Task<IReadOnlyList<SkillAssetFile>> GetSkillFilesAsync(SkillDefinition skill, AspireSkillsBundle? aspireSkillsBundle, CancellationToken cancellationToken)
     {
         if (skill.SkillContent is not null)
         {
             return [new SkillAssetFile("SKILL.md", skill.SkillContent)];
         }
 
-        if (skill.EmbeddedResourceRoot is not null)
+        if (skill.SourceKind is SkillSourceKind.AspireSkillsBundle)
         {
-            return await EmbeddedSkillResourceLoader.LoadTextFilesAsync(skill.EmbeddedResourceRoot, skill.ShouldInstallFile, cancellationToken);
+            if (aspireSkillsBundle is null)
+            {
+                throw new InvalidOperationException($"Aspire skills bundle was not resolved for skill '{skill.Name}'.");
+            }
+
+            return await aspireSkillsBundle.GetSkillFilesAsync(skill, cancellationToken);
         }
 
         throw new InvalidOperationException($"Skill '{skill.Name}' does not define installable files.");
     }
+
+    private sealed record InstalledSkillSummaryItem(string SkillName, string DisplayLocation);
+
+    private readonly record struct SkillInstallResult(bool Succeeded, InstalledSkillSummaryItem? UpdatedSkill);
 }
 
 internal readonly record struct AgentInitExecutionResult(

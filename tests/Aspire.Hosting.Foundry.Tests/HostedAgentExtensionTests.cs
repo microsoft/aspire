@@ -12,14 +12,14 @@ namespace Aspire.Hosting.Foundry.Tests;
 public class HostedAgentExtensionTests
 {
     [Fact]
-    public void PublishAsHostedAgent_InRunMode_AddsHttpEndpoint()
+    public void WithComputeEnvironment_InRunMode_AddsHttpEndpoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .WithComputeEnvironment(project);
 
         builder.Build();
 
@@ -29,7 +29,7 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InRunMode_PreservesExistingHttpEndpointTargetPort()
+    public void WithComputeEnvironment_InRunMode_PreservesExistingHttpEndpointTargetPort()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var project = builder.AddFoundry("account")
@@ -37,7 +37,7 @@ public class HostedAgentExtensionTests
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
             .WithHttpEndpoint(targetPort: 5000)
-            .PublishAsHostedAgent(project);
+            .WithComputeEnvironment(project);
 
         builder.Build();
 
@@ -49,14 +49,14 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InRunMode_DoesNotHardCodePort()
+    public void WithComputeEnvironment_InRunMode_DoesNotHardCodePort()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .WithComputeEnvironment(project);
 
         builder.Build();
 
@@ -66,14 +66,14 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InRunMode_ConfiguresHealthCheck()
+    public void WithComputeEnvironment_InRunMode_ConfiguresHealthCheck()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .WithComputeEnvironment(project);
 
         builder.Build();
 
@@ -84,7 +84,7 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InPublishMode_DoesNotValidateRegion()
+    public void WithComputeEnvironment_InPublishMode_DoesNotValidateRegion()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish);
@@ -95,13 +95,13 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .WithComputeEnvironment(project);
 
         Assert.NotNull(app);
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InPublishMode_AcceptsValidRegion()
+    public void WithComputeEnvironment_InPublishMode_AcceptsValidRegion()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish);
@@ -112,33 +112,33 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .WithComputeEnvironment(project);
 
         Assert.NotNull(app);
     }
 
     [Fact]
-    public void PublishAsHostedAgent_NoRegionConfig_DoesNotThrow()
+    public void WithComputeEnvironment_NoRegionConfig_DoesNotThrow()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .WithComputeEnvironment(project);
 
         Assert.NotNull(app);
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InPublishMode_CreatesHostedAgentResource()
+    public void WithComputeEnvironment_InPublishMode_CreatesHostedAgentResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .WithComputeEnvironment(project);
 
         builder.Build();
 
@@ -148,16 +148,15 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void PublishAsHostedAgent_WithoutProject_CreatesDefaultProject()
+    public void WithComputeEnvironment_WithoutProject_CreatesDefaultProject()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent();
+            .WithComputeEnvironment();
 
         builder.Build();
 
-        // A project should be auto-created
         var project = builder.Resources.OfType<AzureCognitiveServicesProjectResource>().SingleOrDefault();
         Assert.NotNull(project);
     }

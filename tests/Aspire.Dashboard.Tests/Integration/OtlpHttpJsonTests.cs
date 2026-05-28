@@ -529,7 +529,6 @@ public class OtlpHttpJsonTests
             ResourceKey = resource.ResourceKey,
             StartIndex = 0,
             Count = 10,
-            FilterText = string.Empty,
             Filters = []
         });
         Assert.NotEmpty(traces.PagedResult.Items);

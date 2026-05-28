@@ -55,8 +55,6 @@ export const processExceptionOccurred = (error: string, command: string) => vsco
 // Aspire panel strings
 export const pidDescription = (pid: number) => vscode.l10n.t('PID: {0}', pid);
 export const dashboardLabel = vscode.l10n.t('Dashboard');
-export const cliPidLabel = (pid: number) => vscode.l10n.t('CLI PID: {0}', pid);
-export const appHostPidLabel = (pid: number) => vscode.l10n.t('AppHost PID: {0}', pid);
 export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fetching running AppHosts: {0}', error);
 export const aspireDescribeMinimumVersion = '13.2.0';
 export const aspireCliDescribeNotSupported = (version: string) => vscode.l10n.t('Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.', version);
@@ -68,6 +66,9 @@ export const resourceCommandArgumentsTitle = (command: string) => vscode.l10n.t(
 export const resourceCommandArgumentInputTitle = (command: string, input: string) => vscode.l10n.t('{0}: {1}', command, input);
 export const resourceCommandCustomChoice = (value: string) => vscode.l10n.t('Use "{0}"', value);
 export const resourceCommandCustomChoiceDescription = vscode.l10n.t('Custom value');
+export const resourceCommandDynamicInputsUnsupported = vscode.l10n.t('This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.');
+export const resourceCommandDynamicInputsFailed = vscode.l10n.t('Failed to load dynamic command inputs. Run this command from the Aspire Dashboard or Aspire CLI instead.');
+export const resourceCommandLoadingDynamicInputs = vscode.l10n.t('Updating command inputs...');
 export const resourceCommandSecretWarning = vscode.l10n.t('This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.');
 export const resourceCommandContinue = vscode.l10n.t('Continue');
 export const resourceCommandDontShowAgain = vscode.l10n.t("Don't show again");
@@ -96,6 +97,8 @@ export const errorGettingConfigInfo = (error: any) => vscode.l10n.t('Error getti
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
+export const goDisplayName = (program: string) => vscode.l10n.t('Go: {0}', program);
+export const goLabel = vscode.l10n.t('Go');
 export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");
 export const doYouWantToSetDefaultApphost = (appHost: string) => vscode.l10n.t('Do you want to set {0} as the default AppHost for this workspace?', appHost);
 export const doYouWantToSelectDefaultApphost = vscode.l10n.t('Do you want to select the default AppHost for this workspace?');
@@ -129,6 +132,9 @@ export const selectFileTitle = vscode.l10n.t('Select file');
 export const enterPipelineStep = vscode.l10n.t('Enter the pipeline step to execute');
 export const appHostSourceNotFound = vscode.l10n.t('Could not determine the AppHost source file to open.');
 export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed to open AppHost source file: {0}', path);
+export const logFilePathInvalid = vscode.l10n.t('Could not determine the AppHost log file to open.');
+export const logFileOpenFailed = (path: string, error: string) => vscode.l10n.t('Failed to open AppHost log file {0}: {1}', path, error);
+export const logFileLabel = vscode.l10n.t('AppHost logs');
 
 // CodeLens strings.
 // The "\u200A" between the codicon and the label is U+200A HAIR SPACE; it adds

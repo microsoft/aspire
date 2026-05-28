@@ -123,8 +123,8 @@ function Test-CSharpStarterProject {
         [Parameter(Mandatory = $true)][string]$ProjectRoot
     )
 
-    Write-Step "Running 'aspire new aspire-starter --name VerifyApp --output $ProjectRoot --non-interactive --nologo'..."
-    & $AspireBin new aspire-starter --name VerifyApp --output $ProjectRoot --non-interactive --nologo 2>&1 | Write-Host
+    Write-Step "Running 'aspire new aspire-starter --name VerifyApp --output $ProjectRoot --non-interactive --nologo --suppress-agent-init'..."
+    & $AspireBin new aspire-starter --name VerifyApp --output $ProjectRoot --non-interactive --nologo --suppress-agent-init 2>&1 | Write-Host
     if ($LASTEXITCODE -ne 0) {
         Write-Err "'aspire new aspire-starter' failed with exit code $LASTEXITCODE"
         exit 1

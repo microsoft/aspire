@@ -345,10 +345,10 @@
         "icon": "$(clippy)"
       },
       {
-        "command": "aspire-vscode.copyPid",
-        "title": "%command.copyPid%",
+        "command": "aspire-vscode.viewAppHostSource",
+        "title": "%command.viewAppHostSource%",
         "category": "Aspire",
-        "icon": "$(clippy)"
+        "icon": "$(json)"
       },
       {
         "command": "aspire-vscode.switchToGlobalView",
@@ -412,6 +412,18 @@
         "title": "%command.expandAll%",
         "category": "Aspire",
         "icon": "$(expand-all)"
+      },
+      {
+        "command": "aspire-vscode.viewAppHostLogFile",
+        "title": "%command.viewAppHostLogFile%",
+        "category": "Aspire",
+        "icon": "$(output)"
+      },
+      {
+        "command": "aspire-vscode.copyLogFilePath",
+        "title": "%command.copyLogFilePath%",
+        "category": "Aspire",
+        "icon": "$(clippy)"
       }
     ],
     "jsonValidation": [
@@ -551,11 +563,19 @@
           "when": "false"
         },
         {
-          "command": "aspire-vscode.copyPid",
+          "command": "aspire-vscode.viewAppHostSource",
           "when": "false"
         },
         {
           "command": "aspire-vscode.expandAll",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.viewAppHostLogFile",
+          "when": "false"
+        },
+        {
+          "command": "aspire-vscode.copyLogFilePath",
           "when": "false"
         }
       ],
@@ -579,17 +599,17 @@
       "view/item/context": [
         {
           "command": "aspire-vscode.openDashboard",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "inline"
         },
         {
           "command": "aspire-vscode.expandAll",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "inline"
         },
         {
           "command": "aspire-vscode.openAppHostSource",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources)$/",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "1_open@1"
         },
         {
@@ -648,9 +668,19 @@
           "group": "3_info@2"
         },
         {
-          "command": "aspire-vscode.copyPid",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem == pidItem",
-          "group": "1_clipboard@1"
+          "command": "aspire-vscode.viewAppHostSource",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost)$/",
+          "group": "1_open@2"
+        },
+        {
+          "command": "aspire-vscode.viewAppHostLogFile",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem == logFileItem",
+          "group": "1_open@1"
+        },
+        {
+          "command": "aspire-vscode.copyLogFilePath",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem == logFileItem",
+          "group": "3_clipboard@1"
         }
       ]
     },
@@ -754,6 +784,13 @@
           "description": "%configuration.aspire.globalAppHostsPollingInterval%",
           "scope": "window"
         },
+        "aspire.appHostDiscoveryTimeoutMs": {
+          "type": "number",
+          "default": 30000,
+          "minimum": 1000,
+          "description": "%configuration.aspire.appHostDiscoveryTimeoutMs%",
+          "scope": "window"
+        },
         "aspire.enableCodeLens": {
           "type": "boolean",
           "default": true,
@@ -851,24 +888,24 @@
     "branch": "main"
   },
   "scripts": {
-    "vscode:prepublish": "npm run package",
+    "vscode:prepublish": "yarn run package",
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "pretest": "yarn run compile-tests && yarn run compile && yarn run lint",
     "lint": "eslint src",
     "unit-test": "vscode-test",
-    "test": "npm run unit-test",
+    "test": "yarn run unit-test",
     "l10n:export": "gulp prepare",
     "l10n:import": "gulp localizationBundle",
     "generate-schema": "node scripts/generate-schema.js",
     "generate-version": "node scripts/generate-version.js",
-    "precompile": "npm run generate-version && npm run generate-schema && npm run l10n:export && npm run l10n:import",
-    "prepackage": "npm run generate-version && npm run generate-schema && npm run l10n:export && npm run l10n:import",
-    "prewatch": "npm run generate-version && npm run generate-schema && npm run l10n:export && npm run l10n:import",
-    "localize": "npm run l10n:export && npm run l10n:import"
+    "precompile": "yarn run generate-version && yarn run generate-schema && yarn run l10n:export && yarn run l10n:import",
+    "prepackage": "yarn run generate-version && yarn run generate-schema && yarn run l10n:export && yarn run l10n:import",
+    "prewatch": "yarn run generate-version && yarn run generate-schema && yarn run l10n:export && yarn run l10n:import",
+    "localize": "yarn run l10n:export && yarn run l10n:import"
   },
   "devDependencies": {
     "@eslint/js": "9.39.4",
@@ -908,23 +945,13 @@
     "express": "5.2.1",
     "jsonc-parser": "3.3.1",
     "node-forge": "1.4.0",
+    "tree-sitter-c-sharp": "0.23.5",
     "vscode-jsonrpc": "8.2.1",
+    "web-tree-sitter": "0.26.9",
     "ws": "8.20.0"
   },
   "resolutions": {
     "braces": "3.0.3",
-    "serialize-javascript": "7.0.5",
-    "flatted": "3.4.2",
-    "lodash": "4.18.1",
-    "undici": "6.24.1",
-    "path-to-regexp": "8.4.2",
-    "@sinonjs/fake-timers": "13.0.5",
-    "picomatch": "2.3.2",
-    "underscore": "1.13.8",
-    "postcss": "8.5.10",
-    "uuid": "14.0.0"
-  },
-  "overrides": {
     "serialize-javascript": "7.0.5",
     "flatted": "3.4.2",
     "lodash": "4.18.1",

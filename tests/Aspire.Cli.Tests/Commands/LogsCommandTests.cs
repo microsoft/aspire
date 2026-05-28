@@ -3,6 +3,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Resources;
@@ -1121,6 +1122,72 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LogsCommand_WithSearchOption_MultipleWords_MatchesEachFragmentSeparately()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Connection timeout error on port 6379", IsError = true },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "Connection established successfully", IsError = false },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 3, Content = "Timeout waiting for response", IsError = true },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 4, Content = "Ready to accept connections", IsError = false }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // Two words: both "Connection" AND "timeout" must appear in the same log line
+        var result = command.Parse("logs redis --search \"Connection timeout\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // Only the line containing BOTH fragments should match
+        Assert.Single(logsOutput.Logs);
+        Assert.Contains("Connection timeout error", logsOutput.Logs[0].Content);
+    }
+
+    [Fact]
+    public async Task LogsCommand_WithSearchOption_QualifierSyntaxTreatedAsFreeText()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            logLines:
+            [
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "level:error something failed", IsError = true },
+                new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "Normal operation", IsError = false }
+            ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        // Qualifier-like syntax "level:error" should be treated as free text for logs
+        var result = command.Parse("logs redis --search level:error --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
+        Assert.NotNull(jsonOutput);
+
+        var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
+        Assert.NotNull(logsOutput);
+
+        // The qualifier value "error" is treated as a text fragment and matches
+        Assert.Single(logsOutput.Logs);
+        Assert.Contains("level:error", logsOutput.Logs[0].Content);
+    }
+
+    [Fact]
     public async Task LogsCommand_PassesSnapshotFiltersToConsoleLogsRequest()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1355,6 +1422,93 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("Ready to accept connections", StringComparison.Ordinal));
         Assert.Contains(outputWriter.Logs, l => l.Contains("Connection timeout error", StringComparison.Ordinal));
         Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("Client connected", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task LogsCommand_FollowWithSearch_FiltersExistingAndStreamedLogs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var allowFollowLogsTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowExitTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var logLines = Channel.CreateUnbounded<string>();
+        var outputWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            if (line.StartsWith("[", StringComparison.Ordinal))
+            {
+                logLines.Writer.TryWrite(line);
+            }
+        });
+
+        using var provider = CreateLogsTestServices(workspace, outputWriter, disableAnsi: true,
+            configureConnection: connection =>
+            {
+                connection.AppHostInfo = CreateAppHostInfo(workspace, Environment.ProcessId);
+                connection.GetResourceLogsHandler = (resourceName, follow, cancellationToken) =>
+                {
+                    if (!follow)
+                    {
+                        return InitialLogsForFollowSearchAsync(cancellationToken);
+                    }
+
+                    return StreamedLogsForFollowSearchAsync(allowFollowLogsTcs.Task, allowExitTcs.Task, cancellationToken);
+                };
+            });
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("logs redis --follow --tail 10 --search timeout");
+
+        var commandTask = result.InvokeAsync();
+
+        // Read initial tail log from channel and assert
+        var initialLog = await logLines.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal("[redis] Connection timeout error", initialLog);
+
+        // Allow follow logs to flow
+        allowFollowLogsTcs.SetResult();
+
+        // Read streamed follow log from channel and assert
+        var followLog = await logLines.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal("[redis] Another timeout occurred", followLog);
+
+        // Allow the stream to exit
+        allowExitTcs.SetResult();
+
+        var exitCode = await commandTask.DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        logLines.Writer.Complete();
+
+        // Verify no additional log lines were written
+        await logLines.Reader.Completion.DefaultTimeout();
+        Assert.False(logLines.Reader.TryRead(out _));
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> InitialLogsForFollowSearchAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 1, Content = "Ready to accept connections", IsError = false };
+        yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 2, Content = "Connection timeout error", IsError = true };
+        yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 3, Content = "Client connected from 127.0.0.1", IsError = false };
+        await Task.CompletedTask;
+        cancellationToken.ThrowIfCancellationRequested();
+    }
+
+    private static async IAsyncEnumerable<ResourceLogLine> StreamedLogsForFollowSearchAsync(
+        Task allowLogs,
+        Task allowExit,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        // Wait until the test allows follow logs to flow
+        await allowLogs.WaitAsync(cancellationToken);
+
+        yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 4, Content = "Processing request", IsError = false };
+        yield return new ResourceLogLine { ResourceName = "redis", LineNumber = 5, Content = "Another timeout occurred", IsError = true };
+
+        // Wait until the test allows the stream to terminate
+        await allowExit.WaitAsync(cancellationToken);
+        throw new ObjectDisposedException("StreamJsonRpc.JsonRpc");
     }
 
     private static async IAsyncEnumerable<ResourceLogLine> FollowTailSearchLogsAsync(

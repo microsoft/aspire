@@ -17,6 +17,23 @@ namespace Aspire.Cli.Tests.Telemetry;
 
 public class TelemetryConfigurationTests
 {
+    // The Aspire.Cli.Tests assembly opts out of Azure Monitor telemetry by default
+    // (see TestTelemetryDefaults). Tests that need the Azure Monitor branch override
+    // the env-var-derived opt-out by passing this in their in-memory configuration —
+    // AddInMemoryCollection is added AFTER AddEnvironmentVariables in
+    // Program.BuildApplicationAsync, so the in-memory value wins.
+    private static readonly KeyValuePair<string, string?> s_telemetryOptInOverride =
+        new(AspireCliTelemetry.TelemetryOptOutConfigKey, "false");
+
+    private static Dictionary<string, string?> WithTelemetryOptIn(Dictionary<string, string?>? config = null)
+    {
+        var result = config is null
+            ? new Dictionary<string, string?>()
+            : new Dictionary<string, string?>(config);
+        result[s_telemetryOptInOverride.Key] = s_telemetryOptInOverride.Value;
+        return result;
+    }
+
     private static async Task<IHost> BuildHostAsync(Dictionary<string, string?>? config = null)
     {
         var loggingOptions = Program.ParseLoggingOptions([]);
@@ -30,9 +47,11 @@ public class TelemetryConfigurationTests
     [Fact]
     public async Task AzureMonitor_Enabled_ByDefault()
     {
-        // The Application Insights connection string is now hardcoded, so Azure Monitor
-        // should be enabled by default when telemetry is not opted out
-        using var host = await BuildHostAsync();
+        // The Application Insights connection string is hardcoded, so Azure Monitor
+        // should be enabled when telemetry is not opted out. The test process opts out
+        // by default (see TestTelemetryDefaults); we explicitly opt back in here to
+        // exercise the Azure Monitor branch.
+        using var host = await BuildHostAsync(WithTelemetryOptIn());
 
         var telemetryManager = host.Services.GetService<TelemetryManager>();
         Assert.NotNull(telemetryManager);
@@ -59,10 +78,10 @@ public class TelemetryConfigurationTests
     [Fact]
     public async Task OtlpExporter_WithoutProfiling_EnablesOnlyDebugDiagnostics_WhenEndpointProvided()
     {
-        var config = new Dictionary<string, string?>
+        var config = WithTelemetryOptIn(new Dictionary<string, string?>
         {
             [AspireCliTelemetry.OtlpExporterEndpointConfigKey] = "http://localhost:4317"
-        };
+        });
 
         using var host = await BuildHostAsync(config);
 
@@ -122,11 +141,11 @@ public class TelemetryConfigurationTests
     [Fact]
     public async Task OtlpExporter_WithProfiling_KeepsReportedTelemetryAndProfilingSeparate()
     {
-        var config = new Dictionary<string, string?>
+        var config = WithTelemetryOptIn(new Dictionary<string, string?>
         {
             [AspireCliTelemetry.OtlpExporterEndpointConfigKey] = "http://localhost:4317",
             [Aspire.Hosting.KnownConfigNames.ProfilingEnabled] = "true"
-        };
+        });
 
         using var host = await BuildHostAsync(config);
 

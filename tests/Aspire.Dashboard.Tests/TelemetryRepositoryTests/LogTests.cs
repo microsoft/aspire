@@ -1469,4 +1469,61 @@ public class LogTests
                 Assert.Null(resource.EventName);
             });
     }
+
+    [Fact]
+    public void GetLogs_DisabledFiltersAreIgnored()
+    {
+        var repository = CreateRepository();
+
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime, message: "matching log", severity: SeverityNumber.Info),
+                            CreateLogRecord(time: s_testTime.AddSeconds(1), message: "other log", severity: SeverityNumber.Info)
+                        }
+                    }
+                }
+            }
+        });
+
+        // Enabled filter matches "matching", disabled filter would exclude everything
+        var filters = new List<TelemetryFilter>
+        {
+            new FieldTelemetryFilter
+            {
+                Field = nameof(OtlpLogEntry.Message),
+                Value = "matching",
+                Condition = FilterCondition.Contains,
+                Enabled = true
+            },
+            new FieldTelemetryFilter
+            {
+                Field = nameof(OtlpLogEntry.Message),
+                Value = "IMPOSSIBLE",
+                Condition = FilterCondition.Contains,
+                Enabled = false
+            }
+        };
+
+        var logs = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = 10,
+            Filters = filters
+        });
+
+        // The disabled filter should be ignored — only the enabled "matching" filter applies
+        Assert.Single(logs.Items);
+        Assert.Equal("matching log", logs.Items[0].Message);
+    }
 }

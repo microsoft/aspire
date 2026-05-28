@@ -986,6 +986,363 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
+    /// Regression for the daily-CLI scenario: when `aspire init` runs under a CLI identity
+    /// that matches a registered non-stable Explicit channel (<c>daily</c>, <c>staging</c>, <c>pr-{N}</c>),
+    /// the produced <c>aspire.config.json</c> must carry that channel at the top level so
+    /// subsequent <c>aspire add</c> / <c>integration list</c> / <c>integration search</c>
+    /// calls resolve packages against the matching channel rather than the implicit feed.
+    /// </summary>
+    [Theory]
+    [InlineData("stable")]
+    [InlineData("staging")]
+    [InlineData("daily")]
+    [InlineData("pr-12345")]
+    [InlineData("local")]
+    public async Task InitCommand_SingleFileMode_WritesIdentityChannelIntoAspireConfig(string contextChannel)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, contextChannel);
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService(contextChannel);
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        Assert.True(File.Exists(configPath));
+
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
+        if (string.Equals(contextChannel, PackageChannelNames.Stable, StringComparisons.ChannelName))
+        {
+            Assert.Null(config["channel"]);
+        }
+        else
+        {
+            Assert.Equal(contextChannel, config["channel"]!.GetValue<string>());
+        }
+    }
+
+    /// <summary>
+    /// A pre-existing `aspire.config.json#channel` must not be overwritten by init. Users
+    /// who hand-edit the channel (or migrate a project from a different CLI build) own
+    /// that value; init should only fill it in when absent.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_SingleFileMode_PreservesExistingChannelInAspireConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var existing = new JsonObject { ["channel"] = "pr-99999" };
+        await File.WriteAllTextAsync(configPath, existing.ToJsonString());
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "daily");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var config = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!.AsObject();
+        Assert.Equal("pr-99999", config["channel"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// When the running CLI's <see cref="CliExecutionContext.IdentityChannel"/> doesn't match
+    /// any registered channel (e.g. <c>local</c> on a production CLI, or a stale <c>pr-{N}</c>
+    /// without the matching hive), init must NOT persist a channel value. Persisting a
+    /// name no package source mapping satisfies would zero out polyglot
+    /// <c>aspire add</c> discovery via <c>IntegrationPackageSearchService</c>'s name filter.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_SingleFileMode_DoesNotPersistChannelWhenIdentityUnregistered()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "pr-99999");
+            // Only `daily` is registered; identity `pr-99999` has no match.
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
+        Assert.Null(config["channel"]);
+    }
+
+    /// <summary>
+    /// When the running CLI's identity matches a registered Implicit channel (production
+    /// <c>default</c> → nuget.org), init must NOT persist a channel value. Implicit channels
+    /// are the default fallback; pinning them at the project level is redundant and would
+    /// restrict polyglot <c>aspire add</c> discovery to a single channel —
+    /// the regression tracked by https://github.com/microsoft/aspire/issues/17295.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_SingleFileMode_DoesNotPersistChannelWhenIdentityMatchesImplicit()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            // PackageChannel.CreateImplicitChannel names the channel "default".
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "default");
+            options.PackagingServiceFactory = _ =>
+            {
+                var fakeCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        Task.FromResult<IEnumerable<NuGetPackageCli>>([])
+                };
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
+                };
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
+        Assert.Null(config["channel"]);
+    }
+
+    /// <summary>
+    /// Polyglot equivalent of <see cref="InitCommand_SingleFileMode_WritesIdentityChannelIntoAspireConfig"/>:
+    /// when the identity matches a registered non-default Explicit channel, init must propagate
+    /// the resolved channel name through <see cref="ScaffoldContext.Channel"/> so the scaffolder
+    /// persists it into <c>aspire.config.json#channel</c>. Without this, polyglot
+    /// <c>aspire add</c> falls back to the implicit feed regardless of the CLI build.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_PolyglotMode_PassesResolvedNonDefaultChannelToScaffolder()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        ScaffoldContext? capturedContext = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "daily");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+            options.LanguageServiceFactory = sp =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (ctx, _) =>
+                {
+                    capturedContext = ctx;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedContext);
+        Assert.Equal("daily", capturedContext!.Channel);
+    }
+
+    /// <summary>
+    /// The stable channel is an explicit PackagingService channel, but it is also the
+    /// default public-feed behavior. Persisting it would make package discovery use
+    /// only the synthetic NuGet.org config and hide packages from ambient private feeds.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_PolyglotMode_DoesNotPassStableChannelToScaffolder()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        ScaffoldContext? capturedContext = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "stable");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("stable");
+            options.LanguageServiceFactory = sp =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (ctx, _) =>
+                {
+                    capturedContext = ctx;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedContext);
+        Assert.Null(capturedContext!.Channel);
+    }
+
+    /// <summary>
+    /// Polyglot pre-existing-channel preservation. <c>ScaffoldingService.cs:93-95</c> writes
+    /// <c>config.Channel = context.Channel</c> unconditionally when non-empty, so if init
+    /// passed the resolved identity channel into <see cref="ScaffoldContext.Channel"/> without
+    /// first checking the file, a user-edited polyglot <c>aspire.config.json#channel</c>
+    /// would be silently overwritten on subsequent <c>aspire init</c> runs.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_PolyglotMode_PreservesExistingChannelInAspireConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var existing = new JsonObject { ["channel"] = "pr-99999" };
+        await File.WriteAllTextAsync(configPath, existing.ToJsonString());
+
+        ScaffoldContext? capturedContext = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "daily");
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+            options.LanguageServiceFactory = sp =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (ctx, _) =>
+                {
+                    capturedContext = ctx;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedContext);
+        // Init must suppress the channel pass-through so the scaffolder doesn't overwrite
+        // the user-edited value via `config.Channel = context.Channel`.
+        Assert.Null(capturedContext!.Channel);
+    }
+
+    /// <summary>
+    /// Polyglot equivalent of the unregistered-identity guard: when identity doesn't match
+    /// any registered channel, init must NOT pass it through to the scaffolder. Otherwise
+    /// the scaffolder would pin a name no PSM rule satisfies and polyglot <c>aspire add</c>
+    /// would return zero packages.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_PolyglotMode_DoesNotPassChannelWhenIdentityUnregistered()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        ScaffoldContext? capturedContext = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "pr-99999");
+            // Only `daily` is registered; identity `pr-99999` has no match.
+            options.PackagingServiceFactory = _ => CreateNamedChannelPackagingService("daily");
+            options.LanguageServiceFactory = sp =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (ctx, _) =>
+                {
+                    capturedContext = ctx;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedContext);
+        Assert.Null(capturedContext!.Channel);
+    }
+
+    /// <summary>
     /// Negative-shape tripwire: <c>aspire init</c> must never read the <c>channel</c> key from
     /// the global <see cref="IConfigurationService"/>. The injected configuration service throws
     /// on any <c>GetConfigurationAsync(key, ...)</c> or <c>GetConfigurationFromDirectoryAsync</c>

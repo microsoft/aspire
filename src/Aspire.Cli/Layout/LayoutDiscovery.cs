@@ -71,8 +71,45 @@ public sealed class LayoutDiscovery : ILayoutDiscovery
             return LogEnvironmentOverrides(relativeLayout);
         }
 
+        // 3. Try the Aspire home directory. This is the auto-extract destination
+        // for sidecar-less installs (e.g. CLI binaries in read-only locations
+        // like a Nix store), so the bundle the CLI just extracted has to be
+        // discoverable here too — otherwise post-extract validation fails and
+        // every command that depends on the bundle reports extraction failed.
+        // Keep this as the last probe so colocated installs (winget, brew,
+        // dotnet-tool, script, pr, localhive) are never shadowed by a stale
+        // home-directory layout.
+        var aspireHomeLayout = TryDiscoverAspireHomeLayout();
+        if (aspireHomeLayout is not null)
+        {
+            _logger.LogDebug("Discovered layout in Aspire home: {Path}", aspireHomeLayout.LayoutPath);
+            return LogEnvironmentOverrides(aspireHomeLayout);
+        }
+
         _logger.LogDebug("No bundle layout discovered");
         return null;
+    }
+
+    private LayoutConfiguration? TryDiscoverAspireHomeLayout()
+    {
+        string aspireHome;
+        try
+        {
+            aspireHome = CliPathHelper.GetDefaultAspireHomeDirectory();
+        }
+        catch (Exception ex) when (ex is ArgumentException or PathTooLongException or NotSupportedException)
+        {
+            _logger.LogDebug(ex, "TryDiscoverAspireHomeLayout: could not resolve Aspire home directory");
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(aspireHome) || !Directory.Exists(aspireHome))
+        {
+            return null;
+        }
+
+        _logger.LogDebug("TryDiscoverAspireHomeLayout: Checking Aspire home {Path}...", aspireHome);
+        return TryInferLayout(aspireHome);
     }
 
     public string? GetComponentPath(LayoutComponent component, string? projectDirectory = null)

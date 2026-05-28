@@ -15,82 +15,41 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class HostedAgentResourceBuilderExtensions
 {
-    /// <summary>
-    /// In both run and publish modes, build, deploy, and run the containerized agent as a hosted agent in Microsoft Foundry.
-    /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts because run-mode hosted agents are not yet implemented.</remarks>
-    [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented, so AsHostedAgent is not available in polyglot hosts.")]
-    public static IResourceBuilder<T> AsHostedAgent<T>(
-        this IResourceBuilder<T> builder, Action<HostedAgentConfiguration>? configure = null)
-        where T : ExecutableResource
-    {
-        return builder.AsHostedAgent(project: null, configure: configure);
-    }
 
     /// <summary>
-    /// In both run and publish modes, build, deploy, and run the containerized agent as a hosted agent in Microsoft Foundry.
-    /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts because run-mode hosted agents are not yet implemented.</remarks>
-    [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented, so AsHostedAgent is not available in polyglot hosts.")]
-    public static IResourceBuilder<T> AsHostedAgent<T>(
-        this IResourceBuilder<T> builder, IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null, Action<HostedAgentConfiguration>? configure = null)
-        where T : ExecutableResource
-    {
-        return builder.RunAsHostedAgent(project: project, configure: configure).PublishAsHostedAgent(project: project, configure: configure);
-    }
-
-    /// <summary>
-    /// In run mode, build, deploy, and run the containerized agent as a hosted agent in Microsoft Foundry.
-    /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts because run-mode hosted agents are not yet implemented.</remarks>
-    [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented.")]
-    public static IResourceBuilder<T> RunAsHostedAgent<T>(
-        this IResourceBuilder<T> builder, Action<HostedAgentConfiguration> configure)
-        where T : ExecutableResource
-    {
-        return builder.RunAsHostedAgent(project: null, configure: configure);
-    }
-
-    /// <summary>
-    /// In run mode, build, deploy, and run the containerized agent as a hosted agent in Microsoft Foundry.
-    /// </summary>
-    /// <remarks>This overload is not available in polyglot app hosts because run-mode hosted agents are not yet implemented.</remarks>
-    [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented.")]
-    public static IResourceBuilder<T> RunAsHostedAgent<T>(
-        this IResourceBuilder<T> builder, IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null, Action<HostedAgentConfiguration>? configure = null)
-        where T : ExecutableResource
-    {
-        // TODO: Implement this. This will require
-        // 1. Ensuring that ACR is provisioned
-        // 2. Building and pushing the container image
-        // 3. Creating an agent version and returning the name/version of the agent for later use.
-        throw new NotImplementedException("RunAsHostedAgent is not yet implemented.");
-    }
-
-    /// <summary>
-    /// Publish the containerized agent as a hosted agent in Microsoft Foundry.
+    /// Configures the resource to run as a hosted agent in Microsoft Foundry.
     ///
     /// If a project resource is not provided, the method will attempt to find an existing
     /// Microsoft Foundry project resource in the application model. If none exists,
     /// a new project resource (and its parent account resource) will be created automatically.
     /// </summary>
-    [AspireExportIgnore(Reason = "Subset of the full PublishAsHostedAgent overload which is exported.")]
-    public static IResourceBuilder<T> PublishAsHostedAgent<T>(
+    /// <remarks>
+    /// In run mode, this configures the resource with hosted agent endpoints, health checks,
+    /// and OpenTelemetry settings. In publish mode, the resource is deployed as a hosted agent
+    /// in Microsoft Foundry.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Subset of the full WithComputeEnvironment overload which is exported.")]
+    public static IResourceBuilder<T> WithComputeEnvironment<T>(
         this IResourceBuilder<T> builder, Action<HostedAgentConfiguration> configure)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return PublishAsHostedAgent(builder, project: null, configure: configure);
+        return WithComputeEnvironment(builder, project: null, configure: configure);
     }
 
     /// <summary>
-    /// Publish the containerized agent as a hosted agent in Microsoft Foundry.
+    /// Configures the resource to run as a hosted agent in Microsoft Foundry.
     ///
     /// If a project resource is not provided, the method will attempt to find an existing
     /// Microsoft Foundry project resource in the application model. If none exists,
     /// a new project resource (and its parent account resource) will be created automatically.
     /// </summary>
-    [AspireExport("publishAsHostedAgentExecutable", MethodName = "publishAsHostedAgent")]
-    public static IResourceBuilder<T> PublishAsHostedAgent<T>(
+    /// <remarks>
+    /// In run mode, this configures the resource with hosted agent endpoints, health checks,
+    /// and OpenTelemetry settings. In publish mode, the resource is deployed as a hosted agent
+    /// in Microsoft Foundry.
+    /// </remarks>
+    [AspireExport("withComputeEnvironmentExecutable", MethodName = "withComputeEnvironment")]
+    public static IResourceBuilder<T> WithComputeEnvironment<T>(
         this IResourceBuilder<T> builder, IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null, Action<HostedAgentConfiguration>? configure = null)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
@@ -262,7 +221,7 @@ public static class HostedAgentResourceBuilderExtensions
             }
         }
 
-        builder.WithComputeEnvironment(project);
+        ResourceBuilderExtensions.WithComputeEnvironment(builder, project!);
 
         // Hosted Agent resource name
         var agentName = $"{resource.Name}-ha";

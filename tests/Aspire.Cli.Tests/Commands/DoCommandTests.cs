@@ -7,6 +7,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Backchannel;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -325,14 +326,67 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        // Act - no step argument needed with --list-steps
-        var result = command.Parse("do --list-steps");
+        // Act - step argument is required, even with --list-steps
+        var result = command.Parse("do deploy --list-steps");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
         Assert.Equal(0, exitCode);
         Assert.True(getPipelineStepsCalled.Task.IsCompleted, "GetPipelineStepsAsync should have been called");
         Assert.True(requestStopCalled.Task.IsCompleted, "RequestStopAsync should have been called");
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsAndNoStepArgumentShowsFriendlyError()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/17526:
+        // `aspire do --list-steps` with no step argument used to launch the AppHost
+        // and crash mid-pipeline. It should now fail validation with a friendly
+        // error pointing at concrete examples.
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper);
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do --list-steps");
+
+        Assert.NotEmpty(result.Errors);
+        var combined = string.Join("\n", result.Errors.Select(e => e.Message));
+        Assert.Contains("--list-steps", combined);
+        Assert.Contains("aspire do deploy --list-steps", combined);
+        Assert.Contains("build", combined);
+        Assert.Contains("publish", combined);
+        Assert.Contains("https://aspire.dev/reference/cli/commands/aspire-do/", combined);
+    }
+
+    [Fact]
+    public async Task DoCommandWithListStepsAndNoStepArgumentInExtensionHostShowsFriendlyError()
+    {
+        // The extension host bypasses the plain `aspire do` step requirement because
+        // GetRunArgumentsAsync prompts the user interactively. But `--list-steps` does
+        // not flow through that prompt, so without the validator firing the extension
+        // would still hit the original crash from https://github.com/microsoft/aspire/issues/17526.
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.InteractionServiceFactory = sp => new TestExtensionInteractionService(sp);
+            options.ConfigurationCallback += config =>
+            {
+                config[KnownConfigNames.ExtensionDebugSessionId] = "test-session-id";
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse("do --list-steps");
+
+        Assert.NotEmpty(result.Errors);
+        var combined = string.Join("\n", result.Errors.Select(e => e.Message));
+        Assert.Contains("--list-steps", combined);
+        Assert.Contains("https://aspire.dev/reference/cli/commands/aspire-do/", combined);
     }
 
     [Fact]
@@ -431,7 +485,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("do --list-steps");
+        var result = command.Parse("do deploy --list-steps");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert - pipeline should NOT have been executed
@@ -489,7 +543,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
 
-        var result = command.Parse("do --list-steps");
+        var result = command.Parse("do deploy --list-steps");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(0, exitCode);

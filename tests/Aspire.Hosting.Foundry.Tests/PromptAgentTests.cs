@@ -20,7 +20,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent(model, "my-agent", instructions: "You tell jokes.");
+        var agent = project.AddPromptAgent("my-agent", model, instructions: "You tell jokes.");
 
         Assert.NotNull(agent);
         Assert.NotNull(agent.Resource);
@@ -36,7 +36,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent(model, "my-agent", instructions: "You tell jokes.");
+        var agent = project.AddPromptAgent("my-agent", model, instructions: "You tell jokes.");
 
         Assert.Equal("gpt41", agent.Resource.Model);
         Assert.Equal("You tell jokes.", agent.Resource.Instructions);
@@ -50,7 +50,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent(model, "my-agent");
+        var agent = project.AddPromptAgent("my-agent", model);
 
         Assert.Same(project.Resource, agent.Resource.Project);
     }
@@ -63,7 +63,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        Assert.Throws<ArgumentException>(() => project.AddPromptAgent(model, ""));
+        Assert.Throws<ArgumentException>(() => project.AddPromptAgent("", model));
     }
 
     [Fact]
@@ -73,7 +73,7 @@ public class PromptAgentTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
-        Assert.Throws<ArgumentNullException>(() => project.AddPromptAgent(null!, "my-agent"));
+        Assert.Throws<ArgumentNullException>(() => project.AddPromptAgent("my-agent", null!));
     }
 
     [Fact]
@@ -84,7 +84,7 @@ public class PromptAgentTests
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
 
-        var agent = project.AddPromptAgent(model, "my-agent");
+        var agent = project.AddPromptAgent("my-agent", model);
 
         Assert.Null(agent.Resource.Instructions);
     }
@@ -100,7 +100,7 @@ public class PromptAgentTests
         var codeInterp = project.AddCodeInterpreterTool("ci");
         var webSearch = project.AddWebSearchTool("ws");
 
-        var agent = project.AddPromptAgent(model, "my-agent",
+        var agent = project.AddPromptAgent("my-agent", model,
             instructions: "You tell jokes.")
             .WithTool(codeInterp)
             .WithTool(webSearch);
@@ -390,7 +390,7 @@ public class PromptAgentTests
         var aiSearch = project.AddAISearchTool("search-tool").WithReference(search);
         var sharePoint = project.AddSharePointTool("sp", "sp-conn");
 
-        var agent = project.AddPromptAgent(model, "my-agent",
+        var agent = project.AddPromptAgent("my-agent", model,
             instructions: "You tell jokes.")
             .WithTool(codeInterp)
             .WithTool(webSearch)
@@ -414,8 +414,8 @@ public class PromptAgentTests
 
         var codeInterp = project.AddCodeInterpreterTool("ci");
 
-        var agent1 = project.AddPromptAgent(model, "agent-1").WithTool(codeInterp);
-        var agent2 = project.AddPromptAgent(model, "agent-2").WithTool(codeInterp);
+        var agent1 = project.AddPromptAgent("agent-1", model).WithTool(codeInterp);
+        var agent2 = project.AddPromptAgent("agent-2", model).WithTool(codeInterp);
 
         Assert.Single(agent1.Resource.Tools);
         Assert.Single(agent2.Resource.Tools);
@@ -435,7 +435,7 @@ public class PromptAgentTests
         var toolFromProject2 = project2.AddCodeInterpreterTool("ci");
 
         Assert.Throws<InvalidOperationException>(() =>
-            project1.AddPromptAgent(model, "agent").WithTool(toolFromProject2));
+            project1.AddPromptAgent("agent", model).WithTool(toolFromProject2));
     }
 
     [Fact]
@@ -445,7 +445,7 @@ public class PromptAgentTests
         var project = builder.AddFoundry("test-account")
             .AddProject("test-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-        var agent = project.AddPromptAgent(model, "my-agent", instructions: "You tell jokes.");
+        var agent = project.AddPromptAgent("my-agent", model, instructions: "You tell jokes.");
 
         var pyapp = builder.AddPythonApp("app", "./app.py", "main:app")
             .WithReference(agent);
@@ -464,7 +464,7 @@ public class PromptAgentTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
         var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
-        var agent = project.AddPromptAgent(model, "my-agent");
+        var agent = project.AddPromptAgent("my-agent", model);
 
         Assert.IsAssignableFrom<IResourceWithConnectionString>(agent.Resource);
         Assert.IsAssignableFrom<IResourceWithEnvironment>(agent.Resource);

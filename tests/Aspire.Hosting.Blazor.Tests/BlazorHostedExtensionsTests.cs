@@ -3,6 +3,8 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Blazor.Tests;
 
@@ -85,7 +87,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("OTEL_SERVICE_NAME", configJson);
         Assert.Contains("blazorapp", configJson);
-        Assert.Contains("ASPIRE_OTLP_PATH_BASE", configJson);
+        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
         Assert.Contains("/_otlp", configJson);
     }
 
@@ -114,7 +116,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         // Config response includes both service URLs and OTLP
         var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("services__weatherapi__https__0", configJson);
-        Assert.Contains("ASPIRE_OTLP_PATH_BASE", configJson);
+        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
         Assert.Contains("OTEL_SERVICE_NAME", configJson);
     }
 
@@ -182,7 +184,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.False(env.ContainsKey("ReverseProxy__Routes__route-otlp__ClusterId"));
 
         var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
-        Assert.DoesNotContain("ASPIRE_OTLP_PATH_BASE", configJson);
+        Assert.DoesNotContain("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
     }
 
     [Fact]
@@ -282,16 +284,105 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("catalogapi", referencedNames);
     }
 
+    [Fact]
+    public async Task ProxyTelemetry_LogsWarning_WhenOtlpEndpointNotResolvable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        // Intentionally NOT setting ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL
+
+        builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
+            .ProxyBlazorTelemetry();
+
+        var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
+        var (_, sink) = await GetEnvironmentVariablesWithLogs(blazorApp, builder);
+
+        Assert.Contains(sink.Writes, msg =>
+            msg.LogLevel == LogLevel.Warning &&
+            msg.Message?.Contains("OTLP telemetry proxying was requested") == true &&
+            msg.Message?.Contains("WASM client telemetry will not be forwarded") == true);
+    }
+
+    [Fact]
+    public async Task ProxyTelemetry_DoesNotLogWarning_WhenOtlpEndpointIsConfigured()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
+
+        builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
+            .ProxyBlazorTelemetry();
+
+        var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
+        var (_, sink) = await GetEnvironmentVariablesWithLogs(blazorApp, builder);
+
+        Assert.DoesNotContain(sink.Writes, msg =>
+            msg.LogLevel == LogLevel.Warning &&
+            msg.Message?.Contains("OTLP telemetry proxying was requested") == true);
+    }
+
+    [Fact]
+    public async Task WithBlazorClientApp_LogsWarning_WhenOtlpEndpointNotResolvable()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+        gateway.WithBlazorClientApp(wasmApp, proxyTelemetry: true);
+
+        var (_, sink) = await GetEnvironmentVariablesWithLogs(gateway.Resource, builder);
+
+        Assert.Contains(sink.Writes, msg =>
+            msg.LogLevel == LogLevel.Warning &&
+            msg.Message?.Contains("OTLP telemetry proxying was requested") == true &&
+            msg.Message?.Contains("WASM client telemetry will not be forwarded") == true);
+    }
+
+    [Fact]
+    public async Task WithBlazorClientApp_DoesNotLogWarning_WhenOtlpEndpointIsConfigured()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+        gateway.WithBlazorClientApp(wasmApp, proxyTelemetry: true);
+
+        var (_, sink) = await GetEnvironmentVariablesWithLogs(gateway.Resource, builder);
+
+        Assert.DoesNotContain(sink.Writes, msg =>
+            msg.LogLevel == LogLevel.Warning &&
+            msg.Message?.Contains("OTLP telemetry proxying was requested") == true);
+    }
+
     private static async Task<Dictionary<string, object>> GetEnvironmentVariables(
         IResource resource, IDistributedApplicationBuilder builder)
     {
+        var (env, _) = await GetEnvironmentVariablesWithLogs(resource, builder);
+        return env;
+    }
+
+    private static async Task<(Dictionary<string, object> Env, TestSink Sink)> GetEnvironmentVariablesWithLogs(
+        IResource resource, IDistributedApplicationBuilder builder)
+    {
         var env = new Dictionary<string, object>();
-        var context = new EnvironmentCallbackContext(builder.ExecutionContext, resource, env);
+        var sink = new TestSink();
+        var logger = new TestLogger(string.Empty, sink, enabled: true);
+        var context = new EnvironmentCallbackContext(builder.ExecutionContext, resource, env)
+        {
+            Logger = logger
+        };
         foreach (var callback in resource.Annotations.OfType<EnvironmentCallbackAnnotation>())
         {
             await callback.Callback(context).ConfigureAwait(false);
         }
-        return env;
+        return (env, sink);
     }
 
     private static string ResolveManifestExpression(object value)

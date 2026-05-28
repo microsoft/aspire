@@ -46,6 +46,7 @@ internal sealed class InitCommand : BaseCommand
     private readonly IScaffoldingService _scaffoldingService;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly TemplateNuGetConfigService _templateNuGetConfigService;
+    private readonly IPackagingService _packagingService;
 
     private static readonly Option<string?> s_sourceOption = new("--source", "-s")
     {
@@ -77,7 +78,8 @@ internal sealed class InitCommand : BaseCommand
         ICertificateService certificateService,
         IScaffoldingService scaffoldingService,
         ILanguageDiscovery languageDiscovery,
-        TemplateNuGetConfigService templateNuGetConfigService)
+        TemplateNuGetConfigService templateNuGetConfigService,
+        IPackagingService packagingService)
         : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _executionContext = executionContext;
@@ -89,6 +91,7 @@ internal sealed class InitCommand : BaseCommand
         _scaffoldingService = scaffoldingService;
         _languageDiscovery = languageDiscovery;
         _templateNuGetConfigService = templateNuGetConfigService;
+        _packagingService = packagingService;
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -291,7 +294,21 @@ internal sealed class InitCommand : BaseCommand
         // in aspire.config.json — newly generated, or pre-existing if the file already
         // had a `profiles` section. Use the SAME ports for apphost.run.json so the two
         // files always agree on dashboard / OTLP / resource service endpoints.
-        var (configResult, effectivePorts) = DropAspireConfig(workingDirectory, "apphost.cs", language: null, ports);
+        //
+        // Persist the running CLI's identity channel (e.g. `daily`, `staging`, `pr-<N>`)
+        // so subsequent commands like `aspire add` resolve packages against the matching
+        // channel. Resolve through PackagingService and only persist when the identity
+        // matches a registered Explicit channel — mirrors `NewCommand.cs:316-402`.
+        //
+        // `ResolvePersistableChannelNameAsync` filters out identities that aren't
+        // registered as channels on this CLI install (e.g. `local`, `staging` on a CLI
+        // without the staging feature flag, stale `pr-<N>` after the hive is gone),
+        // the Implicit `default` channel that no CLI identity ever has, and `stable`
+        // because the public-feed behavior is already the default. Non-default
+        // Explicit channels are persisted so subsequent commands can match a PSM rule.
+        // See https://github.com/microsoft/aspire/issues/17295.
+        var resolvedChannel = await ResolvePersistableChannelNameAsync(cancellationToken);
+        var (configResult, effectivePorts) = DropAspireConfig(workingDirectory, "apphost.cs", language: null, resolvedChannel, ports);
         if (configResult != CliExitCodes.Success)
         {
             return configResult;
@@ -467,7 +484,25 @@ internal sealed class InitCommand : BaseCommand
             return CliExitCodes.Success;
         }
 
-        var context = new ScaffoldContext(language, workingDirectory, workingDirectory.Name);
+        // Resolve and pass the running CLI's identity channel through to the scaffolder
+        // so it lands in aspire.config.json#channel. Only persist when the identity
+        // resolves to a persistable registered Explicit channel — see
+        // `ResolvePersistableChannelNameAsync` for the full rationale. Additionally,
+        // if aspire.config.json already carries a channel value, suppress the pass-through:
+        // `ScaffoldingService.cs:93-95` writes
+        // `config.Channel = context.Channel` unconditionally when non-empty, so without
+        // this guard a user-edited channel would be silently overwritten.
+        var resolvedChannel = await ResolvePersistableChannelNameAsync(cancellationToken);
+        if (!string.IsNullOrEmpty(resolvedChannel))
+        {
+            var existing = TryLoadExistingChannel(workingDirectory);
+            if (!string.IsNullOrEmpty(existing))
+            {
+                resolvedChannel = null;
+            }
+        }
+
+        var context = new ScaffoldContext(language, workingDirectory, workingDirectory.Name, Channel: resolvedChannel);
         var scaffolded = await _scaffoldingService.ScaffoldAsync(context, cancellationToken);
         if (!scaffolded)
         {
@@ -478,7 +513,7 @@ internal sealed class InitCommand : BaseCommand
         return CliExitCodes.Success;
     }
 
-    private (int ExitCode, AppHostProfilePorts EffectivePorts) DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language, AppHostProfilePorts? ports = null)
+    private (int ExitCode, AppHostProfilePorts EffectivePorts) DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language, string? channel, AppHostProfilePorts? ports = null)
     {
         var configPath = Path.Combine(directory.FullName, AspireConfigFile.FileName);
 
@@ -525,6 +560,16 @@ internal sealed class InitCommand : BaseCommand
         if (language is not null && appHost["language"] is null)
         {
             appHost["language"] = language;
+        }
+
+        // Persist the channel at the top level so `aspire add` / `integration list` /
+        // `integration search` resolve packages against the channel the CLI scaffolded
+        // for. Only write when not already present so a user-edited value wins. Leaving
+        // the channel unset on a non-stable CLI causes downstream commands to fall back
+        // to implicit nuget.org versions that don't line up with the CLI build.
+        if (!string.IsNullOrEmpty(channel) && settings["channel"] is null)
+        {
+            settings["channel"] = channel;
         }
 
         // Resolve the effective ports. Three cases:
@@ -587,6 +632,72 @@ internal sealed class InitCommand : BaseCommand
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, AspireConfigFile.FileName));
         return (CliExitCodes.Success, effectivePorts);
+    }
+
+    /// <summary>
+    /// Resolves the <see cref="CliExecutionContext.IdentityChannel"/> into a channel name
+    /// safe to persist into <c>aspire.config.json#channel</c>. Returns <c>null</c> when:
+    /// <list type="bullet">
+    /// <item><description>The identity is empty (no channel context).</description></item>
+    /// <item><description>The identity doesn't match any registered channel (e.g. <c>local</c>,
+    /// <c>staging</c> on a CLI without the staging feature flag, or a stale <c>pr-{N}</c> on a
+    /// machine without the matching hive). Persisting these would pin a name no PSM rule can
+    /// satisfy and zero out polyglot <c>aspire add</c> discovery via
+    /// <c>IntegrationPackageSearchService.cs</c> line 28-30.</description></item>
+    /// <item><description>The matched channel is <see cref="PackageChannelType.Implicit"/>.
+    /// In production the only Implicit channel created by <c>PackagingService.GetChannelsAsync</c>
+    /// is <c>default</c> (the unscoped nuget.org aggregator), which no CLI identity ever
+    /// resolves to — this branch exists defensively in case a future <c>PackagingService</c>
+    /// adds another Implicit channel whose name happens to collide with a CLI identity.</description></item>
+    /// <item><description>The matched channel is <see cref="PackageChannelNames.Stable"/>.
+    /// Stable uses the same public-feed package set users get by default, but pinning it
+    /// per-project makes package discovery use only the synthetic NuGet.org config and
+    /// hides packages from ambient private feeds.</description></item>
+    /// </list>
+    /// Mirrors the resolution logic in <c>NewCommand.cs:316-402</c> and the warning in
+    /// <c>ScaffoldingService.cs:84-92</c> against falling back to <c>IdentityChannel</c> blindly.
+    /// </summary>
+    private async Task<string?> ResolvePersistableChannelNameAsync(CancellationToken cancellationToken)
+    {
+        var identityChannel = _executionContext.IdentityChannel;
+        if (string.IsNullOrWhiteSpace(identityChannel))
+        {
+            return null;
+        }
+
+        IEnumerable<PackageChannel> channels;
+        try
+        {
+            channels = await _packagingService.GetChannelsAsync(cancellationToken, identityChannel);
+        }
+        catch (Exception)
+        {
+            // Channel discovery is best-effort here — failing to resolve must not break
+            // `aspire init`. Skip persistence and let downstream commands re-resolve.
+            return null;
+        }
+
+        var match = channels.FirstOrDefault(c => string.Equals(c.Name, identityChannel, StringComparisons.ChannelName));
+        return match?.ShouldPersistChannelName() is true ? match.Name : null;
+    }
+
+    /// <summary>
+    /// Best-effort read of the persisted channel from <c>aspire.config.json</c> in
+    /// <paramref name="directory"/>. Used by the polyglot path to avoid overwriting a
+    /// user-edited value via <c>ScaffoldingService</c>, which writes the context channel
+    /// unconditionally. Returns <c>null</c> if the file is absent, unparseable, or has
+    /// no <c>channel</c> key — those cases all mean "no user-set value to preserve".
+    /// </summary>
+    private static string? TryLoadExistingChannel(DirectoryInfo directory)
+    {
+        try
+        {
+            return AspireConfigFile.Load(directory.FullName)?.Channel;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     // Best-effort extraction of the dashboard / OTLP / resource service ports from an

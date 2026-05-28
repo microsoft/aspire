@@ -5,6 +5,7 @@ using System.Formats.Tar;
 using System.IO.Compression;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
@@ -13,6 +14,11 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests;
 
+// EnsureExtractedAndAcquireLayoutAsync_SidecarlessInstall_ExtractsToAspireHomeAndAcquiresLayout
+// mutates the process-wide ASPIRE_HOME variable. xUnit runs test classes in parallel by default,
+// so join EnvVarMutatingTestCollection to serialize with other suites that read ASPIRE_HOME via
+// CliPathHelper.GetDefaultAspireHomeDirectory.
+[Collection(EnvVarMutatingTestCollection.Name)]
 public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
 {
     /// <summary>
@@ -197,9 +203,15 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         var layoutRoot = workspace.WorkspaceRoot.FullName;
         var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
 
-        var v1BinaryPath = CreateFakeCliBinary(Path.Combine(layoutRoot, ".fake-bins"), "aspire-v1", "cli-v1");
-        var v2BinaryPath = CreateFakeCliBinary(Path.Combine(layoutRoot, ".fake-bins"), "aspire-v2", "cli-v2-longer");
+        var binDir = Path.Combine(layoutRoot, ".fake-bins");
+        var v1BinaryPath = CreateFakeCliBinary(binDir, "aspire-v1", "cli-v1");
+        var v2BinaryPath = CreateFakeCliBinary(binDir, "aspire-v2", "cli-v2-longer");
         File.SetLastWriteTimeUtc(v2BinaryPath, File.GetLastWriteTimeUtc(v1BinaryPath).AddHours(1));
+
+        // Drop a script sidecar so EnsureExtractedAndAcquireLayoutAsync resolves the
+        // process-driven extract directory to the parent of the binary directory
+        // (layoutRoot) rather than the default Aspire home.
+        File.WriteAllText(Path.Combine(binDir, ".aspire-install.json"), "{\"source\":\"script\"}");
 
         var v1Service = CreateService(new TestBundlePayloadProvider(CreateFakeBundlePayload("v1")), layoutDiscovery, v1BinaryPath);
         var result1 = await v1Service.ExtractAsync(layoutRoot, force: true);
@@ -280,10 +292,14 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task EnsureExtractedAsync_DotnetToolStorePath_ExtractsToTargetFrameworkDirectory()
+    public async Task EnsureExtractedAsync_DotnetToolStorePath_ExtractsToRidDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var layoutRoot = Path.Combine(
+        // RID-specific dotnet-tool layout: the native binary lives in the
+        // RID-scoped directory inside the tool store. The sidecar declares
+        // source=dotnet-tool so extraction stays at that same RID directory
+        // (binaryDir) rather than falling back to Aspire home.
+        var ridDir = Path.Combine(
             workspace.WorkspaceRoot.FullName,
             ".dotnet",
             "tools",
@@ -293,22 +309,24 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
             "aspire.cli.linux-x64",
             "9.4.0",
             "tools",
-            "net10.0");
+            "net10.0",
+            "linux-x64");
         var processPath = CreateFakeCliBinary(
-            Path.Combine(layoutRoot, "linux-x64"),
+            ridDir,
             BundleDiscovery.GetExecutableFileName("aspire"),
             "native-aot-cli");
+        File.WriteAllText(Path.Combine(ridDir, ".aspire-install.json"), "{\"source\":\"dotnet-tool\"}");
         var payload = CreateFakeBundlePayload();
         var provider = new TestBundlePayloadProvider(payload);
-        var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
+        var layoutDiscovery = new TestLayoutDiscovery(ridDir);
         var service = CreateService(provider, layoutDiscovery, processPath);
 
         await service.EnsureExtractedAsync();
 
-        var bundleLink = Path.Combine(layoutRoot, BundleDiscovery.BundleDirectoryName);
+        var bundleLink = Path.Combine(ridDir, BundleDiscovery.BundleDirectoryName);
         try
         {
-            Assert.True(ReparsePoint.IsReparsePoint(bundleLink), "bundle/ should be a reparse point under the tool TFM directory");
+            Assert.True(ReparsePoint.IsReparsePoint(bundleLink), "bundle/ should be a reparse point under the tool RID directory");
 
             var managedExe = Path.Combine(bundleLink,
                 BundleDiscovery.ManagedDirectoryName,
@@ -317,7 +335,96 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
         }
         finally
         {
-            CleanupReparsePoints(layoutRoot);
+            CleanupReparsePoints(ridDir);
+        }
+    }
+
+    [Fact]
+    public async Task EnsureExtractedAndAcquireLayoutAsync_SidecarlessInstall_ExtractsToAspireHomeAndAcquiresLayout()
+    {
+        // End-to-end coverage for the sidecar-less install scenario fixed by this PR:
+        //   1. ComputeDefaultExtractDir routes a no-sidecar CLI to $ASPIRE_HOME instead of
+        //      Path.GetDirectoryName(binaryDir) so binaries in read-only locations (e.g.
+        //      Nix stores) can still extract their bundle.
+        //   2. The real LayoutDiscovery's Aspire-home probe finds the freshly extracted
+        //      layout even though the CLI binary is outside the bundle hierarchy.
+        // Individual pieces are covered by ComputeDefaultExtractDir tests and
+        // LayoutDiscovery_FallsBackToAspireHomeWhenLayoutIsNotRelativeToCli; this test
+        // locks in the combined behavior end-to-end through EnsureExtractedAndAcquireLayoutAsync.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // CLI lives in a directory unrelated to any layout, with no .aspire-install.json
+        // sidecar. This simulates an installation in an arbitrary location such as a
+        // package-manager-controlled, read-only prefix.
+        var binaryDir = Path.Combine(workspace.WorkspaceRoot.FullName, "opt", "aspire-readonly", "bin");
+        var processPath = CreateFakeCliBinary(
+            binaryDir,
+            BundleDiscovery.GetExecutableFileName("aspire"),
+            "sidecarless-cli");
+
+        var aspireHome = Path.Combine(workspace.WorkspaceRoot.FullName, "home", ".aspire");
+        Directory.CreateDirectory(aspireHome);
+
+        var payload = CreateFakeBundlePayload();
+        var provider = new TestBundlePayloadProvider(payload);
+
+        // Use the real LayoutDiscovery (not TestLayoutDiscovery) so the post-extract
+        // probe must actually find the freshly extracted bundle via the Aspire-home
+        // fallback. Relative-to-CLI discovery must fail (binary lives outside any
+        // layout) for the home probe to be exercised.
+        var layoutDiscovery = new LayoutDiscovery(NullLogger<LayoutDiscovery>.Instance)
+        {
+            ProcessPathOverride = processPath
+        };
+        var service = CreateService(provider, layoutDiscovery, processPath);
+
+        var originalAspireHome = Environment.GetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable);
+        try
+        {
+            Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, aspireHome);
+
+            using var layoutLease = await service.EnsureExtractedAndAcquireLayoutAsync("test", "sidecarless-flow");
+
+            Assert.NotNull(layoutLease);
+            Assert.True(layoutLease!.HasLease);
+
+            // Bundle should have been extracted under $ASPIRE_HOME (not next to the CLI binary).
+            var bundleLink = Path.Combine(aspireHome, BundleDiscovery.BundleDirectoryName);
+            Assert.True(ReparsePoint.IsReparsePoint(bundleLink),
+                $"bundle/ should be a reparse point under $ASPIRE_HOME ({aspireHome})");
+
+            var managedExe = Path.Combine(bundleLink,
+                BundleDiscovery.ManagedDirectoryName,
+                BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+            Assert.True(File.Exists(managedExe), $"managed exe should exist at {managedExe}");
+
+            // No stray extraction should have leaked next to the CLI binary itself.
+            Assert.False(
+                Directory.Exists(Path.Combine(binaryDir, BundleDiscovery.BundleDirectoryName)),
+                "bundle/ must not be created next to the sidecar-less CLI binary.");
+            Assert.False(
+                Directory.Exists(Path.Combine(Path.GetDirectoryName(binaryDir)!, BundleDiscovery.BundleDirectoryName)),
+                "bundle/ must not be created in the parent of the sidecar-less binary directory.");
+
+            // The resolved layout must point into the active version directory under $ASPIRE_HOME,
+            // proving the post-extract discovery succeeded via the Aspire-home probe rather than a
+            // cached lookup.
+            var versionsDir = Path.Combine(aspireHome, BundleService.VersionsDirectoryName);
+            var activeVersionDir = Assert.Single(Directory.GetDirectories(versionsDir));
+
+            var managedPath = layoutLease.Layout.GetManagedPath();
+            Assert.NotNull(managedPath);
+
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            Assert.StartsWith(
+                Path.GetFullPath(activeVersionDir),
+                Path.GetFullPath(managedPath!),
+                comparison);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable(CliPathHelper.AspireHomeEnvironmentVariable, originalAspireHome);
+            CleanupReparsePoints(aspireHome);
         }
     }
 

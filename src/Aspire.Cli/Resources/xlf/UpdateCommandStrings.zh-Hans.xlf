@@ -42,6 +42,11 @@
         <target state="translated">"aspire update" 当前不支持中央包管理。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChannelNonePlaceholder">
+        <source>(none)</source>
+        <target state="new">(none)</target>
+        <note>Displayed in place of the current channel value when aspire.config.json has no channel pinned.</note>
+      </trans-unit>
       <trans-unit id="ChannelOptionDescription">
         <source>Channel to update to (stable, daily)</source>
         <target state="translated">要更新到的频道(稳定，每日)</target>
@@ -266,6 +271,11 @@
         <source>Unexpected code path.</source>
         <target state="translated">意外的代码路径。</target>
         <note />
+      </trans-unit>
+      <trans-unit id="UpdateChannelStepDescriptionFormat">
+        <source>Update aspire.config.json channel from '{0}' to '{1}'</source>
+        <target state="new">Update aspire.config.json channel from '{0}' to '{1}'</target>
+        <note>{0} = current channel name (or '(none)' if absent). {1} = new channel name.</note>
       </trans-unit>
       <trans-unit id="UpdateCliAfterProjectUpdatePrompt">
         <source>An update is available for the Aspire CLI. Would you like to update it now?</source>

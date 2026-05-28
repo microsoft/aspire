@@ -356,7 +356,7 @@ public sealed class AtsCapabilityInfo
     public string? SourceLocation { get; init; }
 
     /// <summary>
-    /// Gets or sets whether synchronous invocations of this capability should run on a background thread.
+    /// Gets or sets whether this capability's invocation should run on a background thread.
     /// </summary>
     public bool RunSyncOnBackgroundThread { get; init; }
 }

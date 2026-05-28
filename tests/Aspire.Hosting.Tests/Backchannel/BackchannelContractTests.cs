@@ -333,6 +333,11 @@ public class BackchannelContractTests
             return propertyName;
         }
 
+        if (property.PropertyType == typeof(string[]))
+        {
+            return new[] { propertyName };
+        }
+
         if (propertyType == typeof(bool))
         {
             return defaultValue is bool value ? !value : true;
@@ -379,6 +384,11 @@ public class BackchannelContractTests
         {
             return expectedDictionary.Count == actualDictionary.Count &&
                    expectedDictionary.All(item => actualDictionary.TryGetValue(item.Key, out var actualValue) && item.Value == actualValue);
+        }
+
+        if (expected is string[] expectedArray && actual is string[] actualArray)
+        {
+            return expectedArray.SequenceEqual(actualArray);
         }
 
         return Equals(expected, actual);

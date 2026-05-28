@@ -102,7 +102,10 @@ The Microsoft Foundry resource exposes the following connection properties:
 | Property Name | Description |
 |---------------|-------------|
 | `Uri` | The endpoint URI for the Microsoft Foundry resource, with the format `https://<resource_name>.services.ai.azure.com/` or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
+| `AIInferenceUri` | The AI inference endpoint URI, with the format `https://<resource_name>.services.ai.azure.com/models` when targeting Azure or the emulator service URI when running Foundry Local (e.g., `http://127.0.0.1:61799/v1`) |
 | `Key` | The API key when using Foundry Local |
+
+See [Migrate from Azure AI Inference to Azure OpenAI in Azure AI Foundry Models](https://learn.microsoft.com/azure/foundry/how-to/model-inference-to-openai-migration?tabs=openai) for guidance on which URI to use based on the SDK used by your application.
 
 ### Microsoft Foundry deployment
 
@@ -160,7 +163,7 @@ var foundry = builder.AddFoundry("foundry");
 var project = foundry.AddProject("my-project");
 
 builder.AddPythonApp("agent", "./app", "main:app")
-       .PublishAsHostedAgent(project);
+       .WithComputeEnvironment(project);
 ```
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.

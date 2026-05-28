@@ -34,8 +34,8 @@ public static class PromptAgentBuilderExtensions
     /// </remarks>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry project resource.</param>
     /// <ats-param name="project">The Microsoft Foundry project resource builder.</ats-param>
-    /// <param name="model">The model deployment to use for this agent.</param>
     /// <param name="name">The name of the prompt agent. This will be the agent name in Foundry.</param>
+    /// <param name="model">The model deployment to use for this agent.</param>
     /// <param name="instructions">Optional system instructions for the agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the prompt agent resource.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
@@ -49,7 +49,7 @@ public static class PromptAgentBuilderExtensions
     /// var aiSearch = project.AddAISearchTool("search").WithReference(searchResource);
     /// var codeInterp = project.AddCodeInterpreterTool("code-interp");
     ///
-    /// project.AddPromptAgent(chat, "joker-agent",
+    /// project.AddPromptAgent("joker-agent", chat,
     ///     instructions: "You are good at telling jokes.")
     ///     .WithTool(bing)
     ///     .WithTool(aiSearch)
@@ -59,8 +59,8 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<AzurePromptAgentResource> AddPromptAgent(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
+        [ResourceName] string name,
         IResourceBuilder<FoundryDeploymentResource> model,
-        string name,
         string? instructions = null)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -164,7 +164,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<CodeInterpreterToolResource> AddCodeInterpreterTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name)
+        [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -187,7 +187,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<FileSearchToolResource> AddFileSearchTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name,
+        [ResourceName] string name,
         params string[] vectorStoreIds)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -213,7 +213,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<WebSearchToolResource> AddWebSearchTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name)
+        [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -235,7 +235,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<ImageGenerationToolResource> AddImageGenerationTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name)
+        [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -260,7 +260,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<ComputerToolResource> AddComputerUseTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name,
+        [ResourceName] string name,
         int displayWidth = 1024,
         int displayHeight = 768,
         string environment = "browser")
@@ -295,7 +295,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<AzureAISearchToolResource> AddAISearchTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name,
+        [ResourceName] string name,
         string? indexName = null)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -359,7 +359,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<BingGroundingToolResource> AddBingGroundingTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name)
+        [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(project);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -489,7 +489,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<SharePointToolResource> AddSharePointTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name,
+        [ResourceName] string name,
         params string[] projectConnectionIds)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -513,7 +513,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<FabricToolResource> AddFabricTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name,
+        [ResourceName] string name,
         params string[] projectConnectionIds)
     {
         ArgumentNullException.ThrowIfNull(project);
@@ -545,7 +545,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible. Use the string overload instead.")]
     public static IResourceBuilder<AzureFunctionToolResource> AddAzureFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name,
+        [ResourceName] string name,
         string functionName,
         string description,
         BinaryData parameters,
@@ -583,7 +583,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     public static IResourceBuilder<AzureFunctionToolResource> AddAzureFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name,
+        [ResourceName] string name,
         string functionName,
         string description,
         string parametersJson,
@@ -611,7 +611,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExportIgnore(Reason = "BinaryData parameter is not ATS-compatible. Use the string overload instead.")]
     public static IResourceBuilder<FunctionToolResource> AddFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name,
+        [ResourceName] string name,
         string functionName,
         BinaryData parameters,
         string? description = null,
@@ -642,7 +642,7 @@ public static class PromptAgentBuilderExtensions
     [AspireExport]
     internal static IResourceBuilder<FunctionToolResource> AddFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
-        string name,
+        [ResourceName] string name,
         string functionName,
         string parametersJson,
         string? description = null,

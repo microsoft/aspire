@@ -96,29 +96,13 @@ namespace Aspire.Hosting
 
     public static partial class HostedAgentResourceBuilderExtensions
     {
-        [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented, so AsHostedAgent is not available in polyglot hosts.")]
-        public static ApplicationModel.IResourceBuilder<T> AsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource>? project = null, System.Action<Foundry.HostedAgentConfiguration>? configure = null)
-            where T : ApplicationModel.ExecutableResource { throw null; }
-
-        [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented, so AsHostedAgent is not available in polyglot hosts.")]
-        public static ApplicationModel.IResourceBuilder<T> AsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Foundry.HostedAgentConfiguration>? configure = null)
-            where T : ApplicationModel.ExecutableResource { throw null; }
-
-        [AspireExport("publishAsHostedAgentExecutable", MethodName = "publishAsHostedAgent", Description = "Publishes an executable resource as a hosted agent in Microsoft Foundry.")]
-        public static ApplicationModel.IResourceBuilder<T> PublishAsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource>? project = null, System.Action<Foundry.HostedAgentConfiguration>? configure = null)
+        [AspireExport("withComputeEnvironmentExecutable", MethodName = "withComputeEnvironment")]
+        public static ApplicationModel.IResourceBuilder<T> WithComputeEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource>? project = null, System.Action<Foundry.HostedAgentConfiguration>? configure = null)
             where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }
 
-        [AspireExportIgnore(Reason = "Subset of the full PublishAsHostedAgent overload which is exported.")]
-        public static ApplicationModel.IResourceBuilder<T> PublishAsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Foundry.HostedAgentConfiguration> configure)
+        [AspireExportIgnore(Reason = "Subset of the full WithComputeEnvironment overload which is exported.")]
+        public static ApplicationModel.IResourceBuilder<T> WithComputeEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Foundry.HostedAgentConfiguration> configure)
             where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }
-
-        [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented.")]
-        public static ApplicationModel.IResourceBuilder<T> RunAsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource>? project = null, System.Action<Foundry.HostedAgentConfiguration>? configure = null)
-            where T : ApplicationModel.ExecutableResource { throw null; }
-
-        [AspireExportIgnore(Reason = "RunAsHostedAgent is not yet implemented.")]
-        public static ApplicationModel.IResourceBuilder<T> RunAsHostedAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Foundry.HostedAgentConfiguration> configure)
-            where T : ApplicationModel.ExecutableResource { throw null; }
     }
 
     public static partial class PromptAgentBuilderExtensions
@@ -154,7 +138,7 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<Foundry.ImageGenerationToolResource> AddImageGenerationTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name) { throw null; }
 
         [AspireExport(Description = "Adds a prompt agent to a Microsoft Foundry project.")]
-        public static ApplicationModel.IResourceBuilder<Foundry.AzurePromptAgentResource> AddPromptAgent(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> model, string name, string? instructions = null) { throw null; }
+        public static ApplicationModel.IResourceBuilder<Foundry.AzurePromptAgentResource> AddPromptAgent(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, ApplicationModel.IResourceBuilder<Foundry.FoundryDeploymentResource> model, string? instructions = null) { throw null; }
 
         [AspireExport(Description = "Adds a SharePoint grounding tool to a Microsoft Foundry project.")]
         public static ApplicationModel.IResourceBuilder<Foundry.SharePointToolResource> AddSharePointTool(this ApplicationModel.IResourceBuilder<Foundry.AzureCognitiveServicesProjectResource> project, string name, params string[] projectConnectionIds) { throw null; }

@@ -4,24 +4,15 @@ parameters:
     default: ''
   - name: channel
     type: string
-  - name: artifactVersion
-    type: string
-    default: ''
   - name: archiveRoot
     type: string
     default: ''
-  - name: skipUrlValidation
-    type: boolean
-    default: false
-  # runInstallTest is derived from skipUrlValidation (they are logical inverses).
-  # Callers should only set skipUrlValidation; install tests run when URLs are valid.
 
 steps:
   - bash: |
       set -euo pipefail
       version='${{ parameters.version }}'
       channel='${{ parameters.channel }}'
-      artifactVersion='${{ parameters.artifactVersion }}'
 
       if [ -z "$version" ]; then
         echo "##[error]Version parameter is required"
@@ -35,38 +26,31 @@ steps:
 
       # Casks are generated for every channel. The artifact is a CI-only build
       # output consumed by dogfooders via 'brew install --cask <local-path>'.
-      # Public Homebrew publishing is gated separately by publish-homebrew.yml in
-      # the release-publish pipeline, which downloads 'homebrew-cask-stable' by
-      # name — so prerelease artifacts can never reach the public tap.
+      # Public Homebrew publishing for the stable cask is handled by upstream
+      # Homebrew/homebrew-cask's autobump workflow (see eng/homebrew/README.md)
+      # — this pipeline does not push to the public tap.
       artifactName="homebrew-cask-$channel"
 
       echo "Version: $version"
       echo "Channel: $channel"
-      echo "Artifact version: ${artifactVersion:-$version}"
       echo "Artifact name: $artifactName"
 
       echo "##vso[task.setvariable variable=CliVersion]$version"
-      echo "##vso[task.setvariable variable=CliArtifactVersion]${artifactVersion:-$version}"
       echo "##vso[task.setvariable variable=HomebrewChannel]$channel"
       echo "##vso[task.setvariable variable=HomebrewArtifactName]$artifactName"
     displayName: 🟣Set version ${{ parameters.version }}
 
   - bash: |
       set -euo pipefail
-      # Default to 'false' so a missing SKIP_URL_VALIDATION never trips `set -u`
-      # if a future caller forgets to thread the parameter through.
-      skipUrlValidation="$(printf '%s' "${SKIP_URL_VALIDATION:-false}" | tr '[:upper:]' '[:lower:]')"
-      validationMode="Full"
-      if [ "$skipUrlValidation" = "true" ]; then
-        validationMode="Offline"
-      fi
-
+      # prepare-cask-artifact.sh defaults to LiveArchives mode, which is what
+      # source-build prep needs — the cask URL points at a github.com release
+      # that doesn't exist yet at prep time. The full LiveRelease audit + real
+      # brew install runs later in release-publish-nuget.yml's
+      # HomebrewValidateJob, against the cask emitted by this prep stage.
       args=(
         --version "$(CliVersion)"
-        --artifact-version "$(CliArtifactVersion)"
         --channel "$(HomebrewChannel)"
         --output-dir "$(Build.StagingDirectory)/homebrew-cask"
-        --validation-mode "$validationMode"
       )
 
       if [ -n "${ARCHIVE_ROOT}" ]; then
@@ -77,7 +61,6 @@ steps:
     displayName: 🟣Prepare Homebrew cask
     env:
       ARCHIVE_ROOT: '${{ parameters.archiveRoot }}'
-      SKIP_URL_VALIDATION: '${{ parameters.skipUrlValidation }}'
 
   - task: 1ES.PublishBuildArtifacts@1
     displayName: 🟣Publish Homebrew cask

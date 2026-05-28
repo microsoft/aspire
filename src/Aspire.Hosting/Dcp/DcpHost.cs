@@ -9,6 +9,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Dashboard.Utils;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Resources;
 using Aspire.Shared;
@@ -38,6 +39,8 @@ internal sealed class DcpHost
     private readonly IConfiguration _configuration;
     private readonly CancellationTokenSource _shutdownCts = new();
     private string? _dcpTlsCertThumbprint;
+    private string? _dcpTlsCertFile;
+    private string? _dcpTlsKeyFile;
     private Task? _logProcessorTask;
 
     // These environment variables should never be inherited by DCP from the app host.
@@ -176,27 +179,25 @@ internal sealed class DcpHost
             }
     }
 
-    internal Task PrepareDcpTlsCertificateAsync(CancellationToken cancellationToken)
+    internal async Task PrepareDcpTlsCertificateAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Using the ASP.NET dev cert for DCP TLS is opt-in; by default DCP uses its own ephemeral certificate.
-        if (!_configuration.GetBool(KnownConfigNames.DcpDeveloperCertificate, defaultValue: false))
+        // DCP uses the ASP.NET dev cert for TLS by default. The environment variable remains
+        // available as an opt-out if users need DCP's ephemeral certificate behavior.
+        if (!_configuration.GetBool(KnownConfigNames.DcpDeveloperCertificate, defaultValue: true))
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        if (!OperatingSystem.IsWindows())
-        {
-            _logger.LogWarning("Developer certificate thumbprint configuration is only supported on Windows. DCP will use its default certificate.");
-            return Task.CompletedTask;
-        }
+        using var activity = ProfilingTelemetry.StartDcpPrepareTlsCertificate(_configuration);
 
         // Check if we have a trusted developer certificate with a private key available
         var certificates = _developerCertificateService.Certificates;
         if (certificates.Count == 0)
         {
-            return Task.CompletedTask;
+            activity.SetDcpTlsCertificateResult(ProfilingTelemetry.Values.DcpTlsCertificateResultNoCertificate);
+            return;
         }
 
         // Use the first (latest/best) certificate that has a private key
@@ -212,20 +213,51 @@ internal sealed class DcpHost
 
         if (certificate is null)
         {
-            return Task.CompletedTask;
+            activity.SetDcpTlsCertificateResult(ProfilingTelemetry.Values.DcpTlsCertificateResultNoPrivateKeyCertificate);
+            return;
         }
 
         var thumbprint = certificate.Thumbprint;
         if (string.IsNullOrWhiteSpace(thumbprint))
         {
             _logger.LogWarning("Failed to read the developer certificate thumbprint. DCP will use its default certificate.");
-            return Task.CompletedTask;
+            activity.SetDcpTlsCertificateResult(ProfilingTelemetry.Values.DcpTlsCertificateResultMissingThumbprint);
+            return;
         }
 
         _dcpTlsCertThumbprint = thumbprint;
-        _logger.LogDebug("Prepared DCP TLS certificate thumbprint {Thumbprint}.", thumbprint);
 
-        return Task.CompletedTask;
+        if (OperatingSystem.IsWindows())
+        {
+            activity.SetDcpTlsCertificateResult(
+                ProfilingTelemetry.Values.DcpTlsCertificateResultPrepared,
+                ProfilingTelemetry.Values.DcpTlsCertificateModeThumbprint,
+                prepared: true);
+            _logger.LogDebug("Prepared DCP TLS certificate thumbprint {Thumbprint}.", thumbprint);
+            return;
+        }
+
+        var (certificatePath, keyPath, cachedThumbprint) = await DeveloperCertificateService.GetCachedCertificateFilePathsAsync(
+            certificate,
+            password: null,
+            cancellationToken).ConfigureAwait(false);
+
+        if (certificatePath is null || keyPath is null || cachedThumbprint is null)
+        {
+            _logger.LogWarning("Failed to cache the developer certificate files. DCP will use its default certificate.");
+            _dcpTlsCertThumbprint = null;
+            activity.SetDcpTlsCertificateResult(ProfilingTelemetry.Values.DcpTlsCertificateResultNoCertificate);
+            return;
+        }
+
+        _dcpTlsCertThumbprint = cachedThumbprint;
+        _dcpTlsCertFile = certificatePath;
+        _dcpTlsKeyFile = keyPath;
+        activity.SetDcpTlsCertificateResult(
+            ProfilingTelemetry.Values.DcpTlsCertificateResultPrepared,
+            ProfilingTelemetry.Values.DcpTlsCertificateModeFiles,
+            prepared: true);
+        _logger.LogDebug("Prepared DCP TLS certificate files for thumbprint {Thumbprint}.", thumbprint);
     }
 
     public async Task StopAsync()
@@ -278,6 +310,11 @@ internal sealed class DcpHost
         if (!string.IsNullOrWhiteSpace(_dcpTlsCertThumbprint))
         {
             arguments += $" --tls-cert-thumbprint \"{_dcpTlsCertThumbprint}\"";
+        }
+
+        if (!string.IsNullOrWhiteSpace(_dcpTlsCertFile) && !string.IsNullOrWhiteSpace(_dcpTlsKeyFile))
+        {
+            arguments += $" --tls-cert-file \"{_dcpTlsCertFile}\" --tls-key-file \"{_dcpTlsKeyFile}\"";
         }
 
         var dcpProcessSpec = new ProcessSpec(dcpExePath)
