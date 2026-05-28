@@ -75,14 +75,15 @@ internal sealed class TerminalRun : IAsyncDisposable
     }
 
     /// <summary>
-    /// Copies diagnostic files from the workspace temp directory to the testresults path
-    /// that CI uploads as artifacts. This makes CLI logs, DCP logs, and other diagnostics
-    /// available in the CI artifact download regardless of test pass/fail status.
+    /// Copies the diagnostics directory from the workspace temp directory to the testresults path
+    /// that CI uploads as artifacts. The in-Docker capture writes everything under a single
+    /// <see cref="CliE2EAutomatorHelpers.DiagnosticsDirectoryName"/> subdirectory, so the host
+    /// side only needs to copy that one directory.
     /// </summary>
     private void CaptureWorkspaceDiagnosticsToTestResults()
     {
-        var workspacePath = _workspace.WorkspaceRoot.FullName;
-        if (!Directory.Exists(workspacePath))
+        var diagnosticsSource = Path.Combine(_workspace.WorkspaceRoot.FullName, CliE2EAutomatorHelpers.DiagnosticsDirectoryName);
+        if (!Directory.Exists(diagnosticsSource))
         {
             return;
         }
@@ -92,17 +93,7 @@ internal sealed class TerminalRun : IAsyncDisposable
             : "unknown";
 
         var destDir = GetDiagnosticsCapturePath(testName);
-        Directory.CreateDirectory(destDir);
-
-        // Copy diagnostic directories produced by BuildAspireDiagnosticsCaptureCommand
-        CopyDirectoryIfExists(Path.Combine(workspacePath, ".aspire-logs"), Path.Combine(destDir, "_aspire-logs"));
-        CopyDirectoryIfExists(Path.Combine(workspacePath, ".aspire-dcp-logs"), Path.Combine(destDir, "_aspire-dcp-logs"));
-        CopyDirectoryIfExists(Path.Combine(workspacePath, ".aspire-packages"), Path.Combine(destDir, "_aspire-packages"));
-
-        // Copy diagnostic files
-        CopyFileIfExists(Path.Combine(workspacePath, "_aspire-start.json"), Path.Combine(destDir, "_aspire-start.json"));
-        CopyFileIfExists(Path.Combine(workspacePath, "_aspire-detach.log"), Path.Combine(destDir, "_aspire-detach.log"));
-        CopyFileIfExists(Path.Combine(workspacePath, "_aspire-cli.log"), Path.Combine(destDir, "_aspire-cli.log"));
+        CopyDirectoryIfExists(diagnosticsSource, destDir);
     }
 
     private static string GetDiagnosticsCapturePath(string testName)
@@ -136,14 +127,6 @@ internal sealed class TerminalRun : IAsyncDisposable
         foreach (var dir in Directory.GetDirectories(source))
         {
             CopyDirectoryIfExists(dir, Path.Combine(destination, Path.GetFileName(dir)));
-        }
-    }
-
-    private static void CopyFileIfExists(string source, string destination)
-    {
-        if (File.Exists(source))
-        {
-            File.Copy(source, destination, overwrite: true);
         }
     }
 }
