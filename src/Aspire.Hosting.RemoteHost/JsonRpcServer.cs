@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.IO.Pipes;
 using System.Net.Sockets;
 using System.Runtime.Versioning;
@@ -111,7 +112,7 @@ internal sealed class JsonRpcServer : BackgroundService
                 listenActivity.AddJsonRpcServerListening();
                 await pipeServer.WaitForConnectionAsync(cancellationToken).ConfigureAwait(false);
 
-                _logger.LogDebug("Client connected");
+                _logger.LogDebug("Accepted JsonRpc client connection on named pipe {SocketPath}", _socketPath);
                 var activeClientCount = Interlocked.Increment(ref _activeClientCount);
                 listenActivity.AddJsonRpcClientConnected(activeClientCount);
 
@@ -172,7 +173,7 @@ internal sealed class JsonRpcServer : BackgroundService
 
                 var clientSocket = await _listenSocket.AcceptAsync(cancellationToken).ConfigureAwait(false);
 
-                _logger.LogDebug("Client connected");
+                _logger.LogDebug("Accepted JsonRpc client connection on Unix domain socket {SocketPath}", _socketPath);
                 var activeClientCount = Interlocked.Increment(ref _activeClientCount);
                 listenActivity.AddJsonRpcClientConnected(activeClientCount);
 
@@ -199,11 +200,12 @@ internal sealed class JsonRpcServer : BackgroundService
     {
         var clientId = Guid.NewGuid().ToString("N")[..8]; // Short client identifier
         var disconnectReason = "unknown";
+        var connectionStopwatch = Stopwatch.StartNew();
         using var activity = _profilingTelemetry.StartJsonRpcConnection();
 
         // Create a DI scope for this client connection
         // All scoped services (HandleRegistry, RemoteAppHostService, etc.) are per-client
-        _logger.LogDebug("Creating DI scope for client {ClientId}", clientId);
+        _logger.LogDebug("Accepted JsonRpc client stream {ClientId}; creating DI scope", clientId);
         var scope = _scopeFactory.CreateAsyncScope();
         await using var _ = scope.ConfigureAwait(false);
 
@@ -228,13 +230,14 @@ internal sealed class JsonRpcServer : BackgroundService
             // Add the shared LanguageService as an additional target for language support methods
             jsonRpc.AddLocalRpcTarget(languageService);
 
+            _logger.LogDebug("Starting JsonRpc listener for client {ClientId}", clientId);
             jsonRpc.StartListening();
             activity.AddJsonRpcListening();
 
             // Enable bidirectional communication - allow .NET to call back to TypeScript
             clientService.SetClientConnection(jsonRpc);
 
-            _logger.LogDebug("JsonRpc connection established for client {ClientId} (bidirectional)", clientId);
+            _logger.LogDebug("JsonRpc listener established for client {ClientId} (bidirectional)", clientId);
 
             // Wait for the connection to be closed by the client, an error, or cancellation
             using var registration = cancellationToken.Register(() =>
@@ -292,7 +295,11 @@ internal sealed class JsonRpcServer : BackgroundService
                 }
             }
 
-            _logger.LogDebug("Connection cleanup completed for client {ClientId}", clientId);
+            _logger.LogDebug(
+                "Connection cleanup completed for client {ClientId}. DisconnectReason: {DisconnectReason}, ElapsedMilliseconds: {ElapsedMilliseconds}",
+                clientId,
+                disconnectReason,
+                connectionStopwatch.ElapsedMilliseconds);
             activity.AddJsonRpcConnectionClosed(disconnectReason);
 
             // Decrement active client count

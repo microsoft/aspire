@@ -7,6 +7,7 @@ using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Templating;
@@ -20,7 +21,8 @@ internal sealed class TemplateNuGetConfigService(
     CliExecutionContext executionContext,
     IPackagingService packagingService,
     ITemplateVersionPrompter templateVersionPrompter,
-    ICliHostEnvironment hostEnvironment)
+    ICliHostEnvironment hostEnvironment,
+    ILogger<TemplateNuGetConfigService> logger)
 {
     /// <summary>
     /// The name of the NuGet package that ships the Aspire project templates.
@@ -204,6 +206,12 @@ internal sealed class TemplateNuGetConfigService(
     /// <exception cref="EmptyChoicesException">Thrown when no template package versions are available across the considered channels.</exception>
     public async Task<TemplatePackageSelection> ResolveTemplatePackageAsync(TemplatePackageQuery query, CancellationToken cancellationToken)
     {
+        logger.LogDebug(
+            "Resolving Aspire project template package. RequestedChannel: {RequestedChannel}, VersionOverride: {VersionOverride}, IncludePrHives: {IncludePrHives}",
+            query.RequestedChannel,
+            query.VersionOverride,
+            query.IncludePrHives);
+
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken, query.RequestedChannel);
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
@@ -233,12 +241,18 @@ internal sealed class TemplateNuGetConfigService(
                 : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
         }
 
+        var selectedChannels = channels.ToArray();
+        logger.LogDebug(
+            "Template package resolution will search {ChannelCount} channel(s): {Channels}",
+            selectedChannels.Length,
+            string.Join(", ", selectedChannels.Select(static c => $"{c.Name} ({c.Type})")));
+
         var packagesFromChannels = await interactionService.ShowStatusAsync(Resources.TemplatingStrings.SearchingForAvailableTemplateVersions, async () =>
         {
             var results = new List<(NuGetPackage Package, PackageChannel Channel)>();
             var resultsLock = new object();
 
-            await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
+            await Parallel.ForEachAsync(selectedChannels, cancellationToken, async (channel, ct) =>
             {
                 var templatePackages = await channel.GetTemplatePackagesAsync(executionContext.WorkingDirectory, ct);
                 lock (resultsLock)
@@ -255,15 +269,25 @@ internal sealed class TemplateNuGetConfigService(
             throw new EmptyChoicesException(Resources.TemplatingStrings.NoTemplateVersionsFound);
         }
 
-        var orderedPackagesFromChannels = packagesFromChannels.OrderByDescending(p => Semver.SemVersion.Parse(p.Package.Version), Semver.SemVersion.PrecedenceComparer);
+        var orderedPackagesFromChannels = packagesFromChannels
+            .OrderByDescending(p => Semver.SemVersion.Parse(p.Package.Version), Semver.SemVersion.PrecedenceComparer)
+            .ToArray();
+
+        LogTemplateCandidates(orderedPackagesFromChannels);
 
         if (query.VersionOverride is { } version)
         {
             var explicitMatch = orderedPackagesFromChannels.FirstOrDefault(p => p.Package.Version == version);
             if (explicitMatch.Package is not null)
             {
+                LogTemplateSelection(explicitMatch, "explicit-version-override");
                 return new TemplatePackageSelection(explicitMatch.Package, explicitMatch.Channel);
             }
+
+            logger.LogDebug(
+                "Requested template version override '{VersionOverride}' was not found among {CandidateCount} candidate package(s); continuing with normal selection.",
+                version,
+                orderedPackagesFromChannels.Length);
         }
 
         if (VersionHelper.TryGetCurrentCliVersionMatch(
@@ -273,6 +297,7 @@ internal sealed class TemplateNuGetConfigService(
             channelName: query.RequestedChannel,
             hasPrHives: hasPrHives))
         {
+            LogTemplateSelection(cliVersionMatch, "current-cli-version-match");
             return new TemplatePackageSelection(cliVersionMatch.Package, cliVersionMatch.Channel);
         }
 
@@ -282,6 +307,7 @@ internal sealed class TemplateNuGetConfigService(
         if (!string.IsNullOrEmpty(query.RequestedChannel))
         {
             var first = orderedPackagesFromChannels.First();
+            LogTemplateSelection(first, "requested-channel-highest");
             return new TemplatePackageSelection(first.Package, first.Channel);
         }
 
@@ -289,11 +315,40 @@ internal sealed class TemplateNuGetConfigService(
         if (!hostEnvironment.SupportsInteractiveInput)
         {
             var first = orderedPackagesFromChannels.First();
+            LogTemplateSelection(first, "non-interactive-highest");
             return new TemplatePackageSelection(first.Package, first.Channel);
         }
 
         var prompted = await templateVersionPrompter.PromptForTemplatesVersionAsync(orderedPackagesFromChannels, cancellationToken);
+        LogTemplateSelection(prompted, "user-prompted");
         return new TemplatePackageSelection(prompted.Package, prompted.Channel);
+    }
+
+    private void LogTemplateCandidates(IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> candidates)
+    {
+        if (!logger.IsEnabled(LogLevel.Debug))
+        {
+            return;
+        }
+
+        var preview = candidates
+            .Take(5)
+            .Select(static c => $"{c.Package.Version} from {c.Channel.Name} ({c.Channel.Type}, {PackageSourceRedactor.RedactForDisplay(c.Package.Source)})");
+        logger.LogDebug(
+            "Template package resolution found {CandidateCount} candidate package(s). Preview: {CandidatePreview}{AdditionalCandidateCount}",
+            candidates.Count,
+            string.Join(", ", preview),
+            candidates.Count > 5 ? $" (+{candidates.Count - 5} more)" : string.Empty);
+    }
+
+    private void LogTemplateSelection((NuGetPackage Package, PackageChannel Channel) selection, string reason)
+    {
+        logger.LogInformation(
+            "Selected Aspire project template package {TemplatePackageVersion} from channel {ChannelName} ({ChannelType}). Reason: {SelectionReason}",
+            selection.Package.Version,
+            selection.Channel.Name,
+            selection.Channel.Type,
+            reason);
     }
 
     private static bool HasInstalledLocalBuildPackageSource(PackageChannel channel)

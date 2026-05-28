@@ -157,6 +157,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                 effectivePackageSourceOverride = await ResolveLocalPackageSourceOverrideAsync(requestedChannel, cancellationToken).ConfigureAwait(false);
             }
 
+            _logger.LogDebug(
+                "Preparing prebuilt AppHost server. RequestedChannel: {RequestedChannel}, PackageSourceOverride: {PackageSourceOverride}, PackageReferences: {PackageReferences}, ProjectReferenceCount: {ProjectReferenceCount}",
+                requestedChannel,
+                string.IsNullOrWhiteSpace(effectivePackageSourceOverride) ? null : PackageSourceRedactor.RedactForDisplay(effectivePackageSourceOverride),
+                AppHostPackageDiagnostics.FormatTrackedPackageVersions(packageRefs.Select(static p => (p.Name, p.Version))),
+                projectRefs.Count);
+
             if (projectRefs.Count > 0)
             {
                 // Project references require .NET SDK — verify it's available
@@ -187,6 +194,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                         cancellationToken).ConfigureAwait(false);
                 }
 
+                _logger.LogDebug(
+                    "Prepared prebuilt AppHost project-reference closure. ManifestPath: {ManifestPath}, Packages: {PackageVersions}",
+                    _integrationProbeManifestPath,
+                    AppHostPackageDiagnostics.FormatTrackedPackageVersions(closureManifest.Entries.Select(static e => (e.PackageId ?? string.Empty, e.PackageVersion))));
+
                 _selectedProjectLayout = await _projectLayoutStore.GetOrCreateAsync(closureManifest, cancellationToken).ConfigureAwait(false);
                 if (_selectedProjectLayout is not null)
                 {
@@ -202,6 +214,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
                     // NuGet-only — use the bundled NuGet service (no SDK required)
                     _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
                         packageRefs, requestedChannel, effectivePackageSourceOverride, cancellationToken);
+                    _logger.LogDebug(
+                        "Prepared prebuilt AppHost package-reference closure. ManifestPath: {ManifestPath}, RequestedPackages: {PackageVersions}",
+                        _integrationProbeManifestPath,
+                        AppHostPackageDiagnostics.FormatTrackedPackageVersions(packageRefs.Select(static p => (p.Name, p.Version))));
                 }
 
                 var appSettingsContent = CreateAppSettingsContent(packageRefs, []);

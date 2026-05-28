@@ -117,6 +117,7 @@ internal sealed class BundleNuGetService : INuGetService
         if (File.Exists(manifestPath) && TryValidatePackageManifest(manifestPath, _logger))
         {
             _logger.LogDebug("Using cached package manifest at {Path}", manifestPath);
+            AppHostPackageDiagnostics.LogRestoredPackageVersionsFromAssetsFile(_logger, assetsPath, manifestPath);
             return manifestPath;
         }
 
@@ -251,6 +252,7 @@ internal sealed class BundleNuGetService : INuGetService
         }
 
         _logger.LogDebug("Package manifest created at {Path}", manifestPath);
+        AppHostPackageDiagnostics.LogRestoredPackageVersionsFromAssetsFile(_logger, assetsPath, manifestPath);
         return manifestPath;
     }
 

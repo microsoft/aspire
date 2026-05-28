@@ -15,6 +15,8 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class AppHostServerSession : IAppHostServerSession
 {
+    private static readonly TimeSpan s_slowOperationWarningThreshold = TimeSpan.FromSeconds(5);
+
     private readonly string _authenticationToken;
     private readonly ILogger _logger;
     private readonly Process _serverProcess;
@@ -103,6 +105,11 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         OutputCollector serverOutput;
         try
         {
+            logger.LogDebug(
+                "Starting AppHost server process for {AppHostServerProjectType}. CliProcessId: {CliProcessId}",
+                appHostServerProject.GetType().Name,
+                currentPid);
+
             (socketPath, serverProcess, serverOutput) = appHostServerProject.Run(
                 currentPid,
                 serverEnvironmentVariables,
@@ -118,6 +125,10 @@ internal sealed class AppHostServerSession : IAppHostServerSession
 
         activity.SetProcessId(serverProcess.Id);
         activity.SetProcessInvocation(serverProcess.StartInfo.FileName, serverProcess.StartInfo.ArgumentList);
+        logger.LogDebug(
+            "Started AppHost server process {ProcessId}. SocketPath: {SocketPath}",
+            serverProcess.Id,
+            socketPath);
 
         return new AppHostServerSession(
             serverProcess,
@@ -135,7 +146,31 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     {
         ObjectDisposedException.ThrowIf(_disposed, nameof(AppHostServerSession));
 
-        return _rpcClient ??= await AppHostRpcClient.ConnectAsync(_socketPath, _authenticationToken, _profilingTelemetry, cancellationToken);
+        if (_rpcClient is not null)
+        {
+            return _rpcClient;
+        }
+
+        _logger.LogDebug(
+            "Creating AppHost RPC client for process {ProcessId}. SocketPath: {SocketPath}",
+            _serverProcess.Id,
+            _socketPath);
+
+        _rpcClient = await DiagnosticLogging.WaitWithSlowWarningAsync(
+            AppHostRpcClient.ConnectAsync(_socketPath, _authenticationToken, _profilingTelemetry, cancellationToken, _logger),
+            s_slowOperationWarningThreshold,
+            () => _logger.LogWarning(
+                "Still waiting to create AppHost RPC client for process {ProcessId} after {ElapsedSeconds} seconds. SocketPath: {SocketPath}",
+                _serverProcess.Id,
+                s_slowOperationWarningThreshold.TotalSeconds,
+                _socketPath));
+
+        _logger.LogDebug(
+            "Created AppHost RPC client for process {ProcessId}. SocketPath: {SocketPath}",
+            _serverProcess.Id,
+            _socketPath);
+
+        return _rpcClient;
     }
 
     /// <inheritdoc />
@@ -207,18 +242,38 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         CancellationToken cancellationToken)
     {
         var appHostServerProject = await _projectFactory.CreateAsync(appHostPath, cancellationToken);
+        var integrationList = integrations.ToList();
+        _logger.LogDebug(
+            "Preparing AppHost server project {AppHostServerProjectType}. AppHostPath: {AppHostPath}, SdkVersion: {SdkVersion}, IntegrationCount: {IntegrationCount}",
+            appHostServerProject.GetType().Name,
+            appHostPath,
+            sdkVersion,
+            integrationList.Count);
 
         // Prepare the server (create files + build for dev mode, restore packages for prebuilt mode)
         AppHostServerPrepareResult prepareResult;
         try
         {
-            prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken: cancellationToken);
+            prepareResult = await DiagnosticLogging.WaitWithSlowWarningAsync(
+                appHostServerProject.PrepareAsync(sdkVersion, integrationList, cancellationToken: cancellationToken),
+                TimeSpan.FromSeconds(30),
+                () => _logger.LogWarning(
+                    "Still preparing AppHost server project {AppHostServerProjectType} after 30 seconds. AppHostPath: {AppHostPath}",
+                    appHostServerProject.GetType().Name,
+                    appHostPath));
         }
         catch
         {
             (appHostServerProject as IDisposable)?.Dispose();
             throw;
         }
+
+        _logger.LogDebug(
+            "Prepared AppHost server project {AppHostServerProjectType}. Success: {Success}, ChannelName: {ChannelName}, NeedsCodeGeneration: {NeedsCodeGeneration}",
+            appHostServerProject.GetType().Name,
+            prepareResult.Success,
+            prepareResult.ChannelName,
+            prepareResult.NeedsCodeGeneration);
 
         if (!prepareResult.Success)
         {
