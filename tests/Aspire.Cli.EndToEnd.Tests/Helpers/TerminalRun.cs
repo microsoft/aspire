@@ -91,8 +91,8 @@ internal sealed class TerminalRun : IAsyncDisposable
             return;
         }
 
-        var testName = TestContext.Current?.TestCase is { } testCase
-            ? $"{testCase.TestClassName}.{testCase.TestMethodName}"
+        var testName = TestContext.Current?.TestCase is { TestMethodName: { } methodName }
+            ? methodName
             : "unknown";
 
         var destDir = GetDiagnosticsCapturePath(testName);
