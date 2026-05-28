@@ -276,49 +276,67 @@ jobs:
           script: |
             const fs = require('fs');
             const runId = ${{ steps.run-info.outputs.run_id }};
-
-            // List all jobs for the workflow run
-            const jobs = await github.paginate(
-              github.rest.actions.listJobsForWorkflowRun,
-              {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                run_id: runId,
-                per_page: 100
-              }
-            );
-
-            console.log(`Found ${jobs.length} jobs for run ${runId}`);
-
-            // Build a map from testShortName to job HTML URL.
-            // Job names follow the pattern: "{testShortName} ({os})" or
-            // "Tests / {testShortName} / {testShortName} ({os})"
-            // We match any job whose name contains the testShortName.
-            const castSourceMap = {};
-            if (fs.existsSync('cast_source_map.txt')) {
-              const lines = fs.readFileSync('cast_source_map.txt', 'utf8').trim().split('\n');
-              for (const line of lines) {
-                const [castName, shortName] = line.split('=');
-                if (castName && shortName) {
-                  castSourceMap[castName] = shortName;
-                }
-              }
-            }
-
-            // Get unique testShortNames
-            const shortNames = [...new Set(Object.values(castSourceMap))];
             const jobMap = {};
 
-            for (const shortName of shortNames) {
-              // Find a job whose name contains the testShortName
-              const job = jobs.find(j => j.name.includes(shortName));
-              if (job) {
-                jobMap[shortName] = { url: job.html_url, id: job.id };
-              }
-            }
+            try {
+              // List all jobs for the workflow run
+              const jobs = await github.paginate(
+                github.rest.actions.listJobsForWorkflowRun,
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: runId,
+                  per_page: 100
+                }
+              );
 
-            fs.writeFileSync('job_map.json', JSON.stringify(jobMap, null, 2));
-            console.log('Job map:', JSON.stringify(jobMap, null, 2));
+              console.log(`Found ${jobs.length} jobs for run ${runId}`);
+
+              // Diagnostic: log first few job names and count any with null/undefined name
+              const nullNameCount = jobs.filter(j => !j.name).length;
+              if (nullNameCount > 0) {
+                console.log(`WARNING: ${nullNameCount} job(s) have null/undefined name`);
+              }
+              const sampleNames = jobs.slice(0, 5).map(j => j.name ?? '<null>');
+              console.log(`Sample job names: ${JSON.stringify(sampleNames)}`);
+
+              // Build a map from testShortName to job HTML URL.
+              // Job names follow the pattern: "{testShortName} ({os})" or
+              // "Tests / {testShortName} / {testShortName} ({os})"
+              // We match any job whose name contains the testShortName.
+              const castSourceMap = {};
+              if (fs.existsSync('cast_source_map.txt')) {
+                const lines = fs.readFileSync('cast_source_map.txt', 'utf8').trim().split('\n');
+                for (const line of lines) {
+                  const [castName, shortName] = line.split('=');
+                  if (castName && shortName) {
+                    castSourceMap[castName] = shortName;
+                  }
+                }
+              }
+
+              // Get unique testShortNames
+              const shortNames = [...new Set(Object.values(castSourceMap))];
+              console.log(`Looking up jobs for ${shortNames.length} short name(s): ${JSON.stringify(shortNames)}`);
+
+              for (const shortName of shortNames) {
+                // Find a job whose name contains the testShortName (null-safe)
+                const job = jobs.find(j => j.name && j.name.includes(shortName));
+                if (job) {
+                  jobMap[shortName] = { url: job.html_url, id: job.id };
+                } else {
+                  console.log(`No job found for shortName: ${shortName}`);
+                }
+              }
+
+              console.log(`Matched ${Object.keys(jobMap).length}/${shortNames.length} short names to jobs`);
+            } catch (error) {
+              core.error(`Failed to look up job information: ${error.message}`);
+              console.log(error.stack);
+            } finally {
+              fs.writeFileSync('job_map.json', JSON.stringify(jobMap, null, 2));
+              console.log('Job map:', JSON.stringify(jobMap, null, 2));
+            }
 
       - name: Upload recordings and post comment
         if: steps.run-info.outputs.skip != 'true'
