@@ -319,15 +319,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
-        // Only synthesize a temp NuGet.config (replacing nuget.config discovery via
-        // RestoreConfigFile) when an explicit --source or auto-discovered local channel source
-        // is in play. The explicit-channel-no-override path keeps the user's ambient
-        // nuget.config in place and contributes channel mappings additively via
-        // RestoreAdditionalProjectSources so private/internal feeds the user has configured
-        // remain reachable for non-Aspire transitives during project-ref restore.
-        using var temporaryNuGetConfig = !string.IsNullOrWhiteSpace(packageSourceOverride)
-            ? await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken)
-            : null;
+        // Explicit channels need their package source mappings during project-reference restore.
+        // RestoreAdditionalProjectSources can add the feed URLs, but it cannot override ambient
+        // packageSourceMapping entries that might route Aspire* packages to another feed.
+        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken);
         var channelSources = temporaryNuGetConfig is null
             ? await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride: null, cancellationToken)
             : null;
