@@ -273,6 +273,7 @@ jobs:
         continue-on-error: true
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
         with:
+          retries: 3
           script: |
             const fs = require('fs');
             const runId = ${{ steps.run-info.outputs.run_id }};
