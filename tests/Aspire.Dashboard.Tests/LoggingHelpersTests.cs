@@ -208,8 +208,8 @@ public class LoggingHelpersTests
             token: "abc123",
             isContainer: true);
 
-        Assert.Equal(2, sink.Writes.Count);
-        var containerWrite = sink.Writes.Skip(1).First();
+        Assert.Equal(3, sink.Writes.Count);
+        var containerWrite = sink.Writes.Last();
         Assert.Equal("Dashboard is running in a container. Access the dashboard from the host using port forwarding.", containerWrite.Message);
     }
 
