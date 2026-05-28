@@ -280,31 +280,7 @@ jobs:
             const jobMap = {};
 
             try {
-              // List all jobs for the workflow run
-              const jobs = await github.paginate(
-                github.rest.actions.listJobsForWorkflowRun,
-                {
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  run_id: runId,
-                  per_page: 100
-                }
-              );
-
-              console.log(`Found ${jobs.length} jobs for run ${runId}`);
-
-              // Diagnostic: log first few job names and count any with null/undefined name
-              const nullNameCount = jobs.filter(j => !j.name).length;
-              if (nullNameCount > 0) {
-                console.log(`WARNING: ${nullNameCount} job(s) have null/undefined name`);
-              }
-              const sampleNames = jobs.slice(0, 5).map(j => j.name ?? '<null>');
-              console.log(`Sample job names: ${JSON.stringify(sampleNames)}`);
-
-              // Build a map from testShortName to job HTML URL.
-              // Job names follow the pattern: "{testShortName} ({os})" or
-              // "Tests / {testShortName} / {testShortName} ({os})"
-              // We match any job whose name contains the testShortName.
+              // Read short names first so we can stop pagination early once all are found
               const castSourceMap = {};
               if (fs.existsSync('cast_source_map.txt')) {
                 const lines = fs.readFileSync('cast_source_map.txt', 'utf8').trim().split('\n');
@@ -316,21 +292,54 @@ jobs:
                 }
               }
 
-              // Get unique testShortNames
               const shortNames = [...new Set(Object.values(castSourceMap))];
+              const unmatchedNames = new Set(shortNames);
               console.log(`Looking up jobs for ${shortNames.length} short name(s): ${JSON.stringify(shortNames)}`);
 
-              for (const shortName of shortNames) {
-                // Find a job whose name contains the testShortName (null-safe)
-                const job = jobs.find(j => j.name && j.name.includes(shortName));
-                if (job) {
-                  jobMap[shortName] = { url: job.html_url, id: job.id };
-                } else {
-                  console.log(`No job found for shortName: ${shortName}`);
+              // Fetch jobs page by page instead of using github.paginate, which fails
+              // with HTTP 500 on large runs (300+ jobs). Manual pagination lets us:
+              // - Handle per-page errors gracefully (skip that page, keep partial results)
+              // - Stop early once all needed jobs are found
+              let page = 1;
+              const maxPages = 10;
+              while (unmatchedNames.size > 0 && page <= maxPages) {
+                let jobs;
+                try {
+                  const response = await github.rest.actions.listJobsForWorkflowRun({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    run_id: runId,
+                    per_page: 100,
+                    page: page
+                  });
+                  jobs = response.data.jobs;
+                } catch (pageError) {
+                  console.log(`Page ${page} failed: ${pageError.message} — skipping`);
+                  page++;
+                  continue;
                 }
+
+                console.log(`Page ${page}: ${jobs.length} jobs`);
+                if (jobs.length === 0) break;
+
+                for (const job of jobs) {
+                  if (!job.name) continue;
+                  for (const shortName of unmatchedNames) {
+                    if (job.name.includes(shortName)) {
+                      jobMap[shortName] = { url: job.html_url, id: job.id };
+                      unmatchedNames.delete(shortName);
+                    }
+                  }
+                }
+
+                if (jobs.length < 100) break;
+                page++;
               }
 
               console.log(`Matched ${Object.keys(jobMap).length}/${shortNames.length} short names to jobs`);
+              if (unmatchedNames.size > 0) {
+                console.log(`Unmatched: ${JSON.stringify([...unmatchedNames])}`);
+              }
             } catch (error) {
               core.error(`Failed to look up job information: ${error.message}`);
               console.log(error.stack);
