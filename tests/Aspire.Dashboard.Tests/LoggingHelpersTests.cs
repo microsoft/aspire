@@ -23,7 +23,15 @@ public class LoggingHelpersTests
             "http://localhost:18890",
             "abc123");
 
-        var write = Assert.Single(sink.Writes);
+        Assert.Equal(2, sink.Writes.Count);
+
+        var loginWrite = sink.Writes.ElementAt(0);
+        Assert.Equal(LogLevel.Information, loginWrite.LogLevel);
+        Assert.Equal("Login to the dashboard at http://localhost:18888/login?t=abc123", loginWrite.Message);
+        Assert.Equal("Login to the dashboard at {LoginUrl}", LogTestHelpers.GetValue(loginWrite, "{OriginalFormat}"));
+        Assert.Equal("http://localhost:18888/login?t=abc123", LogTestHelpers.GetValue(loginWrite, "LoginUrl"));
+
+        var write = sink.Writes.ElementAt(1);
         Assert.Equal(LogLevel.Information, write.LogLevel);
         Assert.NotNull(write.Message);
         var lines = GetMessageLines(write.Message!);
@@ -169,7 +177,9 @@ public class LoggingHelpersTests
             otlpHttpUrl: null,
             token: "abc123");
 
-        var write = Assert.Single(sink.Writes);
+        Assert.Equal(2, sink.Writes.Count);
+
+        var write = sink.Writes.ElementAt(1);
         Assert.NotNull(write.Message);
         var lines = GetMessageLines(write.Message!);
 
@@ -198,7 +208,9 @@ public class LoggingHelpersTests
             token: "abc123",
             isContainer: true);
 
-        var write = Assert.Single(sink.Writes);
+        Assert.Equal(2, sink.Writes.Count);
+
+        var write = sink.Writes.ElementAt(1);
         Assert.NotNull(write.Message);
         var containerMessage = "URLs may need changes depending on how network access to the container is configured.";
 

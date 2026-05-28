@@ -37,6 +37,11 @@ internal static class LoggingHelpers
             ? $"{dashboardAuthority}/login?t={token}"
             : null;
 
+        if (loginUrl is not null)
+        {
+            logger.LogInformation("Login to the dashboard at {LoginUrl}", loginUrl);
+        }
+
         var templateBuilder = new StringBuilder();
         var parameters = new List<object?>();
 
