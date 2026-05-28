@@ -79,13 +79,15 @@ public static class BlazorHostedExtensions
 
         annotation.IsInitialized = true;
 
-        // Register "Debug in Browser" for the hosted WASM client automatically,
-        // unless ProxyWasmDebugging was already called explicitly (which adds its own annotation).
-        if (!host.ApplicationBuilder.ExecutionContext.IsPublishMode
-            && !host.Resource.TryGetAnnotationsOfType<BrowserDebugAnnotation>(out _))
+        // Register "Debug in Browser" for the hosted WASM client automatically (idempotent).
+        if (!host.ApplicationBuilder.ExecutionContext.IsPublishMode)
         {
-            var projectMetadata = host.Resource.GetProjectMetadata();
-            AddBrowserDebuggerResource(host, projectMetadata.ProjectPath, relativePath: null);
+            var debuggerName = $"{host.Resource.Name}-wasm-debugger";
+            if (!host.ApplicationBuilder.Resources.Any(r => r.Name == debuggerName))
+            {
+                var projectMetadata = host.Resource.GetProjectMetadata();
+                AddBrowserDebuggerResource(host, projectMetadata.ProjectPath, relativePath: null);
+            }
         }
 
         host.WithEnvironment(context =>

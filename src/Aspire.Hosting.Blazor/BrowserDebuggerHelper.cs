@@ -41,10 +41,6 @@ internal static class BrowserDebuggerHelper
 
         var clientProjectDir = Path.GetDirectoryName(clientProjectPath) ?? clientProjectPath;
 
-        var debugAnnotation = new BrowserDebugAnnotation(clientProjectPath, relativePath);
-        debugAnnotation.DebuggerResourceName = debuggerResourceName;
-        parentResource.Annotations.Add(debugAnnotation);
-
         var debuggerResource = new BrowserDebuggerResource(debuggerResourceName, "msedge", clientProjectDir);
 
         builder.AddResource(debuggerResource)
