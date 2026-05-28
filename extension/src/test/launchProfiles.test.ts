@@ -632,7 +632,8 @@ suite('Launch Profile Tests', () => {
       },
       // Comment before applicationUrl
       "applicationUrl": "https://localhost:5001",
-      "launchBrowser": true
+      "launchBrowser": true,
+      "launchUrl": "https://localhost:5001/launch"
     },
     // Another profile
     "Production": {
@@ -654,6 +655,7 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result!.profiles['Development'].environmentVariables!.LOG_LEVEL, 'Debug');
             assert.strictEqual(result!.profiles['Development'].applicationUrl, 'https://localhost:5001');
             assert.strictEqual(result!.profiles['Development'].launchBrowser, true);
+            assert.strictEqual(result!.profiles['Development'].launchUrl, 'https://localhost:5001/launch');
             assert.strictEqual(result!.profiles['Production'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Production');
         });
 

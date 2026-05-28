@@ -25,6 +25,8 @@ export interface LaunchProfile {
     environmentVariables?: { [key: string]: string };
     // checkForDevCert in debug configuration
     useSSL?: boolean;
+    // The relative URL to launch in the browser.
+    launchUrl?: string;
 }
 
 /**
