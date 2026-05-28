@@ -40,10 +40,9 @@ public sealed class ConfigDiscoveryTests(ITestOutputHelper output)
             mountDockerSocket: true,
             workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -140,10 +139,5 @@ public sealed class ConfigDiscoveryTests(ITestOutputHelper output)
         }
         Assert.True(hasApplicationUrl,
             $"No profile has 'applicationUrl'. Content:\n{currentContent}");
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

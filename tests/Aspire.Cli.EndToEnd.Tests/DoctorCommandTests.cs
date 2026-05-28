@@ -30,10 +30,9 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -54,10 +53,6 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
             s => s.ContainsText("dev-certs") && s.ContainsText("partially trusted"),
             timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with partial trust warning");
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
@@ -69,10 +64,9 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -101,10 +95,6 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
             return s.ContainsText("certificate is trusted");
         }, timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with trusted certificate");
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Theory]
@@ -118,10 +108,9 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -160,9 +149,5 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
             timeout: TimeSpan.FromSeconds(60),
             description: $"doctor to report missing {toolchain} tooling");
         await auto.WaitForAnyPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

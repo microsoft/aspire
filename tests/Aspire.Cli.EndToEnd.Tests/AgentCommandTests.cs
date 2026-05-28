@@ -31,10 +31,9 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -73,11 +72,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("aspire mcp tools [options]", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -93,8 +87,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         // Use .mcp.json (Claude Code format) for simpler testing
         // This is the same format used by the doctor test that passes
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json");
@@ -102,6 +94,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -137,11 +130,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         Assert.Contains("\"agent\"", fileContent);
         Assert.Contains("\"mcp\"", fileContent);
         Assert.DoesNotContain("\"start\"", fileContent);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -156,12 +144,11 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".mcp.json");
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -175,11 +162,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             s => s.ContainsText("dev-certs") && s.ContainsText("deprecated") && s.ContainsText("aspire agent init"),
             timeout: TimeSpan.FromSeconds(60), description: "doctor output with deprecated warning and fix suggestion");
         await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>
@@ -196,13 +178,12 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         // Set up .vscode folder so VS Code scanner detects it
         var vscodePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".vscode");
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -239,11 +220,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         var deploymentSkillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
         var deploymentFileContent = File.ReadAllText(deploymentSkillFilePath);
         Assert.Contains("Aspire Deployment", deploymentFileContent);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     private static async Task SeedAspireSkillsBundleCacheAsync(Hex1bTerminalAutomator auto, TemporaryWorkspace workspace, SequenceCounter counter)
