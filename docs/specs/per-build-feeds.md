@@ -82,7 +82,13 @@ most likely to break a release at the last mile. Concretely:
 
 - **Shiproom risk.** Late-cycle "I can't resolve staging from this
   CLI" bugs derail RC reviews, because we discover them when teams
-  try to dogfood RC bits with a daily-channel CLI.
+  try to dogfood RC bits with a daily-channel CLI. Resolving them
+  often requires pulling in multiple team members with specialist
+  skills (CLI internals, Maestro/darc, AzDO release pipelines,
+  storage / feed ACLs), and the access controls on the underlying
+  systems are segmented across roles — so progress frequently
+  stalls on timezone splits while waiting for the one person with
+  the right permissions to come online.
 - **Contributor friction.** "How do I test the bits from this PR?"
   is an `gh run download` + hive-copy + path-prefix dance that
   requires the `gh` CLI installed and authenticated. Codespaces,
