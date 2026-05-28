@@ -169,16 +169,50 @@ resolver; URLs are used verbatim with no resolution step. Power
 users and CI can pin to an exact build URL when they need to without
 inventing a new channel name.
 
-### 4. The CLI's identity channel becomes a default, not a behavior switch
+### 4. The CLI's identity is a co-located install-time config, not a baked binary attribute
 
-The CLI continues to bake its identity channel (`stable | staging |
-daily | local | pr-<N>`) as assembly metadata, but its only role is
-to provide a sensible default for `aspire new` / `aspire init` when
-the user hasn't picked one. It no longer controls *whether* a channel
-can be resolved or *how*. A daily CLI can resolve `staging` perfectly
-fine because pointer files exist for every channel.
+Today the CLI's identity channel is baked into the binary as an
+`[AssemblyMetadata("AspireCliChannel", "...")]` value at pack time,
+which means the bits on disk are different per channel even when the
+code is identical. That makes "fake a stable CLI from a staging
+build" or "test a local CLI as if it were daily" require a rebuild.
 
-`local` is handled separately — see section 9 below.
+In the new model the CLI binary is **identical regardless of channel**,
+and its identity is read from a small **co-located configuration file**
+written next to the CLI executable at install time (a separate file,
+**not** `aspire.config.json`; working name e.g.
+`aspire-cli.identity.json`). The file records which channel produced
+this install, the corresponding default feed URL, and any
+local-build-specific fields (e.g. `file://` URL for `local`).
+
+This co-located file's only role is to provide a sensible default
+for `aspire new` / `aspire init` when the user hasn't picked one,
+plus the diagnostic context shown in `aspire doctor`. It no longer
+controls *whether* a channel can be resolved or *how*. A
+daily-installed CLI can resolve `staging` perfectly fine because
+pointer files exist for every channel.
+
+The "no binary difference" property has concrete payoffs:
+
+- **Easier debugging of fake stable / staging builds locally.** A
+  developer or release engineer can copy a daily-built CLI to a
+  scratch directory, drop in a hand-written
+  `aspire-cli.identity.json` claiming `"channel": "stable"`, and
+  reproduce stable-channel default behavior without recompiling.
+  Useful for reproducing customer-reported scaffolding issues
+  without the full build cycle.
+- **Same artifact ships across channels.** The acquisition scripts
+  and installers download one set of CLI bits per RID / version and
+  write the identity file as a side effect of installation,
+  rather than us shipping N parallel near-identical archives.
+- **Easier supply-chain reasoning.** The bytes verified by NuGet /
+  attestations / Authenticode are the same regardless of channel,
+  so cross-channel reproducibility checks become trivial.
+
+`local` is still handled separately — see section 9 below — but
+even the local case becomes "the local pack step writes the
+`aspire-cli.identity.json` with `channel: "local"` and a `file://`
+URL" rather than baking metadata.
 
 ### 5. Channel config is two-tiered: local for projects, global for scaffolding
 
@@ -192,8 +226,9 @@ Resolution is two-tiered with command-line override on top:
 - **Global `aspire.config.json`** (user-scoped): provides the
   default channel for scaffolding commands — `aspire new`,
   `aspire init` — so the user doesn't have to pass `--channel`
-  every time. Falls back to the CLI's baked identity channel if no
-  global config exists yet.
+  every time. Falls back to the channel recorded in the CLI's
+  co-located install-time identity file (see §4) if no global
+  config exists yet.
 - **Command-line `--channel <v>`** always wins for the single
   invocation.
 
@@ -293,12 +328,12 @@ URL.
 A developer build emits a static NuGet v3 feed into
 `artifacts/packages/<config>/Shipping/feed/` on disk (same layout the
 blob-publish step uses; nothing blob-specific about the layout). The
-CLI bakes that build's identity channel as `local` and the
-corresponding `AspireCliLocalFeedUrl` assembly metadata as a
-`file://` URL pointing at that directory. With no global config
-present, a locally-built CLI scaffolds new projects with
-`channel: "local"`, which the resolver dereferences to the baked
-`file://` URL. No network, no hive sideload, no implicit
+local pack step writes the CLI's co-located
+`aspire-cli.identity.json` (see §4) with `channel: "local"` and the
+corresponding feed URL as a `file://` URL pointing at that directory.
+With no global config present, a locally-installed CLI scaffolds new
+projects with `channel: "local"`, which the resolver dereferences to
+that `file://` URL. No network, no hive sideload, no implicit
 directory-sniffing.
 
 **Multiple concurrent local hives.**
@@ -311,11 +346,12 @@ patterns are explicitly supported:
 
 - **Per-worktree feeds (recommended default).** Each worktree's
   build emits its feed under that worktree's `artifacts/packages`
-  directory. The locally-built CLI from that worktree bakes its
-  own `file://` URL, so a fresh project scaffolded by that CLI
-  pins to that worktree's feed via the per-project
-  `aspire.config.json`. Concurrent worktrees do not interfere with
-  each other and do not require any global registration step.
+  directory. The locally-installed CLI for that worktree gets its
+  own `aspire-cli.identity.json` pointing at that worktree's
+  `file://` URL, so a fresh project scaffolded by that CLI pins
+  to that worktree's feed via the per-project `aspire.config.json`.
+  Concurrent worktrees do not interfere with each other and do not
+  require any global registration step.
 - **Named local channels.** A developer or agent can register a
   named local feed by writing it into the **global**
   `aspire.config.json` (or the local one) as a literal URL — for
@@ -635,6 +671,41 @@ before we start writing code.
 - Stable-channel opt-in: name of the global setting that flips a
   stable-channel CLI from nuget.org to the blob feed (working
   name `useBuildFeedForStable`).
+- **Lock-file mechanics for reproducible package resolution.**
+  Today the CLI does not emit a lock file; resolution is purely a
+  function of the channel pointer plus NuGet's standard restore
+  semantics. Customers may want a committed lock file recording
+  the exact `(packageId, version, sha256, feedUrl)` set that a
+  given AppHost resolves to, so that a CI build, a Codespace, or
+  another team member can guarantee bit-identical packages even
+  if the channel pointer has moved since the project was last
+  updated. This is especially valuable for **polyglot AppHosts**,
+  where there is no `.csproj` / `packages.lock.json` to fall back
+  to and the channel pointer alone is the source of truth — a
+  pointer flip silently changes what `aspire run` resolves
+  tomorrow versus today. Open questions: do we adopt the existing
+  NuGet `packages.lock.json` format and write it from the CLI's
+  resolve step; do we invent an `aspire.lock.json` shape that
+  captures the resolved channel pointer URL + version + digest
+  per-package; what command produces and refreshes it (`aspire
+  update` writing it as a side-effect is the natural fit); is
+  lock-file mode opt-in per project or default-on for new
+  scaffolds; and how does `aspire add` behave when a lock file
+  is present (refuse without `--update-lock`, auto-update, or
+  prompt)?
+- **CLI identity file format and validation.** Decide the exact
+  schema for the install-time co-located identity file
+  introduced in §4 (working name `aspire-cli.identity.json`):
+  required fields (`channel`, `feedUrl`, `installedFrom`,
+  `installedUtc`?), how the CLI handles a missing or
+  syntactically invalid file (fall back to a safe default vs.
+  refuse to run vs. warn), and whether the file is treated as
+  trusted user-editable configuration (matching the
+  "fake stable / staging locally for debugging" use case) or
+  as a tamper-evident installer artifact with a signature. The
+  former is simpler and matches existing `.config` conventions;
+  the latter raises the bar against a local attacker swapping
+  the identity.
 
 **Migration**
 
