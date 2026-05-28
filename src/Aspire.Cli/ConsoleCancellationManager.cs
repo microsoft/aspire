@@ -2,17 +2,23 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli;
 
 /// <summary>
 /// Manages Ctrl+C, SIGINT, and SIGTERM signal handling with a shared CancellationTokenSource.
-/// After cancellation is requested, waits up to <c>processTerminationTimeout</c> for the running
-/// handler to complete before signaling forced termination via <see cref="ProcessTerminationCompletionSource"/>.
+/// After cancellation is requested, schedules an asynchronous timeout for the running handler
+/// to complete before signaling forced termination via <see cref="ProcessTerminationCompletionSource"/>.
+/// A second signal forces immediate termination without waiting for the timeout.
 /// Disposing this instance unregisters all signal handlers and disposes the token source.
 /// </summary>
 internal sealed class ConsoleCancellationManager : IDisposable
 {
+    // Standard Unix exit codes: 128 + signal number (SIGINT=2, SIGTERM=15).
+    // SigIntExitCode (130): used when the user presses Ctrl+C (SIGINT).
+    // SigTermExitCode (143): used when the process receives SIGTERM (e.g. container stop, ProcessExit).
     private const int SigIntExitCode = 130;
     private const int SigTermExitCode = 143;
 
@@ -21,6 +27,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
     private readonly PosixSignalRegistration? _sigIntRegistration;
     private readonly PosixSignalRegistration? _sigTermRegistration;
     private readonly CancellationToken _token;
+    private ILogger _logger;
     private Task<int>? _startedHandler;
     private int _cancelCalled;
 
@@ -38,9 +45,16 @@ internal sealed class ConsoleCancellationManager : IDisposable
     /// </summary>
     internal void SetStartedHandler(Task<int> handler) => Volatile.Write(ref _startedHandler, handler);
 
+    /// <summary>
+    /// Sets the logger instance used for diagnostic messages during signal handling.
+    /// Call this once the logging infrastructure is available.
+    /// </summary>
+    internal void SetLogger(ILogger logger) => _logger = logger;
+
     public ConsoleCancellationManager(TimeSpan processTerminationTimeout)
     {
         _processTerminationTimeout = processTerminationTimeout;
+        _logger = NullLogger.Instance;
 
         // Set to a field so getting the token doesn't error after dispose.
         _token = _cts.Token;
@@ -80,40 +94,64 @@ internal sealed class ConsoleCancellationManager : IDisposable
 
     private void OnProcessExit(object? sender, EventArgs e) => Cancel(SigTermExitCode);
 
-    private void Cancel(int forcedTerminationExitCode)
+    internal void Cancel(int forcedTerminationExitCode)
     {
-        // Ensure only the first signal triggers cancellation logic; subsequent signals are no-ops.
-        if (Interlocked.CompareExchange(ref _cancelCalled, 1, 0) != 0)
-        {
-            return;
-        }
+        var signalCount = Interlocked.Increment(ref _cancelCalled);
 
-        // Request cancellation so cooperative listeners can begin shutting down.
-        try
+        if (signalCount == 1)
         {
-            _cts.Cancel();
-        }
-        catch (ObjectDisposedException)
-        {
-            // A signal can race with process shutdown after cancellation resources are disposed.
-            return;
-        }
+            // First signal: request cooperative cancellation and schedule an async timeout
+            // that will force-terminate if the handler doesn't complete in time.
+            _logger.LogInformation("Termination signal received, requesting cancellation.");
 
+            try
+            {
+                _cts.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // A signal can race with process shutdown after cancellation resources are disposed.
+                return;
+            }
+
+            // Schedule the forced-completion timeout asynchronously so the signal handler
+            // returns immediately. This allows Program.Main's Task.WhenAny to observe
+            // handlerTask completion without being blocked by the signal handler thread.
+            _ = ForceTerminationAfterTimeoutAsync(forcedTerminationExitCode);
+        }
+        else
+        {
+            // Second (or subsequent) signal: force immediate termination without waiting.
+            _logger.LogWarning("Second termination signal received, forcing immediate exit.");
+            _processTerminationCompletionSource.TrySetResult(forcedTerminationExitCode);
+        }
+    }
+
+    private async Task ForceTerminationAfterTimeoutAsync(int forcedTerminationExitCode)
+    {
         try
         {
             var startedHandler = Volatile.Read(ref _startedHandler);
 
-            // Wait for the configured interval to allow graceful shutdown.
-            if (startedHandler is null || !startedHandler.Wait(_processTerminationTimeout))
+            if (startedHandler is not null)
             {
-                // If the handler does not finish within configured time, use the completion
-                // source to signal forced completion (preserving native exit code).
-                _processTerminationCompletionSource.TrySetResult(forcedTerminationExitCode);
+                // Give the handler a chance to finish gracefully within the configured timeout.
+                // Use a wrapper Task so we can await with timeout without propagating exceptions.
+                var timeoutTask = Task.Delay(_processTerminationTimeout);
+                if (await Task.WhenAny(startedHandler, timeoutTask).ConfigureAwait(false) == startedHandler)
+                {
+                    // Handler finished within the timeout; no forced termination needed.
+                    return;
+                }
             }
+
+            _logger.LogWarning("Handler did not complete within {Timeout}s, forcing termination.", _processTerminationTimeout.TotalSeconds);
+            _processTerminationCompletionSource.TrySetResult(forcedTerminationExitCode);
         }
-        catch (AggregateException)
+        catch (Exception)
         {
-            // The task was cancelled or an exception was thrown during task execution.
+            // Any failure in the timeout path should still force termination rather than hang.
+            _processTerminationCompletionSource.TrySetResult(forcedTerminationExitCode);
         }
     }
 
