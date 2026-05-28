@@ -85,6 +85,7 @@ internal sealed class TerminalRun : IAsyncDisposable
         var diagnosticsSource = Path.Combine(_workspace.WorkspaceRoot.FullName, CliE2EAutomatorHelpers.DiagnosticsDirectoryName);
         if (!Directory.Exists(diagnosticsSource))
         {
+            WriteTestOutput($"[TerminalRun] No diagnostics directory found at: {diagnosticsSource}");
             return;
         }
 
@@ -94,6 +95,23 @@ internal sealed class TerminalRun : IAsyncDisposable
 
         var destDir = GetDiagnosticsCapturePath(testName);
         CopyDirectoryIfExists(diagnosticsSource, destDir);
+
+        WriteTestOutput($"[TerminalRun] Captured diagnostics to: {destDir}");
+        WriteTestOutput($"[TerminalRun]   Source workspace: {_workspace.WorkspaceRoot.FullName}");
+
+        // Report file counts per subdirectory so CI logs show what was actually captured.
+        foreach (var subDir in Directory.GetDirectories(destDir))
+        {
+            var fileCount = Directory.GetFiles(subDir, "*", SearchOption.AllDirectories).Length;
+            WriteTestOutput($"[TerminalRun]   {Path.GetFileName(subDir)}/: {fileCount} file(s)");
+        }
+
+        // Count top-level files (e.g. aspire-start.json)
+        var topLevelFiles = Directory.GetFiles(destDir);
+        if (topLevelFiles.Length > 0)
+        {
+            WriteTestOutput($"[TerminalRun]   (root): {topLevelFiles.Length} file(s)");
+        }
     }
 
     private static string GetDiagnosticsCapturePath(string testName)
@@ -128,5 +146,10 @@ internal sealed class TerminalRun : IAsyncDisposable
         {
             CopyDirectoryIfExists(dir, Path.Combine(destination, Path.GetFileName(dir)));
         }
+    }
+
+    private static void WriteTestOutput(string message)
+    {
+        TestContext.Current?.TestOutputHelper?.WriteLine(message);
     }
 }
