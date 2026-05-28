@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Backport of #17479: removes --resources and --include-hidden from aspire ps; updates VS Code extension",
+  "mergedAt": "2026-05-28T18:55:17Z",
+  "number": 17579,
+  "runDate": "2026-05-28T20:53:29Z",
+  "status": "included",
+  "title": "[release/13.4] Remove resource data from `aspire ps`; use `aspire describe` for resource streaming"
+}
