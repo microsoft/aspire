@@ -17,6 +17,9 @@ namespace Aspire.Hosting;
 /// </summary>
 internal static class BrowserDebuggerHelper
 {
+    // TODO: Replace with the WebAssembly debugger executable once available.
+    private const string BrowserCommand = "msedge";
+
     /// <summary>
     /// Creates a hidden child ExecutableResource with WithExplicitStart that launches a debug browser
     /// via DCP/IDE when started. Registers "Debug in Browser" and "Stop Browser Debug" commands
@@ -40,7 +43,7 @@ internal static class BrowserDebuggerHelper
 
         var clientProjectDir = Path.GetDirectoryName(clientProjectPath) ?? clientProjectPath;
 
-        var debuggerResource = new BrowserDebuggerResource(debuggerResourceName, "msedge", clientProjectDir);
+        var debuggerResource = new BrowserDebuggerResource(debuggerResourceName, BrowserCommand, clientProjectDir);
 
         // Tracks whether a debug browser session is currently active.
         // Toggled by the start/stop command handlers and reset when the resource stops
@@ -85,7 +88,7 @@ internal static class BrowserDebuggerHelper
                         Mode = mode,
                         Url = appUrl,
                         WebRoot = clientProjectPath,
-                        Browser = "msedge"
+                        Browser = BrowserCommand
                     };
                 },
                 "browser");

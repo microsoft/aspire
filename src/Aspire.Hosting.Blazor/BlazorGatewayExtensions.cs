@@ -457,14 +457,6 @@ public static class BlazorGatewayExtensions
                 """;
         });
 
-        // This container only produces build artifacts (no ENTRYPOINT/CMD), so mark it as
-        // build-only to exclude it from the compute resource pipeline and avoid duplicate
-        // DeploymentTargetAnnotation errors.
-        if (companion.Resource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileAnnotation))
-        {
-            dockerfileAnnotation.HasEntrypoint = false;
-        }
-
         gateway.WithAnnotation(new ContainerFilesDestinationAnnotation
         {
             Source = companion.Resource,
