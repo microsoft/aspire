@@ -46,14 +46,18 @@ internal sealed class ProcessShutdownService(
             return requestRpcStopAsync is not null && await TryRequestRpcStopAsync(requestRpcStopAsync, cancellationToken).ConfigureAwait(false);
         }
 
-        var processesToMonitor = new List<ProcessTarget> { new(appHostInfo.ProcessId, appHostInfo.StartedAt) };
+        var appHostProcess = new ProcessTarget(appHostInfo.ProcessId, appHostInfo.StartedAt);
+        var processesToForceKill = new List<ProcessTarget> { appHostProcess };
         if (appHostInfo.CliProcessId is int cliPid)
         {
-            processesToMonitor.Add(new ProcessTarget(cliPid, appHostInfo.CliStartedAt));
+            // The CLI process is a shutdown handle, not the success condition. On Unix it can remain
+            // observable until its parent reaps it after the AppHost has already stopped.
+            processesToForceKill.Add(new ProcessTarget(cliPid, appHostInfo.CliStartedAt));
         }
 
         return await StopProcessesAsync(
-            processesToMonitor,
+            processesToMonitor: [appHostProcess],
+            processesToForceKill,
             token => RequestAppHostGracefulShutdownAsync(appHostInfo, requestRpcStopAsync, token),
             cancellationToken).ConfigureAwait(false);
     }
@@ -63,19 +67,46 @@ internal sealed class ProcessShutdownService(
         Func<CancellationToken, Task<bool>> requestGracefulShutdownAsync,
         CancellationToken cancellationToken)
     {
+        return await StopProcessesAsync(
+            processesToMonitorAndKill,
+            processesToMonitorAndKill,
+            requestGracefulShutdownAsync,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> StopProcessesAsync(
+        IReadOnlyCollection<ProcessTarget> processesToMonitor,
+        IReadOnlyCollection<ProcessTarget> processesToForceKill,
+        Func<CancellationToken, Task<bool>> requestGracefulShutdownAsync,
+        CancellationToken cancellationToken)
+    {
         var gracefulShutdownRequested = await TryRequestGracefulShutdownAsync(requestGracefulShutdownAsync, cancellationToken).ConfigureAwait(false);
-        if (gracefulShutdownRequested && await MonitorProcessesForTerminationAsync(processesToMonitorAndKill, cancellationToken).ConfigureAwait(false))
+        if (gracefulShutdownRequested && await MonitorProcessesForTerminationAsync(processesToMonitor, cancellationToken).ConfigureAwait(false))
         {
+            ForceKillRemainingProcesses(processesToForceKill.Except(processesToMonitor), afterTimeout: false);
             return true;
         }
 
-        foreach (var process in processesToMonitorAndKill.Distinct())
+        ForceKillRemainingProcesses(processesToForceKill, afterTimeout: true);
+
+        return await MonitorProcessesForTerminationAsync(processesToMonitor, cancellationToken).ConfigureAwait(false);
+    }
+
+    private void ForceKillRemainingProcesses(IEnumerable<ProcessTarget> processes, bool afterTimeout)
+    {
+        foreach (var process in processes.Distinct())
         {
-            logger.LogWarning("Process {Pid} did not stop gracefully within timeout. Forcing process to terminate.", process.Pid);
+            if (afterTimeout)
+            {
+                logger.LogWarning("Process {Pid} did not stop gracefully within timeout. Forcing process to terminate.", process.Pid);
+            }
+            else
+            {
+                logger.LogDebug("Forcing remaining shutdown handle process {Pid} to terminate.", process.Pid);
+            }
+
             ProcessSignaler.ForceKill(process.Pid, process.StartTime, logger);
         }
-
-        return await MonitorProcessesForTerminationAsync(processesToMonitorAndKill, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<bool> RequestAppHostGracefulShutdownAsync(
