@@ -139,6 +139,35 @@ auth, no database, no service to operate. Per-build immutability
 means an exact `<channel>-<runId>` path will return the same bytes
 forever (or until retention reclaims it).
 
+`<runId>` throughout this document is used as a shorthand for a
+**composite identifier that uniquely names a single build attempt
+on a single build system**, not a raw integer from any one provider.
+The build pipeline computes it from the inputs the source pipeline
+already exposes, and the publish workflow uses the same recipe to
+derive the destination path so a PR cannot spoof it. Concretely we
+need to handle both supported build systems:
+
+- **GitHub Actions**: composite of `github.run_id` +
+  `github.run_attempt` (so re-runs of the same workflow land at
+  distinct paths and never collide), prefixed with `gh-` to
+  disambiguate from AzDO ids. For example
+  `gh-<run_id>-<run_attempt>`.
+- **Azure DevOps**: composite of the AzDO build id + the rerun
+  attempt counter (AzDO exposes both, and reruns produce distinct
+  attempt values). Prefixed with `ado-` to disambiguate. For
+  example `ado-<buildId>-<attempt>`.
+
+This prefix-plus-composite scheme guarantees uniqueness across the
+two systems (no risk of a GH run id colliding with an AzDO build id
+that happens to share the same number) and across reruns within
+each system. Exact strings are an implementation detail and may
+change, but the property the rest of the spec depends on is that
+**every build attempt — including reruns — has its own immutable
+path** and that the path is **deterministically derivable** from
+identifiers the upstream build system signs into its OIDC token, so
+the publish workflow can re-compute and validate it without
+trusting any PR-modifiable input.
+
 ### 2. Channel names resolve through small pointer files
 
 The `channel` concept in `aspire.config.json` stays. The set of
