@@ -166,10 +166,7 @@ the user hasn't picked one. It no longer controls *whether* a channel
 can be resolved or *how*. A daily CLI can resolve `staging` perfectly
 fine because pointer files exist for every channel.
 
-`local` is the exception: a local developer build bakes a `file://`
-URL pointing at the developer's own
-`artifacts/packages/<config>/Shipping` so `channel: "local"`
-resolves to those bits without any network round-trip.
+`local` is handled separately — see section 9 below.
 
 ### 5. Channel config is two-tiered: local for projects, global for scaffolding
 
@@ -269,6 +266,95 @@ only routes through it when the user explicitly opts in via a
 global CLI setting. PR / daily / staging / local channels always
 route through the blob.
 
+### 9. Local hives become first-class — and naturally support concurrent agentic development
+
+Local-developer builds and the implicit
+`~/.aspire/hives/<name>/packages` sideload scheme go away in their
+current form, but the **capability** they provide — pointing the CLI
+at a developer-built feed without going through the network — is
+preserved and substantially expanded, because the polymorphic
+`channel` field already accepts arbitrary URLs and `file://` is a
+URL.
+
+**Single local hive (the common case).**
+
+A developer build emits a static NuGet v3 feed into
+`artifacts/packages/<config>/Shipping/feed/` on disk (same layout the
+blob-publish step uses; nothing blob-specific about the layout). The
+CLI bakes that build's identity channel as `local` and the
+corresponding `AspireCliLocalFeedUrl` assembly metadata as a
+`file://` URL pointing at that directory. With no global config
+present, a locally-built CLI scaffolds new projects with
+`channel: "local"`, which the resolver dereferences to the baked
+`file://` URL. No network, no hive sideload, no implicit
+directory-sniffing.
+
+**Multiple concurrent local hives.**
+
+Because `channel` accepts any URL, the same machine can host any
+number of independent local feeds simultaneously, one per local
+working tree / experiment / agent worktree. There is no shared
+ambient state on the machine that selects between them. Two
+patterns are explicitly supported:
+
+- **Per-worktree feeds (recommended default).** Each worktree's
+  build emits its feed under that worktree's `artifacts/packages`
+  directory. The locally-built CLI from that worktree bakes its
+  own `file://` URL, so a fresh project scaffolded by that CLI
+  pins to that worktree's feed via the per-project
+  `aspire.config.json`. Concurrent worktrees do not interfere with
+  each other and do not require any global registration step.
+- **Named local channels.** A developer or agent can register a
+  named local feed by writing it into the **global**
+  `aspire.config.json` (or the local one) as a literal URL — for
+  example `"channel": "file:///work/aspire-experiment-a/.../feed"`
+  — and switch between hives by setting `channel` to a different
+  URL or by passing `--channel <url>` on a single command.
+  Multiple concurrent local hives are just multiple URLs; there is
+  no exclusive "the active hive" concept the way today's
+  `~/.aspire/hives` selection implies.
+
+**Why this matters for concurrent agentic development.**
+
+Coding agents routinely operate in parallel worktrees of the same
+repo, each at a different commit, each producing different bytes
+for the same `(packageId, version)`. Today's hive scheme has a
+machine-global selection step that makes those worktrees collide
+on shared state (last writer wins, cache poisoning across agents,
+"why is agent B suddenly seeing agent A's packages?" bugs).
+
+In the new model the **per-project `aspire.config.json` is the
+selector**, and each worktree's scaffolded project has its own
+pinned `file://` URL. Agents can run dozens of concurrent
+worktrees with independent package realities and no cross-talk,
+because nothing in the resolution path consults global ambient
+state — the project file fully determines the feed URL, and the
+feed URL fully determines the bytes.
+
+**NuGet cache hygiene applies the same way it always does.** Two
+worktrees both producing `Aspire.Hosting 13.5.0-dev` from
+different bytes will trip NuGet's cache by `(id, version)`, the
+same hazard called out for staging recalls earlier in this doc.
+The recommended pattern is to stamp local-build versions with a
+worktree-unique suffix (e.g. `13.5.0-dev.<shortSha>` or
+`13.5.0-dev.<worktreeId>`) so each worktree's feed carries a
+distinct version. The CLI can default this behavior in the
+local-build pack target and surface a warning in `aspire doctor`
+when two registered local feeds publish the same `(id, version)`
+with different digests.
+
+**What goes away vs. what's preserved.**
+
+- *Goes away*: the implicit `~/.aspire/hives/<name>/packages`
+  sideload, the install-prefix process-path string-matching used
+  for PR-hive discovery, the resolution branching that picks
+  between "feed" and "hive" code paths.
+- *Preserved and improved*: pointing the CLI at locally built
+  bits without network round-trips, scaffolding new projects with
+  a local-built CLI, switching between local builds, *plus* the
+  new ability to run an arbitrary number of independent local
+  hives concurrently with no shared state.
+
 ## Why the simplifications follow
 
 Once channels resolve through a single pointer-file lookup:
@@ -289,7 +375,8 @@ Once channels resolve through a single pointer-file lookup:
 - **The PR install-prefix hive scheme goes away.** PR resolution
   is `channels/pr-<N>.json`, same as everything else.
 - **The `~/.aspire/hives/*/packages` discovery for local goes
-  away.** `local` is a baked `file://` URL.
+  away.** Replaced by explicit `file://` URLs in `channel`, which
+  also unlocks multiple concurrent local hives — see section 9.
 - **Prerelease semver filtering inside the CLI goes away.** Each
   per-build feed contains exactly the versions that build produced;
   there is no rolling feed to filter.
@@ -543,6 +630,23 @@ before we start writing code.
   alive as a fallback for legacy `aspire.config.json` files.
 - Coexistence window: how long both systems run in parallel before
   the legacy paths are deleted.
+
+**Local hives**
+
+- Default local-build version stamping: do we always append a
+  worktree-unique suffix to local-build package versions to
+  prevent NuGet-cache collisions between concurrent worktrees, or
+  leave that to the developer / agent harness?
+- Where the per-worktree feed lives on disk by default
+  (`artifacts/packages/<config>/Shipping/feed/` is the working
+  proposal) and whether the pack target writes that layout
+  unconditionally or only when explicitly requested.
+- Whether `aspire doctor` should enumerate known local hives by
+  scanning a configurable list of roots, or stay strictly
+  config-driven so no machine-global discovery exists.
+- Whether `aspire config set channel file://...` accepts both
+  absolute paths and a project-relative shorthand (e.g.
+  `local:./artifacts/...`).
 
 ## Deliverable for the first iteration of this PR
 
