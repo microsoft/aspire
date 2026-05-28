@@ -30,7 +30,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, TestContext.Current.CancellationToken);
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         // Prepare Docker environment (prompt counting, umask, env vars)
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
@@ -77,7 +77,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, TestContext.Current.CancellationToken);
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -113,7 +113,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, TestContext.Current.CancellationToken);
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);

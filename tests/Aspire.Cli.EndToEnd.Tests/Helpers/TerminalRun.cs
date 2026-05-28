@@ -18,13 +18,15 @@ internal sealed class TerminalRun : IAsyncDisposable
     private readonly Hex1bTerminalAutomator _automator;
     private readonly SequenceCounter _counter;
     private readonly TemporaryWorkspace _workspace;
+    private readonly ITestOutputHelper _output;
 
-    internal TerminalRun(Task pendingRun, Hex1bTerminalAutomator automator, SequenceCounter counter, TemporaryWorkspace workspace)
+    internal TerminalRun(Task pendingRun, Hex1bTerminalAutomator automator, SequenceCounter counter, TemporaryWorkspace workspace, ITestOutputHelper output)
     {
         _pendingRun = pendingRun;
         _automator = automator;
         _counter = counter;
         _workspace = workspace;
+        _output = output;
     }
 
     public async ValueTask DisposeAsync()
@@ -148,8 +150,8 @@ internal sealed class TerminalRun : IAsyncDisposable
         }
     }
 
-    private static void WriteTestOutput(string message)
+    private void WriteTestOutput(string message)
     {
-        TestContext.Current?.TestOutputHelper?.WriteLine(message);
+        _output.WriteLine(message);
     }
 }

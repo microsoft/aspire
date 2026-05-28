@@ -138,10 +138,10 @@ internal static class CliE2ETestHelpers
     /// <param name="counter">The sequence counter for prompt tracking.</param>
     /// <param name="cancellationToken">Cancellation token passed to <see cref="Hex1bTerminal.RunAsync"/>.</param>
     /// <returns>A <see cref="TerminalRun"/> that ensures diagnostics capture and clean exit on disposal.</returns>
-    internal static TerminalRun StartRun(Hex1bTerminal terminal, TemporaryWorkspace workspace, Hex1bTerminalAutomator automator, SequenceCounter counter, CancellationToken cancellationToken)
+    internal static TerminalRun StartRun(Hex1bTerminal terminal, TemporaryWorkspace workspace, Hex1bTerminalAutomator automator, SequenceCounter counter, ITestOutputHelper output, CancellationToken cancellationToken)
     {
         var pendingRun = terminal.RunAsync(cancellationToken);
-        return new TerminalRun(pendingRun, automator, counter, workspace);
+        return new TerminalRun(pendingRun, automator, counter, workspace, output);
     }
 
     /// <summary>
