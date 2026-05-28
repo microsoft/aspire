@@ -657,6 +657,151 @@ What it does **not** touch:
   integrations, or anything else outside the CLI's package
   resolution path.
 
+## Phased implementation plan (rough sequencing)
+
+The change touches storage, multiple CI pipelines, the acquisition
+scripts, the CLI, and shipped customer behavior. To avoid breaking
+anything live, the rollout is sequenced so each phase is
+independently revertible and **the existing channel/PackagingService
+code paths keep working as today until the very last phase deletes
+them**. The recurring technique is **shadow / sim-publish**: stand
+up the new infrastructure, publish to it in parallel with the
+current system, validate it against real builds for a sustained
+period, and only then cut consumers over.
+
+Indicative ordering — sub-phases can run in parallel where they do
+not depend on one another, and the phase boundaries are checkpoints,
+not gates that block all other work.
+
+### Phase 0 — Spec sign-off and threat model
+
+- This document reviewed and signed off.
+- Threat model written, candidate hardening controls chosen, IaC
+  shape agreed.
+- No infrastructure, code, or pipeline changes yet. Failure mode:
+  redo the spec; nothing in production is touched.
+
+### Phase 1 — Stand up storage, but no consumer reads from it
+
+- Provision the storage account, container, federated identity,
+  network rules, and retention / immutability policies via IaC.
+- No DNS / vanity hostname yet (or one that nothing depends on).
+- Manually upload a synthetic feed; verify a stock NuGet client
+  can restore from it end-to-end against a throwaway project.
+- Failure mode: tear down the storage account; no consumer code
+  or pipeline change depends on it.
+
+### Phase 2 — Sim-publish from CI in parallel with today's pipelines
+
+This is the central risk-reduction phase and intentionally runs
+for **weeks**, not days.
+
+- Add the static-feed emit step to existing build pipelines so
+  PR, daily, and release builds produce the `feed/` layout as a
+  pipeline artifact, in addition to whatever they produce today.
+- Stand up the separate locked-down publish workflow (the one that
+  actually holds the federated identity). It runs on
+  `workflow_run` from `main`, picks up the artifact, and uploads
+  to `builds/<channel>/<runId>/`.
+- **Nothing consumes these blobs yet.** The existing PR-hive,
+  daily, staging, and stable channel logic is untouched. The CLI,
+  acquisition scripts, customers, and internal users all behave
+  exactly as they do today.
+- Run automated validation against each sim-published feed:
+  layout sanity, signature checks, restore-a-canary-project from
+  the blob URL, attestation verification. Surface failures as CI
+  signal only — they do not block PRs, but they do block phase
+  advancement.
+- Exit criteria: N consecutive weeks of green sim-publishes
+  across all build kinds, including at least one full
+  staging → stable promotion exercised end-to-end against the
+  blob layout (without actually flipping customer-visible
+  pointers).
+- Failure mode: disable the publish workflow; everything keeps
+  working off the existing channel infrastructure.
+
+### Phase 3 — Pointer files and signing infrastructure
+
+- Stand up the Key-Vault-held pointer signer.
+- Publish `channels/<name>.json` pointer files in parallel with
+  sim-publish. Initially they can point at the sim-published
+  blob paths.
+- Build the CLI-side resolver and signature verifier behind a
+  feature flag. **Disabled by default.** Internal opt-in only.
+- Internal dogfooding: ask team members to flip the flag and use
+  the new resolver against the sim-published feeds for daily
+  work. Collect bug reports, iterate.
+- Failure mode: leave the flag off; CLI behavior is unchanged.
+
+### Phase 4 — Per-channel cutover, one channel at a time
+
+Cut consumers over in increasing order of blast radius, with a
+soak period between each step. Each cutover keeps the old code
+path reachable via fallback / flag for one full release cycle.
+
+1. **`pr-<N>` channel first.** Lowest blast radius — only people
+   testing PR builds notice if it breaks, and they already know
+   they are using prerelease bits. The new resolver and the
+   simplified `get-aspire-cli-pr` scripts ship together.
+2. **`daily` channel.** Internal users + early adopters. Soak,
+   then flip the customer-facing pointer.
+3. **`local` channel.** Coordinate with the local build pack
+   target landing the co-located identity file. Worktree-style
+   concurrent agent usage starts working as a side effect.
+4. **`staging` channel.** Cutover here is what unlocks
+   promote-not-rebuild for the next GA. Coordinate with shiproom
+   so the next release is the first one to flow through the new
+   pipeline.
+5. **`stable` channel.** Last. By the time we get here, every
+   other channel has been on the new infrastructure for months.
+   Customer-visible behavior is unchanged because stable still
+   resolves to nuget.org by default; what changes is the
+   *internal* promotion path that produces those nuget.org
+   uploads.
+
+Each step's failure mode is "flip the per-channel feature flag /
+pointer back to the legacy path." No step requires the previous
+step to be irreversible.
+
+### Phase 5 — Merge staging + stable pipelines into one signed-bits pipeline
+
+- Once staging and stable both flow through per-build blob feeds,
+  collapse the two pipelines into one. Signing happens once; the
+  same bits are then either promoted to stable + uploaded to
+  nuget.org, or left as a staging build forever.
+- This is the change that actually eliminates the "we tested an
+  RC and rebuilt for GA" risk.
+
+### Phase 6 — Delete the old code
+
+- Remove the legacy channel branches, hive discovery,
+  install-prefix sniffing, `gh`-dependent acquisition logic, and
+  the staging-rebuild pipeline.
+- This is the moment the simplification is *realized* in the
+  codebase. Done last on purpose: until every consumer is on the
+  new path, the old code is the rollback button.
+
+### Phase 7 — Polyglot cleanup and follow-up
+
+- Remove polyglot-specific fallbacks that exist only because
+  today's channel handling is C#-centric.
+- Decide on lock-file mechanics (open question) and ship if
+  warranted.
+- Decide whether `stable` should ever resolve to blob storage by
+  default (currently spec'd as opt-in only).
+
+### What we explicitly are **not** doing during the transition
+
+- Flipping the customer-facing `stable` pointer to blob storage
+  by default. Stable continues to resolve to nuget.org throughout
+  the transition and at the end of it (per §8).
+- Changing `aspire.config.json` schema in a non-additive way.
+  `channel` widens to accept literal URLs; no existing values
+  break.
+- Asking customers to migrate anything. The whole transition is
+  internal until phase 4, and even then customer-visible behavior
+  for `stable` does not change.
+
 ## Open questions
 
 These are decisions the implementation phase will need to make.
