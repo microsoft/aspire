@@ -1014,7 +1014,10 @@ internal static class CliE2EAutomatorHelpers
             $"cp -r ~/.aspire/logs \"{diag}/logs\" 2>/dev/null || true; " +
             $"cp -r ~/.aspire/packages \"{diag}/packages\" 2>/dev/null || true; " +
             $"cp -r ~/.aspire/dcp-logs \"{diag}/dcp-logs\" 2>/dev/null || true; " +
-            $"cp {AspireStartJsonFile} \"{diag}/aspire-start.json\" 2>/dev/null || true; ";
+            $"cp {AspireStartJsonFile} \"{diag}/aspire-start.json\" 2>/dev/null || true; " +
+            $"echo \"diagnostics: logs=$(find \"{diag}/logs\" -type f 2>/dev/null | wc -l) " +
+            $"packages=$(find \"{diag}/packages\" -type f 2>/dev/null | wc -l) " +
+            $"dcp-logs=$(find \"{diag}/dcp-logs\" -type f 2>/dev/null | wc -l)\"; ";
     }
 
     private static string? GetRegisteredWorkspacePath()
