@@ -690,7 +690,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             return await TemporaryNuGetConfig.CreateAsync(
                 PackageSourceOverrideMappings.Create(packageSourceOverride, matchedChannel),
                 configureGlobalPackagesFolder,
-                configureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder() : null);
+                configureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(packageSourceOverride) : null);
         }
 
         if (string.IsNullOrEmpty(requestedChannel))
@@ -749,7 +749,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         return await TemporaryNuGetConfig.CreateAsync(
             channel.Mappings,
             channel.ConfigureGlobalPackagesFolder,
-            channel.ConfigureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder() : null);
+            channel.ConfigureGlobalPackagesFolder ? ResolveStableGlobalPackagesFolder(GetPrimaryFeedUrl(channel.Mappings)) : null);
     }
 
     /// <summary>
@@ -777,21 +777,38 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// the same staging build can share a single restore — the unit of cache isolation here is
     /// the staging build, not the individual restore command.
     ///
-    /// The cache subdirectory is keyed by the truncated CLI commit hash (first 8 hex chars,
-    /// matching the darc-pub-microsoft-aspire-<c>&lt;hash&gt;</c> feed URL convention) so two
-    /// staging builds of the same release branch — which share the same stable-shaped semver
-    /// (e.g. <c>13.4.0</c>) but ship different SHAs from different darc feeds — each get their
-    /// own cache. NuGet identifies packages by <c>(id, version)</c> only, so without that
-    /// per-build key the second build's restore would silently reuse the first build's now-stale
-    /// <c>13.4.0</c> assemblies. 8 chars is enough to avoid a Windows MAX_PATH blow-up on deep
-    /// integration cache directories while still keeping the SHA collision probability negligible.
+    /// The cache subdirectory is keyed by a truncated hash of the resolved feed URL (first 8
+    /// hex chars of <see cref="System.IO.Hashing.XxHash3"/> over the trimmed/lower-cased URL).
+    /// Two staging builds of the same release branch — which share the same stable-shaped semver
+    /// (e.g. <c>13.4.0</c>) but ship from different darc feeds — therefore each get their own
+    /// cache. A user pointing the same CLI at multiple <c>overrideStagingFeed</c> values during
+    /// dev/test also gets a distinct cache per feed, instead of one bucket silently shared across
+    /// feeds. NuGet identifies packages by <c>(id, version)</c> only, so without that per-feed
+    /// key the second feed's restore would silently reuse the first feed's now-stale
+    /// <c>13.4.0</c> assemblies. When <paramref name="feedUrl"/> is null or empty (defensive —
+    /// both call sites currently always pass a real URL) the key falls back to <c>"default"</c>
+    /// so the path is still well-formed.
     /// </remarks>
-    private string ResolveStableGlobalPackagesFolder()
+    private string ResolveStableGlobalPackagesFolder(string? feedUrl)
     {
-        var cacheKey = VersionHelper.TryGetCurrentCommitHashShort() ?? "default";
+        var cacheKey = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl) ?? "default";
         return Path.Combine(
             CliPathHelper.GetStagingNuGetPackagesDirectory(_executionContext.AspireHomeDirectory),
             cacheKey);
+    }
+
+    /// <summary>
+    /// Returns the URL we use as the cache-key input when materializing a temp nuget.config from
+    /// a <see cref="PackageChannel"/>. Prefers the explicit <c>Aspire*</c> mapping (the staging
+    /// channel's primary feed and the one whose restored assemblies actually need cache
+    /// isolation), falling back to the first mapping for forward compatibility with channel
+    /// shapes we don't yet emit.
+    /// </summary>
+    private static string GetPrimaryFeedUrl(PackageMapping[] mappings)
+    {
+        var aspire = mappings.FirstOrDefault(m =>
+            string.Equals(m.PackageFilter, "Aspire*", StringComparison.OrdinalIgnoreCase));
+        return aspire?.Source ?? mappings[0].Source;
     }
 
     private async Task<string?> ResolveLocalPackageSourceOverrideAsync(string? requestedChannel, CancellationToken cancellationToken)

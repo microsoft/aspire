@@ -11,6 +11,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
@@ -427,9 +428,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var executionContext = CreateContextWithIdentityChannel("local");
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
         var mappings = new[]
         {
-            new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
+            new PackageMapping(PackageMapping.AllPackages, channelSource)
         };
         var stagingChannel = PackageChannel.CreateExplicitChannel(
             name: "staging",
@@ -457,6 +459,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.False(
             gpfValue!.StartsWith(tempConfigDir, StringComparison.Ordinal),
             $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
+        // The cache subdirectory must be keyed by the resolved feed URL so two different staging
+        // feeds (e.g. two darc builds or an overrideStagingFeed setting) get distinct caches.
+        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(channelSource);
+        Assert.NotNull(expectedCacheKey);
+        var expectedCachePath = Path.Combine(
+            CliPathHelper.GetStagingNuGetPackagesDirectory(executionContext.AspireHomeDirectory),
+            expectedCacheKey);
+        Assert.Equal(expectedCachePath, gpfValue);
     }
 
     [Fact]
@@ -507,6 +517,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.False(
             gpfValue!.StartsWith(tempConfigDir, StringComparison.Ordinal),
             $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
+        // The cache key is derived from the resolved staging feed URL so the same CLI talking to
+        // a different overrideStagingFeed gets a different cache bucket.
+        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(overrideStagingFeed);
+        Assert.NotNull(expectedCacheKey);
+        var expectedCachePath = Path.Combine(
+            CliPathHelper.GetStagingNuGetPackagesDirectory(executionContext.AspireHomeDirectory),
+            expectedCacheKey);
+        Assert.Equal(expectedCachePath, gpfValue);
     }
 
     [Theory]
@@ -595,7 +613,8 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             nuGetPackageCache: new FakeNuGetPackageCache(),
             features: new TestFeatures(),
             configureGlobalPackagesFolder: true);
-        var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
+        var executionContext = CreateContextWithIdentityChannel("pr-12345");
+        var server = CreateServerWithChannel(workspace, stagingChannel, executionContext);
 
         using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
             server,
@@ -620,6 +639,14 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.False(
             gpfValue!.StartsWith(tempConfigDir, StringComparison.Ordinal),
             $"globalPackagesFolder must not be under the temp nuget.config dir '{tempConfigDir}'. Got: {gpfValue}");
+        // The cache key is derived from the --source override, not the channel's own mappings,
+        // so users running multiple overrides against the same CLI get distinct cache buckets.
+        var expectedCacheKey = CliPathHelper.ComputeStagingFeedCacheKey(packageSourceOverride);
+        Assert.NotNull(expectedCacheKey);
+        var expectedCachePath = Path.Combine(
+            CliPathHelper.GetStagingNuGetPackagesDirectory(executionContext.AspireHomeDirectory),
+            expectedCacheKey);
+        Assert.Equal(expectedCachePath, gpfValue);
     }
 
     [Fact]
