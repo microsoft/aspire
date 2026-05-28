@@ -68,53 +68,6 @@ public static class BlazorHostedExtensions
         return host;
     }
 
-    /// <summary>
-    /// Enables WebAssembly debugging for a hosted Blazor client project. Creates a hidden
-    /// child debugger resource that launches a debug browser via DCP/IDE when the user
-    /// clicks "Debug in Browser" on the host resource.
-    /// </summary>
-    /// <typeparam name="TClientProject">The client project metadata type (from the .Client project).</typeparam>
-    /// <param name="host">The host resource builder.</param>
-    [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
-    public static IResourceBuilder<ProjectResource> ProxyWasmDebugging<TClientProject>(
-        this IResourceBuilder<ProjectResource> host)
-        where TClientProject : IProjectMetadata, new()
-    {
-        if (host.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            return host;
-        }
-
-        var clientMetadata = new TClientProject();
-        return host.ProxyWasmDebugging(clientMetadata.ProjectPath);
-    }
-
-    /// <summary>
-    /// Enables WebAssembly debugging for a hosted Blazor client project. Creates a hidden
-    /// child debugger resource that launches a debug browser via DCP/IDE when the user
-    /// clicks "Debug in Browser" on the host resource.
-    /// </summary>
-    /// <param name="host">The host resource builder.</param>
-    /// <param name="clientProjectPath">Path to the WASM client .csproj file (absolute or relative to AppHost directory).</param>
-    [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
-    public static IResourceBuilder<ProjectResource> ProxyWasmDebugging(
-        this IResourceBuilder<ProjectResource> host,
-        string clientProjectPath)
-    {
-        if (host.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            return host;
-        }
-
-        var resolvedPath = Path.IsPathRooted(clientProjectPath)
-            ? clientProjectPath
-            : Path.GetFullPath(Path.Combine(host.ApplicationBuilder.AppHostDirectory, clientProjectPath));
-
-        AddBrowserDebuggerResource(host, resolvedPath, relativePath: null);
-
-        return host;
-    }
-
     private static void EnsureEnvironmentCallback(
         IResourceBuilder<ProjectResource> host,
         HostedClientAnnotation annotation)

@@ -41,32 +41,3 @@ internal sealed class ProjectLaunchConfiguration() : ExecutableLaunchConfigurati
     [JsonPropertyName("project_path")]
     public string ProjectPath { get; set; } = string.Empty;
 }
-
-/// <summary>
-/// Launch configuration for browser-based debugging.
-/// The IDE receives this via PUT /run_session, launches a browser navigated to the URL,
-/// and attaches a debug adapter (determined by the <see cref="Browser"/> field).
-/// </summary>
-internal sealed class BrowserLaunchConfiguration() : ExecutableLaunchConfiguration("browser")
-{
-    /// <summary>
-    /// URL where the application is served. The IDE navigates the debug browser here.
-    /// </summary>
-    [JsonPropertyName("url")]
-    public string Url { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Root path for source resolution.
-    /// For JS apps this is the web root directory; for Blazor WASM it is the .csproj path.
-    /// </summary>
-    [JsonPropertyName("web_root")]
-    public string WebRoot { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Browser/debug adapter type. The IDE extension maps this to a VS Code debug adapter.
-    /// Standard values: "msedge", "chrome". For Blazor WASM debugging use "blazor-webassembly"
-    /// (requires extension support). Defaults to "msedge".
-    /// </summary>
-    [JsonPropertyName("browser")]
-    public string Browser { get; set; } = "msedge";
-}

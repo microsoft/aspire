@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.JavaScript;
 using Aspire.Hosting.Orchestrator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -44,7 +45,7 @@ internal static class BrowserDebuggerHelper
         debugAnnotation.DebuggerResourceName = debuggerResourceName;
         parentResource.Annotations.Add(debugAnnotation);
 
-        var debuggerResource = new ExecutableResource(debuggerResourceName, "browser-debug", clientProjectDir);
+        var debuggerResource = new BrowserDebuggerResource(debuggerResourceName, "msedge", clientProjectDir);
 
         builder.AddResource(debuggerResource)
             .WithParentRelationship(parentResource)
@@ -79,7 +80,7 @@ internal static class BrowserDebuggerHelper
                         ? $"{endpointReference.Url}/{relativePath}/"
                         : endpointReference.Url;
 
-                    return new Dcp.Model.BrowserLaunchConfiguration
+                    return new BrowserLaunchConfiguration
                     {
                         Mode = mode,
                         Url = appUrl,
