@@ -74,7 +74,12 @@ internal sealed class ConsoleCancellationManager : IDisposable
 
             // SIGQUIT maps to CTRL_BREAK_EVENT on Windows. Register it to maintain parity with
             // Console.CancelKeyPress which handled both Ctrl+C and Ctrl+Break.
-            _sigQuitRegistration = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, OnPosixSignal);
+            // On Linux/macOS, SIGQUIT's default action produces a core dump which is useful for
+            // debugging hung processes — don't intercept it there.
+            if (OperatingSystem.IsWindows())
+            {
+                _sigQuitRegistration = PosixSignalRegistration.Create(PosixSignal.SIGQUIT, OnPosixSignal);
+            }
         }
         else
         {
