@@ -297,11 +297,12 @@ jobs:
               console.log(`Looking up jobs for ${shortNames.length} short name(s): ${JSON.stringify(shortNames)}`);
 
               // Fetch jobs page by page instead of using github.paginate, which fails
-              // with HTTP 500 on large runs (300+ jobs). Manual pagination lets us:
-              // - Handle per-page errors gracefully (skip that page, keep partial results)
-              // - Stop early once all needed jobs are found
+              // with HTTP 500 on large runs (300+ jobs). Use per_page=50 because the
+              // GitHub API returns 502 "Server Error" with per_page=100 when runs have
+              // many jobs (the response payload exceeds an internal size limit).
+              const perPage = 50;
               let page = 1;
-              const maxPages = 10;
+              const maxPages = 20;
               while (unmatchedNames.size > 0 && page <= maxPages) {
                 let jobs;
                 try {
@@ -309,7 +310,7 @@ jobs:
                     owner: context.repo.owner,
                     repo: context.repo.repo,
                     run_id: runId,
-                    per_page: 100,
+                    per_page: perPage,
                     page: page
                   });
                   jobs = response.data.jobs;
@@ -332,7 +333,7 @@ jobs:
                   }
                 }
 
-                if (jobs.length < 100) break;
+                if (jobs.length < perPage) break;
                 page++;
               }
 
