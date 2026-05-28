@@ -270,10 +270,10 @@ await auto.WaitUntilAsync(
 
 | Method | Description |
 |--------|-------------|
-| `WaitForSuccessPromptAsync(counter, timeout?)` | Waits for `[N OK] $ ` prompt and increments counter |
+| `WaitForSuccessPromptAsync(counter, timeout?)` | Waits for `[N OK] $ ` prompt, fails immediately if error prompt appears, and increments counter |
 | `WaitForAnyPromptAsync(counter, timeout?)` | Waits for any prompt (`OK` or `ERR`) and increments counter |
 | `WaitForErrorPromptAsync(counter, timeout?)` | Waits for `[N ERR:code] $ ` prompt and increments counter |
-| `WaitForSuccessPromptFailFastAsync(counter, timeout?)` | Waits for success prompt, fails immediately if error prompt appears |
+| `RunCommandAsync(command, counter, timeout?)` | Types a command, presses Enter, and waits for success prompt (fails fast on error) |
 | `DeclineAgentInitPromptAsync()` | Declines the `aspire agent init` prompt if it appears |
 | `AspireNewAsync(projectName, counter, template?, useRedisCache?)` | Runs `aspire new` interactively, handling template selection, project name, output path, URLs, Redis, and test project prompts |
 
@@ -301,8 +301,7 @@ The following extensions on `Hex1bTerminalInputSequenceBuilder` are still availa
 |--------|-------------|
 | `WaitForSuccessPrompt(counter, timeout?)` | *(legacy)* Waits for `[N OK] $ ` prompt and increments counter |
 | `PrepareEnvironment(workspace, counter)` | *(legacy)* Sets up custom prompt with command tracking |
-| `InstallAspireCliFromPullRequest(prNumber, counter)` | *(legacy)* Downloads and installs CLI from PR artifacts |
-| `SourceAspireCliEnvironment(counter)` | *(legacy)* Adds `~/.aspire/bin` to PATH |
+| `SourceAspireBundleEnvironment(counter)` | *(legacy)* Sources bundle PATH environment variables |
 
 ## DO: Use CellPatternSearcher for Output Detection
 
