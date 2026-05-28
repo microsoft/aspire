@@ -191,9 +191,24 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         if (packages.Length > 0 &&
             selectedChannel.Type is PackageChannelType.Explicit &&
+            !string.Equals(selectedChannel.Name, PackageChannelNames.Stable, StringComparisons.ChannelName) &&
             !VersionHelper.IsLocalBuildChannel(selectedChannel.Name))
         {
-            // Prerelease channels can filter out the shipped stable package even when the feed can restore it.
+            // Prerelease channels (daily, staging) filter the shipped stable package out of channel
+            // search even when the channel's feed mappings can still restore it (they fall back to
+            // nuget.org). For those channels, pinning to the running CLI's SDK version keeps the
+            // bundled server and the restored Aspire packages in lock-step. Without this, `aspire new
+            // --channel daily` on a shipped 13.4 CLI floats templates to a 13.5 daily preview, which
+            // then breaks the bundled 13.4 AppHost server with `Aspire.TypeSystem, Version=13.5.0.0`
+            // assembly load errors followed by `No language support found for: typescript/nodejs`.
+            //
+            // The stable channel is excluded here on purpose: it does not apply that filter, so a
+            // "no exact match" outcome means the CLI version is genuinely not published on the stable
+            // feed (the CLI is daily-shape, staging-shape, or PR-shape `13.4.0-pr.X.gY`). Forcing
+            // it through would either contradict the user's explicit `--channel stable` request or
+            // write an unpublishable version into `apphost.cs` that NuGet restore cannot satisfy.
+            // Fall through to the OrderByDescending picker so the user gets the highest shipped
+            // stable package they actually asked for.
             return new NuGetPackage
             {
                 Id = TemplateNuGetConfigService.TemplatesPackageName,

@@ -1032,7 +1032,13 @@ internal class NuGetConfigMerger
         AddGlobalPackagesFolderConfiguration(configContext.Configuration);
     }
 
-    internal static void AddGlobalPackagesFolderConfiguration(XElement configuration)
+    // Default workspace-relative cache used when no explicit path is supplied. Matches the
+    // long-standing 'aspire init / aspire new' convention of putting a per-workspace
+    // .nugetpackages folder next to the merged nuget.config so staging-vs-stable cache
+    // poisoning doesn't bleed into the user's global ~/.nuget/packages folder.
+    internal const string DefaultGlobalPackagesFolderValue = ".nugetpackages";
+
+    internal static void AddGlobalPackagesFolderConfiguration(XElement configuration, string? globalPackagesFolderValue = null)
     {
         // Check if config section already exists
         var config = configuration.Element("config");
@@ -1048,10 +1054,13 @@ internal class NuGetConfigMerger
 
         if (existingGlobalPackagesFolder is null)
         {
-            // Add globalPackagesFolder configuration
+            // Add globalPackagesFolder configuration. Callers (e.g. PrebuiltAppHostServer's
+            // temporary nuget.config) supply an absolute path when the config file itself is
+            // ephemeral so the cached packages outlive the config — otherwise NuGet would
+            // resolve the relative ".nugetpackages" under the about-to-be-deleted temp dir.
             var globalPackagesFolderAdd = new XElement("add");
             globalPackagesFolderAdd.SetAttributeValue("key", "globalPackagesFolder");
-            globalPackagesFolderAdd.SetAttributeValue("value", ".nugetpackages");
+            globalPackagesFolderAdd.SetAttributeValue("value", globalPackagesFolderValue ?? DefaultGlobalPackagesFolderValue);
             config.Add(globalPackagesFolderAdd);
         }
     }
