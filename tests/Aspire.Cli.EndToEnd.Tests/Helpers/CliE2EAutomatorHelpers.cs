@@ -1014,12 +1014,7 @@ internal static class CliE2EAutomatorHelpers
             $"cp -r ~/.aspire/logs \"{diag}/logs\" 2>/dev/null || true; " +
             $"cp -r ~/.aspire/packages \"{diag}/packages\" 2>/dev/null || true; " +
             $"cp -r ~/.aspire/dcp-logs \"{diag}/dcp-logs\" 2>/dev/null || true; " +
-            $"cp {AspireStartJsonFile} \"{diag}/aspire-start.json\" 2>/dev/null || true; " +
-            "DETACH_LOG=$(ls -t ~/.aspire/logs/cli_*detach*.log 2>/dev/null | head -1); " +
-            $"[ -n \"$DETACH_LOG\" ] && cp \"$DETACH_LOG\" \"{diag}/aspire-detach.log\" 2>/dev/null || true; " +
-             "CLI_LOG=$(ls -t ~/.aspire/logs/cli_*.log 2>/dev/null | grep -v 'detach' | head -1); " +
-             "if [ -z \"$CLI_LOG\" ]; then CLI_LOG=$(ls -t ~/.aspire/logs/cli_*.log 2>/dev/null | head -1); fi; " +
-             $"[ -n \"$CLI_LOG\" ] && cp \"$CLI_LOG\" \"{diag}/aspire-cli.log\" 2>/dev/null || true; ";
+            $"cp {AspireStartJsonFile} \"{diag}/aspire-start.json\" 2>/dev/null || true; ";
     }
 
     private static string? GetRegisteredWorkspacePath()
