@@ -428,15 +428,15 @@ jobs:
                 TEST_OUTCOME=$(jq -r --arg name "$filename" '.[$name] // "Unknown"' test_outcomes.json)
                 if [ "$TEST_OUTCOME" = "Passed" ]; then
                   STATUS_EMOJI="✅"
-                  LINK_LABEL="✅ ▶️ View recording"
+                  LINK_LABEL="Recording"
                   TEST_PASS_COUNT=$((TEST_PASS_COUNT + 1))
                 elif [ "$TEST_OUTCOME" = "Failed" ]; then
                   STATUS_EMOJI="❌"
-                  LINK_LABEL="❌ ▶️ View failure recording"
+                  LINK_LABEL="Recording"
                   TEST_FAIL_COUNT=$((TEST_FAIL_COUNT + 1))
                 else
                   STATUS_EMOJI="❔"
-                  LINK_LABEL="❔ ▶️ View recording"
+                  LINK_LABEL="Recording"
                   TEST_UNKNOWN_COUNT=$((TEST_UNKNOWN_COUNT + 1))
                 fi
 
