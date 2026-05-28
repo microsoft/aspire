@@ -509,41 +509,43 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_WithAllBundleSkillNames_InstallsEverySkillSurfacedByBundle()
+    public async Task AgentInitCommand_NonInteractive_AllBundleSkills_AreInstallableByName()
     {
-        // Regression guard for the original issue: the bundle ships six skills but only the three
-        // CLI-hardcoded ones (aspire, aspireify, aspire-deployment) were promptable/installable. The
-        // refactored command now derives the catalog from the bundle manifest, so passing each
-        // bundle skill name to --skills must install every skill the bundle exposes — including
-        // aspire-init, aspire-monitoring and aspire-orchestration which used to be invisible to the
-        // CLI. (Explicit names instead of `all` keeps the assertion focused on bundle skills and
-        // avoids dragging in Playwright/dotnet-inspect, which would attempt real network calls.)
+        // Regression guard for the original issue: the bundle ships skills (aspire-init,
+        // aspire-monitoring, aspire-orchestration) that were not surfaced by the CLI because the
+        // install prompt was driven by a hardcoded list. After the refactor, the catalog comes
+        // from the bundle manifest.
+        //
+        // The assertion is data-driven against the bundle's own manifest so this test stays
+        // accurate as the fixture (or, one day, the real bundle) evolves — adding or removing
+        // a skill in FakeAspireSkillsInstaller doesn't require updating the test body.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
-        var bundleSkills = string.Join(",",
-            CommonAgentApplicators.AspireSkillName,
-            CommonAgentApplicators.AspireifySkillName,
-            CommonAgentApplicators.AspireDeploymentSkillName,
-            FakeAspireSkillsInstaller.AspireInitSkillName,
-            FakeAspireSkillsInstaller.AspireMonitoringSkillName,
-            FakeAspireSkillsInstaller.AspireOrchestrationSkillName);
+        // Prime the bundle and read the list of skills it actually surfaces. The fake
+        // installer's InstallAsync is idempotent, so the subsequent CLI invocation will reuse
+        // this same bundle directory.
+        var installer = provider.GetRequiredService<IAspireSkillsInstaller>();
+        var installResult = await installer.InstallAsync(TestContext.Current.CancellationToken).DefaultTimeout();
+        Assert.NotNull(installResult.Bundle);
+        var bundleSkillNames = installResult.Bundle.GetSkillDefinitions().Select(static s => s.Name).ToList();
+        Assert.NotEmpty(bundleSkillNames);
 
+        // Explicit names instead of `all` keeps the assertion focused on bundle skills and
+        // avoids dragging in Playwright/dotnet-inspect, which would attempt real network calls.
+        var skillsArg = string.Join(",", bundleSkillNames);
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations all --skills {bundleSkills}");
+        var result = command.Parse($"agent init --workspace-root {workspace.WorkspaceRoot.FullName} --skill-locations all --skills {skillsArg}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireSkillName);
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireifySkillName);
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireDeploymentSkillName);
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireInitSkillName);
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
-        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireOrchestrationSkillName);
+        foreach (var skillName in bundleSkillNames)
+        {
+            AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), skillName);
+        }
     }
 
     [Fact]

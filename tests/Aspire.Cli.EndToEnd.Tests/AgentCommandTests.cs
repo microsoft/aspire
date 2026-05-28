@@ -247,14 +247,15 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Regression guard for the original bug: the bundle ships six skills but only the three
-    /// CLI-hardcoded ones were promptable/installable. End-to-end this means
-    /// <c>aspire agent init --skills all</c> must materialize every SKILL.md that the bundle
-    /// surfaces — including <c>aspire-init</c>, <c>aspire-monitoring</c> and
-    /// <c>aspire-orchestration</c>, which were invisible to the CLI before this change.
+    /// Regression guard for the original bug: bundle-only skill names (aspire-init,
+    /// aspire-monitoring, aspire-orchestration) were not surfaced by the CLI because the
+    /// install prompt was driven by a hardcoded list. End-to-end this means passing those
+    /// names to <c>aspire agent init --skills</c> must materialize their SKILL.md files.
+    /// The CLI-hardcoded skills (aspire/aspireify/aspire-deployment) worked before, so they
+    /// aren't part of the regression and are covered by the broader integration test.
     /// </summary>
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_WithAllSkills_InstallsEverySkillSurfacedByBundle()
+    public async Task AgentInitCommand_NonInteractive_BundleOnlySkillsBeyondCliCatalog_AreInstallable()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
@@ -271,27 +272,30 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         await auto.InstallAspireCliAsync(strategy, counter);
 
-        // Seed the user-level cache with all six bundle skills so the CLI exercises the cached
-        // path without needing the unpublished npm package. The cache fixture is identical to
-        // the published bundle's manifest shape.
+        // Seed the user-level cache with the six bundle skills so the CLI exercises the cached
+        // path without needing the unpublished npm package. The fixture mirrors the published
+        // bundle's manifest shape.
         await SeedAspireSkillsBundleCacheAsync(auto, workspace, counter);
 
-        // Non-interactive: skill locations + skills + workspace root all set via flags. Enumerate
-        // the six bundle skill names explicitly instead of `all` to keep this test focused on the
-        // bundle catalog (passing `all` would also pull in Playwright/dotnet-inspect, which try real
-        // network calls).
-        await auto.TypeAsync("aspire agent init --workspace-root . --skill-locations standard --skills aspire,aspireify,aspire-deployment,aspire-init,aspire-monitoring,aspire-orchestration");
+        // The names below are the ones the original bug hid from the CLI. Naming them explicitly
+        // (rather than `--skills all`) avoids pulling in playwright/dotnet-inspect, which would
+        // attempt real npm registry calls inside the container, and keeps the assertion narrowly
+        // focused on the regression. Extra skills added to the bundle in the future are
+        // intentionally outside the scope of this snapshot test.
+        var bundleOnlySkills = new[] { "aspire-init", "aspire-monitoring", "aspire-orchestration" };
+        var skillsArg = string.Join(",", bundleOnlySkills);
+
+        await auto.TypeAsync($"aspire agent init --workspace-root . --skill-locations standard --skills {skillsArg}");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(60));
         await auto.WaitForSuccessPromptFailFastAsync(counter);
 
         var skillsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills");
-        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspire", "SKILL.md")), "aspire SKILL.md missing");
-        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspireify", "SKILL.md")), "aspireify SKILL.md missing");
-        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspire-deployment", "SKILL.md")), "aspire-deployment SKILL.md missing");
-        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspire-init", "SKILL.md")), "aspire-init SKILL.md missing");
-        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspire-monitoring", "SKILL.md")), "aspire-monitoring SKILL.md missing");
-        Assert.True(File.Exists(Path.Combine(skillsRoot, "aspire-orchestration", "SKILL.md")), "aspire-orchestration SKILL.md missing");
+        foreach (var skillName in bundleOnlySkills)
+        {
+            var skillFile = Path.Combine(skillsRoot, skillName, "SKILL.md");
+            Assert.True(File.Exists(skillFile), $"Expected {skillName} SKILL.md at {skillFile}");
+        }
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
