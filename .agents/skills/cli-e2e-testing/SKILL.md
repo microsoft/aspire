@@ -45,27 +45,51 @@ public sealed class SmokeTests(ITestOutputHelper output)
     [Fact]
     public async Task MyCliTest()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode();
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal();
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 }
+```
+
+### TerminalRun Pattern
+
+**Always use `CliE2ETestHelpers.StartRun`** to wrap the terminal run. This returns a `TerminalRun` (implements `IAsyncDisposable`) that automatically:
+1. Captures Aspire diagnostics via `CaptureAspireDiagnosticsAsync` (best effort)
+2. Types `exit` and presses Enter to close the terminal
+3. Awaits the pending run task
+
+This eliminates the need for manual `exit`/`await pendingRun` at the end of every test and ensures diagnostics are always captured, even when tests fail.
+
+```csharp
+// DO: Use StartRun for consistent diagnostics capture and cleanup
+using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+var counter = new SequenceCounter();
+var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, TestContext.Current.CancellationToken);
+
+// ... test body — no exit/pendingRun needed at the end
+
+// DON'T: Manually handle exit and pendingRun
+var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+// ... test body ...
+await auto.TypeAsync("exit");
+await auto.EnterAsync();
+await pendingRun;
 ```
 
 ## Running Tests Locally
