@@ -257,6 +257,11 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 (availableSkills, aspireSkillsBundle) = await ResolveAvailableSkillsAsync(detectedLanguage, cancellationToken);
             }
 
+            // Order the merged catalog deterministically by name so the prompt is stable
+            // regardless of manifest order. OrdinalIgnoreCase matches the case-insensitive
+            // --skills parsing used elsewhere.
+            availableSkills = [.. availableSkills.OrderBy(static s => s.Name, StringComparer.OrdinalIgnoreCase)];
+
             // Build prompt items: skills first, then MCP as a separate non-default item
             var skillChoices = new List<object>();
             skillChoices.AddRange(availableSkills);
@@ -292,7 +297,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 skillChoices,
                 item => item switch
                 {
-                    SkillDefinition skill => $"{skill.Name.EscapeMarkup()} — {skill.Description.EscapeMarkup()}",
+                    SkillDefinition skill => $"{skill.Name.EscapeMarkup()} — {SimplifyDescription(skill.Description).EscapeMarkup()}",
                     AgentEnvironmentApplicator app => $"[bold]{app.Description}[/] [dim]{AgentCommandStrings.InitCommand_ConfiguresDetectedAgentEnvironments}[/]",
                     _ => item.ToString()!
                 },
@@ -451,11 +456,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             bundle = result.Bundle ?? throw new InvalidOperationException("Aspire skills installer returned an installed result without a bundle.");
             skills.AddRange(bundle.GetSkillDefinitions().Where(static skill => !IsCliDefinedSkillName(skill.Name)));
         }
-        else
-        {
-            _interactionService.DisplayMessage(KnownEmojis.Warning, result.Message!);
-        }
 
+        // When the bundle is unavailable (network failure, version mismatch, etc.), fall back
+        // silently to the CLI-defined skills. The installer already logs the underlying cause
+        // at debug level, so the user is not interrupted with a warning they cannot act on.
         skills.AddRange(SkillDefinition.CliDefined);
 
         return (skills
@@ -496,6 +500,58 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     private static bool IsCliDefinedSkillName(string name)
     {
         return SkillDefinition.CliDefined.Any(skill => skill.HasName(name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Extracts the single short sentence from a skill description so the selection prompt
+    /// stays readable.
+    /// </summary>
+    /// <remarks>
+    /// Bundle manifest descriptions can include a bold skill-type prefix followed by a
+    /// short tagline and additional usage guidance, for example:
+    ///   "**WORKFLOW SKILL** - Top-level router for Aspire 13.4 distributed apps. Detects the AppHost. USE FOR: ..."
+    /// This trims the prefix and returns only the first sentence. Inputs without the prefix
+    /// or sentence terminator are returned trimmed-but-otherwise-unchanged so CLI-defined
+    /// short descriptions are preserved as-is.
+    /// </remarks>
+    internal static string SimplifyDescription(string description)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return description;
+        }
+
+        var simplified = description.Trim();
+
+        // Strip the leading bold "TYPE SKILL" prefix when present.
+        if (simplified.StartsWith("**", StringComparison.Ordinal))
+        {
+            var endBold = simplified.IndexOf("**", 2, StringComparison.Ordinal);
+            if (endBold > 0)
+            {
+                simplified = simplified[(endBold + 2)..].TrimStart();
+            }
+        }
+
+        // Strip leading separator characters that typically follow the bold prefix (e.g. " - ", " — ", ": ").
+        while (simplified.Length > 0 && simplified[0] is '-' or '\u2013' or '\u2014' or ':')
+        {
+            simplified = simplified[1..].TrimStart();
+        }
+
+        // Return up to and including the first sentence-ending punctuation followed by
+        // whitespace or end-of-string. This avoids splitting on inline punctuation such
+        // as "13.4" or "github.com" inside the first sentence.
+        for (var i = 0; i < simplified.Length; i++)
+        {
+            if (simplified[i] is '.' or '!' or '?'
+                && (i + 1 >= simplified.Length || char.IsWhiteSpace(simplified[i + 1])))
+            {
+                return simplified[..(i + 1)];
+            }
+        }
+
+        return simplified;
     }
 
     private static IReadOnlyList<SkillDefinition> GetDefaultSkills(IEnumerable<SkillDefinition> availableSkills, AgentInitSkillDefaultMode defaultSkillMode)

@@ -165,7 +165,8 @@ internal sealed class AspireSkillsInstaller(
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
             {
-                logger.LogWarning(ex, "Downloaded Aspire skills GitHub release asset {AssetName} is invalid.", asset.Name);
+                // Includes version-mismatch failures from ValidateCompatibility, which fall back to the embedded snapshot.
+                logger.LogDebug(ex, "Downloaded Aspire skills GitHub release asset {AssetName} is invalid.", asset.Name);
                 return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
             }
         }
@@ -240,7 +241,8 @@ internal sealed class AspireSkillsInstaller(
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
             {
-                logger.LogWarning(ex, "Embedded Aspire skills bundle {AssetName} is invalid.", metadata.AssetName);
+                // Includes version-mismatch failures from ValidateCompatibility; the CLI falls back to its CLI-defined skills silently.
+                logger.LogDebug(ex, "Embedded Aspire skills bundle {AssetName} is invalid.", metadata.AssetName);
                 return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
             }
         }

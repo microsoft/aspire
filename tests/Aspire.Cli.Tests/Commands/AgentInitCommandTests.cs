@@ -253,6 +253,114 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("Observe [[danger]] apps", formattedSkill);
     }
 
+    [Theory]
+    [InlineData("", "")]
+    [InlineData("   ", "   ")]
+    [InlineData("Short description", "Short description")]
+    [InlineData("Short description.", "Short description.")]
+    [InlineData("First sentence. Second sentence.", "First sentence.")]
+    [InlineData("**WORKFLOW SKILL** - Top-level router for Aspire 13.4 distributed apps. Detects the AppHost.", "Top-level router for Aspire 13.4 distributed apps.")]
+    [InlineData("**ANALYSIS SKILL** — Observe Aspire apps. USE FOR: aspire logs.", "Observe Aspire apps.")]
+    [InlineData("**SETUP SKILL**: One-time setup of resources. INVOKES: aspire add.", "One-time setup of resources.")]
+    [InlineData("Visit github.com for docs. Then run the tool.", "Visit github.com for docs.")]
+    [InlineData("**TYPE** -", "")]
+    public void SimplifyDescription_ProducesExpectedSummary(string input, string expected)
+    {
+        Assert.Equal(expected, AgentInitCommand.SimplifyDescription(input));
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_InteractiveSkillPrompt_StripsVerboseBundleDescription()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var bundle = await CreateBundleAsync(
+            workspace.WorkspaceRoot,
+            (FakeAspireSkillsInstaller.AspireMonitoringSkillName,
+             "**ANALYSIS SKILL** - Observe Aspire apps. USE FOR: aspire logs, aspire traces. INVOKES: aspire CLI.",
+             false));
+        string? formattedSkill = null;
+        var interactionService = new TestInteractionService();
+        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
+        interactionService.PromptForSelectionsCallback = (_, choices, formatter, _) =>
+        {
+            var items = choices.Cast<object>().ToList();
+            if (items.FirstOrDefault() is SkillLocation)
+            {
+                return [SkillLocation.Standard];
+            }
+
+            var skill = Assert.Single(items.OfType<SkillDefinition>(), static skill => skill.HasName(FakeAspireSkillsInstaller.AspireMonitoringSkillName));
+            formattedSkill = formatter(skill);
+            return [];
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
+                serviceProvider.GetRequiredService<CliExecutionContext>(),
+                AspireSkillsInstallResult.Installed(bundle));
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("agent init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(formattedSkill);
+        Assert.Contains("Observe Aspire apps.", formattedSkill);
+        Assert.DoesNotContain("ANALYSIS SKILL", formattedSkill);
+        Assert.DoesNotContain("USE FOR", formattedSkill);
+        Assert.DoesNotContain("INVOKES", formattedSkill);
+    }
+
+    [Fact]
+    public async Task AgentInitCommand_InteractiveSkillPrompt_OrdersSkillsAlphabetically()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        // Intentionally pass bundle skills in non-alphabetical order to confirm the prompt sorts deterministically.
+        var bundle = await CreateBundleAsync(
+            workspace.WorkspaceRoot,
+            ("zeta-bundle-skill", "Zeta skill", false),
+            ("alpha-bundle-skill", "Alpha skill", false),
+            ("middle-bundle-skill", "Middle skill", false));
+        var promptedSkillNames = new List<string>();
+        var interactionService = new TestInteractionService();
+        interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
+        interactionService.PromptForSelectionsCallback = (_, choices, _, _) =>
+        {
+            var items = choices.Cast<object>().ToList();
+            if (items.FirstOrDefault() is SkillLocation)
+            {
+                return [SkillLocation.Standard];
+            }
+
+            promptedSkillNames.AddRange(items.OfType<SkillDefinition>().Select(static skill => skill.Name));
+            return [];
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AspireSkillsInstallerFactory = serviceProvider => new FakeAspireSkillsInstaller(
+                serviceProvider.GetRequiredService<CliExecutionContext>(),
+                AspireSkillsInstallResult.Installed(bundle));
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("agent init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotEmpty(promptedSkillNames);
+        var sorted = promptedSkillNames.OrderBy(static name => name, StringComparer.OrdinalIgnoreCase).ToList();
+        Assert.Equal(sorted, promptedSkillNames);
+    }
+
     [Fact]
     public async Task AgentInitCommand_NonInteractive_WithSpecificBundleSkill_InstallsSkillFiles()
     {
@@ -438,7 +546,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AgentInitCommand_NonInteractive_WithUnavailableAspireSkillsBundle_WarnsAndSucceedsWithoutSelectedAspireSkills()
+    public async Task AgentInitCommand_NonInteractive_WithUnavailableAspireSkillsBundle_SucceedsWithoutWarningOrSelectedAspireSkills()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         const string installFailureMessage = "Aspire skills bundle is unavailable.";
@@ -460,14 +568,14 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.DoesNotContain(installFailureMessage, interactionService.DisplayedErrors);
-        Assert.Contains(
+        Assert.DoesNotContain(
             interactionService.DisplayedMessages,
             message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == installFailureMessage);
         Assert.Contains(McpCommandStrings.InitCommand_ConfigurationComplete, interactionService.DisplayedSuccess);
     }
 
     [Fact]
-    public async Task PromptAndChainAsync_WithUnavailableAspireSkillsBundle_SucceedsWithoutSelectedAspireSkills()
+    public async Task PromptAndChainAsync_WithUnavailableAspireSkillsBundle_SucceedsWithoutWarningOrSelectedAspireSkills()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         const string installFailureMessage = "Aspire skills bundle is unavailable.";
@@ -493,7 +601,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.DoesNotContain(result.SelectedSkills, static skill => skill.SourceKind is SkillSourceKind.AspireSkillsBundle);
-        Assert.Contains(
+        Assert.DoesNotContain(
             interactionService.DisplayedMessages,
             message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == installFailureMessage);
         Assert.Contains(McpCommandStrings.InitCommand_ConfigurationComplete, interactionService.DisplayedSuccess);
