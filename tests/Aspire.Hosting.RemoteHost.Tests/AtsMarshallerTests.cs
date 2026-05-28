@@ -7,7 +7,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.TypeSystem;
 using Aspire.Hosting.RemoteHost.Ats;
 using Xunit;
-using Aspire.Hosting.Ats;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
 

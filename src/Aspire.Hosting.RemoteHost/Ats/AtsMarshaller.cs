@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -648,6 +649,11 @@ internal sealed class AtsMarshaller
                     }
                 }
 
+                if (HostingTypeHelpers.IsIAtsConvertibleType(targetType))
+                {
+                    return targetType.GetMethod("Deserialize", BindingFlags.Public | BindingFlags.Static)!.Invoke(null, [jsonObj]);
+                }
+
                 // DTOs - must have [AspireDto] attribute
                 if (!AttributeDataReader.HasAspireDtoData(targetType))
                 {
@@ -656,11 +662,6 @@ internal sealed class AtsMarshaller
                         $"Parameter type '{targetType.Name}' must have [AspireDto] attribute to be deserialized from JSON");
                 }
 
-                if (IsIAtsConvertable(targetType))
-                {
-                    return targetType.GetMethod("Deserialize")?.Invoke(null, [jsonObj]);
-                }
-                
                 return DeserializeDto(jsonObj, targetType, context);
             }
 
@@ -680,11 +681,6 @@ internal sealed class AtsMarshaller
             throw CapabilityException.InvalidArgument(
                 capabilityId, paramName, $"Failed to deserialize '{paramName}' as {DescribeType(targetType)}: {ex.Message}");
         }
-    }
-
-    private static bool IsIAtsConvertable(Type type)
-    {
-        return type.GetInterfaces().Any(x => x.FullName == "Aspire.Hosting.Ats.IAtsConvertable");
     }
 
     /// <summary>

@@ -19,6 +19,9 @@ public static class HostingTypeNames
     /// <summary>Full name of the AspireDtoAttribute type.</summary>
     public const string AspireDtoAttribute = "Aspire.Hosting.AspireDtoAttribute";
 
+    /// <summary>Full name of the IAtsConvertible interface.</summary>
+    public const string AtsConvertibleInterface = "Aspire.Hosting.IAtsConvertible";
+
     /// <summary>Full name of the AspireValueAttribute type.</summary>
     public const string AspireValueAttribute = "Aspire.Hosting.AspireValueAttribute";
 
@@ -57,6 +60,12 @@ public static class HostingTypeHelpers
     /// </summary>
     public static bool IsResourceType([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type? type) =>
         IsAssignableToType(type, HostingTypeNames.ResourceInterface);
+
+    /// <summary>
+    /// Determines whether the specified <paramref name="type"/> implements the IAtsConvertible interface.
+    /// </summary>
+    public static bool IsIAtsConvertibleType([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.Interfaces)] Type? type) =>
+        IsAssignableToType(type, HostingTypeNames.AtsConvertibleInterface);
 
     /// <summary>
     /// Determines whether the specified <paramref name="type"/> implements the generic IResourceBuilder interface.

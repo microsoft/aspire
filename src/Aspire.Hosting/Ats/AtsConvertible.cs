@@ -4,12 +4,12 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace Aspire.Hosting.Ats;
+namespace Aspire.Hosting;
 
 /// <summary>
-/// Represents an object that has custom conversion logic for crossing ATS boundaries.
+/// Represents an object that can be deserialized from polyglot AppHosts.
 /// </summary>
-public interface IAtsConvertable 
+public interface IAtsConvertible
 {
     /// <summary>
     /// Deserializes the given JSON object into the implementing class's type.
@@ -17,23 +17,13 @@ public interface IAtsConvertable
     /// <param name="jsonObj">The JSON document to convert.</param>
     /// <returns>The deserialized object.</returns>
     static abstract object? Deserialize(JsonObject jsonObj);
-
-    /// <summary>
-    /// Serializes the given object to JSON.
-    /// </summary>
-    /// <param name="value">The value to serialize.</param>
-    /// <returns>A JSON object matching the given value.</returns>
-    static abstract JsonNode? Serialize(object value);
 }
 
 /// <summary>
-/// Represents an object that is convertable across language boundaries through the ATS system.
+/// Represents an object that supports custom deserialization from polyglot AppHosts.
 /// </summary>
 /// <remarks>
-/// This implementation of <see cref="IAtsConvertable"/> allows for completely generic objects to be sent
-/// across language boundaries.
-/// <example>
-/// 
+/// <example> 
 /// <code>
 /// // User-defined custom TypeScript object
 /// {
@@ -43,12 +33,11 @@ public interface IAtsConvertable
 /// }
 /// </code>
 /// </example>
-/// The above object will get serialized into the <see cref="Object"/> property as a <see cref="Dictionary{TKey, TValue}"/>.
+/// The above object will get de-serialized into the <see cref="Object"/> property as a <see cref="Dictionary{TKey, TValue}"/>.
 /// </remarks>
-/// <ats-summary>An object that supports serialization of custom properties.</ats-summary>
+/// <ats-summary>An object that supports de-serialization of custom properties.</ats-summary>
 [AspireDto]
-[AspireExport]
-public class CustomAtsObjectDto : IAtsConvertable
+public class CustomAtsObjectDto : IAtsConvertible
 {
     /// <summary>
     /// Contains the result of deserialization.
@@ -111,15 +100,5 @@ public class CustomAtsObjectDto : IAtsConvertable
                 _ => throw new NotSupportedException($"Unsupported JSON value kind '{value.GetValueKind()}'.")
             };
         }
-    }
-
-    /// <summary>
-    /// Forwards serialization to the application's default <see cref="JsonSerializer"/>.
-    /// </summary>
-    /// <param name="value">The value to serialize.</param>
-    /// <returns>The serialized JSON.</returns>
-    public static JsonNode? Serialize(object value)
-    {
-        return JsonSerializer.Serialize(value);
     }
 }
