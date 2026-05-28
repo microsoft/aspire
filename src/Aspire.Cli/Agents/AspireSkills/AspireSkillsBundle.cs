@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
 using Aspire.Cli.Utils;
 using Semver;
 
@@ -200,15 +201,59 @@ internal sealed class AspireSkillsBundle
         }
     }
 
+    // Windows-reserved device names that cannot be used as file/path segments even with extensions.
+    // Listed once here so the rejection set matches the documented Windows filesystem rules:
+    // https://learn.microsoft.com/windows/win32/fileio/naming-a-file#naming-conventions
+    private static readonly HashSet<string> s_reservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    };
+
     private static void ValidateSkillName(string skillName)
     {
-        if (Path.IsPathRooted(skillName) ||
+        // Defense-in-depth: although bundle authors are trusted, the skill name becomes a
+        // directory path segment under the user's workspace. Reject anything that could
+        // escape the bundle root, smuggle control characters into logs, or collide with
+        // Windows reserved device names. NFC normalization is checked explicitly because
+        // visually-identical NFD strings would otherwise pass an OrdinalIgnoreCase compare
+        // here but produce a different filesystem name on case-insensitive volumes.
+        if (string.IsNullOrEmpty(skillName) ||
+            Path.IsPathRooted(skillName) ||
             skillName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
             skillName.Contains('/') ||
             skillName.Contains('\\') ||
-            skillName is "." or "..")
+            skillName is "." or ".." ||
+            ContainsControlCharacter(skillName) ||
+            !string.Equals(skillName, skillName.Normalize(NormalizationForm.FormC), StringComparison.Ordinal) ||
+            IsWindowsReservedDeviceName(skillName))
         {
             throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill name '{0}' is not safe.", skillName));
+        }
+
+        static bool ContainsControlCharacter(string value)
+        {
+            foreach (var c in value)
+            {
+                // char.IsControl covers C0 (U+0000-U+001F, U+007F) and C1 (U+0080-U+009F).
+                // Path.GetInvalidFileNameChars() on POSIX only returns { '\0', '/' }, so this is the
+                // portable line of defense against bundle authors injecting U+0001..U+001F or U+0085.
+                if (char.IsControl(c))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        static bool IsWindowsReservedDeviceName(string value)
+        {
+            // Windows reserves device names even when a file extension is present (e.g. "CON.md"),
+            // so test the segment up to the first '.'.
+            var dotIndex = value.IndexOf('.');
+            var stem = dotIndex < 0 ? value : value[..dotIndex];
+            return s_reservedDeviceNames.Contains(stem);
         }
     }
 

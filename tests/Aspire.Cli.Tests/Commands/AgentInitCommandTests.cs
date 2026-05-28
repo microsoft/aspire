@@ -264,6 +264,11 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
     [InlineData("**SETUP SKILL**: One-time setup of resources. INVOKES: aspire add.", "One-time setup of resources.")]
     [InlineData("Visit github.com for docs. Then run the tool.", "Visit github.com for docs.")]
     [InlineData("**TYPE** -", "")]
+    // Fix 1 regression: a leading separator that does NOT follow a "**TYPE**" prefix must be preserved.
+    // The earlier implementation unconditionally trimmed leading separators after the bold-prefix
+    // branch, which silently mutated bundle descriptions that happened to start with '-' or ':'.
+    [InlineData("-Quickly do X.", "-Quickly do X.")]
+    [InlineData(":memo notes", ":memo notes")]
     public void SimplifyDescription_ProducesExpectedSummary(string input, string expected)
     {
         Assert.Equal(expected, AgentInitCommand.SimplifyDescription(input));
@@ -721,7 +726,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             workspace.WorkspaceRoot,
             PromptBinding.CreateDefault(true),
             CancellationToken.None,
-            AgentInitCommand.ExcludeAspireifyFromDefaults).DefaultTimeout();
+            AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults).DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.DoesNotContain(result.SelectedSkills, static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName));

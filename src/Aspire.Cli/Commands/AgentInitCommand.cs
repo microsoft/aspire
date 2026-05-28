@@ -141,18 +141,35 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         // Standalone `aspire agent init` is typically run against an existing project, so don't
         // pre-select the one-time aspireify wiring skill even though the bundle marks it as default.
         // Users can still opt into it from the prompt or via --skills.
-        var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, ExcludeAspireifyFromDefaults, cancellationToken);
+        var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, ExcludeOneTimeSetupSkillsFromDefaults, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
 
     /// <summary>
-    /// Default-skill predicate used by flows that don't want the one-time aspireify wiring
-    /// skill pre-selected — namely <c>aspire new</c> (template already created the AppHost) and
-    /// standalone <c>aspire agent init</c> (typically run against an existing project). The
-    /// skill remains available to opt into from the prompt or via <c>--skills</c>.
+    /// Names of bundle skills that perform one-time workspace setup and should NOT be
+    /// pre-selected after a workspace was just produced by a template flow such as
+    /// <c>aspire new</c> or after standalone <c>aspire agent init</c> (typically run
+    /// against an existing project).
     /// </summary>
-    internal static bool ExcludeAspireifyFromDefaults(SkillDefinition skill)
-        => skill.IsDefault && !skill.HasName(CommonAgentApplicators.AspireifySkillName);
+    /// <remarks>
+    /// This is the single source of truth the CLI consults when filtering bundle-default
+    /// skills out of the auto-preselection set. If the bundle introduces a new wiring or
+    /// bootstrap-style skill marked <c>isDefault: true</c>, add its name here so the CLI
+    /// does not silently start pre-selecting it for already-bootstrapped workspaces.
+    /// </remarks>
+    internal static readonly IReadOnlySet<string> s_oneTimeSetupSkillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        CommonAgentApplicators.AspireifySkillName,
+    };
+
+    /// <summary>
+    /// Default-skill predicate used by flows that do not want one-time setup skills
+    /// pre-selected — namely <c>aspire new</c> (template already created the AppHost) and
+    /// standalone <c>aspire agent init</c> (typically run against an existing project).
+    /// Skills filtered here remain available to opt into from the prompt or via <c>--skills</c>.
+    /// </summary>
+    internal static bool ExcludeOneTimeSetupSkillsFromDefaults(SkillDefinition skill)
+        => skill.IsDefault && !s_oneTimeSetupSkillNames.Contains(skill.Name);
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
@@ -237,6 +254,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         // --- Phase 2: Skill and MCP server selection (only if locations were selected) ---
         IReadOnlyList<SkillDefinition> selectedSkills = [];
         AspireSkillsBundle? aspireSkillsBundle = null;
+        string? bundleInstallFailureMessage = null;
         AgentEnvironmentApplicator? combinedMcpApplicator = null;
         var mcpApplicators = userChoices.Where(a => a.PromptGroup == McpInitPromptGroup.AgentEnvironments).ToList();
 
@@ -251,7 +269,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             }
             else
             {
-                (availableSkills, aspireSkillsBundle) = await ResolveAvailableSkillsAsync(detectedLanguage, cancellationToken);
+                (availableSkills, aspireSkillsBundle, bundleInstallFailureMessage) = await ResolveAvailableSkillsAsync(detectedLanguage, cancellationToken);
             }
 
             // Order the merged catalog deterministically by name so the prompt is stable
@@ -289,6 +307,21 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 ? PromptBinding.Create(parseResult, s_skillsOption, defaultSkillNames)
                 : PromptBinding.CreateDefault<string?>(defaultSkillNames);
 
+            // When the bundle failed to install and the caller passed an explicit --skills value
+            // that names a bundle-only skill, the upcoming MatchChoicesOrThrow will reject the
+            // value as "not a valid choice" with no hint that the underlying cause was the
+            // bundle. Surface the install failure first so users can see why the catalog is short.
+            // We only do this when the value contains a name that is not in the available catalog
+            // and not a CLI-defined skill, so happy-path runs stay silent.
+            if (bundleInstallFailureMessage is not null)
+            {
+                var (wasProvided, requestedSkills, _) = PromptBinding.Resolve(skillsBinding);
+                if (wasProvided && requestedSkills is not null && HasUnknownBundleSkillCandidate(requestedSkills, availableSkills))
+                {
+                    _interactionService.DisplayError(bundleInstallFailureMessage);
+                }
+            }
+
             var selectedItems = await _interactionService.PromptForSelectionsAsync(
                 AgentCommandStrings.InitCommand_SelectSkills,
                 skillChoices,
@@ -301,6 +334,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 preSelected: preSelectedItems,
                 optional: true,
                 binding: skillsBinding,
+                // The MCP applicator participates in the interactive multi-select prompt for UX,
+                // but it is not a skill and must not be addressable via `--skills`. Restrict
+                // non-interactive validation to the actual SkillDefinition catalog.
+                bindingChoices: availableSkills.Cast<object>(),
                 echoSelected: false,
                 cancellationToken: cancellationToken);
 
@@ -442,16 +479,24 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             selectedSkills);
     }
 
-    private async Task<(IReadOnlyList<SkillDefinition> Skills, AspireSkillsBundle? Bundle)> ResolveAvailableSkillsAsync(LanguageId? detectedLanguage, CancellationToken cancellationToken)
+    private async Task<(IReadOnlyList<SkillDefinition> Skills, AspireSkillsBundle? Bundle, string? FailureMessage)> ResolveAvailableSkillsAsync(LanguageId? detectedLanguage, CancellationToken cancellationToken)
     {
         var skills = new List<SkillDefinition>();
         AspireSkillsBundle? bundle = null;
+        string? failureMessage = null;
 
         var result = await _aspireSkillsInstaller.InstallAsync(cancellationToken);
         if (result.Status is AspireSkillsInstallStatus.Installed)
         {
             bundle = result.Bundle ?? throw new InvalidOperationException("Aspire skills installer returned an installed result without a bundle.");
             skills.AddRange(bundle.GetSkillDefinitions().Where(static skill => !IsCliDefinedSkillName(skill.Name)));
+        }
+        else
+        {
+            // Preserve the install failure so the caller can surface it only when the user
+            // passed an explicit --skills value that names a bundle-only skill. Happy-path
+            // (interactive prompt with the embedded fallback) stays silent.
+            failureMessage = result.Message;
         }
 
         // When the bundle is unavailable (network failure, version mismatch, etc.), fall back
@@ -461,7 +506,36 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         return (skills
             .Where(s => s.IsApplicableToLanguage(detectedLanguage))
-            .ToList(), bundle);
+            .ToList(), bundle, failureMessage);
+    }
+
+    private static bool HasUnknownBundleSkillCandidate(string requestedSkills, IReadOnlyList<SkillDefinition> availableSkills)
+    {
+        // Tokens like "all" / "none" don't name skills, so the "looks like a bundle skill but missing"
+        // diagnostic doesn't apply — let the normal validation path handle them.
+        if (string.IsNullOrWhiteSpace(requestedSkills) ||
+            string.Equals(requestedSkills, ConsoleInteractionService.AllChoice, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(requestedSkills, ConsoleInteractionService.NoneChoice, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var requested = requestedSkills.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var name in requested)
+        {
+            if (IsCliDefinedSkillName(name))
+            {
+                continue;
+            }
+
+            if (!availableSkills.Any(s => s.HasName(name, StringComparison.OrdinalIgnoreCase)))
+            {
+                // A non-CLI name that isn't in the catalog is exactly the case the bundle would have provided.
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool ShouldSkipBundleCatalogResolution(ParseResult? parseResult)
@@ -520,20 +594,28 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         var simplified = description.Trim();
 
-        // Strip the leading bold "TYPE SKILL" prefix when present.
+        // Strip the leading bold "TYPE SKILL" prefix when present, and only then strip the
+        // separator characters that typically follow it. Gating the separator strip on the
+        // prefix match avoids silently mutating descriptions that legitimately start with
+        // a dash, em-dash, or colon (e.g. "-mode flag explained" or ":memo notes").
+        var strippedBoldPrefix = false;
         if (simplified.StartsWith("**", StringComparison.Ordinal))
         {
             var endBold = simplified.IndexOf("**", 2, StringComparison.Ordinal);
             if (endBold > 0)
             {
                 simplified = simplified[(endBold + 2)..].TrimStart();
+                strippedBoldPrefix = true;
             }
         }
 
-        // Strip leading separator characters that typically follow the bold prefix (e.g. " - ", " — ", ": ").
-        while (simplified.Length > 0 && simplified[0] is '-' or '\u2013' or '\u2014' or ':')
+        if (strippedBoldPrefix)
         {
-            simplified = simplified[1..].TrimStart();
+            // Separators that typically follow the bold prefix (" - ", " — ", " – ", ": ").
+            while (simplified.Length > 0 && simplified[0] is '-' or '\u2013' or '\u2014' or ':')
+            {
+                simplified = simplified[1..].TrimStart();
+            }
         }
 
         // Return up to and including the first sentence-ending punctuation followed by
