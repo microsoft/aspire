@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Backport of #17600: removes ASPIREATS001 experimental markers from ATS/polyglot APIs, graduating them to GA for Aspire 13.4",
+  "mergedAt": "2026-05-28T18:17:48Z",
+  "number": 17602,
+  "runDate": "2026-05-28T18:55:59Z",
+  "status": "included",
+  "title": "[release/13.4] Remove ATS experimental markers"
+}

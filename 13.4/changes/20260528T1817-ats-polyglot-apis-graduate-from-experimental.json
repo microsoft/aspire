@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire Type System (ATS) APIs for polyglot AppHost authoring are now generally available in Aspire 13.4. Projects that previously suppressed `ASPIREATS001` compiler warnings can safely remove those suppressions.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🎓",
+  "firstMergedAt": "2026-05-28T18:17:48Z",
+  "lastMergedAt": "2026-05-28T18:17:48Z",
+  "name": "ATS polyglot APIs graduate from experimental",
+  "owner": "sebastienros",
+  "prs": [
+    17602
+  ]
+}
