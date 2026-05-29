@@ -110,8 +110,7 @@ server.listen(port, '127.0.0.1');
 `
     ]);
 
-await hostedAgent.asHostedAgent();
-await hostedAgent.withComputeEnvironment({
+await hostedAgent.asHostedAgent({
     project,
     configure: async (configuration) => {
         await configuration.description.set('Validation hosted agent');

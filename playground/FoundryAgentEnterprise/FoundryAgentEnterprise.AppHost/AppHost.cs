@@ -23,11 +23,9 @@ var app = builder.AddUvicornApp("app", "./app", "main:app")
     .WithHttpEndpoint()
     .WithExternalHttpEndpoints()
     .WithHttpHealthCheck("/health")
-    .WithReference(project)
     .WithReference(deployment)
     .WaitFor(deployment)
-    .AsHostedAgent()
-    .WithComputeEnvironment(project, (opts) =>
+    .AsHostedAgent(project, (opts) =>
     {
         opts.Description = "Foundry Agent Basic Example";
         opts.Metadata["managed-by"] = "aspire-foundry";

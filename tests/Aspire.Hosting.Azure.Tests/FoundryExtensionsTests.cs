@@ -295,7 +295,7 @@ public class FoundryExtensionsTests
         var advisorAgent = builder.AddProject<Project>("advisoragent", launchProfileName: null)
             .WithReference(weatherAgent)
             .WaitFor(weatherAgent)
-            .WithComputeEnvironment(project);
+            .AsHostedAgent(project);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -326,7 +326,7 @@ public class FoundryExtensionsTests
             .AddProject("my-project");
 
         var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
-            .WithComputeEnvironment(project);
+            .AsHostedAgent(project);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -363,7 +363,7 @@ public class FoundryExtensionsTests
             {
                 context.EnvironmentVariables["WEATHER_HEALTH_URL"] = ReferenceExpression.Create($"{weatherAgent.GetEndpoint("http")}/health");
             })
-            .WithComputeEnvironment(project);
+            .AsHostedAgent(project);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -403,7 +403,7 @@ public class FoundryExtensionsTests
             {
                 context.EnvironmentVariables["WEATHER_HOST_AND_PORT"] = weatherAgent.GetEndpoint("http").Property(EndpointProperty.HostAndPort);
             })
-            .WithComputeEnvironment(project);
+            .AsHostedAgent(project);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -442,7 +442,7 @@ public class FoundryExtensionsTests
             .WithReference(weatherAgent)
             .WaitFor(weatherAgent);
 
-        advisorAgent.WithComputeEnvironment(project);
+        advisorAgent.AsHostedAgent(project);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -469,4 +469,3 @@ public class FoundryExtensionsTests
     }
 
 }
-

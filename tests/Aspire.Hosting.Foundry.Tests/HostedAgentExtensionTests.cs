@@ -72,13 +72,13 @@ public class HostedAgentExtensionTests
         var resource = builder.Resources.Single(r => r.Name == "agent");
         var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
         Assert.Equal("Send Message", command.DisplayName);
-        Assert.Equal("Agents", command.IconName);
+        Assert.Equal("ChatSparkle", command.IconName);
         Assert.Equal(IconVariant.Regular, command.IconVariant);
         Assert.True(command.IsHighlighted);
     }
 
     [Fact]
-    public void WithComputeEnvironment_InPublishMode_DoesNotValidateRegion()
+    public void AsHostedAgent_InPublishMode_DoesNotValidateRegion()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish);
@@ -89,13 +89,13 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .WithComputeEnvironment(project);
+            .AsHostedAgent(project);
 
         Assert.NotNull(app);
     }
 
     [Fact]
-    public void WithComputeEnvironment_InPublishMode_AcceptsValidRegion()
+    public void AsHostedAgent_InPublishMode_AcceptsValidRegion()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish);
@@ -106,33 +106,33 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .WithComputeEnvironment(project);
+            .AsHostedAgent(project);
 
         Assert.NotNull(app);
     }
 
     [Fact]
-    public void WithComputeEnvironment_NoRegionConfig_DoesNotThrow()
+    public void AsHostedAgent_NoRegionConfig_DoesNotThrow()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .WithComputeEnvironment(project);
+            .AsHostedAgent(project);
 
         Assert.NotNull(app);
     }
 
     [Fact]
-    public void WithComputeEnvironment_InPublishMode_CreatesHostedAgentResource()
+    public void AsHostedAgent_InPublishMode_CreatesHostedAgentResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .WithComputeEnvironment(project);
+            .AsHostedAgent(project);
 
         builder.Build();
 
@@ -142,17 +142,48 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void WithComputeEnvironment_WithoutProject_CreatesDefaultProject()
+    public void AsHostedAgent_WithoutProject_CreatesDefaultProject()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .WithComputeEnvironment();
+            .AsHostedAgent();
 
         builder.Build();
 
         var project = builder.Resources.OfType<AzureCognitiveServicesProjectResource>().SingleOrDefault();
         Assert.NotNull(project);
+    }
+
+    [Fact]
+    public void AsHostedAgent_InRunMode_WithProject_AddsProjectDependency()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var app = builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        Assert.Contains(app.Resource.Annotations.OfType<WaitAnnotation>(), w => ReferenceEquals(w.Resource, project.Resource));
+    }
+
+    [Fact]
+    public void AsHostedAgent_InRunMode_WithProject_RemovesDefaultContainerRegistryResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        Assert.Null(project.Resource.DefaultContainerRegistry);
+        Assert.DoesNotContain(builder.Resources, r => r.Name == "my-project-acr");
     }
 
     [Fact]

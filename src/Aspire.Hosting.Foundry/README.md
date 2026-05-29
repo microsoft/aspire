@@ -163,7 +163,7 @@ var foundry = builder.AddFoundry("foundry");
 var project = foundry.AddProject("my-project");
 
 builder.AddPythonApp("agent", "./app", "main:app")
-       .WithComputeEnvironment(project);
+       .AsHostedAgent(project);
 ```
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.

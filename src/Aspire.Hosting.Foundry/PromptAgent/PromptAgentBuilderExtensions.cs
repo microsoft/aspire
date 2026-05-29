@@ -70,6 +70,7 @@ public static class PromptAgentBuilderExtensions
         var agent = new AzurePromptAgentResource(name, model.Resource.DeploymentName, project.Resource, instructions);
 
         var agentBuilder = project.ApplicationBuilder.AddResource(agent)
+            .WithIconName("Agents")
             .WithReferenceRelationship(project)
             .WithReference(project);
 

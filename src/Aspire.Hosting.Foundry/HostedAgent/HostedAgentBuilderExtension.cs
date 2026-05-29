@@ -15,152 +15,6 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class HostedAgentResourceBuilderExtensions
 {
-
-    /// <summary>
-    /// Configures the resource to be deployed as a hosted agent in Microsoft Foundry.
-    /// </summary>
-    /// <typeparam name="T">The type of resource being configured.</typeparam>
-    /// <param name="builder">The resource builder for the compute resource.</param>
-    /// <param name="configure">A callback to configure the hosted agent deployment.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <remarks>
-    /// This method applies in publish mode. Use <see cref="AsHostedAgent{T}(IResourceBuilder{T})"/>
-    /// to configure the resource with local run-mode hosted agent endpoints, dashboard commands,
-    /// and OpenTelemetry settings.
-    /// </remarks>
-    [AspireExportIgnore(Reason = "Subset of the full WithComputeEnvironment overload which is exported.")]
-    public static IResourceBuilder<T> WithComputeEnvironment<T>(
-        this IResourceBuilder<T> builder, Action<HostedAgentConfiguration> configure)
-        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
-    {
-        return WithComputeEnvironment(builder, project: null, configure: configure);
-    }
-
-    /// <summary>
-    /// Configures the resource to be deployed as a hosted agent in Microsoft Foundry.
-    /// </summary>
-    /// <typeparam name="T">The type of resource being configured.</typeparam>
-    /// <param name="builder">The resource builder for the compute resource.</param>
-    /// <param name="project">The Microsoft Foundry project resource to deploy the hosted agent to.</param>
-    /// <param name="configure">A callback to configure the hosted agent deployment.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <remarks>
-    /// <para>
-    /// If <paramref name="project"/> is not provided, this method attempts to find an existing Microsoft Foundry
-    /// project resource in the application model. If none exists, a new project resource and parent account resource
-    /// are created automatically.
-    /// </para>
-    /// <para>
-    /// This method applies in publish mode. Use <see cref="AsHostedAgent{T}(IResourceBuilder{T})"/>
-    /// to configure the resource with local run-mode hosted agent endpoints, dashboard commands,
-    /// and OpenTelemetry settings.
-    /// </para>
-    /// </remarks>
-    [AspireExport("withComputeEnvironmentExecutable", MethodName = "withComputeEnvironment")]
-    public static IResourceBuilder<T> WithComputeEnvironment<T>(
-        this IResourceBuilder<T> builder, IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null, Action<HostedAgentConfiguration>? configure = null)
-        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
-    {
-        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
-        {
-            /*
-             * Much of the logic here is similar to ExecutableResourceBuilderExtensions.PublishAsDockerFile().
-             *
-             * That is, in Publish mode, we swap the original resource with a hosted agent resource.
-             */
-            ArgumentNullException.ThrowIfNull(builder);
-
-            var resource = builder.Resource;
-
-            AzureCognitiveServicesProjectResource? projResource;
-            if (project is not null)
-            {
-                projResource = project.Resource;
-            }
-            else
-            {
-                projResource = builder.ApplicationBuilder.Resources.OfType<AzureCognitiveServicesProjectResource>().FirstOrDefault();
-                if (projResource is null)
-                {
-                    project = builder.ApplicationBuilder
-                        .AddFoundry($"{resource.Name}-proj-foundry")
-                        .AddProject($"{resource.Name}-proj");
-                    projResource = project.Resource;
-                }
-                else
-                {
-                    project = builder.ApplicationBuilder.CreateResourceBuilder(projResource);
-                }
-            }
-
-            ResourceBuilderExtensions.WithComputeEnvironment(builder, project!);
-
-            // Hosted Agent resource name
-            var agentName = $"{resource.Name}-ha";
-            if (builder.ApplicationBuilder.TryCreateResourceBuilder<AzureHostedAgentResource>(agentName, out var rb))
-            {
-                // We already have a hosted agent for this resource
-                if (configure is not null)
-                {
-                    rb.Resource.Configure = configure;
-                }
-                return builder;
-            }
-            // Get the corresponding ContainerResource for ExecutableResources. Usually this is swapped in at publish time for ExecutableResources.
-            IResource target;
-            if (resource is ContainerResource containerResource)
-            {
-                target = containerResource;
-            }
-            else if (builder.ApplicationBuilder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var crb))
-            {
-                target = crb.Resource;
-            }
-            else
-            {
-                // Ensure we have a container resource to deploy.
-                // ExecutableResource needs PublishAsDockerFile()
-                // to convert them into container resources at this stage.
-                if (resource is ExecutableResource)
-                {
-                    builder.ApplicationBuilder.CreateResourceBuilder((ExecutableResource)(object)resource).PublishAsDockerFile();
-
-                    if (builder.ApplicationBuilder.TryCreateResourceBuilder(resource.Name, out crb))
-                    {
-                        target = crb.Resource;
-                    }
-                    else
-                    {
-                        throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be converted to a container resource.");
-                    }
-                }
-                else if (resource is not ProjectResource)
-                {
-                    throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
-                }
-                else
-                {
-                    target = resource;
-                }
-            }
-
-            // Create a separate agent resource to host the deployment
-            var agent = new AzureHostedAgentResource(agentName, target, configure);
-
-            // Ensure image gets pushed properly
-            target.Annotations.Add(new DeploymentTargetAnnotation(agent)
-            {
-                ComputeEnvironment = projResource,
-                ContainerRegistry = projResource.ContainerRegistry
-            });
-
-            builder.ApplicationBuilder.AddResource(agent)
-                .WithReferenceRelationship(target)
-                .WithReference(project);
-        }
-        return builder;
-    }
-
     /// <summary>
     /// Configures the resource to run locally as a Microsoft Foundry hosted agent.
     /// </summary>
@@ -180,127 +34,273 @@ public static class HostedAgentResourceBuilderExtensions
     /// </code>
     /// </example>
     /// <ats-returns>The resource builder.</ats-returns>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Subset of the full AsHostedAgent overload which is exported.")]
     public static IResourceBuilder<T> AsHostedAgent<T>(this IResourceBuilder<T> builder)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
+        return AsHostedAgent(builder, project: null, configure: null);
+    }
+
+    /// <summary>
+    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="project">Optional Microsoft Foundry project resource used for both run and publish mode configuration.</param>
+    /// <param name="configure">A callback to configure hosted agent deployment options in publish mode.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExport("asHostedAgentExecutable", MethodName = "asHostedAgent")]
+    public static IResourceBuilder<T> AsHostedAgent<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null,
+        Action<HostedAgentConfiguration>? configure = null)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
-            // Preserve any target port already configured on an existing "http" endpoint;
-            // fall back to the default MAF agent port (8088) when none is set.
-            var existingHttpEndpoint = builder.Resource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault(e => e.Name == "http");
-            var targetPort = existingHttpEndpoint?.TargetPort ?? 8088;
+            ConfigureRunMode(builder);
 
-            builder
-                .WithHttpEndpoint(name: "http", env: "DEFAULT_AD_PORT", targetPort: targetPort, isProxied: true)
-                .WithUrls((ctx) =>
-                {
-                    var http = ctx.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == "http" || u.Endpoint?.EndpointName == "https");
-                    if (http is null)
-                    {
-                        return;
-                    }
-                    http.DisplayText = "Responses Endpoint";
-                    http.Url = new UriBuilder(http.Url)
-                    {
-                        Path = "/responses"
-                    }.ToString();
-                })
-                .WithHttpCommand(
-                    path: "/responses",
-                    displayName: "Send Message",
-                    endpointName: "http",
-                    commandOptions: new()
-                    {
-                        Method = HttpMethod.Post,
-                        IconName = "Agents",
-                        IconVariant = IconVariant.Regular,
-                        IsHighlighted = true,
-                        PrepareRequest = async ctx =>
-                        {
-                            var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
-                            var result = await interactionService.PromptInputAsync(
-                                title: "Responses API",
-                                message: "Enter a message to send to the agent.",
-                                inputLabel: "Message",
-                                placeHolder: "I would like to know the weather today.",
-                                cancellationToken: ctx.CancellationToken
-                            ).ConfigureAwait(true);
-                            if (result.Canceled || string.IsNullOrWhiteSpace(result.Data.Value))
-                            {
-                                ctx.HttpClient.CancelPendingRequests();
-                                throw new OperationCanceledException("User canceled the input prompt.");
-                            }
-                            var request = ctx.Request;
-                            var input = result.Data.Value;
-                            request.Content = new StringContent(new JsonObject() { ["input"] = input }.ToString(), System.Text.Encoding.UTF8, "application/json");
-                        },
-                        GetCommandResult = async ctx =>
-                        {
-                            ctx.CancellationToken.ThrowIfCancellationRequested();
-                            try
-                            {
-                                var response = await ctx.Response
-                                    .EnsureSuccessStatusCode()
-                                    .Content
-                                    .ReadFromJsonAsync<JsonObject>(cancellationToken: ctx.CancellationToken)
-                                    .ConfigureAwait(true);
-                                var formattedResponse = $"```\n{JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true })}\n```";
-                                var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
-                                await interactionService.PromptMessageBoxAsync(
-                                    title: "Agent Response",
-                                    message: formattedResponse,
-                                    options: new()
-                                    {
-                                        Intent = MessageIntent.Success,
-                                        EnableMessageMarkdown = true,
-                                        PrimaryButtonText = "Thanks!"
-                                    },
-                                    cancellationToken: ctx.CancellationToken
-                                ).ConfigureAwait(true);
-                                return new() { Success = true };
-                            }
-                            catch (Exception ex)
-                            {
-                                var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
-                                await interactionService.PromptMessageBoxAsync(
-                                    title: "Error",
-                                    message: $"An error occurred while processing the agent's response: {ex.Message}",
-                                    options: new()
-                                    {
-                                        Intent = MessageIntent.Error,
-                                        PrimaryButtonText = "OK"
-                                    },
-                                    cancellationToken: ctx.CancellationToken
-                                ).ConfigureAwait(true);
-                                Console.Error.Write($"Error processing agent response: {ex}");
-                                return new() { Success = false };
-                            }
-                        },
-                    }
-                )
-                .WithOtlpExporter()
-                .WithEnvironment((ctx) =>
-                {
-                    ctx.EnvironmentVariables.Add("OTEL_INSTRUMENTATION_OPENAI_AGENTS_ENABLED", "true");
-                    ctx.EnvironmentVariables.Add("OTEL_INSTRUMENTATION_OPENAI_AGENTS_CAPTURE_CONTENT", "true");
-                    ctx.EnvironmentVariables.Add("OTEL_INSTRUMENTATION_OPENAI_AGENTS_CAPTURE_METRICS", "true");
-                    ctx.EnvironmentVariables.Add("OTEL_GENAI_CAPTURE_MESSAGES", "true");
-                    ctx.EnvironmentVariables.Add("OTEL_GENAI_CAPTURE_SYSTEM_INSTRUCTIONS", "true");
-                    ctx.EnvironmentVariables.Add("OTEL_GENAI_CAPTURE_TOOL_DEFINITIONS", "true");
-                    ctx.EnvironmentVariables.Add("OTEL_GENAI_EMIT_OPERATION_DETAILS", "true");
-                    ctx.EnvironmentVariables.Add("OTEL_GENAI_AGENT_NAME", ctx.Resource.Name);
-                    ctx.EnvironmentVariables.Add("OTEL_GENAI_AGENT_ID", ctx.Resource.Name);
-                    var endpointVar = ctx.EnvironmentVariables.FirstOrDefault((item) => item.Key == "OTEL_EXPORTER_OTLP_ENDPOINT");
-                    if (endpointVar.Equals(default(KeyValuePair<string, string>)))
-                    {
-                        return;
-                    }
-                    // The Microsoft Foundry agentserver SDK expects the exporter to be at OTEL_EXPORTER_ENDPOINT instead.
-                    ctx.EnvironmentVariables["OTEL_EXPORTER_ENDPOINT"] = endpointVar.Value;
-                });
+            if (project is not null)
+            {
+                AddProjectReferenceForRunMode(builder, project);
+            }
+
+            return builder;
         }
 
+        var publishProject = project ?? ResolveProjectBuilderForPublish(builder);
+        ConfigurePublishMode(builder, publishProject, configure);
+
         return builder;
+    }
+
+    /// <summary>
+    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry.
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="configure">A callback to configure hosted agent deployment options in publish mode.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Subset of the full AsHostedAgent overload.")]
+    public static IResourceBuilder<T> AsHostedAgent<T>(
+        this IResourceBuilder<T> builder,
+        Action<HostedAgentConfiguration> configure)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        return AsHostedAgent(builder, project: null, configure: configure);
+    }
+
+    private static void AddProjectReferenceForRunMode<T>(
+        IResourceBuilder<T> builder,
+        IResourceBuilder<AzureCognitiveServicesProjectResource> project)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        builder.WithReference(project);
+
+        // The default ACR is required for publish-time image push, but in run mode it adds noise to the dashboard.
+        // When a hosted agent references a Foundry project for local execution, remove the default registry resource.
+        if (project.Resource.DefaultContainerRegistry is { } defaultRegistry)
+        {
+            builder.ApplicationBuilder.Resources.Remove(defaultRegistry);
+            project.Resource.DefaultContainerRegistry = null;
+        }
+    }
+
+    private static IResourceBuilder<AzureCognitiveServicesProjectResource> ResolveProjectBuilderForPublish<T>(IResourceBuilder<T> builder)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        if (builder.ApplicationBuilder.Resources.OfType<AzureCognitiveServicesProjectResource>().FirstOrDefault() is { } existingProject)
+        {
+            return builder.ApplicationBuilder.CreateResourceBuilder(existingProject);
+        }
+
+        return builder.ApplicationBuilder
+            .AddFoundry($"{builder.Resource.Name}-proj-foundry")
+            .AddProject($"{builder.Resource.Name}-proj");
+    }
+
+    private static void ConfigureRunMode<T>(IResourceBuilder<T> builder)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        // Preserve any target port already configured on an existing "http" endpoint;
+        // fall back to the default MAF agent port (8088) when none is set.
+        var existingHttpEndpoint = builder.Resource.Annotations.OfType<EndpointAnnotation>().FirstOrDefault(e => e.Name == "http");
+        var targetPort = existingHttpEndpoint?.TargetPort ?? 8088;
+
+        builder
+            .WithIconName("Agents")
+            .WithHttpEndpoint(name: "http", env: "DEFAULT_AD_PORT", targetPort: targetPort, isProxied: true)
+            .WithUrls((ctx) =>
+            {
+                var http = ctx.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == "http" || u.Endpoint?.EndpointName == "https");
+                if (http is null)
+                {
+                    return;
+                }
+                http.DisplayText = "Responses Endpoint";
+                http.Url = new UriBuilder(http.Url)
+                {
+                    Path = "/responses"
+                }.ToString();
+            })
+            .WithHttpCommand(
+                path: "/responses",
+                displayName: "Send Message",
+                endpointName: "http",
+                commandOptions: new()
+                {
+                    Method = HttpMethod.Post,
+                    IconName = "ChatSparkle",
+                    IconVariant = IconVariant.Regular,
+                    IsHighlighted = true,
+                    PrepareRequest = async ctx =>
+                    {
+                        var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
+                        var result = await interactionService.PromptInputAsync(
+                            title: "Responses API",
+                            message: "Enter a message to send to the agent.",
+                            inputLabel: "Message",
+                            placeHolder: "I would like to know the weather today.",
+                            cancellationToken: ctx.CancellationToken
+                        ).ConfigureAwait(true);
+                        if (result.Canceled || string.IsNullOrWhiteSpace(result.Data.Value))
+                        {
+                            ctx.HttpClient.CancelPendingRequests();
+                            throw new OperationCanceledException("User canceled the input prompt.");
+                        }
+                        var request = ctx.Request;
+                        var input = result.Data.Value;
+                        request.Content = new StringContent(new JsonObject() { ["input"] = input }.ToString(), System.Text.Encoding.UTF8, "application/json");
+                    },
+                    GetCommandResult = async ctx =>
+                    {
+                        ctx.CancellationToken.ThrowIfCancellationRequested();
+
+                        var response = ctx.Response;
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            var errorPayload = await response.Content.ReadAsStringAsync(ctx.CancellationToken).ConfigureAwait(true);
+                            return CommandResults.Failure(
+                                $"Agent request failed with status code {(int)response.StatusCode} ({response.StatusCode}).",
+                                errorPayload,
+                                CommandResultFormat.Text);
+                        }
+
+                        var responseJson = await response.Content.ReadFromJsonAsync<JsonObject>(cancellationToken: ctx.CancellationToken).ConfigureAwait(true);
+                        if (responseJson is null)
+                        {
+                            return CommandResults.Failure("Agent returned an empty response.");
+                        }
+
+                        var formattedResponse = JsonSerializer.Serialize(responseJson, new JsonSerializerOptions { WriteIndented = true });
+                        return CommandResults.Success(
+                            message: "Agent response received.",
+                            result: formattedResponse,
+                            resultFormat: CommandResultFormat.Json,
+                            displayImmediately: true);
+                    },
+                }
+            )
+            .WithOtlpExporter()
+            .WithEnvironment((ctx) =>
+            {
+                ctx.EnvironmentVariables.Add("OTEL_INSTRUMENTATION_OPENAI_AGENTS_ENABLED", "true");
+                ctx.EnvironmentVariables.Add("OTEL_INSTRUMENTATION_OPENAI_AGENTS_CAPTURE_CONTENT", "true");
+                ctx.EnvironmentVariables.Add("OTEL_INSTRUMENTATION_OPENAI_AGENTS_CAPTURE_METRICS", "true");
+                ctx.EnvironmentVariables.Add("OTEL_GENAI_CAPTURE_MESSAGES", "true");
+                ctx.EnvironmentVariables.Add("OTEL_GENAI_CAPTURE_SYSTEM_INSTRUCTIONS", "true");
+                ctx.EnvironmentVariables.Add("OTEL_GENAI_CAPTURE_TOOL_DEFINITIONS", "true");
+                ctx.EnvironmentVariables.Add("OTEL_GENAI_EMIT_OPERATION_DETAILS", "true");
+                ctx.EnvironmentVariables.Add("OTEL_GENAI_AGENT_NAME", ctx.Resource.Name);
+                ctx.EnvironmentVariables.Add("OTEL_GENAI_AGENT_ID", ctx.Resource.Name);
+                var endpointVar = ctx.EnvironmentVariables.FirstOrDefault((item) => item.Key == "OTEL_EXPORTER_OTLP_ENDPOINT");
+                if (endpointVar.Equals(default(KeyValuePair<string, string>)))
+                {
+                    return;
+                }
+                // The Microsoft Foundry agentserver SDK expects the exporter to be at OTEL_EXPORTER_ENDPOINT instead.
+                ctx.EnvironmentVariables["OTEL_EXPORTER_ENDPOINT"] = endpointVar.Value;
+            });
+    }
+
+    private static void ConfigurePublishMode<T>(
+        IResourceBuilder<T> builder,
+        IResourceBuilder<AzureCognitiveServicesProjectResource> project,
+        Action<HostedAgentConfiguration>? configure)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        /*
+         * Much of the logic here is similar to ExecutableResourceBuilderExtensions.PublishAsDockerFile().
+         *
+         * That is, in Publish mode, we swap the original resource with a hosted agent resource.
+         */
+        var resource = builder.Resource;
+        var projectResource = project.Resource;
+
+        ResourceBuilderExtensions.WithComputeEnvironment(builder, project);
+
+        // Hosted Agent resource name
+        var agentName = $"{resource.Name}-ha";
+        if (builder.ApplicationBuilder.TryCreateResourceBuilder<AzureHostedAgentResource>(agentName, out var existingHostedAgent))
+        {
+            // We already have a hosted agent for this resource
+            if (configure is not null)
+            {
+                existingHostedAgent.Resource.Configure = configure;
+            }
+            return;
+        }
+
+        // Get the corresponding ContainerResource for ExecutableResources. Usually this is swapped in at publish time for ExecutableResources.
+        IResource target;
+        if (resource is ContainerResource containerResource)
+        {
+            target = containerResource;
+        }
+        else if (builder.ApplicationBuilder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerResourceBuilder))
+        {
+            target = containerResourceBuilder.Resource;
+        }
+        else if (resource is ExecutableResource executableResource)
+        {
+            // Ensure we have a container resource to deploy.
+            // ExecutableResource needs PublishAsDockerFile() to convert it into a container resource at this stage.
+            builder.ApplicationBuilder.CreateResourceBuilder(executableResource).PublishAsDockerFile();
+
+            if (builder.ApplicationBuilder.TryCreateResourceBuilder(resource.Name, out containerResourceBuilder))
+            {
+                target = containerResourceBuilder.Resource;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it could not be converted to a container resource.");
+            }
+        }
+        else if (resource is ProjectResource)
+        {
+            target = resource;
+        }
+        else
+        {
+            throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
+        }
+
+        // Create a separate agent resource to host the deployment.
+        var hostedAgent = new AzureHostedAgentResource(agentName, target, configure);
+
+        // Ensure image gets pushed properly.
+        target.Annotations.Add(new DeploymentTargetAnnotation(hostedAgent)
+        {
+            ComputeEnvironment = projectResource,
+            ContainerRegistry = projectResource.ContainerRegistry
+        });
+
+        builder.ApplicationBuilder.AddResource(hostedAgent)
+            .WithIconName("Agents")
+            .WithReferenceRelationship(target)
+            .WithReference(project);
     }
 }
