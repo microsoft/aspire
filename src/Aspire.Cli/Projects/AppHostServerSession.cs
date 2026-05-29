@@ -25,6 +25,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly ProfilingTelemetry? _profilingTelemetry;
     private readonly IDisposable? _projectLifetime;
     private readonly ProcessShutdownService? _processShutdownService;
+    private readonly TimeSpan? _processTerminationTimeout;
+    private readonly TimeSpan? _processShutdownTimeout;
     private IAppHostRpcClient? _rpcClient;
     private bool _disposed;
 
@@ -37,7 +39,9 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         ProfilingTelemetry.ActivityScope activity = default,
         ProfilingTelemetry? profilingTelemetry = null,
         IDisposable? projectLifetime = null,
-        ProcessShutdownService? processShutdownService = null)
+        ProcessShutdownService? processShutdownService = null,
+        TimeSpan? processTerminationTimeout = null,
+        TimeSpan? processShutdownTimeout = null)
     {
         _serverProcess = serverProcess;
         _output = output;
@@ -48,6 +52,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _profilingTelemetry = profilingTelemetry;
         _projectLifetime = projectLifetime;
         _processShutdownService = processShutdownService;
+        _processTerminationTimeout = processTerminationTimeout;
+        _processShutdownTimeout = processShutdownTimeout;
     }
 
     /// <inheritdoc />
@@ -73,6 +79,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     /// <param name="logger">The logger to use for lifecycle diagnostics.</param>
     /// <param name="profilingTelemetry">Optional profiling telemetry for the server process lifetime.</param>
     /// <param name="processShutdownService">Optional shared process shutdown coordinator.</param>
+    /// <param name="processTerminationTimeout">Optional per-process termination monitoring timeout.</param>
+    /// <param name="processShutdownTimeout">Optional total shutdown coordination timeout.</param>
     /// <returns>The started AppHost server session.</returns>
     internal static AppHostServerSession Start(
         IAppHostServerProject appHostServerProject,
@@ -80,7 +88,9 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         bool debug,
         ILogger logger,
         ProfilingTelemetry? profilingTelemetry = null,
-        ProcessShutdownService? processShutdownService = null)
+        ProcessShutdownService? processShutdownService = null,
+        TimeSpan? processTerminationTimeout = null,
+        TimeSpan? processShutdownTimeout = null)
     {
         var currentPid = Environment.ProcessId;
         var serverEnvironmentVariables = environmentVariables is null
@@ -134,7 +144,9 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             activity,
             profilingTelemetry,
             appHostServerProject as IDisposable,
-            processShutdownService);
+            processShutdownService,
+            processTerminationTimeout,
+            processShutdownTimeout);
     }
 
     /// <inheritdoc />
@@ -168,14 +180,17 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             {
                 if (TryGetServerProcessStartTime(out var serverProcessStartTime))
                 {
-                    using var shutdownCts = new CancellationTokenSource(ProcessShutdownService.RunProcessShutdownTimeout);
+                    var processTerminationTimeout = _processTerminationTimeout ?? ProcessShutdownService.DefaultProcessTerminationTimeout;
+                    var processShutdownTimeout = _processShutdownTimeout ?? GetProcessShutdownTimeout(processTerminationTimeout);
+                    using var shutdownCts = new CancellationTokenSource(processShutdownTimeout);
                     try
                     {
+                        _logger.LogInformation("Requesting shutdown of AppHost server process {ProcessId}", _serverProcess.Id);
                         stopped = await _processShutdownService.StopProcessGroupAsync(
                             _serverProcess.Id,
                             serverProcessStartTime,
                             forceKillEntireProcessTree: !OperatingSystem.IsWindows(),
-                            processTerminationTimeout: ProcessShutdownService.RunProcessTerminationTimeout,
+                            processTerminationTimeout,
                             shutdownCts.Token).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) when (shutdownCts.IsCancellationRequested)
@@ -193,7 +208,9 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             {
                 try
                 {
-                    _serverProcess.Kill(entireProcessTree: !OperatingSystem.IsWindows());
+                    var killEntireProcessTree = !OperatingSystem.IsWindows();
+                    _logger.LogInformation("Killing AppHost server process {ProcessId} (entireProcessTree={EntireProcessTree})", _serverProcess.Id, killEntireProcessTree);
+                    _serverProcess.Kill(entireProcessTree: killEntireProcessTree);
                     _activity.SetError("AppHost server process was terminated during session disposal.");
                 }
                 catch (Exception ex)
@@ -201,6 +218,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
                     _logger.LogDebug(ex, "Error killing AppHost server process");
                 }
             }
+
         }
 
         if (_serverProcess.HasExited)
@@ -227,6 +245,9 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             return false;
         }
     }
+
+    private static TimeSpan GetProcessShutdownTimeout(TimeSpan processTerminationTimeout)
+        => TimeSpan.FromTicks(processTerminationTimeout.Ticks * 2) + TimeSpan.FromSeconds(1);
 }
 
 /// <summary>

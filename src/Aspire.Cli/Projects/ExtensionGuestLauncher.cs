@@ -34,6 +34,8 @@ internal sealed class ExtensionGuestLauncher : IGuestProcessLauncher
         DirectoryInfo workingDirectory,
         IDictionary<string, string> environmentVariables,
         CancellationToken cancellationToken,
+        TimeSpan? processTerminationTimeout = null,
+        TimeSpan? processShutdownTimeout = null,
         Func<Task>? afterLaunchAsync = null)
     {
         // Prepend the runtime command (e.g., "npx") as the first argument so the

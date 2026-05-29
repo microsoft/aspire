@@ -19,5 +19,7 @@ internal interface IGuestProcessLauncher
         DirectoryInfo workingDirectory,
         IDictionary<string, string> environmentVariables,
         CancellationToken cancellationToken,
+        TimeSpan? processTerminationTimeout = null,
+        TimeSpan? processShutdownTimeout = null,
         Func<Task>? afterLaunchAsync = null);
 }

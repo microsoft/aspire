@@ -41,6 +41,8 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         DirectoryInfo workingDirectory,
         IDictionary<string, string> environmentVariables,
         CancellationToken cancellationToken,
+        TimeSpan? processTerminationTimeout = null,
+        TimeSpan? processShutdownTimeout = null,
         Func<Task>? afterLaunchAsync = null)
     {
         var activity = GetCurrentProfilingActivity();
@@ -172,14 +174,16 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
                 {
                     if (TryGetProcessStartTime(process, out var processStartedAt))
                     {
-                        using var shutdownCts = new CancellationTokenSource(ProcessShutdownService.RunProcessShutdownTimeout);
+                        var effectiveProcessTerminationTimeout = processTerminationTimeout ?? ProcessShutdownService.DefaultProcessTerminationTimeout;
+                        var effectiveProcessShutdownTimeout = processShutdownTimeout ?? GetProcessShutdownTimeout(effectiveProcessTerminationTimeout);
+                        using var shutdownCts = new CancellationTokenSource(effectiveProcessShutdownTimeout);
                         try
                         {
                             stopped = await _processShutdownService.StopProcessGroupAsync(
                                 process.Id,
                                 processStartedAt,
                                 forceKillEntireProcessTree: true,
-                                processTerminationTimeout: ProcessShutdownService.RunProcessTerminationTimeout,
+                                effectiveProcessTerminationTimeout,
                                 shutdownCts.Token).ConfigureAwait(false);
                         }
                         catch (OperationCanceledException) when (shutdownCts.IsCancellationRequested)
@@ -212,7 +216,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             }
 
             _logger.LogDebug("Waiting for {Language} guest process {ProcessId} to exit after kill", _language, process.Id);
-            using var finalExitCts = new CancellationTokenSource(ProcessShutdownService.RunProcessTerminationTimeout);
+            using var finalExitCts = new CancellationTokenSource(processTerminationTimeout ?? ProcessShutdownService.DefaultProcessTerminationTimeout);
             try
             {
                 await process.WaitForExitAsync(finalExitCts.Token).ConfigureAwait(false);
@@ -257,6 +261,9 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             return false;
         }
     }
+
+    private static TimeSpan GetProcessShutdownTimeout(TimeSpan processTerminationTimeout)
+        => TimeSpan.FromTicks(processTerminationTimeout.Ticks * 2) + TimeSpan.FromSeconds(1);
 
     private static Activity? GetCurrentProfilingActivity()
     {

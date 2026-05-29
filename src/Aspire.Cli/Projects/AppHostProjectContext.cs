@@ -87,6 +87,16 @@ internal sealed class AppHostProjectContext
     public required DirectoryInfo WorkingDirectory { get; init; }
 
     /// <summary>
+    /// Gets the per-process termination monitoring timeout for AppHost-owned child processes.
+    /// </summary>
+    public TimeSpan? ProcessTerminationTimeout { get; init; }
+
+    /// <summary>
+    /// Gets the total shutdown coordination timeout for AppHost-owned child processes.
+    /// </summary>
+    public TimeSpan? ProcessShutdownTimeout { get; init; }
+
+    /// <summary>
     /// Gets or sets the output collector for capturing stdout/stderr.
     /// Project implementations populate this during execution.
     /// Commands can access it for error display.

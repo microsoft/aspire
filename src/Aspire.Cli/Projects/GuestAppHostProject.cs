@@ -434,7 +434,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     context.Debug,
                     _logger,
                     _profilingTelemetry,
-                    _processShutdownService);
+                    _processShutdownService,
+                    context.ProcessTerminationTimeout,
+                    context.ProcessShutdownTimeout);
                 try
                 {
                     // Give the server a moment to start
@@ -608,7 +610,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // appHostSystemCts is linked to cancellationToken) tears down the guest process. The
                 // launcher will kill the guest's process tree when this token cancels.
                 (guestExitCode, guestOutput) = await ExecuteGuestAppHostAsync(
-                    appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, appHostSystemToken);
+                    appHostFile, directory, environmentVariables, enableHotReload, rpcClient, launcher, StartBackchannelConnectionAfterGuestAppHostLaunchesAsync, context.ProcessTerminationTimeout, context.ProcessShutdownTimeout, appHostSystemToken);
             }
 
             // If the user cancelled (Ctrl+C), surface that as cancellation instead of a "guest failed"
@@ -1885,6 +1887,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IAppHostRpcClient rpcClient,
         IGuestProcessLauncher launcher,
         Func<Task>? afterAppHostLaunchedAsync,
+        TimeSpan? processTerminationTimeout,
+        TimeSpan? processShutdownTimeout,
         CancellationToken cancellationToken)
     {
         await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
@@ -1895,7 +1899,16 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
-        return await _guestRuntime.RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, cancellationToken, afterAppHostLaunchedAsync: afterAppHostLaunchedAsync);
+        return await _guestRuntime.RunAsync(
+            appHostFile,
+            directory,
+            environmentVariables,
+            watchMode,
+            launcher,
+            cancellationToken,
+            processTerminationTimeout,
+            processShutdownTimeout,
+            afterAppHostLaunchedAsync: afterAppHostLaunchedAsync);
     }
 
     /// <summary>

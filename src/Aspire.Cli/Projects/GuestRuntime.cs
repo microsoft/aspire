@@ -154,6 +154,8 @@ internal sealed class GuestRuntime
     /// <param name="watchMode">Whether to run in watch mode for hot reload.</param>
     /// <param name="launcher">Strategy for launching the process.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="processTerminationTimeout">Optional per-process termination monitoring timeout.</param>
+    /// <param name="processShutdownTimeout">Optional total shutdown coordination timeout.</param>
     /// <param name="afterAppHostLaunchedAsync">Callback invoked after the AppHost execute command has launched.</param>
     /// <returns>A tuple of the exit code and captured output (null when launched via extension).</returns>
     public async Task<(int ExitCode, OutputCollector? Output)> RunAsync(
@@ -163,6 +165,8 @@ internal sealed class GuestRuntime
         bool watchMode,
         IGuestProcessLauncher launcher,
         CancellationToken cancellationToken,
+        TimeSpan? processTerminationTimeout = null,
+        TimeSpan? processShutdownTimeout = null,
         Func<Task>? afterAppHostLaunchedAsync = null)
     {
         var useWatchCommand = watchMode && _spec.WatchExecute is not null;
@@ -183,7 +187,18 @@ internal sealed class GuestRuntime
         var phase = useWatchCommand
             ? ProfilingTelemetry.Values.GuestCommandPhaseWatchExecute
             : ProfilingTelemetry.Values.GuestCommandPhaseExecute;
-        return await ExecuteCommandAsync(commandSpec, appHostFile, directory, environmentVariables, null, phase, launcher, cancellationToken, afterLaunchAsync: afterAppHostLaunchedAsync);
+        return await ExecuteCommandAsync(
+            commandSpec,
+            appHostFile,
+            directory,
+            environmentVariables,
+            null,
+            phase,
+            launcher,
+            cancellationToken,
+            processTerminationTimeout,
+            processShutdownTimeout,
+            afterLaunchAsync: afterAppHostLaunchedAsync);
     }
 
     /// <summary>
@@ -262,6 +277,8 @@ internal sealed class GuestRuntime
         string phase,
         IGuestProcessLauncher launcher,
         CancellationToken cancellationToken,
+        TimeSpan? processTerminationTimeout = null,
+        TimeSpan? processShutdownTimeout = null,
         Func<Task>? afterLaunchAsync = null)
     {
         var args = ReplacePlaceholders(commandSpec.Args, appHostFile, directory, additionalArgs);
@@ -272,7 +289,15 @@ internal sealed class GuestRuntime
         using var activity = _profilingTelemetry is null
             ? default
             : _profilingTelemetry.StartGuestExecuteCommand(_spec.Language, _spec.DisplayName, commandSpec.Command, args, directory, phase);
-        var (exitCode, output) = await launcher.LaunchAsync(commandSpec.Command, args, directory, mergedEnvironment, cancellationToken, afterLaunchAsync: afterLaunchAsync);
+        var (exitCode, output) = await launcher.LaunchAsync(
+            commandSpec.Command,
+            args,
+            directory,
+            mergedEnvironment,
+            cancellationToken,
+            processTerminationTimeout,
+            processShutdownTimeout,
+            afterLaunchAsync);
         activity.SetProcessExitCode(exitCode);
         if (exitCode != 0)
         {

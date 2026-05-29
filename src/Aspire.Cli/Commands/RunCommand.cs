@@ -12,7 +12,6 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Processes;
 using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -77,11 +76,14 @@ internal sealed class RunCommand : BaseCommand
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
 
-    // Startup cancellation waits for the AppHost run task to complete after it asks
-    // ProcessShutdownService to stop the guest and server processes. Each stop can spend
-    // one run timeout waiting for graceful shutdown and another after force-kill fallback.
+    private static readonly TimeSpan s_runProcessTerminationTimeout = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan s_runProcessShutdownTimeout =
+        TimeSpan.FromTicks(s_runProcessTerminationTimeout.Ticks * 2) + TimeSpan.FromSeconds(1);
+
+    // Startup cancellation waits for the AppHost run task to complete after it stops the
+    // directly-owned guest and server processes. Each stop gets its own run shutdown budget.
     private static readonly TimeSpan s_appHostStartupCancellationTimeout =
-        TimeSpan.FromTicks(ProcessShutdownService.RunProcessShutdownTimeout.Ticks * 2);
+        TimeSpan.FromTicks(s_runProcessShutdownTimeout.Ticks * 2);
 
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation
@@ -283,6 +285,8 @@ internal sealed class RunCommand : BaseCommand
                 WorkingDirectory = ExecutionContext.WorkingDirectory,
                 BuildCompletionSource = buildCompletionSource,
                 BackchannelCompletionSource = backchannelCompletionSource,
+                ProcessTerminationTimeout = s_runProcessTerminationTimeout,
+                ProcessShutdownTimeout = s_runProcessShutdownTimeout,
             };
             ProfilingTelemetry.AddCurrentContextToEnvironment(context.EnvironmentVariables);
             if (captureProfile)

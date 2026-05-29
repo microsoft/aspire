@@ -22,15 +22,9 @@ internal sealed class ProcessShutdownService(
     TimeProvider timeProvider)
 {
     private static readonly TimeSpan s_processTerminationTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan s_runProcessTerminationTimeout = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_processTerminationPollInterval = TimeSpan.FromMilliseconds(250);
 
-    internal static TimeSpan ProcessTerminationTimeout => s_processTerminationTimeout;
-
-    internal static TimeSpan RunProcessTerminationTimeout => s_runProcessTerminationTimeout;
-
-    internal static TimeSpan RunProcessShutdownTimeout =>
-        TimeSpan.FromTicks(s_runProcessTerminationTimeout.Ticks * 2) + TimeSpan.FromSeconds(1);
+    internal static TimeSpan DefaultProcessTerminationTimeout => s_processTerminationTimeout;
 
     public Task<bool> StopProcessTreeAsync(
         int pid,
