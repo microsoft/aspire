@@ -43,17 +43,22 @@ public static class HostedAgentResourceBuilderExtensions
         return AsHostedAgent(builder, project: null, configure: null);
     }
 
+    // The internal AsHostedAgentForExport overload below is the polyglot-exported version of AsHostedAgent.
+    // The method name differs from AsHostedAgent to avoid C# overload ambiguity with the Action-based
+    // overload; the polyglot-facing name is set back to "asHostedAgent" via [AspireExport(MethodName)].
+    // .NET callers should keep using the Action<HostedAgentConfiguration> overload above, which exposes
+    // the full HostedAgentConfiguration surface (tools, content filters, container protocol versions, etc.).
+
     /// <summary>
     /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry, targeting the specified Foundry project.
     /// </summary>
-    /// <remarks>
-    /// This overload exists for the polyglot SDK surfaces (TypeScript, Go, Java, Python) generated via
-    /// <see cref="AspireExportAttribute"/>. .NET callers should use the
-    /// <see cref="AsHostedAgent{T}(IResourceBuilder{T}, IResourceBuilder{AzureCognitiveServicesProjectResource}?, Action{HostedAgentConfiguration}?)"/>
-    /// overload, which exposes the full <see cref="HostedAgentConfiguration"/> surface.
-    /// The method name differs from <c>AsHostedAgent</c> to avoid C# overload ambiguity with the <c>Action</c>-based
-    /// overload; the polyglot-facing name is set back to <c>asHostedAgent</c> via <see cref="AspireExportAttribute.MethodName"/>.
-    /// </remarks>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="project">The Microsoft Foundry project the hosted agent is deployed into.</param>
+    /// <param name="options">Optional hosted agent deployment options (description, CPU, memory, metadata, environment variables) applied in publish mode.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="project"/> is <see langword="null"/>.</exception>
     [AspireExport("asHostedAgentExecutable", MethodName = "asHostedAgent")]
     internal static IResourceBuilder<T> AsHostedAgentForExport<T>(
         this IResourceBuilder<T> builder,

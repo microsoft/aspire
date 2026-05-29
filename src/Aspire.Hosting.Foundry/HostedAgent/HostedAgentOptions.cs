@@ -3,42 +3,45 @@
 
 namespace Aspire.Hosting.Foundry;
 
+// HostedAgentOptions exposes the subset of HostedAgentConfiguration that is meaningful to non-.NET
+// app hosts. .NET callers should use the AsHostedAgent overload that takes Action<HostedAgentConfiguration>
+// to access the full configuration surface (tools, content filters, container protocol versions, etc.).
+
 /// <summary>
-/// Polyglot-friendly options for configuring a hosted agent.
+/// Options that control how a compute resource is deployed as a Microsoft Foundry hosted agent.
+/// All properties are optional; unset properties fall back to the Foundry hosted agent defaults.
 /// </summary>
-/// <remarks>
-/// This DTO exposes the subset of <see cref="HostedAgentConfiguration"/> that is meaningful
-/// to non-.NET app hosts. .NET callers can use the
-/// <see cref="HostedAgentResourceBuilderExtensions.AsHostedAgent{T}(ApplicationModel.IResourceBuilder{T}, ApplicationModel.IResourceBuilder{AzureCognitiveServicesProjectResource}, System.Action{HostedAgentConfiguration})"/>
-/// overload to access the full configuration surface (tools, content filters, container protocol versions, etc.).
-/// </remarks>
 [AspireExport(ExposeProperties = true)]
 internal sealed class HostedAgentOptions
 {
     /// <summary>
-    /// The description of the hosted agent. When not set, the default from <see cref="HostedAgentConfiguration"/> is used.
+    /// Human-readable description of the hosted agent surfaced in the Microsoft Foundry portal.
+    /// When not set, the hosted agent default description is used.
     /// </summary>
     public string? Description { get; set; }
 
     /// <summary>
-    /// CPU allocation for each hosted agent instance, in vCPU cores. Must be between 0.5 and 3.5 in increments of 0.25.
-    /// When not set, the default from <see cref="HostedAgentConfiguration"/> is used.
+    /// CPU allocation for each hosted agent instance, in vCPU cores. Must be between 0.5 and 3.5
+    /// in increments of 0.25. When not set, the hosted agent default CPU allocation is used.
     /// </summary>
     public decimal? Cpu { get; set; }
 
     /// <summary>
-    /// Memory allocation for each hosted agent instance, in GiB. Must be between 1 and 7 in increments of 0.5
-    /// and equal to twice the CPU value. When not set, the default from <see cref="HostedAgentConfiguration"/> is used.
+    /// Memory allocation for each hosted agent instance, in GiB. Must be between 1 and 7 in
+    /// increments of 0.5 and equal to twice the CPU value. When not set, the hosted agent
+    /// default memory allocation is used.
     /// </summary>
     public decimal? Memory { get; set; }
 
     /// <summary>
-    /// Additional metadata to merge into the hosted agent definition. Existing entries with the same key are overwritten.
+    /// Additional metadata key/value pairs to attach to the hosted agent definition.
+    /// Entries with the same key as an existing metadata entry overwrite it.
     /// </summary>
     public IDictionary<string, string> Metadata { get; init; } = new Dictionary<string, string>();
 
     /// <summary>
-    /// Environment variables to set on the hosted agent container. Existing entries with the same key are overwritten.
+    /// Environment variables to set on the hosted agent container at runtime.
+    /// Entries with the same key as an existing environment variable overwrite it.
     /// </summary>
     public IDictionary<string, string> EnvironmentVariables { get; init; } = new Dictionary<string, string>();
 
