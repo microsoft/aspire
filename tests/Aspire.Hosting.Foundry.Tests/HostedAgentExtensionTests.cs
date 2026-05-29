@@ -5,6 +5,7 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -143,7 +144,7 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void AsHostedAgent_InPublishMode_AddsProjectReferenceToDeploymentTarget()
+    public async Task AsHostedAgent_InPublishMode_AddsProjectReferenceToDeploymentTarget()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
@@ -160,6 +161,16 @@ public class HostedAgentExtensionTests
         Assert.Contains(relationships, r =>
             r.Type == "Reference" &&
             ReferenceEquals(r.Resource, project.Resource));
+
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            hostedAgent.Target, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+
+        Assert.Contains(envVars, kvp =>
+            kvp.Key == "ConnectionStrings__my-project" &&
+            kvp.Value == "{my-project.connectionString}");
+        Assert.Contains(envVars, kvp =>
+            kvp.Key == "MY_PROJECT_CONNECTIONSTRING" &&
+            kvp.Value == "Endpoint={my-project.outputs.endpoint}");
         Assert.DoesNotContain(hostedAgent.Annotations.OfType<ResourceRelationshipAnnotation>(), r =>
             r.Type == "Reference" &&
             ReferenceEquals(r.Resource, project.Resource));

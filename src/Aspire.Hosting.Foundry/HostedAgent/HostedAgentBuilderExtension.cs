@@ -144,20 +144,6 @@ public static class HostedAgentResourceBuilderExtensions
         }
     }
 
-    private static void AddProjectReferenceForPublishMode(
-        IDistributedApplicationBuilder applicationBuilder,
-        IResource target,
-        IResourceBuilder<AzureCognitiveServicesProjectResource> project)
-    {
-        if (target is not IResourceWithEnvironment targetWithEnvironment)
-        {
-            throw new InvalidOperationException($"Unable to reference Foundry project from resource '{target.Name}' because it does not support environment variables.");
-        }
-
-        applicationBuilder.CreateResourceBuilder(targetWithEnvironment)
-            .WithReference(project);
-    }
-
     private static IResourceBuilder<AzureCognitiveServicesProjectResource> ResolveProjectBuilderForPublish<T>(IResourceBuilder<T> builder)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
@@ -309,7 +295,7 @@ public static class HostedAgentResourceBuilderExtensions
         }
 
         // Get the corresponding ContainerResource for ExecutableResources. Usually this is swapped in at publish time for ExecutableResources.
-        IResource target;
+        IResourceWithEnvironment target;
         if (resource is ContainerResource containerResource)
         {
             target = containerResource;
@@ -343,7 +329,10 @@ public static class HostedAgentResourceBuilderExtensions
             throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
         }
 
-        AddProjectReferenceForPublishMode(builder.ApplicationBuilder, target, project);
+        // The hosted agent wrapper is not the deployed workload. Apply the Foundry
+        // reference to the target so its connection annotations flow into the deployment.
+        builder.ApplicationBuilder.CreateResourceBuilder(target)
+            .WithReference(project);
 
         // Create a separate agent resource to host the deployment.
         var hostedAgent = new AzureHostedAgentResource(agentName, target, configure);
