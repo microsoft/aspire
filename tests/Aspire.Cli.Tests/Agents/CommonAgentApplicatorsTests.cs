@@ -46,45 +46,36 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
-    public void SkillDefinition_All_ContainsExpectedSkills()
+    public void SkillDefinition_CliDefined_ContainsExpectedSkills()
     {
-        Assert.Equal(5, SkillDefinition.All.Count);
-        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspire);
-        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.AspireDeployment);
-        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspireify);
-        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.PlaywrightCli);
-        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.DotnetInspect);
+        Assert.Equal(2, SkillDefinition.CliDefined.Count);
+        Assert.Contains(SkillDefinition.CliDefined, s => s == SkillDefinition.PlaywrightCli);
+        Assert.Contains(SkillDefinition.CliDefined, s => s == SkillDefinition.DotnetInspect);
     }
 
     [Fact]
-    public void SkillDefinition_DefaultSkills()
+    public void SkillDefinition_CliDefinedSkills_AreNotDefault()
     {
-        Assert.True(SkillDefinition.Aspire.IsDefault);
-        Assert.True(SkillDefinition.AspireDeployment.IsDefault);
-        Assert.True(SkillDefinition.Aspireify.IsDefault);
-        Assert.False(SkillDefinition.PlaywrightCli.IsDefault);
-        Assert.False(SkillDefinition.DotnetInspect.IsDefault);
+        Assert.All(SkillDefinition.CliDefined, static skill => Assert.False(skill.IsDefault));
     }
 
     [Fact]
     public void SkillDefinition_DotnetInspect_IsRestrictedToCSharp()
     {
         Assert.Equal([KnownLanguageId.CSharp], SkillDefinition.DotnetInspect.ApplicableLanguages);
-        Assert.Empty(SkillDefinition.Aspire.ApplicableLanguages);
-        Assert.Empty(SkillDefinition.AspireDeployment.ApplicableLanguages);
-        Assert.Empty(SkillDefinition.Aspireify.ApplicableLanguages);
         Assert.Empty(SkillDefinition.PlaywrightCli.ApplicableLanguages);
     }
 
     [Fact]
     public void SkillDefinition_IsApplicableToLanguage_EmptyApplicableLanguages_AlwaysTrue()
     {
-        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(null));
-        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
-        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
-        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(null));
-        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
-        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
+        var bundleSkill = SkillDefinition.CreateAspireSkillsBundle(
+            "aspire-monitoring",
+            "Observe Aspire apps with logs, traces, metrics, and resource state");
+
+        Assert.True(bundleSkill.IsApplicableToLanguage(null));
+        Assert.True(bundleSkill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
+        Assert.True(bundleSkill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
     }
 
     [Fact]
@@ -106,10 +97,14 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
-    public void SkillDefinition_AspireWorkflowSkills_AreExternallySourced()
+    public void SkillDefinition_BundleSkills_AreExternallySourced()
     {
         Assert.All(
-            [SkillDefinition.Aspire, SkillDefinition.Aspireify, SkillDefinition.AspireDeployment],
+            [
+                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
+                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifySkillName, "One-time setup: wire up AppHost with discovered projects"),
+                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireDeploymentSkillName, "Aspire deployment target selection, preflight, publish, and deploy workflows")
+            ],
             skill =>
             {
                 Assert.Null(skill.SkillContent);
@@ -121,7 +116,7 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public async Task SkillDefinition_StaticInstallableSkillDescriptionsFitAgentHostLimits()
     {
-        var installableSkills = SkillDefinition.All
+        var installableSkills = SkillDefinition.CliDefined
             .Where(static skill => skill.SkillContent is not null);
 
         foreach (var skill in installableSkills)
@@ -139,11 +134,16 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
-    public void SkillDefinition_Aspire_ExcludesEvalsFromInstall()
+    public void SkillDefinition_BundleSkill_ExcludesManifestPathsFromInstall()
     {
-        Assert.Contains(SkillDefinition.Aspire.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));
-        Assert.False(SkillDefinition.Aspire.ShouldInstallFile(Path.Combine("evals", "evals.json")));
-        Assert.True(SkillDefinition.Aspire.ShouldInstallFile("SKILL.md"));
+        var bundleSkill = SkillDefinition.CreateAspireSkillsBundle(
+            CommonAgentApplicators.AspireSkillName,
+            "Aspire CLI commands and workflows for distributed apps",
+            installExcludedRelativePaths: [Path.Combine("evals")]);
+
+        Assert.Contains(bundleSkill.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));
+        Assert.False(bundleSkill.ShouldInstallFile(Path.Combine("evals", "evals.json")));
+        Assert.True(bundleSkill.ShouldInstallFile("SKILL.md"));
     }
 
     [Fact]

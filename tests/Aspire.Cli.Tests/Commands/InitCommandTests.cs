@@ -496,7 +496,11 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 return [SkillLocation.Standard, SkillLocation.ClaudeCode, SkillLocation.OpenCode];
             }
 
-            return [SkillDefinition.Aspireify];
+            return items
+                .OfType<SkillDefinition>()
+                .Where(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName))
+                .Cast<object>()
+                .ToList();
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -540,7 +544,11 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
                 return [SkillLocation.Standard];
             }
 
-            return [SkillDefinition.Aspire];
+            return items
+                .OfType<SkillDefinition>()
+                .Where(static skill => skill.HasName(CommonAgentApplicators.AspireSkillName))
+                .Cast<object>()
+                .ToList();
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>

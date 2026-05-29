@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Xml.Linq;
+using Aspire.Cli.Agents;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
@@ -2891,7 +2892,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Agent init should not have run — no skill files should exist
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", "aspire", "SKILL.md");
+        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
         Assert.False(File.Exists(skillPath));
     }
 
@@ -2917,8 +2918,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Agent init should have run — default skill files should exist
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", "aspire", "SKILL.md");
+        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
         Assert.True(File.Exists(skillPath));
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
+        Assert.False(File.Exists(aspireifySkillPath));
     }
 
     [Fact]
@@ -2943,8 +2946,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Default is to run agent init
-        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", "aspire", "SKILL.md");
+        var skillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
         Assert.True(File.Exists(skillPath));
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", ".agents", "skills", CommonAgentApplicators.AspireifySkillName, "SKILL.md");
+        Assert.False(File.Exists(aspireifySkillPath));
     }
 
     [Fact]

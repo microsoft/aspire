@@ -168,11 +168,18 @@ internal sealed class InitCommand : BaseCommand
         // This prompt lets users choose which skills to install — including aspireify.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, CliExitCodes.Success, workspaceRoot, agentInitBinding, cancellationToken);
+        // aspire init creates an AppHost in an existing repo, so pre-select every bundle skill
+        // (which includes aspireify as the natural follow-up wiring skill).
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(
+            InteractionService,
+            CliExitCodes.Success,
+            workspaceRoot,
+            agentInitBinding,
+            cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
         if (agentInitResult.ExitCode == CliExitCodes.Success &&
-            agentInitResult.SelectedSkills.Contains(SkillDefinition.Aspireify))
+            agentInitResult.SelectedSkills.Any(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName)))
         {
             var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
             if (commands.Count > 0)

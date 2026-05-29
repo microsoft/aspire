@@ -2639,17 +2639,17 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => _innerService.ShowStatusAsync(statusText, action, emoji, allowMarkup);
     public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null) => _innerService.ShowDynamicStatusAsync(initialStatusText, action, emoji);
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => _innerService.ShowStatus(statusText, action, emoji, allowMarkup);
-    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) 
+    public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
         => _innerService.PromptForStringAsync(promptText, validator, isSecret, required, binding, cancellationToken);
     public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
         => _innerService.PromptForFilePathAsync(promptText, validator, directory, required, binding, cancellationToken);
-    public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default) 
+    public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
         => _innerService.PromptConfirmAsync(promptText, binding, cancellationToken);
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull 
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
         => _innerService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, echoSelected, cancellationToken);
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull 
-        => _innerService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, echoSelected, cancellationToken);
-    public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) 
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
+        => _innerService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, echoSelected, bindingChoices, cancellationToken);
+    public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion)
         => _innerService.DisplayIncompatibleVersionError(ex, appHostHostingVersion);
     public void DisplayError(string errorMessage, bool allowMarkup = false) => _innerService.DisplayError(errorMessage, allowMarkup);
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) => _innerService.DisplayMessage(emoji, message, allowMarkup, consoleOverride);

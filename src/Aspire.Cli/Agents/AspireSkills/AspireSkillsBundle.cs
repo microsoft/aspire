@@ -41,13 +41,24 @@ internal sealed class AspireSkillsBundle
             bundleDirectory,
             VersionHelper.GetDefaultSdkVersion(),
             VersionHelper.GetDefaultSdkVersion(),
+            skipCompatibilityCheck: false,
             cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static Task<AspireSkillsBundle> LoadAsync(
+        DirectoryInfo bundleDirectory,
+        string currentCliVersion,
+        string currentSdkVersion,
+        CancellationToken cancellationToken)
+    {
+        return LoadAsync(bundleDirectory, currentCliVersion, currentSdkVersion, skipCompatibilityCheck: false, cancellationToken);
     }
 
     internal static async Task<AspireSkillsBundle> LoadAsync(
         DirectoryInfo bundleDirectory,
         string currentCliVersion,
         string currentSdkVersion,
+        bool skipCompatibilityCheck,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(bundleDirectory);
@@ -71,7 +82,7 @@ internal sealed class AspireSkillsBundle
             throw new InvalidOperationException("Aspire skills bundle manifest is empty or invalid.");
         }
 
-        ValidateManifest(bundleDirectory, manifest, currentCliVersion, currentSdkVersion);
+        ValidateManifest(bundleDirectory, manifest, currentCliVersion, currentSdkVersion, skipCompatibilityCheck);
 
         return new AspireSkillsBundle(bundleDirectory, manifest);
     }
@@ -107,18 +118,43 @@ internal sealed class AspireSkillsBundle
         return files;
     }
 
+    /// <summary>
+    /// Gets the installable skill definitions declared by the bundle manifest.
+    /// </summary>
+    public IReadOnlyList<SkillDefinition> GetSkillDefinitions()
+    {
+        return _manifest.Skills
+            .Select(static skill => SkillDefinition.CreateAspireSkillsBundle(
+                skill.Name!,
+                skill.Description!,
+                (skill.InstallExcludedRelativePaths ?? []).Select(NormalizeRelativePath).ToArray(),
+                skill.ApplicableLanguages ?? []))
+            .ToList();
+    }
+
     private static void ValidateManifest(
         DirectoryInfo bundleDirectory,
         SkillBundleManifest manifest,
         string currentCliVersion,
-        string currentSdkVersion)
+        string currentSdkVersion,
+        bool skipCompatibilityCheck)
     {
         if (string.IsNullOrWhiteSpace(manifest.Version))
         {
             throw new InvalidOperationException("Aspire skills bundle manifest must specify a version.");
         }
 
-        ValidateCompatibility(manifest.Supports, currentCliVersion, currentSdkVersion);
+        // The bundle's `supports` range gates whether a bundle pulled fresh from GitHub
+        // is allowed at runtime. For bundles we already trust locally — the snapshot
+        // embedded in the CLI binary, and bundles already written to our own cache —
+        // we skip the range check because the CLI's effective version may have moved
+        // past the snapshot's stamped range (e.g., a dogfood build of 13.5.x using a
+        // bundle whose supports declares ">=13.4.0 <13.5.0"). The bundle's `version`
+        // field plus the version-keyed cache directory still gate matching content.
+        if (!skipCompatibilityCheck)
+        {
+            ValidateCompatibility(manifest.Supports, currentCliVersion, currentSdkVersion);
+        }
 
         var skills = manifest.Skills;
         if (skills is not { Length: > 0 })
@@ -126,7 +162,7 @@ internal sealed class AspireSkillsBundle
             throw new InvalidOperationException("Aspire skills bundle manifest must contain at least one skill.");
         }
 
-        var skillNames = new HashSet<string>(StringComparer.Ordinal);
+        var skillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var skill in skills)
         {
             if (string.IsNullOrWhiteSpace(skill.Name))
@@ -137,6 +173,11 @@ internal sealed class AspireSkillsBundle
             if (!skillNames.Add(skill.Name))
             {
                 throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle manifest contains duplicate skill '{0}'.", skill.Name));
+            }
+
+            if (string.IsNullOrWhiteSpace(skill.Description))
+            {
+                throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture, "Aspire skills bundle skill '{0}' must specify a description.", skill.Name));
             }
 
             if (skill.Files is not { Length: > 0 })
