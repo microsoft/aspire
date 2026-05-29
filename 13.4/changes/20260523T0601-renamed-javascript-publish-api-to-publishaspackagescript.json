@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Renamed PublishAsNpmPackageScript to PublishAsPackageScript and startScriptName to scriptName, reflecting that the API supports npm, pnpm, Yarn, and Bun — not just npm. Update call sites to use the new names.",
-  "docsPrs": [],
+  "docsPrs": [
+    1020
+  ],
   "docsRequired": true,
   "emoji": "📦",
   "firstMergedAt": "2026-05-23T06:01:41Z",

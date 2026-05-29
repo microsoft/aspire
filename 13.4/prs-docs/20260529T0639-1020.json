@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents pnpm/Bun runtime support for PublishAsPackageScript (aspire#17178 and #17382)",
+  "mergedAt": "2026-05-29T06:39:55Z",
+  "number": 1020,
+  "runDate": "2026-05-29T07:22:30Z",
+  "status": "included",
+  "title": "[docs] Fix pnpm and Bun runtime support for PublishAsPackageScript"
+}
