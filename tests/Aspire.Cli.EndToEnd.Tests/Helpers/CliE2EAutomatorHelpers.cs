@@ -879,7 +879,7 @@ internal static class CliE2EAutomatorHelpers
     /// Stops a running Aspire AppHost with <c>aspire stop</c>.
     /// </summary>
     /// <remarks>
-    /// Uses <see cref="Hex1bAutomatorTestHelpers.WaitForSuccessPromptFailFastAsync"/> so that a
+    /// Uses <see cref="Hex1bAutomatorTestHelpers.WaitForSuccessPromptAsync"/> so that a
     /// non-zero exit from <c>aspire stop</c> (for example the documented <c>FailedToDotnetRunAppHost</c>
     /// flake in https://github.com/microsoft/aspire/issues/16643) surfaces immediately with a
     /// useful diagnostic rather than the default 500-second wait for the success prompt. <c>aspire stop</c>
@@ -892,7 +892,7 @@ internal static class CliE2EAutomatorHelpers
     {
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 
     /// <summary>
