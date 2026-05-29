@@ -406,6 +406,15 @@ public class FrontendBrowserTokenAuthTests
             },
             w =>
             {
+                Assert.Equal("Login to the dashboard at {LoginUrl}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+
+                var loginUrl = (string)LogTestHelpers.GetValue(w, "LoginUrl")!;
+                var uri = new Uri(loginUrl, UriKind.Absolute);
+                var queryString = HttpUtility.ParseQueryString(uri.Query);
+                Assert.NotNull(queryString["t"]);
+            },
+            w =>
+            {
                 Assert.StartsWith("Aspire Dashboard", (string)LogTestHelpers.GetValue(w, "{OriginalFormat}")!);
 
                 var loginUrl = (string)LogTestHelpers.GetValue(w, "LoginUrl")!;
