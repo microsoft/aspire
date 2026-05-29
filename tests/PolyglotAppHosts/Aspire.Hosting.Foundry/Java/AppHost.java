@@ -107,12 +107,13 @@ server.listen(port, '127.0.0.1');
 """
             });
 
-        hostedAgent.asHostedAgent(project, new HostedAgentOptions()
-            .description("Validation hosted agent")
-            .cpu(1)
-            .memory(2)
-            .metadata(Map.of("scenario", "validation"))
-            .environmentVariables(Map.of("VALIDATION_MODE", "true")));
+        var hostedAgentOptions = new HostedAgentOptions();
+        hostedAgentOptions.setDescription("Validation hosted agent");
+        hostedAgentOptions.setCpu(1);
+        hostedAgentOptions.setMemory(2);
+        hostedAgentOptions.setMetadata(Map.of("scenario", "validation"));
+        hostedAgentOptions.setEnvironmentVariables(Map.of("VALIDATION_MODE", "true"));
+        hostedAgent.asHostedAgent(project, hostedAgentOptions);
 
         var api = builder.addContainer("api", "nginx");
         foundry.withContainerRegistryRoleAssignments(registry, new AzureContainerRegistryRole[] {
