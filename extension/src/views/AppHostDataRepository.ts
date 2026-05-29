@@ -236,6 +236,48 @@ export class AppHostDataRepository {
         this._syncPolling();
     }
 
+    /**
+     * Performs a one-shot `aspire ps --resources` call and returns the results directly.
+     * Independent of the polling lifecycle — works regardless of panel visibility.
+     */
+    async fetchAppHostsOnce(): Promise<AppHostDisplayInfo[]> {
+        const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
+        const args = ['ps', '--format', 'json', '--resources'];
+
+        return new Promise<AppHostDisplayInfo[]>((resolve) => {
+            let stdout = '';
+            let stderr = '';
+            let resolved = false;
+
+            spawnCliProcess(this._terminalProvider, cliPath, args, {
+                noExtensionVariables: true,
+                stdoutCallback: (data) => { stdout += data; },
+                stderrCallback: (data) => { stderr += data; },
+                exitCallback: (code) => {
+                    if (resolved) { return; }
+                    resolved = true;
+                    if (code === 0) {
+                        try {
+                            resolve(JSON.parse(stdout));
+                        } catch {
+                            extensionLogOutputChannel.warn(`Failed to parse aspire ps output in fetchAppHostsOnce`);
+                            resolve([]);
+                        }
+                    } else {
+                        extensionLogOutputChannel.warn(`aspire ps exited with code ${code} in fetchAppHostsOnce: ${stderr}`);
+                        resolve([]);
+                    }
+                },
+                errorCallback: (error) => {
+                    if (resolved) { return; }
+                    resolved = true;
+                    extensionLogOutputChannel.warn(`aspire ps error in fetchAppHostsOnce: ${error.message}`);
+                    resolve([]);
+                },
+            });
+        });
+    }
+
     dispose(): void {
         this._disposed = true;
         this._stopPolling();

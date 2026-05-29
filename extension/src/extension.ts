@@ -37,6 +37,7 @@ import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser'
 import { readGitCommitSha } from './utils/versionInfo';
 import { collectResourceCommandArguments, hasSecretResourceCommandArguments } from './views/ResourceCommandArguments';
 import { ResourceCommandJson } from './views/AppHostDataRepository';
+import { createAspireExtensionApi } from './api';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -239,8 +240,11 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(restoreCommandRegistration);
 
   // Return exported API for tests or other extensions
+  const api = createAspireExtensionApi(dataRepository, terminalProvider);
   return {
     rpcServerInfo: rpcServer.connectionInfo,
+    dcpServerInfo: dcpServer.connectionInfo,
+    ...api,
   };
 }
 
