@@ -46,20 +46,16 @@ public static class HostedAgentResourceBuilderExtensions
     /// <summary>
     /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry, targeting the specified Foundry project.
     /// </summary>
-    /// <typeparam name="T">The type of resource being configured.</typeparam>
-    /// <param name="builder">The resource builder for the compute resource.</param>
-    /// <param name="project">The Microsoft Foundry project resource used for both run and publish mode configuration.</param>
-    /// <param name="options">Optional hosted agent deployment options applied in publish mode.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <example>
-    /// <code lang="csharp">
-    /// var agent = builder.AddProject&lt;Projects.AgentService&gt;("agent")
-    ///     .AsHostedAgent(project, new HostedAgentOptions { Cpu = 1, Memory = 2 });
-    /// </code>
-    /// </example>
-    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// This overload exists for the polyglot SDK surfaces (TypeScript, Go, Java, Python) generated via
+    /// <see cref="AspireExportAttribute"/>. .NET callers should use the
+    /// <see cref="AsHostedAgent{T}(IResourceBuilder{T}, IResourceBuilder{AzureCognitiveServicesProjectResource}?, Action{HostedAgentConfiguration}?)"/>
+    /// overload, which exposes the full <see cref="HostedAgentConfiguration"/> surface.
+    /// The method name differs from <c>AsHostedAgent</c> to avoid C# overload ambiguity with the <c>Action</c>-based
+    /// overload; the polyglot-facing name is set back to <c>asHostedAgent</c> via <see cref="AspireExportAttribute.MethodName"/>.
+    /// </remarks>
     [AspireExport("asHostedAgentExecutable", MethodName = "asHostedAgent")]
-    public static IResourceBuilder<T> AsHostedAgent<T>(
+    internal static IResourceBuilder<T> AsHostedAgentForExport<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         HostedAgentOptions? options = null)
@@ -85,7 +81,7 @@ public static class HostedAgentResourceBuilderExtensions
     public static IResourceBuilder<T> AsHostedAgent<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureCognitiveServicesProjectResource>? project,
-        Action<HostedAgentConfiguration>? configure)
+        Action<HostedAgentConfiguration>? configure = null)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);

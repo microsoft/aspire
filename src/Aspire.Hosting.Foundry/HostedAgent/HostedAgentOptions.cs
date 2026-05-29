@@ -13,7 +13,7 @@ namespace Aspire.Hosting.Foundry;
 /// overload to access the full configuration surface (tools, content filters, container protocol versions, etc.).
 /// </remarks>
 [AspireExport(ExposeProperties = true)]
-public sealed class HostedAgentOptions
+internal sealed class HostedAgentOptions
 {
     /// <summary>
     /// The description of the hosted agent. When not set, the default from <see cref="HostedAgentConfiguration"/> is used.

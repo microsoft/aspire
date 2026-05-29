@@ -159,7 +159,7 @@ public class HostedAgentExtensionTests
         };
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project, options);
+            .AsHostedAgentForExport(project, options);
 
         builder.Build();
 
@@ -183,7 +183,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project, options: null);
+            .AsHostedAgentForExport(project, options: null);
 
         builder.Build();
 
@@ -197,7 +197,7 @@ public class HostedAgentExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var app = builder.AddPythonApp("agent", "./app.py", "main:app");
 
-        Assert.Throws<ArgumentNullException>(() => app.AsHostedAgent(project: null!));
+        Assert.Throws<ArgumentNullException>(() => app.AsHostedAgentForExport(project: null!));
     }
 
     [Fact]
