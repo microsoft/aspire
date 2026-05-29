@@ -44,8 +44,8 @@ public static class HostedAgentResourceBuilderExtensions
     }
 
     // The internal AsHostedAgentForExport overload below is the polyglot-exported version of AsHostedAgent.
-    // The method name differs from AsHostedAgent to avoid C# overload ambiguity with the Action-based
-    // overload; the polyglot-facing name is set back to "asHostedAgent" via [AspireExport(MethodName)].
+    // The CLR method name differs from AsHostedAgent to avoid C# overload ambiguity with the Action-based
+    // overload, but the ATS capability name must stay "asHostedAgent" for compatibility.
     // .NET callers should keep using the Action<HostedAgentConfiguration> overload above, which exposes
     // the full HostedAgentConfiguration surface (tools, content filters, container protocol versions, etc.).
 
@@ -59,7 +59,7 @@ public static class HostedAgentResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="project"/> is <see langword="null"/>.</exception>
-    [AspireExport("asHostedAgentExecutable", MethodName = "asHostedAgent")]
+    [AspireExport("asHostedAgent", MethodName = "asHostedAgent")]
     internal static IResourceBuilder<T> AsHostedAgentForExport<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureCognitiveServicesProjectResource> project,
