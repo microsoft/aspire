@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -151,6 +152,13 @@ internal sealed class ConsoleCancellationManager : IDisposable
     {
         try
         {
+            // When a debugger is attached, don't force-terminate — the developer needs
+            // unlimited time to step through cancellation/cleanup logic.
+            if (Debugger.IsAttached)
+            {
+                return;
+            }
+
             var startedHandler = Volatile.Read(ref _startedHandler);
 
             if (startedHandler is not null)
