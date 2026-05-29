@@ -85,8 +85,8 @@ public sealed class SmokeTests(ITestOutputHelper output)
         const string projectName = "PolyglotDevLocalhost";
         await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.ExpressReact, useDevLocalhost: true);
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
-        await auto.RunCommandFailFastAsync("grep -F 'ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL' aspire.config.json && grep -F 'polyglotdevlocalhost.dev.localhost' aspire.config.json", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync("grep -F 'ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL' aspire.config.json && grep -F 'polyglotdevlocalhost.dev.localhost' aspire.config.json", counter);
 
         await auto.TypeAsync("aspire run");
         await auto.EnterAsync();

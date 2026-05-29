@@ -192,12 +192,7 @@ internal sealed class DashboardServiceHost : IHostedService
             ? uri.Host[..^1]
             : uri.Host;
 
-        // RFC 6761 reserves "localhost." and names under it for loopback resolution:
-        // https://www.rfc-editor.org/rfc/rfc6761#section-6.3. Uri.IsLoopback only
-        // recognizes "localhost" itself, but Aspire-generated polyglot AppHosts can use
-        // scoped names like "myapp.dev.localhost".
-        return string.Equals(host, KnownHostNames.Localhost, StringComparison.OrdinalIgnoreCase)
-            || host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase);
+        return EndpointHostHelpers.IsLocalhostOrLocalhostTld(host);
     }
 
     /// <summary>
