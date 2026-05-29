@@ -143,6 +143,64 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void AsHostedAgent_WithOptions_AppliesAllPropertiesToConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var options = new HostedAgentOptions
+        {
+            Description = "test description",
+            Cpu = 1m,
+            Memory = 2m,
+            Metadata = { ["scenario"] = "unit-test" },
+            EnvironmentVariables = { ["MY_VAR"] = "my-value" }
+        };
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, options);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        Assert.Equal("test description", configuration.Description);
+        Assert.Equal(1m, configuration.Cpu);
+        Assert.Equal(2m, configuration.Memory);
+        Assert.Equal("unit-test", configuration.Metadata["scenario"]);
+        Assert.Equal("my-value", configuration.EnvironmentVariables["MY_VAR"]);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithNullOptions_DoesNotSetConfigureCallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, options: null);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        Assert.Null(hostedAgent.Configure);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithNullProject_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var app = builder.AddPythonApp("agent", "./app.py", "main:app");
+
+        Assert.Throws<ArgumentNullException>(() => app.AsHostedAgent(project: null!));
+    }
+
+    [Fact]
     public void AsHostedAgent_WithoutProject_CreatesDefaultProject()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -1,4 +1,5 @@
 import aspire.*;
+import java.util.Map;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
@@ -106,15 +107,12 @@ server.listen(port, '127.0.0.1');
 """
             });
 
-        hostedAgent.asHostedAgent(new AsHostedAgentOptions()
-            .project(project)
-            .configure((configuration) -> {
-                configuration.setDescription("Validation hosted agent");
-                configuration.setCpu(1);
-                configuration.setMemory(2);
-                configuration.metadata().put("scenario", "validation");
-                configuration.environmentVariables().put("VALIDATION_MODE", "true");
-            }));
+        hostedAgent.asHostedAgent(project, new HostedAgentOptions()
+            .description("Validation hosted agent")
+            .cpu(1)
+            .memory(2)
+            .metadata(Map.of("scenario", "validation"))
+            .environmentVariables(Map.of("VALIDATION_MODE", "true")));
 
         var api = builder.addContainer("api", "nginx");
         foundry.withContainerRegistryRoleAssignments(registry, new AzureContainerRegistryRole[] {

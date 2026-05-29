@@ -36,7 +36,7 @@ public static class HostedAgentResourceBuilderExtensions
     /// </code>
     /// </example>
     /// <ats-returns>The resource builder.</ats-returns>
-    [AspireExportIgnore(Reason = "Subset of the full AsHostedAgent overload which is exported.")]
+    [AspireExportIgnore(Reason = "Subset of the full AsHostedAgent(project) overload which is exported.")]
     public static IResourceBuilder<T> AsHostedAgent<T>(this IResourceBuilder<T> builder)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
@@ -44,18 +44,48 @@ public static class HostedAgentResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry.
+    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry, targeting the specified Foundry project.
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the compute resource.</param>
-    /// <param name="project">Optional Microsoft Foundry project resource used for both run and publish mode configuration.</param>
-    /// <param name="configure">A callback to configure hosted agent deployment options in publish mode.</param>
+    /// <param name="project">The Microsoft Foundry project resource used for both run and publish mode configuration.</param>
+    /// <param name="options">Optional hosted agent deployment options applied in publish mode.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <example>
+    /// <code lang="csharp">
+    /// var agent = builder.AddProject&lt;Projects.AgentService&gt;("agent")
+    ///     .AsHostedAgent(project, new HostedAgentOptions { Cpu = 1, Memory = 2 });
+    /// </code>
+    /// </example>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("asHostedAgentExecutable", MethodName = "asHostedAgent")]
     public static IResourceBuilder<T> AsHostedAgent<T>(
         this IResourceBuilder<T> builder,
-        IResourceBuilder<AzureCognitiveServicesProjectResource>? project = null,
-        Action<HostedAgentConfiguration>? configure = null)
+        IResourceBuilder<AzureCognitiveServicesProjectResource> project,
+        HostedAgentOptions? options = null)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        ArgumentNullException.ThrowIfNull(project);
+
+        Action<HostedAgentConfiguration>? configure = options is null ? null : options.ApplyTo;
+        return AsHostedAgent(builder, project: project, configure: configure);
+    }
+
+    /// <summary>
+    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry, with full programmatic
+    /// access to the underlying <see cref="HostedAgentConfiguration"/> (including Azure SDK-specific options
+    /// such as tools and content filters).
+    /// </summary>
+    /// <typeparam name="T">The type of resource being configured.</typeparam>
+    /// <param name="builder">The resource builder for the compute resource.</param>
+    /// <param name="project">Optional Microsoft Foundry project resource used for both run and publish mode configuration. When <see langword="null"/>, an existing Foundry project in the model is reused or a new project is created in publish mode.</param>
+    /// <param name="configure">A callback to configure hosted agent deployment options in publish mode.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    [AspireExportIgnore(Reason = "Action callback shape is awkward for polyglot hosts; the HostedAgentOptions overload is exported instead.")]
+    public static IResourceBuilder<T> AsHostedAgent<T>(
+        this IResourceBuilder<T> builder,
+        IResourceBuilder<AzureCognitiveServicesProjectResource>? project,
+        Action<HostedAgentConfiguration>? configure)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -79,7 +109,9 @@ public static class HostedAgentResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry.
+    /// Configures the resource to run and publish as a hosted agent in Microsoft Foundry, with full programmatic
+    /// access to the underlying <see cref="HostedAgentConfiguration"/>. The Foundry project is resolved automatically
+    /// in publish mode.
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the compute resource.</param>
