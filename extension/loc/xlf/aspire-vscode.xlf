@@ -10,7 +10,7 @@
     <trans-unit id="extension.debug.args">
       <source xml:lang="en">Additional arguments to pass to the Aspire CLI command</source>
     </trans-unit>
-    <trans-unit id="views.runningAppHosts.name">
+    <trans-unit id="views.appHosts.name">
       <source xml:lang="en">AppHosts</source>
     </trans-unit>
     <trans-unit id="mcpServerDefinitionProviders.aspire.label">
@@ -346,7 +346,7 @@
     <trans-unit id="aspire-vscode.strings.noCsprojFound">
       <source xml:lang="en">No AppHost found in the current workspace.</source>
     </trans-unit>
-    <trans-unit id="views.runningAppHosts.welcome">
+    <trans-unit id="views.appHosts.welcome">
       <source xml:lang="en">No Aspire AppHosts detected in this workspace.&#10;[Refresh](command:aspire-vscode.refreshAppHosts)</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.noCsharpBuildTask">
@@ -355,7 +355,7 @@
     <trans-unit id="aspire-vscode.strings.noOutputFromMsbuild">
       <source xml:lang="en">No output from msbuild.</source>
     </trans-unit>
-    <trans-unit id="views.runningAppHosts.globalWelcome">
+    <trans-unit id="views.appHosts.globalWelcome">
       <source xml:lang="en">No running Aspire AppHosts detected on this machine.&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.noWatchTask">
@@ -469,7 +469,7 @@
     <trans-unit id="walkthrough.getStarted.createProject.description">
       <source xml:lang="en">Scaffold a new Aspire project from a starter template. The template includes an AppHost orchestrator, a sample API, and a web frontend.&#10;&#10;[Create new project](command:aspire-vscode.new)</source>
     </trans-unit>
-    <trans-unit id="views.runningAppHosts.loading">
+    <trans-unit id="views.appHosts.loading">
       <source xml:lang="en">Searching for AppHosts...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.openCliInstallInstructions">
@@ -529,7 +529,7 @@
     <trans-unit id="walkthrough.getStarted.dashboard.description">
       <source xml:lang="en">The Aspire Dashboard shows your resources, endpoints, logs, traces, and metrics — all in one place.&#10;&#10;[Open dashboard](command:aspire-vscode.openDashboard)</source>
     </trans-unit>
-    <trans-unit id="views.runningAppHosts.errorWelcome">
+    <trans-unit id="views.appHosts.errorWelcome">
       <source xml:lang="en">The Aspire panel workspace view requires Aspire CLI 13.2.0 or newer and an AppHost that references Aspire.Hosting 13.2.0 or newer. Install or update the Aspire CLI and update your AppHost package to get started.&#10;[Update Aspire CLI](command:aspire-vscode.updateSelf)&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser">

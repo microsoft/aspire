@@ -47,10 +47,10 @@ function assertContains(whenClause: string | undefined, fragment: string): void 
 suite('extension/package.json', () => {
     test('running apphosts welcome states use string view mode checks', () => {
         const manifest = readManifest();
-        const runningAppHostsWelcome = manifest.contributes.viewsWelcome?.filter(item => item.view === 'aspire-vscode.runningAppHosts') ?? [];
+        const runningAppHostsWelcome = manifest.contributes.viewsWelcome?.filter(item => item.view === 'aspire-vscode.appHosts') ?? [];
 
-        const workspaceWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.runningAppHosts.welcome%');
-        const globalWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.runningAppHosts.globalWelcome%');
+        const workspaceWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.welcome%');
+        const globalWelcome = runningAppHostsWelcome.find(item => item.contents === '%views.appHosts.globalWelcome%');
 
         assertContains(workspaceWelcome?.when, "aspire.viewMode != 'global'");
         assertContains(globalWelcome?.when, "aspire.viewMode == 'global'");
@@ -64,11 +64,11 @@ suite('extension/package.json', () => {
         const switchToWorkspace = titleMenus.find(item => item.command === 'aspire-vscode.switchToWorkspaceView');
         const globalRefreshAppHosts = titleMenus.find(item => item.command === 'aspire-vscode.globalRefreshAppHosts');
 
-        assertContains(switchToGlobal?.when, "view == 'aspire-vscode.runningAppHosts'");
+        assertContains(switchToGlobal?.when, "view == 'aspire-vscode.appHosts'");
         assertContains(switchToGlobal?.when, "aspire.viewMode != 'global'");
-        assertContains(switchToWorkspace?.when, "view == 'aspire-vscode.runningAppHosts'");
+        assertContains(switchToWorkspace?.when, "view == 'aspire-vscode.appHosts'");
         assertContains(switchToWorkspace?.when, "aspire.viewMode == 'global'");
-        assertContains(globalRefreshAppHosts?.when, "view == 'aspire-vscode.runningAppHosts'");
+        assertContains(globalRefreshAppHosts?.when, "view == 'aspire-vscode.appHosts'");
     });
 
     test('workspace non-running apphost context actions include run and debug', () => {
@@ -78,9 +78,9 @@ suite('extension/package.json', () => {
         const runAppHost = contextMenus.find(item => item.command === 'aspire-vscode.runAppHost');
         const debugAppHost = contextMenus.find(item => item.command === 'aspire-vscode.debugAppHost');
 
-        assertContains(runAppHost?.when, "view == aspire-vscode.runningAppHosts");
+        assertContains(runAppHost?.when, "view == aspire-vscode.appHosts");
         assertContains(runAppHost?.when, 'viewItem == workspaceAppHost');
-        assertContains(debugAppHost?.when, "view == aspire-vscode.runningAppHosts");
+        assertContains(debugAppHost?.when, "view == aspire-vscode.appHosts");
         assertContains(debugAppHost?.when, 'viewItem == workspaceAppHost');
     });
 

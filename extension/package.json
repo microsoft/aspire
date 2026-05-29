@@ -66,30 +66,30 @@
     "views": {
       "aspire-panel": [
         {
-          "id": "aspire-vscode.runningAppHosts",
-          "name": "%views.runningAppHosts.name%"
+          "id": "aspire-vscode.appHosts",
+          "name": "%views.appHosts.name%"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "aspire-vscode.runningAppHosts",
-        "contents": "%views.runningAppHosts.loading%",
+        "view": "aspire-vscode.appHosts",
+        "contents": "%views.appHosts.loading%",
         "when": "aspire.loading"
       },
       {
-        "view": "aspire-vscode.runningAppHosts",
-        "contents": "%views.runningAppHosts.welcome%",
+        "view": "aspire-vscode.appHosts",
+        "contents": "%views.appHosts.welcome%",
         "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode != 'global'"
       },
       {
-        "view": "aspire-vscode.runningAppHosts",
-        "contents": "%views.runningAppHosts.globalWelcome%",
+        "view": "aspire-vscode.appHosts",
+        "contents": "%views.appHosts.globalWelcome%",
         "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode == 'global'"
       },
       {
-        "view": "aspire-vscode.runningAppHosts",
-        "contents": "%views.runningAppHosts.errorWelcome%",
+        "view": "aspire-vscode.appHosts",
+        "contents": "%views.appHosts.errorWelcome%",
         "when": "aspire.fetchAppHostsError && !aspire.loading"
       }
     ],
@@ -612,119 +612,119 @@
       "view/title": [
         {
           "command": "aspire-vscode.switchToGlobalView",
-          "when": "view == 'aspire-vscode.runningAppHosts' && aspire.viewMode != 'global'",
+          "when": "view == 'aspire-vscode.appHosts' && aspire.viewMode != 'global'",
           "group": "navigation"
         },
         {
           "command": "aspire-vscode.switchToWorkspaceView",
-          "when": "view == 'aspire-vscode.runningAppHosts' && aspire.viewMode == 'global'",
+          "when": "view == 'aspire-vscode.appHosts' && aspire.viewMode == 'global'",
           "group": "navigation"
         },
         {
           "command": "aspire-vscode.globalRefreshAppHosts",
-          "when": "view == 'aspire-vscode.runningAppHosts' && aspire.viewMode == 'global'",
+          "when": "view == 'aspire-vscode.appHosts' && aspire.viewMode == 'global'",
           "group": "navigation"
         },
         {
           "command": "aspire-vscode.refreshAppHosts",
-          "when": "view == 'aspire-vscode.runningAppHosts' && aspire.viewMode != 'global'",
+          "when": "view == 'aspire-vscode.appHosts' && aspire.viewMode != 'global'",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
           "command": "aspire-vscode.openDashboard",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "inline"
         },
         {
           "command": "aspire-vscode.expandAll",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost$|workspaceResources(:|$))/",
           "group": "inline"
         },
         {
           "command": "aspire-vscode.openAppHostSource",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources:hasAppHost|workspaceAppHost)$/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost$|workspaceResources:hasAppHost|workspaceAppHost)$/",
           "group": "1_open@1"
         },
         {
           "command": "aspire-vscode.runAppHost",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem == workspaceAppHost",
+          "when": "view == aspire-vscode.appHosts && viewItem == workspaceAppHost",
           "group": "2_actions@1"
         },
         {
           "command": "aspire-vscode.debugAppHost",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem == workspaceAppHost",
+          "when": "view == aspire-vscode.appHosts && viewItem == workspaceAppHost",
           "group": "2_actions@2"
         },
         {
           "command": "aspire-vscode.stopAppHost",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources:hasAppHost)$/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost$|workspaceResources:hasAppHost)$/",
           "group": "2_actions@1"
         },
         {
           "command": "aspire-vscode.copyAppHostPath",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost$|workspaceResources:hasAppHost|workspaceAppHost)$/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost$|workspaceResources:hasAppHost|workspaceAppHost)$/",
           "group": "3_clipboard@1"
         },
         {
           "command": "aspire-vscode.stopResource",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^resource.*:canStop/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource.*:canStop/",
           "group": "2_actions@1"
         },
         {
           "command": "aspire-vscode.startResource",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^resource.*:canStart/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource.*:canStart/",
           "group": "2_actions@2"
         },
         {
           "command": "aspire-vscode.restartResource",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^resource.*:canRestart/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource.*:canRestart/",
           "group": "2_actions@3"
         },
         {
           "command": "aspire-vscode.executeResourceCommand",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^resource(:|$)/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource(:|$)/",
           "group": "2_actions@4"
         },
         {
           "command": "aspire-vscode.viewResourceLogs",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^resource(:|$)/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource(:|$)/",
           "group": "3_info@1"
         },
         {
           "command": "aspire-vscode.openInExternalBrowser",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem == endpointUrl",
+          "when": "view == aspire-vscode.appHosts && viewItem == endpointUrl",
           "group": "1_open@1"
         },
         {
           "command": "aspire-vscode.openInIntegratedBrowser",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem == endpointUrl",
+          "when": "view == aspire-vscode.appHosts && viewItem == endpointUrl",
           "group": "1_open@2"
         },
         {
           "command": "aspire-vscode.copyEndpointUrl",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^endpointUrl/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^endpointUrl/",
           "group": "3_clipboard@1"
         },
         {
           "command": "aspire-vscode.copyResourceName",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^resource(:|$)/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^resource(:|$)/",
           "group": "3_info@2"
         },
         {
           "command": "aspire-vscode.viewAppHostSource",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost)$/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost|workspaceResources:hasAppHost)$/",
           "group": "1_open@2"
         },
         {
           "command": "aspire-vscode.viewAppHostLogFile",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem == logFileItem",
+          "when": "view == aspire-vscode.appHosts && viewItem == logFileItem",
           "group": "1_open@1"
         },
         {
           "command": "aspire-vscode.copyLogFilePath",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem == logFileItem",
+          "when": "view == aspire-vscode.appHosts && viewItem == logFileItem",
           "group": "3_clipboard@1"
         }
       ]
