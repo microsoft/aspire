@@ -5,7 +5,7 @@
 ```console
 git clone https://github.com/open-telemetry/opentelemetry-dotnet-contrib.git
 git fetch --tags
-git checkout tags/Instrumentation.ConfluentKafka-0.1.0-alpha.2
+git checkout tags/Instrumentation.ConfluentKafka-0.1.0-alpha.7
 ```
 
 ### Instructions

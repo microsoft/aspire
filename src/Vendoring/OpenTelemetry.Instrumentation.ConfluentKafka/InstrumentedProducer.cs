@@ -42,8 +42,8 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
         Message<TKey, TValue> message,
         CancellationToken cancellationToken = default)
     {
-        DateTimeOffset start = DateTimeOffset.UtcNow;
-        using Activity? activity = this.StartPublishActivity(start, topic, message);
+        var start = DateTimeOffset.UtcNow;
+        using var activity = this.StartPublishActivity(start, topic, message);
         if (activity != null)
         {
             this.InjectActivity(activity, message);
@@ -71,9 +71,9 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
         }
         finally
         {
-            DateTimeOffset end = DateTimeOffset.UtcNow;
+            var end = DateTimeOffset.UtcNow;
             activity?.SetEndTime(end.UtcDateTime);
-            TimeSpan duration = end - start;
+            var duration = end - start;
 
             if (this.options.Metrics)
             {
@@ -89,8 +89,8 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
         Message<TKey, TValue> message,
         CancellationToken cancellationToken = default)
     {
-        DateTimeOffset start = DateTimeOffset.UtcNow;
-        using Activity? activity = this.StartPublishActivity(start, topicPartition.Topic, message, topicPartition.Partition);
+        var start = DateTimeOffset.UtcNow;
+        using var activity = this.StartPublishActivity(start, topicPartition.Topic, message, topicPartition.Partition);
         if (activity != null)
         {
             this.InjectActivity(activity, message);
@@ -118,9 +118,9 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
         }
         finally
         {
-            DateTimeOffset end = DateTimeOffset.UtcNow;
+            var end = DateTimeOffset.UtcNow;
             activity?.SetEndTime(end.UtcDateTime);
-            TimeSpan duration = end - start;
+            var duration = end - start;
 
             if (this.options.Metrics)
             {
@@ -133,8 +133,8 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
 
     public void Produce(string topic, Message<TKey, TValue> message, Action<DeliveryReport<TKey, TValue>>? deliveryHandler = null)
     {
-        DateTimeOffset start = DateTimeOffset.UtcNow;
-        using Activity? activity = this.StartPublishActivity(start, topic, message);
+        var start = DateTimeOffset.UtcNow;
+        using var activity = this.StartPublishActivity(start, topic, message);
         if (activity != null)
         {
             this.InjectActivity(activity, message);
@@ -161,9 +161,9 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
         }
         finally
         {
-            DateTimeOffset end = DateTimeOffset.UtcNow;
+            var end = DateTimeOffset.UtcNow;
             activity?.SetEndTime(end.UtcDateTime);
-            TimeSpan duration = end - start;
+            var duration = end - start;
 
             if (this.options.Metrics)
             {
@@ -174,8 +174,8 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
 
     public void Produce(TopicPartition topicPartition, Message<TKey, TValue> message, Action<DeliveryReport<TKey, TValue>>? deliveryHandler = null)
     {
-        DateTimeOffset start = DateTimeOffset.UtcNow;
-        using Activity? activity = this.StartPublishActivity(start, topicPartition.Topic, message, topicPartition.Partition);
+        var start = DateTimeOffset.UtcNow;
+        using var activity = this.StartPublishActivity(start, topicPartition.Topic, message, topicPartition.Partition);
         if (activity != null)
         {
             this.InjectActivity(activity, message);
@@ -202,9 +202,9 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
         }
         finally
         {
-            DateTimeOffset end = DateTimeOffset.UtcNow;
+            var end = DateTimeOffset.UtcNow;
             activity?.SetEndTime(end.UtcDateTime);
-            TimeSpan duration = end - start;
+            var duration = end - start;
 
             if (this.options.Metrics)
             {
@@ -364,7 +364,7 @@ internal sealed class InstrumentedProducer<TKey, TValue> : IProducer<TKey, TValu
 
     private void InjectTraceContext(Message<TKey, TValue> message, string key, string value)
     {
-        message.Headers ??= new Headers();
+        message.Headers ??= [];
         message.Headers.Add(key, Encoding.UTF8.GetBytes(value));
     }
 }
