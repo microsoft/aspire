@@ -15,6 +15,8 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class HostedAgentResourceBuilderExtensions
 {
+    private static readonly JsonSerializerOptions s_indentedJsonOptions = new() { WriteIndented = true };
+
     /// <summary>
     /// Configures the resource to run locally as a Microsoft Foundry hosted agent.
     /// </summary>
@@ -195,7 +197,7 @@ public static class HostedAgentResourceBuilderExtensions
                             return CommandResults.Failure("Agent returned an empty response.");
                         }
 
-                        var formattedResponse = JsonSerializer.Serialize(responseJson, new JsonSerializerOptions { WriteIndented = true });
+                        var formattedResponse = JsonSerializer.Serialize(responseJson, s_indentedJsonOptions);
                         return CommandResults.Success(
                             message: "Agent response received.",
                             result: formattedResponse,
