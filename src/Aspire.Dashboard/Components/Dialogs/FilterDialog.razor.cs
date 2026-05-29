@@ -48,6 +48,8 @@ public partial class FilterDialog
 
         _numericFilterConditions =
         [
+            CreateFilterSelectViewModel(FilterCondition.Equals),
+            CreateFilterSelectViewModel(FilterCondition.NotEqual),
             CreateFilterSelectViewModel(FilterCondition.GreaterThanOrEqual),
             CreateFilterSelectViewModel(FilterCondition.GreaterThan),
             CreateFilterSelectViewModel(FilterCondition.LessThanOrEqual),
