@@ -5,10 +5,10 @@ param(
 
 # Parse version from eng/Versions.props
 [xml]$props = Get-Content "$PSScriptRoot/../eng/Versions.props"
-$major = $props.Project.PropertyGroup.MajorVersion
-$minor = $props.Project.PropertyGroup.MinorVersion
-$patch = $props.Project.PropertyGroup.PatchVersion
-$preRelease = $props.Project.PropertyGroup.PreReleaseVersionLabel
+$major = $props.SelectSingleNode("//MajorVersion").InnerText.Trim()
+$minor = $props.SelectSingleNode("//MinorVersion").InnerText.Trim()
+$patch = $props.SelectSingleNode("//PatchVersion").InnerText.Trim()
+$preRelease = $props.SelectSingleNode("//PreReleaseVersionLabel").InnerText.Trim()
 $tag = "$major.$minor.$patch-$preRelease"
 
 Write-Host "Building and pushing: $Registry/$Repository`:$tag" -ForegroundColor Cyan
