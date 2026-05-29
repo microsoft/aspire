@@ -50,7 +50,11 @@ public static class AzureCognitiveServicesProjectExtensions
         builder.ApplicationBuilder.Services.Configure<AzureProvisioningOptions>(o => o.SupportsTargetedRoleAssignments = true);
 
         var project = builder.ApplicationBuilder.AddResource(new AzureCognitiveServicesProjectResource(name, ConfigureInfrastructure, builder.Resource));
-        project.Resource.DefaultContainerRegistry = CreateDefaultRegistry(builder.ApplicationBuilder, $"{name}-acr");
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            project.Resource.DefaultContainerRegistry = CreateDefaultRegistry(builder.ApplicationBuilder, $"{name}-acr");
+        }
+
         return project;
     }
 

@@ -195,17 +195,16 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
-    public void AddProject_AddsDefaultContainerRegistryInRunMode()
+    public void AddProject_DoesNotAddDefaultContainerRegistryInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var project = builder.AddFoundry("myAIFoundry")
             .AddProject("my-project");
 
-        var registry = Assert.Single(builder.Resources.OfType<AzureContainerRegistryResource>());
-
-        Assert.Equal("my-project-acr", registry.Name);
-        Assert.Same(registry, project.Resource.ContainerRegistry);
+        Assert.DoesNotContain(builder.Resources, r => r.Name == "my-project-acr");
+        Assert.Empty(builder.Resources.OfType<AzureContainerRegistryResource>());
+        Assert.Null(project.Resource.ContainerRegistry);
     }
 
     [Fact]

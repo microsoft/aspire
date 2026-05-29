@@ -172,7 +172,7 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void AsHostedAgent_InRunMode_WithProject_RemovesDefaultContainerRegistryResource()
+    public void AsHostedAgent_InRunMode_WithProject_DoesNotCreateDefaultContainerRegistryResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var project = builder.AddFoundry("account")
