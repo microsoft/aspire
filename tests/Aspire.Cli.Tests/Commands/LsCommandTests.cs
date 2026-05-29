@@ -165,6 +165,46 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LsCommand_JsonFormat_IncludesConfiguredAppHostOutsideWorkingDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+        var workingDirectory = workspace.WorkspaceRoot.CreateSubdirectory("WorkingDir");
+        var configuredAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "ConfiguredAppHost.csproj"));
+        await File.WriteAllTextAsync(configuredAppHost.FullName, "Not a real apphost");
+        await File.WriteAllTextAsync(Path.Combine(workingDirectory.FullName, "aspire.config.json"), JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = "../ConfiguredAppHost.csproj"
+            }
+        }));
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.WorkingDirectory = workingDirectory;
+            options.OutputTextWriter = textWriter;
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory();
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ls --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = string.Join(string.Empty, textWriter.Logs);
+        var candidateAppHosts = JsonSerializer.Deserialize(jsonOutput, JsonSourceGenerationContext.RelaxedEscaping.ListCandidateAppHostDisplayInfo);
+        Assert.NotNull(candidateAppHosts);
+        var candidate = Assert.Single(candidateAppHosts);
+        Assert.Equal(configuredAppHost.FullName, candidate.Path);
+        Assert.Equal(KnownLanguageId.CSharp, candidate.Language);
+        Assert.Equal("buildable", candidate.Status);
+    }
+
+    [Fact]
     public async Task LsCommand_JsonFormat_OnlyJsonOnStdout_StatusMessagesOnStderr()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

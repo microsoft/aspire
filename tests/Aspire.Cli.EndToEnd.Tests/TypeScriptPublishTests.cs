@@ -26,11 +26,9 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -97,11 +95,6 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         await auto.TypeAsync("grep -F \"postgres:\" artifacts/docker-compose.yaml");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
@@ -115,11 +108,9 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript.", "Aspire.Hosting.Docker."]);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -152,7 +143,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire publish -o artifacts --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(5));
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(5));
 
         var artifactsPath = Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts");
         var composeContent = await File.ReadAllTextAsync(Path.Combine(artifactsPath, "docker-compose.yaml"));
@@ -194,11 +185,6 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
             "COPY --from=build --chown=node:node /app/.next/static ./.next/static",
             "USER node",
             "ENTRYPOINT [\"node\",\"server.js\"]");
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
@@ -216,11 +202,9 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -278,18 +262,13 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire publish --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(5));
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(5));
 
         var dockerComposePath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-output", "docker-compose.yaml");
         Assert.True(File.Exists(dockerComposePath), $"Expected docker-compose output at {dockerComposePath}");
 
         var dockerComposeContent = await File.ReadAllTextAsync(dockerComposePath);
         Assert.Contains("postgres:", dockerComposeContent);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
@@ -307,11 +286,9 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -363,7 +340,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire publish -o artifacts --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, timeout: TimeSpan.FromMinutes(5));
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(5));
 
         var envFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "artifacts", ".env");
         Assert.True(File.Exists(envFilePath), $"Expected env file at {envFilePath}");
@@ -371,11 +348,6 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         var envFileContent = await File.ReadAllTextAsync(envFilePath);
         Assert.Contains("# Customized bind mount source", envFileContent);
         Assert.DoesNotContain("# Bind mount source for my-container:/container/data", envFileContent);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     private static void WriteJavaScriptPublishAppHost(TemporaryWorkspace workspace)

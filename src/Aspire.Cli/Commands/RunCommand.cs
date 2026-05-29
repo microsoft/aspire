@@ -306,7 +306,7 @@ internal sealed class RunCommand : BaseCommand
                 catch (TimeoutException)
                 {
                     runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                    await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun).ConfigureAwait(false);
+                    await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun, cancellationToken).ConfigureAwait(false);
                     return CreateStartupTimeoutResult(timeoutSeconds);
                 }
 
@@ -351,7 +351,7 @@ internal sealed class RunCommand : BaseCommand
                 catch (TimeoutException)
                 {
                     runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                    await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun).ConfigureAwait(false);
+                    await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun, cancellationToken).ConfigureAwait(false);
                     return CreateStartupTimeoutResult(timeoutSeconds);
                 }
 
@@ -1124,15 +1124,18 @@ internal sealed class RunCommand : BaseCommand
         return elapsed >= startupTimeout ? TimeSpan.Zero : startupTimeout - elapsed;
     }
 
-    private async Task CancelAppHostStartupAsync(CancellationTokenSource runCancellationTokenSource, Task<int> pendingRun)
+    private async Task CancelAppHostStartupAsync(CancellationTokenSource runCancellationTokenSource, Task<int> pendingRun, CancellationToken cancellationToken)
     {
         runCancellationTokenSource.Cancel();
 
         try
         {
-            await pendingRun.WaitAsync(s_appHostStartupCancellationTimeout, _timeProvider).ConfigureAwait(false);
+            // The timeout is a safety net for the startup-timeout path (no Ctrl+C). When the user
+            // presses Ctrl+C, cancellationToken fires and WaitAsync exits immediately via the token
+            // rather than waiting for the full timeout duration.
+            await pendingRun.WaitAsync(s_appHostStartupCancellationTimeout, _timeProvider, cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException) when (runCancellationTokenSource.IsCancellationRequested)
+        catch (OperationCanceledException) when (runCancellationTokenSource.IsCancellationRequested || cancellationToken.IsCancellationRequested)
         {
         }
         catch (TimeoutException ex)

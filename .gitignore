@@ -186,6 +186,7 @@ tests/PolyglotAppHosts/**/Go/apphost.exe
 
 #Aspire CLI
 .aspire/
+.modules/
 
 # Release notes automation output
 tools/ReleaseNotes/analysis-output/

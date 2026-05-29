@@ -219,8 +219,6 @@ public class Program
         var isMcpStartCommand = args?.Length >= 2 &&
             ((args[0] == "mcp" && args[1] == "start") || (args[0] == "agent" && args[1] == "mcp"));
 
-        var extensionEndpoint = Environment.GetEnvironmentVariable(KnownConfigNames.ExtensionEndpoint);
-
         // Create file logger provider from pre-computed path info
         var fileLoggerProvider = new FileLoggerProvider(loggingOptions.LogFilePath, errorWriter);
 
@@ -253,8 +251,12 @@ public class Program
                 builder.AddFilter<FileLoggerProvider>("Aspire.Cli.Certificates.NativeCertificateToolRunner", LogLevel.Information);
             }
 
-            // Configure console logging based on --verbosity or --debug
-            if (consoleLogLevel is not null && !isMcpStartCommand && extensionEndpoint is null)
+            // Configure console logging based on --verbosity or --debug.
+            // When the CLI is hosted by the VS Code extension, stderr is captured line-by-line
+            // and surfaced in the Debug Console, so debug logs still need to flow to stderr there;
+            // suppressing them only because an extension endpoint is present meant that
+            // `--debug` produced no visible output under F5, even though it works in a terminal.
+            if (consoleLogLevel is not null && !isMcpStartCommand)
             {
                 // Use custom Spectre Console logger for clean debug output to stderr
                 builder.AddProvider(new SpectreConsoleLoggerProvider(Console.Error, logBufferContext));
@@ -799,6 +801,7 @@ public class Program
         var logBufferContext = new ConsoleLogBufferContext();
         var (loggerFactory, fileLoggerProvider) = CreateLoggerFactory(args, loggingOptions, errorWriter, logBufferContext);
         var logger = loggerFactory.CreateLogger(RootLoggerName);
+        cancellationManager.SetLogger(logger);
         using var startupContext = new CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, logger);
 
         logger.LogInformation("Aspire CLI version: {Version}", AspireCliTelemetry.GetCliVersion());
@@ -897,9 +900,10 @@ public class Program
                     var firstCompletedTask = await Task.WhenAny(handlerTask, cancellationManager.ProcessTerminationCompletionSource.Task);
                     if (firstCompletedTask != handlerTask)
                     {
-                        // The termination signal triggered cancellation and the timeout has completed. Kill the process.
+                        // ProcessTerminationCompletionSource was signaled — either the graceful-shutdown
+                        // timeout elapsed, or a second signal forced immediate termination.
                         // handlerTask is not awaited because the process is shutting down and we assume the task is hung.
-                        logger.LogWarning("Timeout waiting for cancellation from termination signal.");
+                        logger.LogWarning("Termination signal forced process exit.");
                     }
 
                     exitCode = await firstCompletedTask; // return the result or propagate the exception

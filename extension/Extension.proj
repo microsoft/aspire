@@ -31,13 +31,13 @@
     <!-- Override package.json version if ExtensionVersionOverride is set, saving original first -->
     <Copy SourceFiles="$(_PackageJsonPath)" DestinationFiles="$(_PackageJsonPath).bak"
           Condition="'$(ExtensionVersionOverride)' != ''" />
-    <Exec Command="yarn version --new-version &quot;$(ExtensionVersionOverride)&quot; --no-git-tag-version"
+    <Exec Command="corepack yarn@1.22.22 version --new-version &quot;$(ExtensionVersionOverride)&quot; --no-git-tag-version"
           Condition="'$(ExtensionVersionOverride)' != ''"
           WorkingDirectory="$(ExtensionSrcDir)" />
 
     <!-- Install dependencies and compile -->
-    <Exec Command="yarn install --frozen-lockfile --non-interactive" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
-    <Exec Command="yarn compile" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="corepack yarn@1.22.22 install --frozen-lockfile --non-interactive" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
+    <Exec Command="corepack yarn@1.22.22 compile" WorkingDirectory="$(ExtensionSrcDir)" IgnoreStandardErrorWarningFormat="true" />
 
     <!-- Make extension directory -->
     <MakeDir Directories="$(_VscodeOutputDir)" />
@@ -88,12 +88,12 @@
   </Target>
 
   <Target Name="CheckYarnInstalled">
-    <Exec Command="yarn --version" ContinueOnError="true" ConsoleToMSBuild="true" IgnoreStandardErrorWarningFormat="true">
+    <Exec Command="corepack yarn@1.22.22 --version" ContinueOnError="true" ConsoleToMSBuild="true" IgnoreStandardErrorWarningFormat="true">
       <Output TaskParameter="ExitCode" PropertyName="YarnExitCode" />
       <Output TaskParameter="ConsoleOutput" PropertyName="YarnVersion" />
     </Exec>
 
-    <Error Condition="'$(YarnExitCode)' != '0'" Text="yarn is not installed or not available in PATH. To build the extension, install yarn: https://yarnpkg.com/getting-started/install" />
+    <Error Condition="'$(YarnExitCode)' != '0'" Text="Corepack is not installed or cannot run Yarn Classic. To build the extension, install a Node.js version that includes Corepack." />
 
     <Message Importance="high" Text="yarn version: $(YarnVersion)" />
   </Target>

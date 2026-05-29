@@ -271,6 +271,12 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(allocatedPort, uri.Port);
         Assert.Equal(expectedScheme, uri.Scheme);
 
+        var loginLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString() == "Login to the dashboard at {LoginUrl}");
+
+        Assert.NotNull(loginLog);
+        Assert.Equal($"{expectedScheme}://{expectedHost}:{allocatedPort}/login?t=test-token", LogTestHelpers.GetValue(loginLog, "LoginUrl"));
+
         var summaryLog = testSink.Writes.FirstOrDefault(l =>
             LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);
 

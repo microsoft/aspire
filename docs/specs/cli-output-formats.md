@@ -95,32 +95,7 @@ If discovery finds no AppHost candidates, the stream emits no lines. The stream 
 ]
 ```
 
-Use `aspire ps --format json --resources` to include each AppHost's current resources:
-
-```json
-[
-  {
-    "appHostPath": "/path/to/MyApp.AppHost/MyApp.AppHost.csproj",
-    "appHostPid": 12345,
-    "status": "running",
-    "resources": [
-      {
-        "name": "api",
-        "displayName": "api",
-        "resourceType": "Project",
-        "state": "Running",
-        "healthStatus": "Healthy",
-        "urls": [
-          {
-            "name": "https",
-            "url": "https://localhost:5001"
-          }
-        ]
-      }
-    ]
-  }
-]
-```
+`aspire ps` returns only AppHost-level information. Use [`aspire describe`](#aspire-describe) to inspect or stream the resources that belong to an AppHost.
 
 `aspire ps --follow --format json` streams newline-delimited AppHost objects. New or changed AppHosts are emitted with `"status": "running"`. When an AppHost stops, it is emitted one last time with `"status": "stopped"` so consumers can remove it from their state:
 
@@ -172,7 +147,7 @@ Use `aspire ps --format json --resources` to include each AppHost's current reso
 
 #### Resource fields
 
-`aspire describe`, `aspire describe --follow`, and `aspire ps --resources` share the resource object shape:
+`aspire describe` and `aspire describe --follow` share the resource object shape:
 
 | Field | Description |
 | ----- | ----------- |

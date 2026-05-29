@@ -50,6 +50,7 @@ suite('AppHostDataRepository', () => {
     let getCliPathStub: sinon.SinonStub;
     let spawnStub: sinon.SinonStub;
     let defaultWorkspaceFoldersStub: sinon.SinonStub;
+    let findFilesStub: sinon.SinonStub;
 
     setup(() => {
         subscriptions = [];
@@ -58,11 +59,13 @@ suite('AppHostDataRepository', () => {
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
         defaultWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
+        findFilesStub = sinon.stub(vscode.workspace, 'findFiles').resolves([]);
     });
 
     teardown(() => {
         spawnStub.restore();
         getCliPathStub.restore();
+        findFilesStub.restore();
         if (defaultWorkspaceFoldersStub.restore) {
             defaultWorkspaceFoldersStub.restore();
         }
@@ -257,7 +260,6 @@ suite('AppHostDataRepository', () => {
                 appHostPid: 1234,
                 cliPid: null,
                 dashboardUrl: null,
-                resources: null,
             }]));
 
             assert.ok(repository.errorMessage?.includes('describe failed'), repository.errorMessage);
@@ -271,7 +273,7 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         const getAppHostsProcess = new TestChildProcess();
         const describeProcess = new TestChildProcess();
-        const psResourcesProcess = new TestChildProcess();
+        const psFollowProcess = new TestChildProcess();
         const psFallbackProcess = new TestChildProcess();
         const replacementDescribeProcess = new TestChildProcess();
         const psSuccessProcess = new TestChildProcess();
@@ -280,7 +282,7 @@ suite('AppHostDataRepository', () => {
             return getAppHostsProcess;
         });
         spawnStub.onSecondCall().returns(describeProcess);
-        spawnStub.onThirdCall().returns(psResourcesProcess);
+        spawnStub.onThirdCall().returns(psFollowProcess);
         spawnStub.onCall(3).returns(psFallbackProcess);
         spawnStub.onCall(4).returns(replacementDescribeProcess);
         spawnStub.onCall(5).returns(psSuccessProcess);
@@ -309,12 +311,7 @@ suite('AppHostDataRepository', () => {
             psFollowOptions.exitCallback(1);
             await waitForAppHostDiscovery();
 
-            const psResourcesOptions = spawnStub.getCall(3).args[3];
-            psResourcesOptions.stderrCallback('resources unavailable');
-            psResourcesOptions.exitCallback(1);
-            await waitForAppHostDiscovery();
-
-            const psFallbackOptions = spawnStub.getCall(4).args[3];
+            const psFallbackOptions = spawnStub.getCall(3).args[3];
             psFallbackOptions.stderrCallback('ps failed');
             psFallbackOptions.exitCallback(1);
             assert.ok(repository.errorMessage?.includes('ps failed'), repository.errorMessage);
@@ -372,7 +369,7 @@ suite('AppHostDataRepository', () => {
 
             assert.strictEqual(repository.viewMode, 'workspace');
             assert.strictEqual(spawnStub.callCount, 2);
-            assert.deepStrictEqual(spawnStub.secondCall.args[2], ['ps', '--follow', '--format', 'json', '--resources']);
+            assert.deepStrictEqual(spawnStub.secondCall.args[2], ['ps', '--follow', '--format', 'json']);
         } finally {
             repository.dispose();
             workspaceFoldersStub.restore();
@@ -410,7 +407,7 @@ suite('AppHostDataRepository', () => {
                     '/workspace/samples/Store/AppHost.csproj',
                 ],
             }));
-            await waitForMicrotasks();
+            await waitForAppHostDiscovery();
 
             assert.strictEqual(repository.viewMode, 'workspace');
             assert.strictEqual(repository.workspaceAppHostPath, '/workspace/apps/Store/AppHost.csproj');
@@ -418,7 +415,241 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(describeProcess.killed, false);
             assert.strictEqual(spawnStub.callCount, 3);
             assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/apps/Store/AppHost.csproj']);
-            assert.deepStrictEqual(spawnStub.thirdCall.args[2], ['ps', '--follow', '--format', 'json', '--resources']);
+            assert.deepStrictEqual(spawnStub.thirdCall.args[2], ['ps', '--follow', '--format', 'json']);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('multi-AppHost workspace retargets describe to the only running AppHost', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        const describeProcesses: TestChildProcess[] = [];
+        const describeCalls: { args: string[]; options: any }[] = [];
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
+            if (args[0] === 'describe') {
+                describeCalls.push({ args, options });
+                const process = new TestChildProcess();
+                describeProcesses.push(process);
+                return process;
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/apps/Store/AppHost.csproj',
+                all_project_file_candidates: [
+                    '/workspace/apps/Store/AppHost.csproj',
+                    '/workspace/samples/Store/AppHost.csproj',
+                ],
+            }));
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(describeCalls.length, 1);
+            assert.deepStrictEqual(describeCalls[0].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/apps/Store/AppHost.csproj']);
+            assert.ok(psOptions);
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    cliPid: 125738,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+            ]));
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.workspaceAppHostPath, '/workspace/samples/Store/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHostName, 'samples/Store/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+            assert.strictEqual(describeProcesses[0].killed, true);
+            assert.strictEqual(describeCalls.length, 2);
+            assert.deepStrictEqual(describeCalls[1].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/samples/Store/AppHost.csproj']);
+
+            describeCalls[1].options.lineCallback(JSON.stringify({ name: 'api', resourceType: 'Project', state: 'Running' }));
+            assert.strictEqual(repository.workspaceResources.length, 1);
+            assert.strictEqual(repository.workspaceResources[0].name, 'api');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('multi-AppHost workspace does not retarget describe when multiple candidate AppHosts are running', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        const describeProcesses: TestChildProcess[] = [];
+        const describeCalls: { args: string[]; options: any }[] = [];
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
+            if (args[0] === 'describe') {
+                describeCalls.push({ args, options });
+                const process = new TestChildProcess();
+                describeProcesses.push(process);
+                return process;
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/apps/Store/AppHost.csproj',
+                all_project_file_candidates: [
+                    '/workspace/apps/Store/AppHost.csproj',
+                    '/workspace/samples/Store/AppHost.csproj',
+                    '/workspace/tools/Admin/AppHost.csproj',
+                ],
+            }));
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(describeCalls.length, 1);
+            assert.deepStrictEqual(describeCalls[0].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/apps/Store/AppHost.csproj']);
+            assert.ok(psOptions);
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    cliPid: 125738,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+                {
+                    appHostPath: '/workspace/tools/Admin/AppHost.csproj',
+                    appHostPid: 125882,
+                    cliPid: 125739,
+                    dashboardUrl: 'https://localhost:17194/login?t=061213',
+                },
+            ]));
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.workspaceAppHostPath, '/workspace/apps/Store/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHostName, 'apps/Store/AppHost.csproj');
+            assert.strictEqual(repository.workspaceAppHost, undefined);
+            // No retarget, but global describe streams start for the non-selected running AppHosts
+            // so their resources appear in the workspace tree.
+            assert.strictEqual(describeCalls.length, 3);
+            assert.deepStrictEqual(describeCalls[1].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/samples/Store/AppHost.csproj']);
+            assert.deepStrictEqual(describeCalls[2].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/tools/Admin/AppHost.csproj']);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('non-selected running AppHosts in workspace get resources from per-AppHost describe streams', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        const describeProcesses: TestChildProcess[] = [];
+        const describeCalls: { args: string[]; options: any }[] = [];
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider: any, _command: any, args: string[], options: any) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
+            if (args[0] === 'describe') {
+                describeCalls.push({ args, options });
+                const process = new TestChildProcess();
+                describeProcesses.push(process);
+                return process;
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/apps/Store/AppHost.csproj',
+                all_project_file_candidates: [
+                    '/workspace/apps/Store/AppHost.csproj',
+                    '/workspace/samples/Store/AppHost.csproj',
+                ],
+            }));
+            await waitForAppHostDiscovery();
+            assert.strictEqual(describeCalls.length, 1);
+            assert.ok(psOptions);
+
+            // Simulate both AppHosts running
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                    appHostPid: 125880,
+                    cliPid: 125737,
+                    dashboardUrl: 'https://localhost:17192/login?t=061211',
+                },
+                {
+                    appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                    cliPid: 125738,
+                    dashboardUrl: 'https://localhost:17193/login?t=061212',
+                },
+            ]));
+            await waitForMicrotasks();
+
+            // Global describe for non-selected AppHost spawns asynchronously after resolving CLI path
+            await waitForCondition(() => describeCalls.length >= 2, 'global describe for non-selected AppHost should start');
+
+            // Initial workspace describe + global describe for the non-selected AppHost
+            // (workspace describe restart is still pending on a timer)
+            assert.strictEqual(describeCalls.length, 2);
+            assert.deepStrictEqual(describeCalls[1].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/samples/Store/AppHost.csproj']);
+
+            // Simulate resource data arriving on the non-selected AppHost's describe stream (NDJSON format)
+            describeCalls[1].options.lineCallback(JSON.stringify({ name: 'redis', resourceType: 'Container', state: 'Running' }));
+            await waitForMicrotasks();
+
+            // The non-selected AppHost should have its resources populated
+            const nonSelectedAppHost = repository.appHosts.find((a: any) => a.appHostPath === '/workspace/samples/Store/AppHost.csproj');
+            assert.ok(nonSelectedAppHost);
+            assert.ok(nonSelectedAppHost.resources);
+            assert.strictEqual(nonSelectedAppHost.resources!.length, 1);
+            assert.strictEqual(nonSelectedAppHost.resources![0].name, 'redis');
         } finally {
             repository.dispose();
             workspaceFoldersStub.restore();
@@ -439,6 +670,12 @@ suite('AppHostDataRepository', () => {
                     path: configuredAppHostPath,
                 },
             }));
+            findFilesStub.callsFake(async (include: vscode.GlobPattern) => {
+                const pattern = typeof include === 'string' ? include : include.pattern;
+                return pattern.endsWith('aspire.config.json')
+                    ? [vscode.Uri.file(path.join(workspaceRoot, 'aspire.config.json'))]
+                    : [];
+            });
 
             let getAppHostsLineCallback: ((line: string) => void) | undefined;
             let psOptions: any;
@@ -490,7 +727,6 @@ suite('AppHostDataRepository', () => {
                 {
                     appHostPath: configuredAppHostPath,
                     appHostPid: 125881,
-                    resources: [],
                 },
             ]));
             assert.strictEqual(repository.workspaceAppHost?.appHostPath, configuredAppHostPath);
@@ -568,6 +804,10 @@ suite('AppHostDataRepository', () => {
                     status: 'possibly-unbuildable',
                 },
             ]));
+            // aspire ls exit handler awaits getConfiguredAppHostPathFromWorkspaceRoot, which
+            // probes for aspire.config.json / .aspire/settings.json via vscode workspace fs.
+            // That probe can take more than one macrotask on Windows, so poll for completion
+            // instead of relying on a single setTimeout(0) tick.
             await waitForCondition(
                 () => repository.workspaceAppHostPath === '/workspace/apps/Store/AppHost.csproj',
                 'buildable AppHost discovery did not finish');
@@ -677,16 +917,15 @@ suite('AppHostDataRepository', () => {
                 selected_project_file: '/workspace/apphost/apphost.cs',
                 all_project_file_candidates: ['/workspace/apphost/apphost.cs'],
             }));
-            await waitForMicrotasks();
+            await waitForAppHostDiscovery();
 
             assert.ok(psOptions);
-            assert.deepStrictEqual(psArgs, ['ps', '--follow', '--format', 'json', '--resources']);
+            assert.deepStrictEqual(psArgs, ['ps', '--follow', '--format', 'json']);
             psOptions.lineCallback(JSON.stringify([{
                 appHostPath: '/workspace/apphost/apphost.cs',
                 appHostPid: 125881,
                 cliPid: 125738,
                 dashboardUrl: 'https://localhost:17193/login?t=061212',
-                resources: [],
             }]));
 
             assert.strictEqual(repository.workspaceResources.length, 0);
@@ -751,7 +990,7 @@ suite('AppHostDataRepository', () => {
                     },
                 ],
             }));
-            await waitForMicrotasks();
+            await waitForAppHostDiscovery();
 
             assert.ok(psOptions);
             psOptions.lineCallback(JSON.stringify([
@@ -760,7 +999,6 @@ suite('AppHostDataRepository', () => {
                     appHostPid: 125881,
                     cliPid: 125738,
                     dashboardUrl: 'https://localhost:17193/login?t=061212',
-                    resources: [],
                 },
             ]));
 
@@ -822,7 +1060,7 @@ suite('AppHostDataRepository', () => {
                     },
                 ],
             }));
-            await waitForMicrotasks();
+            await waitForAppHostDiscovery();
 
             assert.ok(psOptions);
             psOptions.lineCallback(JSON.stringify([]));
@@ -877,7 +1115,7 @@ suite('AppHostDataRepository', () => {
                 selected_project_file: '/workspace/labs/ops/apphost.cs',
                 all_project_file_candidates: ['/workspace/labs/ops/apphost.cs'],
             }));
-            await waitForMicrotasks();
+            await waitForAppHostDiscovery();
 
             assert.ok(describeOptions);
             assert.ok(psOptions);
@@ -886,7 +1124,6 @@ suite('AppHostDataRepository', () => {
                 {
                     appHostPath: '/workspace/labs/ops/apphost.cs',
                     appHostPid: 125881,
-                    resources: [],
                 },
             ]));
 
@@ -898,6 +1135,143 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.workspaceResources.length, 0);
             assert.strictEqual(repository.workspaceAppHost, undefined);
             assert.strictEqual(describeProcess.killed, true);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace describe exit clears stale running AppHost before ps stop snapshot', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        const describeProcess = new TestChildProcess();
+        let describeOptions: any;
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
+            if (args[0] === 'describe') {
+                describeOptions = options;
+                return describeProcess;
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.ok(getAppHostsLineCallback);
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/labs/ops/apphost.cs',
+                all_project_file_candidates: ['/workspace/labs/ops/apphost.cs'],
+            }));
+            await waitForAppHostDiscovery();
+
+            assert.ok(describeOptions);
+            assert.ok(psOptions);
+            describeOptions.lineCallback(JSON.stringify({ name: 'worker', resourceType: 'Project', state: 'Running' }));
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/labs/ops/apphost.cs',
+                    appHostPid: 125881,
+                },
+            ]));
+
+            assert.strictEqual(repository.workspaceResources.length, 1);
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+            assert.strictEqual(repository.appHosts.length, 1);
+
+            describeOptions.exitCallback(0);
+
+            assert.strictEqual(repository.workspaceResources.length, 0);
+            assert.strictEqual(repository.workspaceAppHost, undefined);
+            assert.strictEqual(repository.appHosts.length, 0);
+
+            const noRunningContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts');
+            assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace ps start restarts describe after earlier empty describe exit', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        let psOptions: any;
+        const describeProcesses: TestChildProcess[] = [];
+        const describeOptions: any[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
+            if (args[0] === 'describe') {
+                describeOptions.push(options);
+                const process = new TestChildProcess();
+                describeProcesses.push(process);
+                return process;
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.ok(getAppHostsLineCallback);
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/labs/ops/apphost.cs',
+                all_project_file_candidates: ['/workspace/labs/ops/apphost.cs'],
+            }));
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(describeOptions.length, 1);
+            describeOptions[0].exitCallback(0);
+            assert.strictEqual(repository.workspaceResources.length, 0);
+            assert.strictEqual(Boolean(repository.workspaceAppHost), false);
+
+            assert.ok(psOptions);
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/labs/ops/apphost.cs',
+                    appHostPid: 125881,
+                },
+            ]));
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+            assert.strictEqual(describeOptions.length, 2);
+
+            describeOptions[1].lineCallback(JSON.stringify({ name: 'worker', resourceType: 'Project', state: 'Running' }));
+            assert.strictEqual(repository.workspaceResources.length, 1);
+            assert.strictEqual(repository.workspaceResources[0].name, 'worker');
+            assert.strictEqual(describeProcesses[0].killed, false);
+            assert.strictEqual(describeProcesses[1].killed, false);
         } finally {
             repository.dispose();
             workspaceFoldersStub.restore();
@@ -1003,7 +1377,7 @@ suite('AppHostDataRepository global polling', () => {
         repository.setPanelVisible(true);
         await waitForMicrotasks();
 
-        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ps', '--follow', '--format', 'json', '--resources']);
+        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ps', '--follow', '--format', 'json']);
 
         repository.setPanelVisible(false);
 
@@ -1022,52 +1396,58 @@ suite('AppHostDataRepository global polling', () => {
         repository.setPanelVisible(true);
         await waitForMicrotasks();
 
-        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ps', '--follow', '--format', 'json', '--resources']);
+        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ps', '--follow', '--format', 'json']);
 
-        const lineCallback = spawnStub.firstCall.args[3].lineCallback;
-        lineCallback(JSON.stringify({
+        const psLineCallback = spawnStub.firstCall.args[3].lineCallback;
+        psLineCallback(JSON.stringify({
             appHostPath: '/workspace/AppHost.csproj',
             appHostPid: 1234,
             status: 'running',
-            resources: [
-                { name: 'api', resourceType: 'Project', state: 'Running' }
-            ]
         }));
+        await waitForMicrotasks();
 
         assert.strictEqual(repository.appHosts.length, 1);
         assert.strictEqual(repository.appHosts[0].appHostPath, '/workspace/AppHost.csproj');
+
+        // The repository should now have spawned `aspire describe --follow --apphost <path>`
+        // for the discovered AppHost so the global tree can show resources.
+        const describeCall = spawnStub.getCalls().find(call =>
+            Array.isArray(call.args[2]) && call.args[2][0] === 'describe' && call.args[2].includes('/workspace/AppHost.csproj'));
+        assert.ok(describeCall, 'expected aspire describe --follow to spawn for the discovered AppHost');
+        assert.deepStrictEqual(describeCall.args[2], ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/AppHost.csproj']);
+
+        const describeLineCallback = describeCall.args[3].lineCallback;
+        describeLineCallback(JSON.stringify({ name: 'api', resourceType: 'Project', state: 'Running' }));
         assert.strictEqual(repository.appHosts[0].resources?.[0].name, 'api');
 
-        lineCallback(JSON.stringify({
+        psLineCallback(JSON.stringify({
             appHostPath: '/workspace/OtherAppHost.csproj',
             appHostPid: 5678,
             status: 'running',
-            resources: []
         }));
+        await waitForMicrotasks();
 
         assert.strictEqual(repository.appHosts.length, 2);
         assert.strictEqual(repository.appHosts[1].appHostPath, '/workspace/OtherAppHost.csproj');
         assert.deepStrictEqual(repository.appHosts[1].resources, []);
 
-        lineCallback(JSON.stringify({
+        psLineCallback(JSON.stringify({
             appHostPath: '/workspace/AppHost.csproj',
             appHostPid: 9999,
             status: 'running',
-            resources: []
         }));
+        await waitForMicrotasks();
 
         assert.strictEqual(repository.appHosts.length, 3);
         assert.strictEqual(repository.appHosts[2].appHostPath, '/workspace/AppHost.csproj');
         assert.strictEqual(repository.appHosts[2].appHostPid, 9999);
 
-        lineCallback(JSON.stringify({
+        psLineCallback(JSON.stringify({
             appHostPath: '/workspace/AppHost.csproj',
             appHostPid: 1234,
             status: 'stopped',
-            resources: [
-                { name: 'api', resourceType: 'Project', state: 'Running' }
-            ]
         }));
+        await waitForMicrotasks();
 
         assert.strictEqual(repository.appHosts.length, 2);
         assert.strictEqual(repository.appHosts[0].appHostPath, '/workspace/OtherAppHost.csproj');
@@ -1098,7 +1478,7 @@ suite('AppHostDataRepository global polling', () => {
         repository.dispose();
     });
 
-    test('cli path failure does not disable resources polling', async () => {
+    test('cli path failure does not disable ps polling', async () => {
         const clock = sinon.useFakeTimers();
         getCliPathStub.onFirstCall().rejects(new Error('CLI path unavailable'));
         getCliPathStub.onSecondCall().resolves('aspire');
@@ -1116,7 +1496,7 @@ suite('AppHostDataRepository global polling', () => {
             await waitForMicrotasks();
 
             assert.strictEqual(spawnStub.calledOnce, true);
-            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ps', '--format', 'json', '--resources']);
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ps', '--format', 'json']);
         } finally {
             repository.dispose();
             clock.restore();
@@ -1148,7 +1528,7 @@ suite('AppHostDataRepository global polling', () => {
         }
     });
 
-    test('stopped ps does not start fallback after resources failure', async () => {
+    test('stopped ps does not start fallback after exit', async () => {
         const childProcess = new TestChildProcess();
         spawnStub.returns(childProcess);
         const repository = new AppHostDataRepository(terminalProvider);
@@ -1209,6 +1589,99 @@ suite('AppHostDataRepository global polling', () => {
 
         assert.ok(childProcess);
         assert.strictEqual(childProcess.killed, false);
+
+        repository.dispose();
+    });
+
+    test('global mode spawns describe per AppHost and tears down on AppHost removal', async () => {
+        const spawned: { args: string[]; process: TestChildProcess; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            const process = new TestChildProcess();
+            spawned.push({ args, process, options });
+            return process;
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setViewMode('global');
+        repository.setPanelVisible(true);
+        await waitForMicrotasks();
+
+        const psCall = spawned.find(call => call.args[0] === 'ps');
+        assert.ok(psCall);
+
+        psCall.options.lineCallback(JSON.stringify({
+            appHostPath: '/workspace/AppHost.csproj',
+            appHostPid: 1234,
+            status: 'running',
+        }));
+        psCall.options.lineCallback(JSON.stringify({
+            appHostPath: '/workspace/OtherAppHost.csproj',
+            appHostPid: 5678,
+            status: 'running',
+        }));
+        await waitForMicrotasks();
+
+        const describeCalls = spawned.filter(call => call.args[0] === 'describe');
+        assert.strictEqual(describeCalls.length, 2);
+        const paths = describeCalls.map(call => call.args[call.args.indexOf('--apphost') + 1]).sort();
+        assert.deepStrictEqual(paths, ['/workspace/AppHost.csproj', '/workspace/OtherAppHost.csproj']);
+
+        const firstDescribe = describeCalls.find(call => call.args.includes('/workspace/AppHost.csproj'))!;
+        firstDescribe.options.lineCallback(JSON.stringify({ name: 'api', resourceType: 'Project', state: 'Running' }));
+        firstDescribe.options.lineCallback(JSON.stringify({ name: 'db', resourceType: 'Container', state: 'Running' }));
+
+        const first = repository.appHosts.find(a => a.appHostPath === '/workspace/AppHost.csproj');
+        assert.ok(first);
+        assert.strictEqual(first.resources?.length, 2);
+        assert.deepStrictEqual(first.resources?.map(r => r.name).sort(), ['api', 'db']);
+
+        // Stop the first AppHost — its describe stream should be torn down.
+        psCall.options.lineCallback(JSON.stringify({
+            appHostPath: '/workspace/AppHost.csproj',
+            appHostPid: 1234,
+            status: 'stopped',
+        }));
+        await waitForMicrotasks();
+
+        assert.strictEqual(firstDescribe.process.killed, true);
+        assert.strictEqual(repository.appHosts.length, 1);
+        assert.strictEqual(repository.appHosts[0].appHostPath, '/workspace/OtherAppHost.csproj');
+
+        repository.dispose();
+    });
+
+    test('global describe streams are stopped when switching to workspace mode', async () => {
+        const spawned: { args: string[]; process: TestChildProcess; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            const process = new TestChildProcess();
+            spawned.push({ args, process, options });
+            return process;
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setViewMode('global');
+        repository.setPanelVisible(true);
+        await waitForMicrotasks();
+
+        const psCall = spawned.find(call => call.args[0] === 'ps');
+        assert.ok(psCall);
+        psCall.options.lineCallback(JSON.stringify({
+            appHostPath: '/workspace/AppHost.csproj',
+            appHostPid: 1234,
+            status: 'running',
+        }));
+        await waitForMicrotasks();
+
+        const describeCall = spawned.find(call => call.args[0] === 'describe');
+        assert.ok(describeCall);
+        assert.strictEqual(describeCall.process.killed, false);
+
+        repository.setViewMode('workspace');
+        await waitForMicrotasks();
+
+        assert.strictEqual(describeCall.process.killed, true);
 
         repository.dispose();
     });
@@ -1310,7 +1783,7 @@ async function waitForAppHostDiscovery(): Promise<void> {
 }
 
 async function waitForCondition(condition: () => boolean, message: string): Promise<void> {
-    for (let i = 0; i < 20; i++) {
+    for (let i = 0; i < 100; i++) {
         if (condition()) {
             return;
         }

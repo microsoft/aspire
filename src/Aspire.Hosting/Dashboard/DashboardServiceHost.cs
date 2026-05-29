@@ -25,16 +25,6 @@ namespace Aspire.Hosting.Dashboard;
 internal sealed class DashboardServiceHost : IHostedService
 {
     /// <summary>
-    /// Name of the environment variable that optionally specifies the resource service URL,
-    /// which the dashboard will connect to over gRPC.
-    /// </summary>
-    /// <remarks>
-    /// This is primarily intended for cases outside of the local developer environment.
-    /// If no value exists for this variable, a port is assigned dynamically.
-    /// </remarks>
-    private const string ResourceServiceUrlVariableName = "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL";
-
-    /// <summary>
     /// Provides access to the URI at which the resource service endpoint is hosted.
     /// </summary>
     private readonly TaskCompletionSource<string> _resourceServiceUri = new();
@@ -135,7 +125,9 @@ internal sealed class DashboardServiceHost : IHostedService
         void ConfigureKestrel(KestrelServerOptions kestrelOptions)
         {
             // Inspect environment for the address to listen on.
-            var uri = configuration.GetUri(ResourceServiceUrlVariableName);
+            // Prefer the new config name, falling back to the legacy name.
+            var uri = configuration.GetUri(KnownConfigNames.ResourceServiceEndpointUrl)
+                ?? configuration.GetUri(KnownConfigNames.Legacy.ResourceServiceEndpointUrl);
             var allowUnsecuredTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
 
             var scheme = ResolveScheme(uri, allowUnsecuredTransport);
@@ -146,7 +138,7 @@ internal sealed class DashboardServiceHost : IHostedService
                 kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
                 _logger.LogDebug("Resource service endpoint not configured. Listening on {Scheme}://127.0.0.1:<random>.", scheme);
             }
-            else if (uri.IsLoopback)
+            else if (IsLocalResourceServiceEndpoint(uri))
             {
                 // Listen on the requested localhost port.
                 kestrelOptions.ListenLocalhost(uri.Port, ConfigureListen);
@@ -154,7 +146,7 @@ internal sealed class DashboardServiceHost : IHostedService
             }
             else
             {
-                throw new ArgumentException($"{ResourceServiceUrlVariableName} must contain a local loopback address.");
+                throw new ArgumentException($"{KnownConfigNames.ResourceServiceEndpointUrl} must contain a local loopback address.");
             }
 
             void ConfigureListen(ListenOptions options)
@@ -187,11 +179,28 @@ internal sealed class DashboardServiceHost : IHostedService
     }
 
     /// <summary>
+    /// Determines whether the resource service endpoint is scoped to the local machine.
+    /// </summary>
+    internal static bool IsLocalResourceServiceEndpoint(Uri uri)
+    {
+        if (uri.IsLoopback)
+        {
+            return true;
+        }
+
+        var host = uri.Host.EndsWith(".", StringComparison.Ordinal)
+            ? uri.Host[..^1]
+            : uri.Host;
+
+        return EndpointHostHelpers.IsLocalhostOrLocalhostTld(host);
+    }
+
+    /// <summary>
     /// Gets the URI upon which the resource service is listening.
     /// </summary>
     /// <remarks>
     /// Intended to be used by the app model when launching the dashboard process, populating its
-    /// <c>DOTNET_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable with a single URI.
+    /// <c>ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable with a single URI.
     /// </remarks>
     public async Task<string> GetResourceServiceUriAsync(CancellationToken cancellationToken = default)
     {

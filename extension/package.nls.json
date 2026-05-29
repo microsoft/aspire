@@ -42,6 +42,7 @@
   "configuration.aspire.enableDebugConfigEnvironmentLogging": "Include environment variables when logging debug session configurations. This can help diagnose environment-related issues but may expose sensitive information in logs.",
   "configuration.aspire.registerMcpServerInWorkspace": "Whether to register the Aspire MCP server when a workspace is open.",
   "configuration.aspire.globalAppHostsPollingInterval": "Polling interval in milliseconds for fetching all running AppHosts (used in global view). Minimum: 1000.",
+  "configuration.aspire.appHostDiscoveryTimeoutMs": "Timeout in milliseconds for Aspire CLI commands that discover AppHost projects. Minimum: 1000.",
   "configuration.aspire.enableCodeLens": "Show CodeLens actions (state, restart, stop, logs) inline above resource declarations in AppHost files.",
   "configuration.aspire.enableGutterDecorations": "Show colored status dots in the editor gutter next to resource declarations in AppHost files.",
   "configuration.aspire.enableAutoRestore": "Automatically run 'aspire restore' when the workspace opens and whenever aspire.config.json changes (e.g. after switching git branches). Keeps integration packages in sync and prevents editor errors.",

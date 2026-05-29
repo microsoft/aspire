@@ -38,6 +38,7 @@ import { readGitCommitSha } from './utils/versionInfo';
 import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgumentsLoader';
 import { ResourceCommandJson } from './views/AppHostDataRepository';
+import { AppHostDiscoveryService } from './utils/appHostDiscovery';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -61,7 +62,10 @@ export async function activate(context: vscode.ExtensionContext) {
   terminalProvider.dcpServerConnectionInfo = dcpServer.connectionInfo;
   terminalProvider.closeAllOpenAspireTerminals();
 
-  const editorCommandProvider = new AspireEditorCommandProvider();
+  const appHostDiscoveryService = new AppHostDiscoveryService(terminalProvider);
+  context.subscriptions.push(appHostDiscoveryService);
+
+  const editorCommandProvider = new AspireEditorCommandProvider(appHostDiscoveryService);
 
   const cliAddCommandRegistration = vscode.commands.registerCommand('aspire-vscode.add', () => tryExecuteCommand('aspire-vscode.add', terminalProvider, (tp) => addCommand(tp, editorCommandProvider)));
   const cliNewCommandRegistration = vscode.commands.registerCommand('aspire-vscode.new', () => tryExecuteCommand('aspire-vscode.new', terminalProvider, newCommand));
@@ -85,7 +89,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const verifyCliInstalledRegistration = vscode.commands.registerCommand('aspire-vscode.verifyCliInstalled', verifyCliInstalledCommand);
 
   // Aspire panel - running app hosts tree view
-  const dataRepository = new AppHostDataRepository(terminalProvider);
+  const dataRepository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService);
   const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, context.globalState);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.runningAppHosts', {
     treeDataProvider: appHostTreeProvider,
@@ -195,7 +199,7 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(cliUpdateCommandRegistration, cliUpdateSelfCommandRegistration, settingsCommandRegistration, openLocalSettingsCommandRegistration, openGlobalSettingsCommandRegistration, runAppHostCommandRegistration, debugAppHostCommandRegistration);
   context.subscriptions.push(installCliStableRegistration, installCliDailyRegistration, verifyCliInstalledRegistration);
 
-  const debugConfigProvider = new AspireDebugConfigurationProvider();
+  const debugConfigProvider = new AspireDebugConfigurationProvider(appHostDiscoveryService);
   context.subscriptions.push(
     vscode.debug.registerDebugConfigurationProvider('aspire', debugConfigProvider, vscode.DebugConfigurationProviderTriggerKind.Dynamic)
   );
@@ -219,7 +223,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const getEnableSettingsFileCreationPromptOnStartup = () => vscode.workspace.getConfiguration('aspire').get<boolean>('enableSettingsFileCreationPromptOnStartup', true);
   const setEnableSettingsFileCreationPromptOnStartup = async (value: boolean) => await vscode.workspace.getConfiguration('aspire').update('enableSettingsFileCreationPromptOnStartup', value, vscode.ConfigurationTarget.Workspace);
   const appHostDisposablePromise = checkForExistingAppHostPathInWorkspace(
-    terminalProvider,
+    appHostDiscoveryService,
     getEnableSettingsFileCreationPromptOnStartup,
     setEnableSettingsFileCreationPromptOnStartup
   );

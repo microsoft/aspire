@@ -10,8 +10,8 @@ namespace Aspire.Shared.Model.Serialization;
 /// Represents a resource in JSON format.
 /// This is a shared representation used by both the Dashboard and CLI.
 /// </summary>
-// CLI commands such as `aspire describe --format json` and `aspire ps --format json --resources`
-// use this shape and the nested resource shapes below; keep docs/specs/cli-output-formats.md in sync when changing them.
+// `aspire describe --format json` uses this shape and the nested resource shapes below;
+// keep docs/specs/cli-output-formats.md in sync when changing them.
 internal sealed class ResourceJson
 {
     /// <summary>

@@ -40,11 +40,9 @@ public sealed class TypeScriptLegacyAppHostTests(ITestOutputHelper output)
             variant: CliE2ETestHelpers.DockerfileVariant.DotNet,
             mountDockerSocket: true,
             workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -84,7 +82,7 @@ public sealed class TypeScriptLegacyAppHostTests(ITestOutputHelper output)
         // legacy `.modules/` folder — the contract the conversion enforces.
         await auto.TypeAsync("npx --no-install tsc --noEmit -p tsconfig.apphost.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 5: `aspire start` exercises apphost.ts at runtime — proving the generated
         // SDK is dynamically importable AND that addRedis (added via aspire add in step 2)
@@ -93,11 +91,6 @@ public sealed class TypeScriptLegacyAppHostTests(ITestOutputHelper output)
         await auto.AspireStartAsync(counter);
         await auto.AssertResourcesExistAsync(counter, "cache");
         await auto.AspireStopAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     /// <summary>

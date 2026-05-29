@@ -22,4 +22,21 @@ public class DashboardServiceHostTests
 
         Assert.Equal(expectedScheme, scheme);
     }
+
+    [Theory]
+    [InlineData("https://localhost:5001", true)]
+    [InlineData("https://localhost.:5001", true)]
+    [InlineData("https://127.0.0.1:5001", true)]
+    [InlineData("https://[::1]:5001", true)]
+    [InlineData("https://myapp.dev.localhost:5001", true)]
+    [InlineData("https://myapp.dev.localhost.:5001", true)]
+    [InlineData("https://example.com:5001", false)]
+    [InlineData("https://localhost.example.com:5001", false)]
+    [InlineData("https://example-localhost:5001", false)]
+    public void IsLocalResourceServiceEndpoint_ReturnsExpectedResult(string uriString, bool expectedResult)
+    {
+        var result = DashboardServiceHost.IsLocalResourceServiceEndpoint(new Uri(uriString));
+
+        Assert.Equal(expectedResult, result);
+    }
 }

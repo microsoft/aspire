@@ -45,27 +45,51 @@ public sealed class SmokeTests(ITestOutputHelper output)
     [Fact]
     public async Task MyCliTest()
     {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode();
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal();
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         await auto.TypeAsync("aspire --version");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-        await pendingRun;
     }
 }
+```
+
+### TerminalRun Pattern
+
+**Always use `CliE2ETestHelpers.StartRun`** to wrap the terminal run. This returns a `TerminalRun` (implements `IAsyncDisposable`) that automatically:
+1. Captures Aspire diagnostics via `CaptureAspireDiagnosticsAsync` (best effort)
+2. Types `exit` and presses Enter to close the terminal
+3. Awaits the pending run task
+
+This eliminates the need for manual `exit`/`await pendingRun` at the end of every test and ensures diagnostics are always captured, even when tests fail.
+
+```csharp
+// DO: Use StartRun for consistent diagnostics capture and cleanup
+using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+var counter = new SequenceCounter();
+var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, TestContext.Current.CancellationToken);
+
+// ... test body — no exit/pendingRun needed at the end
+
+// DON'T: Manually handle exit and pendingRun
+var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+// ... test body ...
+await auto.TypeAsync("exit");
+await auto.EnterAsync();
+await pendingRun;
 ```
 
 ## Running Tests Locally
@@ -246,10 +270,10 @@ await auto.WaitUntilAsync(
 
 | Method | Description |
 |--------|-------------|
-| `WaitForSuccessPromptAsync(counter, timeout?)` | Waits for `[N OK] $ ` prompt and increments counter |
+| `WaitForSuccessPromptAsync(counter, timeout?)` | Waits for `[N OK] $ ` prompt, fails immediately if error prompt appears, and increments counter |
 | `WaitForAnyPromptAsync(counter, timeout?)` | Waits for any prompt (`OK` or `ERR`) and increments counter |
 | `WaitForErrorPromptAsync(counter, timeout?)` | Waits for `[N ERR:code] $ ` prompt and increments counter |
-| `WaitForSuccessPromptFailFastAsync(counter, timeout?)` | Waits for success prompt, fails immediately if error prompt appears |
+| `RunCommandAsync(command, counter, timeout?)` | Types a command, presses Enter, and waits for success prompt (fails fast on error) |
 | `DeclineAgentInitPromptAsync()` | Declines the `aspire agent init` prompt if it appears |
 | `AspireNewAsync(projectName, counter, template?, useRedisCache?)` | Runs `aspire new` interactively, handling template selection, project name, output path, URLs, Redis, and test project prompts |
 
@@ -277,8 +301,7 @@ The following extensions on `Hex1bTerminalInputSequenceBuilder` are still availa
 |--------|-------------|
 | `WaitForSuccessPrompt(counter, timeout?)` | *(legacy)* Waits for `[N OK] $ ` prompt and increments counter |
 | `PrepareEnvironment(workspace, counter)` | *(legacy)* Sets up custom prompt with command tracking |
-| `InstallAspireCliFromPullRequest(prNumber, counter)` | *(legacy)* Downloads and installs CLI from PR artifacts |
-| `SourceAspireCliEnvironment(counter)` | *(legacy)* Adds `~/.aspire/bin` to PATH |
+| `SourceAspireBundleEnvironment(counter)` | *(legacy)* Sources bundle PATH environment variables |
 
 ## DO: Use CellPatternSearcher for Output Detection
 

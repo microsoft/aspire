@@ -3,6 +3,7 @@
 
 using System.IO.Pipes;
 using System.Net.Sockets;
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Telemetry;
 using Aspire.TypeSystem;
@@ -94,19 +95,19 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
 
     /// <inheritdoc />
     public Task<Dictionary<string, string>> GenerateCodeAsync(string languageId, CancellationToken cancellationToken)
-        => InvokeAsync<Dictionary<string, string>>("generateCode", [languageId, null], cancellationToken);
+        => InvokeCodeGenerationAsync<Dictionary<string, string>>("generateCode", [languageId, null], cancellationToken);
 
     /// <inheritdoc />
     public Task<Dictionary<string, string>> GenerateCodeForAssemblyAsync(string languageId, string assemblyName, CancellationToken cancellationToken)
-        => InvokeAsync<Dictionary<string, string>>("generateCode", [languageId, assemblyName], cancellationToken);
+        => InvokeCodeGenerationAsync<Dictionary<string, string>>("generateCode", [languageId, assemblyName], cancellationToken);
 
     /// <inheritdoc />
     public Task<Commands.Sdk.CapabilitiesInfo> GetCapabilitiesAsync(CancellationToken cancellationToken)
-        => InvokeAsync<Commands.Sdk.CapabilitiesInfo>("getCapabilities", [null], cancellationToken);
+        => InvokeCodeGenerationAsync<Commands.Sdk.CapabilitiesInfo>("getCapabilities", [null], cancellationToken);
 
     /// <inheritdoc />
     public Task<Commands.Sdk.CapabilitiesInfo> GetCapabilitiesForAssembliesAsync(IReadOnlyList<string> assemblyNames, CancellationToken cancellationToken)
-        => InvokeAsync<Commands.Sdk.CapabilitiesInfo>("getCapabilities", [assemblyNames], cancellationToken);
+        => InvokeCodeGenerationAsync<Commands.Sdk.CapabilitiesInfo>("getCapabilities", [assemblyNames], cancellationToken);
 
     /// <inheritdoc />
     public Task<T> InvokeAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
@@ -115,6 +116,57 @@ internal sealed class AppHostRpcClient : IAppHostRpcClient
     /// <inheritdoc />
     public Task InvokeAsync(string methodName, object?[] parameters, CancellationToken cancellationToken)
         => _jsonRpc.InvokeWithProfilingAsync(_profilingTelemetry, ConnectionName, methodName, parameters, cancellationToken);
+
+    /// <summary>
+    /// Invokes a code-generation RPC method and rethrows structured load/type failures as
+    /// <see cref="AppHostCodeGenerationException"/> so the CLI can render an actionable
+    /// diagnostic instead of an empty or .NET-specific error message.
+    /// </summary>
+    private async Task<T> InvokeCodeGenerationAsync<T>(string methodName, object?[] parameters, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await _jsonRpc.InvokeWithProfilingAsync<T>(_profilingTelemetry, ConnectionName, methodName, parameters, cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteInvocationException ex) when (ex.ErrorCode == AppHostCodeGenerationErrorCodes.IncompatibleAspireSdk)
+        {
+            var diagnostic = TryReadDiagnostic(ex);
+            if (diagnostic is null)
+            {
+                throw;
+            }
+
+            throw new AppHostCodeGenerationException(ex.Message, diagnostic, ex);
+        }
+    }
+
+    /// <summary>
+    /// Extracts a <see cref="AppHostCodeGenerationDiagnostic"/> from a <see cref="RemoteInvocationException"/>'s
+    /// structured error data, returning <see langword="null"/> if the payload is missing or
+    /// can't be deserialized.
+    /// </summary>
+    private static AppHostCodeGenerationDiagnostic? TryReadDiagnostic(RemoteInvocationException exception)
+    {
+        if (exception.DeserializedErrorData is AppHostCodeGenerationDiagnostic typed)
+        {
+            return typed;
+        }
+
+        var payload = exception.DeserializedErrorData ?? exception.ErrorData;
+        if (payload is JsonElement element)
+        {
+            try
+            {
+                return element.Deserialize(BackchannelJsonSerializerContext.Default.AppHostCodeGenerationDiagnostic);
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()

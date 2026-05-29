@@ -262,4 +262,18 @@
     <value>The configuration file '{0}' contains invalid JSON: {1}</value>
     <comment>{0} is the file path, {1} is the exception message</comment>
   </data>
+  <data name="CodegenVersionSkewWarning" xml:space="preserve">
+    <value>The installed Aspire CLI version ({0}) differs from the configured Aspire SDK version ({1}). If you run into errors, run 'aspire update' to align them.</value>
+    <comment>{0} is the CLI version, {1} is the SDK version configured in aspire.config.json.</comment>
+  </data>
+  <data name="CodegenIncompatibleSdkSummary" xml:space="preserve">
+    <value>{0} SDK code generation failed because the installed Aspire CLI appears to be incompatible with the configured Aspire SDK. Run 'aspire update' to align the CLI and SDK and try again.</value>
+    <comment>{0} is the AppHost language display name, e.g. 'TypeScript (Node.js)'.</comment>
+  </data>
+  <data name="CodegenDebugHint" xml:space="preserve">
+    <value>Run with '--debug' for full diagnostic details.</value>
+  </data>
+  <data name="CodegenDebugHeader" xml:space="preserve">
+    <value>Diagnostic details:</value>
+  </data>
 </root>
