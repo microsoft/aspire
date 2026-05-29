@@ -1003,7 +1003,7 @@ suite('AppHostDataRepository', () => {
             ]));
 
             const noRunningContextCalls = executeCommandStub.getCalls().filter(call =>
-                call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts');
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
             assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
@@ -1070,7 +1070,7 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(loadingContextCalls.at(-1)?.args[2], false);
 
             const noRunningContextCalls = executeCommandStub.getCalls().filter(call =>
-                call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts');
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
             assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], true);
         } finally {
             repository.dispose();
@@ -1201,7 +1201,7 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.appHosts.length, 0);
 
             const noRunningContextCalls = executeCommandStub.getCalls().filter(call =>
-                call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts');
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
             assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], true);
         } finally {
             repository.dispose();

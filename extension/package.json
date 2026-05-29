@@ -80,12 +80,12 @@
       {
         "view": "aspire-vscode.appHosts",
         "contents": "%views.appHosts.welcome%",
-        "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode != 'global'"
+        "when": "aspire.noAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode != 'global'"
       },
       {
         "view": "aspire-vscode.appHosts",
         "contents": "%views.appHosts.globalWelcome%",
-        "when": "aspire.noRunningAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode == 'global'"
+        "when": "aspire.noAppHosts && !aspire.fetchAppHostsError && !aspire.loading && aspire.viewMode == 'global'"
       },
       {
         "view": "aspire-vscode.appHosts",
@@ -510,7 +510,7 @@
         },
         {
           "command": "aspire-vscode.openDashboard",
-          "when": "!aspire.noRunningAppHosts"
+          "when": "!aspire.noAppHosts"
         },
         {
           "command": "aspire-vscode.stopAppHost",

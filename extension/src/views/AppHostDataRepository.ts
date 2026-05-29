@@ -837,7 +837,7 @@ export class AppHostDataRepository {
         const hasWorkspaceAppHost = this._workspaceAppHost !== undefined;
         const hasResources = this._workspaceResources.size > 0;
         const hasRunningAppHosts = this._appHosts.length > 0;
-        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts);
+        vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts);
         const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
@@ -983,7 +983,7 @@ export class AppHostDataRepository {
         if (this._viewMode === 'global' && this._loadingGlobal) {
             this._loadingGlobal = false;
             this._updateLoadingContext();
-            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', this._appHosts.length === 0);
+            vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
         }
     }
 
@@ -1083,7 +1083,7 @@ export class AppHostDataRepository {
             }
 
             if (changed) {
-                vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', appHosts.length === 0);
+                vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', appHosts.length === 0);
                 this._onDidChangeData.fire();
             }
         } catch (e) {
