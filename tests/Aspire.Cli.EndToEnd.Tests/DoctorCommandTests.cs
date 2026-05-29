@@ -125,7 +125,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
         if (TypeScriptAppHostToolchainTestHelpers.UsesCorepack(toolchain))
         {
-            await auto.RunCommandFailFastAsync(
+            await auto.RunCommandAsync(
                 $"COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack prepare {TypeScriptAppHostToolchainTestHelpers.GetPackageManager(toolchain)} --activate",
                 counter,
                 TimeSpan.FromMinutes(2));

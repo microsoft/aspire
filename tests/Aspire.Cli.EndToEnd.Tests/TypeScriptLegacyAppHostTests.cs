@@ -82,7 +82,7 @@ public sealed class TypeScriptLegacyAppHostTests(ITestOutputHelper output)
         // legacy `.modules/` folder — the contract the conversion enforces.
         await auto.TypeAsync("npx --no-install tsc --noEmit -p tsconfig.apphost.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 5: `aspire start` exercises apphost.ts at runtime — proving the generated
         // SDK is dynamically importable AND that addRedis (added via aspire add in step 2)

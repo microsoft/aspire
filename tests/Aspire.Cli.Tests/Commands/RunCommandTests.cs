@@ -131,6 +131,67 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WhenCancelledDuringStartupTimeout_ExitsWithoutWaitingForFullTimeout()
+    {
+        // Verifies that when Ctrl+C fires (cancellationToken) during startup, the command exits
+        // promptly rather than blocking for the 5-second CancelAppHostStartupAsync timeout.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cts = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+        var buildCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, _) =>
+            {
+                context.BuildCompletionSource?.TrySetResult(true);
+                buildCompleted.SetResult();
+
+                // Never signal BackchannelCompletionSource and ignore cancellation to
+                // simulate a hung AppHost process.
+                await Task.Delay(TimeSpan.FromSeconds(30), CancellationToken.None);
+                return 0;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+
+        // Cancel after build completes to simulate Ctrl+C during startup.
+        await buildCompleted.Task.DefaultTimeout();
+        cts.Cancel();
+
+        var stopwatch = Stopwatch.StartNew();
+        var exitCode = await pendingRun.DefaultTimeout();
+        stopwatch.Stop();
+
+        // Without the cancellationToken plumbing, this would block for the full 5-second
+        // CancelAppHostStartupAsync timeout. With the fix, it exits promptly.
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"Expected prompt exit after Ctrl+C, but took {stopwatch.Elapsed}.");
+        Assert.Equal(CliExitCodes.Success, exitCode);
+    }
+
+    [Fact]
     public async Task RunCommand_StartupTimeoutBudgetIncludesBuildAndBackchannelWaits()
     {
         var interactionService = new TestInteractionService();

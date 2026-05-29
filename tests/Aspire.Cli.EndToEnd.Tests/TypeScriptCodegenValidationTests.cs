@@ -88,7 +88,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
         await auto.TypeAsync(TypeScriptAppHostToolchainTestHelpers.GetTypeCheckCommand(toolchain, "tsconfig.apphost.json"));
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         // Step 4: Verify generated SDK files exist.
         var modulesDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "modules");
@@ -247,7 +247,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
 
         await auto.TypeAsync("npx tsc --noEmit --project tsconfig.apphost.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 
     [Fact]
@@ -318,7 +318,7 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         // withReference(db) should accept PromiseLike<T> from the un-awaited addDatabase().
         await auto.TypeAsync("npx tsc --noEmit --project tsconfig.apphost.json");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptFailFastAsync(counter, TimeSpan.FromMinutes(2));
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
         // Validate runtime behavior: aspire start launches the apphost, which calls
         // build() and triggers flushPendingPromises(). If the flush deadlocks (e.g. the

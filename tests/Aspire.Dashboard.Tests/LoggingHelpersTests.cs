@@ -39,10 +39,10 @@ public class LoggingHelpersTests
         Assert.Collection(lines,
             line => Assert.Equal("Aspire Dashboard", line),
             line => Assert.Equal(string.Empty, line),
-            line => Assert.Equal("Dashboard:    http://localhost:18888", line),
-            line => Assert.Equal("Login URL:    http://localhost:18888/login?t=abc123", line),
-            line => Assert.Equal("OTLP/gRPC:    http://localhost:18889", line),
-            line => Assert.Equal("OTLP/HTTP:    http://localhost:18890", line),
+            line => Assert.Equal("      - Dashboard:  http://localhost:18888", line),
+            line => Assert.Equal("      - Login URL:  http://localhost:18888/login?t=abc123", line),
+            line => Assert.Equal("      - OTLP/gRPC:  http://localhost:18889", line),
+            line => Assert.Equal("      - OTLP/HTTP:  http://localhost:18890", line),
             line => Assert.Equal(string.Empty, line));
 
         Assert.Equal("http://localhost:18888", LogTestHelpers.GetValue(write, "DashboardUrl"));
@@ -72,9 +72,9 @@ public class LoggingHelpersTests
         Assert.Collection(lines,
             line => Assert.Equal("Aspire Dashboard", line),
             line => Assert.Equal(string.Empty, line),
-            line => Assert.Equal("Dashboard:    http://localhost:18888", line),
-            line => Assert.Equal("OTLP/gRPC:    http://localhost:18889", line),
-            line => Assert.Equal("OTLP/HTTP:    http://localhost:18890", line),
+            line => Assert.Equal("      - Dashboard:  http://localhost:18888", line),
+            line => Assert.Equal("      - OTLP/gRPC:  http://localhost:18889", line),
+            line => Assert.Equal("      - OTLP/HTTP:  http://localhost:18890", line),
             line => Assert.Equal(string.Empty, line));
 
         Assert.Null(LogTestHelpers.GetValue(write, "LoginUrl"));
@@ -96,8 +96,8 @@ public class LoggingHelpersTests
         Assert.Collection(lines,
             line => Assert.Equal("Aspire Dashboard", line),
             line => Assert.Equal(string.Empty, line),
-            line => Assert.Equal("OTLP/gRPC:    http://localhost:18889", line),
-            line => Assert.Equal("OTLP/HTTP:    http://localhost:18890", line),
+            line => Assert.Equal("      - OTLP/gRPC:  http://localhost:18889", line),
+            line => Assert.Equal("      - OTLP/HTTP:  http://localhost:18890", line),
             line => Assert.Equal(string.Empty, line));
     }
 
@@ -122,8 +122,8 @@ public class LoggingHelpersTests
         Assert.Collection(lines,
             line => Assert.Equal("Aspire Dashboard", line),
             line => Assert.Equal(string.Empty, line),
-            line => Assert.Equal("OTLP/gRPC:    http://localhost:18889", line),
-            line => Assert.Equal("OTLP/HTTP:    http://localhost:18890", line),
+            line => Assert.Equal("      - OTLP/gRPC:  http://localhost:18889", line),
+            line => Assert.Equal("      - OTLP/HTTP:  http://localhost:18890", line),
             line => Assert.Equal(string.Empty, line));
 
         Assert.Null(LogTestHelpers.GetValue(write, "DashboardUrl"));
@@ -186,8 +186,8 @@ public class LoggingHelpersTests
         Assert.Collection(lines,
             line => Assert.Equal("Aspire Dashboard", line),
             line => Assert.Equal(string.Empty, line),
-            line => Assert.Equal("Dashboard:    http://localhost:18888", line),
-            line => Assert.Equal("Login URL:    http://localhost:18888/login?t=abc123", line),
+            line => Assert.Equal("      - Dashboard:  http://localhost:18888", line),
+            line => Assert.Equal("      - Login URL:  http://localhost:18888/login?t=abc123", line),
             line => Assert.Equal(string.Empty, line));
 
         Assert.Null(LogTestHelpers.GetValue(write, "OtlpGrpcUrl"));
@@ -208,13 +208,10 @@ public class LoggingHelpersTests
             token: "abc123",
             isContainer: true);
 
-        Assert.Equal(2, sink.Writes.Count);
+        Assert.Equal(3, sink.Writes.Count);
 
-        var write = sink.Writes.ElementAt(1);
-        Assert.NotNull(write.Message);
-        var containerMessage = "URLs may need changes depending on how network access to the container is configured.";
-
-        Assert.Contains(containerMessage, write.Message);
+        var containerWrite = sink.Writes.ElementAt(2);
+        Assert.Equal("Dashboard is running in a container. Access the dashboard from the host using port forwarding.", containerWrite.Message);
     }
 
     private static string[] GetMessageLines(string message)
