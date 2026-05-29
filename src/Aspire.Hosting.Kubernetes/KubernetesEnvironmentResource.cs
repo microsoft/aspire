@@ -479,6 +479,9 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         // Process Gateway API resources
         await ProcessGatewayResources(appModel, deploymentTargets, logger, context.CancellationToken).ConfigureAwait(false);
+
+        // Process Custom resources.
+        await ProcessCustomResources(appModel, context.CancellationToken).ConfigureAwait(false);
     }
 
     private static IContainerRegistry? GetContainerRegistry(KubernetesEnvironmentResource environment, DistributedApplicationModel appModel)
@@ -531,6 +534,47 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         {
             return expression.Format;
         }
+    }
+
+    private static async Task ProcessCustomResources(DistributedApplicationModel model, CancellationToken cancellationToken)
+    {
+        foreach (var resource in model.Resources.OfType<KubernetesCustomResourceResource>())
+        {
+            resource.GeneratedResource = await BuildCustomResourceObject(resource, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static async Task<CustomResourceV1> BuildCustomResourceObject(KubernetesCustomResourceResource resource, CancellationToken cancellationToken)
+    {
+        var metadata = new ObjectMetaV1
+        {
+            Name = resource.Name.ToKubernetesResourceName()
+        };
+        
+        foreach (var annotation in resource.Annotations.OfType<MetadataAnnotation>())
+        {
+            annotation.Configure(metadata);
+        }
+
+        var apiVersion = await ResolveExpressionAtDeployTimeAsync(resource.ApiVersion, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(apiVersion))
+        {
+            throw new InvalidOperationException($"The 'apiVersion' on {resource.Name} must be set to create a valid Kubernetes manifest.");
+        }
+
+        var kind = await ResolveExpressionAtDeployTimeAsync(resource.Kind, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(kind))
+        {
+            throw new InvalidOperationException($"The 'kind' property on {resource.Name} must be set to create a valid Kubernetes manifest.");
+        }
+
+        var builtResource = new CustomResourceV1(apiVersion, kind)
+        {
+            Metadata = metadata,
+            Spec = resource.Spec
+        };
+
+        return builtResource;
     }
 
     /// <summary>

@@ -135,6 +135,14 @@ internal sealed class KubernetesPublishingContext(
             }
         }
 
+        foreach (var customResource in resources.OfType<KubernetesCustomResourceResource>())
+        {
+            if (customResource.Parent == environment && customResource.GeneratedResource is { } generatedResource)
+            {
+                await WriteKubernetesTemplatesForResource(customResource, [generatedResource]).ConfigureAwait(false);
+            }
+        }
+
         await WriteKubernetesHelmChartAsync(environment).ConfigureAwait(false);
 
         // Drain any captured Helm values from ingress/gateway resources that don't go through
