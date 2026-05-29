@@ -78,6 +78,9 @@ All JS module imports **must** use relative paths (`./`) so they resolve relativ
 | `Components/Controls/TextVisualizer.razor.cs` | `/Components/Controls/TextVisualizer.razor.js` | `./Components/Controls/TextVisualizer.razor.js` |
 | `Components/Pages/Login.razor.cs` | `/Components/Pages/Login.razor.js` | `./Components/Pages/Login.razor.js` |
 | `Components/Pages/Resources.razor.cs` | `/js/app-resourcegraph.js` | `./js/app-resourcegraph.js` |
+| `Components/Controls/AssistantChat.razor.js` | `/js/highlight-11.11.1.min.js` | `../../js/highlight-11.11.1.min.js` |
+| `Components/Controls/MarkdownRenderer.razor.js` | `/js/highlight-11.11.1.min.js` | `../../js/highlight-11.11.1.min.js` |
+| `Components/Controls/TextVisualizer.razor.js` | `/js/highlight-11.11.1.min.js` | `../../js/highlight-11.11.1.min.js` |
 | `Components/Layout/MainLayout.razor.cs` | `/js/app-theme.js` | `./js/app-theme.js` |
 | `wwwroot/js/app-theme.js` | Absolute Fluent UI import | Relative (`../`) Fluent UI import |
 

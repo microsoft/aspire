@@ -14,7 +14,7 @@ $tag = "$major.$minor.$patch-$preRelease"
 Write-Host "Building and pushing: $Registry/$Repository`:$tag" -ForegroundColor Cyan
 
 # Publish
-dotnet publish "$PSScriptRoot/../src/Aspire.Dashboard/Aspire.Dashboard.csproj" -c Release -r linux-x64 --self-contained false -o "$PSScriptRoot/../src/Aspire.Dashboard/publish"
+dotnet publish "$PSScriptRoot/../src/Aspire.Dashboard/Aspire.Dashboard.csproj" -c Release -r linux-x64 --self-contained false -o "$PSScriptRoot/../src/Aspire.Dashboard/publish" /p:VersionSuffix=$preRelease
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed" }
 
 # Docker build

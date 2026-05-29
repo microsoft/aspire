@@ -5,7 +5,7 @@
     <MinorVersion>4</MinorVersion>
     <PatchVersion>0</PatchVersion>
     <VersionPrefix>$(MajorVersion).$(MinorVersion).$(PatchVersion)</VersionPrefix>
-    <PreReleaseVersionLabel>elite.11</PreReleaseVersionLabel>
+    <PreReleaseVersionLabel>elite.13</PreReleaseVersionLabel>
     <DefaultTargetFramework>net8.0</DefaultTargetFramework>
     <AllTargetFrameworks>$(DefaultTargetFramework);net9.0;net10.0</AllTargetFrameworks>
     <!-- dotnet versions for running tests -->
