@@ -4,11 +4,9 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Acquisition;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -43,14 +41,10 @@ internal sealed class DoctorCommand : BaseCommand
         IEnvironmentChecker environmentChecker,
         IInstallationDiscovery installationDiscovery,
         WingetFirstRunProbe wingetFirstRunProbe,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
         IAnsiConsole ansiConsole,
         ILogger<DoctorCommand> logger,
-        AspireCliTelemetry telemetry)
-        : base("doctor", DoctorCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("doctor", DoctorCommandStrings.Description, services)
     {
         _environmentChecker = environmentChecker;
         _installationDiscovery = installationDiscovery;

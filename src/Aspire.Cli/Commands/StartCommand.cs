@@ -4,10 +4,7 @@
 using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
-using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
@@ -29,15 +26,11 @@ internal sealed class StartCommand : BaseCommand
     };
 
     public StartCommand(
-        IInteractionService interactionService,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        AspireCliTelemetry telemetry,
         AppHostLauncher appHostLauncher,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        CommonCommandServices services)
         : base("start", StartCommandStrings.Description,
-               features, updateNotifier, executionContext, interactionService, telemetry)
+               services)
     {
         _appHostLauncher = appHostLauncher;
         _configuration = configuration;

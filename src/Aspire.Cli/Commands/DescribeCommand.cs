@@ -7,11 +7,9 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared;
@@ -77,7 +75,6 @@ internal sealed class DescribeCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
 
-    private readonly IInteractionService _interactionService;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ResourceColorMap _resourceColorMap;
 
@@ -105,21 +102,16 @@ internal sealed class DescribeCommand : BaseCommand
     };
 
     public DescribeCommand(
-        IInteractionService interactionService,
         IAuxiliaryBackchannelMonitor backchannelMonitor,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IProjectLocator projectLocator,
-        AspireCliTelemetry telemetry,
         ResourceColorMap resourceColorMap,
-        ILogger<DescribeCommand> logger)
-        : base("describe", DescribeCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        ILogger<DescribeCommand> logger,
+        CommonCommandServices services)
+        : base("describe", DescribeCommandStrings.Description, services)
     {
         Aliases.Add("resources");
-        _interactionService = interactionService;
         _resourceColorMap = resourceColorMap;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, InteractionService, projectLocator, services.ExecutionContext, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -149,7 +141,7 @@ internal sealed class DescribeCommand : BaseCommand
 
         if (!result.Success)
         {
-            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService));
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, InteractionService));
         }
 
         var connection = result.Connection!;
@@ -190,7 +182,7 @@ internal sealed class DescribeCommand : BaseCommand
                 // describe --follow is active. Treat the lost watch as a normal end of stream
                 // rather than surfacing it as an unexpected CLI failure. Emit the status
                 // message on stderr so JSON output on stdout remains parseable.
-                AppHostFollowDisconnectHelpers.WriteStatusMessage(_interactionService, connection);
+                AppHostFollowDisconnectHelpers.WriteStatusMessage(InteractionService, connection);
 
                 return CommandResult.Success();
             }
@@ -212,7 +204,7 @@ internal sealed class DescribeCommand : BaseCommand
         // Check if resource was not found
         if (resourceName is not null && snapshots.Count == 0)
         {
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DescribeCommandStrings.ResourceNotFound, resourceName));
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DescribeCommandStrings.ResourceNotFound, resourceName));
             return CliExitCodes.FailedToFindProject;
         }
 
@@ -223,7 +215,7 @@ internal sealed class DescribeCommand : BaseCommand
             var output = new ResourcesOutput { Resources = resourceList.ToArray() };
             var json = JsonSerializer.Serialize(output, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
             // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
         }
         else
         {
@@ -275,7 +267,7 @@ internal sealed class DescribeCommand : BaseCommand
                 }
 
                 lastDisplayedContent[snapshot.Name] = json;
-                _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+                InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
             }
             else
             {
@@ -298,7 +290,7 @@ internal sealed class DescribeCommand : BaseCommand
     {
         if (snapshots.Count == 0)
         {
-            _interactionService.DisplayMessage(KnownEmojis.Information, "No resources found.");
+            InteractionService.DisplayMessage(KnownEmojis.Information, "No resources found.");
             return;
         }
 
@@ -329,7 +321,7 @@ internal sealed class DescribeCommand : BaseCommand
             if (!string.IsNullOrEmpty(dashboardBaseUrl))
             {
                 var resourceUrl = DashboardUrls.CombineUrl(dashboardBaseUrl, DashboardUrls.ResourcesUrl(resource: snapshot.Name));
-                nameMarkup = MarkupHelpers.SafeLink(_interactionService, resourceUrl, displayName);
+                nameMarkup = MarkupHelpers.SafeLink(InteractionService, resourceUrl, displayName);
             }
             else
             {
@@ -339,7 +331,7 @@ internal sealed class DescribeCommand : BaseCommand
             table.AddRow(ColorResourceName(displayName, nameMarkup), type, stateText, healthText, endpoints);
         }
 
-        _interactionService.DisplayRenderable(table);
+        InteractionService.DisplayRenderable(table);
     }
 
     private static ResourceDisplayState BuildResourceDisplayState(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> allResources)
@@ -361,7 +353,7 @@ internal sealed class DescribeCommand : BaseCommand
             ? $" - {string.Join(", ", state.Endpoints.Select(e => FormatEndpointUrl(e.Url, e.DisplayName)))}"
             : "";
 
-        _interactionService.DisplayMarkupLine($"{ColorResourceName(state.DisplayName, $"[[{state.DisplayName.EscapeMarkup()}]]")} {stateText}{healthText}{endpointsStr}");
+        InteractionService.DisplayMarkupLine($"{ColorResourceName(state.DisplayName, $"[[{state.DisplayName.EscapeMarkup()}]]")} {stateText}{healthText}{endpointsStr}");
     }
 
     private string ColorResourceName(string name, string displayMarkup) =>
@@ -394,7 +386,7 @@ internal sealed class DescribeCommand : BaseCommand
     {
         var text = !string.IsNullOrEmpty(displayName) ? displayName : url;
         return KnownUnsupportedUrlSchemes.IsLinkableUrl(url)
-            ? MarkupHelpers.SafeLink(_interactionService, url, text)
+            ? MarkupHelpers.SafeLink(InteractionService, url, text)
             : text.EscapeMarkup();
     }
 

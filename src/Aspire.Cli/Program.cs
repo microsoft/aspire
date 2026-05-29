@@ -18,18 +18,16 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
-using Aspire.Cli.Secrets;
-using Aspire.Cli.Documentation.ApiDocs;
-using Microsoft.AspNetCore.Certificates.Generation;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
-using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Processes;
@@ -37,12 +35,14 @@ using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -81,7 +81,8 @@ public class Program
         ILoggerFactory LoggerFactory,
         FileLoggerProvider FileLoggerProvider,
         ConsoleLogBufferContext LogBufferContext,
-        ILogger Logger) : IDisposable
+        ILogger Logger,
+        ConsoleCancellationManager CancellationManager) : IDisposable
     {
         public void Dispose()
         {
@@ -322,6 +323,9 @@ public class Program
         builder.Services.AddSingleton<ILoggerFactory>(startupContext.LoggerFactory);
         builder.Services.TryAddSingleton(typeof(ILogger<>), typeof(Logger<>));
 
+        // Register the cancellation manager so commands can observe forced-termination signals
+        builder.Services.AddSingleton(startupContext.CancellationManager);
+
         // Register file logger provider for components that write directly to the log file
         builder.Services.AddSingleton(startupContext.FileLoggerProvider);
 
@@ -515,6 +519,7 @@ public class Program
         builder.Services.AddSingleton<IMcpTransportFactory, StdioMcpTransportFactory>();
 
         // Commands.
+        builder.Services.AddSingleton<CommonCommandServices>();
         builder.Services.AddTransient<AppHostLauncher>();
         builder.Services.AddTransient<NewCommand>();
         builder.Services.AddTransient<InitCommand>();
@@ -802,7 +807,7 @@ public class Program
         var (loggerFactory, fileLoggerProvider) = CreateLoggerFactory(args, loggingOptions, errorWriter, logBufferContext);
         var logger = loggerFactory.CreateLogger(RootLoggerName);
         cancellationManager.SetLogger(logger);
-        using var startupContext = new CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, logger);
+        using var startupContext = new CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, logger, cancellationManager);
 
         logger.LogInformation("Aspire CLI version: {Version}", AspireCliTelemetry.GetCliVersion());
         logger.LogInformation("Aspire CLI build ID: {BuildId}", AspireCliTelemetry.GetCliBuildId());
@@ -893,20 +898,7 @@ public class Program
                     }
 
                     // Parse commandline and invoke the handler.
-                    var handlerTask = parseResult.InvokeAsync(invokeConfig, cancellationManager.Token);
-                    cancellationManager.SetStartedHandler(handlerTask);
-
-                    // Wait for either the handler to complete or a termination signal to trigger cancellation and timeout.
-                    var firstCompletedTask = await Task.WhenAny(handlerTask, cancellationManager.ProcessTerminationCompletionSource.Task);
-                    if (firstCompletedTask != handlerTask)
-                    {
-                        // ProcessTerminationCompletionSource was signaled — either the graceful-shutdown
-                        // timeout elapsed, or a second signal forced immediate termination.
-                        // handlerTask is not awaited because the process is shutting down and we assume the task is hung.
-                        logger.LogWarning("Termination signal forced process exit.");
-                    }
-
-                    exitCode = await firstCompletedTask; // return the result or propagate the exception
+                    exitCode = await parseResult.InvokeAsync(invokeConfig, cancellationManager.Token).ConfigureAwait(false);
 
                     // Set telemetry tags based on how the command completed.
                     profileCommandActivity.SetProcessExitCode(exitCode);

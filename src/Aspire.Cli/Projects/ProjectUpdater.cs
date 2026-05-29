@@ -942,39 +942,39 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         {
             foreach (var packageReference in packageReferencesElement.EnumerateArray())
             {
-            var packageId = packageReference.GetProperty("Identity").GetString() ?? throw new ProjectUpdaterException(UpdateCommandStrings.PackageReferenceNoIdentity);
+                var packageId = packageReference.GetProperty("Identity").GetString() ?? throw new ProjectUpdaterException(UpdateCommandStrings.PackageReferenceNoIdentity);
 
-            if (!IsUpdatablePackage(packageId))
-            {
-                continue;
-            }
-
-            if (cpmInfo.UsesCentralPackageManagement)
-            {
-                await AnalyzePackageForCentralPackageManagementAsync(packageId, projectFile, cpmInfo.DirectoryPackagesPropsFile!, context, cancellationToken);
-            }
-            else
-            {
-                // Traditional package management - Version should be in PackageReference
-                if (!packageReference.TryGetProperty("Version", out var versionElement))
+                if (!IsUpdatablePackage(packageId))
                 {
-                    // Version attribute is missing - treat as wildcard
-                    var packageVersion = "*";
-                    await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
+                    continue;
+                }
+
+                if (cpmInfo.UsesCentralPackageManagement)
+                {
+                    await AnalyzePackageForCentralPackageManagementAsync(packageId, projectFile, cpmInfo.DirectoryPackagesPropsFile!, context, cancellationToken);
                 }
                 else
                 {
-                    var packageVersion = versionElement.GetString();
-                    if (string.IsNullOrEmpty(packageVersion) || packageVersion == "*")
+                    // Traditional package management - Version should be in PackageReference
+                    if (!packageReference.TryGetProperty("Version", out var versionElement))
                     {
-                        // Version is * or empty - treat as wildcard
-                        packageVersion = "*";
+                        // Version attribute is missing - treat as wildcard
+                        var packageVersion = "*";
+                        await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
                     }
-                    await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
+                    else
+                    {
+                        var packageVersion = versionElement.GetString();
+                        if (string.IsNullOrEmpty(packageVersion) || packageVersion == "*")
+                        {
+                            // Version is * or empty - treat as wildcard
+                            packageVersion = "*";
+                        }
+                        await AnalyzePackageForTraditionalManagementAsync(packageId, packageVersion, projectFile, context, cancellationToken);
+                    }
                 }
             }
         }
-    }
     }
 
     private static bool IsUpdatablePackage(string packageId)

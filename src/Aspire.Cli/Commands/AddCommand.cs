@@ -3,7 +3,6 @@
 
 using System.CommandLine;
 using System.Globalization;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
@@ -46,8 +45,8 @@ internal sealed class AddCommand : BaseCommand
         Description = AddCommandStrings.SourceArgumentDescription
     };
 
-    public AddCommand(IInteractionService interactionService, IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, AspireCliTelemetry telemetry, IDotNetSdkInstaller sdkInstaller, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry)
-        : base("add", AddCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+    public AddCommand(IProjectLocator projectLocator, IntegrationPackageSearchService integrationPackageSearchService, IAddCommandPrompter prompter, IDotNetSdkInstaller sdkInstaller, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, ProfilingTelemetry profilingTelemetry, CommonCommandServices services)
+        : base("add", AddCommandStrings.Description, services)
     {
         _projectLocator = projectLocator;
         _integrationPackageSearchService = integrationPackageSearchService;

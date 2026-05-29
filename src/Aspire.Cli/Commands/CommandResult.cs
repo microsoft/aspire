@@ -43,6 +43,10 @@ internal sealed class CommandResult
     /// Creates a result from a raw exit code with no error message.
     /// Useful when wrapping calls that return plain exit codes.
     /// </summary>
-    public static CommandResult FromExitCode(int exitCode) =>
-        exitCode == CliExitCodes.Success ? Success() : Failure(exitCode);
+    public static CommandResult FromExitCode(int exitCode) => exitCode switch
+    {
+        CliExitCodes.Success => Success(),
+        CliExitCodes.Cancelled => Cancelled(exitCode),
+        _ => Failure(exitCode)
+    };
 }

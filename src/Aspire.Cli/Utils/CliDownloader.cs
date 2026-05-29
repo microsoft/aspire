@@ -25,7 +25,7 @@ internal class CliDownloader(
 {
     private const int ArchiveDownloadTimeoutSeconds = 600;
     private const int ChecksumDownloadTimeoutSeconds = 120;
-    
+
     private static readonly HttpClient s_httpClient = new();
 
     public async Task<string> DownloadLatestCliAsync(string channelName, CancellationToken cancellationToken)
@@ -33,7 +33,7 @@ internal class CliDownloader(
         // Get the channel information from PackagingService
         var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
         var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparison.OrdinalIgnoreCase));
-        
+
         if (channel is null)
         {
             throw new ArgumentException($"Unsupported channel '{channelName}'. Available channels: {string.Join(", ", channels.Select(c => c.Name))}");
@@ -70,7 +70,7 @@ internal class CliDownloader(
 
                 logger.LogDebug("Downloading checksum from {Url} to {Path}", checksumUrl, checksumPath);
                 await DownloadFileAsync(checksumUrl, checksumPath, ChecksumDownloadTimeoutSeconds, cancellationToken);
-                
+
                 return 0; // Return dummy value for ShowStatusAsync
             });
 

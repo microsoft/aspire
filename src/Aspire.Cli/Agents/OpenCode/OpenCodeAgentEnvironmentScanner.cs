@@ -52,7 +52,7 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
         if (configFileExists)
         {
             _logger.LogDebug("Found existing opencode.jsonc at: {ConfigFilePath}", configFilePath);
-            
+
             // Check if aspire is already configured
             _logger.LogDebug("Checking if Aspire MCP server is already configured in opencode.jsonc...");
             if (!HasAspireServerConfigured(configFilePath))
@@ -81,7 +81,7 @@ internal sealed class OpenCodeAgentEnvironmentScanner : IAgentEnvironmentScanner
                 // OpenCode is installed - offer to create config
                 _logger.LogDebug("Adding OpenCode applicator to create new opencode.jsonc at: {ConfigDirectory}", configDirectory.FullName);
                 context.AddApplicator(CreateApplicator(configDirectory));
-                
+
                 // Register Playwright CLI installation applicator
                 CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
             }
