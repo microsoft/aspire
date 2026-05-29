@@ -109,8 +109,8 @@ server.listen(port, '127.0.0.1');
 
         var hostedAgentOptions = new HostedAgentOptions();
         hostedAgentOptions.setDescription("Validation hosted agent");
-        hostedAgentOptions.setCpu(1);
-        hostedAgentOptions.setMemory(2);
+        hostedAgentOptions.setCpu(1.0);
+        hostedAgentOptions.setMemory(2.0);
         hostedAgentOptions.setMetadata(Map.of("scenario", "validation"));
         hostedAgentOptions.setEnvironmentVariables(Map.of("VALIDATION_MODE", "true"));
         hostedAgent.asHostedAgent(project, hostedAgentOptions);
