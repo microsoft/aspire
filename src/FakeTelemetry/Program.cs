@@ -46,7 +46,7 @@ using var tracerProvider = Sdk.CreateTracerProviderBuilder()
     .SetResourceBuilder(resourceBuilder)
     .AddOtlpExporter(o =>
     {
-        o.Endpoint = new Uri("http://localhost:4318/v1/traces");
+        o.Endpoint = new Uri("https://otel-e360.azurewebsites.net/v1/traces");
         o.Protocol = OtlpExportProtocol.HttpProtobuf;
     })
     .AddConsoleExporter()
@@ -57,7 +57,7 @@ using var meterProvider = Sdk.CreateMeterProviderBuilder()
     .SetResourceBuilder(resourceBuilder)
     .AddOtlpExporter(o =>
     {
-        o.Endpoint = new Uri("http://localhost:4318/v1/metrics");
+        o.Endpoint = new Uri("https://otel-e360.azurewebsites.net/v1/metrics");
         o.Protocol = OtlpExportProtocol.HttpProtobuf;
     })
     .AddConsoleExporter()
@@ -70,7 +70,7 @@ using var loggerFactory = LoggerFactory.Create(logging =>
         o.SetResourceBuilder(resourceBuilder);
         o.AddOtlpExporter(e =>
         {
-            e.Endpoint = new Uri("http://localhost:4318/v1/logs");
+            e.Endpoint = new Uri("https://otel-e360.azurewebsites.net/v1/logs");
             e.Protocol = OtlpExportProtocol.HttpProtobuf;
         });
         o.AddConsoleExporter();

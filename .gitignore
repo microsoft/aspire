@@ -215,3 +215,4 @@ local.settings.json
 diagnostics.log
 .squad/
 tags
+/src/Aspire.Dashboard/publish

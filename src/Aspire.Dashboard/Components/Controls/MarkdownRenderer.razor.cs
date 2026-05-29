@@ -44,7 +44,7 @@ public partial class MarkdownRenderer : ComponentBase, IAsyncDisposable
     {
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Controls/MarkdownRenderer.razor.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Controls/MarkdownRenderer.razor.js");
         }
 
         if (_jsModule is not null)
