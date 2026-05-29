@@ -1,0 +1,9 @@
+{
+  "author": "aspire-repo-bot",
+  "comment": "Documents PR #17637: CLI template channel forwarding for identity-based channels (aspire new --channel auto-selection behavior)",
+  "mergedAt": "2026-05-29T15:27:33Z",
+  "number": 1118,
+  "runDate": "2026-05-29T17:11:50Z",
+  "status": "included",
+  "title": "[docs] Clarify --channel identity-channel auto-selection for aspire new"
+}

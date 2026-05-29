@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backport of PR #17595: improved dashboard startup summary log formatting with bullet indentation and separate container log entry",
+  "mergedAt": "2026-05-29T16:14:20Z",
+  "number": 17640,
+  "runDate": "2026-05-29T17:11:50Z",
+  "status": "included",
+  "title": "[release/13.4] Improve dashboard summary log formatting"
+}

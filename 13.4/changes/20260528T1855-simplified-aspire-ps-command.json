@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The `aspire ps` command no longer supports `--resources` and `--include-hidden` flags, which overlapped with `aspire describe`. Consumers needing per-resource data should use `aspire describe --follow --apphost` instead. The VS Code extension's AppHostDataRepository has been updated accordingly.",
-  "docsPrs": [],
+  "docsPrs": [
+    1109
+  ],
   "docsRequired": true,
   "emoji": "🧹",
   "firstMergedAt": "2026-05-28T18:55:17Z",

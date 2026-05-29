@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Fixed a bug where running `aspire new` without an explicit `--channel` argument failed to forward the CLI's identity channel to template resolution for dotnet-runtime templates. Daily, staging, and PR builds would silently fall back to resolving `Aspire.ProjectTemplates` from nuget.org instead of the channel-appropriate NuGet feed.",
-  "docsPrs": [],
+  "docsPrs": [
+    1118
+  ],
   "docsRequired": false,
   "emoji": "🐛",
   "firstMergedAt": "2026-05-29T01:21:51Z",

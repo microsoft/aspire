@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": true,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dashboard startup log output now uses indented bullet formatting for the dashboard and OTLP endpoint URLs, and the container access guidance is emitted as a separate log entry rather than appended to the summary template. This makes the startup summary easier to scan.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-05-29T16:14:20Z",
+  "lastMergedAt": "2026-05-29T16:14:20Z",
+  "name": "Improved dashboard startup summary log formatting",
+  "owner": "JamesNK",
+  "prs": [
+    17640
+  ]
+}
