@@ -837,8 +837,9 @@ export class AppHostDataRepository {
         const hasWorkspaceAppHost = this._workspaceAppHost !== undefined;
         const hasResources = this._workspaceResources.size > 0;
         const hasRunningAppHosts = this._appHosts.length > 0;
-        vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts);
-        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts);
+        const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
+        vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
+        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
             this._updateLoadingContext();
