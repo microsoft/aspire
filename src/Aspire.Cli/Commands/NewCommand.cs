@@ -498,6 +498,19 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             resolvedChannelName = resolveResult.ChannelName;
         }
 
+        // Apply the channel precedence as a single coalesce. The identity fallback lives
+        // here, not inside ResolveCliTemplateVersionAsync, because that resolver only runs
+        // on the CLI-runtime / no-explicit-version branch above. The two paths that need
+        // the identity hint are precisely the ones the resolver does NOT visit:
+        //   * TemplateRuntime.DotNet templates (aspire-starter family) — the bug this fix
+        //     addresses; without forwarding, DotNetTemplateFactory searches only the
+        //     Implicit (nuget.org) channel regardless of CLI identity.
+        //   * CLI-runtime templates invoked with --version, which short-circuits the
+        //     resolver and would otherwise leave inputs.Channel null.
+        // Keeping the fallback out of the resolver also keeps the resolver's role narrow:
+        // it performs version negotiation across channels and reports the channel that won;
+        // the identity hint is a different policy ("label the project with the CLI's own
+        // channel") that should not influence version selection.
         resolvedChannelName = parseResult.GetValue(_channelOption)
             ?? resolvedChannelName
             ?? await ResolveIdentityChannelNameAsync(cancellationToken);
