@@ -39,7 +39,7 @@ internal static class LoggingHelpers
 
         if (loginUrl is not null)
         {
-            // dotnet watch looks for this exact log message to launch the dashboard. Do not change it.
+            // The template format string "Login to the dashboard at {LoginUrl}" is the contract with dotnet watch. Do not change it.
             logger.LogInformation("Login to the dashboard at {LoginUrl}", loginUrl);
         }
 
