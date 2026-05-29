@@ -264,7 +264,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.TypeAsync($"aspire agent init --workspace-root . --skill-locations standard --skills {skillsArg}");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(60));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         var skillsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills");
         foreach (var skillName in bundleOnlySkills)
