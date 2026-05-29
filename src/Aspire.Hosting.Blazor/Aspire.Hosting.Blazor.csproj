@@ -6,10 +6,6 @@
     <PackageTags>aspire integration hosting blazor webassembly gateway</PackageTags>
     <Description>Blazor WebAssembly hosting support for Aspire.</Description>
     <NoWarn>$(NoWarn);ASPIREBLAZOR001</NoWarn>
-    <!-- Ship as preview in 13.4.x. The stable 13.4.0 layout placed gateway scripts only under
-         buildTransitive/, which breaks the TypeScript AppHost flow that resolves Gateway.cs from
-         lib/. Keep the package preview-shaped until the packaging/loader issue is fully fixed.
-         Tracked by https://github.com/microsoft/aspire/issues/17685. -->
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
   </PropertyGroup>
 
