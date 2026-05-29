@@ -24,6 +24,8 @@ internal sealed class ProcessShutdownService(
     private static readonly TimeSpan s_processTerminationTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_processTerminationPollInterval = TimeSpan.FromMilliseconds(250);
 
+    internal static TimeSpan ProcessTerminationTimeout => s_processTerminationTimeout;
+
     public Task<bool> StopProcessTreeAsync(
         int pid,
         DateTimeOffset? startTime,
@@ -314,7 +316,7 @@ internal sealed class ProcessShutdownService(
     private async Task<bool> MonitorProcessesForTerminationAsync(IReadOnlyCollection<ProcessTarget> processes, CancellationToken cancellationToken)
     {
         var startTime = timeProvider.GetUtcNow();
-        while (timeProvider.GetUtcNow() - startTime < s_processTerminationTimeout)
+        while (timeProvider.GetUtcNow() - startTime < ProcessTerminationTimeout)
         {
             if (processes.All(IsProcessStopped))
             {

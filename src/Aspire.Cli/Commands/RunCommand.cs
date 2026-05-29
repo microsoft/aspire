@@ -12,6 +12,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -76,7 +77,13 @@ internal sealed class RunCommand : BaseCommand
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
 
-    private static readonly TimeSpan s_appHostStartupCancellationTimeout = TimeSpan.FromSeconds(5);
+    // Startup cancellation waits for the AppHost run task to complete after it asks
+    // ProcessShutdownService to stop processes. That service can spend one full timeout
+    // waiting for graceful shutdown and another after force-kill fallback.
+    private static readonly TimeSpan s_appHostStartupCancellationTimeout =
+        ProcessShutdownService.ProcessTerminationTimeout +
+        ProcessShutdownService.ProcessTerminationTimeout +
+        TimeSpan.FromSeconds(1);
 
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation
