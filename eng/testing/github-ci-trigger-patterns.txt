@@ -54,3 +54,8 @@ Aspire-Core.slnf
 .github/workflows/tests-quarantine.yml
 .github/workflows/update-*.yml
 .github/workflows/auto-rerun-transient-ci-failures.*
+
+# Scripts not used on CI
+start-code.sh
+localhive.*
+dogfood.sh
