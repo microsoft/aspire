@@ -93,11 +93,13 @@ public class ResourceSnapshotMapperTests
         Assert.Single(result.Urls!);
         Assert.Equal("http://localhost:5000", result.Urls![0].Url);
 
-        // Only enabled commands should be included
-        var command = Assert.Single(result.Commands!);
-        Assert.Equal("stop", command.Key);
-        Assert.Equal(KnownCommandVisibility.Api, command.Value.Visibility);
-        var argumentInput = Assert.Single(command.Value.ArgumentInputs!);
+        // Enabled and disabled commands with API visibility should be included
+        Assert.Equal(2, result.Commands!.Count);
+
+        var stopCommand = result.Commands["stop"];
+        Assert.Equal("Enabled", stopCommand.State);
+        Assert.Equal(KnownCommandVisibility.Api, stopCommand.Visibility);
+        var argumentInput = Assert.Single(stopCommand.ArgumentInputs!);
         Assert.Equal("selector", argumentInput.Name);
         Assert.Equal("Selector", argumentInput.Label);
         Assert.Equal("CSS selector to click.", argumentInput.Description);
@@ -112,6 +114,10 @@ public class ResourceSnapshotMapperTests
         Assert.NotNull(argumentInput.DynamicLoading);
         Assert.True(argumentInput.DynamicLoading.AlwaysLoadOnStart);
         Assert.Equal("browser", Assert.Single(argumentInput.DynamicLoading.DependsOnInputs!));
+
+        var startCommand = result.Commands["start"];
+        Assert.Equal("Disabled", startCommand.State);
+        Assert.Null(startCommand.Visibility);
 
         // Only IsFromSpec environment variables should be included
         Assert.Single(result.Environment!);

@@ -156,6 +156,7 @@
   "command.restartResource": "Restart",
   "command.viewResourceLogs": "View logs",
   "command.executeResourceCommand": "Execute resource command",
+  "command.executeResourceCommandItem": "Execute command",
   "command.copyEndpointUrl": "Copy URL",
   "command.openInExternalBrowser": "Open in browser",
   "command.openInIntegratedBrowser": "Open in VS Code",

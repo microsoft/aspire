@@ -60,6 +60,7 @@ export const aspireDescribeMinimumVersion = '13.2.0';
 export const aspireCliDescribeNotSupported = (version: string) => vscode.l10n.t('Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.', version);
 export const appHostDescribeMayNotBeSupported = (version: string) => vscode.l10n.t('No workspace resources were returned. Workspace resources require the AppHost to reference Aspire.Hosting {0} or newer.', version);
 export const resourcesGroupLabel = vscode.l10n.t('Resources');
+export const commandsLabel = vscode.l10n.t('Commands');
 export const noCommandsAvailable = vscode.l10n.t('No commands available for this resource.');
 export const selectCommandPlaceholder = vscode.l10n.t('Select a command to execute');
 export const resourceCommandArgumentsTitle = (command: string) => vscode.l10n.t('Run {0}', command);

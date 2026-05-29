@@ -315,6 +315,12 @@
         "icon": "$(terminal)"
       },
       {
+        "command": "aspire-vscode.executeResourceCommandItem",
+        "title": "%command.executeResourceCommandItem%",
+        "category": "Aspire",
+        "icon": "$(terminal)"
+      },
+      {
         "command": "aspire-vscode.copyEndpointUrl",
         "title": "%command.copyEndpointUrl%",
         "category": "Aspire",
@@ -511,6 +517,10 @@
           "when": "false"
         },
         {
+          "command": "aspire-vscode.executeResourceCommandItem",
+          "when": "false"
+        },
+        {
           "command": "aspire-vscode.codeLensDebugPipelineStep",
           "when": "false"
         },
@@ -640,6 +650,11 @@
         {
           "command": "aspire-vscode.executeResourceCommand",
           "when": "view == aspire-vscode.runningAppHosts && viewItem =~ /^resource(:|$)/",
+          "group": "2_actions@4"
+        },
+        {
+          "command": "aspire-vscode.executeResourceCommandItem",
+          "when": "view == aspire-vscode.runningAppHosts && viewItem == resourceCommand:enabled",
           "group": "2_actions@4"
         },
         {

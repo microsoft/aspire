@@ -106,9 +106,9 @@ internal static class ResourceSnapshotMapper
             }
         }
 
-        // Only include enabled commands
+        // Include enabled and disabled commands (exclude hidden/unsupported visibility)
         var commands = snapshot.Commands
-            .Where(IsCommandAvailableToApi)
+            .Where(c => IsCommandVisibleToApi(c.Visibility))
             .OrderBy(c => c.Name)
             .ToDistinctDictionary(
                 c => c.Name,
@@ -117,6 +117,7 @@ internal static class ResourceSnapshotMapper
                     DisplayName = string.IsNullOrWhiteSpace(c.DisplayName) ? null : c.DisplayName.Trim(),
                     Description = c.Description,
                     Visibility = IsDefaultCommandVisibility(c.Visibility) ? null : c.Visibility,
+                    State = c.State,
                     ArgumentInputs = c.ArgumentInputs.Length > 0
                         ? c.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
                         : null

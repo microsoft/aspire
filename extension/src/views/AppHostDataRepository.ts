@@ -18,6 +18,7 @@ export interface ResourceCommandJson {
     displayName?: string | null;
     description: string | null;
     visibility?: string | null;
+    state?: string | null;
     argumentInputs?: ResourceCommandArgumentInputJson[] | null;
 }
 

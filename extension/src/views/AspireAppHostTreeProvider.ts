@@ -25,6 +25,7 @@ import {
     resourceDescriptionHealth,
     resourceDescriptionExitCode,
     logFileLabel,
+    commandsLabel,
 } from '../loc/strings';
 import { isLinkableUrl } from '../utils/urlSchemes';
 import {
@@ -34,11 +35,12 @@ import {
     ResourceJson,
     ViewMode,
     shortenPaths,
+    ResourceCommandJson,
 } from './AppHostDataRepository';
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
 
-type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem;
+type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -177,6 +179,45 @@ class HealthCheckItem extends vscode.TreeItem {
             this.tooltip = description;
         }
         this.contextValue = 'healthCheck';
+    }
+}
+
+class CommandsGroupItem extends vscode.TreeItem {
+    constructor(public readonly resource: ResourceJson, public readonly resourceItem: ResourceItem, parentId: string) {
+        super(commandsLabel, vscode.TreeItemCollapsibleState.Collapsed);
+        this.id = `${parentId}:commands`;
+        this.iconPath = new vscode.ThemeIcon('terminal');
+        this.contextValue = 'commandsGroup';
+    }
+}
+
+class ResourceCommandItem extends vscode.TreeItem {
+    constructor(
+        public readonly commandName: string,
+        public readonly commandJson: ResourceCommandJson,
+        public readonly resourceItem: ResourceItem,
+        parentId: string
+    ) {
+        const label = commandJson.displayName ?? commandName;
+        super(label, vscode.TreeItemCollapsibleState.None);
+        this.id = `${parentId}:command:${commandName}`;
+        this.tooltip = commandJson.description ?? undefined;
+
+        const isEnabled = commandJson.state !== 'Disabled';
+
+        if (isEnabled) {
+            this.iconPath = new vscode.ThemeIcon('run');
+            this.contextValue = 'resourceCommand:enabled';
+            this.command = {
+                command: 'aspire-vscode.executeResourceCommandItem',
+                title: label,
+                arguments: [this]
+            };
+        } else {
+            this.iconPath = new vscode.ThemeIcon('run', new vscode.ThemeColor('disabledForeground'));
+            this.description = vscode.l10n.t('(disabled)');
+            this.contextValue = 'resourceCommand:disabled';
+        }
     }
 }
 
@@ -588,6 +629,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return this._getHealthCheckChildren(element);
         }
 
+        if (element instanceof CommandsGroupItem) {
+            return this._getCommandChildren(element);
+        }
+
         return [];
     }
 
@@ -636,6 +681,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (element instanceof HealthChecksGroupItem) {
             return this._getHealthCheckChildren(element);
         }
+        if (element instanceof CommandsGroupItem) {
+            return this._getCommandChildren(element);
+        }
 
         return [];
     }
@@ -657,7 +705,22 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             items.push(new HealthChecksGroupItem(element.resource, element.id!));
         }
 
+        const commands = element.resource.commands;
+        if (commands && Object.keys(commands).length > 0) {
+            items.push(new CommandsGroupItem(element.resource, element, element.id!));
+        }
+
         return items;
+    }
+
+    private _getCommandChildren(element: CommandsGroupItem): TreeElement[] {
+        const commands = element.resource.commands;
+        if (!commands) {
+            return [];
+        }
+        return Object.entries(commands)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([name, cmd]) => new ResourceCommandItem(name, cmd, element.resourceItem, element.id!));
     }
 
     private _getHealthCheckChildren(element: HealthChecksGroupItem): TreeElement[] {
@@ -815,6 +878,22 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         this._runResourceCommand(element, `"${selected.label}"`, commandArguments.args, commandArguments.containsSecret);
+    }
+
+    async executeResourceCommandItem(element: ResourceCommandItem): Promise<void> {
+        const commandName = element.commandName;
+        const command = element.commandJson;
+        const resourceItem = element.resourceItem;
+
+        const commandArguments = await collectResourceCommandArguments(commandName, command, {
+            secretWarningState: this._secretWarningState,
+            loadDynamicArguments: values => this._loadResourceCommandArguments(resourceItem, commandName, values),
+        });
+        if (commandArguments === undefined) {
+            return;
+        }
+
+        this._runResourceCommand(resourceItem, `"${commandName}"`, commandArguments.args, commandArguments.containsSecret);
     }
 
     async copyAppHostPath(element: AppHostItem): Promise<void> {

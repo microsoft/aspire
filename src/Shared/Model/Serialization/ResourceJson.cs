@@ -237,6 +237,12 @@ internal sealed class ResourceCommandJson
     public string? Visibility { get; set; }
 
     /// <summary>
+    /// The state of the command (e.g., "Enabled", "Disabled").
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? State { get; set; }
+
+    /// <summary>
     /// The ordered inputs that describe the invocation arguments accepted by the command.
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
