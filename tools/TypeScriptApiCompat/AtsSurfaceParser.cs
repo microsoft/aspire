@@ -101,7 +101,7 @@ internal static class AtsSurfaceParser
                     var capability = ParseCapability(trimmed);
                     if (IsOwnedByPackage(capability.CapabilityId, packageName, packageNames))
                     {
-                        capabilities.Add(capability.CapabilityId, capability);
+                        AddCapability(capabilities, capability);
                     }
                     break;
             }
@@ -209,6 +209,25 @@ internal static class AtsSurfaceParser
 
         return new AtsCapability(capabilityId, parameters, returnTypeId);
     }
+
+    private static void AddCapability(Dictionary<string, AtsCapability> capabilities, AtsCapability capability)
+    {
+        if (capabilities.TryGetValue(capability.CapabilityId, out var existingCapability))
+        {
+            if (CapabilitiesAreEquivalent(existingCapability, capability))
+            {
+                return;
+            }
+
+            throw new InvalidDataException($"Duplicate capability '{capability.CapabilityId}' has conflicting signatures.");
+        }
+
+        capabilities.Add(capability.CapabilityId, capability);
+    }
+
+    private static bool CapabilitiesAreEquivalent(AtsCapability left, AtsCapability right) =>
+        string.Equals(left.ReturnTypeId, right.ReturnTypeId, StringComparison.Ordinal) &&
+        left.Parameters.SequenceEqual(right.Parameters);
 
     private static AtsParameter ParseParameter(string parameterText)
     {

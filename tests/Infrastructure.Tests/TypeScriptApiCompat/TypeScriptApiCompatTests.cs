@@ -120,6 +120,20 @@ public sealed class TypeScriptApiCompatTests
     }
 
     [Fact]
+    public void ParserIgnoresDuplicateEquivalentCapabilities()
+    {
+        var surface = AtsSurfaceParser.Parse("Pkg", """
+            # Capabilities
+            Pkg/addThing(name: string, port?: number) -> Pkg/Thing
+            Pkg/addThing(name: string, port?: number) -> Pkg/Thing
+            """);
+
+        var capability = Assert.Single(surface.Capabilities.Values);
+        Assert.Equal("Pkg/addThing", capability.CapabilityId);
+        Assert.Equal("Pkg/Thing", capability.ReturnTypeId);
+    }
+
+    [Fact]
     public void ComparerClassifiesBreakingAndAdditiveChanges()
     {
         using var tempDirectory = new TestTempDirectory();
