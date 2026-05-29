@@ -85,7 +85,7 @@ internal static class KnownFeatures
 
         [AspireSkillsRemoteFetchEnabled] = new(
             AspireSkillsRemoteFetchEnabled,
-            "Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
+            "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
             DefaultValue: false)
     };
 
