@@ -475,6 +475,15 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         }
 
         var version = parseResult.GetValue(s_versionOption);
+        // Precedence for the channel written into TemplateInputs.Channel:
+        //   1. Explicit --channel argument (user override always wins).
+        //   2. Channel returned by ResolveCliTemplateVersionAsync (CLI-runtime templates).
+        //   3. The running CLI's IdentityChannel, when it matches a registered Explicit
+        //      channel — needed for TemplateRuntime.DotNet starters (aspire-starter,
+        //      aspire-starter-csharp-typescript) which otherwise resolve
+        //      Aspire.ProjectTemplates from the Implicit (nuget.org) channel regardless
+        //      of CLI identity, and also for CLI-runtime templates invoked with --version
+        //      which short-circuits the resolver below.
         string? resolvedChannelName = null;
         if (ShouldResolveCliTemplateVersion(template) &&
             string.IsNullOrWhiteSpace(version))
@@ -489,26 +498,9 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             resolvedChannelName = resolveResult.ChannelName;
         }
 
-        // For template paths that don't run ResolveCliTemplateVersionAsync — chiefly the
-        // TemplateRuntime.DotNet starters like `aspire-starter` and
-        // `aspire-starter-csharp-typescript`, which delegate channel/version resolution to
-        // DotNetTemplateFactory → TemplateNuGetConfigService.ResolveTemplatePackageAsync —
-        // we still need to forward the running CLI's IdentityChannel into inputs.Channel
-        // when `--channel` was not supplied. Without this, the DotNet path searches only
-        // the Implicit (nuget.org) channel for Aspire.ProjectTemplates regardless of CLI
-        // identity, so a daily / staging / release-branch CLI silently resolves a stable
-        // template package (or fails to find a matching release-branch template at all).
-        //
-        // The CLI-runtime path resolves its own channel inside ResolveCliTemplateVersionAsync
-        // and surfaces it via resolveResult.ChannelName, so this fallback only fires when
-        // resolveResult didn't already pin a channel (i.e. DotNet-runtime templates, or a
-        // CLI-runtime template invoked with --version which short-circuits the resolver).
-        var explicitChannelArg = parseResult.GetValue(_channelOption);
-        string? identityChannelName = null;
-        if (string.IsNullOrWhiteSpace(explicitChannelArg) && resolvedChannelName is null)
-        {
-            identityChannelName = await ResolveIdentityChannelNameAsync(cancellationToken);
-        }
+        resolvedChannelName = parseResult.GetValue(_channelOption)
+            ?? resolvedChannelName
+            ?? await ResolveIdentityChannelNameAsync(cancellationToken);
 
         var inputs = new TemplateInputs
         {
@@ -516,7 +508,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             Output = parseResult.GetValue(s_outputOption),
             Source = source,
             Version = version,
-            Channel = explicitChannelArg ?? resolvedChannelName ?? identityChannelName,
+            Channel = resolvedChannelName,
             Language = selectedLanguageId
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
