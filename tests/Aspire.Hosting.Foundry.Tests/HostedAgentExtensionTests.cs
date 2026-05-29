@@ -143,6 +143,29 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void AsHostedAgent_InPublishMode_AddsProjectReferenceToDeploymentTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddProject<Project>("agent", launchProfileName: null)
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+
+        Assert.True(hostedAgent.Target.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.Contains(relationships, r =>
+            r.Type == "Reference" &&
+            ReferenceEquals(r.Resource, project.Resource));
+        Assert.DoesNotContain(hostedAgent.Annotations.OfType<ResourceRelationshipAnnotation>(), r =>
+            r.Type == "Reference" &&
+            ReferenceEquals(r.Resource, project.Resource));
+    }
+
+    [Fact]
     public void AsHostedAgent_WithOptions_AppliesAllPropertiesToConfiguration()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -282,4 +305,9 @@ public class HostedAgentExtensionTests
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    private sealed class Project : IProjectMetadata
+    {
+        public string ProjectPath => "project";
+    }
 }
