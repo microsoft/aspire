@@ -29,6 +29,7 @@ type ExtensionManifest = {
         viewsWelcome?: Array<{ view?: string; contents?: string; when?: string }>;
         menus?: {
             'view/title'?: ManifestMenuItem[];
+            'view/item/context'?: ManifestMenuItem[];
         };
         debuggers?: DebuggerContribution[];
     };
@@ -61,13 +62,39 @@ suite('extension/package.json', () => {
 
         const switchToGlobal = titleMenus.find(item => item.command === 'aspire-vscode.switchToGlobalView');
         const switchToWorkspace = titleMenus.find(item => item.command === 'aspire-vscode.switchToWorkspaceView');
-        const refreshRunningAppHosts = titleMenus.find(item => item.command === 'aspire-vscode.refreshRunningAppHosts');
+        const globalRefreshAppHosts = titleMenus.find(item => item.command === 'aspire-vscode.globalRefreshAppHosts');
 
         assertContains(switchToGlobal?.when, "view == 'aspire-vscode.runningAppHosts'");
         assertContains(switchToGlobal?.when, "aspire.viewMode != 'global'");
         assertContains(switchToWorkspace?.when, "view == 'aspire-vscode.runningAppHosts'");
         assertContains(switchToWorkspace?.when, "aspire.viewMode == 'global'");
-        assertContains(refreshRunningAppHosts?.when, "view == 'aspire-vscode.runningAppHosts'");
+        assertContains(globalRefreshAppHosts?.when, "view == 'aspire-vscode.runningAppHosts'");
+    });
+
+    test('workspace non-running apphost context actions include run and debug', () => {
+        const manifest = readManifest();
+        const contextMenus = manifest.contributes.menus?.['view/item/context'] ?? [];
+
+        const runAppHost = contextMenus.find(item => item.command === 'aspire-vscode.runAppHost');
+        const debugAppHost = contextMenus.find(item => item.command === 'aspire-vscode.debugAppHost');
+
+        assertContains(runAppHost?.when, "view == aspire-vscode.runningAppHosts");
+        assertContains(runAppHost?.when, 'viewItem == workspaceAppHost');
+        assertContains(debugAppHost?.when, "view == aspire-vscode.runningAppHosts");
+        assertContains(debugAppHost?.when, 'viewItem == workspaceAppHost');
+    });
+
+    test('running apphost context actions only target running apphost contexts', () => {
+        const manifest = readManifest();
+        const contextMenus = manifest.contributes.menus?.['view/item/context'] ?? [];
+
+        const openDashboard = contextMenus.find(item => item.command === 'aspire-vscode.openDashboard');
+        const expandAll = contextMenus.find(item => item.command === 'aspire-vscode.expandAll');
+        const openAppHostSource = contextMenus.find(item => item.command === 'aspire-vscode.openAppHostSource');
+
+        assertContains(openDashboard?.when, 'workspaceResources');
+        assertContains(expandAll?.when, 'workspaceResources');
+        assertContains(openAppHostSource?.when, 'workspaceResources');
     });
 
     test('aspire launch configuration declares an env property as a string-valued object', () => {

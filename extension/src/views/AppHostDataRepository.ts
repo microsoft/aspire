@@ -224,8 +224,8 @@ export class AppHostDataRepository {
         return this._workspaceAppHostPath;
     }
 
-    get hasMultipleWorkspaceAppHosts(): boolean {
-        return this._workspaceAppHostCandidatePaths.length > 1;
+    get workspaceAppHostCandidatePaths(): readonly string[] {
+        return this._workspaceAppHostCandidatePaths;
     }
 
     get workspaceAppHostDescription(): string | undefined {
