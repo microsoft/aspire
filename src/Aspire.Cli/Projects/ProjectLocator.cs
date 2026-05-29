@@ -138,6 +138,9 @@ internal sealed class ProjectLocator(
     IAppHostCandidateFinder appHostCandidateFinder,
     AspireCliTelemetry telemetry) : IProjectLocator
 {
+    private const string AspireConfigAppHostPathKey = "appHost.path";
+    private const string LegacySettingsAppHostPathKey = "appHostPath";
+
     /// <summary>
     /// Finds all candidate AppHost projects in the specified search directory with language metadata.
     /// </summary>
@@ -640,7 +643,7 @@ internal sealed class ProjectLocator(
                 // other invalid characters that survive JSON parsing. Without this we surface
                 // as a generic "An unexpected error occurred" — see
                 // https://github.com/microsoft/aspire/issues/17624.
-                if (!IsValidConfiguredAppHostPath(configAppHostPath, configFilePath, "appHost.path", silent))
+                if (!IsValidConfiguredAppHostPath(configAppHostPath, configFilePath, fieldName: AspireConfigAppHostPathKey, silent: silent))
                 {
                     return null;
                 }
@@ -684,11 +687,11 @@ internal sealed class ProjectLocator(
                         return null;
                     }
 
-                    if (json.RootElement.TryGetProperty("appHostPath", out var appHostPathProperty))
+                    if (json.RootElement.TryGetProperty(LegacySettingsAppHostPathKey, out var appHostPathProperty))
                     {
                         if (appHostPathProperty.ValueKind is not JsonValueKind.Null and not JsonValueKind.String)
                         {
-                            ReportInvalidConfiguredAppHostPathType(settingsFile.FullName, "appHostPath", silent);
+                            ReportInvalidConfiguredAppHostPathType(settingsFile.FullName, LegacySettingsAppHostPathKey, silent);
                             return null;
                         }
 
@@ -697,7 +700,7 @@ internal sealed class ProjectLocator(
                             // Mirror the validation on the modern path above so the legacy branch also
                             // cannot reach Path.Combine with a NUL byte or other Path.GetInvalidPathChars
                             // value (https://github.com/microsoft/aspire/issues/17624).
-                            if (!IsValidConfiguredAppHostPath(appHostPath, settingsFile.FullName, "appHostPath", silent))
+                            if (!IsValidConfiguredAppHostPath(appHostPath, settingsFile.FullName, fieldName: LegacySettingsAppHostPathKey, silent: silent))
                             {
                                 return null;
                             }
@@ -1107,7 +1110,7 @@ internal sealed class ProjectLocator(
         var relativePathToProjectFile = Path.GetRelativePath(settingsFile.Directory!.FullName, projectFile.FullName).Replace(Path.DirectorySeparatorChar, '/');
 
         // Use the configuration writer to set the AppHost path, which will merge with any existing settings.
-        await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, "appHost.path", relativePathToProjectFile, cancellationToken);
+        await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, AspireConfigAppHostPathKey, relativePathToProjectFile, cancellationToken);
 
         // For polyglot projects, also set language and inherit SDK version from parent/global config.
         var language = languageDiscovery.GetLanguageByFile(projectFile);
