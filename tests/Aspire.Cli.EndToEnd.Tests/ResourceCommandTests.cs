@@ -297,14 +297,14 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
             "echo '=== Contents of /tmp/resource-cmd-output.txt ===' && cat /tmp/resource-cmd-output.txt && echo && echo '=== APPHOST_LOG value ===' && echo \"$APPHOST_LOG\" && echo '=== End debug output ===' || true",
             counter);
 
-        await auto.RunCommandFailFastAsync(
+        await auto.RunCommandAsync(
             "test -n \"$APPHOST_LOG\" && test -s \"$APPHOST_LOG\"",
             counter,
             TimeSpan.FromSeconds(10));
 
         // Verify the log file contains the custom log entry written by the
         // command handler via ILogger before returning the failure result.
-        await auto.RunCommandFailFastAsync(
+        await auto.RunCommandAsync(
             "grep -q 'CUSTOM_E2E_LOG_ENTRY_FOR_VERIFICATION' \"$APPHOST_LOG\"",
             counter,
             TimeSpan.FromSeconds(10));

@@ -122,7 +122,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire agent init --workspace-root . --skill-locations none --skills none");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Step 3: Verify config was updated to new format
         // The updated config should contain "agent" and "mcp" but not "start"
@@ -211,7 +211,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
         // the default Aspire skills from the seeded bundle.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
-        await auto.WaitForSuccessPromptFailFastAsync(counter);
+        await auto.WaitForSuccessPromptAsync(counter);
 
         // Verify skill files were created (skills are now installed at .agents/skills/ by StandardLocationAgentEnvironmentScanner)
         var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");

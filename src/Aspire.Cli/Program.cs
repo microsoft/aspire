@@ -801,6 +801,7 @@ public class Program
         var logBufferContext = new ConsoleLogBufferContext();
         var (loggerFactory, fileLoggerProvider) = CreateLoggerFactory(args, loggingOptions, errorWriter, logBufferContext);
         var logger = loggerFactory.CreateLogger(RootLoggerName);
+        cancellationManager.SetLogger(logger);
         using var startupContext = new CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, logger);
 
         logger.LogInformation("Aspire CLI version: {Version}", AspireCliTelemetry.GetCliVersion());
@@ -899,9 +900,10 @@ public class Program
                     var firstCompletedTask = await Task.WhenAny(handlerTask, cancellationManager.ProcessTerminationCompletionSource.Task);
                     if (firstCompletedTask != handlerTask)
                     {
-                        // The termination signal triggered cancellation and the timeout has completed. Kill the process.
+                        // ProcessTerminationCompletionSource was signaled — either the graceful-shutdown
+                        // timeout elapsed, or a second signal forced immediate termination.
                         // handlerTask is not awaited because the process is shutting down and we assume the task is hung.
-                        logger.LogWarning("Timeout waiting for cancellation from termination signal.");
+                        logger.LogWarning("Termination signal forced process exit.");
                     }
 
                     exitCode = await firstCompletedTask; // return the result or propagate the exception
