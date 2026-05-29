@@ -85,7 +85,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             $"  {string.Format(
                 CultureInfo.CurrentCulture,
                 AgentCommandStrings.InitCommand_InstalledSkillsSummarySkills,
-                $"{CommonAgentApplicators.AspireSkillName}, {CommonAgentApplicators.AspireDeploymentSkillName}")}",
+                $"{CommonAgentApplicators.AspireSkillName}, {CommonAgentApplicators.AspireDeploymentSkillName}, {FakeAspireSkillsInstaller.AspireInitSkillName}, {FakeAspireSkillsInstaller.AspireMonitoringSkillName}, {FakeAspireSkillsInstaller.AspireOrchestrationSkillName}")}",
             $"  {string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkillsSummaryLocations, ".agents/skills, ~/.agents/skills")}");
         var message = Assert.Single(interactionService.DisplayedMessages, displayedMessage => displayedMessage.Emoji.Equals(KnownEmojis.Robot));
         Assert.Equal(expectedSummary, message.Message);
@@ -217,7 +217,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var bundle = await CreateBundleAsync(
             workspace.WorkspaceRoot,
-            (FakeAspireSkillsInstaller.AspireMonitoringSkillName, "Observe [danger] apps", false));
+            (FakeAspireSkillsInstaller.AspireMonitoringSkillName, "Observe [danger] apps"));
         string? formattedSkill = null;
         var interactionService = new TestInteractionService();
         interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
@@ -281,8 +281,7 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         var bundle = await CreateBundleAsync(
             workspace.WorkspaceRoot,
             (FakeAspireSkillsInstaller.AspireMonitoringSkillName,
-             "**ANALYSIS SKILL** - Observe Aspire apps. USE FOR: aspire logs, aspire traces. INVOKES: aspire CLI.",
-             false));
+             "**ANALYSIS SKILL** - Observe Aspire apps. USE FOR: aspire logs, aspire traces. INVOKES: aspire CLI."));
         string? formattedSkill = null;
         var interactionService = new TestInteractionService();
         interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
@@ -328,9 +327,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         // Intentionally pass bundle skills in non-alphabetical order to confirm the prompt sorts deterministically.
         var bundle = await CreateBundleAsync(
             workspace.WorkspaceRoot,
-            ("zeta-bundle-skill", "Zeta skill", false),
-            ("alpha-bundle-skill", "Alpha skill", false),
-            ("middle-bundle-skill", "Middle skill", false));
+            ("zeta-bundle-skill", "Zeta skill"),
+            ("alpha-bundle-skill", "Alpha skill"),
+            ("middle-bundle-skill", "Middle skill"));
         var promptedSkillNames = new List<string>();
         var interactionService = new TestInteractionService();
         interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
@@ -419,8 +418,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var bundle = await CreateBundleAsync(
             workspace.WorkspaceRoot,
-            (CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps", true),
-            (SkillDefinition.PlaywrightCli.Name, "Bundle-provided Playwright collision", true));
+            (CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
+            (SkillDefinition.PlaywrightCli.Name, "Bundle-provided Playwright collision"));
         var promptedSkills = new List<SkillDefinition>();
         var interactionService = new TestInteractionService();
         interactionService.SetupStringPromptResponse(workspace.WorkspaceRoot.FullName);
@@ -504,11 +503,16 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        // Default Aspire skills are installed. Aspireify and Playwright are not selected by the standalone default.
+        // Default Aspire skills are installed (all bundle skills except the one-time setup skill).
+        // Aspireify is filtered out by ExcludeOneTimeSetupSkillsFromDefaults; Playwright is
+        // a CLI-defined skill that is not default.
         Assert.Equal(CliExitCodes.Success, exitCode);
 
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireDeploymentSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireInitSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireOrchestrationSkillName);
         var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
@@ -609,6 +613,9 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireSkillName);
         AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), CommonAgentApplicators.AspireDeploymentSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireInitSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireMonitoringSkillName);
+        AssertSkillFileExists(workspace.WorkspaceRoot, Path.Combine(".agents", "skills"), FakeAspireSkillsInstaller.AspireOrchestrationSkillName);
         var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", CommonAgentApplicators.AspireifySkillName);
         Assert.False(Directory.Exists(aspireifySkillPath), $"Expected no aspireify skill directory but found {aspireifySkillPath}");
     }
@@ -689,8 +696,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<AgentInitCommand>();
 
-        // Passing no predicate honors the bundle author's IsDefault as-is, which is the
-        // semantic `aspire init` relies on so the one-time wiring skill chains into the flow.
+        // Passing no predicate pre-selects every bundle-sourced skill, which is the semantic
+        // `aspire init` relies on so the one-time wiring skill chains into the flow.
         var result = await command.PromptAndChainAsync(
             interactionService,
             CliExitCodes.Success,
@@ -777,13 +784,13 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(skillPath), $"Expected skill file at {skillPath}");
     }
 
-    private static async Task<AspireSkillsBundle> CreateBundleAsync(DirectoryInfo workspaceRoot, params (string Name, string Description, bool IsDefault)[] skills)
+    private static async Task<AspireSkillsBundle> CreateBundleAsync(DirectoryInfo workspaceRoot, params (string Name, string Description)[] skills)
     {
         var bundleDirectory = new DirectoryInfo(Path.Combine(workspaceRoot.FullName, $".test-aspire-skills-bundle-{Guid.NewGuid():N}"));
         Directory.CreateDirectory(bundleDirectory.FullName);
 
         var manifestSkills = new List<SkillBundleSkill>();
-        foreach (var (name, description, isDefault) in skills)
+        foreach (var (name, description) in skills)
         {
             var skillDirectory = Path.Combine(bundleDirectory.FullName, "skills", name);
             Directory.CreateDirectory(skillDirectory);
@@ -801,7 +808,6 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
             {
                 Name = name,
                 Description = description,
-                IsDefault = isDefault,
                 Files =
                 [
                     new SkillBundleFile

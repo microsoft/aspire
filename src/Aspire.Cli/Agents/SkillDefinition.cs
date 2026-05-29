@@ -37,10 +37,15 @@ internal sealed class SkillDefinition
         isDefault: false,
         applicableLanguages: [KnownLanguageId.CSharp]);
 
+    /// <summary>
+    /// Creates a skill definition sourced from the Aspire skills bundle. All bundle-sourced
+    /// skills are pre-selected by default in the install prompt; callers like <c>aspire new</c>
+    /// and standalone <c>aspire agent init</c> can still narrow that set with a predicate
+    /// (see <c>AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults</c>).
+    /// </summary>
     internal static SkillDefinition CreateAspireSkillsBundle(
         string name,
         string description,
-        bool isDefault,
         IReadOnlyList<string>? installExcludedRelativePaths = null,
         IReadOnlyList<string>? applicableLanguages = null)
     {
@@ -53,7 +58,7 @@ internal sealed class SkillDefinition
             skillContent: null,
             sourceKind: SkillSourceKind.AspireSkillsBundle,
             installExcludedRelativePaths: installExcludedRelativePaths ?? [],
-            isDefault,
+            isDefault: true,
             applicableLanguages);
     }
 

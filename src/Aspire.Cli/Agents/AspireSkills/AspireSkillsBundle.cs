@@ -127,7 +127,6 @@ internal sealed class AspireSkillsBundle
             .Select(static skill => SkillDefinition.CreateAspireSkillsBundle(
                 skill.Name!,
                 skill.Description!,
-                skill.IsDefault,
                 (skill.InstallExcludedRelativePaths ?? []).Select(NormalizeRelativePath).ToArray(),
                 skill.ApplicableLanguages ?? []))
             .ToList();

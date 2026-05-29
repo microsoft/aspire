@@ -483,7 +483,6 @@ public class AspireSkillsInstallerTests
                 {
                     Name = CommonAgentApplicators.AspireSkillName,
                     Description = AspireSkillDescription,
-                    IsDefault = true,
                     Files =
                     [
                         new SkillBundleFile

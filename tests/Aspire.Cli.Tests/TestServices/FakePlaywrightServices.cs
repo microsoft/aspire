@@ -164,12 +164,12 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
             },
             Skills =
             [
-                CreateSkill(CommonAgentApplicators.AspireSkillName, isDefault: true, ["evals"], files),
-                CreateSkill(CommonAgentApplicators.AspireifySkillName, isDefault: true, ["evals"], files),
-                CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, isDefault: true, ["evals"], files),
-                CreateSkill(AspireInitSkillName, isDefault: false, ["evals"], files),
-                CreateSkill(AspireMonitoringSkillName, isDefault: false, ["evals"], files),
-                CreateSkill(AspireOrchestrationSkillName, isDefault: false, ["evals"], files)
+                CreateSkill(CommonAgentApplicators.AspireSkillName, ["evals"], files),
+                CreateSkill(CommonAgentApplicators.AspireifySkillName, ["evals"], files),
+                CreateSkill(CommonAgentApplicators.AspireDeploymentSkillName, ["evals"], files),
+                CreateSkill(AspireInitSkillName, ["evals"], files),
+                CreateSkill(AspireMonitoringSkillName, ["evals"], files),
+                CreateSkill(AspireOrchestrationSkillName, ["evals"], files)
             ]
         };
 
@@ -177,13 +177,12 @@ internal sealed class FakeAspireSkillsInstaller : IAspireSkillsInstaller
         await File.WriteAllTextAsync(Path.Combine(_bundleDirectory.FullName, "skill-manifest.json"), manifestJson, cancellationToken);
     }
 
-    private SkillBundleSkill CreateSkill(string skillName, bool isDefault, string[] installExcludedRelativePaths, Dictionary<(string SkillName, string RelativePath), string> files)
+    private SkillBundleSkill CreateSkill(string skillName, string[] installExcludedRelativePaths, Dictionary<(string SkillName, string RelativePath), string> files)
     {
         return new SkillBundleSkill
         {
             Name = skillName,
             Description = $"{skillName} skill",
-            IsDefault = isDefault,
             InstallExcludedRelativePaths = installExcludedRelativePaths,
             Files = files
                 .Where(entry => string.Equals(entry.Key.SkillName, skillName, StringComparison.Ordinal))

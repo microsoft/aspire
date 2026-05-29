@@ -16,13 +16,11 @@ public class AspireSkillsBundleTests
     private static SkillDefinition AspireSkillDefinition => SkillDefinition.CreateAspireSkillsBundle(
         CommonAgentApplicators.AspireSkillName,
         AspireSkillDescription,
-        isDefault: true,
         installExcludedRelativePaths: ["evals"]);
 
     private static SkillDefinition AspireifySkillDefinition => SkillDefinition.CreateAspireSkillsBundle(
         CommonAgentApplicators.AspireifySkillName,
-        AspireifySkillDescription,
-        isDefault: true);
+        AspireifySkillDescription);
 
     [Fact]
     public async Task LoadAsync_ValidatesManifestAndReturnsInstallableFiles()
@@ -178,7 +176,6 @@ public class AspireSkillsBundleTests
                     {
                         Name = CommonAgentApplicators.AspireSkillName,
                         Description = AspireSkillDescription,
-                        IsDefault = true,
                         Files =
                         [
                             new SkillBundleFile
@@ -227,7 +224,6 @@ public class AspireSkillsBundleTests
                     {
                       "name": "{{CommonAgentApplicators.AspireifySkillName}}",
                       "description": "{{AspireifySkillDescription}}",
-                      "isDefault": true,
                       "files": [
                         { "relativePath": "SKILL.md", "sha256": "{{ComputeSha256(skillPath)}}" }
                       ]
@@ -270,7 +266,6 @@ public class AspireSkillsBundleTests
                     {
                         Name = CommonAgentApplicators.AspireSkillName,
                         Description = AspireSkillDescription,
-                        IsDefault = true,
                         Files =
                         [
                             new SkillBundleFile
@@ -429,7 +424,6 @@ public class AspireSkillsBundleTests
                 {
                     Name = CommonAgentApplicators.AspireSkillName,
                     Description = AspireSkillDescription,
-                    IsDefault = true,
                     InstallExcludedRelativePaths = ["evals"],
                     Files = files
                         .Select(file => new SkillBundleFile
@@ -467,7 +461,6 @@ public class AspireSkillsBundleTests
         {
             Name = skillName,
             Description = description,
-            IsDefault = true,
             Files =
             [
                 new SkillBundleFile

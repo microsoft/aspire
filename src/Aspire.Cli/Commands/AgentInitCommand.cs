@@ -101,8 +101,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// <summary>
     /// Prompts the user to run agent init after a successful command, then chains into agent init if accepted.
     /// Used by commands (e.g. <c>aspire init</c>, <c>aspire new</c>) to offer agent init as a follow-up step.
-    /// When <paramref name="selectByDefault"/> is <see langword="null"/> the bundle author's
-    /// <see cref="SkillDefinition.IsDefault"/> is honored as-is, which is what <c>aspire init</c> wants.
+    /// When <paramref name="selectByDefault"/> is <see langword="null"/> every bundle-sourced skill is
+    /// pre-selected, which is what <c>aspire init</c> wants because aspireify is the natural follow-up.
     /// Other callers (e.g. <c>aspire new</c>) can pass a predicate to additionally filter out skills that
     /// don't fit their context (such as one-time setup skills after a template has already produced the AppHost).
     /// </summary>
@@ -139,8 +139,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     {
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
         // Standalone `aspire agent init` is typically run against an existing project, so don't
-        // pre-select the one-time aspireify wiring skill even though the bundle marks it as default.
-        // Users can still opt into it from the prompt or via --skills.
+        // pre-select the one-time aspireify wiring skill even though every other bundle skill
+        // is default-on. Users can still opt into it from the prompt or via --skills.
         var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, ExcludeOneTimeSetupSkillsFromDefaults, cancellationToken);
         return CommandResult.FromExitCode(result.ExitCode);
     }
@@ -152,10 +152,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// against an existing project).
     /// </summary>
     /// <remarks>
-    /// This is the single source of truth the CLI consults when filtering bundle-default
-    /// skills out of the auto-preselection set. If the bundle introduces a new wiring or
-    /// bootstrap-style skill marked <c>isDefault: true</c>, add its name here so the CLI
-    /// does not silently start pre-selecting it for already-bootstrapped workspaces.
+    /// This is the single source of truth the CLI consults when filtering bundle skills out
+    /// of the auto-preselection set. All bundle skills are default-on, so if the bundle ships
+    /// a new wiring or bootstrap-style skill that should NOT auto-run in an already-bootstrapped
+    /// workspace, add its name here.
     /// </remarks>
     internal static readonly IReadOnlySet<string> s_oneTimeSetupSkillNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
@@ -635,9 +635,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
     private static IReadOnlyList<SkillDefinition> GetDefaultSkills(IEnumerable<SkillDefinition> availableSkills, Func<SkillDefinition, bool>? selectByDefault)
     {
-        // When the caller doesn't customize default selection, honor the bundle author's intent
-        // (skill.IsDefault). Callers like `aspire new` pass a predicate to additionally filter out
-        // skills that don't fit their flow.
+        // When the caller doesn't customize default selection, fall back to SkillDefinition.IsDefault.
+        // Bundle-sourced skills are uniformly IsDefault=true; CLI-defined skills (playwright-cli,
+        // dotnet-inspect) are IsDefault=false so they stay opt-in. Callers like `aspire new` pass
+        // a predicate to additionally filter out skills that don't fit their flow.
         var predicate = selectByDefault ?? (static skill => skill.IsDefault);
         return availableSkills.Where(predicate).ToList();
     }

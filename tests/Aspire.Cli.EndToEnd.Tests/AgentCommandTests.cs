@@ -379,7 +379,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                 {
                   "name": "aspire",
                   "description": "Aspire CLI commands and workflows for distributed apps",
-                  "isDefault": true,
                   "installExcludedRelativePaths": ["evals"],
                   "files": [
                     { "relativePath": "SKILL.md", "sha256": "$aspire_skill_hash" },
@@ -390,7 +389,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                 {
                   "name": "aspireify",
                   "description": "One-time setup: wire up AppHost with discovered projects",
-                  "isDefault": true,
                   "files": [
                     { "relativePath": "SKILL.md", "sha256": "$aspireify_skill_hash" }
                   ]
@@ -398,7 +396,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                 {
                   "name": "aspire-deployment",
                   "description": "Aspire deployment target selection, preflight, publish, and deploy workflows",
-                  "isDefault": true,
                   "files": [
                     { "relativePath": "SKILL.md", "sha256": "$deployment_skill_hash" },
                     { "relativePath": "references/preflight.md", "sha256": "$deployment_preflight_hash" }
@@ -407,7 +404,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                 {
                   "name": "aspire-init",
                   "description": "First-run flow for adding Aspire to a repo",
-                  "isDefault": false,
                   "files": [
                     { "relativePath": "SKILL.md", "sha256": "$init_skill_hash" }
                   ]
@@ -415,7 +411,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                 {
                   "name": "aspire-monitoring",
                   "description": "Observe Aspire apps with logs, traces, metrics, and resource state",
-                  "isDefault": false,
                   "files": [
                     { "relativePath": "SKILL.md", "sha256": "$monitoring_skill_hash" }
                   ]
@@ -423,7 +418,6 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
                 {
                   "name": "aspire-orchestration",
                   "description": "Manage Aspire AppHost lifecycle and resource commands",
-                  "isDefault": false,
                   "files": [
                     { "relativePath": "SKILL.md", "sha256": "$orchestration_skill_hash" }
                   ]

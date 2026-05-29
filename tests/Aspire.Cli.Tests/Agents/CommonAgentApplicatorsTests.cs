@@ -71,8 +71,7 @@ public class CommonAgentApplicatorsTests
     {
         var bundleSkill = SkillDefinition.CreateAspireSkillsBundle(
             "aspire-monitoring",
-            "Observe Aspire apps with logs, traces, metrics, and resource state",
-            isDefault: false);
+            "Observe Aspire apps with logs, traces, metrics, and resource state");
 
         Assert.True(bundleSkill.IsApplicableToLanguage(null));
         Assert.True(bundleSkill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
@@ -102,9 +101,9 @@ public class CommonAgentApplicatorsTests
     {
         Assert.All(
             [
-                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps", isDefault: true),
-                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifySkillName, "One-time setup: wire up AppHost with discovered projects", isDefault: true),
-                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireDeploymentSkillName, "Aspire deployment target selection, preflight, publish, and deploy workflows", isDefault: true)
+                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
+                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifySkillName, "One-time setup: wire up AppHost with discovered projects"),
+                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireDeploymentSkillName, "Aspire deployment target selection, preflight, publish, and deploy workflows")
             ],
             skill =>
             {
@@ -140,7 +139,6 @@ public class CommonAgentApplicatorsTests
         var bundleSkill = SkillDefinition.CreateAspireSkillsBundle(
             CommonAgentApplicators.AspireSkillName,
             "Aspire CLI commands and workflows for distributed apps",
-            isDefault: true,
             installExcludedRelativePaths: [Path.Combine("evals")]);
 
         Assert.Contains(bundleSkill.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));
