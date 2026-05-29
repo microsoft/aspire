@@ -16,7 +16,7 @@ namespace Aspire.Hosting.Azure;
 /// </remarks>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure Network Security Group resource.</param>
-public class AzureNetworkSecurityGroupResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
+public sealed class AzureNetworkSecurityGroupResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure)
 {
     /// <summary>

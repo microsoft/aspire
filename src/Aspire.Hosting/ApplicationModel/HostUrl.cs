@@ -149,7 +149,7 @@ public record HostUrl(string Url) : IExpressionValue, IValueProvider, IManifestE
 
     internal static bool MatchesHostPort(EndpointAnnotation endpoint, int port)
     {
-        return endpoint.DefaultNetworkID == KnownNetworkIdentifiers.LocalhostNetwork && endpoint.Port == port;
+        return endpoint.DefaultNetworkId == KnownNetworkIdentifiers.LocalhostNetwork && endpoint.Port == port;
     }
 
     private static bool IsLocalHost(string host) => host is "localhost" or "127.0.0.1" or "::1" or "[::1]";

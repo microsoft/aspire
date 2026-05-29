@@ -3610,9 +3610,9 @@ public class DcpExecutorTests
             var endpoint = resource.GetEndpoint(name).EndpointAnnotation;
             var allocatedEndpoints = endpoint.AllAllocatedEndpoints;
 
-            Assert.Contains(allocatedEndpoints, a => a.NetworkID == network);
+            Assert.Contains(allocatedEndpoints, a => a.NetworkId == network);
 
-            var allocatedEndpoint = await endpoint.AllAllocatedEndpoints.Single(x => x.NetworkID == network).Snapshot.GetValueAsync().DefaultTimeout();
+            var allocatedEndpoint = await endpoint.AllAllocatedEndpoints.Single(x => x.NetworkId == network).Snapshot.GetValueAsync().DefaultTimeout();
 
             Assert.Equal(endpoint, allocatedEndpoint.Endpoint);
             Assert.Equal(address, allocatedEndpoint.Address);

@@ -22,7 +22,7 @@ namespace Aspire.Hosting.Azure;
 /// </remarks>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure Network Security Perimeter resource.</param>
-public class AzureNetworkSecurityPerimeterResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
+public sealed class AzureNetworkSecurityPerimeterResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure)
 {
     /// <summary>

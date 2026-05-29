@@ -10,7 +10,7 @@ namespace Aspire.Hosting.JavaScript;
 /// <param name="command">The command to execute the Vite application, such as the script or entry point.</param>
 /// <param name="workingDirectory">The working directory from which the Vite application command is executed.</param>
 [AspireExport(ExposeProperties = true)]
-public class ViteAppResource(string name, string command, string workingDirectory)
+public sealed class ViteAppResource(string name, string command, string workingDirectory)
     : JavaScriptAppResource(name, command, workingDirectory)
 {
     /// <summary>

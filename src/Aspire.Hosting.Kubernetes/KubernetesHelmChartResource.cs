@@ -41,7 +41,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// </code>
 /// </example>
 [AspireExport]
-public class KubernetesHelmChartResource : Resource, IResourceWithParent<KubernetesEnvironmentResource>
+public sealed class KubernetesHelmChartResource : Resource, IResourceWithParent<KubernetesEnvironmentResource>
 {
     /// <summary>
     /// Initializes a new instance of <see cref="KubernetesHelmChartResource"/>.

@@ -17,7 +17,7 @@ namespace Aspire.Hosting;
 /// </summary>
 [Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [AspireExport]
-public class BlazorWasmAppResource(string name, string projectPath) : Resource(name), IResourceWithEnvironment, IResourceWithParent
+public sealed class BlazorWasmAppResource(string name, string projectPath) : Resource(name), IResourceWithEnvironment, IResourceWithParent
 {
     /// <summary>Fully-qualified path to the .csproj file.</summary>
     public string ProjectPath { get; } = projectPath;
