@@ -90,6 +90,27 @@ public class ProjectResourceTests
     }
 
     [Fact]
+    public async Task AddProject_WithoutHostedAgents_RemovesDefaultContainerRegistryDuringBeforeStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var defaultRegistry = project.Resource.DefaultContainerRegistry;
+        Assert.NotNull(defaultRegistry);
+        Assert.Contains(defaultRegistry, builder.Resources);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var registries = model.Resources.OfType<AzureContainerRegistryResource>().ToList();
+        Assert.DoesNotContain(defaultRegistry, registries);
+        Assert.Null(project.Resource.DefaultContainerRegistry);
+    }
+
+    [Fact]
     public void ConnectionStringExpression_HasCorrectFormat()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

@@ -240,6 +240,11 @@ public static class HostedAgentResourceBuilderExtensions
         var resource = builder.Resource;
         var projectResource = project.Resource;
 
+        if (!projectResource.HasAnnotationOfType<RequiresHostedAgentRegistryAnnotation>())
+        {
+            projectResource.Annotations.Add(new RequiresHostedAgentRegistryAnnotation());
+        }
+
         ResourceBuilderExtensions.WithComputeEnvironment(builder, project);
 
         // Hosted Agent resource name

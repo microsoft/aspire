@@ -104,7 +104,7 @@ public static class PromptAgentBuilderExtensions
             },
             commandOptions: new()
             {
-                IconName = "Agents",
+                IconName = "ChatSparkle",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = true,
                 Arguments =
