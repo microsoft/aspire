@@ -2,6 +2,7 @@ import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration
 import { browserDisplayName, browserLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
+import { tryStartWasmDebugging } from "./wasmDebug";
 
 export const browserDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'browser',
@@ -15,7 +16,7 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
     },
     getSupportedFileTypes: () => [],
     getProjectFile: () => '',
-    createDebugSessionConfigurationCallback: async (launchConfig, _args, _env, _launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
+    createDebugSessionConfigurationCallback: async (launchConfig, _args, _env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
         if (!isBrowserLaunchConfiguration(launchConfig)) {
             extensionLogOutputChannel.info(`The resource type was not browser for ${JSON.stringify(launchConfig)}`);
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
@@ -37,5 +38,11 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
         delete debugConfiguration.program;
         delete debugConfiguration.args;
         delete debugConfiguration.cwd;
+
+        // If web_root points to a .csproj, this is a Blazor WASM project —
+        // wire up managed debugging via the C# extension's VSWebAssemblyBridge.
+        if (launchConfig.web_root?.endsWith('.csproj') && launchConfig.url) {
+            await tryStartWasmDebugging(launchConfig.url, launchConfig.web_root, debugConfiguration, launchOptions.debugSession);
+        }
     }
 };
