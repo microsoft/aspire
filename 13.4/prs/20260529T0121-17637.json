@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix: identity channel not forwarded to dotnet-runtime template path in aspire new without --channel",
+  "mergedAt": "2026-05-29T01:21:51Z",
+  "number": 17637,
+  "runDate": "2026-05-29T03:12:19Z",
+  "status": "included",
+  "title": "Forward IdentityChannel to TemplateInputs.Channel for dotnet-runtime templates"
+}

@@ -5,16 +5,17 @@
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
-  "description": "Fixed multiple issues in the CLI archive verifier build pipeline: removed failing TypeScript starter and bundle-layout checks that could not run in the 1ES signed-build agent, added lightweight GitHub CI coverage to catch verifier regressions before they reach the post-merge pipeline, and fixed a latent scope-narrowing bug in the sidecar check that would have silently missed stray sidecars in archives with a top-level directory.",
+  "description": "Fixed multiple issues in the CLI archive verifier build pipeline: removed failing TypeScript and C# starter checks that could not run in the 1ES signed-build agent (both depend on NuGet feeds unreachable from the build agent), added lightweight GitHub CI coverage to catch verifier regressions before they reach the post-merge pipeline, and fixed a latent scope-narrowing bug in the sidecar check that would have silently missed stray sidecars in archives with a top-level directory.",
   "docsPrs": [],
   "docsRequired": false,
   "emoji": "🔨",
   "firstMergedAt": "2026-05-21T04:11:21Z",
-  "lastMergedAt": "2026-05-21T07:01:34Z",
+  "lastMergedAt": "2026-05-29T02:37:49Z",
   "name": "Fix CLI archive verifier build break and add GitHub CI coverage",
   "owner": "radical",
   "prs": [
     17341,
-    17346
+    17346,
+    17646
   ]
 }

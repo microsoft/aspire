@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Engineering fix: removed C# starter check from CLI archive verifier that depended on NuGet feeds unreachable from 1ES build agent",
+  "mergedAt": "2026-05-29T02:37:49Z",
+  "number": 17646,
+  "runDate": "2026-05-29T03:12:25Z",
+  "status": "included",
+  "title": "[release/13.4] Remove 'aspire new aspire-starter' step from CLI archive verifier"
+}
