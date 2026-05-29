@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
 import { AspireResourceExtendedDebugConfiguration } from '../../dcp/types';
 import { extensionLogOutputChannel } from '../../utils/logging';
 import { AspireDebugSession } from '../AspireDebugSession';
@@ -84,23 +83,27 @@ export async function tryStartWasmDebugging(
         cascadeTerminateToConfigurations: [debugConfiguration.name],
     };
 
+    extensionLogOutputChannel.info(`[WASM] Attempting to start monovsdbg_wasm session with config: ${JSON.stringify(wasmManagedConfig)}`);
+
     // Start the monovsdbg_wasm session as a child of the Aspire debug session.
     // This ensures it's tracked and terminated when the Aspire session ends.
     const debugSessionStarted = await vscode.debug.startDebugging(
-        undefined, wasmManagedConfig, parentDebugSession.session);
+        vscode.workspace.workspaceFolders?.[0], wasmManagedConfig, { parentSession: parentDebugSession.session });
     if (!debugSessionStarted) {
         extensionLogOutputChannel.warn('Failed to start monovsdbg_wasm session — falling back to plain browser');
         return false;
     }
 
-    // Redirect the browser session through the bridge's port.
-    // The bridge acts as a DevTools protocol proxy, forwarding between the browser
-    // and the mono debugger so both JS and managed debugging work simultaneously.
+    // Use the inspectUri returned by the bridge directly.
+    // The bridge acts as the debug proxy (replaces /_framework/debug/ws-proxy).
+    // The inspectUri contains js-debug placeholders like {browserInspectUriPath}
+    // which js-debug resolves at runtime using the browser's DevTools WebSocket path.
     debugConfiguration.inspectUri = inspectUri;
-    (debugConfiguration as any).port = portBrowserDebug;
 
-    // Set webRoot to the project directory (not the .csproj file) for source map resolution
-    debugConfiguration.webRoot = path.dirname(projectPath);
+    // Tell js-debug to launch the browser with remote debugging on the port
+    // the bridge expects. The bridge connects to the browser on this port to
+    // proxy DevTools protocol messages.
+    (debugConfiguration as any).port = portBrowserDebug;
 
     return true;
 }

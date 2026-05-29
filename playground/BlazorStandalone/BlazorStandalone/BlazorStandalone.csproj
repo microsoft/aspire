@@ -4,6 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <!-- Enable managed debugging for WebAssembly -->
+    <DebuggerSupport>true</DebuggerSupport>
+    <WasmDebugLevel>2</WasmDebugLevel>
     <!-- Enable WebAssembly diagnostics for OpenTelemetry tracing -->
     <MetricsSupport>true</MetricsSupport>
     <EventSourceSupport>true</EventSourceSupport>
