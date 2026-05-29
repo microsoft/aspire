@@ -121,7 +121,7 @@ internal static partial class ProcessSignaler
         var result = GenerateConsoleCtrlEvent(CtrlBreakEvent, (uint)pid);
         if (!result)
         {
-            int error = Marshal.GetLastWin32Error();
+            var error = Marshal.GetLastWin32Error();
             // Best effort.
             logger.LogWarning("Could not gracefully stop Aspire application host process group {Pid}; the error code from signal send operation was {ErrorCode}", pid, error);
         }
