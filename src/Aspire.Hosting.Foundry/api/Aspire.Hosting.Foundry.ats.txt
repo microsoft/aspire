@@ -268,7 +268,7 @@ Aspire.Hosting.Foundry/addSearchConnection(search: Aspire.Hosting.Azure.Search/A
 Aspire.Hosting.Foundry/addSharePointTool(name: string, projectConnectionIds: string[]) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.SharePointToolResource
 Aspire.Hosting.Foundry/addStorageConnection(storage: Aspire.Hosting.Azure.Storage/Aspire.Hosting.Azure.AzureStorageResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectConnectionResource
 Aspire.Hosting.Foundry/addWebSearchTool(name: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.WebSearchToolResource
-Aspire.Hosting.Foundry/asHostedAgentExecutable(project: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource, options?: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting.Foundry/asHostedAgent(project: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource, options?: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting.Foundry/AzurePromptAgentResource.connectionStringExpression(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzurePromptAgentResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Foundry/AzurePromptAgentResource.description(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzurePromptAgentResource) -> string
 Aspire.Hosting.Foundry/AzurePromptAgentResource.instructions(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzurePromptAgentResource) -> string
