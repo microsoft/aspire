@@ -272,12 +272,121 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
-    /// Invokes <see cref="NewCommand"/> with a fake CLI-runtime template that captures the
-    /// <see cref="TemplateInputs"/> handed to it. This is the contract surface the four
-    /// shipping CLI templates (TS/Python/Go starter + empty AppHost) all read from. Its
-    /// <c>Version</c> reflects which channel won template-version resolution; its
-    /// <c>Channel</c> reflects what the template factories will persist into the new
-    /// project's <c>aspire.config.json</c>.
+    /// Issue: <c>aspire new aspire-starter</c> (and <c>aspire-starter-csharp-typescript</c>)
+    /// run through the <see cref="TemplateRuntime.DotNet"/> path, which delegates template
+    /// package resolution to <c>TemplateNuGetConfigService.ResolveTemplatePackageAsync</c>
+    /// using <c>TemplateInputs.Channel</c> as the <c>RequestedChannel</c>. When no
+    /// <c>--channel</c> is supplied, <see cref="NewCommand"/> must forward the running CLI's
+    /// <see cref="CliExecutionContext.IdentityChannel"/> through <c>inputs.Channel</c> so the
+    /// DotNet template path searches the identity-matching feed for
+    /// <c>Aspire.ProjectTemplates</c> — symmetrical to the CLI-runtime path
+    /// (<see cref="NewCommand_NoChannelArg_ResolvesTemplateFromIdentityChannel"/>).
+    /// <para>
+    /// Without this forwarding, a daily / staging / release-branch CLI silently resolves the
+    /// templates package from the Implicit (nuget.org) channel — for example, on a 13.4
+    /// CLI it fails to discover the matching <c>13.4.0</c> template and falls back to the
+    /// latest stable on nuget.org. Passing <c>--channel</c> explicitly works because that
+    /// value is already forwarded into <c>inputs.Channel</c>.
+    /// </para>
+    /// <para>
+    /// All four shipping identity shapes are exercised — PR (developer dogfood build
+    /// against a hive), daily (nightly dnceng feed), staging (release-branch dnceng feed),
+    /// and stable (nuget.org via the explicit Stable channel registration).
+    /// </para>
+    /// </summary>
+    [Theory]
+    [InlineData("pr-99999", "13.4.0-pr.99999.gabc123")]
+    [InlineData(PackageChannelNames.Daily, "13.4.0-preview.1.99999.1")]
+    [InlineData(PackageChannelNames.Staging, "13.4.0-rc.1.99999.1")]
+    [InlineData(PackageChannelNames.Stable, "13.5.0")]
+    public async Task NewCommand_DotNetRuntimeTemplate_NoChannelArg_ForwardsIdentityChannelToInputs(string identityChannel, string identityChannelVersion)
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: identityChannel,
+            channelOptionArg: null,
+            identityChannelVersion: identityChannelVersion,
+            runtime: TemplateRuntime.DotNet);
+
+        // DotNet-runtime templates resolve the template package version themselves inside
+        // DotNetTemplateFactory.ApplyTemplateAsync — NewCommand does not populate inputs.Version
+        // for this runtime — so only inputs.Channel is asserted here.
+        Assert.Equal(identityChannel, captured.Channel);
+    }
+
+    /// <summary>
+    /// Defensive: when the identity channel is something that isn't a registered channel
+    /// (typo, future addition, locally-built CLI without the local hive installed, etc.),
+    /// <see cref="NewCommand"/> must NOT blindly forward the unrecognized identity into
+    /// <c>inputs.Channel</c> — doing so would make the DotNet template path throw
+    /// <c>ChannelNotFoundException</c> inside <c>TemplateNuGetConfigService.ResolveTemplatePackageAsync</c>.
+    /// Instead, leave <c>inputs.Channel</c> as <c>null</c> so the resolver consults the Implicit
+    /// (nuget.org) channel and the new project inherits the user's ambient NuGet configuration.
+    /// Mirrors the CLI-runtime contract pinned by
+    /// <see cref="NewCommand_NoChannelArg_IdentityChannelNotRegistered_FallsBackToImplicit"/>.
+    /// </summary>
+    [Fact]
+    public async Task NewCommand_DotNetRuntimeTemplate_NoChannelArg_IdentityChannelNotRegistered_FallsBackToNull()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: "stalbe", // intentional typo: not registered as a channel
+            channelOptionArg: null,
+            identityChannelVersion: null,
+            runtime: TemplateRuntime.DotNet);
+
+        // Implicit-fallback case: inputs.Channel stays null so DotNetTemplateFactory does not
+        // pin a per-project channel and the new project uses the ambient NuGet configuration.
+        Assert.Null(captured.Channel);
+    }
+
+    /// <summary>
+    /// Explicit <c>--channel</c> on a DotNet-runtime template (aspire-starter family) must
+    /// still flow through <c>inputs.Channel</c> verbatim and override the running CLI's
+    /// identity. Pinned here so the identity-channel forwarding fix doesn't accidentally
+    /// clobber an explicit user choice (e.g. a daily CLI scaffolding a stable-channel
+    /// project for migration testing).
+    /// </summary>
+    [Fact]
+    public async Task NewCommand_DotNetRuntimeTemplate_ExplicitChannelArg_OverridesIdentityChannel()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Daily,
+            channelOptionArg: PackageChannelNames.Stable,
+            identityChannelVersion: "13.4.0-preview.1.99999.1",
+            runtime: TemplateRuntime.DotNet);
+
+        Assert.Equal(PackageChannelNames.Stable, captured.Channel);
+    }
+
+    /// <summary>
+    /// <c>--version</c> on a DotNet-runtime template must still flow through to
+    /// <c>inputs.Version</c> AND identity-channel forwarding must still populate
+    /// <c>inputs.Channel</c>. The version pin tells <c>ResolveTemplatePackageAsync</c> which
+    /// package to pick, but the channel pin still selects the feed that package is fetched
+    /// from and the per-project NuGet.config mappings the generated project will use.
+    /// Without both, a daily CLI passing <c>--version 13.4.0-preview.1.99999.1</c> would
+    /// resolve the version against nuget.org (where prerelease daily builds aren't published)
+    /// and fail.
+    /// </summary>
+    [Fact]
+    public async Task NewCommand_DotNetRuntimeTemplate_VersionOverride_StillForwardsIdentityChannel()
+    {
+        var captured = await CaptureTemplateInputsAsync(
+            identityChannel: PackageChannelNames.Daily,
+            channelOptionArg: null,
+            identityChannelVersion: "13.4.0-preview.1.99999.1",
+            runtime: TemplateRuntime.DotNet,
+            versionOptionArg: "13.4.0-preview.1.99999.1");
+
+        Assert.Equal("13.4.0-preview.1.99999.1", captured.Version);
+        Assert.Equal(PackageChannelNames.Daily, captured.Channel);
+    }
+
+    /// <summary>
+    /// Invokes <see cref="NewCommand"/> with a fake template that captures the
+    /// <see cref="TemplateInputs"/> handed to it. Its <c>Version</c> reflects which channel
+    /// won template-version resolution; its <c>Channel</c> reflects what the template
+    /// factories will persist into the new project's <c>aspire.config.json</c> (or use as
+    /// the <c>RequestedChannel</c> for DotNet-runtime templates).
     /// </summary>
     /// <param name="identityChannel">Identity baked into the CLI under test.</param>
     /// <param name="channelOptionArg">Value passed via <c>--channel</c>, or <c>null</c> to omit the flag.</param>
@@ -285,23 +394,35 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// Version returned by the channel whose name matches <paramref name="identityChannel"/>,
     /// or <c>null</c> when that channel is not registered.
     /// </param>
+    /// <param name="identityChannelVersions">Optional list of versions exposed by the identity channel.</param>
+    /// <param name="runtime">Template runtime kind. CLI runtime drives ResolveCliTemplateVersionAsync; DotNet runtime mirrors aspire-starter.</param>
     private async Task<CapturedTemplateInputs> CaptureTemplateInputsAsync(
         string identityChannel,
         string? channelOptionArg,
         string? identityChannelVersion,
-        IEnumerable<string>? identityChannelVersions = null)
+        IEnumerable<string>? identityChannelVersions = null,
+        TemplateRuntime runtime = TemplateRuntime.Cli,
+        string? versionOptionArg = null)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var capturedInputs = new CapturedTemplateInputs();
 
-        // A fake CLI-runtime template that intercepts the inputs and returns success
-        // without invoking the heavyweight template scaffolding pipeline (RPC, codegen,
-        // bundled NuGet restore). The template is registered via a fake ITemplateProvider
-        // injected through CliServiceCollectionTestOptions.TemplateProviderFactory.
+        // A fake template that intercepts the inputs and returns success without invoking
+        // the heavyweight template scaffolding pipeline (RPC, codegen, bundled NuGet restore).
+        // The template is registered via a fake ITemplateProvider injected through
+        // CliServiceCollectionTestOptions.TemplateProviderFactory.
+        //
+        // The runtime kind switches which code path inside NewCommand.ExecuteAsync produces
+        // inputs.Channel: TemplateRuntime.Cli walks ResolveCliTemplateVersionAsync (which
+        // owns the identity-channel fallback for the CLI starters), while TemplateRuntime.DotNet
+        // mirrors the path used by aspire-starter / aspire-starter-csharp-typescript, which
+        // delegate version/feed selection to DotNetTemplateFactory → TemplateNuGetConfigService.
+        // NewCommand is responsible for passing the right channel into inputs.Channel in both
+        // cases, so this helper can exercise both with a single shape.
         var fakeTemplate = new CallbackTemplate(
-            name: "fake-cli-template",
-            description: "Fake CLI-runtime template for channel-resolution tests",
+            name: "fake-template",
+            description: "Fake template for channel-resolution tests",
             pathDeriverCallback: (ctx, projectName) => Path.Combine(ctx.WorkingDirectory.FullName, projectName),
             applyOptionsCallback: _ => { },
             applyTemplateCallback: (_, inputs, _, _) =>
@@ -312,7 +433,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                 Directory.CreateDirectory(outputPath);
                 return Task.FromResult(new TemplateResult(CliExitCodes.Success, outputPath));
             },
-            runtime: TemplateRuntime.Cli,
+            runtime: runtime,
             languageId: KnownLanguageId.TypeScript);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -328,7 +449,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         var newCommand = serviceProvider.GetRequiredService<NewCommand>();
 
         var channelArg = string.IsNullOrEmpty(channelOptionArg) ? "" : $" --channel {channelOptionArg}";
-        var parseResult = newCommand.Parse($"new fake-cli-template --name TestApp --output ./captured{channelArg}");
+        var versionArg = string.IsNullOrEmpty(versionOptionArg) ? "" : $" --version {versionOptionArg}";
+        var parseResult = newCommand.Parse($"new fake-template --name TestApp --output ./captured{channelArg}{versionArg}");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
