@@ -166,11 +166,18 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             var stopped = false;
             if (_processShutdownService is not null)
             {
-                stopped = await _processShutdownService.StopProcessGroupAsync(
-                    _serverProcess.Id,
-                    TryGetServerProcessStartTime(),
-                    forceKillEntireProcessTree: !OperatingSystem.IsWindows(),
-                    CancellationToken.None).ConfigureAwait(false);
+                if (TryGetServerProcessStartTime(out var serverProcessStartTime))
+                {
+                    stopped = await _processShutdownService.StopProcessGroupAsync(
+                        _serverProcess.Id,
+                        serverProcessStartTime,
+                        forceKillEntireProcessTree: !OperatingSystem.IsWindows(),
+                        CancellationToken.None).ConfigureAwait(false);
+                }
+                else
+                {
+                    stopped = true;
+                }
             }
 
             if (!stopped && !_serverProcess.HasExited)
@@ -197,16 +204,18 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _activity.Dispose();
     }
 
-    private DateTimeOffset? TryGetServerProcessStartTime()
+    private bool TryGetServerProcessStartTime(out DateTimeOffset? startTime)
     {
         try
         {
-            return new DateTimeOffset(_serverProcess.StartTime);
+            startTime = new DateTimeOffset(_serverProcess.StartTime);
+            return true;
         }
         catch (InvalidOperationException)
         {
             // The process exited between the HasExited check and shutdown coordination.
-            return null;
+            startTime = null;
+            return false;
         }
     }
 }
