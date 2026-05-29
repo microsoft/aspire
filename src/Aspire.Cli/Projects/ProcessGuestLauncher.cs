@@ -69,11 +69,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             RedirectStandardError = true,
             UseShellExecute = false,
             CreateNoWindow = true
-        };
-        if (OperatingSystem.IsWindows())
-        {
-            startInfo.CreateNewProcessGroup = true;
-        }
+        }.CreateNewProcessGroupOnWindows();
 
         foreach (var arg in args)
         {
