@@ -489,13 +489,34 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             resolvedChannelName = resolveResult.ChannelName;
         }
 
+        // For template paths that don't run ResolveCliTemplateVersionAsync — chiefly the
+        // TemplateRuntime.DotNet starters like `aspire-starter` and
+        // `aspire-starter-csharp-typescript`, which delegate channel/version resolution to
+        // DotNetTemplateFactory → TemplateNuGetConfigService.ResolveTemplatePackageAsync —
+        // we still need to forward the running CLI's IdentityChannel into inputs.Channel
+        // when `--channel` was not supplied. Without this, the DotNet path searches only
+        // the Implicit (nuget.org) channel for Aspire.ProjectTemplates regardless of CLI
+        // identity, so a daily / staging / release-branch CLI silently resolves a stable
+        // template package (or fails to find a matching release-branch template at all).
+        //
+        // The CLI-runtime path resolves its own channel inside ResolveCliTemplateVersionAsync
+        // and surfaces it via resolveResult.ChannelName, so this fallback only fires when
+        // resolveResult didn't already pin a channel (i.e. DotNet-runtime templates, or a
+        // CLI-runtime template invoked with --version which short-circuits the resolver).
+        var explicitChannelArg = parseResult.GetValue(_channelOption);
+        string? identityChannelName = null;
+        if (string.IsNullOrWhiteSpace(explicitChannelArg) && resolvedChannelName is null)
+        {
+            identityChannelName = await ResolveIdentityChannelNameAsync(cancellationToken);
+        }
+
         var inputs = new TemplateInputs
         {
             Name = parseResult.GetValue(s_nameOption),
             Output = parseResult.GetValue(s_outputOption),
             Source = source,
             Version = version,
-            Channel = parseResult.GetValue(_channelOption) ?? resolvedChannelName,
+            Channel = explicitChannelArg ?? resolvedChannelName ?? identityChannelName,
             Language = selectedLanguageId
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
@@ -517,6 +538,33 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return template.Runtime is TemplateRuntime.Cli;
     }
 
+    /// <summary>
+    /// Resolves <see cref="CliExecutionContext.IdentityChannel"/> to a registered channel name
+    /// from the packaging service. Returns the channel name when an Explicit channel matches the
+    /// identity (e.g. <c>daily</c>, <c>staging</c>, <c>stable</c>, <c>pr-&lt;N&gt;</c>); returns
+    /// <see langword="null"/> when there is no identity, when no Explicit channel matches, or
+    /// when only the Implicit (nuget.org) channel is registered. A <see langword="null"/> result
+    /// intentionally lets the downstream template path consult the Implicit channel and avoids
+    /// writing a per-project channel pin into the new project's NuGet configuration.
+    /// </summary>
+    private async Task<string?> ResolveIdentityChannelNameAsync(CancellationToken cancellationToken)
+    {
+        var identity = ExecutionContext.IdentityChannel;
+        if (string.IsNullOrWhiteSpace(identity))
+        {
+            return null;
+        }
+
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken, identity);
+        var match = channels.FirstOrDefault(c =>
+            string.Equals(c.Name, identity, StringComparisons.ChannelName));
+
+        // Only persist Explicit channel names — Implicit channels (the nuget.org fallback)
+        // are deliberately left unpinned so `aspire add` and later restores use ambient
+        // NuGet configuration. Mirrors the same rule applied at the end of
+        // ResolveCliTemplateVersionAsync.
+        return match is { Type: PackageChannelType.Explicit } ? match.Name : null;
+    }
 }
 
 internal interface INewCommandPrompter
