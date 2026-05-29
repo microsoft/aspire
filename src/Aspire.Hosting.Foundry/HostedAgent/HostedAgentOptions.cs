@@ -11,7 +11,7 @@ namespace Aspire.Hosting.Foundry;
 /// Options that control how a compute resource is deployed as a Microsoft Foundry hosted agent.
 /// All properties are optional; unset properties fall back to the Foundry hosted agent defaults.
 /// </summary>
-[AspireExport(ExposeProperties = true)]
+[AspireDto]
 internal sealed class HostedAgentOptions
 {
     /// <summary>

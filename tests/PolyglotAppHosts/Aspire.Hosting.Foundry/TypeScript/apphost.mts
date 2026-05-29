@@ -111,13 +111,11 @@ server.listen(port, '127.0.0.1');
     ]);
 
 await hostedAgent.asHostedAgent(project, {
-    options: {
-        description: 'Validation hosted agent',
-        cpu: 1,
-        memory: 2,
-        metadata: { scenario: 'validation' },
-        environmentVariables: { VALIDATION_MODE: 'true' }
-    }
+    description: 'Validation hosted agent',
+    cpu: 1,
+    memory: 2,
+    metadata: { scenario: 'validation' },
+    environmentVariables: { VALIDATION_MODE: 'true' }
 });
 
 const api = await builder.addContainer('api', 'nginx');
