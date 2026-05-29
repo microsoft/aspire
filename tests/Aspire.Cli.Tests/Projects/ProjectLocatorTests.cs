@@ -15,7 +15,9 @@ using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -2654,15 +2656,18 @@ builder.Build().Run();");
             { "appHost": { "path": "a\u0000b.csproj" } }
             """);
 
+        var sink = new TestSink();
+        var logger = new TestLogger<ProjectLocator>(new TestLoggerFactory(sink, enabled: true));
         var interactionService = new TestInteractionService();
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService, logger: logger);
 
         await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
 
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains(configPath, error);
         Assert.Contains("appHost.path", error);
+        Assert.DoesNotContain(sink.Writes, w => w.LogLevel == LogLevel.Warning && w.Message?.Contains("Ignoring configured AppHost path", StringComparison.Ordinal) == true);
     }
 
     [Fact]
@@ -2744,6 +2749,119 @@ builder.Build().Run();");
     }
 
     [Fact]
+    public async Task GetAppHostFromSettings_MalformedConfig_SilentProbeLogsWarning()
+    {
+        // Probe-style callers intentionally don't write to the user-facing interaction
+        // service, but malformed config still needs diagnostics so background checks are
+        // debuggable.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            { "appHost": {
+            """);
+
+        var sink = new TestSink();
+        var logger = new TestLogger<ProjectLocator>(new TestLoggerFactory(sink, enabled: true));
+        var interactionService = new TestInteractionService();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService, logger: logger);
+
+        var foundAppHost = await projectLocator.GetAppHostFromSettingsAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.Null(foundAppHost);
+        Assert.Empty(interactionService.DisplayedErrors);
+
+        var warning = Assert.Single(sink.Writes, w => w.LogLevel == LogLevel.Warning);
+        Assert.Contains(configPath, warning.Message);
+        Assert.IsAssignableFrom<JsonException>(warning.Exception);
+    }
+
+    [Fact]
+    public async Task GetAppHostFromSettings_MalformedLegacySettings_SilentProbeLogsWarning()
+    {
+        // The legacy settings reader uses JsonDocument directly, so it needs the same
+        // silent-mode diagnostics as aspire.config.json instead of letting JsonException
+        // escape from background probes.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var settingsPath = Path.Combine(workspaceSettingsDirectory.FullName, "settings.json");
+        await File.WriteAllTextAsync(settingsPath, """
+            { "appHostPath":
+            """);
+
+        var sink = new TestSink();
+        var logger = new TestLogger<ProjectLocator>(new TestLoggerFactory(sink, enabled: true));
+        var interactionService = new TestInteractionService();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService, logger: logger);
+
+        var foundAppHost = await projectLocator.GetAppHostFromSettingsAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.Null(foundAppHost);
+        Assert.Empty(interactionService.DisplayedErrors);
+
+        var warning = Assert.Single(sink.Writes, w => w.LogLevel == LogLevel.Warning);
+        Assert.Contains(settingsPath, warning.Message);
+        Assert.IsAssignableFrom<JsonException>(warning.Exception);
+    }
+
+    [Fact]
+    public async Task GetAppHostFromSettings_LegacySettingsWithNonStringPath_ReportsValidationErrorAndDoesNotCrash()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var settingsPath = Path.Combine(workspaceSettingsDirectory.FullName, "settings.json");
+        await File.WriteAllTextAsync(settingsPath, """
+            { "appHostPath": 123 }
+            """);
+
+        var sink = new TestSink();
+        var logger = new TestLogger<ProjectLocator>(new TestLoggerFactory(sink, enabled: true));
+        var interactionService = new TestInteractionService();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService, logger: logger);
+
+        var foundAppHost = await projectLocator.GetAppHostFromSettingsAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.Null(foundAppHost);
+        Assert.Empty(interactionService.DisplayedErrors);
+
+        var warning = Assert.Single(sink.Writes, w => w.LogLevel == LogLevel.Warning);
+        Assert.Contains(settingsPath, warning.Message);
+        Assert.Contains("not a JSON string", warning.Message);
+    }
+
+    [Fact]
+    public async Task GetAppHostFromSettings_LegacySettingsWithNonObjectRoot_ReportsValidationErrorAndDoesNotCrash()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var workspaceSettingsDirectory = workspace.CreateDirectory(".aspire");
+        var settingsPath = Path.Combine(workspaceSettingsDirectory.FullName, "settings.json");
+        await File.WriteAllTextAsync(settingsPath, """
+            []
+            """);
+
+        var sink = new TestSink();
+        var logger = new TestLogger<ProjectLocator>(new TestLoggerFactory(sink, enabled: true));
+        var interactionService = new TestInteractionService();
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService, logger: logger);
+
+        var foundAppHost = await projectLocator.GetAppHostFromSettingsAsync(CancellationToken.None).DefaultTimeout();
+
+        Assert.Null(foundAppHost);
+        Assert.Empty(interactionService.DisplayedErrors);
+
+        var warning = Assert.Single(sink.Writes, w => w.LogLevel == LogLevel.Warning);
+        Assert.Contains(settingsPath, warning.Message);
+        Assert.Contains("not a JSON object", warning.Message);
+    }
+
+    [Fact]
     public async Task FindAppHostProjectsAsync_DeduplicatesSettingsCandidateAcrossSymlink()
     {
         // Regression test for https://github.com/microsoft/aspire/issues/17626.
@@ -2821,16 +2939,16 @@ builder.Build().Run();");
         ILanguageDiscovery? languageDiscovery = null,
         IDotNetSdkInstaller? sdkInstaller = null,
         IGitRepository? gitRepository = null,
-        AspireCliTelemetry? telemetry = null)
+        AspireCliTelemetry? telemetry = null,
+        ILogger<ProjectLocator>? logger = null)
     {
-        var logger = NullLogger<ProjectLocator>.Instance;
         var appHostCandidateFinder = new AppHostCandidateFinder(
             gitRepository ?? new TestGitRepository(),
             new ProfilingTelemetry(new ConfigurationBuilder().Build()),
             NullLogger<AppHostCandidateFinder>.Instance);
 
         return new ProjectLocator(
-            logger,
+            logger ?? NullLogger<ProjectLocator>.Instance,
             executionContext,
             interactionService ?? new TestInteractionService(),
             configurationService ?? new TestConfigurationService(executionContext),

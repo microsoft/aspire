@@ -155,7 +155,7 @@ internal sealed class LsCommand : BaseCommand
 
         // `aspire ls --format json --stream` emits each candidate as soon as discovery surfaces
         // it (arrival order from parallel discovery). The contract is documented in
-        // docs/specs/cli-output-formats.md and in LsStreamOptionDescription. Do NOT sort here:
+        // docs/specs/cli-output-formats.md. Do NOT sort here:
         // candidates have already been written to stdout via WriteJsonStreamCandidate above, so
         // any post-loop sort would only reorder this in-memory list — which the caller does not
         // use for stream output. Pipe to `sort` / `jq -s 'sort_by(.path)'` for ordered output.

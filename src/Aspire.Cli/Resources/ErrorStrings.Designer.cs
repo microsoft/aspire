@@ -461,5 +461,23 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfiguredAppHostPathHasInvalidCharacters", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configured AppHost path in '{0}' ('{1}') must be a JSON string..
+        /// </summary>
+        public static string ConfiguredAppHostPathMustBeString {
+            get {
+                return ResourceManager.GetString("ConfiguredAppHostPathMustBeString", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The configuration file '{0}' must contain a JSON object..
+        /// </summary>
+        public static string ConfigurationFileMustBeJsonObject {
+            get {
+                return ResourceManager.GetString("ConfigurationFileMustBeJsonObject", resourceCulture);
+            }
+        }
     }
 }

@@ -152,7 +152,7 @@
     <value>Include all candidate AppHosts, ignoring .gitignore and built-in directory filters</value>
   </data>
   <data name="LsStreamOptionDescription" xml:space="preserve">
-    <value>Stream newline-delimited JSON discovery events in arrival order from parallel discovery (not sorted). Requires --format json</value>
+    <value>Output discovered AppHosts as newline-delimited JSON. Requires --format json</value>
   </data>
   <data name="LsStreamRequiresJson" xml:space="preserve">
     <value>The --stream option requires --format json.</value>

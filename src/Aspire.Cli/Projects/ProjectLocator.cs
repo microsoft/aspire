@@ -627,12 +627,10 @@ internal sealed class ProjectLocator(
             }
             catch (JsonException ex)
             {
-                if (!silent)
-                {
-                    interactionService.DisplayError(ex.Message);
-                }
+                ReportInvalidConfigurationFile(ex, ex.Message, silent);
                 return null;
             }
+
             if (aspireConfig?.AppHost?.Path is { } configAppHostPath)
             {
                 var configFilePath = Path.Combine(searchDirectory.FullName, AspireConfigFile.FileName);
@@ -675,41 +673,65 @@ internal sealed class ProjectLocator(
 
             if (settingsFile.Exists)
             {
-                using var stream = settingsFile.OpenRead();
-                var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-
-                if (json.RootElement.TryGetProperty("appHostPath", out var appHostPathProperty) && appHostPathProperty.GetString() is { } appHostPath)
+                try
                 {
-                    // Mirror the validation on the modern path above so the legacy branch also
-                    // cannot reach Path.Combine with a NUL byte or other Path.GetInvalidPathChars
-                    // value (https://github.com/microsoft/aspire/issues/17624).
-                    if (!IsValidConfiguredAppHostPath(appHostPath, settingsFile.FullName, "appHostPath", silent))
+                    using var stream = settingsFile.OpenRead();
+                    using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+                    if (json.RootElement.ValueKind is not JsonValueKind.Object)
                     {
+                        ReportInvalidConfigurationFileShape(settingsFile.FullName, silent);
                         return null;
                     }
 
-                    var qualifiedAppHostPath = Path.IsPathRooted(appHostPath) ? appHostPath : Path.Combine(settingsFile.Directory!.FullName, appHostPath);
-                    qualifiedAppHostPath = PathNormalizer.NormalizePathForCurrentPlatform(qualifiedAppHostPath);
-                    var appHostFile = new FileInfo(qualifiedAppHostPath);
-
-                    if (appHostFile.Exists)
+                    if (json.RootElement.TryGetProperty("appHostPath", out var appHostPathProperty))
                     {
-                        return appHostFile;
-                    }
-                    else
-                    {
-                        if (!silent)
+                        if (appHostPathProperty.ValueKind is not JsonValueKind.Null and not JsonValueKind.String)
                         {
-                            // Warn against the user-authored file (.aspire/settings.json), not the
-                            // never-authored aspire.config.json. Earlier versions reported
-                            // aspire.config.json because startup eagerly migrated the legacy
-                            // settings (PR #17234); see https://github.com/microsoft/aspire/issues/17620
-                            // for the user-facing impact of pointing users at a file they did
-                            // not create.
-                            interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, settingsFile.FullName, qualifiedAppHostPath));
+                            ReportInvalidConfiguredAppHostPathType(settingsFile.FullName, "appHostPath", silent);
+                            return null;
                         }
-                        return null;
+
+                        if (appHostPathProperty.GetString() is { } appHostPath)
+                        {
+                            // Mirror the validation on the modern path above so the legacy branch also
+                            // cannot reach Path.Combine with a NUL byte or other Path.GetInvalidPathChars
+                            // value (https://github.com/microsoft/aspire/issues/17624).
+                            if (!IsValidConfiguredAppHostPath(appHostPath, settingsFile.FullName, "appHostPath", silent))
+                            {
+                                return null;
+                            }
+
+                            var qualifiedAppHostPath = Path.IsPathRooted(appHostPath) ? appHostPath : Path.Combine(settingsFile.Directory!.FullName, appHostPath);
+                            qualifiedAppHostPath = PathNormalizer.NormalizePathForCurrentPlatform(qualifiedAppHostPath);
+                            var appHostFile = new FileInfo(qualifiedAppHostPath);
+
+                            if (appHostFile.Exists)
+                            {
+                                return appHostFile;
+                            }
+                            else
+                            {
+                                if (!silent)
+                                {
+                                    // Warn against the user-authored file (.aspire/settings.json), not the
+                                    // never-authored aspire.config.json. Earlier versions reported
+                                    // aspire.config.json because startup eagerly migrated the legacy
+                                    // settings (PR #17234); see https://github.com/microsoft/aspire/issues/17620
+                                    // for the user-facing impact of pointing users at a file they did
+                                    // not create.
+                                    interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.AppHostWasSpecifiedButDoesntExist, settingsFile.FullName, qualifiedAppHostPath));
+                                }
+                                return null;
+                            }
+                        }
                     }
+                }
+                catch (JsonException ex)
+                {
+                    var message = string.Format(CultureInfo.CurrentCulture, ErrorStrings.InvalidJsonInConfigFile, settingsFile.FullName, ex.Message);
+                    ReportInvalidConfigurationFile(ex, message, silent);
+                    return null;
                 }
             }
 
@@ -721,6 +743,44 @@ internal sealed class ProjectLocator(
             {
                 return null;
             }
+        }
+    }
+
+    private void ReportInvalidConfigurationFileShape(string configFilePath, bool silent)
+    {
+        var message = string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationFileMustBeJsonObject, configFilePath);
+        if (!silent)
+        {
+            interactionService.DisplayError(message);
+        }
+        else
+        {
+            logger.LogWarning("Ignoring AppHost settings in '{ConfigFilePath}' because the configuration root is not a JSON object.", configFilePath);
+        }
+    }
+
+    private void ReportInvalidConfiguredAppHostPathType(string configFilePath, string fieldName, bool silent)
+    {
+        var message = string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfiguredAppHostPathMustBeString, configFilePath, fieldName);
+        if (!silent)
+        {
+            interactionService.DisplayError(message);
+        }
+        else
+        {
+            logger.LogWarning("Ignoring configured AppHost path in '{ConfigFilePath}' ('{FieldName}') because it is not a JSON string.", configFilePath, fieldName);
+        }
+    }
+
+    private void ReportInvalidConfigurationFile(JsonException ex, string message, bool silent)
+    {
+        if (!silent)
+        {
+            interactionService.DisplayError(message);
+        }
+        else
+        {
+            logger.LogWarning(ex, "Unable to load AppHost settings: {Message}", message);
         }
     }
 
@@ -738,9 +798,10 @@ internal sealed class ProjectLocator(
             {
                 interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfiguredAppHostPathHasInvalidCharacters, configFilePath, fieldName));
             }
-            // Log even in silent mode so non-interactive probes (DotNetSdkCheck etc.) leave a
-            // diagnostic trail when they reject a malformed path.
-            logger.LogWarning("Ignoring configured AppHost path in '{ConfigFilePath}' ('{FieldName}') because it is empty or contains invalid characters.", configFilePath, fieldName);
+            else
+            {
+                logger.LogWarning("Ignoring configured AppHost path in '{ConfigFilePath}' ('{FieldName}') because it is empty or contains invalid characters.", configFilePath, fieldName);
+            }
             return false;
         }
 

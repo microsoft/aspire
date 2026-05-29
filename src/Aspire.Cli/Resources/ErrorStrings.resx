@@ -280,4 +280,12 @@
     <value>The configured AppHost path in '{0}' ('{1}') is empty or contains characters that are not allowed in a file path.</value>
     <comment>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</comment>
   </data>
+  <data name="ConfiguredAppHostPathMustBeString" xml:space="preserve">
+    <value>The configured AppHost path in '{0}' ('{1}') must be a JSON string.</value>
+    <comment>{0} is the configuration file path that the user authored, {1} is the field/setting name within that file (for example "appHost.path" or "appHostPath")</comment>
+  </data>
+  <data name="ConfigurationFileMustBeJsonObject" xml:space="preserve">
+    <value>The configuration file '{0}' must contain a JSON object.</value>
+    <comment>{0} is the configuration file path that the user authored.</comment>
+  </data>
 </root>
