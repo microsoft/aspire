@@ -69,7 +69,7 @@ public partial class Login : IAsyncDisposable, IComponentWithTelemetry
     {
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Pages/Login.razor.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/Login.razor.js");
 
             _tokenTextField?.FocusAsync();
         }

@@ -349,6 +349,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddAntiforgery(options =>
         {
             options.Cookie.Name = DashboardAntiForgeryCookieName;
+            options.Cookie.Path = "/";
+            options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+            options.Cookie.SameSite = SameSiteMode.None;
         });
 
         _app = builder.Build();
@@ -445,21 +448,31 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
 
         // Support running behind a reverse proxy with a path prefix (e.g., /sandbox/us/).
-        // The proxy sends X-Forwarded-Prefix to communicate the original path base.
         var pathBase = builder.Configuration["Dashboard:PathBase"];
         if (!string.IsNullOrEmpty(pathBase))
         {
+            var configuredPathBase = new PathString(pathBase.TrimEnd('/'));
             _app.Use((context, next) =>
             {
+                // Use X-Forwarded-Prefix if sent by the proxy, otherwise always set from config.
                 if (context.Request.Headers.TryGetValue("X-Forwarded-Prefix", out var forwardedPrefix) && forwardedPrefix.Count > 0)
                 {
                     context.Request.PathBase = new PathString(forwardedPrefix.ToString().TrimEnd('/'));
                 }
+                else if (context.Request.Path.StartsWithSegments(configuredPathBase, out var remaining))
+                {
+                    context.Request.PathBase = configuredPathBase;
+                    context.Request.Path = remaining;
+                }
+                else
+                {
+                    context.Request.PathBase = configuredPathBase;
+                }
                 return next();
             });
-            // Also handle direct access (without proxy) where the path includes the prefix.
-            _app.UsePathBase(pathBase.TrimEnd('/'));
         }
+
+        _app.UseRouting();
 
         // Redirect browser directly to /structuredlogs address if the dashboard is running without a resource service.
         // This is done to avoid immediately navigating in the Blazor app.
@@ -529,6 +542,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             }
         });
 
+        _app.UseAuthentication();
         _app.UseAuthorization();
 
         _app.UseMiddleware<BrowserSecurityHeadersMiddleware>();
@@ -835,6 +849,16 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
                     options.Events = new()
                     {
+                        OnRemoteFailure = context =>
+                        {
+                            // Break the auth loop: if OIDC callback fails (e.g. correlation failure),
+                            // redirect to root instead of triggering another challenge.
+                            var logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Aspire.Dashboard.OIDC");
+                            logger.LogWarning("OIDC remote failure: {Error}", context.Failure?.Message);
+                            context.Response.Redirect(context.Request.PathBase + "/");
+                            context.HandleResponse();
+                            return Task.CompletedTask;
+                        },
                         OnRedirectToIdentityProvider = context =>
                         {
                             // If this is an AJAX/fetch/SignalR request, return 401 instead of redirecting.
@@ -892,10 +916,9 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                     // Use the standard OIDC callback path for redirect URI compatibility.
                     options.CallbackPath = "/signin-oidc";
 
-                    // Required when running behind a reverse proxy to prevent infinite redirect loops.
-                    // If the correlation cookie can't be validated, skip the request instead of throwing
-                    // (which would trigger the error page → auth challenge → loop).
-                    options.SkipUnrecognizedRequests = true;
+                    // Do NOT use SkipUnrecognizedRequests. When true, correlation failures cause the
+                    // middleware to silently skip the callback, which falls through to auth challenge
+                    // and creates an infinite redirect loop. Instead, let OnRemoteFailure handle errors.
 
                     // Ensure correlation and nonce cookies are sent on the callback request
                     // regardless of path base configuration.

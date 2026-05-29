@@ -187,7 +187,7 @@ public partial class PlotlyChart : ChartBase
     {
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/js/app-metrics.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./js/app-metrics.js");
         }
 
         await base.OnAfterRenderAsync(firstRender);

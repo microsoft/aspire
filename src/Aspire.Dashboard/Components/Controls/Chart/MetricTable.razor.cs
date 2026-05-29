@@ -247,7 +247,7 @@ public partial class MetricTable : ChartBase
 
         if (firstRender)
         {
-            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "/Components/Controls/Chart/MetricTable.razor.js");
+            _jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Controls/Chart/MetricTable.razor.js");
         }
 
         await base.OnAfterRenderAsync(firstRender);

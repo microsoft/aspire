@@ -8,7 +8,7 @@
 
 <div class="layout" style="@(_isNavMenuOpen ? "overflow: hidden;" : string.Empty)">
     <div class="aspire-icon">
-        <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo"
+        <FluentAnchor Appearance="Appearance.Stealth" Href="./" Class="logo"
                       title="@Loc[nameof(Layout.MainLayoutAspire)]"
                       aria-label="@Loc[nameof(Layout.MainLayoutAspire)]">
             <FluentIcon Value="@(new AspireIcons.Size24.Logo())"/>
@@ -18,7 +18,7 @@
     @if (ViewportInformation.IsDesktop)
     {
         <FluentHeader>
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
+            <FluentAnchor Appearance="Appearance.Stealth" Href="./" Class="logo">
                 <ApplicationName/>
             </FluentAnchor>
             <div class="flex-filler"></div>
@@ -67,7 +67,7 @@
     else
     {
         <FluentHeader>
-            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
+            <FluentAnchor Appearance="Appearance.Stealth" Href="./" Class="logo">
                 <ApplicationName/>
             </FluentAnchor>
             <div class="flex-filler"></div>
