@@ -989,14 +989,26 @@ function connectClient(state, wsUrl) {
         // periodic-reconnect investigations. code/reason/wasClean tell
         // us who hung up and why (1000 = normal, 1006 = abnormal/no-
         // close-frame, 1011 = server error, etc.).
-        dbg(state, 'client.onClose', {
+        const closeInfo = {
             generation: myGeneration,
             currentGeneration: state.reconnect.generation,
             stale: myGeneration !== state.reconnect.generation,
             code: ev?.code,
             reason: ev?.reason,
             wasClean: ev?.wasClean,
-        });
+        };
+        dbg(state, 'client.onClose', closeInfo);
+        // Abnormal close (1006 = no close frame, !wasClean) is highly
+        // suggestive of a transport-level kill. Surface this at warn so
+        // it shows up in the default browser console without needing the
+        // aspire-terminal-debug flag. Normal close (1000) under stress
+        // means the proxy gracefully closed after upstream EOF — also
+        // worth a one-liner to correlate with server-side pump logs.
+        if (ev && (ev.code !== 1000 || !ev.wasClean)) {
+            try {
+                console.warn('[aspire-terminal] WS closed abnormally', closeInfo);
+            } catch { /* ignore */ }
+        }
         if (myGeneration !== state.reconnect.generation) {
             return;
         }

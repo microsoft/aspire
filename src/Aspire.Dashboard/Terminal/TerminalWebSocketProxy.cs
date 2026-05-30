@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers;
+using System.Diagnostics;
 using System.Net.WebSockets;
 using Aspire.Dashboard.Configuration;
 
@@ -211,12 +213,25 @@ internal static class TerminalWebSocketProxy
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var token = linkedCts.Token;
 
+        // Outbound (upstream → browser) is the heavy direction for terminal
+        // workloads (fullscreen TUIs emit kilobytes per frame). Use a larger
+        // pooled buffer to reduce the WS message rate the browser must
+        // dispatch — each ReadAsync turns into exactly one WS frame, so
+        // shrinking that count directly reduces browser-side dispatch
+        // pressure under stress. 64 KB matches the typical UDS receive
+        // window on macOS/Linux for SOCK_STREAM peers.
+        const int OutboundBufferSize = 64 * 1024;
+        const int InboundBufferSize = 16 * 1024;
+
         // Browser → upstream. WS frames carry HMP1 payloads from the JS
         // client (Input, Resize, RequestPrimary, ClientHello). Forward
         // verbatim; upstream's Hex1b server speaks HMP1.
         var inbound = Task.Run(async () =>
         {
-            var buffer = new byte[16 * 1024];
+            var buffer = ArrayPool<byte>.Shared.Rent(InboundBufferSize);
+            var bytesIn = 0L;
+            string endReason = "unknown";
+            Exception? endException = null;
             try
             {
                 while (!token.IsCancellationRequested)
@@ -224,19 +239,22 @@ internal static class TerminalWebSocketProxy
                     var msg = await ws.ReceiveAsync(buffer, token).ConfigureAwait(false);
                     if (msg.MessageType == WebSocketMessageType.Close)
                     {
+                        endReason = "browser-close";
                         return;
                     }
 
                     if (msg.Count > 0)
                     {
+                        bytesIn += msg.Count;
                         await upstream.WriteAsync(buffer.AsMemory(0, msg.Count), token).ConfigureAwait(false);
                         await upstream.FlushAsync(token).ConfigureAwait(false);
                     }
                 }
+                endReason = "cancelled";
             }
             catch (OperationCanceledException)
             {
-                // Normal shutdown.
+                endReason = "cancelled";
             }
             catch (Exception ex)
             {
@@ -244,8 +262,13 @@ internal static class TerminalWebSocketProxy
                 // and abrupt-kill races can surface here as IOException,
                 // WebSocketException, ObjectDisposedException, or unrelated
                 // types depending on the failure mode.
-                logger.LogDebug(ex, "Terminal WS inbound pump ended for {ConnectionId} ({ExceptionType}).",
-                    connectionId, ex.GetType().FullName);
+                endReason = "exception";
+                endException = ex;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+                LogPumpEnd(logger, connectionId, "inbound", endReason, endException, bytesIn, sends: 0, slowSends: 0, maxSendMs: 0);
             }
         }, token);
 
@@ -254,7 +277,13 @@ internal static class TerminalWebSocketProxy
         // HMP1 client reassembles them across WS message boundaries.
         var outbound = Task.Run(async () =>
         {
-            var buffer = new byte[16 * 1024];
+            var buffer = ArrayPool<byte>.Shared.Rent(OutboundBufferSize);
+            var bytesOut = 0L;
+            var sends = 0L;
+            var slowSends = 0L;
+            var maxSendMs = 0L;
+            string endReason = "unknown";
+            Exception? endException = null;
             try
             {
                 while (!token.IsCancellationRequested)
@@ -262,34 +291,90 @@ internal static class TerminalWebSocketProxy
                     var read = await upstream.ReadAsync(buffer, token).ConfigureAwait(false);
                     if (read == 0)
                     {
-                        // Upstream EOF — terminal host process died or the
-                        // replica recycled. Tear the WS down so the JS
-                        // reconnect loop kicks in.
+                        // Upstream EOF — terminal host process died, the
+                        // replica recycled, or the host evicted this peer
+                        // (e.g. slow-consumer policy). Tear the WS down so
+                        // the JS reconnect loop kicks in. The
+                        // distinguishing signal (vs. ReadAsync throwing) is
+                        // logged via endReason below.
+                        endReason = "upstream-eof";
                         return;
                     }
 
+                    bytesOut += read;
+                    sends++;
+
+                    var sw = ValueStopwatch.StartNew();
                     await ws.SendAsync(new ArraySegment<byte>(buffer, 0, read),
                                        WebSocketMessageType.Binary,
                                        endOfMessage: true,
                                        token).ConfigureAwait(false);
+                    var sendMs = sw.ElapsedMilliseconds;
+                    if (sendMs > maxSendMs)
+                    {
+                        maxSendMs = sendMs;
+                    }
+                    // 100ms is well above the inter-frame budget for a
+                    // 60fps TUI (≈16ms). Sustained slow sends here are
+                    // the primary smoking gun for browser-side
+                    // backpressure that ultimately triggers an upstream
+                    // slow-peer eviction.
+                    if (sendMs >= 100)
+                    {
+                        slowSends++;
+                    }
                 }
+                endReason = "cancelled";
             }
             catch (OperationCanceledException)
             {
-                // Normal shutdown.
+                endReason = "cancelled";
             }
             catch (Exception ex)
             {
-                logger.LogDebug(ex, "Terminal WS outbound pump ended for {ConnectionId} ({ExceptionType}).",
-                    connectionId, ex.GetType().FullName);
+                endReason = "exception";
+                endException = ex;
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+                LogPumpEnd(logger, connectionId, "outbound", endReason, endException, bytesOut, sends, slowSends, maxSendMs);
             }
         }, token);
 
         // Whoever finishes first triggers teardown of the other; both are
         // then awaited so we don't leave background tasks running after
         // the request scope ends.
-        await Task.WhenAny(inbound, outbound).ConfigureAwait(false);
+        var firstCompleted = await Task.WhenAny(inbound, outbound).ConfigureAwait(false);
+        logger.LogInformation("Terminal bridge first pump ended for {ConnectionId}: {Pump}.",
+            connectionId, firstCompleted == inbound ? "inbound" : "outbound");
         try { await linkedCts.CancelAsync().ConfigureAwait(false); } catch { /* swallow */ }
         try { await Task.WhenAll(inbound, outbound).ConfigureAwait(false); } catch { /* swallow */ }
+    }
+
+    private static void LogPumpEnd(ILogger logger, string connectionId, string direction, string reason,
+                                   Exception? exception, long bytes, long sends, long slowSends, long maxSendMs)
+    {
+        // Log abnormal terminations at Warning so they show up in default
+        // AppHost output, normal terminations at Information. The reason
+        // string is the single most useful signal for diagnosing periodic
+        // reconnects: "upstream-eof" points at the terminal host /
+        // slow-peer policy; "exception" + the type points at a transport
+        // failure; "browser-close" is a clean browser-initiated close.
+        var slow = direction == "outbound" ? $" sends={sends} slowSends={slowSends} maxSendMs={maxSendMs}" : "";
+        var exType = exception?.GetType().FullName ?? "(none)";
+        var level = (reason is "exception" or "upstream-eof") ? LogLevel.Warning : LogLevel.Information;
+        logger.Log(level, exception,
+            "Terminal WS {Direction} pump ended for {ConnectionId}: reason={Reason} bytes={Bytes}{SlowInfo} exceptionType={ExceptionType}.",
+            direction, connectionId, reason, bytes, slow, exType);
+    }
+
+    private readonly struct ValueStopwatch
+    {
+        private static readonly double s_timestampToMs = 1000.0 / Stopwatch.Frequency;
+        private readonly long _start;
+        private ValueStopwatch(long start) => _start = start;
+        public static ValueStopwatch StartNew() => new(Stopwatch.GetTimestamp());
+        public long ElapsedMilliseconds => (long)((Stopwatch.GetTimestamp() - _start) * s_timestampToMs);
     }
 }
