@@ -81,7 +81,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
         Options.Add(s_viewerOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -93,7 +93,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
         if (string.IsNullOrWhiteSpace(resourceName))
         {
             _interactionService.DisplayError("A resource name is required.");
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         var connectionResult = await _connectionResolver.ResolveConnectionAsync(
@@ -106,7 +106,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
         if (!connectionResult.Success)
         {
             _interactionService.DisplayMessage(KnownEmojis.Information, connectionResult.ErrorMessage);
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         var connection = connectionResult.Connection!;
@@ -115,7 +115,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
         {
             _interactionService.DisplayError(
                 "The connected AppHost does not support 'aspire terminal'. Update Aspire.Hosting to 13.4 or later.");
-            return ExitCodeConstants.AppHostIncompatible;
+            return CommandResult.Failure(CliExitCodes.AppHostIncompatible);
         }
 
         var snapshots = await _interactionService.ShowStatusAsync(
@@ -127,7 +127,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
         {
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
                 "Resource '{0}' was not found.", resourceName));
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         // For replicated resources, all snapshots share the same DisplayName which
@@ -146,13 +146,13 @@ internal sealed class TerminalAttachCommand : BaseCommand
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
                 "Resource '{0}' is not available for terminal attachment. Make sure the resource was registered with '.WithTerminal()' and that the terminal host has started.",
                 canonicalName));
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         var (replica, selectionError) = await SelectReplicaAsync(info.Replicas, requestedReplica, canonicalName, cancellationToken).ConfigureAwait(false);
-        if (selectionError != ExitCodeConstants.Success)
+        if (selectionError != CliExitCodes.Success)
         {
-            return selectionError;
+            return CommandResult.Failure(selectionError);
         }
         Debug.Assert(replica is not null, "SelectReplicaAsync returns a non-null replica when error == Success.");
 
@@ -194,11 +194,11 @@ internal sealed class TerminalAttachCommand : BaseCommand
             var displayName = string.Format(CultureInfo.InvariantCulture,
                 "aspire-cli:{0}", Environment.ProcessId);
             var viewerApp = new TerminalViewerApp(replica.ConsumerUdsPath, sessionLabel, displayName, viewerOnly, _logger);
-            return await viewerApp.RunAsync(cancellationToken).ConfigureAwait(false);
+            return CommandResult.FromExitCode(await viewerApp.RunAsync(cancellationToken).ConfigureAwait(false));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
         catch (SocketException ex)
         {
@@ -206,7 +206,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture,
                 "Could not connect to terminal session for '{0}' (replica {1}). Is the AppHost still running?",
                 canonicalName, replica.ReplicaIndex));
-            return ExitCodeConstants.FailedToExecuteResourceCommand;
+            return CommandResult.Failure(CliExitCodes.FailedToExecuteResourceCommand);
         }
         catch (IOException ex) when (ex.InnerException is SocketException)
         {
@@ -215,7 +215,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
                 string.Format(CultureInfo.CurrentCulture,
                     "Terminal session for '{0}' (replica {1}) ended.",
                     canonicalName, replica.ReplicaIndex));
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
     }
 
@@ -235,14 +235,14 @@ internal sealed class TerminalAttachCommand : BaseCommand
                     requestedReplica.Value,
                     canonicalName,
                     string.Join(", ", replicas.Select(r => r.ReplicaIndex.ToString(CultureInfo.InvariantCulture)))));
-                return (null, ExitCodeConstants.InvalidCommand);
+                return (null, CliExitCodes.InvalidCommand);
             }
-            return (match, ExitCodeConstants.Success);
+            return (match, CliExitCodes.Success);
         }
 
         if (replicas.Length == 1)
         {
-            return (replicas[0], ExitCodeConstants.Success);
+            return (replicas[0], CliExitCodes.Success);
         }
 
         if (Console.IsInputRedirected || Console.IsOutputRedirected)
@@ -251,7 +251,7 @@ internal sealed class TerminalAttachCommand : BaseCommand
                 "Resource '{0}' has {1} replicas. Pass --replica <index> to choose one in non-interactive mode.",
                 canonicalName,
                 replicas.Length));
-            return (null, ExitCodeConstants.InvalidCommand);
+            return (null, CliExitCodes.InvalidCommand);
         }
 
         var picked = await _interactionService.PromptForSelectionAsync(
@@ -262,6 +262,6 @@ internal sealed class TerminalAttachCommand : BaseCommand
                 : string.Format(CultureInfo.CurrentCulture, "{0} (exited code={1})", r.Label, r.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? "unknown"),
             cancellationToken: cancellationToken).ConfigureAwait(false);
 
-        return (picked, ExitCodeConstants.Success);
+        return (picked, CliExitCodes.Success);
     }
 }

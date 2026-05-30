@@ -76,7 +76,7 @@ internal sealed class TerminalPsCommand : BaseCommand
         Options.Add(s_verboseOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -102,10 +102,10 @@ internal sealed class TerminalPsCommand : BaseCommand
             if (format == OutputFormat.Json)
             {
                 _interactionService.DisplayRawText("[]", ConsoleOutput.Standard);
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
             _interactionService.DisplayMessage(KnownEmojis.Information, connectionResult.ErrorMessage);
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         var connection = connectionResult.Connection!;
@@ -117,7 +117,7 @@ internal sealed class TerminalPsCommand : BaseCommand
             // than an explicit incompatibility error.
             _interactionService.DisplayError(
                 "The connected AppHost does not support 'aspire terminal ps'. Update Aspire.Hosting to a build that advertises the 'terminals.ps.v1' capability.");
-            return ExitCodeConstants.AppHostIncompatible;
+            return CommandResult.Failure(CliExitCodes.AppHostIncompatible);
         }
 
         var response = await _interactionService.ShowStatusAsync(
@@ -135,7 +135,7 @@ internal sealed class TerminalPsCommand : BaseCommand
                 _interactionService.DisplayMessage(KnownEmojis.Information,
                     "No resources in the connected AppHost are configured for interactive terminals (`.WithTerminal()`).");
             }
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         _logger.LogDebug(
@@ -152,7 +152,7 @@ internal sealed class TerminalPsCommand : BaseCommand
             DisplayTable(response, verbose);
         }
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 
     private void EmitJson(Aspire.Cli.Backchannel.ListTerminalsResponse response, bool verbose)

@@ -103,7 +103,8 @@ public static class TerminalResourceBuilderExtensions
     /// to customise columns/rows/shell can fall back to per-resource environment variables
     /// or wait for a future overload that accepts a DTO.
     /// </summary>
-    [AspireExport("withTerminal", Description = "Adds an interactive terminal session to a resource using the default terminal options.")]
+    /// <ats-summary>Adds an interactive terminal session to a resource using the default terminal options.</ats-summary>
+    [AspireExport("withTerminal")]
     internal static IResourceBuilder<T> WithTerminalForPolyglot<T>(this IResourceBuilder<T> builder)
         where T : IResource
         => builder.WithTerminal();

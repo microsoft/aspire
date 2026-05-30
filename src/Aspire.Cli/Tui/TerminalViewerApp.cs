@@ -294,7 +294,7 @@ internal sealed class TerminalViewerApp
             throw _embeddedFault;
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private void OnRoleChanged(RoleChangedEventArgs e)

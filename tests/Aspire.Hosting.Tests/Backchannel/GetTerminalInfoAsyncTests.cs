@@ -3,8 +3,10 @@
 
 using System.Net.Sockets;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Shared.TerminalHost;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using StreamJsonRpc;
@@ -234,7 +236,9 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         var services = new ServiceCollection();
         services.AddSingleton(model);
         var sp = services.BuildServiceProvider();
-        return new AuxiliaryBackchannelRpcTarget(NullLogger<AuxiliaryBackchannelRpcTarget>.Instance, sp);
+        var configuration = new ConfigurationBuilder().Build();
+        var profilingTelemetry = new ProfilingTelemetry(configuration);
+        return new AuxiliaryBackchannelRpcTarget(NullLogger<AuxiliaryBackchannelRpcTarget>.Instance, configuration, profilingTelemetry, sp);
     }
 
     private async Task<FakeControlHost> StartFakeControlHostAsync(TerminalHostSessionInfo session)
