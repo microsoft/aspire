@@ -9,6 +9,8 @@ import { PassThrough } from 'stream';
 import { AppHostDataRepository } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import * as cliModule from '../debugger/languages/cli';
+import * as configInfoProvider from '../utils/configInfoProvider';
+import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 
 class TestChildProcess extends EventEmitter {
     stdout = new PassThrough();
@@ -49,6 +51,7 @@ suite('AppHostDataRepository', () => {
     let subscriptions: vscode.Disposable[];
     let getCliPathStub: sinon.SinonStub;
     let spawnStub: sinon.SinonStub;
+    let getConfigInfoStub: sinon.SinonStub;
     let defaultWorkspaceFoldersStub: sinon.SinonStub;
     let findFilesStub: sinon.SinonStub;
 
@@ -58,6 +61,12 @@ suite('AppHostDataRepository', () => {
         getCliPathStub = sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
+        // The repository probes `aspire config info --json` to learn whether the CLI advertises the
+        // describe `--include-disabled-commands` capability. Default to a capability-supporting CLI
+        // so the common-path tests below still see the flag on the describe invocation.
+        getConfigInfoStub = sinon.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
+            capabilities: [describeIncludeDisabledCommandsCapability],
+        } as any);
         defaultWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value(undefined);
         findFilesStub = sinon.stub(vscode.workspace, 'findFiles').resolves([]);
     });
@@ -65,6 +74,7 @@ suite('AppHostDataRepository', () => {
     teardown(() => {
         spawnStub.restore();
         getCliPathStub.restore();
+        getConfigInfoStub.restore();
         findFilesStub.restore();
         if (defaultWorkspaceFoldersStub.restore) {
             defaultWorkspaceFoldersStub.restore();
@@ -104,6 +114,40 @@ suite('AppHostDataRepository', () => {
         repository.dispose();
     });
 
+    test('describe watch omits disabled command flag when CLI does not advertise the capability', async () => {
+        // A CLI that responds to `config info` but doesn't list the capability is authoritative:
+        // we must not pass the flag at all (no optimistic attempt, no error-text parsing).
+        getConfigInfoStub.resolves({ capabilities: ['pipelines'] } as any);
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setPanelVisible(true);
+        await waitForMicrotasks();
+
+        assert.strictEqual(spawnStub.calledOnce, true);
+        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json']);
+
+        repository.dispose();
+    });
+
+    test('describe watch optimistically sends disabled command flag when capabilities cannot be read', async () => {
+        // If `config info` can't be read (e.g. a CLI too old to support it) we keep the optimistic
+        // default so newer-but-unprobeable CLIs still get the flag; the no-data fallback protects us.
+        getConfigInfoStub.resolves(null);
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setPanelVisible(true);
+        await waitForMicrotasks();
+
+        assert.strictEqual(spawnStub.calledOnce, true);
+        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands']);
+
+        repository.dispose();
+    });
+
     test('describe watch retries without disabled command flag when CLI does not recognize it', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
@@ -113,6 +157,26 @@ suite('AppHostDataRepository', () => {
 
         const firstOptions = spawnStub.firstCall.args[3];
         firstOptions.stderrCallback("Unrecognized command or argument '--include-disabled-commands'");
+        firstOptions.exitCallback(1);
+        await waitForMicrotasks();
+
+        assert.strictEqual(spawnStub.calledTwice, true);
+        assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json']);
+
+        repository.dispose();
+    });
+
+    test('describe watch retries without disabled command flag when CLI does not recognize it in a non-English locale', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setPanelVisible(true);
+        await waitForMicrotasks();
+
+        const firstOptions = spawnStub.firstCall.args[3];
+        // Localized (Spanish) rejection from a CLI without the flag. The flag token is never
+        // translated, so the fallback must trigger regardless of the surrounding error text.
+        firstOptions.stderrCallback("No se encuentra el recurso '--include-disabled-commands'.");
         firstOptions.exitCallback(1);
         await waitForMicrotasks();
 
@@ -1380,6 +1444,7 @@ suite('AppHostDataRepository global polling', () => {
     let subscriptions: vscode.Disposable[];
     let getCliPathStub: sinon.SinonStub;
     let spawnStub: sinon.SinonStub;
+    let getConfigInfoStub: sinon.SinonStub;
 
     setup(() => {
         subscriptions = [];
@@ -1387,11 +1452,17 @@ suite('AppHostDataRepository global polling', () => {
         getCliPathStub = sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
+        // Stub the capability probe so the constructor's eager `config info --json` doesn't
+        // spawn through spawnCliProcess and pollute these suites' spawn assertions.
+        getConfigInfoStub = sinon.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
+            capabilities: [describeIncludeDisabledCommandsCapability],
+        } as any);
     });
 
     teardown(() => {
         spawnStub.restore();
         getCliPathStub.restore();
+        getConfigInfoStub.restore();
         subscriptions.forEach(subscription => subscription.dispose());
     });
 
@@ -1757,6 +1828,7 @@ suite('AppHostDataRepository AppHost-file gate', () => {
     let subscriptions: vscode.Disposable[];
     let getCliPathStub: sinon.SinonStub;
     let spawnStub: sinon.SinonStub;
+    let getConfigInfoStub: sinon.SinonStub;
 
     setup(() => {
         subscriptions = [];
@@ -1764,11 +1836,17 @@ suite('AppHostDataRepository AppHost-file gate', () => {
         getCliPathStub = sinon.stub(terminalProvider, 'getAspireCliExecutablePath').resolves('aspire');
         spawnStub = sinon.stub(cliModule, 'spawnCliProcess');
         spawnStub.callsFake(() => new TestChildProcess());
+        // Stub the capability probe so the constructor's eager `config info --json` doesn't
+        // spawn through spawnCliProcess and pollute these suites' spawn assertions.
+        getConfigInfoStub = sinon.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves({
+            capabilities: [describeIncludeDisabledCommandsCapability],
+        } as any);
     });
 
     teardown(() => {
         spawnStub.restore();
         getCliPathStub.restore();
+        getConfigInfoStub.restore();
         subscriptions.forEach(subscription => subscription.dispose());
     });
 
@@ -1837,8 +1915,13 @@ suite('AppHostDataRepository AppHost-file gate', () => {
 });
 
 async function waitForMicrotasks(): Promise<void> {
-    await Promise.resolve();
-    await Promise.resolve();
+    // Flush many microtask ticks so promise chains settle, including the multi-await
+    // capability probe (cli path -> ensureCapabilities -> config info) in the describe
+    // start path. We deliberately avoid a real timer (setTimeout): several tests install
+    // sinon fake timers, under which a setTimeout(0) would never fire and would hang here.
+    for (let i = 0; i < 20; i++) {
+        await Promise.resolve();
+    }
 }
 
 async function waitForAppHostDiscovery(): Promise<void> {

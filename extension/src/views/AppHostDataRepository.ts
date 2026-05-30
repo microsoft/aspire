@@ -6,6 +6,8 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
 import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
+import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 
 export interface ResourceUrlJson {
     name: string | null;
@@ -136,7 +138,13 @@ export class AppHostDataRepository {
     private _describeReceivedData = false;
     private _describeStartPending = false;
     private _describeStartVersion = 0;
+    // Whether `aspire describe` accepts the hidden `--include-disabled-commands` flag. Resolved
+    // lazily from the CLI's advertised capabilities (`aspire config info --json`) so we don't pass
+    // the flag to an older CLI that would reject it and emit no resource data. Starts optimistic so
+    // that, if capability resolution fails (e.g. a CLI too old to support `config info`), we still
+    // attempt the flag and rely on the locale-independent no-data fallback below.
     private _includeDisabledCommandsSupported = true;
+    private readonly _configInfoProvider: ConfigInfoProvider;
 
     // ── Running AppHost state (ps polling) ──
     private _appHosts: AppHostDisplayInfo[] = [];
@@ -188,6 +196,7 @@ export class AppHostDataRepository {
     constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService) {
         this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
+        this._configInfoProvider = new ConfigInfoProvider(_terminalProvider);
         this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
             const rootFolder = vscode.workspace.workspaceFolders?.[0];
             if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
@@ -200,6 +209,12 @@ export class AppHostDataRepository {
                 this._startPsPolling();
             }
         });
+        // Kick off the CLI capability probe eagerly (fire-and-forget) so the cached describe gate is
+        // ready by the time a describe stream starts. We must NOT await capabilities on the describe
+        // start path: an await there would reorder the describe spawn after other streams (e.g. ps)
+        // and change observable process ordering. Until the probe resolves we use the optimistic
+        // default and the per-stream no-data fallback corrects a stale CLI.
+        void this._resolveDescribeCapability();
     }
 
     // ── Public accessors ──
@@ -460,7 +475,22 @@ export class AppHostDataRepository {
 
     // ── Workspace mode: describe --follow ──
 
-    private _startDescribeWatch(includeDisabledCommands = this._includeDisabledCommandsSupported): void {
+    /**
+     * Reads the CLI's advertised capabilities and maps the describe `--include-disabled-commands`
+     * capability onto {@link _includeDisabledCommandsSupported}. Best-effort: on a missing/older CLI
+     * the optimistic default and per-stream no-data fallback still cover us.
+     */
+    private async _resolveDescribeCapability(): Promise<void> {
+        const configInfo = await this._configInfoProvider.getConfigInfo({ suppressErrors: true });
+        if (this._disposed || !configInfo) {
+            return;
+        }
+
+        this._includeDisabledCommandsSupported = configInfo.capabilities?.includes(describeIncludeDisabledCommandsCapability) ?? false;
+        extensionLogOutputChannel.info(`CLI capability '${describeIncludeDisabledCommandsCapability}' ${this._includeDisabledCommandsSupported ? 'advertised' : 'not advertised'}; describe --include-disabled-commands ${this._includeDisabledCommandsSupported ? 'enabled' : 'disabled'}.`);
+    }
+
+    private _startDescribeWatch(forceIncludeDisabledCommands?: boolean): void {
         if (this._describeProcess || this._describeStartPending || this._disposed) {
             return;
         }
@@ -475,6 +505,8 @@ export class AppHostDataRepository {
                 return;
             }
 
+            // Read the cached capability synchronously — see constructor for why we don't await here.
+            const includeDisabledCommands = forceIncludeDisabledCommands ?? this._includeDisabledCommandsSupported;
             const args = ['describe', '--follow', '--format', 'json'];
             if (includeDisabledCommands) {
                 args.push('--include-disabled-commands');
@@ -720,6 +752,7 @@ export class AppHostDataRepository {
                 return;
             }
 
+            // Read the cached capability synchronously — see constructor for why we don't await here.
             const includeDisabledCommands = this._includeDisabledCommandsSupported;
             const args = ['describe', '--follow', '--format', 'json'];
             if (includeDisabledCommands) {
@@ -1473,14 +1506,18 @@ function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: st
 }
 
 function isIncludeDisabledCommandsUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
-    const output = [...nonJsonLines, stderr].join('\n').toLowerCase();
-    if (!output.includes('--include-disabled-commands')) {
-        return false;
-    }
-
-    return output.includes('unrecognized option')
-        || output.includes('unknown option')
-        || output.includes('unrecognized command or argument');
+    // This is only consulted after a describe attempt produced no resource data, so any
+    // non-JSON/stderr output here is diagnostic text rather than successful output. When the
+    // CLI accepts `--include-disabled-commands` it streams JSON resources and never echoes the
+    // flag name back, so the literal flag token only appears when the CLI is reporting that it
+    // does not recognize the option, e.g.:
+    //   English:  Unrecognized command or argument '--include-disabled-commands'.
+    //   Spanish:  No se encuentra el recurso '--include-disabled-commands'.
+    // The flag token itself is never localized, so detecting on its presence keeps this fallback
+    // locale-independent — matching on translated phrases like "unrecognized option" would miss
+    // non-English CLI output (e.g. via ASPIRE_LOCALE_OVERRIDE or the system locale).
+    const output = [...nonJsonLines, stderr].join('\n');
+    return output.includes('--include-disabled-commands');
 }
 
 export function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {

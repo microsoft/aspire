@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { AspireEditorCommandProvider } from '../editor/AspireEditorCommandProvider';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
-import { getConfigInfo } from '../utils/configInfoProvider';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
 import { enterPipelineStep } from '../loc/strings';
 
 export async function doCommand(terminalProvider: AspireTerminalProvider, editorCommandProvider: AspireEditorCommandProvider) {
@@ -19,8 +19,8 @@ export async function doCommand(terminalProvider: AspireTerminalProvider, editor
  * Returns undefined if the user cancels.
  */
 async function resolveStep(terminalProvider: AspireTerminalProvider): Promise<string | null | undefined> {
-    const configInfo = await getConfigInfo(terminalProvider);
-    if (configInfo?.Capabilities?.includes('pipelines')) {
+    const configInfoProvider = new ConfigInfoProvider(terminalProvider);
+    if (await configInfoProvider.hasCapability('pipelines')) {
         // New CLI: it will prompt for the step via interaction service
         return null;
     }

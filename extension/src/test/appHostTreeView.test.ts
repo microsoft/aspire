@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
+import * as configInfoProvider from '../utils/configInfoProvider';
 import { AppHostDataRepository, shortenPath, shortenPaths } from '../views/AppHostDataRepository';
 import { AspireAppHostTreeProvider, getResourceContextValue, getResourceIcon, resolveAppHostSourcePath, buildResourceDescription } from '../views/AspireAppHostTreeProvider';
 import type { AppHostDisplayInfo, ResourceJson, ViewMode } from '../views/AppHostDataRepository';
@@ -483,6 +484,9 @@ suite('AppHostDataRepository', () => {
 
     setup(() => {
         sandbox = sinon.createSandbox();
+        // The repository eagerly probes `aspire config info --json` in its constructor. Stub it so
+        // it doesn't spawn through the shared spawnCliProcess fake and clobber the discovery callback.
+        sandbox.stub(configInfoProvider.ConfigInfoProvider.prototype, 'getConfigInfo').resolves(null);
     });
 
     teardown(() => {
