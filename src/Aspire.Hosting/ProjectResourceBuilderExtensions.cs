@@ -453,6 +453,77 @@ public static class ProjectResourceBuilderExtensions
         return resource;
     }
 
+    /// <summary>
+    /// Configures the default VS Code <c>serverReadyAction</c> for a .NET project resource.
+    /// </summary>
+    /// <typeparam name="TProjectResource">The type of the project resource.</typeparam>
+    /// <param name="builder">The resource builder for the .NET project.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <remarks>
+    /// <para>
+    /// This applies the default VS Code <c>serverReadyAction</c> that matches ASP.NET Core's standard
+    /// <c>Now listening on:</c> output and opens the exact runtime URL emitted by the application.
+    /// </para>
+    /// <para>
+    /// The configuration is only used when the project launches through the Aspire VS Code extension in an IDE debugging session.
+    /// It does not affect normal process execution or published deployments.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// Configure a project to open the runtime URL chosen by Aspire when debugging in VS Code:
+    /// <code lang="csharp">
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// builder.AddProject&lt;Projects.ApiService&gt;("api")
+    ///     .WithVSCodeServerReadyAction();
+    /// </code>
+    /// </example>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "VS Code-specific debug configuration is not part of the ATS surface.")]
+    public static IResourceBuilder<TProjectResource> WithVSCodeServerReadyAction<TProjectResource>(this IResourceBuilder<TProjectResource> builder)
+        where TProjectResource : ProjectResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithVSCodeServerReadyAction(new VSCodeServerReadyAction());
+    }
+
+    /// <summary>
+    /// Configures a custom VS Code <c>serverReadyAction</c> for a .NET project resource.
+    /// </summary>
+    /// <typeparam name="TProjectResource">The type of the project resource.</typeparam>
+    /// <param name="builder">The resource builder for the .NET project.</param>
+    /// <param name="serverReadyAction">The VS Code server ready action to apply when debugging the project resource.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <remarks>
+    /// Use this overload when you need to customize how VS Code reacts to the server-ready signal, such as launching
+    /// a browser debugger or starting another debug configuration after the application reports its runtime URL.
+    /// </remarks>
+    /// <example>
+    /// Configure a custom follow-up debug session in VS Code:
+    /// <code lang="csharp">
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    ///
+    /// builder.AddProject&lt;Projects.ApiService&gt;("api")
+    ///     .WithVSCodeServerReadyAction(new VSCodeServerReadyAction
+    ///     {
+    ///         Action = "startDebugging",
+    ///         Pattern = @"\bNow listening on:\s+(https?://\S+)",
+    ///         Name = "Attach browser"
+    ///     });
+    /// </code>
+    /// </example>
+    [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "VS Code-specific debug configuration is not part of the ATS surface.")]
+    public static IResourceBuilder<TProjectResource> WithVSCodeServerReadyAction<TProjectResource>(this IResourceBuilder<TProjectResource> builder, VSCodeServerReadyAction serverReadyAction)
+        where TProjectResource : ProjectResource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(serverReadyAction);
+
+        return builder.WithAnnotation(new VSCodeServerReadyActionAnnotation(serverReadyAction), ResourceAnnotationMutationBehavior.Replace);
+    }
+
     private static void ApplyProjectResourceOptions(ProjectResourceOptions target, ProjectResourceOptions source)
     {
         ArgumentNullException.ThrowIfNull(target);

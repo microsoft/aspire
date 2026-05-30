@@ -573,7 +573,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.program, outputPath);
 
         // cwd should resolve to projectDir/custom
-        assert.strictEqual(debugConfig.cwd, path.join(projectDir, 'custom'));
+        assert.strictEqual(debugConfig.cwd, path.posix.normalize(path.join(projectDir, 'custom').replace(/\\/g, '/')));
 
         // args should be parsed from commandLineArgs
         assert.deepStrictEqual(debugConfig.args, '--arg "value" --flag');
@@ -586,14 +586,16 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.executablePath, 'exePath');
         assert.strictEqual(debugConfig.checkForDevCert, true);
 
-        // serverReadyAction should be present with the applicationUrl
+        // serverReadyAction should be present when launchBrowser is true
         assert.notStrictEqual(debugConfig.serverReadyAction, undefined);
+        assert.ok(debugConfig.serverReadyAction);
+        assert.ok('uriFormat' in debugConfig.serverReadyAction);
         assert.strictEqual(debugConfig.serverReadyAction.uriFormat, 'https://localhost:5001');
+        assert.strictEqual(debugConfig.serverReadyAction.pattern, '\\bNow listening on:\\s+https://localhost:5001');
 
         // cleanup
         fs.rmSync(tempDir, { recursive: true, force: true });
     });
-
     test('uses executable path for Executable command launch profiles instead of project output', async () => {
         // Bug #15647: Executable command profiles use the executablePath and
         // commandLineArgs to define how to run the class library project. The extension
@@ -655,7 +657,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.strictEqual(debugConfig.args, 'exec --depsfile ./MyClassLibFunction.deps.json --runtimeconfig ./MyClassLibFunction.runtimeconfig.json RuntimeSupport.dll MyClassLibFunction::MyClassLibFunction.Function::FunctionHandler');
 
         // cwd should resolve to the profile's working directory
-        assert.strictEqual(debugConfig.cwd, path.resolve(projectDir, 'bin/Debug/net10.0/'));
+        assert.strictEqual(debugConfig.cwd, path.posix.normalize(path.resolve(projectDir, 'bin/Debug/net10.0/').replace(/\\/g, '/')));
 
         // env should include the profile's environment variables
         assert.strictEqual(debugConfig.env.FUNCTION_ENV, 'test');
@@ -730,6 +732,65 @@ suite('Dotnet Debugger Extension Tests', () => {
 
         // cleanup
         delete process.env[envVarName];
+        fs.rmSync(tempDir, { recursive: true, force: true });
+    });
+
+    test('does not overwrite an existing serverReadyAction', async () => {
+        const fs = require('fs');
+        const os = require('os');
+        const path = require('path');
+
+        const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-test-'));
+        const projectDir = path.join(tempDir, 'TestProject');
+        const propertiesDir = path.join(projectDir, 'Properties');
+        fs.mkdirSync(propertiesDir, { recursive: true });
+
+        const projectPath = path.join(projectDir, 'TestProject.csproj');
+        fs.writeFileSync(projectPath, '<Project></Project>');
+
+        const launchSettings = {
+            profiles: {
+                'Development': {
+                    commandName: 'Project',
+                    launchBrowser: true,
+                    applicationUrl: 'https://localhost:5001'
+                }
+            }
+        };
+
+        fs.writeFileSync(path.join(propertiesDir, 'launchSettings.json'), JSON.stringify(launchSettings, null, 2));
+
+        const outputPath = path.join(projectDir, 'bin', 'Debug', 'net7.0', 'TestProject.dll');
+        const { extension } = createDebuggerExtension(outputPath, null, true, true);
+
+        const launchConfig: ProjectLaunchConfiguration = {
+            type: 'project',
+            project_path: projectPath,
+            launch_profile: 'Development'
+        };
+
+        const existingServerReadyAction = {
+            action: 'openExternally',
+            pattern: 'existing',
+            uriFormat: 'https://example.invalid/existing'
+        };
+
+        const debugConfig: AspireResourceExtendedDebugConfiguration = {
+            runId: '1',
+            debugSessionId: '1',
+            type: 'coreclr',
+            name: 'Test Debug Config',
+            request: 'launch',
+            serverReadyAction: existingServerReadyAction
+        };
+
+        const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+        await extension.createDebugSessionConfigurationCallback!(launchConfig, undefined, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+        assert.strictEqual(debugConfig.serverReadyAction, existingServerReadyAction);
+        assert.strictEqual(debugConfig.serverReadyAction.uriFormat, 'https://example.invalid/existing');
+
         fs.rmSync(tempDir, { recursive: true, force: true });
     });
 });
