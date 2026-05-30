@@ -169,6 +169,35 @@ const SIZE_PRESETS = [
 function ensureTerminalStyles() {
     if (document.getElementById('aspire-terminal-styles')) return;
     const css = `
+/*
+ * Bundled Nerd Font for the terminal view. Cascadia Mono NF is
+ * Microsoft's official patched build of Cascadia Mono (no ligatures —
+ * preferred for terminal output) with the Nerd Font glyph set, so
+ * Powerline separators, devicons, weather icons, k9s/lazygit/htop
+ * glyphs, etc. all render correctly instead of as tofu boxes. The
+ * font ships as a single variable woff2 (~950 KB) covering all
+ * weights. License: SIL OFL 1.1 — see
+ * wwwroot/fonts/cascadia-mono-nf/LICENSE.txt.
+ *
+ * font-display: swap so the terminal renders immediately with the
+ * fallback monospace stack and silently upgrades to Cascadia once
+ * the woff2 lands. xterm.js measures cell width from
+ * .xterm-char-measure-element which is re-measured on every theme/
+ * options change; if we ever need to force a re-measure after the
+ * font swap we can listen for document.fonts.ready, but in practice
+ * the first measurement happens after the font has loaded for
+ * already-cached fetches and the visual glitch on cold load is a
+ * one-frame reflow.
+ */
+@font-face {
+  font-family: 'Cascadia Mono NF';
+  src: url('/fonts/cascadia-mono-nf/CascadiaMonoNF.woff2') format('woff2-variations'),
+       url('/fonts/cascadia-mono-nf/CascadiaMonoNF.woff2') format('woff2');
+  font-weight: 200 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 .aspire-terminal-host {
   /*
    * --aspire-term-bg is the chrome around the framed terminal (the
@@ -800,7 +829,7 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
     const term = new window.Terminal({
         cursorBlink: true,
         fontSize: state.currentFontPx,
-        fontFamily: 'Menlo, Consolas, "DejaVu Sans Mono", monospace',
+        fontFamily: '"Cascadia Mono NF", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace',
         // HMP1 does not currently synchronize scrollback across consumer
         // reconnects — the producer's StateSync only repaints the visible
         // viewport. The reconnect path below calls term.clear() on every
@@ -821,6 +850,35 @@ export async function initTerminal(element, wsUrl, dotNetRef) {
 
     state.term = term;
     state.fitAddon = fitAddon;
+
+    // Force xterm to re-measure cell metrics once Cascadia Mono NF has
+    // actually loaded. xterm measures cell width ONCE per fontFamily
+    // change via its hidden .xterm-char-measure-element, so if the
+    // woff2 isn't in the FontFace cache when Terminal is constructed
+    // the grid is calibrated against the fallback (Menlo / Consolas /
+    // generic monospace) and stays slightly off when Cascadia swaps in
+    // — visible as text drifting away from the cursor column. The
+    // workaround is to bounce fontFamily through a different value
+    // (any string xterm hasn't seen) and back so it re-runs the
+    // measurement pass after document.fonts.ready resolves. The font
+    // is also pinned at font-display: swap so the first paint already
+    // uses something monospace; this hook just corrects the metrics
+    // once the real glyphs land. Guarded by FontFace API support and
+    // wrapped in try/catch so we silently no-op on older browsers or
+    // if the asset 404s.
+    if (document.fonts && typeof document.fonts.ready?.then === 'function') {
+        document.fonts.ready
+            .then(() => {
+                if (state.term !== term) return;
+                try {
+                    term.options.fontFamily = 'monospace';
+                    term.options.fontFamily = '"Cascadia Mono NF", "Cascadia Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace';
+                    calibrateRatios(state);
+                    applyRoleAwareLayout(state);
+                } catch { /* ignore — xterm disposed mid-flight */ }
+            })
+            .catch(() => { /* font load failed; fallback stack continues to render */ });
+    }
 
     // Defer the initial layout one frame so xterm has rendered the cell
     // grid — calibrateRatios needs the rendered .xterm-screen.
