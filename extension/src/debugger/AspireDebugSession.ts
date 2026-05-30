@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
 import * as fs from "fs";
 import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
-import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProjectLaunchConfiguration, StartAppHostOptions } from "../dcp/types";
+import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProjectLaunchConfiguration, SessionTerminatedNotification, StartAppHostOptions } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
 import AspireDcpServer, { generateDcpIdPrefix } from "../dcp/AspireDcpServer";
 import { spawnCliProcess } from "./languages/cli";
@@ -264,6 +264,21 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
     this._trackedDebugAdapters.push(debugAdapter);
     this._disposables.push(createDebugAdapterTracker(this._dcpServer, debugAdapter, onAppHostRestartRequested, onAppHostOutput));
+  }
+
+  /**
+   * Sends a sessionTerminated notification to DCP for the given run session.
+   * Used by resource debugger extensions (e.g., browser) to notify DCP when
+   * a debug session ends outside of the normal adapter tracker flow.
+   */
+  sendSessionTerminated(sessionId: string, dcpId: string, exitCode: number = 0): void {
+    const notification: SessionTerminatedNotification = {
+      notification_type: 'sessionTerminated',
+      session_id: sessionId,
+      dcp_id: dcpId,
+      exit_code: exitCode
+    };
+    this._dcpServer.sendNotification(notification);
   }
 
   private static readonly _nodeAppHostExtensions = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];

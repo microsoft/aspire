@@ -8,6 +8,17 @@
     <NoDefaultLaunchSettingsFile>true</NoDefaultLaunchSettingsFile>
     <StaticWebAssetProjectMode>Default</StaticWebAssetProjectMode>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <!-- Enable managed debugging for WebAssembly -->
+    <DebuggerSupport>true</DebuggerSupport>
+    <!-- Set debug level > 0 so the WASM runtime enables its debug agent at startup -->
+    <WasmDebugLevel>2</WasmDebugLevel>
+    <!-- Override Arcade's embedded PDBs: the WASM debugger needs separate portable PDB files
+         served alongside the .wasm assemblies in _framework/ to bind breakpoints. -->
+    <DebugType>portable</DebugType>
+    <!-- Workaround: monovsdbg_wasm WebCIL parser fails in hosted mode.
+         Serving plain .dll files bypasses the issue.
+         Tracking: https://github.com/microsoft/vscode-dotnettools/issues/3002 -->
+    <WasmEnableWebcil>false</WasmEnableWebcil>
     <!-- Enable WebAssembly diagnostics for OpenTelemetry tracing -->
     <MetricsSupport>true</MetricsSupport>
     <EventSourceSupport>true</EventSourceSupport>

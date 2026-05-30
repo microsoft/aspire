@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import * as path from 'path';
 import * as os from 'os';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isBrowserLaunchConfiguration } from "../../dcp/types";
@@ -52,7 +53,8 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
             '--no-first-run',
             '--no-default-browser-check',
             '--hide-crash-restore-bubble',
-            '--disable-features=EdgeProfileOnStartup,msEdgeFirstRunExperience',
+            '--disable-features=EdgeProfileOnStartup,msEdgeFirstRunExperience,EdgeBackgroundMode',
+            '--disable-background-mode',
         ];
 
         // Remove program/args/cwd since browser debugging doesn't use them
@@ -74,5 +76,28 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
             }
         }
         extensionLogOutputChannel.info(`[Browser] Final debug config: type=${debugConfiguration.type}, url=${debugConfiguration.url}, webRoot=${debugConfiguration.webRoot}, noDebug=${debugConfiguration.noDebug}`);
+
+        // Listen for the browser debug session to terminate (e.g., user closes the browser window).
+        // When it does, notify DCP so the resource transitions to a terminal state and
+        // the dashboard UI can reset.
+        // We match by session name only because js-debug child sessions do not carry
+        // custom configuration properties (runId) from the parent launch config.
+        const runId = debugConfiguration.runId;
+        const debugSessionId = debugConfiguration.debugSessionId;
+        const aspireSession = launchOptions.debugSession;
+        const browserSessionName = debugConfiguration.name;
+
+        extensionLogOutputChannel.info(`[Browser] Registering terminate listener for session name="${browserSessionName}", runId=${runId}, debugSessionId=${debugSessionId}`);
+
+        if (runId && debugSessionId) {
+            const disposable = vscode.debug.onDidTerminateDebugSession((session) => {
+                extensionLogOutputChannel.info(`[Browser] onDidTerminateDebugSession fired: name="${session.name}", configRunId=${session.configuration?.runId}, expected="${browserSessionName}"`);
+                if (session.name === browserSessionName) {
+                    disposable.dispose();
+                    extensionLogOutputChannel.info(`[Browser] Browser debug session terminated — notifying DCP (runId: ${runId}, debugSessionId: ${debugSessionId})`);
+                    aspireSession.sendSessionTerminated(runId, debugSessionId, 0);
+                }
+            });
+        }
     }
 };
