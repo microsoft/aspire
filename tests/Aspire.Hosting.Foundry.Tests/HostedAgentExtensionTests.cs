@@ -7,6 +7,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Azure.AI.Projects.Agents;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Foundry.Tests;
@@ -74,9 +75,47 @@ public class HostedAgentExtensionTests
         var resource = builder.Resources.Single(r => r.Name == "agent");
         var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
         Assert.Equal("Send Message", command.DisplayName);
+        Assert.EndsWith("-/responses", command.Name);
         Assert.Equal("ChatSparkle", command.IconName);
         Assert.Equal(IconVariant.Regular, command.IconVariant);
         Assert.True(command.IsHighlighted);
+    }
+
+    [Fact]
+    public async Task AsHostedAgent_InRunMode_WithInvocationsProtocol_ConfiguresEndpointAndCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, configuration =>
+            {
+                configuration.ContainerProtocolVersions.Clear();
+                configuration.ContainerProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"));
+            });
+
+        using var app = builder.Build();
+
+        var resource = builder.Resources.Single(r => r.Name == "agent");
+        var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.EndsWith("-/invocations", command.Name);
+
+        var urlsCallback = Assert.Single(resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
+        var url = new ResourceUrlAnnotation
+        {
+            Url = "http://localhost:1234",
+            Endpoint = ((IResourceWithEndpoints)resource).GetEndpoint("http")
+        };
+        var urls = new List<ResourceUrlAnnotation> { url };
+        var context = new ResourceUrlsCallbackContext(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            resource,
+            urls);
+
+        await urlsCallback.Callback(context);
+
+        Assert.Equal("Invocations Endpoint", url.DisplayText);
+        Assert.Equal("http://localhost:1234/invocations", url.Url);
     }
 
     [Fact]
@@ -189,7 +228,15 @@ public class HostedAgentExtensionTests
             Cpu = 1m,
             Memory = 2m,
             Metadata = { ["scenario"] = "unit-test" },
-            EnvironmentVariables = { ["MY_VAR"] = "my-value" }
+            EnvironmentVariables = { ["MY_VAR"] = "my-value" },
+            Protocols =
+            {
+                new HostedAgentProtocolVersion
+                {
+                    Protocol = "invocations",
+                    Version = "1.0.0"
+                }
+            }
         };
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
@@ -207,6 +254,9 @@ public class HostedAgentExtensionTests
         Assert.Equal(2m, configuration.Memory);
         Assert.Equal("unit-test", configuration.Metadata["scenario"]);
         Assert.Equal("my-value", configuration.EnvironmentVariables["MY_VAR"]);
+        var protocol = Assert.Single(configuration.ContainerProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
+        Assert.Equal("1.0.0", protocol.Version);
     }
 
     [Fact]
