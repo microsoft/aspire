@@ -1467,6 +1467,76 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.All(exactMatchQueries, query => Assert.Equal("Aspire.Hosting.Redis", query));
     }
 
+    [Theory]
+    [InlineData("redis")]
+    [InlineData("Aspire.Hosting.Redis")]
+    public async Task AddCommandInteractiveDoesNotPromptForIntegrationWhenExactMatchIsFound(string integrationName)
+    {
+        var promptedForIntegration = false;
+        var promptedForVersion = false;
+        var selectedPackageName = string.Empty;
+        var selectedPackageVersion = string.Empty;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationCallback = (packages) =>
+                {
+                    promptedForIntegration = true;
+                    throw new InvalidOperationException("Should not have been prompted for integration selection.");
+                };
+                prompter.PromptForIntegrationVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    return packages.Single(package => package.Package.Version == "13.2.0");
+                };
+
+                return prompter;
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
+                {
+                    return (0, [
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "nuget", Version = "13.3.0" },
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "nuget", Version = "13.2.0" }
+                    ]);
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
+                {
+                    selectedPackageName = packageName;
+                    selectedPackageVersion = packageVersion;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add {integrationName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.False(promptedForIntegration);
+        Assert.True(promptedForVersion);
+        Assert.Equal("Aspire.Hosting.Redis", selectedPackageName);
+        Assert.Equal("13.2.0", selectedPackageVersion);
+    }
+
     [Fact]
     public async Task AddCommandSearchesEachPackageIdOnceWhenExactMatchFallsBackAcrossSharedChannel()
     {
@@ -2809,6 +2879,131 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(0, exitCode);
         Assert.Equal("Aspire.Hosting.Kubernetes", addedPackage);
+    }
+
+    [Fact]
+    public async Task AddCommand_Interactive_SingleFuzzyMatchPromptsBeforeAdding_Regression17724()
+    {
+        var promptedPackages = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
+        var addedPackage = string.Empty;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationCallback = (packages) =>
+                {
+                    promptedPackages.AddRange(packages);
+                    return packages.Single();
+                };
+
+                return prompter;
+            };
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    return (
+                        0,
+                        new NuGetPackage[]
+                        {
+                            new() { Id = "Aspire.Hosting.Azure", Source = "nuget", Version = "9.2.0" }
+                        });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
+                {
+                    addedPackage = packageName;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add kube");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var promptedPackage = Assert.Single(promptedPackages);
+        Assert.Equal(0, exitCode);
+        Assert.Equal("Aspire.Hosting.Azure", promptedPackage.Package.Id);
+        Assert.Equal("Aspire.Hosting.Azure", addedPackage);
+    }
+
+    [Fact]
+    public async Task AddCommand_Interactive_NoFuzzyMatchSinglePackagePromptsBeforeAdding()
+    {
+        var promptedPackages = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
+        var displayedSubtleMessage = string.Empty;
+        var addedPackage = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationCallback = (packages) =>
+                {
+                    promptedPackages.AddRange(packages);
+                    return packages.Single();
+                };
+
+                return prompter;
+            };
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    return (
+                        0,
+                        new NuGetPackage[]
+                        {
+                            new() { Id = "Aspire.Hosting.Redis", Source = "nuget", Version = "9.2.0" }
+                        });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
+                {
+                    addedPackage = packageName;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add zzzzzzzzzz");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var promptedPackage = Assert.Single(promptedPackages);
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Format(AddCommandStrings.NoPackagesMatchedSearchTerm, "zzzzzzzzzz"), displayedSubtleMessage);
+        Assert.Equal("Aspire.Hosting.Redis", promptedPackage.Package.Id);
+        Assert.Equal("Aspire.Hosting.Redis", addedPackage);
     }
 
     [Fact]
