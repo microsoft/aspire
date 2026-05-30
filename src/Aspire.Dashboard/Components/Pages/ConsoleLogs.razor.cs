@@ -20,6 +20,7 @@ using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -166,6 +167,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _selectedResourceHasTerminal;
     private string? _terminalResourceName;
     private int _terminalReplicaIndex;
+    private Controls.TerminalToolbarState? _terminalToolbarState;
+    private IReadOnlyList<Controls.TerminalSizePreset> _terminalSizePresets = Array.Empty<Controls.TerminalSizePreset>();
 
     // UI
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
@@ -417,6 +420,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _selectedResourceHasTerminal = false;
         _terminalResourceName = null;
         _terminalReplicaIndex = 0;
+        // Drop any prior terminal's toolbar state so we don't briefly render
+        // the wrong badge/dims/dropdown for the new resource while the JS
+        // terminal is initializing and pushing its first snapshot.
+        _terminalToolbarState = null;
 
         if (!isAllSelected && selectedResourceName is not null &&
             _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
@@ -1135,6 +1142,92 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             };
         });
     }
+
+    // --- Terminal toolbar wiring -----------------------------------------
+    //
+    // The TerminalView component pushes a TerminalToolbarState snapshot up
+    // here whenever the underlying xterm/HMP1 state changes (role flips,
+    // resize, font change). Those snapshots drive the page-level toolbar
+    // that replaces the in-frame chrome the terminal used to render itself.
+    // JS remains the source of truth for terminal state; this layer just
+    // mirrors the latest snapshot and routes user actions back to JS via
+    // the TerminalView public methods.
+    private const int TerminalFontStep = 1;
+    private const int TerminalFontMin = 4;
+    private const int TerminalFontMax = 72;
+
+    private async Task OnTerminalToolbarStateChangedAsync(Controls.TerminalToolbarState state)
+    {
+        _terminalToolbarState = state;
+
+        // First snapshot after init — fetch the size preset list once so
+        // the dropdown stays in sync with whatever JS knows how to handle.
+        if (_terminalSizePresets.Count == 0 && _terminalViewRef is not null)
+        {
+            _terminalSizePresets = await _terminalViewRef.GetSizePresetsAsync();
+        }
+
+        StateHasChanged();
+    }
+
+    private Task TerminalTakeControlAsync()
+        => _terminalViewRef?.TakePrimaryAsync() ?? Task.CompletedTask;
+
+    private Task TerminalFontMinusAsync()
+    {
+        if (_terminalToolbarState is not { } s || _terminalViewRef is null)
+        {
+            return Task.CompletedTask;
+        }
+        return _terminalViewRef.SetFontSizeAsync(Math.Max(TerminalFontMin, s.FontPx - TerminalFontStep));
+    }
+
+    private Task TerminalFontPlusAsync()
+    {
+        if (_terminalToolbarState is not { } s || _terminalViewRef is null)
+        {
+            return Task.CompletedTask;
+        }
+        return _terminalViewRef.SetFontSizeAsync(Math.Min(TerminalFontMax, s.FontPx + TerminalFontStep));
+    }
+
+    private Task TerminalSizeChangedAsync(string? newKey)
+    {
+        if (newKey is null || _terminalViewRef is null)
+        {
+            return Task.CompletedTask;
+        }
+        return _terminalViewRef.SetSizeModeAsync(newKey);
+    }
+
+    // Badge appearance roughly mirrors the colour cues the old in-frame
+    // chrome used: green for primary, yellow/accent for no-primary, neutral
+    // for connecting/viewer.
+    private static Appearance TerminalStatusAppearance(string status) => status switch
+    {
+        "primary" => Appearance.Accent,
+        "no-primary" => Appearance.Lightweight,
+        "viewer" => Appearance.Neutral,
+        _ => Appearance.Neutral,
+    };
+
+    private static string TerminalStatusLabel(string status) => status switch
+    {
+        "primary" => "PRIMARY",
+        "no-primary" => "no primary",
+        "viewer" => "viewer",
+        "connecting" => "connecting",
+        _ => status,
+    };
+
+    private static string TerminalStatusTitle(string status) => status switch
+    {
+        "primary" => "This tab owns primary input on the terminal session.",
+        "no-primary" => "No client currently owns primary input.",
+        "viewer" => "Another client owns primary input; this tab is a viewer.",
+        "connecting" => "Connecting to the terminal session…",
+        _ => status,
+    };
 
     // IComponentWithTelemetry impl
     public ComponentTelemetryContext TelemetryContext { get; } = new(ComponentType.Page, TelemetryComponentIds.ConsoleLogs);

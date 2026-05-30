@@ -16,6 +16,7 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
 {
     private ElementReference _terminalElement;
     private IJSObjectReference? _jsModule;
+    private DotNetObjectReference<TerminalView>? _selfRef;
     private int _terminalId;
     private string? _connectedResourceName;
     private int _connectedReplicaIndex = -1;
@@ -33,6 +34,16 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
     /// </summary>
     [Parameter]
     public int ReplicaIndex { get; set; }
+
+    /// <summary>
+    /// Raised when the JS side pushes a fresh toolbar state snapshot (role,
+    /// dims, font size, etc.). The host page subscribes so the chrome that
+    /// used to live inside the terminal frame — status badge, "Take control"
+    /// button, font controls, size dropdown, dims readout — can be rendered
+    /// in the page's existing toolbar instead.
+    /// </summary>
+    [Parameter]
+    public EventCallback<TerminalToolbarState> OnToolbarStateChanged { get; set; }
 
     [Inject]
     public required IJSRuntime JS { get; init; }
@@ -99,8 +110,10 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
             _jsModule = await JS.InvokeAsync<IJSObjectReference>(
                 "import", "/Components/Controls/TerminalView.razor.js");
 
+            _selfRef ??= DotNetObjectReference.Create(this);
+
             _terminalId = await _jsModule.InvokeAsync<int>(
-                "initTerminal", _terminalElement, BuildWebSocketUrl(ResourceName!, ReplicaIndex));
+                "initTerminal", _terminalElement, BuildWebSocketUrl(ResourceName!, ReplicaIndex), _selfRef);
         }
         catch (JSDisconnectedException)
         {
@@ -144,6 +157,106 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Invoked by the JS terminal whenever its role/size/font state changes.
+    /// Forwards the snapshot to the host page via <see cref="OnToolbarStateChanged"/>.
+    /// JS remains the source of truth for terminal state — the toolbar
+    /// renders whatever the most recent snapshot says.
+    /// </summary>
+    [JSInvokable]
+    public Task OnTerminalStateChanged(TerminalToolbarState state)
+    {
+        // Drop stale snapshots that arrive after this view was rebound to a
+        // different resource/replica (the JS side bumps `generation` on every
+        // (re)connect; the id changes when initTerminal allocates a new one).
+        if (_terminalId != 0 && state.TerminalId != _terminalId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return OnToolbarStateChanged.InvokeAsync(state);
+    }
+
+    /// <summary>
+    /// Requests primary control of the producer session. No-op if the terminal
+    /// JS module hasn't initialized yet or if we're already primary; JS
+    /// performs the authoritative role checks.
+    /// </summary>
+    public async Task TakePrimaryAsync()
+    {
+        if (_jsModule is null || _terminalId == 0)
+        {
+            return;
+        }
+        try
+        {
+            await _jsModule.InvokeVoidAsync("takePrimaryFromHost", _terminalId);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Sets the terminal font size and switches sizing back to "Auto" (font-
+    /// driven) mode. Out-of-range values are clamped by the JS side.
+    /// </summary>
+    public async Task SetFontSizeAsync(int fontPx)
+    {
+        if (_jsModule is null || _terminalId == 0)
+        {
+            return;
+        }
+        try
+        {
+            await _jsModule.InvokeVoidAsync("setFontSizeFromHost", _terminalId, fontPx);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Sets the sizing mode by preset key (<c>auto</c> or one of the
+    /// <see cref="TerminalToolbarState.SizeKey"/> values). Unknown keys are
+    /// ignored by the JS side.
+    /// </summary>
+    public async Task SetSizeModeAsync(string sizeKey)
+    {
+        if (_jsModule is null || _terminalId == 0)
+        {
+            return;
+        }
+        try
+        {
+            await _jsModule.InvokeVoidAsync("setSizeModeFromHost", _terminalId, sizeKey);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Fetches the set of size presets exposed by the JS terminal so the
+    /// host page's size dropdown stays in sync with the values JS knows
+    /// how to handle.
+    /// </summary>
+    public async Task<IReadOnlyList<TerminalSizePreset>> GetSizePresetsAsync()
+    {
+        if (_jsModule is null)
+        {
+            return Array.Empty<TerminalSizePreset>();
+        }
+        try
+        {
+            return await _jsModule.InvokeAsync<TerminalSizePreset[]>("getSizePresets");
+        }
+        catch (JSDisconnectedException)
+        {
+            return Array.Empty<TerminalSizePreset>();
+        }
+    }
+
     private string BuildWebSocketUrl(string resource, int replica)
     {
         var baseUri = new Uri(NavigationManager.BaseUri);
@@ -168,5 +281,64 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         {
             await JSInteropHelpers.SafeDisposeAsync(_jsModule);
         }
+        _selfRef?.Dispose();
+        _selfRef = null;
     }
 }
+
+/// <summary>
+/// Snapshot of the JS terminal's current role, sizing, and dims, pushed up
+/// to the host page so the toolbar can render the right state.
+/// </summary>
+public sealed record TerminalToolbarState
+{
+    /// <summary>Unique JS-side terminal id (allocated by <c>initTerminal</c>).</summary>
+    public int TerminalId { get; init; }
+
+    /// <summary>Reconnect generation; bumped on every (re)connect.</summary>
+    public int Generation { get; init; }
+
+    /// <summary>
+    /// One of <c>connecting</c>, <c>primary</c>, <c>viewer</c>, <c>no-primary</c>.
+    /// </summary>
+    public string Status { get; init; } = "connecting";
+
+    /// <summary>True once the HMP1 client has a peer id assigned.</summary>
+    public bool Connected { get; init; }
+
+    /// <summary>True when this client owns primary input on the producer.</summary>
+    public bool IsPrimary { get; init; }
+
+    /// <summary>True when "Take control" is meaningful to surface.</summary>
+    public bool CanTakeControl { get; init; }
+
+    /// <summary>Current sizing mode (<c>font</c> or <c>fixed</c>).</summary>
+    public string SizeMode { get; init; } = "font";
+
+    /// <summary>
+    /// Dropdown key — <c>auto</c> for font-driven sizing or <c>{cols}x{rows}</c>
+    /// for a preset.
+    /// </summary>
+    public string SizeKey { get; init; } = "auto";
+
+    /// <summary>Current xterm font size in CSS pixels.</summary>
+    public int FontPx { get; init; }
+
+    /// <summary>Whether font ± buttons should be enabled (Auto mode + primary).</summary>
+    public bool FontControlsEnabled { get; init; }
+
+    /// <summary>Whether the size dropdown should be enabled (primary).</summary>
+    public bool SizeSelectEnabled { get; init; }
+
+    /// <summary>Current xterm grid width.</summary>
+    public int Cols { get; init; }
+
+    /// <summary>Current xterm grid height.</summary>
+    public int Rows { get; init; }
+}
+
+/// <summary>
+/// A named size preset surfaced by the JS terminal (used to populate the
+/// host page's size dropdown).
+/// </summary>
+public sealed record TerminalSizePreset(string Value, string Label, int Cols, int Rows);

@@ -219,10 +219,10 @@ internal sealed class TerminalViewerApp
         {
             await using var outer = Hex1bTerminal.CreateBuilder()
                 .WithMouse()
-                .WithHex1bApp((app, _) =>
+                .WithHex1bApp(_ => { }, (Hex1bApp app) =>
                 {
                     _app = app;
-                    return ctx => Render(ctx);
+                    return (Func<RootContext, Hex1bWidget>)(ctx => Render(ctx));
                 })
                 .Build();
 

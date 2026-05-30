@@ -23,7 +23,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("terminal --help");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("terminal");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("terminal attach");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -68,7 +68,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Mirrors the LogsCommand behavior: no running AppHost is informational, not an error.
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var result = command.Parse("terminal attach myresource");
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-            Assert.Equal(ExitCodeConstants.AppHostIncompatible, exitCode);
+            Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
         }
     }
 
@@ -107,7 +107,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var result = command.Parse("terminal attach does-not-exist");
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-            Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         }
     }
 
@@ -132,7 +132,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var result = command.Parse("terminal attach myresource");
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-            Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         }
     }
 
@@ -157,7 +157,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var result = command.Parse("terminal attach myresource");
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-            Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         }
     }
 
@@ -198,7 +198,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var result = command.Parse("terminal attach myresource --replica 99");
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-            Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         }
     }
 
@@ -239,7 +239,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
 
             // IsAvailable=false → InvalidCommand, but we should see the canonical
             // parent name "myresource" passed to GetTerminalInfoAsync, not "myresource-0".
-            Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
             Assert.Equal("myresource", capturedResourceName);
         }
     }
@@ -285,7 +285,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             // Console.IsInputRedirected and Console.IsOutputRedirected are both true.
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-            Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         }
     }
 
@@ -301,7 +301,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Mirrors TerminalAttachCommand: no running AppHost is informational, not an error.
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -323,7 +323,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var result = command.Parse("terminal ps");
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-            Assert.Equal(ExitCodeConstants.AppHostIncompatible, exitCode);
+            Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
         }
     }
 
@@ -346,7 +346,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var result = command.Parse("terminal ps");
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-            Assert.Equal(ExitCodeConstants.Success, exitCode);
+            Assert.Equal(CliExitCodes.Success, exitCode);
         }
     }
 
@@ -392,7 +392,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var result = command.Parse("terminal ps");
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-            Assert.Equal(ExitCodeConstants.Success, exitCode);
+            Assert.Equal(CliExitCodes.Success, exitCode);
         }
     }
 
@@ -415,7 +415,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
             var result = command.Parse("terminal ps --format json");
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-            Assert.Equal(ExitCodeConstants.Success, exitCode);
+            Assert.Equal(CliExitCodes.Success, exitCode);
         }
     }
 
@@ -478,6 +478,7 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
         public bool IsInScope => _inner.IsInScope;
         public DateTimeOffset ConnectedAt => _inner.ConnectedAt;
         public bool SupportsV2 => _inner.SupportsV2;
+        public bool SupportsV3 => _inner.SupportsV3;
         public bool SupportsTerminalsV1 => _inner.SupportsTerminalsV1;
         public bool SupportsTerminalsPsV1 => _inner.SupportsTerminalsPsV1;
 
@@ -513,6 +514,15 @@ public class TerminalCommandTests(ITestOutputHelper outputHelper)
 
         public Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default)
             => _inner.GetAppHostInfoV2Async(cancellationToken);
+
+        public Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default)
+            => _inner.WaitForAppHostReadyAsync(cancellationToken);
+
+        public IAsyncEnumerable<ResourceLogLine> GetConsoleLogsAsync(GetConsoleLogsRequest request, CancellationToken cancellationToken = default)
+            => _inner.GetConsoleLogsAsync(request, cancellationToken);
+
+        public IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesAsync(GetConsoleLogsRequest request, CancellationToken cancellationToken = default)
+            => _inner.GetConsoleLogBatchesAsync(request, cancellationToken);
 
         public void Dispose() => _inner.Dispose();
     }

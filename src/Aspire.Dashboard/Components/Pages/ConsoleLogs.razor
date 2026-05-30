@@ -67,6 +67,57 @@
                 }
             }
 
+            @if (_selectedResourceHasTerminal && _terminalToolbarState is { } terminalState)
+            {
+                <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
+
+                <FluentBadge Appearance="@TerminalStatusAppearance(terminalState.Status)"
+                             Circular="true"
+                             Title="@TerminalStatusTitle(terminalState.Status)">
+                    @TerminalStatusLabel(terminalState.Status)
+                </FluentBadge>
+
+                <FluentButton Appearance="Appearance.Lightweight"
+                              Disabled="@(!terminalState.CanTakeControl)"
+                              OnClick="TerminalTakeControlAsync"
+                              Title="Request primary control of the terminal session">
+                    Take control
+                </FluentButton>
+
+                <FluentButton Appearance="Appearance.Stealth"
+                              Disabled="@(!terminalState.FontControlsEnabled || terminalState.FontPx <= TerminalFontMin)"
+                              OnClick="TerminalFontMinusAsync"
+                              Title="Decrease font size">−</FluentButton>
+                <span style="min-width: 28px; text-align: center; font-variant-numeric: tabular-nums;"
+                      title="Terminal font size">@terminalState.FontPx</span>
+                <FluentButton Appearance="Appearance.Stealth"
+                              Disabled="@(!terminalState.FontControlsEnabled || terminalState.FontPx >= TerminalFontMax)"
+                              OnClick="TerminalFontPlusAsync"
+                              Title="Increase font size">+</FluentButton>
+
+                @if (_terminalSizePresets.Count > 0)
+                {
+                    <FluentSelect TOption="Controls.TerminalSizePreset"
+                                  Items="@_terminalSizePresets"
+                                  OptionValue="@(p => p.Value)"
+                                  OptionText="@(p => p.Label)"
+                                  Value="@terminalState.SizeKey"
+                                  ValueChanged="TerminalSizeChangedAsync"
+                                  Disabled="@(!terminalState.SizeSelectEnabled)"
+                                  Width="100px"
+                                  Style="min-width: auto;"
+                                  AriaLabel="Terminal grid size" />
+                }
+
+                @if (terminalState.Cols > 0 && terminalState.Rows > 0)
+                {
+                    <span style="color: var(--neutral-foreground-hint); font-variant-numeric: tabular-nums;"
+                          title="Current terminal grid">
+                        @terminalState.Cols × @terminalState.Rows
+                    </span>
+                }
+            }
+
             @if (ViewportInformation.IsDesktop)
             {
                 // This takes up too much horizontal space on mobile, so show on a new line on mobile
@@ -109,7 +160,8 @@
                 <TerminalView
                     @ref="_terminalViewRef"
                     ResourceName="@_terminalResourceName"
-                    ReplicaIndex="@_terminalReplicaIndex" />
+                    ReplicaIndex="@_terminalReplicaIndex"
+                    OnToolbarStateChanged="OnTerminalToolbarStateChangedAsync" />
             }
             else
             {
