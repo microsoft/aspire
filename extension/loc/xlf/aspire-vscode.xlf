@@ -506,7 +506,7 @@
       <source xml:lang="en">Start</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.runApp.description">
-      <source xml:lang="en">Start your Aspire app to launch all services and open the real-time dashboard.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHost)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHost)</source>
+      <source xml:lang="en">Start your Aspire app to launch all services and open the real-time dashboard.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHostCommand)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHostCommand)</source>
     </trans-unit>
     <trans-unit id="command.stopResource">
       <source xml:lang="en">Stop</source>

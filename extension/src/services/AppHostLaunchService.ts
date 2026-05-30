@@ -70,7 +70,11 @@ export class AppHostLaunchService implements vscode.Disposable {
      * @param doStep Optional step name for the 'do' command.
      */
     async launch(appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep?: string): Promise<void> {
-        // Track launching state
+        // Track launching state before awaiting startDebugging so the tree shows "Starting..."
+        // immediately. We must clear this state if startDebugging returns false (debug adapter
+        // rejected, no provider matched, user cancelled) or throws — otherwise no terminate
+        // event will fire and the tree item stays stuck on the spinner indefinitely.
+        // See https://code.visualstudio.com/api/references/vscode-api#debug.startDebugging
         this._launchingPaths.add(getComparisonKey(path.resolve(appHostPath)));
         this._onDidChangeLaunchingState.fire();
 
@@ -87,6 +91,14 @@ export class AppHostLaunchService implements vscode.Disposable {
             config.step = doStep;
         }
 
-        await vscode.debug.startDebugging(undefined, config);
+        try {
+            const started = await vscode.debug.startDebugging(undefined, config);
+            if (!started) {
+                this.clearLaunching(appHostPath);
+            }
+        } catch (err) {
+            this.clearLaunching(appHostPath);
+            throw err;
+        }
     }
 }

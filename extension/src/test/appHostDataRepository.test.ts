@@ -1073,6 +1073,14 @@ suite('AppHostDataRepository', () => {
             const noRunningContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
             assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], false);
+
+            // noRunningAppHosts is true because aspire ps returned no running AppHosts.
+            // This distinguishes "discovered candidates exist" from "any AppHost is actually
+            // running" — the Open Dashboard palette entry should be hidden in this state
+            // because no live dashboard URL is available.
+            const noLiveAppHostsCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts');
+            assert.strictEqual(noLiveAppHostsCalls.at(-1)?.args[2], true);
         } finally {
             repository.dispose();
             executeCommandStub.restore();

@@ -138,6 +138,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Set initial context for welcome view
   vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', true);
+  vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', true);
   vscode.commands.executeCommand('setContext', 'aspire.loading', true);
 
   // Activate the data repository. Workspace describe watching and global polling begin when the panel is visible.

@@ -839,6 +839,12 @@ export class AppHostDataRepository {
         const hasRunningAppHosts = this._appHosts.length > 0;
         const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
         vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
+        // `aspire.noRunningAppHosts` gates the Open Dashboard command palette entry,
+        // which requires a live dashboard URL. Keep this distinct from `noAppHosts`
+        // (which also considers discovered idle candidates) so the palette entry
+        // doesn't appear when only idle candidates exist — invoking it would silently
+        // no-op because no dashboard URL is available.
+        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasRunningAppHosts);
         const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
@@ -985,6 +991,7 @@ export class AppHostDataRepository {
             this._loadingGlobal = false;
             this._updateLoadingContext();
             vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
+            vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', this._appHosts.length === 0);
         }
     }
 
@@ -1085,6 +1092,7 @@ export class AppHostDataRepository {
 
             if (changed) {
                 vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', appHosts.length === 0);
+                vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', appHosts.length === 0);
                 this._onDidChangeData.fire();
             }
         } catch (e) {
@@ -1429,7 +1437,7 @@ function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: st
         || output.includes('is not a recognized command');
 }
 
-function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {
+export function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {
     if (!left || !right) {
         return false;
     }

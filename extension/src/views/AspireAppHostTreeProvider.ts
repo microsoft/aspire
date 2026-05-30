@@ -32,6 +32,7 @@ import {
     resourceDescriptionExitCode,
     logFileLabel,
     appHostStartingDescription,
+    errorMessage,
 } from '../loc/strings';
 import { isLinkableUrl } from '../utils/urlSchemes';
 import {
@@ -40,6 +41,7 @@ import {
     ResourceCommandArgumentInputJson,
     ResourceJson,
     ViewMode,
+    isMatchingAppHostPath,
     shortenPaths,
 } from './AppHostDataRepository';
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
@@ -647,9 +649,6 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
             if (workspaceCandidatePaths.length > 1 || (workspaceResources.length === 0 && !workspaceAppHost)) {
                 const selectedAppHostPath = workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
-                const runningAppHostsByPath = new Map(
-                    this._repository.appHosts.map(appHost => [getComparisonKey(path.resolve(appHost.appHostPath)), appHost] as const)
-                );
                 const labels = shortenPaths(workspaceCandidatePaths);
 
                 // When multiple workspace AppHosts are running, use global-style AppHostItem (nested view).
@@ -659,7 +658,13 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
                 for (let i = 0; i < workspaceCandidatePaths.length; i++) {
                     const candidatePath = workspaceCandidatePaths[i];
-                    const runningAppHost = runningAppHostsByPath.get(getComparisonKey(path.resolve(candidatePath)));
+                    // Use directory-equivalent matching (not exact path) because `aspire ls`
+                    // resolves to a `.csproj` while `aspire ps` can report the AppHost source file
+                    // (e.g. Program.cs) in the same directory. AppHostDataRepository uses the same
+                    // helper when filtering running AppHosts into _appHosts.
+                    const runningAppHost = this._repository.appHosts.find(
+                        appHost => isMatchingAppHostPath(appHost.appHostPath, candidatePath)
+                    );
                     const launching = this._launchService.isLaunching(candidatePath);
 
                     if (!runningAppHost) {
@@ -916,14 +921,18 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
-    runAppHost(element: WorkspaceAppHostItem | undefined, noDebug: boolean): void {
+    async runAppHost(element: WorkspaceAppHostItem | undefined, noDebug: boolean): Promise<void> {
         const appHostPath = element?.appHostPath;
         if (!appHostPath) {
             vscode.window.showWarningMessage(appHostSourceNotFound);
             return;
         }
 
-        this._launchService.launch(appHostPath, 'run', noDebug);
+        try {
+            await this._launchService.launch(appHostPath, 'run', noDebug);
+        } catch (err) {
+            vscode.window.showErrorMessage(errorMessage(err));
+        }
     }
 
     stopAppHost(element: AppHostItem | WorkspaceResourcesItem): void {

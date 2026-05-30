@@ -822,11 +822,51 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('runAppHost shows warning when element is undefined', () => {
+    test('workspace mode matches running AppHost to candidate by directory when paths differ', () => {
+        // aspire ls returns the project file (.csproj) while aspire ps can report the
+        // AppHost source file (Program.cs) in the same directory. These paths are not
+        // equal, but the tree should still pair them as the SAME AppHost via the
+        // directory-equivalence fallback in isMatchingAppHostPath.
+        const candidateCsproj = '/repo/apps/Store/AppHost.csproj';
+        const runningSourceFile = '/repo/apps/Store/Program.cs';
+        const idlePath = '/repo/apps/Backend/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [makeAppHost({ appHostPath: runningSourceFile, appHostPid: 1234, cliPid: 5678, resources: [makeResource()] })],
+            workspaceResources: [],
+            workspaceAppHostPath: candidateCsproj,
+            workspaceAppHostCandidatePaths: [candidateCsproj, idlePath],
+            workspaceAppHostName: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+
+        const topLevelItems = provider.getChildren();
+
+        // Both groups must appear: the .csproj candidate should be recognized as running
+        // (rendered in the running group), and the unrelated idle candidate stays in
+        // the workspace group. Without directory-equivalence matching, the .csproj
+        // candidate would be misclassified as idle.
+        assert.strictEqual(topLevelItems.length, 2);
+        assert.strictEqual(topLevelItems[0].contextValue, 'runningAppHostsGroup');
+        assert.strictEqual(topLevelItems[1].contextValue, 'workspaceAppHostsGroup');
+
+        const runningChildren = provider.getChildren(topLevelItems[0]);
+        assert.strictEqual(runningChildren.length, 1);
+        assert.ok(runningChildren[0].contextValue?.startsWith('workspaceResources'));
+
+        const idleChildren = provider.getChildren(topLevelItems[1]);
+        assert.strictEqual(idleChildren.length, 1);
+        assert.strictEqual(idleChildren[0].contextValue, 'workspaceAppHost');
+        provider.dispose();
+    });
+
+    test('runAppHost shows warning when element is undefined', async () => {
         const provider = makeTreeProvider([], 'workspace');
         const stub = sinon.stub(vscode.window, 'showWarningMessage');
 
-        provider.runAppHost(undefined, true);
+        await provider.runAppHost(undefined, true);
 
         assert.ok(stub.calledOnce, 'Expected a warning message');
         stub.restore();
@@ -852,13 +892,44 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         // Get the workspace item from inside the Workspace AppHosts group and pass it to runAppHost
         const [groupItem] = provider.getChildren();
         const [item] = provider.getChildren(groupItem);
-        provider.runAppHost(item as any, false);
+        await provider.runAppHost(item as any, false);
 
         assert.ok(launchStub.calledOnce, 'Expected launch to be called');
         assert.strictEqual(launchStub.firstCall.args[0], appHostPath);
         assert.strictEqual(launchStub.firstCall.args[1], 'run');
         assert.strictEqual(launchStub.firstCall.args[2], false);
         launchStub.restore();
+        provider.dispose();
+    });
+
+    test('runAppHost surfaces launch errors via showErrorMessage', async () => {
+        // The previous fire-and-forget call discarded rejections — they surfaced as
+        // unhandled promise rejections with no user feedback. The async variant must
+        // catch and report so the user knows the launch failed.
+        const appHostPath = '/repo/AppHost/AppHost.csproj';
+        const launchService = makeLaunchService();
+        const launchStub = sinon.stub(launchService, 'launch').rejects(new Error('startDebugging blew up'));
+        const errorStub = sinon.stub(vscode.window, 'showErrorMessage');
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHostPath: undefined,
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostName: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
+
+        const [groupItem] = provider.getChildren();
+        const [item] = provider.getChildren(groupItem);
+        await provider.runAppHost(item as any, false);
+
+        assert.ok(launchStub.calledOnce, 'Expected launch to be called');
+        assert.ok(errorStub.calledOnce, 'Expected showErrorMessage to be called when launch rejects');
+        launchStub.restore();
+        errorStub.restore();
         provider.dispose();
     });
 
