@@ -149,6 +149,9 @@
   <data name="DotNetToolSelfUpdateMessage" xml:space="preserve">
     <value>To update the Aspire CLI when installed as a .NET tool, run:</value>
   </data>
+  <data name="NpmSelfUpdateMessage" xml:space="preserve">
+    <value>To update the Aspire CLI when installed from npm, run:</value>
+  </data>
   <data name="ProjectUpdateSkippedAfterCliUpdateMessage" xml:space="preserve">
     <value>Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</value>
   </data>

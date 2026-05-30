@@ -53,6 +53,16 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
+      # Node.js is required because PackDotnetTool now depends on PackNpmPackage,
+      # which shells out to `npm pack` to produce the @microsoft/aspire-cli npm
+      # tarballs alongside the existing dotnet tool packages. GitHub-hosted
+      # runners ship Node by default, but installing it explicitly pins the
+      # version and avoids relying on the runner image.
+      - name: Install node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22.x
+
       # Build RID-specific NuGet packages (DCP + Dashboard) locally instead of
       # downloading them from the build_packages job. This allows the CLI archive
       # build to run in parallel with build_packages.
@@ -121,8 +131,25 @@ jobs:
             -Rid $rid `
             -ArchivePath $archive[0].FullName
 
-      # Upload DCP, Dashboard, and CLI tool NuGets so test/polyglot jobs can download them
-      - name: Upload RID-specific NuGets
+      - name: Verify CLI npm package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $rid = '${{ matrix.targets.rids }}'
+          $archiveExtension = if ($rid.StartsWith('win-')) { 'zip' } else { 'tar.gz' }
+          $archive = @(Get-ChildItem -Path 'artifacts/packages/${{ inputs.configuration }}' -Filter "aspire-cli-$rid-*.$archiveExtension" -Recurse -File -ErrorAction SilentlyContinue)
+          if ($archive.Count -ne 1) {
+            throw "Expected exactly one CLI archive for $rid, but found $($archive.Count): $($archive.FullName -join ', ')"
+          }
+
+          eng/scripts/verify-cli-npm-package.ps1 `
+            -PackagesDir artifacts/packages/${{ inputs.configuration }} `
+            -Rid $rid `
+            -ArchivePath $archive[0].FullName
+
+      # Upload DCP, Dashboard, and CLI tool packages so test/polyglot jobs can download them
+      - name: Upload RID-specific packages
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: built-nugets-for-${{ matrix.targets.rids }}
@@ -130,6 +157,7 @@ jobs:
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Cli.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/microsoft-aspire-cli*.tgz
           if-no-files-found: error
           retention-days: 15
 

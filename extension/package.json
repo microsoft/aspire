@@ -13,6 +13,7 @@
   "engines": {
     "vscode": "^1.98.0"
   },
+  "packageManager": "yarn@1.22.22",
   "categories": [
     "Programming Languages",
     "Debuggers",
