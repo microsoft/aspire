@@ -1069,9 +1069,10 @@ suite('AppHostDataRepository', () => {
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
             assert.strictEqual(loadingContextCalls.at(-1)?.args[2], false);
 
+            // noAppHosts is false because workspace candidates are still present (idle AppHosts)
             const noRunningContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
-            assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], true);
+            assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();
@@ -1200,9 +1201,10 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.workspaceAppHost, undefined);
             assert.strictEqual(repository.appHosts.length, 0);
 
+            // noAppHosts is false because workspace candidates are still present (idle AppHosts)
             const noRunningContextCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
-            assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], true);
+            assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();
