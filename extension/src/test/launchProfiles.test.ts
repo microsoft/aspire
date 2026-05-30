@@ -565,6 +565,41 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(result?.uriFormat, 'https://localhost:5001/some/path');
             assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
         });
+
+        test('absolute launchUrl overrides wildcard-host applicationUrl', () => {
+            const result = determineServerReadyAction(
+                true,
+                'http://*:80/;https://*:443/',
+                'https://mywebsite.localhost');
+
+            assert.strictEqual(result?.uriFormat, 'https://mywebsite.localhost/');
+        });
+
+        test('falls back to applicationUrl when relative launchUrl resolves against wildcard-host applicationUrl', () => {
+            const applicationUrl = 'http://*:80/';
+            const result = determineServerReadyAction(true, applicationUrl, '/some/path');
+
+            assert.strictEqual(result?.uriFormat, applicationUrl);
+        });
+
+        test('falls back to applicationUrl when relative launchUrl cannot be resolved', () => {
+            const result = determineServerReadyAction(true, 'localhost:5001', '/some/path');
+
+            assert.strictEqual(result?.uriFormat, 'localhost:5001');
+        });
+
+        test('falls back to applicationUrl when applicationUrl is empty', () => {
+            const result = determineServerReadyAction(true, ';http://localhost:5000', '/some/path');
+
+            assert.strictEqual(result?.uriFormat, '');
+        });
+
+        test('falls back to applicationUrl when absolute launchUrl is not http or https', () => {
+            const applicationUrl = 'https://localhost:5001';
+            const result = determineServerReadyAction(true, applicationUrl, 'javascript:alert(1)');
+
+            assert.strictEqual(result?.uriFormat, applicationUrl);
+        });
     });
 
     suite('readLaunchSettings', () => {
