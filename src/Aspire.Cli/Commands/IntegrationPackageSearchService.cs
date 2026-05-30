@@ -23,15 +23,19 @@ internal sealed class IntegrationPackageSearchService(
 
     public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
+        // `configuredChannel` (from a polyglot apphost's aspire.config.json) is forwarded
+        // ONLY as `requestedChannelName` so PackagingService can synthesize the staging
+        // channel for out-of-tree apphosts whose directory wasn't picked up by
+        // ConfigurationHelper.RegisterSettingsFiles. It must NOT narrow the post-retrieval
+        // channel set: doing so was the root cause of https://github.com/microsoft/aspire/issues/17724
+        // and https://github.com/microsoft/aspire/issues/17725, because a TS apphost pinned to a
+        // `Quality.Stable` channel ended up with only prerelease=false queries and prerelease-only
+        // packages (e.g. Aspire.Hosting.Foundry) became invisible. The filter pipeline downstream
+        // of this method is now identical for C# and TS apphosts.
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken, configuredChannel);
 
-        if (!string.IsNullOrEmpty(configuredChannel))
-        {
-            allChannels = allChannels.Where(c => string.Equals(c.Name, configuredChannel, StringComparison.OrdinalIgnoreCase));
-        }
-
         var hasHives = executionContext.GetHiveCount() > 0;
-        var channels = hasHives || !string.IsNullOrEmpty(configuredChannel)
+        var channels = hasHives
             ? allChannels
             : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
 

@@ -178,9 +178,17 @@ internal sealed class AddCommand : BaseCommand
                 ? ProfilingTelemetry.Values.AddPackageMatchKindExact
                 : ProfilingTelemetry.Values.AddPackageMatchKindNone;
 
-            if (filteredPackagesWithShortName.Count == 0 && integrationName is not null && version is not null && !_hostEnvironment.SupportsInteractiveInput)
+            // Non-interactive mode never falls back to fuzzy search: in interactive mode the user picks
+            // from the fuzzy candidates, but a script/CI invocation would otherwise silently auto-select
+            // distinctPackages.First() in GetPackageByInteractiveFlow and install the wrong package
+            // (https://github.com/microsoft/aspire/issues/17724). Refusing with an actionable error
+            // forces the caller to supply an exact package id or friendly name.
+            if (filteredPackagesWithShortName.Count == 0 && integrationName is not null && !_hostEnvironment.SupportsInteractiveInput)
             {
-                throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionRequiresExactPackageMatch, integrationName));
+                var message = version is not null
+                    ? string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionRequiresExactPackageMatch, integrationName)
+                    : string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NonInteractiveRequiresExactPackageMatch, integrationName);
+                throw new EmptyChoicesException(message);
             }
 
             if (filteredPackagesWithShortName.Count == 0 && integrationName is not null)
