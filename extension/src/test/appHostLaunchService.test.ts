@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
+import { AspireExtendedDebugConfiguration } from '../dcp/types';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 
 suite('AppHostLaunchService', () => {
@@ -40,7 +41,7 @@ suite('AppHostLaunchService', () => {
         await service.launch('/repo/AppHost.csproj', 'run', false);
 
         assert.ok(startDebuggingStub.calledOnce);
-        const config = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.strictEqual(config.type, 'aspire');
         assert.strictEqual(config.request, 'launch');
         assert.strictEqual(config.program, '/repo/AppHost.csproj');
@@ -52,7 +53,7 @@ suite('AppHostLaunchService', () => {
     test('launch includes step when doStep is provided', async () => {
         await service.launch('/repo/AppHost.csproj', 'do', true, 'deploy');
 
-        const config = startDebuggingStub.firstCall.args[1] as vscode.DebugConfiguration;
+        const config = startDebuggingStub.firstCall.args[1] as AspireExtendedDebugConfiguration;
         assert.strictEqual(config.command, 'do');
         assert.strictEqual(config.step, 'deploy');
     });

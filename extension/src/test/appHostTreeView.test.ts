@@ -703,12 +703,21 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
 
-        const [appHostItem] = provider.getChildren();
+        const [groupItem] = provider.getChildren();
         const result = provider.findAppHostElement('/repo/AppHost/AppHost.csproj');
 
-        assert.ok(appHostItem, 'Expected a non-running workspace AppHost candidate item');
+        assert.ok(groupItem, 'Expected the Workspace AppHosts group');
+        assert.strictEqual(groupItem.contextValue, 'workspaceAppHostsGroup');
+        const [appHostItem] = provider.getChildren(groupItem);
         assert.strictEqual(appHostItem.label, 'AppHost.csproj');
         assert.strictEqual(appHostItem.contextValue, 'workspaceAppHost');
+        assert.strictEqual(appHostItem.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
+        assert.deepStrictEqual(provider.getChildren(appHostItem).map(item => item.contextValue), [
+            'workspaceAppHostAction:openSource',
+            'workspaceAppHostAction:run',
+            'workspaceAppHostAction:debug',
+            'workspaceAppHostPath',
+        ]);
         assert.ok(result, 'Expected to find the workspace AppHost candidate');
         provider.dispose();
     });
@@ -730,7 +739,11 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
 
-        const appHostItems = provider.getChildren();
+        const topLevel = provider.getChildren();
+        assert.strictEqual(topLevel.length, 1);
+        assert.strictEqual(topLevel[0].contextValue, 'workspaceAppHostsGroup');
+
+        const appHostItems = provider.getChildren(topLevel[0]);
 
         assert.deepStrictEqual(appHostItems.map(item => item.label), [
             'apps/Store/AppHost.csproj',
@@ -764,7 +777,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
 
-        const [item] = provider.getChildren();
+        const [groupItem] = provider.getChildren();
+        assert.strictEqual(groupItem?.contextValue, 'workspaceAppHostsGroup');
+        const [item] = provider.getChildren(groupItem);
 
         assert.ok(item, 'Expected a launching workspace AppHost item');
         assert.strictEqual(item.contextValue, 'workspaceAppHostLaunching');
@@ -789,15 +804,21 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
         const topLevelItems = provider.getChildren();
 
-        // First item is the running AppHost (WorkspaceResourcesItem), second is the group
+        // When both running and idle AppHosts exist, both sets are wrapped in sibling
+        // groups so they nest at the same depth and read symmetrically in the tree.
         assert.strictEqual(topLevelItems.length, 2);
-        assert.ok(topLevelItems[0].contextValue?.startsWith('workspaceResources'));
+        assert.strictEqual(topLevelItems[0].contextValue, 'runningAppHostsGroup');
         assert.strictEqual(topLevelItems[1].contextValue, 'workspaceAppHostsGroup');
 
-        // Group contains the idle AppHost
-        const groupChildren = provider.getChildren(topLevelItems[1]);
-        assert.strictEqual(groupChildren.length, 1);
-        assert.strictEqual(groupChildren[0].contextValue, 'workspaceAppHost');
+        // Running group contains the running AppHost (rendered as WorkspaceResourcesItem)
+        const runningChildren = provider.getChildren(topLevelItems[0]);
+        assert.strictEqual(runningChildren.length, 1);
+        assert.ok(runningChildren[0].contextValue?.startsWith('workspaceResources'));
+
+        // Workspace group contains the idle AppHost
+        const idleChildren = provider.getChildren(topLevelItems[1]);
+        assert.strictEqual(idleChildren.length, 1);
+        assert.strictEqual(idleChildren[0].contextValue, 'workspaceAppHost');
         provider.dispose();
     });
 
@@ -828,8 +849,9 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         } as unknown as AppHostDataRepository;
         const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
 
-        // Get the workspace item and pass it to runAppHost
-        const [item] = provider.getChildren();
+        // Get the workspace item from inside the Workspace AppHosts group and pass it to runAppHost
+        const [groupItem] = provider.getChildren();
+        const [item] = provider.getChildren(groupItem);
         provider.runAppHost(item as any, false);
 
         assert.ok(launchStub.calledOnce, 'Expected launch to be called');

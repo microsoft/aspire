@@ -12,6 +12,11 @@ import {
     selectDashboardPlaceholder,
     workspaceAppHostLabel,
     workspaceAppHostsGroupLabel,
+    runningAppHostsGroupLabel,
+    appHostOpenSourceActionLabel,
+    appHostRunActionLabel,
+    appHostDebugActionLabel,
+    appHostPathLabel,
     resourceCountDescription,
     tooltipType,
     tooltipState,
@@ -41,7 +46,7 @@ import { collectResourceCommandArguments, ResourceCommandArgumentValue } from '.
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 
-type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem;
+type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem;
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -109,9 +114,9 @@ class WorkspaceAppHostItem extends vscode.TreeItem {
         public readonly appHostPath: string,
         appHostName?: string,
         appHostDescription?: string,
-        launching?: boolean
+        public readonly launching?: boolean
     ) {
-        super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.None);
+        super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.Collapsed);
         this.id = `workspace-apphost:${getComparisonKey(path.resolve(appHostPath))}`;
 
         if (launching) {
@@ -130,6 +135,40 @@ class WorkspaceAppHostItem extends vscode.TreeItem {
     }
 }
 
+class WorkspaceAppHostActionItem extends vscode.TreeItem {
+    constructor(parent: WorkspaceAppHostItem, action: 'openSource' | 'run' | 'debug') {
+        const label = action === 'openSource'
+            ? appHostOpenSourceActionLabel
+            : action === 'run'
+                ? appHostRunActionLabel
+                : appHostDebugActionLabel;
+        super(label, vscode.TreeItemCollapsibleState.None);
+        this.id = `${parent.id}:action:${action}`;
+        this.iconPath = new vscode.ThemeIcon(action === 'debug' ? 'debug-alt' : action === 'run' ? 'play' : 'go-to-file');
+        this.contextValue = `workspaceAppHostAction:${action}`;
+        this.command = {
+            command: action === 'openSource'
+                ? 'aspire-vscode.openAppHostSource'
+                : action === 'run'
+                    ? 'aspire-vscode.runAppHost'
+                    : 'aspire-vscode.debugAppHost',
+            title: label,
+            arguments: [parent]
+        };
+    }
+}
+
+class WorkspaceAppHostPathItem extends vscode.TreeItem {
+    constructor(parent: WorkspaceAppHostItem) {
+        super(appHostPathLabel, vscode.TreeItemCollapsibleState.None);
+        this.id = `${parent.id}:path`;
+        this.iconPath = new vscode.ThemeIcon('file-directory');
+        this.contextValue = 'workspaceAppHostPath';
+        this.description = parent.appHostPath;
+        this.tooltip = parent.appHostPath;
+    }
+}
+
 class WorkspaceAppHostsGroupItem extends vscode.TreeItem {
     constructor(public readonly appHosts: WorkspaceAppHostItem[]) {
         super(workspaceAppHostsGroupLabel, vscode.TreeItemCollapsibleState.Expanded);
@@ -137,6 +176,16 @@ class WorkspaceAppHostsGroupItem extends vscode.TreeItem {
         this.iconPath = new vscode.ThemeIcon('folder');
         this.contextValue = 'workspaceAppHostsGroup';
         this.description = `(${appHosts.length})`;
+    }
+}
+
+class RunningAppHostsGroupItem extends vscode.TreeItem {
+    constructor(public readonly runningAppHosts: ReadonlyArray<AppHostItem | WorkspaceResourcesItem>) {
+        super(runningAppHostsGroupLabel, vscode.TreeItemCollapsibleState.Expanded);
+        this.id = 'running-apphosts-group';
+        this.iconPath = new vscode.ThemeIcon('folder-active', new vscode.ThemeColor('aspire.brandPurple'));
+        this.contextValue = 'runningAppHostsGroup';
+        this.description = `(${runningAppHosts.length})`;
     }
 }
 
@@ -500,7 +549,17 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return undefined;
         }
         const targetDir = path.dirname(appHostPath);
-        const elements = this.getChildren();
+        // Workspace mode wraps running/idle items in group elements, so flatten one level
+        // of group children before matching. Group items themselves never match a path.
+        const topLevel = this.getChildren();
+        const elements: TreeElement[] = [];
+        for (const element of topLevel) {
+            if (element instanceof WorkspaceAppHostsGroupItem || element instanceof RunningAppHostsGroupItem) {
+                elements.push(...this.getChildren(element));
+            } else {
+                elements.push(element);
+            }
+        }
         for (const element of elements) {
             if (element instanceof AppHostItem) {
                 const hostPath = element.appHost.appHostPath;
@@ -595,7 +654,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
                 // When multiple workspace AppHosts are running, use global-style AppHostItem (nested view).
                 // When only one is running, use flat WorkspaceResourcesItem.
-                const runningItems: TreeElement[] = [];
+                const runningItems: (AppHostItem | WorkspaceResourcesItem)[] = [];
                 const workspaceItems: WorkspaceAppHostItem[] = [];
 
                 for (let i = 0; i < workspaceCandidatePaths.length; i++) {
@@ -636,10 +695,18 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 }
 
                 if (workspaceItems.length > 0 && runningItems.length > 0) {
-                    return [...runningItems, new WorkspaceAppHostsGroupItem(workspaceItems)];
+                    // Wrap running items in a sibling group so both sets share the same
+                    // indentation depth and the visual hierarchy reads symmetrically.
+                    const runningGroup = new RunningAppHostsGroupItem(runningItems);
+                    return [runningGroup, new WorkspaceAppHostsGroupItem(workspaceItems)];
                 }
-                // When nothing is running, show workspace items flat (no group wrapper)
-                return [...runningItems, ...workspaceItems];
+                // When nothing is running, still wrap idle items in the group so they
+                // render under the "Workspace AppHosts" header. This keeps the tree shape
+                // consistent with the mixed case and avoids loose root-level items.
+                if (workspaceItems.length > 0) {
+                    return [new WorkspaceAppHostsGroupItem(workspaceItems)];
+                }
+                return [...runningItems];
             }
 
             // Single candidate, running — show flat WorkspaceResourcesItem
@@ -657,6 +724,21 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
         if (element instanceof WorkspaceAppHostsGroupItem) {
             return element.appHosts;
+        }
+
+        if (element instanceof RunningAppHostsGroupItem) {
+            return [...element.runningAppHosts];
+        }
+
+        if (element instanceof WorkspaceAppHostItem) {
+            const items: TreeElement[] = [new WorkspaceAppHostActionItem(element, 'openSource')];
+            if (!element.launching) {
+                items.push(new WorkspaceAppHostActionItem(element, 'run'));
+                items.push(new WorkspaceAppHostActionItem(element, 'debug'));
+            }
+            items.push(new WorkspaceAppHostPathItem(element));
+
+            return items;
         }
 
         if (element instanceof WorkspaceResourcesItem) {

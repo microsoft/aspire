@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { AspireCommandType } from '../dcp/types';
+import { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
 
 function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
@@ -74,13 +74,13 @@ export class AppHostLaunchService implements vscode.Disposable {
         this._launchingPaths.add(getComparisonKey(path.resolve(appHostPath)));
         this._onDidChangeLaunchingState.fire();
 
-        const config: vscode.DebugConfiguration = {
+        const config: AspireExtendedDebugConfiguration = {
             type: 'aspire',
             name: `Aspire ${command}: ${vscode.workspace.asRelativePath(appHostPath)}`,
             request: 'launch',
             program: appHostPath,
-            command: command,
-            noDebug: noDebug
+            command,
+            noDebug
         };
 
         if (doStep) {
