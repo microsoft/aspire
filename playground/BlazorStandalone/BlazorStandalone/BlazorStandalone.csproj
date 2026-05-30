@@ -6,7 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Enable managed debugging for WebAssembly -->
     <DebuggerSupport>true</DebuggerSupport>
+    <!-- Set debug level > 0 so the WASM runtime enables its debug agent at startup -->
     <WasmDebugLevel>2</WasmDebugLevel>
+    <!-- Override Arcade's embedded PDBs: the WASM debugger needs separate portable PDB files
+         served alongside the .wasm assemblies in _framework/ to bind breakpoints. -->
+    <DebugType>portable</DebugType>
+    <WasmCopyOutputSymbolsToPublishDirectory>true</WasmCopyOutputSymbolsToPublishDirectory>
     <!-- Enable WebAssembly diagnostics for OpenTelemetry tracing -->
     <MetricsSupport>true</MetricsSupport>
     <EventSourceSupport>true</EventSourceSupport>
