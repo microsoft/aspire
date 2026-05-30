@@ -27,10 +27,13 @@
                             @bind-SelectedResource:after="HandleSelectedOptionChangedAsync"
                             LabelClass="toolbar-left" />
 
-            <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
-                                  IsPaused="@PauseManager.ConsoleLogsPaused"
-                                  OnPausedChanged="@OnPausedChanged"
-                                  SelectedResource="@PageViewModel.SelectedResource" />
+            @if (!_selectedResourceHasTerminal)
+            {
+                <SignalsActionsDisplay HandleClearSignal="@ClearConsoleLogs"
+                                      IsPaused="@PauseManager.ConsoleLogsPaused"
+                                      OnPausedChanged="@OnPausedChanged"
+                                      SelectedResource="@PageViewModel.SelectedResource" />
+            }
 
             @if (PageViewModel.SelectedResource is { } selectedResource && !IsAllSelected())
             {
@@ -121,16 +124,19 @@
             @if (ViewportInformation.IsDesktop)
             {
                 // This takes up too much horizontal space on mobile, so show on a new line on mobile
-                <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
+                @if (!_selectedResourceHasTerminal)
+                {
+                    <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]" slot="end">@PageViewModel.Status</FluentLabel>
 
-                <AspireMenuButton
-                    ButtonAppearance="Appearance.Lightweight"
-                    Icon="@(new Icons.Regular.Size20.Options())"
-                    Items="@_logsMenuItems"
-                    Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]"
-                    slot="end"/>
+                    <AspireMenuButton
+                        ButtonAppearance="Appearance.Lightweight"
+                        Icon="@(new Icons.Regular.Size20.Options())"
+                        Items="@_logsMenuItems"
+                        Title="@Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsSettings)]"
+                        slot="end"/>
+                }
             }
-            else
+            else if (!_selectedResourceHasTerminal)
             {
                 <AspireMenuButton
                     Icon="@(new Icons.Regular.Size20.Options())"
@@ -142,16 +148,19 @@
         </ToolbarSection>
 
         <MobilePageTitleToolbarSection>
-            <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">
-                @if (PageViewModel.SelectedResource?.Id is not null)
-                {
-                    @($"{PageViewModel.SelectedResource.Name}: {PageViewModel.Status}")
-                }
-                else
-                {
-                    @PageViewModel.Status
-                }
-            </FluentLabel>
+            @if (!_selectedResourceHasTerminal)
+            {
+                <FluentLabel Typo="Typography.Body" aria-live="polite" aria-label="@Loc[nameof(Dashboard.Resources.ConsoleLogs.LogStatusLabel)]">
+                    @if (PageViewModel.SelectedResource?.Id is not null)
+                    {
+                        @($"{PageViewModel.SelectedResource.Name}: {PageViewModel.Status}")
+                    }
+                    else
+                    {
+                        @PageViewModel.Status
+                    }
+                </FluentLabel>
+            }
         </MobilePageTitleToolbarSection>
 
         <MainSection>
