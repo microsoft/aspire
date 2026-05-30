@@ -138,9 +138,15 @@ internal sealed class DashboardServiceHost : IHostedService
                 kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
                 _logger.LogDebug("Resource service endpoint not configured. Listening on {Scheme}://127.0.0.1:<random>.", scheme);
             }
-            else if (IsLocalResourceServiceEndpoint(uri))
+            else if (IPAddress.TryParse(uri.Host, out var ip) && IPAddress.IsLoopback(ip))
             {
-                // Listen on the requested localhost port.
+                // Bind to the exact loopback address specified (e.g. 127.0.0.1 or [::1]).
+                kestrelOptions.Listen(ip, uri.Port, ConfigureListen);
+                _logger.LogDebug("Resource service endpoint configured: {Uri}", uri);
+            }
+            else if (uri.IsLoopback || IsLocalhostOrLocalhostTld(uri))
+            {
+                // For "localhost" or *.localhost hosts, bind to both IPv4 and IPv6 loopback.
                 kestrelOptions.ListenLocalhost(uri.Port, ConfigureListen);
                 _logger.LogDebug("Resource service endpoint configured: {Uri}", uri);
             }
@@ -178,16 +184,8 @@ internal sealed class DashboardServiceHost : IHostedService
         return allowUnsecuredTransport ? "http" : "https";
     }
 
-    /// <summary>
-    /// Determines whether the resource service endpoint is scoped to the local machine.
-    /// </summary>
-    internal static bool IsLocalResourceServiceEndpoint(Uri uri)
+    private static bool IsLocalhostOrLocalhostTld(Uri uri)
     {
-        if (uri.IsLoopback)
-        {
-            return true;
-        }
-
         var host = uri.Host.EndsWith(".", StringComparison.Ordinal)
             ? uri.Host[..^1]
             : uri.Host;
