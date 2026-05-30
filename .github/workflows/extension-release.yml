@@ -60,9 +60,14 @@ jobs:
           PERMISSION=$(gh api "repos/${REPOSITORY}/collaborators/${ACTOR}/permission" --jq '.permission')
           echo "User permission level: ${PERMISSION}"
 
-          if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" ]]; then
+          # `write` is the highest permission level granted to contributors on
+          # microsoft/aspire — nobody holds `maintain`/`admin`, so gating on those
+          # alone would make this workflow undispatchable by anyone. Accept `write`
+          # and above, matching the repo's other contributor-gated workflows
+          # (.github/workflows/apply-test-attributes.yml, backport.yml).
+          if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" && "$PERMISSION" != "write" ]]; then
             echo "❌ ERROR: User ${ACTOR} does not have sufficient permissions."
-            echo "Required: 'admin' or 'maintain' permission level."
+            echo "Required: 'write', 'maintain', or 'admin' permission level."
             echo "Current: '${PERMISSION}'"
             exit 1
           fi
