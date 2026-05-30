@@ -4,6 +4,9 @@
     <trans-unit id="aspire-vscode.strings.resourceCommandDisabledDescription">
       <source xml:lang="en">(disabled)</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCountDescription">
+      <source xml:lang="en">({0} resources)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.debugSessionAlreadyExists">
       <source xml:lang="en">A debug session is already active for id {0}.</source>
     </trans-unit>
@@ -103,6 +106,9 @@
     <trans-unit id="aspire-vscode.strings.codespacesUrl">
       <source xml:lang="en">Codespaces: {0}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.commandsLabel">
+      <source xml:lang="en">Commands</source>
+    </trans-unit>
     <trans-unit id="extension.debug.debuggers">
       <source xml:lang="en">Configuration to apply when launching resources of specific types</source>
     </trans-unit>
@@ -144,6 +150,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dashboard">
       <source xml:lang="en">Dashboard</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDebugActionLabel">
+      <source xml:lang="en">Debug AppHost</source>
     </trans-unit>
     <trans-unit id="command.debugAppHost">
       <source xml:lang="en">Debug AppHost</source>
@@ -358,6 +367,9 @@
     <trans-unit id="aspire-vscode.strings.noCsharpBuildTask">
       <source xml:lang="en">No C# Dev Kit build task found, defaulting to dotnet CLI. Maybe the workspace hasn&apos;t finished loading?</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.noCommandsAvailable">
+      <source xml:lang="en">No commands available for this resource.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.noOutputFromMsbuild">
       <source xml:lang="en">No output from msbuild.</source>
     </trans-unit>
@@ -381,6 +393,9 @@
     </trans-unit>
     <trans-unit id="command.viewAppHostLogFile">
       <source xml:lang="en">Open AppHost logs file</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostOpenSourceActionLabel">
+      <source xml:lang="en">Open AppHost source</source>
     </trans-unit>
     <trans-unit id="command.openAppHostSource">
       <source xml:lang="en">Open AppHost source</source>
@@ -415,6 +430,9 @@
     <trans-unit id="aspire-vscode.strings.directLink">
       <source xml:lang="en">Open local URL</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostPathLabel">
+      <source xml:lang="en">Path</source>
+    </trans-unit>
     <trans-unit id="extension.debug.program">
       <source xml:lang="en">Path to the AppHost to run</source>
     </trans-unit>
@@ -445,6 +463,9 @@
     <trans-unit id="aspire-vscode.strings.requiredCapability">
       <source xml:lang="en">Required capability: {0}.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourcesGroupLabel">
+      <source xml:lang="en">Resources</source>
+    </trans-unit>
     <trans-unit id="command.restartResource">
       <source xml:lang="en">Restart</source>
     </trans-unit>
@@ -453,6 +474,9 @@
     </trans-unit>
     <trans-unit id="command.codeLensRevealResource">
       <source xml:lang="en">Reveal resource in Aspire panel</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostRunActionLabel">
+      <source xml:lang="en">Run AppHost</source>
     </trans-unit>
     <trans-unit id="command.runAppHost">
       <source xml:lang="en">Run AppHost</source>
@@ -465,6 +489,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.runProject">
       <source xml:lang="en">Run {0}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.runningAppHostsGroupLabel">
+      <source xml:lang="en">Running AppHosts</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.runningAspireRestoreProgress">
       <source xml:lang="en">Running aspire restore ({0}/{1} projects) ...</source>
@@ -480,6 +507,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.openCliInstallInstructions">
       <source xml:lang="en">See CLI installation instructions</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.selectCommandPlaceholder">
+      <source xml:lang="en">Select a command to execute</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.selectDashboardPlaceholder">
       <source xml:lang="en">Select a dashboard to open</source>
@@ -513,6 +543,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.runApp.description">
       <source xml:lang="en">Start your Aspire app to launch all services and open the real-time dashboard.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHostCommand)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHostCommand)</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostStartingDescription">
+      <source xml:lang="en">Starting...</source>
     </trans-unit>
     <trans-unit id="command.stopResource">
       <source xml:lang="en">Stop</source>
@@ -604,8 +637,23 @@
     <trans-unit id="configuration.aspire.registerMcpServerInWorkspace">
       <source xml:lang="en">Whether to register the Aspire MCP server when a workspace is open.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.workspaceAppHostLabel">
+      <source xml:lang="en">Workspace AppHost</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.workspaceAppHostsGroupLabel">
+      <source xml:lang="en">Workspace AppHosts</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliDescribeNotSupported">
       <source xml:lang="en">Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.workspaceViewSelectedSingleAppHost">
+      <source xml:lang="en">Workspace view selected because aspire ls found one buildable AppHost.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.workspaceViewSelectedSingleAppHostWithLanguage">
+      <source xml:lang="en">Workspace view selected because aspire ls found one buildable {0} AppHost.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.workspaceViewSelectedMultipleAppHosts">
+      <source xml:lang="en">Workspace view selected because aspire ls found {0} buildable AppHosts.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.yesLabel">
       <source xml:lang="en">Yes</source>
@@ -618,6 +666,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireRestoreFailed">
       <source xml:lang="en">aspire restore failed for {0}: {1}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostCandidateDescription">
+      <source xml:lang="en">{0} · {1}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandArgumentInputTitle">
       <source xml:lang="en">{0}: {1}</source>
