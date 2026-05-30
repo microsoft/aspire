@@ -72,4 +72,96 @@ public sealed class SecretDotNetAppHostTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("db-password", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
     }
+
+    [Fact]
+    public async Task SecretDeploymentEnvironmentLoadsSelectedAspireSecretsFile()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.AspireNewAsync("DeploymentSecrets", counter, template: AspireTemplate.EmptyAppHost);
+
+        var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "DeploymentSecrets", "apphost.cs");
+        var directiveLines = File.ReadLines(appHostFilePath)
+            .TakeWhile(line => line.StartsWith("#:", StringComparison.Ordinal) || string.IsNullOrWhiteSpace(line))
+            .Where(line => line.StartsWith("#:", StringComparison.Ordinal));
+        var directives = string.Join(Environment.NewLine, directiveLines);
+
+        await File.WriteAllTextAsync(appHostFilePath, $$"""
+            {{directives}}
+
+            #pragma warning disable ASPIREPIPELINES001
+
+            using Aspire.Hosting.Pipelines;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            var appHostEnvironment = builder.Environment.EnvironmentName;
+            var apiKey = builder.Configuration["Parameters:api_key"] ?? "<missing>";
+
+            builder.Pipeline.AddStep("verify-deployment-secret", async context =>
+            {
+                if (!StringComparer.Ordinal.Equals(appHostEnvironment, "Staging") ||
+                    !StringComparer.Ordinal.Equals(apiKey, "staging-secret"))
+                {
+                    throw new InvalidOperationException($"E2E_SECRET_MISMATCH:{appHostEnvironment}:{apiKey}");
+                }
+
+                var task = await context.ReportingStep
+                    .CreateTaskAsync("Verifying deployment secret", context.CancellationToken)
+                    .ConfigureAwait(false);
+
+                await using (task.ConfigureAwait(false))
+                {
+                    Console.WriteLine("E2E_DEPLOY_SECRET_OK");
+
+                    await task.CompleteAsync(
+                        "E2E_DEPLOY_SECRET_OK",
+                        CompletionState.Completed,
+                        context.CancellationToken).ConfigureAwait(false);
+                }
+            }, requiredBy: WellKnownPipelineSteps.Deploy);
+
+            builder.Build().Run();
+            """, TestContext.Current.CancellationToken);
+
+        await auto.TypeAsync("cd DeploymentSecrets");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire secret set Parameters:api_key development-secret");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("set successfully", timeout: TimeSpan.FromSeconds(60));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire secret set Parameters:api_key staging-secret --environment Staging");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("set successfully", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire secret get Parameters:api_key --environment Staging | grep -qx 'staging-secret' && echo E2E_DOTNET_STAGING_SECRET_GET_OK");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("E2E_DOTNET_STAGING_SECRET_GET_OK", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire secret list --all | grep 'staging-secret' | grep 'Staging' >/dev/null && echo E2E_DOTNET_SECRET_LIST_ALL_OK");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("E2E_DOTNET_SECRET_LIST_ALL_OK", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire deploy --environment Staging --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("E2E_DEPLOY_SECRET_OK", timeout: TimeSpan.FromMinutes(3));
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
 }

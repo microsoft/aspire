@@ -73,5 +73,35 @@ public sealed class SecretTypeScriptAppHostTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("ConnectionStrings:Db", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire secret set MyConfig:ApiKey staging-ts-secret --environment Staging --apphost apphost.mts");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("set successfully", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire secret set MyConfig:ApiKey production-ts-secret --environment Production --apphost apphost.mts");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("set successfully", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire secret get MyConfig:ApiKey --environment Staging --apphost apphost.mts | grep -qx 'staging-ts-secret' && echo E2E_TS_STAGING_SECRET_GET_OK");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("E2E_TS_STAGING_SECRET_GET_OK", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire secret get MyConfig:ApiKey --environment Production --apphost apphost.mts | grep -qx 'production-ts-secret' && echo E2E_TS_PRODUCTION_SECRET_GET_OK");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("E2E_TS_PRODUCTION_SECRET_GET_OK", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire secret list --all --apphost apphost.mts | grep 'staging-ts-secret' | grep 'Staging' >/dev/null && echo E2E_TS_SECRET_LIST_STAGING_OK");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("E2E_TS_SECRET_LIST_STAGING_OK", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire secret list --all --apphost apphost.mts | grep 'production-ts-secret' | grep 'Production' >/dev/null && echo E2E_TS_SECRET_LIST_PRODUCTION_OK");
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("E2E_TS_SECRET_LIST_PRODUCTION_OK", timeout: TimeSpan.FromSeconds(30));
+        await auto.WaitForSuccessPromptAsync(counter);
     }
 }
