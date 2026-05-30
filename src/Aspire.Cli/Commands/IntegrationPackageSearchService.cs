@@ -24,18 +24,25 @@ internal sealed class IntegrationPackageSearchService(
     public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
         // `configuredChannel` (from a polyglot apphost's aspire.config.json) is forwarded
-        // ONLY as `requestedChannelName` so PackagingService can synthesize the staging
-        // channel for out-of-tree apphosts whose directory wasn't picked up by
-        // ConfigurationHelper.RegisterSettingsFiles. It must NOT narrow the post-retrieval
-        // channel set: doing so was the root cause of https://github.com/microsoft/aspire/issues/17724
-        // and https://github.com/microsoft/aspire/issues/17725, because a TS apphost pinned to a
-        // `Quality.Stable` channel ended up with only prerelease=false queries and prerelease-only
-        // packages (e.g. Aspire.Hosting.Foundry) became invisible. The filter pipeline downstream
-        // of this method is now identical for C# and TS apphosts.
+        // as `requestedChannelName` so PackagingService can synthesize the staging channel
+        // for out-of-tree apphosts whose directory wasn't picked up by
+        // ConfigurationHelper.RegisterSettingsFiles.
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken, configuredChannel);
 
+        // Channels included in the search:
+        //   * Implicit channel: always.
+        //   * Explicit channels (stable, daily, staging, custom): when PR hives exist OR the
+        //     apphost has pinned an explicit channel via aspire.config.json.
+        //
+        // What this method MUST NOT do is narrow the explicit channel set to just the pinned
+        // channel. That was the root cause of https://github.com/microsoft/aspire/issues/17724
+        // and https://github.com/microsoft/aspire/issues/17725: a TS apphost pinned to a
+        // Quality.Stable channel ended up with prerelease=false queries everywhere and
+        // prerelease-only packages (e.g. Aspire.Hosting.Foundry) became invisible. The implicit
+        // channel (Quality.Both) must always participate so prerelease packages are reachable
+        // even when the explicit pin is Stable-quality.
         var hasHives = executionContext.GetHiveCount() > 0;
-        var channels = hasHives
+        var channels = hasHives || !string.IsNullOrEmpty(configuredChannel)
             ? allChannels
             : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
 

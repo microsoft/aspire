@@ -365,14 +365,18 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         //   the scaffolded aspire.config.json for polyglot apphosts. This activated the Layer 1 bug for
         //   every newly-initialized TS apphost in 13.4.
         //
-        // Fix: IntegrationPackageSearchService no longer narrows; the configured channel is forwarded
-        //   only as a synthesis trigger to PackagingService.GetChannelsAsync. The full channel set
-        //   (implicit + pinned channel + any hives) is now searched, matching C# behavior.
+        // Fix: IntegrationPackageSearchService no longer narrows. The full channel set (implicit +
+        //   pinned channel + any hives) is searched.
         //
         // This test pins the TS apphost to the "daily" channel via aspire.config.json. Pre-fix only the
         // daily channel was searched and Redis 2.0.0 (daily) was the only result. Post-fix the implicit
-        // channel is also searched, and SelectPreferredIntegrationPackage prefers the implicit channel
+        // channel is ALSO searched, and SelectPreferredIntegrationPackage prefers the implicit channel
         // when versions collide on Id, so Redis 1.0.0 (implicit) wins the dedupe.
+        //
+        // The structural guarantee asserted below — both `implicitHits` AND `dailyHits` being > 0 — is
+        // what defends against a regression that drops either channel from the search. Asserting only
+        // on the resulting Redis version is insufficient because implicit-only and daily-only searches
+        // both happen to produce a single result.
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -388,13 +392,25 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             }
             """);
 
+        // Track per-channel invocation. IntegrationPackageSearchService walks channels via
+        // Parallel.ForEachAsync, so callbacks may run concurrently; Interlocked guards that.
+        var implicitHits = 0;
+        var dailyHits = 0;
         var implicitCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref implicitHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
         };
         var dailyCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref dailyHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")]);
+            }
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -418,8 +434,11 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
+        // Structural regression signal: BOTH channels must have been searched.
+        Assert.True(implicitHits > 0, "Implicit channel was not queried — discovery is dropping it.");
+        Assert.True(dailyHits > 0, "Daily channel was not queried — pinned channel is being dropped from discovery.");
+
         // Implicit channel result wins the dedupe (SelectPreferredIntegrationPackage prefers implicit).
-        // The important regression signal is that the implicit channel is SEARCHED at all post-fix.
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
         Assert.Equal("1.0.0", integration.Version);
@@ -446,13 +465,23 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             }
             """);
 
+        var implicitHits = 0;
+        var stagingHits = 0;
         var implicitCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref implicitHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
         };
         var stagingCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref stagingHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")]);
+            }
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -476,6 +505,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
+
+        Assert.True(implicitHits > 0, "Implicit channel was not queried — discovery is dropping it.");
+        Assert.True(stagingHits > 0, "Staging channel was not queried — pinned channel is being dropped from discovery.");
 
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
@@ -515,18 +547,28 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             """);
 
         // Implicit channel: Quality.Both. Returns Redis when prerelease=false, Redis+Foundry when prerelease=true.
+        var implicitHits = 0;
         var implicitCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
-                prerelease
-                    ? [CreatePackage("Aspire.Hosting.Redis", "1.0.0"), CreatePackage("Aspire.Hosting.Foundry", "1.0.0-preview.1")]
-                    : [CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+            {
+                Interlocked.Increment(ref implicitHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    prerelease
+                        ? [CreatePackage("Aspire.Hosting.Redis", "1.0.0"), CreatePackage("Aspire.Hosting.Foundry", "1.0.0-preview.1")]
+                        : [CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
         };
         // Stable channel: Quality.Stable. PackageChannel only issues prerelease=false queries against it,
         // so Foundry (prerelease-only) never appears regardless of what the cache could return.
+        var stableHits = 0;
         var stableCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref stableHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -551,28 +593,38 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
+        // Both channels must be queried. The implicit channel is what surfaces Foundry (via
+        // prerelease=true), but the stable channel must also be searched so users who pinned to
+        // it don't lose stable-only packages.
+        Assert.True(implicitHits > 0, "Implicit channel was not queried — Foundry would not be discoverable.");
+        Assert.True(stableHits > 0, "Stable channel was not queried — pinned channel is being dropped from discovery.");
+
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Foundry", integration.Package);
         Assert.Equal("1.0.0-preview.1", integration.Version);
     }
 
     [Theory]
-    [InlineData(null)]        // No persisted channel — control case
-    [InlineData("\"daily\"")] // Persisted channel — the case where #17452 + Layer-1 narrowing collided
-    public async Task IntegrationSearchCommandTypeScriptAppHostProducesSameResultRegardlessOfPersistedChannel(string? configFileChannelJson)
+    [InlineData(null, false)]        // No persisted channel — only implicit is searched, daily is excluded.
+    [InlineData("\"daily\"", true)]  // Persisted channel — implicit AND daily are searched.
+    public async Task IntegrationSearchCommandTypeScriptAppHostPersistedChannelExpandsDiscoveryWithoutChangingPreferredResult(string? configFileChannelJson, bool expectExplicitChannelHit)
     {
-        // Durable regression guard for the Layer-1 narrowing bug.
+        // Durable regression guard against re-introducing the Layer-1 narrowing bug.
         //
         // Pre-fix: aspire.config.json with `"channel"` set caused IntegrationPackageSearchService to
-        //   narrow the channel set to that single channel, so the with-channel arm of this theory
-        //   would have returned ONLY the daily channel's Redis (2.0.0) while the without-channel arm
-        //   returned BOTH channels (implicit + daily, dedupe wins on implicit → 1.0.0).
-        // Post-fix: both arms search the full channel set; both produce Redis 1.0.0.
+        //   narrow the channel set to that single channel, so the with-channel arm would have returned
+        //   ONLY the daily channel's Redis (2.0.0) while the without-channel arm returned Redis 1.0.0.
+        // Post-fix two things hold simultaneously:
+        //   (a) Both arms yield the SAME preferred Redis to the user (1.0.0, the implicit channel
+        //       wins via SelectPreferredIntegrationPackage) — because the pin no longer overrides
+        //       what the user sees as the top-ranked result.
+        //   (b) The with-channel arm ALSO queries the pinned (daily) channel; the without-channel arm
+        //       does not — because the explicit channel set is gated on `hasHives || !empty(configuredChannel)`.
         //
-        // This is the structural guarantee that #17452's `"channel"` persistence has zero effect on
-        // discovery filtering — it now only acts as a synthesis trigger to PackagingService.
-        // If anyone re-introduces narrowing on `configuredChannel`, this test fires on the
-        // with-channel arm.
+        // Both halves matter. (a) alone would pass for an implementation that incorrectly narrowed
+        // to implicit-only when a channel was pinned (a different regression than the original bug
+        // but still wrong — it would mean users who pin to `daily` lose access to packages that only
+        // exist on the daily feed). (b) is the new structural guarantee on top of (a).
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -591,13 +643,23 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 """);
         }
 
+        var implicitHits = 0;
+        var dailyHits = 0;
         var implicitCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref implicitHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
         };
         var dailyCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref dailyHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")]);
+            }
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -621,12 +683,21 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
+        // (a) User-visible result is identical across arms: implicit Redis 1.0.0 wins.
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
-        // Implicit channel is preferred by SelectPreferredIntegrationPackage when an integration
-        // appears in both implicit and explicit channels. Both theory arms must agree on 1.0.0,
-        // proving persisted-channel value no longer narrows discovery.
         Assert.Equal("1.0.0", integration.Version);
+
+        // (b) Per-channel search invocation differs based on whether a channel was pinned.
+        Assert.True(implicitHits > 0, "Implicit channel must always be searched.");
+        if (expectExplicitChannelHit)
+        {
+            Assert.True(dailyHits > 0, "With-channel arm: pinned 'daily' channel must also be searched.");
+        }
+        else
+        {
+            Assert.Equal(0, dailyHits);
+        }
     }
 
     [Fact]
