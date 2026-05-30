@@ -700,7 +700,7 @@
         },
         {
           "command": "aspire-vscode.executeResourceCommandItem",
-          "when": "view == aspire-vscode.runningAppHosts && viewItem == resourceCommand:enabled",
+          "when": "view == aspire-vscode.appHosts && viewItem == resourceCommand:enabled",
           "group": "2_actions@4"
         },
         {
