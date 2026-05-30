@@ -468,6 +468,9 @@ public class FoundryExtensionsTests
 
     private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
     {
+        // These tests call the deployment-time environment resolver directly. In a real publish,
+        // provisioning populates the Foundry project Bicep outputs before references are resolved.
+        // Seed the outputs here so BicepOutputReference.GetValueAsync does not wait for provisioning.
         project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
         project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
         project.ProvisioningTaskCompletionSource?.TrySetResult();
