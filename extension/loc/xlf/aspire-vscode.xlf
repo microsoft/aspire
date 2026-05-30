@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <xliff version="1.2" xmlns="urn:oasis:names:tc:xliff:document:1.2">
   <file original="package" source-language="en" datatype="plaintext"><body>
+    <trans-unit id="aspire-vscode.strings.resourceCommandDisabledDescription">
+      <source xml:lang="en">(disabled)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.debugSessionAlreadyExists">
       <source xml:lang="en">A debug session is already active for id {0}.</source>
     </trans-unit>
@@ -207,6 +210,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.error">
       <source xml:lang="en">Error: {0}</source>
+    </trans-unit>
+    <trans-unit id="command.executeResourceCommandItem">
+      <source xml:lang="en">Execute command</source>
     </trans-unit>
     <trans-unit id="command.do">
       <source xml:lang="en">Execute pipeline step (aspire do)</source>

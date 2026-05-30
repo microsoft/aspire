@@ -99,7 +99,25 @@ suite('AppHostDataRepository', () => {
 
         assert.strictEqual(getCliPathStub.calledOnce, true);
         assert.strictEqual(spawnStub.calledOnce, true);
-        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json']);
+        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands']);
+
+        repository.dispose();
+    });
+
+    test('describe watch retries without disabled command flag when CLI does not recognize it', async () => {
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setPanelVisible(true);
+        await waitForMicrotasks();
+
+        const firstOptions = spawnStub.firstCall.args[3];
+        firstOptions.stderrCallback("Unrecognized command or argument '--include-disabled-commands'");
+        firstOptions.exitCallback(1);
+        await waitForMicrotasks();
+
+        assert.strictEqual(spawnStub.calledTwice, true);
+        assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json']);
 
         repository.dispose();
     });
@@ -414,7 +432,7 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.workspaceAppHostName, 'apps/Store/AppHost.csproj');
             assert.strictEqual(describeProcess.killed, false);
             assert.strictEqual(spawnStub.callCount, 3);
-            assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/apps/Store/AppHost.csproj']);
+            assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/apps/Store/AppHost.csproj']);
             assert.deepStrictEqual(spawnStub.thirdCall.args[2], ['ps', '--follow', '--format', 'json']);
         } finally {
             repository.dispose();
@@ -465,7 +483,7 @@ suite('AppHostDataRepository', () => {
             await waitForAppHostDiscovery();
 
             assert.strictEqual(describeCalls.length, 1);
-            assert.deepStrictEqual(describeCalls[0].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/apps/Store/AppHost.csproj']);
+            assert.deepStrictEqual(describeCalls[0].args, ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/apps/Store/AppHost.csproj']);
             assert.ok(psOptions);
 
             psOptions.lineCallback(JSON.stringify([
@@ -483,7 +501,7 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
             assert.strictEqual(describeProcesses[0].killed, true);
             assert.strictEqual(describeCalls.length, 2);
-            assert.deepStrictEqual(describeCalls[1].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/samples/Store/AppHost.csproj']);
+            assert.deepStrictEqual(describeCalls[1].args, ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/samples/Store/AppHost.csproj']);
 
             describeCalls[1].options.lineCallback(JSON.stringify({ name: 'api', resourceType: 'Project', state: 'Running' }));
             assert.strictEqual(repository.workspaceResources.length, 1);
@@ -538,7 +556,7 @@ suite('AppHostDataRepository', () => {
             await waitForAppHostDiscovery();
 
             assert.strictEqual(describeCalls.length, 1);
-            assert.deepStrictEqual(describeCalls[0].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/apps/Store/AppHost.csproj']);
+            assert.deepStrictEqual(describeCalls[0].args, ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/apps/Store/AppHost.csproj']);
             assert.ok(psOptions);
 
             psOptions.lineCallback(JSON.stringify([
@@ -563,8 +581,8 @@ suite('AppHostDataRepository', () => {
             // No retarget, but global describe streams start for the non-selected running AppHosts
             // so their resources appear in the workspace tree.
             assert.strictEqual(describeCalls.length, 3);
-            assert.deepStrictEqual(describeCalls[1].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/samples/Store/AppHost.csproj']);
-            assert.deepStrictEqual(describeCalls[2].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/tools/Admin/AppHost.csproj']);
+            assert.deepStrictEqual(describeCalls[1].args, ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/samples/Store/AppHost.csproj']);
+            assert.deepStrictEqual(describeCalls[2].args, ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/tools/Admin/AppHost.csproj']);
         } finally {
             repository.dispose();
             workspaceFoldersStub.restore();
@@ -638,7 +656,7 @@ suite('AppHostDataRepository', () => {
             // Initial workspace describe + global describe for the non-selected AppHost
             // (workspace describe restart is still pending on a timer)
             assert.strictEqual(describeCalls.length, 2);
-            assert.deepStrictEqual(describeCalls[1].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/samples/Store/AppHost.csproj']);
+            assert.deepStrictEqual(describeCalls[1].args, ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/samples/Store/AppHost.csproj']);
 
             // Simulate resource data arriving on the non-selected AppHost's describe stream (NDJSON format)
             describeCalls[1].options.lineCallback(JSON.stringify({ name: 'redis', resourceType: 'Container', state: 'Running' }));
@@ -720,7 +738,7 @@ suite('AppHostDataRepository', () => {
 
             assert.strictEqual(repository.viewMode, 'workspace');
             assert.strictEqual(repository.workspaceAppHostPath, configuredAppHostPath);
-            assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json', '--apphost', configuredAppHostPath]);
+            assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', configuredAppHostPath]);
 
             assert.ok(psOptions);
             psOptions.lineCallback(JSON.stringify([
@@ -1414,7 +1432,7 @@ suite('AppHostDataRepository global polling', () => {
         const describeCall = spawnStub.getCalls().find(call =>
             Array.isArray(call.args[2]) && call.args[2][0] === 'describe' && call.args[2].includes('/workspace/AppHost.csproj'));
         assert.ok(describeCall, 'expected aspire describe --follow to spawn for the discovered AppHost');
-        assert.deepStrictEqual(describeCall.args[2], ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/AppHost.csproj']);
+        assert.deepStrictEqual(describeCall.args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/AppHost.csproj']);
 
         const describeLineCallback = describeCall.args[3].lineCallback;
         describeLineCallback(JSON.stringify({ name: 'api', resourceType: 'Project', state: 'Running' }));
@@ -1452,6 +1470,43 @@ suite('AppHostDataRepository global polling', () => {
         assert.strictEqual(repository.appHosts.length, 2);
         assert.strictEqual(repository.appHosts[0].appHostPath, '/workspace/OtherAppHost.csproj');
         assert.strictEqual(repository.appHosts[1].appHostPid, 9999);
+
+        repository.dispose();
+    });
+
+    test('global describe retries without disabled command flag when CLI does not recognize it', async () => {
+        const spawned: { args: string[]; options: any }[] = [];
+        spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
+            spawned.push({ args, options });
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        repository.activate();
+        repository.setViewMode('global');
+        repository.setPanelVisible(true);
+        await waitForMicrotasks();
+
+        const psCall = spawned.find(call => call.args[0] === 'ps');
+        assert.ok(psCall);
+        psCall.options.lineCallback(JSON.stringify({
+            appHostPath: '/workspace/AppHost.csproj',
+            appHostPid: 1234,
+            status: 'running',
+        }));
+        await waitForMicrotasks();
+
+        const firstDescribe = spawned.find(call => call.args[0] === 'describe');
+        assert.ok(firstDescribe);
+        assert.deepStrictEqual(firstDescribe.args, ['describe', '--follow', '--format', 'json', '--include-disabled-commands', '--apphost', '/workspace/AppHost.csproj']);
+
+        firstDescribe.options.stderrCallback("Unrecognized command or argument '--include-disabled-commands'");
+        firstDescribe.options.exitCallback(1);
+        await waitForMicrotasks();
+
+        const describeCalls = spawned.filter(call => call.args[0] === 'describe');
+        assert.strictEqual(describeCalls.length, 2);
+        assert.deepStrictEqual(describeCalls[1].args, ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/AppHost.csproj']);
 
         repository.dispose();
     });
@@ -1715,7 +1770,7 @@ suite('AppHostDataRepository AppHost-file gate', () => {
         await waitForMicrotasks();
 
         assert.strictEqual(spawnStub.calledOnce, true);
-        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json']);
+        assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json', '--include-disabled-commands']);
 
         repository.dispose();
     });

@@ -99,6 +99,10 @@ internal sealed class DescribeCommand : BaseCommand
     {
         Description = DescribeCommandStrings.IncludeHiddenOptionDescription
     };
+    private static readonly Option<bool> s_includeDisabledCommandsOption = new("--include-disabled-commands")
+    {
+        Hidden = true
+    };
 
     public DescribeCommand(
         IInteractionService interactionService,
@@ -122,6 +126,7 @@ internal sealed class DescribeCommand : BaseCommand
         Options.Add(s_followOption);
         Options.Add(s_formatOption);
         Options.Add(s_includeHiddenOption);
+        Options.Add(s_includeDisabledCommandsOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -133,6 +138,7 @@ internal sealed class DescribeCommand : BaseCommand
         var follow = parseResult.GetValue(s_followOption);
         var format = parseResult.GetValue(s_formatOption);
         var includeHidden = parseResult.GetValue(s_includeHiddenOption);
+        var includeDisabledCommands = parseResult.GetValue(s_includeDisabledCommandsOption);
 
         var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
@@ -167,7 +173,7 @@ internal sealed class DescribeCommand : BaseCommand
         {
             try
             {
-                return CommandResult.FromExitCode(await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, cancellationToken));
+                return CommandResult.FromExitCode(await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, includeDisabledCommands, cancellationToken));
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
             {
@@ -191,11 +197,11 @@ internal sealed class DescribeCommand : BaseCommand
         }
         else
         {
-            return CommandResult.FromExitCode(ExecuteSnapshot(resourceWatcher.GetResources().ToList(), dashboardBaseUrl, resourceName, format));
+            return CommandResult.FromExitCode(ExecuteSnapshot(resourceWatcher.GetResources().ToList(), dashboardBaseUrl, resourceName, format, includeDisabledCommands));
         }
     }
 
-    private int ExecuteSnapshot(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl, string? resourceName, OutputFormat format)
+    private int ExecuteSnapshot(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl, string? resourceName, OutputFormat format, bool includeDisabledCommands)
     {
         // Filter by resource name if specified
         if (resourceName is not null)
@@ -210,7 +216,7 @@ internal sealed class DescribeCommand : BaseCommand
             return CliExitCodes.FailedToFindProject;
         }
 
-        var resourceList = ResourceSnapshotMapper.MapToResourceJsonList(snapshots, dashboardBaseUrl);
+        var resourceList = ResourceSnapshotMapper.MapToResourceJsonList(snapshots, dashboardBaseUrl, includeDisabledCommands: includeDisabledCommands);
 
         if (format == OutputFormat.Json)
         {
@@ -227,7 +233,7 @@ internal sealed class DescribeCommand : BaseCommand
         return CliExitCodes.Success;
     }
 
-    private async Task<int> ExecuteWatchAsync(IAppHostAuxiliaryBackchannel connection, ResourceSnapshotWatcher resourceWatcher, string? dashboardBaseUrl, string? resourceName, OutputFormat format, CancellationToken cancellationToken)
+    private async Task<int> ExecuteWatchAsync(IAppHostAuxiliaryBackchannel connection, ResourceSnapshotWatcher resourceWatcher, string? dashboardBaseUrl, string? resourceName, OutputFormat format, bool includeDisabledCommands, CancellationToken cancellationToken)
     {
         // Cache the last displayed content per resource to avoid duplicate output.
         // Values are either a string (JSON mode) or a ResourceDisplayState (non-JSON mode).
@@ -257,7 +263,7 @@ internal sealed class DescribeCommand : BaseCommand
 
             if (format == OutputFormat.Json)
             {
-                var resourceJson = ResourceSnapshotMapper.MapToResourceJson(snapshot, currentSnapshots, dashboardBaseUrl);
+                var resourceJson = ResourceSnapshotMapper.MapToResourceJson(snapshot, currentSnapshots, dashboardBaseUrl, includeDisabledCommands: includeDisabledCommands);
 
                 // NDJSON output - compact, one object per line for streaming
                 var json = JsonSerializer.Serialize(resourceJson, ResourcesCommandJsonContext.Ndjson.ResourceJson);

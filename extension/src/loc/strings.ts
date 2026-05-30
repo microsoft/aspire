@@ -75,6 +75,7 @@ export const resourceCommandContinue = vscode.l10n.t('Continue');
 export const resourceCommandDontShowAgain = vscode.l10n.t("Don't show again");
 export const resourceCommandInvalidNumber = vscode.l10n.t('Enter a number using invariant culture, for example 1, -1.5, or 1e3.');
 export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value must be {0} characters or fewer.', length);
+export const resourceCommandDisabledDescription = vscode.l10n.t('(disabled)');
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
 export const workspaceAppHostLabel = vscode.l10n.t('Workspace AppHost');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);

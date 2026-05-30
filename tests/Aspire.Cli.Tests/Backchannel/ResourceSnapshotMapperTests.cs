@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Shared.Model.Serialization;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -75,6 +76,7 @@ public class ResourceSnapshotMapperTests
                     ]
                 },
                 new ResourceSnapshotCommand { Name = "start", State = "Disabled", Description = "Start" },
+                new ResourceSnapshotCommand { Name = "save", State = "Hidden", Description = "Save parameter" },
                 new ResourceSnapshotCommand { Name = "dashboard-only", State = "Enabled", Description = "UI only", Visibility = KnownCommandVisibility.UI },
                 new ResourceSnapshotCommand { Name = "missing-visibility", State = "Enabled", Description = "Missing visibility", Visibility = null! }
             ],
@@ -93,10 +95,11 @@ public class ResourceSnapshotMapperTests
         Assert.Single(result.Urls!);
         Assert.Equal("http://localhost:5000", result.Urls![0].Url);
 
-        // Enabled and disabled commands with API visibility should be included
-        Assert.Equal(2, result.Commands!.Count);
+        // Enabled commands with API visibility should be included by default.
+        var command = Assert.Single(result.Commands!);
+        Assert.Equal("stop", command.Key);
 
-        var stopCommand = result.Commands["stop"];
+        var stopCommand = command.Value;
         Assert.Equal("Enabled", stopCommand.State);
         Assert.Equal(KnownCommandVisibility.Api, stopCommand.Visibility);
         var argumentInput = Assert.Single(stopCommand.ArgumentInputs!);
@@ -115,10 +118,6 @@ public class ResourceSnapshotMapperTests
         Assert.True(argumentInput.DynamicLoading.AlwaysLoadOnStart);
         Assert.Equal("browser", Assert.Single(argumentInput.DynamicLoading.DependsOnInputs!));
 
-        var startCommand = result.Commands["start"];
-        Assert.Equal("Disabled", startCommand.State);
-        Assert.Null(startCommand.Visibility);
-
         // Only IsFromSpec environment variables should be included
         Assert.Single(result.Environment!);
         Assert.Equal("Development", result.Environment!["ASPNETCORE_ENVIRONMENT"]);
@@ -126,6 +125,30 @@ public class ResourceSnapshotMapperTests
         // Dashboard URL should be generated
         Assert.NotNull(result.DashboardUrl);
         Assert.Contains("localhost:18080", result.DashboardUrl);
+    }
+
+    [Fact]
+    public void MapToResourceJson_WithIncludeDisabledCommands_IncludesDisabledAndExcludesHidden()
+    {
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand { Name = "restart", State = KnownCommandState.Enabled, Description = "Restart" },
+                new ResourceSnapshotCommand { Name = "start", State = KnownCommandState.Disabled, Description = "Start" },
+                new ResourceSnapshotCommand { Name = "save", State = KnownCommandState.Hidden, Description = "Save parameter" }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
+
+        Assert.Equal(["restart", "start"], result.Commands!.Keys);
+        Assert.Equal(KnownCommandState.Enabled, result.Commands["restart"].State);
+        Assert.Equal(KnownCommandState.Disabled, result.Commands["start"].State);
     }
 
     [Fact]

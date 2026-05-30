@@ -31,10 +31,11 @@ internal static class ResourceSnapshotMapper
     /// <param name="snapshots">The resource snapshots to map.</param>
     /// <param name="dashboardBaseUrl">Optional base URL of the Aspire Dashboard for generating resource URLs.</param>
     /// <param name="includeEnvironmentVariableValues">Whether to include environment variable values. Defaults to <c>true</c>. Set to <c>false</c> to exclude values for security reasons.</param>
-    public static List<ResourceJson> MapToResourceJsonList(IEnumerable<ResourceSnapshot> snapshots, string? dashboardBaseUrl = null, bool includeEnvironmentVariableValues = true)
+    /// <param name="includeDisabledCommands">Whether to include disabled commands. Hidden commands are always excluded.</param>
+    public static List<ResourceJson> MapToResourceJsonList(IEnumerable<ResourceSnapshot> snapshots, string? dashboardBaseUrl = null, bool includeEnvironmentVariableValues = true, bool includeDisabledCommands = false)
     {
         var snapshotList = snapshots.ToList();
-        return snapshotList.Select(s => MapToResourceJson(s, snapshotList, dashboardBaseUrl, includeEnvironmentVariableValues)).ToList();
+        return snapshotList.Select(s => MapToResourceJson(s, snapshotList, dashboardBaseUrl, includeEnvironmentVariableValues, includeDisabledCommands)).ToList();
     }
 
     /// <summary>
@@ -44,7 +45,8 @@ internal static class ResourceSnapshotMapper
     /// <param name="allSnapshots">All resource snapshots for resolving relationships.</param>
     /// <param name="dashboardBaseUrl">Optional base URL of the Aspire Dashboard for generating resource URLs.</param>
     /// <param name="includeEnvironmentVariableValues">Whether to include environment variable values. Defaults to <c>true</c>. Set to <c>false</c> to exclude values for security reasons.</param>
-    public static ResourceJson MapToResourceJson(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> allSnapshots, string? dashboardBaseUrl = null, bool includeEnvironmentVariableValues = true)
+    /// <param name="includeDisabledCommands">Whether to include disabled commands. Hidden commands are always excluded.</param>
+    public static ResourceJson MapToResourceJson(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> allSnapshots, string? dashboardBaseUrl = null, bool includeEnvironmentVariableValues = true, bool includeDisabledCommands = false)
     {
         var urls = snapshot.Urls
             .Select(u => new ResourceUrlJson
@@ -106,9 +108,11 @@ internal static class ResourceSnapshotMapper
             }
         }
 
-        // Include enabled and disabled commands (exclude hidden/unsupported visibility)
+        // Include only API-visible commands. Disabled commands are emitted only for the
+        // VS Code tree view describe stream so other structured consumers keep the
+        // pre-existing enabled-command contract. Hidden commands are never emitted.
         var commands = snapshot.Commands
-            .Where(c => IsCommandVisibleToApi(c.Visibility))
+            .Where(c => IsCommandVisibleToApi(c.Visibility) && IsCommandVisibleToConsumer(c.State, includeDisabledCommands))
             .OrderBy(c => c.Name)
             .ToDistinctDictionary(
                 c => c.Name,
@@ -230,6 +234,12 @@ internal static class ResourceSnapshotMapper
     private static bool IsCommandVisibleToApi(string? visibility)
     {
         return visibility?.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.Api, StringComparison.OrdinalIgnoreCase)) is true;
+    }
+
+    private static bool IsCommandVisibleToConsumer(string state, bool includeDisabledCommands)
+    {
+        return string.Equals(state, KnownCommandState.Enabled, StringComparison.OrdinalIgnoreCase)
+            || (includeDisabledCommands && string.Equals(state, KnownCommandState.Disabled, StringComparison.OrdinalIgnoreCase));
     }
 
     internal static ResourceCommandArgumentJson MapCommandArgumentInput(ResourceSnapshotCommandArgument input)

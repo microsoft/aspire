@@ -204,5 +204,6 @@
   "aspire-vscode.strings.resourceCommandContinue": "Continue",
   "aspire-vscode.strings.resourceCommandDontShowAgain": "Don't show again",
   "aspire-vscode.strings.resourceCommandInvalidNumber": "Enter a number using invariant culture, for example 1, -1.5, or 1e3.",
-  "aspire-vscode.strings.resourceCommandMaxLength": "Value must be {0} characters or fewer."
+  "aspire-vscode.strings.resourceCommandMaxLength": "Value must be {0} characters or fewer.",
+  "aspire-vscode.strings.resourceCommandDisabledDescription": "(disabled)"
 }

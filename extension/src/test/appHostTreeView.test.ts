@@ -65,6 +65,17 @@ function makeTreeProvider(appHosts: readonly AppHostDisplayInfo[], viewMode: Vie
     return new AspireAppHostTreeProvider(repository, makeTerminalProvider());
 }
 
+function getResourceCommandItems(provider: AspireAppHostTreeProvider): readonly vscode.TreeItem[] {
+    const [appHostItem] = provider.getChildren();
+    const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+    assert.ok(resourcesGroup);
+    const [resourceItem] = provider.getChildren(resourcesGroup);
+    const commandsGroup = provider.getChildren(resourceItem).find(item => item.contextValue === 'commandsGroup');
+    assert.ok(commandsGroup);
+
+    return provider.getChildren(commandsGroup);
+}
+
 function makeWorkspaceTreeProvider(workspaceAppHostDescription: string): AspireAppHostTreeProvider {
     const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
     const repository = {
@@ -290,6 +301,92 @@ suite('AspireAppHostTreeProvider', () => {
             'samples/Store/AppHost.csproj',
         ]);
     });
+
+    test('enabled command tree item uses context menu execution only', () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        commands: {
+                            restart: { displayName: 'Restart', description: 'Restart the resource', state: 'Enabled' },
+                        },
+                    }),
+                ],
+            }),
+        ]);
+
+        const [commandItem] = getResourceCommandItems(provider);
+
+        assert.strictEqual(commandItem.label, 'Restart');
+        assert.strictEqual(commandItem.contextValue, 'resourceCommand:enabled');
+        assert.strictEqual((commandItem.iconPath as vscode.ThemeIcon).id, 'run');
+        assert.strictEqual(commandItem.command, undefined);
+    });
+
+    test('resource with commands is expandable even without URLs, health checks, or child resources', () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        commands: {
+                            restart: { displayName: 'Restart', description: 'Restart the resource', state: 'Enabled' },
+                        },
+                    }),
+                ],
+            }),
+        ]);
+
+        const [appHostItem] = provider.getChildren();
+        const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+        assert.ok(resourcesGroup);
+        const [resourceItem] = provider.getChildren(resourcesGroup);
+
+        assert.strictEqual(resourceItem.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
+    });
+
+    test('disabled command tree item is not executable', () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        commands: {
+                            start: { displayName: 'Start', description: 'Start the resource', state: 'Disabled' },
+                        },
+                    }),
+                ],
+            }),
+        ]);
+
+        const [commandItem] = getResourceCommandItems(provider);
+
+        assert.strictEqual(commandItem.label, 'Start');
+        assert.strictEqual(commandItem.contextValue, 'resourceCommand:disabled');
+        assert.strictEqual(commandItem.description, '(disabled)');
+        assert.strictEqual((commandItem.iconPath as vscode.ThemeIcon).id, 'run');
+        assert.strictEqual(commandItem.command, undefined);
+    });
+
+    test('hidden command state is not shown', () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        commands: {
+                            save: { displayName: 'Save', description: 'Save the resource', state: 'Hidden' },
+                        },
+                    }),
+                ],
+            }),
+        ]);
+
+        const [appHostItem] = provider.getChildren();
+        const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+        assert.ok(resourcesGroup);
+        const [resourceItem] = provider.getChildren(resourcesGroup);
+
+        assert.strictEqual(resourceItem.collapsibleState, vscode.TreeItemCollapsibleState.None);
+        assert.strictEqual(provider.getChildren(resourceItem).length, 0);
+    });
 });
 
 suite('AppHostDataRepository', () => {
@@ -389,21 +486,21 @@ suite('getResourceContextValue', () => {
 
     test('resource with start command', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'start': { displayName: null, description: null } },
+            commands: { 'start': { displayName: null, description: null, state: 'Enabled' } },
         }));
         assert.strictEqual(result, 'resource:canStart');
     });
 
     test('resource with resource-start command', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'resource-start': { displayName: null, description: null } },
+            commands: { 'resource-start': { displayName: null, description: null, state: 'Enabled' } },
         }));
         assert.strictEqual(result, 'resource:canStart');
     });
 
     test('resource with stop command', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'stop': { displayName: null, description: null } },
+            commands: { 'stop': { displayName: null, description: null, state: 'Enabled' } },
         }));
         assert.strictEqual(result, 'resource:canStop');
     });
@@ -411,9 +508,9 @@ suite('getResourceContextValue', () => {
     test('resource with all lifecycle commands', () => {
         const result = getResourceContextValue(makeResource({
             commands: {
-                'start': { displayName: null, description: null },
-                'stop': { displayName: null, description: null },
-                'restart': { displayName: null, description: null },
+                'start': { displayName: null, description: null, state: 'Enabled' },
+                'stop': { displayName: null, description: null, state: 'Enabled' },
+                'restart': { displayName: null, description: null, state: 'Enabled' },
             },
         }));
         assert.strictEqual(result, 'resource:canStart:canStop:canRestart');
@@ -429,11 +526,18 @@ suite('getResourceContextValue', () => {
     test('resource with mixed lifecycle and custom commands', () => {
         const result = getResourceContextValue(makeResource({
             commands: {
-                'restart': { displayName: null, description: null },
-                'custom-action': { displayName: null, description: null },
+                'restart': { displayName: null, description: null, state: 'Enabled' },
+                'custom-action': { displayName: null, description: null, state: 'Enabled' },
             },
         }));
         assert.strictEqual(result, 'resource:canRestart');
+    });
+
+    test('resource with disabled lifecycle command has base context only', () => {
+        const result = getResourceContextValue(makeResource({
+            commands: { 'start': { displayName: null, description: null, state: 'Disabled' } },
+        }));
+        assert.strictEqual(result, 'resource');
     });
 
 });

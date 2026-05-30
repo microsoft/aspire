@@ -95,6 +95,8 @@ interface GlobalDescribeStream {
     appHostPath: string;
     process: ChildProcessWithoutNullStreams | undefined;
     resources: Map<string, ResourceJson>;
+    nonJsonLines: string[];
+    stderr: string;
     restartTimer: ReturnType<typeof setTimeout> | undefined;
     restartDelay: number;
     version: number;
@@ -134,6 +136,7 @@ export class AppHostDataRepository {
     private _describeReceivedData = false;
     private _describeStartPending = false;
     private _describeStartVersion = 0;
+    private _includeDisabledCommandsSupported = true;
 
     // ── Running AppHost state (ps polling) ──
     private _appHosts: AppHostDisplayInfo[] = [];
@@ -457,7 +460,7 @@ export class AppHostDataRepository {
 
     // ── Workspace mode: describe --follow ──
 
-    private _startDescribeWatch(): void {
+    private _startDescribeWatch(includeDisabledCommands = this._includeDisabledCommandsSupported): void {
         if (this._describeProcess || this._describeStartPending || this._disposed) {
             return;
         }
@@ -473,6 +476,9 @@ export class AppHostDataRepository {
             }
 
             const args = ['describe', '--follow', '--format', 'json'];
+            if (includeDisabledCommands) {
+                args.push('--include-disabled-commands');
+            }
             if (this._workspaceAppHostPath) {
                 args.push('--apphost', this._workspaceAppHostPath);
             }
@@ -518,6 +524,12 @@ export class AppHostDataRepository {
                     // loop forever. The panel will refresh when the user explicitly
                     // retries or when activity resumes.
                     if (!this._describeReceivedData) {
+                        if (includeDisabledCommands && isIncludeDisabledCommandsUnsupportedOutput(describeNonJsonLines, describeStderr)) {
+                            this._includeDisabledCommandsSupported = false;
+                            this._startDescribeWatch(false);
+                            return;
+                        }
+
                         extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
                         this._workspaceResources.clear();
                         this._setDescribeError(this._getDescribeNoDataError(code, describeNonJsonLines, describeStderr));
@@ -693,6 +705,8 @@ export class AppHostDataRepository {
             appHostPath,
             process: undefined,
             resources: new Map(),
+            nonJsonLines: [],
+            stderr: '',
             restartTimer: undefined,
             restartDelay: 5000,
             version: 0,
@@ -706,7 +720,12 @@ export class AppHostDataRepository {
                 return;
             }
 
-            const args = ['describe', '--follow', '--format', 'json', '--apphost', appHostPath];
+            const includeDisabledCommands = this._includeDisabledCommandsSupported;
+            const args = ['describe', '--follow', '--format', 'json'];
+            if (includeDisabledCommands) {
+                args.push('--include-disabled-commands');
+            }
+            args.push('--apphost', appHostPath);
             extensionLogOutputChannel.info(`Starting aspire describe --follow for AppHost ${appHostPath}`);
 
             const childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
@@ -715,13 +734,18 @@ export class AppHostDataRepository {
                     if (this._globalDescribeStreams.get(appHostPath) !== stream || stream.process !== childProcess) {
                         return;
                     }
-                    this._handleGlobalDescribeLine(stream, line);
+                    if (!this._handleGlobalDescribeLine(stream, line) && stream.nonJsonLines.length < 20) {
+                        stream.nonJsonLines.push(line);
+                    }
                 },
                 stderrCallback: (data) => {
                     // Per-AppHost describe errors should not pollute the global error banner,
                     // but they MUST be logged so users can diagnose missing resources for
                     // non-selected AppHosts (e.g., CLI too old to support `describe --apphost`).
                     extensionLogOutputChannel.warn(`aspire describe --follow stderr for ${appHostPath}: ${data}`);
+                    if (stream.stderr.length < 4000) {
+                        stream.stderr += data;
+                    }
                 },
                 exitCallback: (code) => {
                     if (this._globalDescribeStreams.get(appHostPath) !== stream || stream.process !== childProcess) {
@@ -730,6 +754,13 @@ export class AppHostDataRepository {
                     extensionLogOutputChannel.info(`aspire describe --follow for ${appHostPath} exited with code ${code}`);
                     stream.process = undefined;
                     if (this._disposed) {
+                        return;
+                    }
+
+                    if (includeDisabledCommands && stream.resources.size === 0 && isIncludeDisabledCommandsUnsupportedOutput(stream.nonJsonLines, stream.stderr)) {
+                        this._includeDisabledCommandsSupported = false;
+                        this._globalDescribeStreams.delete(appHostPath);
+                        this._startGlobalDescribe(appHostPath);
                         return;
                     }
 
@@ -792,10 +823,10 @@ export class AppHostDataRepository {
         });
     }
 
-    private _handleGlobalDescribeLine(stream: GlobalDescribeStream, line: string): void {
+    private _handleGlobalDescribeLine(stream: GlobalDescribeStream, line: string): boolean {
         const trimmed = line.trim();
         if (!trimmed) {
-            return;
+            return true;
         }
         try {
             const resource: ResourceJson = JSON.parse(trimmed);
@@ -804,10 +835,13 @@ export class AppHostDataRepository {
                 stream.restartDelay = 5000;
                 this._attachGlobalResourcesToAppHosts();
                 this._onDidChangeData.fire();
+                return true;
             }
         } catch (e) {
             extensionLogOutputChannel.warn(`Failed to parse describe NDJSON line for ${stream.appHostPath}: ${e}`);
         }
+
+        return false;
     }
 
     private _stopGlobalDescribe(appHostPath: string): void {
@@ -1427,6 +1461,17 @@ function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: st
         || output.includes('unrecognized command')
         || output.includes('unrecognized option')
         || output.includes('is not a recognized command');
+}
+
+function isIncludeDisabledCommandsUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
+    const output = [...nonJsonLines, stderr].join('\n').toLowerCase();
+    if (!output.includes('--include-disabled-commands')) {
+        return false;
+    }
+
+    return output.includes('unrecognized option')
+        || output.includes('unknown option')
+        || output.includes('unrecognized command or argument');
 }
 
 function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {

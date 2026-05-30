@@ -26,6 +26,7 @@ import {
     resourceDescriptionExitCode,
     logFileLabel,
     commandsLabel,
+    resourceCommandDisabledDescription,
 } from '../loc/strings';
 import { isLinkableUrl } from '../utils/urlSchemes';
 import {
@@ -62,6 +63,11 @@ function getComparisonKey(value: string): string {
 
 function hasNoResources(resources: readonly ResourceJson[] | null | undefined): boolean {
     return resources === undefined || resources === null || resources.length === 0;
+}
+
+function getVisibleCommands(commands: Record<string, ResourceCommandJson>): [string, ResourceCommandJson][] {
+    return Object.entries(commands)
+        .filter(([, command]) => command.state === 'Enabled' || command.state === 'Disabled');
 }
 
 function appHostIcon(path?: string): vscode.ThemeIcon {
@@ -203,19 +209,14 @@ class ResourceCommandItem extends vscode.TreeItem {
         this.id = `${parentId}:command:${commandName}`;
         this.tooltip = commandJson.description ?? undefined;
 
-        const isEnabled = commandJson.state !== 'Disabled';
+        const isEnabled = commandJson.state === 'Enabled';
 
         if (isEnabled) {
             this.iconPath = new vscode.ThemeIcon('run');
             this.contextValue = 'resourceCommand:enabled';
-            this.command = {
-                command: 'aspire-vscode.executeResourceCommandItem',
-                title: label,
-                arguments: [this]
-            };
         } else {
             this.iconPath = new vscode.ThemeIcon('run', new vscode.ThemeColor('disabledForeground'));
-            this.description = vscode.l10n.t('(disabled)');
+            this.description = resourceCommandDisabledDescription;
             this.contextValue = 'resourceCommand:disabled';
         }
     }
@@ -230,7 +231,8 @@ class ResourceItem extends vscode.TreeItem {
         const label = resource.displayName ?? resource.name;
         const hasUrls = resource.urls && resource.urls.filter(u => !u.isInternal).length > 0;
         const hasHealthReports = resource.healthReports && Object.keys(resource.healthReports).length > 0;
-        const hasExpandableContent = hasChildren || hasUrls || hasHealthReports;
+        const hasCommands = resource.commands && getVisibleCommands(resource.commands).length > 0;
+        const hasExpandableContent = hasChildren || hasUrls || hasHealthReports || hasCommands;
         const collapsible = hasChildren
             ? vscode.TreeItemCollapsibleState.Expanded
             : hasExpandableContent ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
@@ -244,18 +246,22 @@ class ResourceItem extends vscode.TreeItem {
 }
 
 export function getResourceContextValue(resource: ResourceJson): string {
-    const commands = resource.commands ? Object.keys(resource.commands) : [];
+    const commands = resource.commands;
     const parts = ['resource'];
-    if (commands.includes('start') || commands.includes('resource-start')) {
+    if (hasEnabledCommand(commands, 'start') || hasEnabledCommand(commands, 'resource-start')) {
         parts.push('canStart');
     }
-    if (commands.includes('stop') || commands.includes('resource-stop')) {
+    if (hasEnabledCommand(commands, 'stop') || hasEnabledCommand(commands, 'resource-stop')) {
         parts.push('canStop');
     }
-    if (commands.includes('restart') || commands.includes('resource-restart')) {
+    if (hasEnabledCommand(commands, 'restart') || hasEnabledCommand(commands, 'resource-restart')) {
         parts.push('canRestart');
     }
     return parts.join(':');
+}
+
+function hasEnabledCommand(commands: Record<string, ResourceCommandJson> | null | undefined, commandName: string): boolean {
+    return commands?.[commandName]?.state === 'Enabled';
 }
 
 export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
@@ -706,7 +712,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         const commands = element.resource.commands;
-        if (commands && Object.keys(commands).length > 0) {
+        if (commands && getVisibleCommands(commands).length > 0) {
             items.push(new CommandsGroupItem(element.resource, element, element.id!));
         }
 
@@ -718,7 +724,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (!commands) {
             return [];
         }
-        return Object.entries(commands)
+        return getVisibleCommands(commands)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([name, cmd]) => new ResourceCommandItem(name, cmd, element.resourceItem, element.id!));
     }
@@ -855,11 +861,18 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        const items = Object.entries(commands).map(([name, cmd]) => ({
-            label: name,
-            description: cmd.description ?? undefined,
-            command: cmd,
-        }));
+        const items = Object.entries(commands)
+            .filter(([, cmd]) => cmd.state === 'Enabled')
+            .map(([name, cmd]) => ({
+                label: name,
+                description: cmd.description ?? undefined,
+                command: cmd,
+            }));
+
+        if (items.length === 0) {
+            vscode.window.showInformationMessage(noCommandsAvailable);
+            return;
+        }
 
         const selected = await vscode.window.showQuickPick(items, {
             placeHolder: selectCommandPlaceholder,
@@ -884,6 +897,11 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         const commandName = element.commandName;
         const command = element.commandJson;
         const resourceItem = element.resourceItem;
+
+        if (command.state !== 'Enabled') {
+            vscode.window.showInformationMessage(noCommandsAvailable);
+            return;
+        }
 
         const commandArguments = await collectResourceCommandArguments(commandName, command, {
             secretWarningState: this._secretWarningState,
