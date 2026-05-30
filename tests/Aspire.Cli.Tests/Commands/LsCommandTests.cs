@@ -357,6 +357,58 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LsCommand_JsonFormat_Stream_EmitsCandidatesInArrivalOrder()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17621.
+        // `aspire ls --format json --stream` must emit each candidate in the order it
+        // arrives from parallel discovery — it must NOT sort the stream output. Without
+        // this contract, the streaming option offers no latency benefit over the buffered
+        // snapshot, and consumers that rely on prompt arrival are silently broken.
+        //
+        // Use names in non-alphabetical arrival order (Z, A, M) so any incidental
+        // alphabetical sort would fail this assertion.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+        var errorWriter = new StringWriter();
+        var appHostPathZ = Path.Combine(workspace.WorkspaceRoot.FullName, "ZApp", "Z.AppHost.csproj");
+        var appHostPathA = Path.Combine(workspace.WorkspaceRoot.FullName, "AApp", "A.AppHost.csproj");
+        var appHostPathM = Path.Combine(workspace.WorkspaceRoot.FullName, "MApp", "M.AppHost.csproj");
+        var appHostZ = new AppHostProjectCandidate(new FileInfo(appHostPathZ), KnownLanguageId.CSharp);
+        var appHostA = new AppHostProjectCandidate(new FileInfo(appHostPathA), KnownLanguageId.CSharp);
+        var appHostM = new AppHostProjectCandidate(new FileInfo(appHostPathM), KnownLanguageId.CSharp);
+        var projectLocator = new TestProjectLocator
+        {
+            FindAppHostProjectsStreamAsyncCallback = (_, _, _, _) => ToAsyncEnumerable(appHostZ, appHostA, appHostM)
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.ErrorTextWriter = errorWriter;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ls --format json --stream");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var lines = textWriter.Logs.ToArray();
+        Assert.Equal(3, lines.Length);
+
+        using var first = JsonDocument.Parse(lines[0]);
+        using var second = JsonDocument.Parse(lines[1]);
+        using var third = JsonDocument.Parse(lines[2]);
+        Assert.Equal(appHostPathZ, first.RootElement.GetProperty("path").GetString());
+        Assert.Equal(appHostPathA, second.RootElement.GetProperty("path").GetString());
+        Assert.Equal(appHostPathM, third.RootElement.GetProperty("path").GetString());
+        Assert.Equal(string.Empty, errorWriter.ToString());
+    }
+
+    [Fact]
     public async Task LsCommand_JsonFormat_Stream_FlushesCandidateBeforeDiscoveryCompletes()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

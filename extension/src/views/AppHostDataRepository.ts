@@ -228,8 +228,8 @@ export class AppHostDataRepository {
         return this._workspaceAppHostPath;
     }
 
-    get hasMultipleWorkspaceAppHosts(): boolean {
-        return this._workspaceAppHostCandidatePaths.length > 1;
+    get workspaceAppHostCandidatePaths(): readonly string[] {
+        return this._workspaceAppHostCandidatePaths;
     }
 
     get workspaceAppHostDescription(): string | undefined {
@@ -872,8 +872,15 @@ export class AppHostDataRepository {
         const hasWorkspaceAppHost = this._workspaceAppHost !== undefined;
         const hasResources = this._workspaceResources.size > 0;
         const hasRunningAppHosts = this._appHosts.length > 0;
-        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts);
-        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts);
+        const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
+        vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
+        // `aspire.noRunningAppHosts` gates the Open Dashboard command palette entry,
+        // which requires a live dashboard URL. Keep this distinct from `noAppHosts`
+        // (which also considers discovered idle candidates) so the palette entry
+        // doesn't appear when only idle candidates exist — invoking it would silently
+        // no-op because no dashboard URL is available.
+        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasRunningAppHosts);
+        const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
             this._updateLoadingContext();
@@ -1018,6 +1025,7 @@ export class AppHostDataRepository {
         if (this._viewMode === 'global' && this._loadingGlobal) {
             this._loadingGlobal = false;
             this._updateLoadingContext();
+            vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', this._appHosts.length === 0);
             vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', this._appHosts.length === 0);
         }
     }
@@ -1118,6 +1126,7 @@ export class AppHostDataRepository {
             }
 
             if (changed) {
+                vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', appHosts.length === 0);
                 vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', appHosts.length === 0);
                 this._onDidChangeData.fire();
             }
@@ -1474,7 +1483,7 @@ function isIncludeDisabledCommandsUnsupportedOutput(nonJsonLines: readonly strin
         || output.includes('unrecognized command or argument');
 }
 
-function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {
+export function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {
     if (!left || !right) {
         return false;
     }

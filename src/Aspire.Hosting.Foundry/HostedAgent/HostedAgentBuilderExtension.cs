@@ -295,7 +295,7 @@ public static class HostedAgentResourceBuilderExtensions
         }
 
         // Get the corresponding ContainerResource for ExecutableResources. Usually this is swapped in at publish time for ExecutableResources.
-        IResource target;
+        IResourceWithEnvironment target;
         if (resource is ContainerResource containerResource)
         {
             target = containerResource;
@@ -308,7 +308,8 @@ public static class HostedAgentResourceBuilderExtensions
         {
             // Ensure we have a container resource to deploy.
             // ExecutableResource needs PublishAsDockerFile() to convert it into a container resource at this stage.
-            builder.ApplicationBuilder.CreateResourceBuilder(executableResource).PublishAsDockerFile();
+            builder.ApplicationBuilder.CreateResourceBuilder(executableResource)
+                .PublishAsDockerFile();
 
             if (builder.ApplicationBuilder.TryCreateResourceBuilder(resource.Name, out containerResourceBuilder))
             {
@@ -328,6 +329,11 @@ public static class HostedAgentResourceBuilderExtensions
             throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
         }
 
+        // The hosted agent wrapper is not the deployed workload. Apply the Foundry
+        // reference to the target so its connection annotations flow into the deployment.
+        builder.ApplicationBuilder.CreateResourceBuilder(target)
+            .WithReference(project);
+
         // Create a separate agent resource to host the deployment.
         var hostedAgent = new AzureHostedAgentResource(agentName, target, configure);
 
@@ -340,7 +346,6 @@ public static class HostedAgentResourceBuilderExtensions
 
         builder.ApplicationBuilder.AddResource(hostedAgent)
             .WithIconName("Agents")
-            .WithReferenceRelationship(target)
-            .WithReference(project);
+            .WithReferenceRelationship(target);
     }
 }

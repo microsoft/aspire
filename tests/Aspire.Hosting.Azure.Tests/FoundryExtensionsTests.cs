@@ -304,6 +304,7 @@ public class FoundryExtensionsTests
         var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
         environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
         environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -332,6 +333,7 @@ public class FoundryExtensionsTests
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -372,6 +374,7 @@ public class FoundryExtensionsTests
         var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
         environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
         environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -412,6 +415,7 @@ public class FoundryExtensionsTests
         var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
         environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
         environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -460,6 +464,16 @@ public class FoundryExtensionsTests
         Assert.Contains("Foundry hosted agent 'advisor-agent-ha'", ex.Message);
         Assert.Contains("Endpoint 'http' on resource 'weather-agent' cannot be used", ex.Message);
         Assert.Contains("internal", ex.Message);
+    }
+
+    private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
+    {
+        // These tests call the deployment-time environment resolver directly. In a real publish,
+        // provisioning populates the Foundry project Bicep outputs before references are resolved.
+        // Seed the outputs here so BicepOutputReference.GetValueAsync does not wait for provisioning.
+        project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
+        project.ProvisioningTaskCompletionSource?.TrySetResult();
     }
 
     private sealed class Project : IProjectMetadata

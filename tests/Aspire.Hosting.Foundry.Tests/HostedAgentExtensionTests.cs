@@ -5,6 +5,7 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -140,6 +141,39 @@ public class HostedAgentExtensionTests
         var hostedAgent = builder.Resources.OfType<AzureHostedAgentResource>().SingleOrDefault();
         Assert.NotNull(hostedAgent);
         Assert.Equal("agent-ha", hostedAgent.Name);
+    }
+
+    [Fact]
+    public async Task AsHostedAgent_InPublishMode_AddsProjectReferenceToDeploymentTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddProject<Project>("agent", launchProfileName: null)
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+
+        Assert.True(hostedAgent.Target.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.Contains(relationships, r =>
+            r.Type == "Reference" &&
+            ReferenceEquals(r.Resource, project.Resource));
+
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            hostedAgent.Target, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+
+        Assert.Contains(envVars, kvp =>
+            kvp.Key == "ConnectionStrings__my-project" &&
+            kvp.Value == "{my-project.connectionString}");
+        Assert.Contains(envVars, kvp =>
+            kvp.Key == "MY_PROJECT_CONNECTIONSTRING" &&
+            kvp.Value == "Endpoint={my-project.outputs.endpoint}");
+        Assert.DoesNotContain(hostedAgent.Annotations.OfType<ResourceRelationshipAnnotation>(), r =>
+            r.Type == "Reference" &&
+            ReferenceEquals(r.Resource, project.Resource));
     }
 
     [Fact]
@@ -282,4 +316,9 @@ public class HostedAgentExtensionTests
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    private sealed class Project : IProjectMetadata
+    {
+        public string ProjectPath => "project";
+    }
 }

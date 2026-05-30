@@ -56,14 +56,18 @@ jobs:
     inputs:
       version: '20.x'
 
+  - task: npmAuthenticate@0
+    displayName: NPM authenticate
+    inputs:
+      workingFile: $(Build.SourcesDirectory)\.npmrc
+
   - task: PowerShell@2
-    displayName: Install yarn
+    displayName: Set .npmrc environment
     inputs:
       targetType: 'inline'
-      script: |
-        npm install -g yarn@1.22.22
-        yarn --version
-      workingDirectory: '$(Build.SourcesDirectory)'
+      script: Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$(Build.SourcesDirectory)\.npmrc"
+
+  - template: /eng/pipelines/templates/install-corepack.yml
 
   - task: PowerShell@2
     displayName: Install vsce

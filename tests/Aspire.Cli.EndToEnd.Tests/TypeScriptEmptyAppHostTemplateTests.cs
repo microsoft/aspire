@@ -59,57 +59,24 @@ public sealed class TypeScriptEmptyAppHostTemplateTests(ITestOutputHelper output
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
-        var testBodyFailed = false;
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
-        try
-        {
-            await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
-            await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
-            await auto.AspireNewTypeScriptEmptyAppHostAsync("TsDeadlockRepro", counter);
+        await auto.AspireNewTypeScriptEmptyAppHostAsync("TsDeadlockRepro", counter);
 
-            var appDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "TsDeadlockRepro");
-            WriteDeadlockReproFiles(appDirectory);
+        var appDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "TsDeadlockRepro");
+        WriteDeadlockReproFiles(appDirectory);
 
-            await auto.RunCommandFailFastAsync("cd TsDeadlockRepro", counter);
-            await auto.RunCommandFailFastAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
-            await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));
+        await auto.RunCommandAsync("cd TsDeadlockRepro", counter);
+        await auto.RunCommandAsync("aspire restore --non-interactive", counter, TimeSpan.FromMinutes(3));
+        await auto.RunCommandAsync("npm run build", counter, TimeSpan.FromMinutes(2));
 
-            await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(2));
-            await auto.AspireStopAsync(counter);
-        }
-        catch
-        {
-            testBodyFailed = true;
-            throw;
-        }
-        finally
-        {
-            try
-            {
-                await auto.CaptureAspireDiagnosticsAsync(counter, workspace);
-            }
-            catch { } // Best effort
-
-            try
-            {
-                await auto.TypeAsync("exit");
-                await auto.EnterAsync();
-                await pendingRun;
-            }
-            catch
-            {
-                if (!testBodyFailed)
-                {
-                    throw;
-                }
-            }
-        }
+        await auto.AspireStartAsync(counter, startTimeout: TimeSpan.FromMinutes(2));
+        await auto.AspireStopAsync(counter);
     }
 
     private static void WriteDeadlockReproFiles(string appDirectory)

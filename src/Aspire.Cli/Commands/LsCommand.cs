@@ -153,14 +153,19 @@ internal sealed class LsCommand : BaseCommand
     {
         var appHosts = new List<AppHostProjectCandidate>();
 
+        // `aspire ls --format json --stream` emits each candidate as soon as discovery surfaces
+        // it (arrival order from parallel discovery). The contract is documented in
+        // docs/specs/cli-output-formats.md. Do NOT sort here:
+        // candidates have already been written to stdout via WriteJsonStreamCandidate above, so
+        // any post-loop sort would only reorder this in-memory list — which the caller does not
+        // use for stream output. Pipe to `sort` / `jq -s 'sort_by(.path)'` for ordered output.
+        // See https://github.com/microsoft/aspire/issues/17621.
         await foreach (var candidate in _projectLocator.FindAppHostProjectsStreamAsync(_executionContext.WorkingDirectory, scope, cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             cancellationToken.ThrowIfCancellationRequested();
             appHosts.Add(candidate);
             WriteJsonStreamCandidate(CreateDisplayInfo(candidate));
         }
-
-        appHosts.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
 
         return appHosts;
     }
