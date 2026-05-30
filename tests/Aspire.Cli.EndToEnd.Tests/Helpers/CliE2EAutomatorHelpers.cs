@@ -106,7 +106,7 @@ internal static class CliE2EAutomatorHelpers
 
             case CliInstallMode.PullRequest:
                 var prNumber = CliE2ETestHelpers.GetRequiredPrNumber();
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetPullRequestInstallCommand(prNumber, AspireCliShellCommandHelpers.DockerPullRequestInstallCommandPrefix),
                     counter,
                     TimeSpan.FromSeconds(300));
@@ -114,7 +114,7 @@ internal static class CliE2EAutomatorHelpers
                 break;
 
             case CliInstallMode.LocalArchive:
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetLocalArchiveInstallCommand("/tmp/aspire-cli-archives", AspireCliShellCommandHelpers.DockerPullRequestInstallCommandPrefix),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -122,7 +122,7 @@ internal static class CliE2EAutomatorHelpers
                 break;
 
             case CliInstallMode.InstallScript:
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetInstallScriptCommand(strategy, AspireCliShellCommandHelpers.DockerInstallScriptCommandPrefix),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -131,7 +131,7 @@ internal static class CliE2EAutomatorHelpers
 
             case CliInstallMode.DotnetTool:
                 await auto.SourceDotnetToolEnvironmentAsync(counter);
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetDotnetToolInstallCommandInDocker(strategy),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -404,7 +404,7 @@ internal static class CliE2EAutomatorHelpers
             case CliInstallMode.LocalArchive:
                 var archiveDir = strategy.ArchiveDir ?? throw new InvalidOperationException("LocalArchive strategy is missing the archive directory.");
                 var localDirPrScript = AspireCliShellCommandHelpers.QuoteBashArg(Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "scripts", "get-aspire-cli-pr.sh"));
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetLocalArchiveInstallCommand(archiveDir, $"bash {localDirPrScript}"),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -413,7 +413,7 @@ internal static class CliE2EAutomatorHelpers
 
             case CliInstallMode.InstallScript:
                 var getAspireCliScript = AspireCliShellCommandHelpers.QuoteBashArg(Path.Combine(CliE2ETestHelpers.GetRepoRoot(), "eng", "scripts", "get-aspire-cli.sh"));
-                await auto.RunCommandFailFastAsync(
+                await auto.RunCommandAsync(
                     AspireCliShellCommandHelpers.GetInstallScriptCommand(strategy, $"bash {getAspireCliScript}"),
                     counter,
                     TimeSpan.FromSeconds(120));
@@ -568,7 +568,7 @@ internal static class CliE2EAutomatorHelpers
         SequenceCounter counter)
     {
         var command = AspireCliShellCommandHelpers.GetPullRequestInstallCommand(prNumber, AspireCliShellCommandHelpers.MainPullRequestInstallCommandPrefix);
-        await auto.RunCommandFailFastAsync(command, counter, TimeSpan.FromSeconds(300));
+        await auto.RunCommandAsync(command, counter, TimeSpan.FromSeconds(300));
     }
 
     /// <summary>
@@ -705,7 +705,7 @@ internal static class CliE2EAutomatorHelpers
         var command = AspireCliShellCommandHelpers.GetInstallScriptCommand(
             CliInstallStrategy.FromVersion(version),
             AspireCliShellCommandHelpers.MainInstallScriptCommandPrefix);
-        await auto.RunCommandFailFastAsync(command, counter, TimeSpan.FromSeconds(300));
+        await auto.RunCommandAsync(command, counter, TimeSpan.FromSeconds(300));
     }
 
     /// <summary>

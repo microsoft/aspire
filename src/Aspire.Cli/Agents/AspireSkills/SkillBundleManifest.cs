@@ -37,8 +37,6 @@ internal sealed class SkillBundleSkill
 
     public string? Description { get; init; }
 
-    public bool IsDefault { get; init; }
-
     public string[] ApplicableLanguages { get; init; } = [];
 
     public string[] InstallExcludedRelativePaths { get; init; } = [];

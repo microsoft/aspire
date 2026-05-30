@@ -41,6 +41,7 @@ public static class FoundryExtensions
 
         var resource = new FoundryResource(name, ConfigureInfrastructure);
         return builder.AddResource(resource)
+            .WithIconName("AgentsAdd")
             .WithDefaultRoleAssignments(CognitiveServicesBuiltInRole.GetBuiltInRoleName,
                 CognitiveServicesBuiltInRole.CognitiveServicesUser, CognitiveServicesBuiltInRole.CognitiveServicesOpenAIUser);
     }
@@ -77,7 +78,7 @@ public static class FoundryExtensions
             deploymentBuilder.AsLocalDeployment(deployment);
         }
 
-        return deploymentBuilder;
+        return deploymentBuilder.WithIconName("BoxMultiple");
     }
 
     /// <summary>

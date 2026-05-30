@@ -56,6 +56,26 @@ public class PromptAgentTests
     }
 
     [Fact]
+    public void AddPromptAgent_ConfiguresSendMessageCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var model = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+
+        project.AddPromptAgent("my-agent", model);
+
+        builder.Build();
+
+        var resource = builder.Resources.Single(r => r.Name == "my-agent");
+        var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.Equal("Send Message", command.DisplayName);
+        Assert.Equal("ChatSparkle", command.IconName);
+        Assert.Equal(IconVariant.Regular, command.IconVariant);
+        Assert.True(command.IsHighlighted);
+    }
+
+    [Fact]
     public void AddPromptAgent_WithNullName_Throws()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

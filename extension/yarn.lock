@@ -5580,10 +5580,10 @@ tinyglobby@^0.2.15:
     fdir "^6.5.0"
     picomatch "^4.0.3"
 
-tmp@^0.2.3:
-  version "0.2.5"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/tmp/-/tmp-0.2.5.tgz"
-  integrity sha1-sGvNI/DzyDV7QmiRcm0WAVq/2Pg=
+tmp@0.2.6, tmp@^0.2.3:
+  version "0.2.6"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/tmp/-/tmp-0.2.6.tgz#0dfac10fd09a9319288eb0e8f0ed524604e183b4"
+  integrity sha1-DfrBD9CakxkojrDo8O1SRgThg7Q=
 
 to-absolute-glob@^2.0.0, to-absolute-glob@^2.0.2:
   version "2.0.2"

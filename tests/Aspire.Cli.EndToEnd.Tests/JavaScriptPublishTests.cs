@@ -108,7 +108,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             await auto.PrepareDockerEnvironmentAsync(counter, workspace);
             await auto.InstallAspireCliAsync(strategy, counter);
 
-            await auto.RunCommandFailFastAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
 
             if (localChannel is not null)
             {
@@ -123,10 +123,10 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             WriteRuntimeAppHost(workspace);
             WriteRuntimeVerificationScript(workspace);
 
-            await auto.RunCommandFailFastAsync("unset ASPIRE_PLAYGROUND", counter);
+            await auto.RunCommandAsync("unset ASPIRE_PLAYGROUND", counter);
 
-            await auto.RunCommandFailFastAsync("aspire run > aspire-run.log 2>&1 & echo $! > aspire-run.pid", counter);
-            await auto.RunCommandFailFastAsync("bash verify-runtime.sh", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync("aspire run > aspire-run.log 2>&1 & echo $! > aspire-run.pid", counter);
+            await auto.RunCommandAsync("bash verify-runtime.sh", counter, TimeSpan.FromMinutes(2));
         }
         finally
         {

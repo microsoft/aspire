@@ -12,6 +12,7 @@ import { codeLensCommand } from '../loc/strings';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { AppHostLaunchService } from '../services/AppHostLaunchService';
 // Import parsers so they self-register before the provider consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
@@ -123,7 +124,7 @@ function createHarness(opts: {
     const subs: vscode.Disposable[] = [];
     const terminalProvider = new AspireTerminalProvider(subs);
     const repository = new AppHostDataRepository(terminalProvider);
-    const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider);
+    const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider, new AppHostLaunchService());
 
     const appHostsStub = sinon.stub(repository, 'appHosts').get(() => opts.appHosts ?? []);
     const workspaceResourcesStub = sinon.stub(repository, 'workspaceResources').get(() => opts.workspaceResources ?? []);

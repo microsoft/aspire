@@ -76,6 +76,13 @@ export const resourceCommandInvalidNumber = vscode.l10n.t('Enter a number using 
 export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value must be {0} characters or fewer.', length);
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
 export const workspaceAppHostLabel = vscode.l10n.t('Workspace AppHost');
+export const workspaceAppHostsGroupLabel = vscode.l10n.t('Workspace AppHosts');
+export const runningAppHostsGroupLabel = vscode.l10n.t('Running AppHosts');
+export const appHostOpenSourceActionLabel = vscode.l10n.t('Open AppHost source');
+export const appHostRunActionLabel = vscode.l10n.t('Run AppHost');
+export const appHostDebugActionLabel = vscode.l10n.t('Debug AppHost');
+export const appHostPathLabel = vscode.l10n.t('Path');
+export const appHostStartingDescription = vscode.l10n.t('Starting...');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
 export const appHostCandidateDescription = (language: string, status: string) => vscode.l10n.t('{0} · {1}', language, status);
 export const workspaceViewSelectedSingleAppHost = (language?: string) => language

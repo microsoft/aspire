@@ -116,7 +116,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             ? "./.aspire/modules/aspire.mjs"
             : "./.aspire/modules/aspire.js";
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
 
         // Step 3: Add the first package on the non-stable channel. Don't pass --non-interactive — the
         // helper handles both direct success and the "based on NuGet.config" version picker that
@@ -256,7 +256,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         const string projectName = "ChannelUpdateCsharpInitApp";
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
         Directory.CreateDirectory(projectPath);
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
 
         await auto.AspireInitAsync(counter);
 
@@ -304,7 +304,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             CliE2ETestHelpers.WriteLocalChannelSettings(projectPath, localChannel.SdkVersion);
         }
 
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
         await RunStableChannelUpdateAndAssertChannelPreservedAsync(auto, counter, Path.Combine(projectPath, "aspire.config.json"));
     }
 
@@ -339,7 +339,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         const string projectName = "ChannelUpdateTsInitApp";
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
         Directory.CreateDirectory(projectPath);
-        await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
+        await auto.RunCommandAsync($"cd {projectName}", counter);
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();

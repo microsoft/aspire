@@ -1003,7 +1003,7 @@ suite('AppHostDataRepository', () => {
             ]));
 
             const noRunningContextCalls = executeCommandStub.getCalls().filter(call =>
-                call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts');
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
             assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
@@ -1069,9 +1069,18 @@ suite('AppHostDataRepository', () => {
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
             assert.strictEqual(loadingContextCalls.at(-1)?.args[2], false);
 
+            // noAppHosts is false because workspace candidates are still present (idle AppHosts)
             const noRunningContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
+            assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], false);
+
+            // noRunningAppHosts is true because aspire ps returned no running AppHosts.
+            // This distinguishes "discovered candidates exist" from "any AppHost is actually
+            // running" — the Open Dashboard palette entry should be hidden in this state
+            // because no live dashboard URL is available.
+            const noLiveAppHostsCalls = executeCommandStub.getCalls().filter(call =>
                 call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts');
-            assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], true);
+            assert.strictEqual(noLiveAppHostsCalls.at(-1)?.args[2], true);
         } finally {
             repository.dispose();
             executeCommandStub.restore();
@@ -1200,9 +1209,10 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.workspaceAppHost, undefined);
             assert.strictEqual(repository.appHosts.length, 0);
 
+            // noAppHosts is false because workspace candidates are still present (idle AppHosts)
             const noRunningContextCalls = executeCommandStub.getCalls().filter(call =>
-                call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts');
-            assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], true);
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
+            assert.strictEqual(noRunningContextCalls.at(-1)?.args[2], false);
         } finally {
             repository.dispose();
             executeCommandStub.restore();

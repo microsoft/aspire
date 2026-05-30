@@ -209,14 +209,9 @@ extends:
                   targetType: 'inline'
                   script: Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$(Build.SourcesDirectory)\.npmrc"
 
-              - task: PowerShell@2
-                displayName: 🟣Install yarn
-                inputs:
-                  targetType: 'inline'
-                  script: |
-                    npm install -g yarn@1.22.22
-                    yarn --version
-                  workingDirectory: '$(Build.SourcesDirectory)'
+              - template: /eng/pipelines/templates/install-corepack.yml
+                parameters:
+                  displayPrefix: '🟣'
 
               - task: PowerShell@2
                 displayName: 🟣Install vsce

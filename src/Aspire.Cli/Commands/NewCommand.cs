@@ -466,7 +466,9 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         var workspaceRoot = new DirectoryInfo(templateResult.OutputPath ?? ExecutionContext.WorkingDirectory.FullName);
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
-        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, cancellationToken);
+        // The template already produced the AppHost, so don't pre-select the one-time aspireify
+        // wiring skill — users can still opt into it from the prompt.
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, cancellationToken, AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {
