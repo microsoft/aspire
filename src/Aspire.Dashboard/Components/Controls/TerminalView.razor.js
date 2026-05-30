@@ -639,9 +639,15 @@ function buildToolbarSnapshot(state) {
         sizeMode: state.sizeMode,
         sizeKey,
         fontPx: state.currentFontPx,
-        // Font controls only meaningful in font (Auto) mode while primary.
-        fontControlsEnabled: isPrimary && state.sizeMode === 'font',
-        sizeSelectEnabled: isPrimary,
+        // Font/size controls are enabled whenever this tab is primary or
+        // could become primary on demand. If we're not primary yet, the
+        // setFontSizeFromHost / setSizeModeFromHost entry points will
+        // auto-promote before applying the change so the user doesn't have
+        // to click "Take control" first — this is especially important
+        // after a WS reconnect, which silently drops primary status.
+        // Connecting state still gates these off via canTakeControl=false.
+        fontControlsEnabled: (isPrimary && state.sizeMode === 'font') || canTakeControl,
+        sizeSelectEnabled: isPrimary || canTakeControl,
         cols: term && term.cols ? term.cols : 0,
         rows: term && term.rows ? term.rows : 0,
     };
@@ -1113,12 +1119,20 @@ export function takePrimaryFromHost(id) {
 export function setFontSizeFromHost(id, newSize) {
     const state = terminals.get(id);
     if (!state || typeof newSize !== 'number') return;
+    // Auto-promote: changing local presentation (font/size) implies the
+    // user wants to drive this session, so silently take primary if we
+    // aren't already. Avoids the trap where a WS reconnect drops primary
+    // and the user can no longer use the toolbar to recover it without
+    // an explicit Take-control click. takePrimary is a no-op if the
+    // client isn't connected or is already primary.
+    maybeAutoPromote(state);
     setFontSize(state, newSize);
 }
 
 export function setSizeModeFromHost(id, sizeKey) {
     const state = terminals.get(id);
     if (!state) return;
+    maybeAutoPromote(state);
     if (!sizeKey || sizeKey === 'auto') {
         setSizeMode(state, 'font', null);
         return;
@@ -1127,6 +1141,13 @@ export function setSizeModeFromHost(id, sizeKey) {
     if (preset) {
         setSizeMode(state, 'fixed', { cols: preset.cols, rows: preset.rows });
     }
+}
+
+function maybeAutoPromote(state) {
+    const client = state.client;
+    if (!client || client.peerId === null) return;
+    if (client.isPrimary) return;
+    takePrimary(state);
 }
 
 // Lets the .NET host query the current snapshot on demand (e.g. when
