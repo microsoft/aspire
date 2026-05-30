@@ -7,6 +7,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
@@ -21,8 +22,8 @@ internal sealed class DestroyCommand : PipelineCommandBase
 
     private readonly Option<bool> _yesOption;
 
-    public DestroyCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DestroyCommand> logger, IAnsiConsole ansiConsole)
-        : base("destroy", DestroyCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
+    public DestroyCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, AspireSecretsStoreResolver aspireSecretsStoreResolver, ILogger<DestroyCommand> logger, IAnsiConsole ansiConsole)
+        : base("destroy", DestroyCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, aspireSecretsStoreResolver, logger, ansiConsole)
     {
         _yesOption = new Option<bool>("--yes", "-y")
         {

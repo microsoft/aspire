@@ -27,22 +27,23 @@ internal sealed class SecretSetCommand : BaseCommand
         Description = SecretCommandStrings.ValueArgumentDescription
     };
 
-    private readonly SecretStoreResolver _secretStoreResolver;
+    private readonly AspireSecretsStoreResolver _secretsStoreResolver;
 
     public SecretSetCommand(
         IInteractionService interactionService,
-        SecretStoreResolver secretStoreResolver,
+        AspireSecretsStoreResolver secretsStoreResolver,
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry)
         : base("set", SecretCommandStrings.SetDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        _secretStoreResolver = secretStoreResolver;
+        _secretsStoreResolver = secretsStoreResolver;
 
         Arguments.Add(s_keyArgument);
         Arguments.Add(s_valueArgument);
         Options.Add(SecretCommand.s_appHostOption);
+        Options.Add(SecretCommand.s_environmentOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -51,17 +52,16 @@ internal sealed class SecretSetCommand : BaseCommand
         var key = parseResult.GetValue(s_keyArgument)!;
         var value = parseResult.GetValue(s_valueArgument)!;
         var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
+        var environment = parseResult.GetValue(SecretCommand.s_environmentOption);
 
-        // autoInit: true — when setting a secret, automatically initialize user secrets
-        // if not yet configured (e.g., run 'dotnet user-secrets init' for csproj projects)
-        var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: true, cancellationToken);
+        var result = await _secretsStoreResolver.ResolveAsync(projectFile, environment, autoInitDevelopmentUserSecrets: true, cancellationToken);
         if (result is null)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
-        result.Store.Set(key, value);
-        result.Store.Save();
+        result.AspireStore.Set(key, value);
+        result.AspireStore.Save();
 
         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretSetSuccess, key));
         return CommandResult.Success();

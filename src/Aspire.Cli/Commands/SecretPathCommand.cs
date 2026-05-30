@@ -16,33 +16,35 @@ namespace Aspire.Cli.Commands;
 /// </summary>
 internal sealed class SecretPathCommand : BaseCommand
 {
-    private readonly SecretStoreResolver _secretStoreResolver;
+    private readonly AspireSecretsStoreResolver _secretsStoreResolver;
 
     public SecretPathCommand(
         IInteractionService interactionService,
-        SecretStoreResolver secretStoreResolver,
+        AspireSecretsStoreResolver secretsStoreResolver,
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry)
         : base("path", SecretCommandStrings.PathDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        _secretStoreResolver = secretStoreResolver;
+        _secretsStoreResolver = secretsStoreResolver;
 
         Options.Add(SecretCommand.s_appHostOption);
+        Options.Add(SecretCommand.s_environmentOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
+        var environment = parseResult.GetValue(SecretCommand.s_environmentOption);
 
-        var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
+        var result = await _secretsStoreResolver.ResolveAsync(projectFile, environment, cancellationToken);
         if (result is null)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
-        InteractionService.DisplayRawText(result.Store.FilePath, consoleOverride: ConsoleOutput.Standard);
+        InteractionService.DisplayRawText(result.AspireSecretsFilePath, consoleOverride: ConsoleOutput.Standard);
         return CommandResult.Success();
     }
 }

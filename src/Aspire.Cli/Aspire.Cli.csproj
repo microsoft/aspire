@@ -166,6 +166,7 @@
     <Compile Include="$(SharedDir)FormatHelpers.cs" Link="Utils\FormatHelpers.cs" />
     <Compile Include="$(SharedDir)DateFormatStringsHelpers.cs" Link="Utils\DateFormatStringsHelpers.cs" />
     <Compile Include="$(SharedDir)TimeProviderExtensions.cs" Link="Extensions\TimeProviderExtensions.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\AspireSecretsPathHelper.cs" Link="Utils\AspireSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="Utils\UserSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\IsolatedUserSecretsHelper.cs" Link="Utils\IsolatedUserSecretsHelper.cs" />
     <Compile Include="$(SharedDir)UserSecrets\SecretsStore.cs" Link="Secrets\SecretsStore.cs" />

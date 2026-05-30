@@ -6,8 +6,6 @@
 
 using System.Diagnostics;
 using System.Reflection;
-using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Shared.UserSecrets;
@@ -27,28 +25,29 @@ internal sealed class UserSecretsManagerFactory
     // Dictionary to cache instances by file path
     private readonly Dictionary<string, IUserSecretsManager> _managerCache = new();
     private readonly object _lock = new();
-    private readonly IFileSystemService _fileSystemService;
 
     internal UserSecretsManagerFactory(IFileSystemService fileSystemService)
     {
-        _fileSystemService = fileSystemService;
+        ArgumentNullException.ThrowIfNull(fileSystemService);
     }
 
     /// <summary>
     /// Gets or creates a user secrets manager for the specified file path.
     /// </summary>
-    public IUserSecretsManager GetOrCreate(string filePath)
+    public IUserSecretsManager GetOrCreate(string filePath, string? legacyUserSecretsFilePath = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
         var normalizedPath = Path.GetFullPath(filePath);
+        var normalizedLegacyPath = string.IsNullOrWhiteSpace(legacyUserSecretsFilePath) ? null : Path.GetFullPath(legacyUserSecretsFilePath);
+        var cacheKey = normalizedLegacyPath is null ? normalizedPath : $"{normalizedPath}|{normalizedLegacyPath}";
 
         lock (_lock)
         {
-            if (!_managerCache.TryGetValue(normalizedPath, out var manager))
+            if (!_managerCache.TryGetValue(cacheKey, out var manager))
             {
-                manager = new UserSecretsManager(normalizedPath, _fileSystemService);
-                _managerCache[normalizedPath] = manager;
+                manager = new UserSecretsManager(normalizedPath, normalizedLegacyPath);
+                _managerCache[cacheKey] = manager;
             }
             return manager;
         }
@@ -79,15 +78,13 @@ internal sealed class UserSecretsManagerFactory
 
     private sealed class UserSecretsManager : IUserSecretsManager
     {
-        private static readonly JsonSerializerOptions s_jsonSerializerOptions = new() { WriteIndented = true };
-
         private readonly SemaphoreSlim _semaphore = new(1, 1);
-        private readonly IFileSystemService _fileSystemService;
+        private readonly string? _legacyUserSecretsFilePath;
 
-        public UserSecretsManager(string filePath, IFileSystemService fileSystemService)
+        public UserSecretsManager(string filePath, string? legacyUserSecretsFilePath)
         {
             FilePath = filePath;
-            _fileSystemService = fileSystemService;
+            _legacyUserSecretsFilePath = legacyUserSecretsFilePath;
         }
 
         public bool IsAvailable => true;
@@ -122,7 +119,11 @@ internal sealed class UserSecretsManagerFactory
                 _semaphore.Wait();
                 try
                 {
-                    DeleteSecretCore(name);
+                    DeleteSecretCore(FilePath, name);
+                    if (_legacyUserSecretsFilePath is not null && !PathsEqual(_legacyUserSecretsFilePath, FilePath))
+                    {
+                        DeleteSecretCore(_legacyUserSecretsFilePath, name);
+                    }
                     return true;
                 }
                 finally
@@ -165,10 +166,17 @@ internal sealed class UserSecretsManagerFactory
             try
             {
                 var flattenedState = JsonFlattener.FlattenJsonObject(state);
-                EnsureUserSecretsDirectory();
+                var store = new SecretsStore(FilePath);
+                store.Clear();
+                foreach (var (key, value) in flattenedState)
+                {
+                    if (value is not null)
+                    {
+                        store.Set(key, value.ToString());
+                    }
+                }
 
-                var json = flattenedState.ToJsonString(s_jsonSerializerOptions);
-                await File.WriteAllTextAsync(FilePath, json, Encoding.UTF8, cancellationToken).ConfigureAwait(false);
+                store.Save();
             }
             finally
             {
@@ -178,64 +186,21 @@ internal sealed class UserSecretsManagerFactory
 
         private void SetSecretCore(string name, string value)
         {
-            EnsureUserSecretsDirectory();
-
-            // Load existing secrets, merge with new value, save
-            var secrets = Load();
-            secrets[name] = value;
-            Save(secrets);
+            var store = new SecretsStore(FilePath);
+            store.Set(name, value);
+            store.Save();
         }
 
-        private void DeleteSecretCore(string name)
+        private static void DeleteSecretCore(string filePath, string name)
         {
-            var secrets = Load();
-            if (secrets.Remove(name))
+            var store = new SecretsStore(filePath);
+            if (store.Remove(name))
             {
-                EnsureUserSecretsDirectory();
-                Save(secrets);
+                store.Save();
             }
         }
 
-        private Dictionary<string, string?> Load()
-        {
-            return new ConfigurationBuilder()
-                .AddJsonFile(FilePath, optional: true)
-                .Build()
-                .AsEnumerable()
-                .Where(i => i.Value != null)
-                .ToDictionary(i => i.Key, i => i.Value);
-        }
-
-        private void Save(Dictionary<string, string?> secrets)
-        {
-            var contents = new JsonObject();
-            foreach (var secret in secrets)
-            {
-                contents[secret.Key] = secret.Value;
-            }
-
-            var json = contents.ToJsonString(s_jsonSerializerOptions);
-
-            // Create a temp file with the correct Unix file mode before moving it to the expected path.
-            if (!OperatingSystem.IsWindows())
-            {
-                var tempFilename = _fileSystemService.TempDirectory.CreateTempFile().Path;
-                File.WriteAllText(tempFilename, json, Encoding.UTF8);
-                File.Move(tempFilename, FilePath, overwrite: true);
-            }
-            else
-            {
-                File.WriteAllText(FilePath, json, Encoding.UTF8);
-            }
-        }
-
-        private void EnsureUserSecretsDirectory()
-        {
-            var directoryName = Path.GetDirectoryName(FilePath);
-            if (!string.IsNullOrEmpty(directoryName) && !Directory.Exists(directoryName))
-            {
-                Directory.CreateDirectory(directoryName);
-            }
-        }
+        private static bool PathsEqual(string left, string right) =>
+            string.Equals(Path.GetFullPath(left), Path.GetFullPath(right), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     }
 }

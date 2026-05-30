@@ -572,7 +572,7 @@ public class Program
         builder.Services.AddTransient<SecretListCommand>();
         builder.Services.AddTransient<SecretPathCommand>();
         builder.Services.AddTransient<SecretDeleteCommand>();
-        builder.Services.AddTransient<SecretStoreResolver>();
+        builder.Services.AddTransient<AspireSecretsStoreResolver>();
         builder.Services.AddTransient<SdkCommand>();
         builder.Services.AddTransient<SdkGenerateCommand>();
         builder.Services.AddTransient<SdkDumpCommand>();

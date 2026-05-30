@@ -32,6 +32,8 @@ using Aspire.Hosting.Publishing;
 using Aspire.Hosting.UserSecrets;
 using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
+using Microsoft.Extensions.Configuration.CommandLine;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Aspire.Hosting.VersionChecking;
 using Microsoft.Extensions.Configuration;
@@ -202,8 +204,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder = new HostApplicationBuilder(innerBuilderOptions);
 
         var configuredUserSecretsId = _innerBuilder.Configuration[KnownConfigNames.AspireUserSecretsId];
+        var configuredAspireSecretsFile = _innerBuilder.Configuration[KnownConfigNames.AspireSecretsFile];
         var userSecretsId = ResolveUserSecretsId(AppHostAssembly, _innerBuilder.Configuration);
-        AddConfiguredUserSecrets(_innerBuilder.Configuration, AppHostAssembly, configuredUserSecretsId, _innerBuilder.Environment.IsDevelopment());
+        var legacyUserSecretsFilePath = ResolveLegacyUserSecretsFilePath(userSecretsId);
+        var aspireSecretsFilePath = ResolveAspireSecretsFilePath(configuredAspireSecretsFile, userSecretsId, _innerBuilder.Environment.EnvironmentName);
+        var isDevelopment = _innerBuilder.Environment.IsDevelopment();
+        AddConfiguredUserSecrets(_innerBuilder.Configuration, AppHostAssembly, configuredUserSecretsId, isDevelopment);
+        ImportLegacyUserSecretsIfNeeded(legacyUserSecretsFilePath, aspireSecretsFilePath, isDevelopment);
+        AddConfiguredAspireSecretsFile(_innerBuilder.Configuration, aspireSecretsFilePath);
 
         _innerBuilder.Services.AddSingleton(TimeProvider.System);
 
@@ -343,8 +351,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // Create and register the user secrets manager (uses the userSecretsId resolved at top of constructor)
         var userSecretsFactory = new UserSecretsManagerFactory(_directoryService);
 
-        _userSecretsManager = !string.IsNullOrEmpty(userSecretsId)
-            ? userSecretsFactory.GetOrCreateFromId(userSecretsId)
+        _userSecretsManager = !string.IsNullOrEmpty(aspireSecretsFilePath)
+            ? userSecretsFactory.GetOrCreate(aspireSecretsFilePath, isDevelopment ? legacyUserSecretsFilePath : null)
             : NoopUserSecretsManager.Instance;
 
         // Always register IUserSecretsManager so dependencies can resolve
@@ -840,6 +848,51 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         return string.IsNullOrWhiteSpace(configuredUserSecretsId) ? assemblyUserSecretsId : configuredUserSecretsId;
     }
 
+    internal static string? ResolveAspireSecretsFilePath(string? configuredAspireSecretsFile, string? userSecretsId, string environmentName)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredAspireSecretsFile))
+        {
+            return Path.GetFullPath(configuredAspireSecretsFile);
+        }
+
+        if (string.IsNullOrWhiteSpace(userSecretsId))
+        {
+            return null;
+        }
+
+        var resolvedEnvironment = string.IsNullOrWhiteSpace(environmentName) ? Environments.Development : environmentName;
+        return AspireSecretsPathHelper.GetSecretsFilePath(AspireSecretsPathHelper.GetDefaultHomeDirectory(), userSecretsId, resolvedEnvironment);
+    }
+
+    internal static string? ResolveLegacyUserSecretsFilePath(string? userSecretsId) =>
+        string.IsNullOrWhiteSpace(userSecretsId) ? null : UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+
+    internal static void ImportLegacyUserSecretsIfNeeded(string? legacyUserSecretsFilePath, string? aspireSecretsFilePath, bool isDevelopment)
+    {
+        if (!isDevelopment ||
+            legacyUserSecretsFilePath is null ||
+            aspireSecretsFilePath is null ||
+            !File.Exists(legacyUserSecretsFilePath) ||
+            File.Exists(aspireSecretsFilePath))
+        {
+            return;
+        }
+
+        var legacyStore = new SecretsStore(legacyUserSecretsFilePath);
+        if (legacyStore.Count == 0)
+        {
+            return;
+        }
+
+        var aspireStore = new SecretsStore(aspireSecretsFilePath);
+        foreach (var (key, value) in legacyStore.AsEnumerable())
+        {
+            aspireStore.Set(key, value);
+        }
+
+        aspireStore.Save();
+    }
+
     internal static void AddConfiguredUserSecrets(IConfigurationManager configuration, Assembly? appHostAssembly, string? configuredUserSecretsId, bool isDevelopment)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -852,8 +905,64 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // Remove only the file-backed source for the assembly-derived user-secrets ID so the configured
             // user-secrets store replaces that single source without affecting other configuration providers.
             RemoveUserSecretsSource(configuration, appHostAssembly?.GetCustomAttribute<UserSecretsIdAttribute>()?.UserSecretsId);
-            configuration.AddUserSecrets(configuredUserSecretsId);
+            AddUserSecretsAtUserSecretsPrecedence(configuration, configuredUserSecretsId);
         }
+    }
+
+    private static void AddUserSecretsAtUserSecretsPrecedence(IConfigurationManager configuration, string userSecretsId)
+    {
+        configuration.AddUserSecrets(userSecretsId);
+        MoveLastConfigurationSourceToUserSecretsPrecedence(configuration);
+    }
+
+    internal static void AddConfiguredAspireSecretsFile(IConfigurationManager configuration, string? aspireSecretsFile)
+    {
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        if (string.IsNullOrWhiteSpace(aspireSecretsFile))
+        {
+            return;
+        }
+
+        var secretsFile = new FileInfo(Path.GetFullPath(aspireSecretsFile));
+        if (secretsFile.DirectoryName is null)
+        {
+            throw new InvalidOperationException($"The configured Aspire secrets file path '{aspireSecretsFile}' does not have a directory.");
+        }
+
+        // The CLI passes an environment-specific flat JSON file. Add it after appsettings and any
+        // Development user-secrets source, but before environment variables and command-line args so
+        // deployment-time process inputs still have higher precedence.
+        configuration.AddJsonFile(secretsFile.FullName, optional: true, reloadOnChange: false);
+        MoveLastConfigurationSourceToUserSecretsPrecedence(configuration);
+    }
+
+    private static void MoveLastConfigurationSourceToUserSecretsPrecedence(IConfigurationManager configuration)
+    {
+        var lastIndex = configuration.Sources.Count - 1;
+        var source = configuration.Sources[lastIndex];
+        configuration.Sources.RemoveAt(lastIndex);
+        AddConfigurationSourceAtUserSecretsPrecedence(configuration, source);
+    }
+
+    private static void AddConfigurationSourceAtUserSecretsPrecedence(IConfigurationManager configuration, IConfigurationSource source)
+    {
+        var insertIndex = configuration.Sources.Count;
+        for (var i = configuration.Sources.Count - 1; i >= 0; i--)
+        {
+            if (configuration.Sources[i] is EnvironmentVariablesConfigurationSource or CommandLineConfigurationSource)
+            {
+                insertIndex = i;
+                continue;
+            }
+
+            if (insertIndex != configuration.Sources.Count)
+            {
+                break;
+            }
+        }
+
+        configuration.Sources.Insert(insertIndex, source);
     }
 
     internal static void RemoveUserSecretsSource(IConfigurationManager configuration, string? userSecretsId)

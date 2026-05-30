@@ -24,35 +24,62 @@ internal sealed class SecretListCommand : BaseCommand
         Description = SecretCommandStrings.FormatOptionDescription
     };
 
-    private readonly SecretStoreResolver _secretStoreResolver;
+    private static readonly Option<bool> s_allEnvironmentsOption = new("--all")
+    {
+        Description = SecretCommandStrings.AllEnvironmentsOptionDescription,
+        Aliases = { "--all-environments" }
+    };
+
+    private readonly AspireSecretsStoreResolver _secretsStoreResolver;
 
     public SecretListCommand(
         IInteractionService interactionService,
-        SecretStoreResolver secretStoreResolver,
+        AspireSecretsStoreResolver secretsStoreResolver,
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         AspireCliTelemetry telemetry)
         : base("list", SecretCommandStrings.ListDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
-        _secretStoreResolver = secretStoreResolver;
+        _secretsStoreResolver = secretsStoreResolver;
 
         Options.Add(SecretCommand.s_appHostOption);
+        Options.Add(SecretCommand.s_environmentOption);
+        Options.Add(s_allEnvironmentsOption);
         Options.Add(s_formatOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
+        var environment = parseResult.GetValue(SecretCommand.s_environmentOption);
         var format = parseResult.GetValue(s_formatOption);
+        var allEnvironments = parseResult.GetValue(s_allEnvironmentsOption);
 
-        var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
+        if (allEnvironments)
+        {
+            if (!string.IsNullOrWhiteSpace(environment))
+            {
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, SecretCommandStrings.AllEnvironmentsCannotUseEnvironment);
+            }
+
+            var results = await _secretsStoreResolver.ResolveAllExistingAsync(projectFile, cancellationToken);
+            if (results is null)
+            {
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
+            }
+
+            DisplayAllEnvironments(results, format);
+            return CommandResult.Success();
+        }
+
+        var result = await _secretsStoreResolver.ResolveAsync(projectFile, environment, cancellationToken);
         if (result is null)
         {
             return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
-        var secrets = result.Store.ToList();
+        var secrets = result.GetReadStore().ToList();
 
         if (format == OutputFormat.Json)
         {
@@ -91,5 +118,61 @@ internal sealed class SecretListCommand : BaseCommand
         }
 
         return CommandResult.Success();
+    }
+
+    private void DisplayAllEnvironments(IReadOnlyList<AspireSecretsStoreResult> results, OutputFormat? format)
+    {
+        var environments = results
+            .Select(result => new
+            {
+                result.EnvironmentName,
+                Secrets = result.GetReadStore().ToList()
+            })
+            .Where(result => result.Secrets.Count > 0)
+            .OrderBy(result => result.EnvironmentName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (format == OutputFormat.Json)
+        {
+            var root = new JsonObject();
+            foreach (var environment in environments)
+            {
+                var obj = new JsonObject();
+                foreach (var (key, value) in environment.Secrets.OrderBy(s => s.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    obj[key] = value;
+                }
+
+                root[environment.EnvironmentName] = obj;
+            }
+
+            var json = root.ToJsonString(SecretsStore.s_jsonOptions);
+            InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
+            return;
+        }
+
+        if (environments.Count == 0)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, SecretCommandStrings.NoSecretsConfigured);
+            return;
+        }
+
+        var table = new Table();
+        table.AddBoldColumn(SecretCommandStrings.EnvironmentColumnHeader, noWrap: true);
+        table.AddBoldColumn(SecretCommandStrings.KeyColumnHeader, noWrap: true);
+        table.AddBoldColumn(SecretCommandStrings.ValueColumnHeader);
+
+        foreach (var environment in environments)
+        {
+            foreach (var (key, value) in environment.Secrets.OrderBy(s => s.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                table.AddRow(
+                    $"[green]{environment.EnvironmentName.EscapeMarkup()}[/]",
+                    $"[cyan]{key.EscapeMarkup()}[/]",
+                    $"[yellow]{value.EscapeMarkup()}[/]");
+            }
+        }
+
+        InteractionService.DisplayRenderable(table);
     }
 }

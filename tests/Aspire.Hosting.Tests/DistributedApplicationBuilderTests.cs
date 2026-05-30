@@ -15,6 +15,7 @@ using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Pipelines;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -172,21 +173,70 @@ public class DistributedApplicationBuilderTests
     public void PolyglotAppHostUsesAspireUserSecretsIdForUserSecretsManager()
     {
         var userSecretsId = Guid.NewGuid().ToString("N");
-        var userSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        var legacyUserSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        var aspireSecretsPath = AspireSecretsPathHelper.GetSecretsFilePath(
+            AspireSecretsPathHelper.GetDefaultHomeDirectory(),
+            userSecretsId,
+            "Production");
 
-        if (File.Exists(userSecretsPath))
+        DeleteUserSecretsFile(legacyUserSecretsPath);
+        DeleteFileIfExists(aspireSecretsPath);
+
+        try
         {
-            File.Delete(userSecretsPath);
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"],
+                DisableDashboard = true,
+            });
+
+            Assert.True(appBuilder.UserSecretsManager.IsAvailable);
+            Assert.Equal(aspireSecretsPath, appBuilder.UserSecretsManager.FilePath);
         }
-
-        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        finally
         {
-            Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"],
-            DisableDashboard = true,
-        });
+            DeleteFileIfExists(aspireSecretsPath);
+        }
+    }
 
-        Assert.True(appBuilder.UserSecretsManager.IsAvailable);
-        Assert.Equal(userSecretsPath, appBuilder.UserSecretsManager.FilePath);
+    [Fact]
+    public void UserSecretsManagerDoesNotDeleteLegacyUserSecretsOutsideDevelopment()
+    {
+        var userSecretsId = Guid.NewGuid().ToString("N");
+        var legacyUserSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+        var aspireSecretsPath = AspireSecretsPathHelper.GetSecretsFilePath(
+            AspireSecretsPathHelper.GetDefaultHomeDirectory(),
+            userSecretsId,
+            "Production");
+
+        DeleteUserSecretsFile(legacyUserSecretsPath);
+        DeleteFileIfExists(aspireSecretsPath);
+
+        File.WriteAllText(legacyUserSecretsPath, """
+            {
+              "LegacyOnly": "legacy"
+            }
+            """);
+
+        try
+        {
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal(aspireSecretsPath, appBuilder.UserSecretsManager.FilePath);
+            Assert.True(appBuilder.UserSecretsManager.TryDeleteSecret("LegacyOnly"));
+
+            var legacyJson = File.ReadAllText(legacyUserSecretsPath);
+            Assert.Contains("LegacyOnly", legacyJson, StringComparison.Ordinal);
+        }
+        finally
+        {
+            DeleteFileIfExists(legacyUserSecretsPath);
+            DeleteFileIfExists(aspireSecretsPath);
+        }
     }
 
     [Fact]
@@ -255,6 +305,95 @@ public class DistributedApplicationBuilderTests
         Assert.Equal(assemblyUserSecretsId, DistributedApplicationBuilder.ResolveUserSecretsId(testAssembly, configuration));
     }
 
+    [Fact]
+    public void AspireSecretsFileLoadsInProduction()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var secretsFile = Path.Combine(tempDirectory.FullName, "Production.json");
+            File.WriteAllText(secretsFile, """
+                {
+                  "Parameters:api_key": "from-secret"
+                }
+                """);
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args = [$"{KnownConfigNames.AspireSecretsFile}={secretsFile}"],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal("Production", appBuilder.Environment.EnvironmentName);
+            Assert.Equal("from-secret", appBuilder.Configuration["Parameters:api_key"]);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void CommandLineOverridesAspireSecretsFile()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var secretsFile = Path.Combine(tempDirectory.FullName, "Production.json");
+            File.WriteAllText(secretsFile, """
+                {
+                  "Parameters:api_key": "from-secret"
+                }
+                """);
+
+            var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+            {
+                Args =
+                [
+                    $"{KnownConfigNames.AspireSecretsFile}={secretsFile}",
+                    "Parameters:api_key=from-command-line"
+                ],
+                DisableDashboard = true,
+            });
+
+            Assert.Equal("from-command-line", appBuilder.Configuration["Parameters:api_key"]);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EnvironmentVariableOverridesAspireSecretsFile()
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory();
+        try
+        {
+            var secretsFile = Path.Combine(tempDirectory.FullName, "Production.json");
+            File.WriteAllText(secretsFile, """
+                {
+                  "Parameters:api_key": "from-secret"
+                }
+                """);
+
+            var configuration = new ConfigurationManager();
+            configuration.Sources.Add(new TestEnvironmentVariablesConfigurationSource(
+                new Dictionary<string, string?>
+                {
+                    ["Parameters:api_key"] = "from-environment"
+                }));
+
+            DistributedApplicationBuilder.AddConfiguredAspireSecretsFile(configuration, secretsFile);
+
+            Assert.Equal("from-environment", configuration["Parameters:api_key"]);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData(KnownConfigNames.DashboardUnsecuredAllowAnonymous)]
     [InlineData(KnownConfigNames.Legacy.DashboardUnsecuredAllowAnonymous)]
@@ -270,15 +409,37 @@ public class DistributedApplicationBuilderTests
 
     private static void DeleteUserSecretsFile(string userSecretsPath)
     {
-        if (File.Exists(userSecretsPath))
-        {
-            File.Delete(userSecretsPath);
-        }
+        DeleteFileIfExists(userSecretsPath);
 
         var directory = Path.GetDirectoryName(userSecretsPath);
         if (!string.IsNullOrEmpty(directory))
         {
             Directory.CreateDirectory(directory);
+        }
+    }
+
+    private static void DeleteFileIfExists(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+
+    private sealed class TestEnvironmentVariablesConfigurationSource(IReadOnlyDictionary<string, string?> values) : EnvironmentVariablesConfigurationSource, IConfigurationSource
+    {
+        IConfigurationProvider IConfigurationSource.Build(IConfigurationBuilder builder) =>
+            new TestEnvironmentVariablesConfigurationProvider(values);
+    }
+
+    private sealed class TestEnvironmentVariablesConfigurationProvider(IReadOnlyDictionary<string, string?> values) : ConfigurationProvider
+    {
+        public override void Load()
+        {
+            foreach (var (key, value) in values)
+            {
+                Data[key] = value;
+            }
         }
     }
 

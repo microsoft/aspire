@@ -15,6 +15,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
@@ -73,6 +74,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly TimeProvider _timeProvider;
+    private readonly AspireSecretsStoreResolver _aspireSecretsStoreResolver;
     private bool _isDetachMode;
     private const int MaxDisplayedAppHostStartupOutputLines = 80;
 
@@ -111,7 +113,8 @@ internal sealed class RunCommand : BaseCommand
         FileLoggerProvider fileLoggerProvider,
         ICliHostEnvironment hostEnvironment,
         ProfilingTelemetry profilingTelemetry,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        AspireSecretsStoreResolver aspireSecretsStoreResolver)
         : base("run", RunCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _runner = runner;
@@ -128,6 +131,7 @@ internal sealed class RunCommand : BaseCommand
         _hostEnvironment = hostEnvironment;
         _profilingTelemetry = profilingTelemetry;
         _timeProvider = timeProvider;
+        _aspireSecretsStoreResolver = aspireSecretsStoreResolver;
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
@@ -284,6 +288,7 @@ internal sealed class RunCommand : BaseCommand
             {
                 ProfileCaptureEnvironment.AddCurrentToEnvironment(context.EnvironmentVariables);
             }
+            await AddAspireSecretsFileEnvironmentVariableAsync(effectiveAppHostFile, project, context.EnvironmentVariables, context.UnmatchedTokens, cancellationToken);
 
             // Start the project run as a pending task - we'll handle UX while it runs
             Task<int> pendingRun;
@@ -1166,6 +1171,31 @@ internal sealed class RunCommand : BaseCommand
         return CommandResult.Failure(
             CliExitCodes.FailedToDotnetRunAppHost,
             string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeout));
+    }
+
+    private async Task AddAspireSecretsFileEnvironmentVariableAsync(
+        FileInfo appHostFile,
+        IAppHostProject project,
+        IDictionary<string, string> environmentVariables,
+        string[] args,
+        CancellationToken cancellationToken)
+    {
+        var effectiveEnvironment = AppHostEnvironmentDefaults.ResolveEffectiveEnvironment(
+            environmentVariables,
+            AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
+            ExecutionContext.EnvironmentVariables,
+            args);
+
+        if (string.IsNullOrWhiteSpace(effectiveEnvironment))
+        {
+            return;
+        }
+
+        var result = await _aspireSecretsStoreResolver.ResolveAsync(appHostFile, project, effectiveEnvironment, cancellationToken);
+        if (result is not null)
+        {
+            environmentVariables[KnownConfigNames.AspireSecretsFile] = result.AspireSecretsFilePath;
+        }
     }
 
 }

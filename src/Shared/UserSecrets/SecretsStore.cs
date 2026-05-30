@@ -64,6 +64,11 @@ internal sealed class SecretsStore
     public bool ContainsKey(string key) => _secrets.ContainsKey(key);
 
     /// <summary>
+    /// Removes all secrets from the store. Call <see cref="Save"/> to persist.
+    /// </summary>
+    public void Clear() => _secrets.Clear();
+
+    /// <summary>
     /// Returns all secret key-value pairs.
     /// </summary>
     public IEnumerable<KeyValuePair<string, string>> AsEnumerable() => _secrets;
@@ -79,9 +84,13 @@ internal sealed class SecretsStore
     public void Save()
     {
         var directory = Path.GetDirectoryName(_secretsFilePath);
-        if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+        if (!string.IsNullOrEmpty(directory))
         {
             Directory.CreateDirectory(directory);
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(directory, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
         }
 
         var obj = new JsonObject();
@@ -92,18 +101,43 @@ internal sealed class SecretsStore
 
         var json = obj.ToJsonString(s_jsonOptions);
 
-        // Unix: write to temp file then move for atomicity (matches aspnetcore pattern)
-        if (!OperatingSystem.IsWindows())
+        if (!string.IsNullOrEmpty(directory))
         {
-            var tempFilename = Path.GetTempFileName();
+            var tempFilename = Path.Combine(directory, $".{Path.GetFileName(_secretsFilePath)}.{Guid.NewGuid():N}.tmp");
             try
             {
-                File.WriteAllText(tempFilename, json);
+                var options = new FileStreamOptions
+                {
+                    Mode = FileMode.CreateNew,
+                    Access = FileAccess.Write,
+                    Share = FileShare.None
+                };
+
+                if (!OperatingSystem.IsWindows())
+                {
+                    options.UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite;
+                }
+
+                using (var stream = new FileStream(tempFilename, options))
+                {
+                    if (!OperatingSystem.IsWindows())
+                    {
+                        File.SetUnixFileMode(tempFilename, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                    }
+
+                    using var writer = new StreamWriter(stream);
+                    writer.Write(json);
+                }
+
                 File.Move(tempFilename, _secretsFilePath, overwrite: true);
+
+                if (!OperatingSystem.IsWindows())
+                {
+                    File.SetUnixFileMode(_secretsFilePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                }
             }
             finally
             {
-                // Clean up temp file if move failed
                 if (File.Exists(tempFilename))
                 {
                     File.Delete(tempFilename);
@@ -132,7 +166,11 @@ internal sealed class SecretsStore
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         }
 
-        var parsed = JsonNode.Parse(json)?.AsObject();
+        var parsed = JsonNode.Parse(json, documentOptions: new JsonDocumentOptions
+        {
+            AllowTrailingCommas = true,
+            CommentHandling = JsonCommentHandling.Skip
+        })?.AsObject();
         if (parsed is null)
         {
             return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

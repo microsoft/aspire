@@ -52,9 +52,12 @@
     <Compile Include="$(SharedDir)OverloadResolutionPriorityAttribute.cs" Link="Utils\OverloadResolutionPriorityAttribute.cs" />
     <Compile Include="$(SharedDir)PackageUpdateHelpers.cs" Link="Utils\PackageUpdateHelpers.cs" />
     <Compile Include="$(SharedDir)InteractionHelpers.cs" Link="Utils\InteractionHelpers.cs" />
+    <Compile Include="$(SharedDir)Json\JsonFlattener.cs" Link="Utils\JsonFlattener.cs" />
     <Compile Include="$(SharedDir)LocaleHelpers.cs" Link="Utils\LocaleHelpers.cs" />
     <Compile Include="$(SharedDir)PathLookupHelper.cs" Link="Utils\PathLookupHelper.cs" />
     <Compile Include="$(SharedDir)BackchannelConstants.cs" Link="Backchannel\BackchannelConstants.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\AspireSecretsPathHelper.cs" Link="UserSecrets\AspireSecretsPathHelper.cs" />
+    <Compile Include="$(SharedDir)UserSecrets\SecretsStore.cs" Link="UserSecrets\SecretsStore.cs" />
     <Compile Include="$(SharedDir)UserSecrets\UserSecretsPathHelper.cs" Link="UserSecrets\UserSecretsPathHelper.cs" />
     <Compile Include="$(SharedDir)X509Certificate2Extensions.cs" Link="Utils\X509Certificate2Extensions.cs" />
     <Compile Include="$(SharedDir)PasswordGenerator.cs" Link="Utils\PasswordGenerator.cs" />

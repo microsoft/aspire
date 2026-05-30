@@ -5,11 +5,14 @@ using System.Runtime.CompilerServices;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Secrets;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Aspire.Hosting;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -265,6 +268,103 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.Equal(0, exitCode); // Ensure the command succeeds
+    }
+
+    [Fact]
+    public async Task DeployCommandPassesAspireSecretsFileForEnvironmentWhenStoreExists()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(tempRepo.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        string? capturedSecretsFile = null;
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                BuildAsyncCallback = (_, _, _, _) => 0,
+                GetAppHostInformationAsyncCallback = (_, _, _) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                RunAsyncCallback = async (_, _, _, _, _, env, backchannelCompletionSource, _, _) =>
+                {
+                    Assert.NotNull(env);
+                    Assert.True(env.TryGetValue(KnownConfigNames.AspireSecretsFile, out capturedSecretsFile));
+
+                    var deployModeCompleted = new TaskCompletionSource();
+                    backchannelCompletionSource?.SetResult(new TestAppHostBackchannel
+                    {
+                        RequestStopAsyncCalled = deployModeCompleted
+                    });
+                    await deployModeCompleted.Task.DefaultTimeout();
+                    return 0;
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var resolver = provider.GetRequiredService<AspireSecretsStoreResolver>();
+        var project = provider.GetRequiredService<IAppHostProjectFactory>().GetProject(appHostFile);
+        var secrets = await resolver.ResolveAsync(appHostFile, project, "Production", CancellationToken.None);
+        Assert.NotNull(secrets);
+        secrets.AspireStore.Set("Parameters:api_key", "prod-secret");
+        secrets.AspireStore.Save();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"deploy --apphost \"{appHostFile.FullName}\" --environment Production");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(secrets.AspireSecretsFilePath, capturedSecretsFile);
+    }
+
+    [Fact]
+    public async Task DeployCommandPassesAspireSecretsFileWhenStoreIsMissing()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(tempRepo.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        string? capturedSecretsFile = null;
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                BuildAsyncCallback = (_, _, _, _) => 0,
+                GetAppHostInformationAsyncCallback = (_, _, _) => (0, true, VersionHelper.GetDefaultTemplateVersion()),
+                RunAsyncCallback = async (_, _, _, _, _, env, backchannelCompletionSource, _, _) =>
+                {
+                    Assert.NotNull(env);
+                    Assert.True(env.TryGetValue(KnownConfigNames.AspireSecretsFile, out capturedSecretsFile));
+
+                    var deployModeCompleted = new TaskCompletionSource();
+                    backchannelCompletionSource?.SetResult(new TestAppHostBackchannel
+                    {
+                        RequestStopAsyncCalled = deployModeCompleted
+                    });
+                    await deployModeCompleted.Task.DefaultTimeout();
+                    return 0;
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var resolver = provider.GetRequiredService<AspireSecretsStoreResolver>();
+        var project = provider.GetRequiredService<IAppHostProjectFactory>().GetProject(appHostFile);
+        var secrets = await resolver.ResolveAsync(appHostFile, project, "Production", CancellationToken.None);
+        Assert.NotNull(secrets);
+        Assert.False(File.Exists(secrets.AspireSecretsFilePath));
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"deploy --apphost \"{appHostFile.FullName}\" --environment Production");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(secrets.AspireSecretsFilePath, capturedSecretsFile);
     }
 
     [Fact]

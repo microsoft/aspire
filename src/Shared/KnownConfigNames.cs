@@ -45,6 +45,7 @@ internal static class KnownConfigNames
     public const string InteractivityEnabled = "ASPIRE_INTERACTIVITY_ENABLED";
     public const string EnableContainerTunnel = "ASPIRE_ENABLE_CONTAINER_TUNNEL";
     public const string AspireUserSecretsId = "ASPIRE_USER_SECRETS_ID";
+    public const string AspireSecretsFile = "ASPIRE_SECRETS_FILE";
 
     public const string LocaleOverride = "ASPIRE_LOCALE_OVERRIDE";
     public const string DotnetCliUiLanguage = "DOTNET_CLI_UI_LANGUAGE";
