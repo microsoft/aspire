@@ -330,6 +330,51 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(commandItem.command, undefined);
     });
 
+    test('legacy command without state is treated as enabled', () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        commands: {
+                            restart: { displayName: 'Restart', description: 'Restart the resource' },
+                        },
+                    }),
+                ],
+            }),
+        ]);
+
+        const [commandItem] = getResourceCommandItems(provider);
+
+        assert.strictEqual(commandItem.label, 'Restart');
+        assert.strictEqual(commandItem.contextValue, 'resourceCommand:enabled');
+        assert.strictEqual((commandItem.iconPath as vscode.ThemeIcon).id, 'run');
+        assert.strictEqual(commandItem.command, undefined);
+    });
+
+    test('legacy command without state is shown in execute quick pick', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        commands: {
+                            restart: { displayName: 'Restart', description: 'Restart the resource' },
+                        },
+                    }),
+                ],
+            }),
+        ]);
+        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const [appHostItem] = provider.getChildren();
+        const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+        assert.ok(resourcesGroup);
+        const [resourceItem] = provider.getChildren(resourcesGroup);
+
+        await provider.executeResourceCommand(resourceItem as any);
+
+        const items = showQuickPickStub.getCall(0).args[0] as readonly vscode.QuickPickItem[];
+        assert.deepStrictEqual(items.map(item => item.label), ['restart']);
+    });
+
     test('resource with commands is expandable even without URLs, health checks, or child resources', () => {
         const provider = makeTreeProvider([
             makeAppHost({
@@ -521,6 +566,15 @@ suite('getResourceContextValue', () => {
             },
         }));
         assert.strictEqual(result, 'resource:canStart:canStop:canRestart');
+    });
+
+    test('resource with legacy lifecycle command has lifecycle context', () => {
+        const result = getResourceContextValue(makeResource({
+            commands: {
+                'restart': { displayName: null, description: null },
+            },
+        }));
+        assert.strictEqual(result, 'resource:canRestart');
     });
 
     test('resource with non-lifecycle commands has base context only', () => {

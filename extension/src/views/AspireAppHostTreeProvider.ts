@@ -77,7 +77,12 @@ function hasNoResources(resources: readonly ResourceJson[] | null | undefined): 
 
 function getVisibleCommands(commands: Record<string, ResourceCommandJson>): [string, ResourceCommandJson][] {
     return Object.entries(commands)
-        .filter(([, command]) => command.state === 'Enabled' || command.state === 'Disabled');
+        .filter(([, command]) => isEnabledCommand(command) || command.state === 'Disabled');
+}
+
+function isEnabledCommand(command: ResourceCommandJson | null | undefined): boolean {
+    return command !== null && command !== undefined
+        && (command.state === undefined || command.state === null || command.state === 'Enabled');
 }
 
 function appHostIcon(path?: string): vscode.ThemeIcon {
@@ -299,7 +304,7 @@ class ResourceCommandItem extends vscode.TreeItem {
         this.id = `${parentId}:command:${commandName}`;
         this.tooltip = commandJson.description ?? undefined;
 
-        const isEnabled = commandJson.state === 'Enabled';
+        const isEnabled = isEnabledCommand(commandJson);
 
         if (isEnabled) {
             this.iconPath = new vscode.ThemeIcon('run');
@@ -351,7 +356,7 @@ export function getResourceContextValue(resource: ResourceJson): string {
 }
 
 function hasEnabledCommand(commands: Record<string, ResourceCommandJson> | null | undefined, commandName: string): boolean {
-    return commands?.[commandName]?.state === 'Enabled';
+    return isEnabledCommand(commands?.[commandName]);
 }
 
 export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
@@ -1075,7 +1080,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         const items = Object.entries(commands)
-            .filter(([, cmd]) => cmd.state === 'Enabled')
+            .filter(([, cmd]) => isEnabledCommand(cmd))
             .map(([name, cmd]) => ({
                 label: name,
                 description: cmd.description ?? undefined,
