@@ -13,7 +13,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure Virtual Network resource.</param>
 [AspireExport]
-public sealed class AzureVirtualNetworkResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
+public class AzureVirtualNetworkResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure)
 {
     private const string DefaultAddressPrefix = "10.0.0.0/16";

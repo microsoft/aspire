@@ -63,7 +63,7 @@ public class AllocatedEndpoint
         BindingMode = bindingMode;
         Port = port;
         TargetPortExpression = targetPortExpression;
-        NetworkId = networkId ?? endpoint.DefaultNetworkId;
+        NetworkID = networkId ?? endpoint.DefaultNetworkID;
     }
 
     /// <summary>
@@ -139,7 +139,7 @@ public class AllocatedEndpoint
     /// <summary>
     /// Gets the network identifier for the network associated with the <see cref="AllocatedEndpoint"/> instance.
     /// </summary>
-    public NetworkIdentifier NetworkId { get; private set; }
+    public NetworkIdentifier NetworkID { get; private set; }
 
     /// <summary>
     /// Returns a string representation of the allocated endpoint URI.

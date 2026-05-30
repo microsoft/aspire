@@ -228,7 +228,7 @@ internal static class DcpModelUtilities
             targetPortExpression: $$$"""{{- portForServing "{{{sp.DcpResource.Metadata.Name}}}" -}}""",
             KnownNetworkIdentifiers.DefaultAspireContainerNetwork
         );
-        sp.EndpointAnnotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(allocatedEndpoint.NetworkId, allocatedEndpoint);
+        sp.EndpointAnnotation.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(allocatedEndpoint.NetworkID, allocatedEndpoint);
     }
 
     private static void AddExecutableContainerNetworkAllocatedEndpoint<TDcpResource>(RenderedModelResource<TDcpResource> resource, ServiceWithModelResource sp, bool enableAspireContainerTunnel, string containerHostName)

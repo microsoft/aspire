@@ -15,7 +15,7 @@ namespace Aspire.Hosting.Azure;
 /// </remarks>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure Public IP Address resource.</param>
-public sealed class AzurePublicIPAddressResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
+public class AzurePublicIPAddressResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure)
 {
     /// <summary>

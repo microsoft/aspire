@@ -19,7 +19,7 @@ namespace Aspire.Hosting.Azure;
 /// </remarks>
 /// <ats-remarks />
 [AspireExport]
-public sealed class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNetworkResource>
+public class AzureSubnetResource : Resource, IResourceWithParent<AzureVirtualNetworkResource>
 {
     // Backing field holds either string or ParameterResource
     private readonly object _addressPrefix;

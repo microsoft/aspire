@@ -129,7 +129,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// The reference will be resolved in the context of this network, which may be different
     /// from the network associated with the default network of the referenced Endpoint.
     /// </summary>
-    public NetworkIdentifier? ContextNetworkId => _contextNetworkId;
+    public NetworkIdentifier? ContextNetworkID => _contextNetworkId;
 
     /// <summary>
     /// Gets the specified property expression of the endpoint.
@@ -244,7 +244,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
 
         foreach (var nes in endpointAnnotation.AllAllocatedEndpoints)
         {
-            if (string.Equals(nes.NetworkId.Value, (_contextNetworkId ?? KnownNetworkIdentifiers.LocalhostNetwork).Value, StringComparisons.NetworkId))
+            if (string.Equals(nes.NetworkID.Value, (_contextNetworkId ?? KnownNetworkIdentifiers.LocalhostNetwork).Value, StringComparisons.NetworkId))
             {
                 if (!nes.Snapshot.IsValueSet)
                 {
@@ -369,7 +369,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
     {
         // If the EndpointReference was for a specific network context, then use that. Otherwise, use the network context from the ValueProviderContext.
         // This allows the EndpointReference to be resolved in the context of the caller's network if it was not explicitly set.
-        var networkContext = Endpoint.ContextNetworkId ?? context.GetNetworkIdentifier();
+        var networkContext = Endpoint.ContextNetworkID ?? context.GetNetworkIdentifier();
 
         return Property switch
         {

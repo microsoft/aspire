@@ -635,7 +635,7 @@ public static class ResourceExtensions
                     "Waiting for endpoint '{EndpointName}' on resource '{ResourceName}' for the '{NetworkName}' network",
                     endpointReference.EndpointName,
                     endpointReference.Resource.Name,
-                    endpointReference.ContextNetworkId?.Value);
+                    endpointReference.ContextNetworkID?.Value);
             }
             else
             {

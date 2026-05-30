@@ -334,7 +334,7 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// <summary>
     /// Gets the ID of the network that is the "default" network for the Endpoint (the one the Endpoint is associated with and can be reached without routing or network address translation).
     /// </summary>
-    public NetworkIdentifier DefaultNetworkId => _networkId;
+    public NetworkIdentifier DefaultNetworkID => _networkId;
 
     /// <summary>
     /// Gets or sets the default <see cref="AllocatedEndpoint"/> for this Endpoint.
@@ -364,9 +364,9 @@ public sealed class EndpointAnnotation : IResourceAnnotation
             }
             else
             {
-                if (_networkId != value.NetworkId)
+                if (_networkId != value.NetworkID)
                 {
-                    throw new InvalidOperationException($"The default AllocatedEndpoint's network ID must match the EndpointAnnotation network ID ('{_networkId}'). The attempted AllocatedEndpoint belongs to '{value.NetworkId}'.");
+                    throw new InvalidOperationException($"The default AllocatedEndpoint's network ID must match the EndpointAnnotation network ID ('{_networkId}'). The attempted AllocatedEndpoint belongs to '{value.NetworkID}'.");
                 }
                 AllocatedEndpointSnapshot.SetValue(value);
             }
@@ -390,9 +390,9 @@ public sealed class EndpointAnnotation : IResourceAnnotation
 /// Represents an AllocatedEndpoint snapshot associated with a specific network.
 /// </summary>
 /// <param name="Snapshot">AllocatedEndpoint snapshot</param>
-/// <param name="NetworkId">The ID of the network that is associated with the AllocatedEndpoint snapshot.</param>
-[DebuggerDisplay("NetworkId = {NetworkId}, Endpoint = {Snapshot}")]
-public record class NetworkEndpointSnapshot(ValueSnapshot<AllocatedEndpoint> Snapshot, NetworkIdentifier NetworkId);
+/// <param name="NetworkID">The ID of the network that is associated with the AllocatedEndpoint snapshot.</param>
+[DebuggerDisplay("NetworkID = {NetworkID}, Endpoint = {Snapshot}")]
+public record class NetworkEndpointSnapshot(ValueSnapshot<AllocatedEndpoint> Snapshot, NetworkIdentifier NetworkID);
 
 /// <summary>
 /// Holds a list of <see cref="NetworkEndpointSnapshot"/> for an Endpoint, providing thread-safe enumeration and addition.
@@ -423,7 +423,7 @@ public class NetworkEndpointSnapshotList : IEnumerable<NetworkEndpointSnapshot>
     {
         lock (_snapshots)
         {
-            if (_snapshots.Any(s => s.NetworkId.Equals(networkId)))
+            if (_snapshots.Any(s => s.NetworkID.Equals(networkId)))
             {
                 return false;
             }
@@ -437,7 +437,7 @@ public class NetworkEndpointSnapshotList : IEnumerable<NetworkEndpointSnapshot>
     /// </summary>
     public void AddOrUpdateAllocatedEndpoint(NetworkIdentifier networkId, AllocatedEndpoint endpoint)
     {
-        if (endpoint.NetworkId != networkId)
+        if (endpoint.NetworkID != networkId)
         {
             throw new ArgumentException($"AllocatedEndpoint must use the same network as the {nameof(networkId)} parameter", nameof(endpoint));
         }
@@ -458,7 +458,7 @@ public class NetworkEndpointSnapshotList : IEnumerable<NetworkEndpointSnapshot>
     {
         lock (_snapshots)
         {
-            var nes = _snapshots.FirstOrDefault(s => s.NetworkId.Equals(networkId));
+            var nes = _snapshots.FirstOrDefault(s => s.NetworkID.Equals(networkId));
             if (nes is null)
             {
                 nes = new NetworkEndpointSnapshot(new ValueSnapshot<AllocatedEndpoint>(), networkId);

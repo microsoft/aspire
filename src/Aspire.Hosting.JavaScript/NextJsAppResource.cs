@@ -13,5 +13,5 @@ namespace Aspire.Hosting.JavaScript;
 /// <param name="workingDirectory">The working directory from which the application command is executed.</param>
 [AspireExport(ExposeProperties = true)]
 [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-public sealed class NextJsAppResource(string name, string command, string workingDirectory)
+public class NextJsAppResource(string name, string command, string workingDirectory)
     : JavaScriptAppResource(name, command, workingDirectory);

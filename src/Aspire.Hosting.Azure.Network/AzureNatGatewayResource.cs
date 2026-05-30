@@ -16,7 +16,7 @@ namespace Aspire.Hosting.Azure;
 /// </remarks>
 /// <param name="name">The name of the resource.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure NAT Gateway resource.</param>
-public sealed class AzureNatGatewayResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
+public class AzureNatGatewayResource(string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     : AzureProvisioningResource(name, configureInfrastructure)
 {
     /// <summary>

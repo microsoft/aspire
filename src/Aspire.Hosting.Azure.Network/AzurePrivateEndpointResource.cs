@@ -13,7 +13,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="subnet">The subnet where the private endpoint will be created.</param>
 /// <param name="target">The target Azure resource to connect via private link.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure Private Endpoint resource.</param>
-public sealed class AzurePrivateEndpointResource(
+public class AzurePrivateEndpointResource(
     string name,
     AzureSubnetResource subnet,
     IAzurePrivateEndpointTarget target,

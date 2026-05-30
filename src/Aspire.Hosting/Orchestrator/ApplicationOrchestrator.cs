@@ -252,7 +252,7 @@ internal sealed class ApplicationOrchestrator
                     // will be "localhost" as that's a valid address for the .NET developer certificate. However,
                     // if a service is bound to a specific IP address, the allocated endpoint will be that same IP
                     // address.
-                    var endpointReference = new EndpointReference(resourceWithEndpoints, endpoint, endpoint.DefaultNetworkId);
+                    var endpointReference = new EndpointReference(resourceWithEndpoints, endpoint, endpoint.DefaultNetworkID);
                     var url = new ResourceUrlAnnotation { Url = allocatedEndpoint.UriString, Endpoint = endpointReference };
 
                     // In the case that a service is bound to multiple addresses or a *.localhost address, we generate
