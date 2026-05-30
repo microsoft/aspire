@@ -151,6 +151,30 @@ internal static class TerminalWebSocketProxy
             return;
         }
 
+        // Hex1b's Hmp1PresentationAdapter holds a 1000-frame BoundedChannel
+        // per peer and uses TryWrite — when the channel fills it disconnects
+        // the peer outright (no backpressure, no drop-oldest). On high-
+        // resolution terminals every Output frame is many KB, so a slow
+        // browser drain easily fills 1000 frames in a couple of seconds.
+        // Bumping the OS receive buffer on the consumer UDS gives Hex1b's
+        // write pump much more headroom to drain into the kernel before
+        // its channel fills, which directly buys time for the WS proxy to
+        // catch up under stress. 1 MB is well above the default (208 KB on
+        // Linux, 8 KB on macOS) but still trivial per connection. Best-
+        // effort: any failure is non-fatal (the connection still works,
+        // just at the default buffer size).
+        if (upstream is System.Net.Sockets.NetworkStream ns)
+        {
+            try
+            {
+                ns.Socket.ReceiveBufferSize = 1 * 1024 * 1024;
+            }
+            catch (Exception ex)
+            {
+                logger.LogDebug(ex, "Failed to bump UDS receive buffer for {ConnectionId}.", connectionId);
+            }
+        }
+
         WebSocket ws;
         try
         {
@@ -215,13 +239,15 @@ internal static class TerminalWebSocketProxy
 
         // Outbound (upstream → browser) is the heavy direction for terminal
         // workloads (fullscreen TUIs emit kilobytes per frame). Use a larger
-        // pooled buffer to reduce the WS message rate the browser must
-        // dispatch — each ReadAsync turns into exactly one WS frame, so
-        // shrinking that count directly reduces browser-side dispatch
-        // pressure under stress. 64 KB matches the typical UDS receive
-        // window on macOS/Linux for SOCK_STREAM peers.
-        const int OutboundBufferSize = 64 * 1024;
+        // pooled buffer and coalesce consecutive available reads into one
+        // WebSocket send. Fewer, larger WS messages = fewer browser dispatch
+        // events per second under stress = faster drain = less risk of
+        // tripping Hex1b's slow-peer eviction. 256 KB is well above any
+        // realistic single Output frame at sane terminal sizes, but still
+        // a small per-connection cost.
+        const int OutboundBufferSize = 256 * 1024;
         const int InboundBufferSize = 16 * 1024;
+        var upstreamNs = upstream as System.Net.Sockets.NetworkStream;
 
         // Browser → upstream. WS frames carry HMP1 payloads from the JS
         // client (Input, Resize, RequestPrimary, ClientHello). Forward
@@ -288,7 +314,7 @@ internal static class TerminalWebSocketProxy
             {
                 while (!token.IsCancellationRequested)
                 {
-                    var read = await upstream.ReadAsync(buffer, token).ConfigureAwait(false);
+                    var read = await upstream.ReadAsync(buffer.AsMemory(0, OutboundBufferSize), token).ConfigureAwait(false);
                     if (read == 0)
                     {
                         // Upstream EOF — terminal host process died, the
@@ -299,6 +325,40 @@ internal static class TerminalWebSocketProxy
                         // logged via endReason below.
                         endReason = "upstream-eof";
                         return;
+                    }
+
+                    // Coalesce: while more data is already available on
+                    // the socket without blocking, keep filling the buffer
+                    // up to OutboundBufferSize. NetworkStream.DataAvailable
+                    // is a synchronous SO_NREAD probe — we use synchronous
+                    // Read for the follow-on chunks so we don't pay the
+                    // async state-machine cost for what's effectively a
+                    // memcpy from the kernel buffer. This collapses bursts
+                    // of small upstream writes into one larger WS message,
+                    // which under stress is the difference between the
+                    // browser keeping up and tripping Hex1b's per-peer
+                    // slow-consumer eviction.
+                    if (upstreamNs is not null)
+                    {
+                        while (read < OutboundBufferSize && upstreamNs.DataAvailable)
+                        {
+                            int more;
+                            try
+                            {
+                                more = upstreamNs.Read(buffer, read, OutboundBufferSize - read);
+                            }
+                            catch
+                            {
+                                // Defer to the next outer ReadAsync loop iteration
+                                // to surface the failure with proper exception type.
+                                break;
+                            }
+                            if (more <= 0)
+                            {
+                                break;
+                            }
+                            read += more;
+                        }
                     }
 
                     bytesOut += read;
