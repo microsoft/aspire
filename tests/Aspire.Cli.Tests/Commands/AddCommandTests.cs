@@ -605,8 +605,13 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData(null, false)]        // No persisted channel — only implicit is searched, daily is excluded.
-    [InlineData("\"daily\"", true)]  // Persisted channel — implicit AND daily are searched.
+    [InlineData(null, false)]          // No persisted channel — only implicit is searched, the explicit channel is excluded.
+    [InlineData("\"daily\"", true)]    // Persisted daily channel — implicit AND daily are searched.
+    [InlineData("\"staging\"", true)]  // Persisted staging channel — implicit AND staging are searched. Proves the gate is channel-name-opaque,
+                                       // so the post-fix behavior verified for "daily" applies equally to a staging-stamped release where
+                                       // `aspire new` would write `"channel": "staging"` into the polyglot apphost's aspire.config.json.
+                                       // (See IntegrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync: the gate is
+                                       //  `hasHives || !string.IsNullOrEmpty(configuredChannel)` — it never inspects the channel name.)
     public async Task IntegrationSearchCommandTypeScriptAppHostPersistedChannelExpandsDiscoveryWithoutChangingPreferredResult(string? configFileChannelJson, bool expectExplicitChannelHit)
     {
         // Durable regression guard against re-introducing the Layer-1 narrowing bug.
@@ -692,7 +697,12 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.True(implicitHits > 0, "Implicit channel must always be searched.");
         if (expectExplicitChannelHit)
         {
-            Assert.True(dailyHits > 0, "With-channel arm: pinned 'daily' channel must also be searched.");
+            // The explicit (daily) channel registered in the fake PackagingService gets searched
+            // regardless of what channel NAME the apphost pinned (the gate is channel-name-opaque —
+            // it only checks `!string.IsNullOrEmpty(configuredChannel)`). That's how a real CLI
+            // built with `AspireCliChannel=staging` (writing `"channel": "staging"` into apphosts
+            // via `aspire new`) will exercise the same gate path as a CLI that pinned `"daily"`.
+            Assert.True(dailyHits > 0, $"With-channel arm: explicit channel must also be searched when apphost pin is non-empty (configured: {configFileChannelJson}).");
         }
         else
         {
@@ -792,6 +802,100 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
         Assert.Equal("1.0.0", integration.Version);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandStagingStampedCliWithPinnedStagingApphostQueriesBothImplicitAndStagingChannelsAndSurfacesPrereleaseOnlyPackages()
+    {
+        // High-confidence shipping-shape regression guard for #17724 and #17725.
+        //
+        // This test simulates EXACTLY what a real CLI built and shipped as staging will do when
+        // the user runs `aspire add <name>` against a polyglot apphost that `aspire new` created:
+        //
+        //   * The CLI binary is stamped `AspireCliChannel=staging` -> `IdentityChannel == "staging"`.
+        //     This triggers the real PackagingService.GetChannelsAsync to synthesize a real staging
+        //     channel alongside implicit + stable (no fake TestPackagingService is used here).
+        //   * `aspire new` writes `"channel": "staging"` into aspire.config.json (see
+        //     CliTemplateFactory.TypeScriptStarterTemplate). We mirror that here.
+        //   * There are NO PR hives. This is a real shipped install, not a dogfood/PR build.
+        //
+        // Pre-fix (the regression introduced before 13.4): the gate narrowed the search to ONLY the
+        // pinned staging channel. Implicit was excluded. Prerelease-only integrations (e.g.,
+        // Aspire.Hosting.Foundry) were invisible because the only feed queried was the staging
+        // feed, which doesn't surface them. The `aspire add kubernetes` regression had the same
+        // root cause: kubernetes was reachable via implicit (nuget.org) but invisible under the
+        // narrowed staging-only search.
+        //
+        // Post-fix invariants verified here:
+        //   (i)  BOTH implicit AND the synthesized staging channel are queried (cache call count
+        //        is >= 2). Pre-fix this would have been exactly 1.
+        //   (ii) A prerelease-only package returned by the cache only when prerelease=true (which
+        //        is what Quality.Both channels request) is reachable to the user.
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "staging"
+            }
+            """);
+
+        var totalCacheCalls = 0;
+        var prereleaseRequested = 0;
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+            {
+                Interlocked.Increment(ref totalCacheCalls);
+                if (prerelease)
+                {
+                    Interlocked.Increment(ref prereleaseRequested);
+                    return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Foundry", "13.4.0-rc.1")]);
+                }
+                return Task.FromResult<IEnumerable<NuGetPackage>>([]);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            // Stamp the running CLI as the staging release identity. The real PackagingService
+            // (left un-overridden here) reads this from CliExecutionContext.IdentityChannel and
+            // synthesizes the staging channel automatically (see PackagingService.GetChannelsAsync
+            // -> stagingIdentityChannel branch).
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace, PackageChannelNames.Staging);
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.NuGetPackageCacheFactory = _ => cache;
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search foundry --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // (ii) The prerelease-only package is reachable to the user.
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Foundry", integration.Package);
+        Assert.Equal("13.4.0-rc.1", integration.Version);
+
+        // (i) Both implicit AND staging were queried. Pre-fix narrowing would have produced exactly 1 call.
+        // Real PackagingService.GetChannelsAsync under IdentityChannel=Staging returns at least
+        // [implicit, stable, staging]; the IPSS gate now lets all of them through (hasHives=false,
+        // configuredChannel="staging" -> not empty -> gate evaluates true). At minimum the implicit
+        // and staging channels must have run, so we require >= 2 calls. Using `>= 2` rather than
+        // `== N` keeps the test robust to PackagingService adding additional explicit channels
+        // (e.g., stable) without weakening the regression guard.
+        Assert.True(totalCacheCalls >= 2, $"Expected >= 2 cache calls (both implicit and staging channels), got {totalCacheCalls}. Pre-fix narrowing would have produced 1 call.");
+        Assert.True(prereleaseRequested >= 1, $"Expected at least one channel to request prerelease=true (Quality.Both channels do); got {prereleaseRequested}.");
     }
 
     [Fact]
