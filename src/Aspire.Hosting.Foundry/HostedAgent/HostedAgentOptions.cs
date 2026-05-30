@@ -123,13 +123,18 @@ internal sealed class HostedAgentOptions
 
         if (string.IsNullOrWhiteSpace(protocolVersion.Protocol))
         {
-            throw new ArgumentException("Hosted agent protocol cannot be null, empty, or whitespace.", nameof(protocolVersion));
+            ThrowInvalidProtocolProperty(nameof(HostedAgentProtocolVersion.Protocol), "Hosted agent protocol cannot be null, empty, or whitespace.");
         }
 
         if (string.IsNullOrWhiteSpace(protocolVersion.Version))
         {
-            throw new ArgumentException("Hosted agent protocol version cannot be null, empty, or whitespace.", nameof(protocolVersion));
+            ThrowInvalidProtocolProperty(nameof(HostedAgentProtocolVersion.Version), "Hosted agent protocol version cannot be null, empty, or whitespace.");
         }
+    }
+
+    private static void ThrowInvalidProtocolProperty(string propertyName, string message)
+    {
+        throw new ArgumentException(message, propertyName);
     }
 
     private static ProtocolVersionRecord ToProtocolVersionRecord(HostedAgentProtocolVersion protocolVersion)

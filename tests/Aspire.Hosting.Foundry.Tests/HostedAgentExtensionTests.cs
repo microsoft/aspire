@@ -119,6 +119,19 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void AsHostedAgent_InRunMode_WrapsConfigurationCallbackFailures()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            builder.AddPythonApp("agent", "./app.py", "main:app")
+                .AsHostedAgent(configuration => configuration.Cpu = 4.0m));
+
+        Assert.Contains("run mode", ex.Message);
+        Assert.IsType<ArgumentException>(ex.InnerException);
+    }
+
+    [Fact]
     public void AsHostedAgent_InPublishMode_DoesNotValidateRegion()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
@@ -257,6 +270,27 @@ public class HostedAgentExtensionTests
         var protocol = Assert.Single(configuration.ContainerProtocolVersions);
         Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
         Assert.Equal("1.0.0", protocol.Version);
+    }
+
+    [Theory]
+    [InlineData("", "1.0.0", nameof(HostedAgentProtocolVersion.Protocol))]
+    [InlineData("invocations", "", nameof(HostedAgentProtocolVersion.Version))]
+    public void AsHostedAgent_WithInvalidProtocolOptions_ThrowsWithPropertyName(string protocol, string version, string expectedParamName)
+    {
+        var options = new HostedAgentOptions
+        {
+            Protocols =
+            {
+                new HostedAgentProtocolVersion
+                {
+                    Protocol = protocol,
+                    Version = version
+                }
+            }
+        };
+
+        var ex = Assert.Throws<ArgumentException>(() => options.ApplyTo(new HostedAgentConfiguration("test-image")));
+        Assert.Equal(expectedParamName, ex.ParamName);
     }
 
     [Fact]

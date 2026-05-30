@@ -319,7 +319,16 @@ public static class HostedAgentResourceBuilderExtensions
         // publish mode where the image is known. Use a scratch configuration here so protocol selection has
         // one C# API surface across run and publish mode.
         var configuration = new HostedAgentConfiguration(image: string.Empty);
-        configure(configuration);
+        try
+        {
+            configure(configuration);
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException(
+                $"Failed to apply the hosted agent configuration callback while determining the Foundry hosted agent protocol for run mode. In run mode, only {nameof(HostedAgentConfiguration.ContainerProtocolVersions)} is used; other options can still be validated by the callback.",
+                ex);
+        }
 
         return configuration.ContainerProtocolVersions.FirstOrDefault()?.Protocol.ToString();
     }
