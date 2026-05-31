@@ -29,11 +29,6 @@ public enum AgentProtocol
     Responses,
 
     /// <summary>
-    /// The Model Context Protocol over Streamable HTTP.
-    /// </summary>
-    Mcp,
-
-    /// <summary>
     /// The AG-UI protocol.
     /// </summary>
     AgUi,

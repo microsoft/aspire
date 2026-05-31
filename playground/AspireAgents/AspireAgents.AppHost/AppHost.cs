@@ -4,6 +4,8 @@
 using Aspire.Hosting.Agents;
 using Aspire.Hosting.Foundry;
 
+#pragma warning disable ASPIREMCP001
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 var foundry = builder.AddFoundry("agents-foundry");
@@ -22,13 +24,14 @@ builder.AddProject<Projects.ResponsesAgent>("responses-agent")
     .WithReference(chat)
     .WithReference(a2aAgent)
     .WaitFor(chat)
-    .AsAgent(AgentProtocol.Responses, AgentProtocol.Mcp);
+    .AsAgent(AgentProtocol.Responses)
+    .WithMcpServer();
 
 builder.AddProject<Projects.McpAgent>("mcp-agent")
     .WithHttpEndpoint(env: "PORT")
     .WithReference(chat)
     .WaitFor(chat)
-    .AsAgent(AgentProtocol.Mcp);
+    .WithMcpServer();
 
 builder.AddUvicornApp("ag-ui-agent", "../ag-ui-agent-python", "ag_ui_agent.main:app")
     .WithUv()

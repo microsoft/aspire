@@ -34,6 +34,35 @@ public class WithMcpServerTests
 
         var mcpAnnotation = Assert.Single(resource.Annotations.OfType<McpServerEndpointAnnotation>());
         Assert.NotNull(mcpAnnotation.EndpointUrlResolver);
+
+        var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == "app-mcp-call-tool");
+        Assert.Equal("Invoke MCP", command.DisplayName);
+        Assert.Equal("ChatSparkle", command.IconName);
+        Assert.Equal(IconVariant.Regular, command.IconVariant);
+        Assert.True(command.IsHighlighted);
+    }
+
+    [Fact]
+    public async Task WithMcpServer_DoesNotHighlightCommandWhenResourceAlreadyHasHighlightedCommand()
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        appBuilder.AddContainer("app", "image")
+            .WithHttpEndpoint(name: "http")
+            .WithCommand(
+                "existing",
+                "Existing",
+                _ => Task.FromResult(CommandResults.Success()),
+                new CommandOptions { IsHighlighted = true })
+            .WithMcpServer(endpointName: "http");
+
+        using var app = await appBuilder.BuildAsync();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.Resources.OfType<ContainerResource>());
+
+        var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == "app-mcp-call-tool");
+        Assert.False(command.IsHighlighted);
     }
 
     [Fact]

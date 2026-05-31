@@ -7,7 +7,7 @@
 
 # Enum Types
 enum:Aspire.Hosting.Agents.A2AInvocationMode = NonStreaming | Streaming
-enum:Aspire.Hosting.Agents.AgentProtocol = A2AJsonRpc | A2AGrpc | A2AHttpJson | Responses | Mcp | AgUi | Acp
+enum:Aspire.Hosting.Agents.AgentProtocol = A2AJsonRpc | A2AGrpc | A2AHttpJson | Responses | AgUi | Acp
 
 # Capabilities
 Aspire.Hosting.Agents/asAgent(protocols: enum:Aspire.Hosting.Agents.AgentProtocol[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints

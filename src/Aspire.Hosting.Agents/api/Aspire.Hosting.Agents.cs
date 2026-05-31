@@ -20,9 +20,8 @@ namespace Aspire.Hosting.Agents
         A2AGrpc = 1,
         A2AHttpJson = 2,
         Responses = 3,
-        Mcp = 4,
-        AgUi = 5,
-        Acp = 6,
+        AgUi = 4,
+        Acp = 5,
     }
 
     public sealed partial class AgentResourceAnnotation : Aspire.Hosting.ApplicationModel.IResourceAnnotation
@@ -51,8 +50,6 @@ namespace Aspire.Hosting.Agents
         public const string DefaultAcpPath = "/runs";
 
         public const string DefaultAgUiPath = "/ag-ui";
-
-        public const string DefaultMcpPath = "/mcp";
 
         public const string DefaultResponsesPath = "/v1/responses";
 

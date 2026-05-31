@@ -548,7 +548,6 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.A2AGrpc));
         Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.A2AHttpJson));
         Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.Responses));
-        Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.Mcp));
         Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.AgUi));
         Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.Acp));
 
