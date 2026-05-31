@@ -68,11 +68,10 @@ graph LR
 - [API Patterns](#api-patterns)
 - [Custom Resource Lifecycle Model](#custom-resource-lifecycle-model)
   - [ResourceContext](#resourcecontext)
-  - [Lifecycle Primitives](#lifecycle-primitives)
+  - [The OnLifecycle hook](#the-onlifecycle-hook)
   - [Builder Helpers](#builder-helpers)
-  - [What the Framework Handles Automatically](#what-the-framework-handles-automatically)
-  - [Composition Rules](#composition-rules)
-  - [Error Handling](#error-handling-1)
+  - [What the Framework Handles Around OnLifecycle](#what-the-framework-handles-around-onlifecycle)
+  - [Patterns](#patterns)
   - [Start/Stop/Restart Routing](#startstoprestart-routing)
   - [Targeted Snapshot Updates](#targeted-snapshot-updates)
 - [Full Examples](#full-examples)
@@ -1182,15 +1181,16 @@ public virtual void WriteToManifest(ManifestPublishingContext context)
 
 Custom resources that don't derive from built-in types (Container, Project, Executable) need a way to participate in the Aspire lifecycle — appearing in the dashboard, reporting state, exposing URLs, and supporting Start/Stop/Restart commands — without manually wiring all the plumbing that built-in resources get for free.
 
-The custom resource lifecycle model is built on three principles inspired by UI frameworks:
+The custom resource lifecycle model has two ideas, applied consistently:
 
-1. **Targeted updates** — each producer updates only its slice of the resource snapshot, never clobbering other producers' data.
-2. **Framework-owned lifecycle** — the framework manages the state machine, fires events, sets timestamps, and wires commands.
-3. **Reactive triggers** — resource authors declare *what drives their resource* (a timer, another resource, a stream) and provide callbacks. The framework manages when those callbacks fire.
+1. **Targeted updates** — each producer (DCP, orchestrator, user code) updates only its slice of the resource snapshot, never clobbering other producers' data.
+2. **One lifecycle hook, framework-managed ceremony** — authors implement a single `OnLifecycle` hook. The framework fires lifecycle events, sets timestamps, wires Start/Stop/Restart commands, and handles cleanup around it. The author owns whatever logic runs inside.
+
+See [`docs/specs/custom-resource-lifecycle.md`](custom-resource-lifecycle.md) for the full proposal including layering, migration, and open questions.
 
 ### ResourceContext
 
-`ResourceContext` is the primary API surface for custom resource authors to update dashboard state. It provides targeted methods for each aspect of the resource snapshot.
+`ResourceContext` is the primary API surface for custom resource authors to update dashboard state. It provides targeted methods for each aspect of the resource snapshot — no more `with` expressions over `CustomResourceSnapshot`.
 
 ```csharp
 public class ResourceContext
@@ -1205,17 +1205,17 @@ public class ResourceContext
     public IServiceProvider Services { get; }
 
     /// Updates the resource state shown in the dashboard.
-    public Task SetStateAsync(ResourceStateSnapshot state);
-    public Task SetStateAsync(string state);
+    public Task SetStateAsync(ResourceStateSnapshot state, CancellationToken ct = default);
+    public Task SetStateAsync(string state, CancellationToken ct = default);
 
     /// Sets a property shown in the resource details panel.
-    public Task SetPropertyAsync(string name, object? value, bool isSensitive = false);
+    public Task SetPropertyAsync(string name, object? value, bool isSensitive = false, CancellationToken ct = default);
 
     /// Adds or updates a URL shown in the dashboard.
-    public Task AddUrlAsync(UrlSnapshot url);
+    public Task AddUrlAsync(UrlSnapshot url, CancellationToken ct = default);
 
     /// Removes a URL by name.
-    public Task RemoveUrlAsync(string urlName);
+    public Task RemoveUrlAsync(string urlName, CancellationToken ct = default);
 
     /// Tracks a disposable that will be disposed when the resource stops.
     public void Track(IAsyncDisposable disposable);
@@ -1226,145 +1226,139 @@ public class ResourceContext
 }
 ```
 
-### Lifecycle primitives
+### The OnLifecycle hook
 
-Every custom resource is driven by one of four things:
-
-| Driver | Primitive | When to use |
-|--------|-----------|-------------|
-| Time | `WithInterval(period, onTick)` | Periodic polling, status refresh |
-| Another resource | `BoundTo(source)` | Port follows tunnel, sidecar follows container |
-| External stream | `RunAsync(execute)` | Streaming connections, subprocess management |
-| One-shot | `OnStarted(callback)` | Setup-and-done resources, external services |
-
-All four share the same `ResourceContext` for state updates.
-
-#### `WithInterval` — framework-owned timer
-
-The framework starts the timer when the resource starts and stops it on stop. No `while` loop needed.
+A custom resource that wants to participate in the dashboard lifecycle implements **one** hook:
 
 ```csharp
-builder.AddResource(new TalkingClockResource("clock"))
-    .WithResourceType("TalkingClock")
-    .WithProperty(CustomResourceKnownProperties.Source, "Talking Clock")
-    .WithInterval(TimeSpan.FromSeconds(1), async (ctx, tick) =>
-    {
-        await ctx.SetStateAsync(tick % 2 == 0
-            ? new ResourceStateSnapshot("Tick", KnownResourceStateStyles.Success)
-            : new ResourceStateSnapshot("Tock", KnownResourceStateStyles.Success));
-    });
+public static IResourceBuilder<T> OnLifecycle<T>(
+    this IResourceBuilder<T> builder,
+    Func<ResourceContext, CancellationToken, Task> lifecycle)
+    where T : IResource;
 ```
 
-#### `BoundTo` — lifecycle follows another resource
+The framework calls the callback when the resource should start (auto-start at app startup, or in response to a Start/Restart command). The cancellation token is cancelled when the resource should stop. The callback observes the token and returns promptly.
 
-Binds this resource's lifecycle to another. The framework automatically starts this resource when the source becomes ready, stops it when the source stops, and restarts it when the source restarts.
-
-```csharp
-// A tunnel port whose lifecycle follows the parent tunnel.
-portBuilder
-    .BoundTo(tunnelBuilder)
-    .OnStarted(async ctx =>
-    {
-        // Framework already fired BeforeResourceStartedEvent, set Starting, set timestamps.
-        // Just do the port-specific setup:
-        var port = (DevTunnelPortResource)ctx.Resource;
-        port.TunnelEndpointAnnotation.AllocatedEndpoint =
-            new(port.TunnelEndpointAnnotation, tunnelPortUri.Host, 443);
-        // Framework auto-resolves URLs from annotations.
-    });
-    // On source stop: framework sets Stopped, StopTimeStamp,
-    // marks URLs inactive, fires ResourceStoppedEvent.
-```
-
-#### `RunAsync` — escape hatch for streaming/subprocess patterns
-
-The author owns the loop. The framework still handles lifecycle, commands, events, and timestamps.
-
-```csharp
-builder.AddResource(new KafkaMonitorResource("kafka-monitor"))
-    .WithResourceType("KafkaMonitor")
-    .RunAsync(async (ctx, stoppingToken) =>
-    {
-        var consumer = new KafkaConsumer(ctx.Get<KafkaConfig>().BootstrapServers);
-        ctx.Track(consumer);
-        await foreach (var msg in consumer.ConsumeAsync(stoppingToken))
-        {
-            await ctx.SetPropertyAsync("last-offset", msg.Offset);
-        }
-    });
-```
-
-#### `OnStarted` / `OnStopping` — one-shot setup and cleanup
-
-```csharp
-builder.AddResource(new ExternalApiResource("payments-api"))
-    .WithResourceType("ExternalAPI")
-    .WithUrl("https://api.payments.com", "API")
-    .OnStarted(async ctx =>
-    {
-        var client = new HttpClient();
-        ctx.Track(client);
-        var response = await client.GetAsync("https://api.payments.com/health");
-        await ctx.SetStateAsync(response.IsSuccessStatusCode ? "Healthy" : "Degraded");
-    });
-```
+There is no separate `WithInterval`, `BoundTo`, `RunAsync`, or `OnStarted` primitive. Whatever pattern the resource needs — a periodic loop, an event subscription, a streaming consumer, a one-shot probe — is just code inside the callback. Convenience extensions (`WithInterval`, etc.) can be layered on top, but they expand to ordinary `OnLifecycle` bodies and aren't part of the framework contract.
 
 ### Builder helpers
 
 Registration-time helpers that replace the need to construct a full `CustomResourceSnapshot`:
 
 ```csharp
-/// Sets the resource type shown in the dashboard Type column.
 builder.AddResource(myResource)
     .WithResourceType("MyResourceType")
     .WithProperty(CustomResourceKnownProperties.Source, "my-source")
     .WithProperty("Version", "1.0");
 
-// WithInitialState remains for backward compatibility but is no longer recommended.
+// WithInitialState remains for backward compatibility but is [Obsolete(false)].
 ```
 
-### What the framework handles automatically
+### What the framework handles around OnLifecycle
 
-For all lifecycle primitives, the framework provides:
+| Concern | Framework behavior |
+|---------|-------------------|
+| Registration | Sets `CreationTimeStamp` and initial `State = NotStarted`. |
+| Start | Fires `BeforeResourceStartedEvent`, transitions to `Starting`, sets `StartTimeStamp`, then invokes the callback. |
+| Stop / Restart commands | Wires Start/Stop/Restart dashboard commands. Stop cancels the token; Restart does stop-then-start. |
+| URL resolution | Auto-resolves `ResourceUrlAnnotation`s into `UrlSnapshot`s on start. |
+| URL active state | Marks URLs active on start, inactive on stop. |
+| `WaitFor` support | Works automatically because `BeforeResourceStartedEvent` fires at the right time. |
+| Normal return | If the author hasn't already set a terminal state, framework sets `State = Finished`, `StopTimeStamp`, fires `ResourceStoppedEvent`. |
+| Cancellation | Same as normal return, plus the framework swallows `OperationCanceledException` from the cancellation token. |
+| Exception | State → `FailedToStart` if `Running` was never reached, else `Exited`. Either way, `StopTimeStamp` is set and `ResourceStoppedEvent` fires. Resource remains restartable. |
+| Cleanup | Disposables tracked via `ctx.Track(...)` are disposed in reverse order after the callback returns or throws. |
 
-| Concern | What the framework does |
-|---------|------------------------|
-| State machine | Manages NotStarted → Starting → Running → Stopping → Stopped transitions |
-| Timestamps | Sets `CreationTimeStamp` at registration, `StartTimeStamp` on start, `StopTimeStamp` on stop |
-| Lifecycle events | Fires `BeforeResourceStartedEvent` before callbacks; `ResourceStoppedEvent` on stop |
-| Dashboard commands | Wires Start/Stop/Restart commands automatically |
-| URL resolution | Auto-resolves `ResourceUrlAnnotation`s into `UrlSnapshot`s |
-| URL active state | Marks URLs inactive on stop, active on start |
-| `WaitFor` support | Works automatically because `BeforeResourceStartedEvent` fires at the right time |
-| Error handling | Callback throws → state = FailedToStart, logged, restartable from dashboard |
-| Cleanup | All tracked disposables (`ctx.Track(...)`) are disposed on stop |
+The author is responsible for transitioning to `Running` (or another live state) when their resource is actually ready, because only the author knows when that is.
 
-### Composition rules
+Resources that don't have a meaningful runtime lifecycle (e.g. `ParameterResource`) implement `IResourceWithoutLifecycle`. They are skipped by the framework's start/stop machinery and don't get Start/Stop/Restart commands.
 
-| Combination | Behavior |
-|-------------|----------|
-| Multiple `WithInterval` | All timers run independently |
-| `WithInterval` + `OnStarted` | `OnStarted` fires first, then timers start |
-| `BoundTo` + `OnStarted` | `OnStarted` fires when the source becomes ready |
-| `RunAsync` | Exclusive — cannot combine with `WithInterval` or `BoundTo` |
-| Multiple `OnStarted` | All fire in registration order |
-| Multiple `OnStopping` | All fire in reverse registration order |
+### Patterns
 
-### Error handling
+All four common patterns are just different bodies of the same `OnLifecycle` hook.
 
-| Scenario | Behavior |
-|----------|----------|
-| `OnStarted` throws | State → FailedToStart, error logged, restartable |
-| `WithInterval` tick throws | Error logged, tick skipped, timer continues |
-| `RunAsync` throws (not `OperationCanceledException`) | State → FailedToStart, error logged, restartable |
-| `OnStopping` throws | Error logged, stop proceeds anyway |
+#### Periodic (TalkingClock)
+
+```csharp
+builder.AddResource(new TalkingClockResource("clock"))
+    .WithResourceType("TalkingClock")
+    .OnLifecycle(async (ctx, ct) =>
+    {
+        await ctx.SetStateAsync(KnownResourceStates.Running, ct);
+        long tick = 0;
+        while (!ct.IsCancellationRequested)
+        {
+            await ctx.SetStateAsync(tick++ % 2 == 0
+                ? new ResourceStateSnapshot("Tick", KnownResourceStateStyles.Success)
+                : new ResourceStateSnapshot("Tock", KnownResourceStateStyles.Success), ct);
+            await Task.Delay(TimeSpan.FromSeconds(1), ct);
+        }
+    });
+```
+
+#### Bound to another resource (DevTunnelPort)
+
+When a resource's lifecycle follows another resource, the author waits for the source resource's state inside the callback. No new primitive needed:
+
+```csharp
+portBuilder.OnLifecycle(async (ctx, ct) =>
+{
+    var notifications = ctx.Services.GetRequiredService<ResourceNotificationService>();
+
+    await notifications.WaitForResourceHealthyAsync(tunnel.Resource.Name, ct);
+
+    // Port-specific setup...
+    await ctx.SetStateAsync(KnownResourceStates.Running, ct);
+
+    // Wait for parent to stop, then return. If the parent restarts,
+    // the framework's restart logic re-invokes this callback.
+    await notifications.WaitForResourceAsync(tunnel.Resource.Name,
+        [KnownResourceStates.Finished, KnownResourceStates.Exited], ct);
+});
+```
+
+#### Streaming / long-running loop (Kafka monitor)
+
+```csharp
+builder.AddResource(new KafkaMonitorResource("kafka-monitor"))
+    .OnLifecycle(async (ctx, ct) =>
+    {
+        var consumer = new KafkaConsumer(ctx.Get<KafkaConfig>().BootstrapServers);
+        ctx.Track(consumer);
+
+        await ctx.SetStateAsync(KnownResourceStates.Running, ct);
+        await foreach (var msg in consumer.ConsumeAsync(ct))
+        {
+            await ctx.SetPropertyAsync("last-offset", msg.Offset, ct: ct);
+        }
+    });
+```
+
+#### One-shot setup (external service)
+
+```csharp
+builder.AddResource(new ExternalApiResource("payments-api"))
+    .WithResourceType("ExternalAPI")
+    .WithUrl("https://api.payments.com", "API")
+    .OnLifecycle(async (ctx, ct) =>
+    {
+        var client = new HttpClient();
+        ctx.Track(client);
+        await client.GetAsync("https://api.payments.com/health", ct);
+
+        await ctx.SetStateAsync(KnownResourceStates.Running, ct);
+        await Task.Delay(Timeout.Infinite, ct);  // stay alive until shutdown
+    });
+```
+
+For ongoing health, use `WithHealthCheck` rather than overloading `State` with `Healthy`/`Degraded`.
 
 ### Start/Stop/Restart routing
 
 Today, Start/Stop/Restart commands route directly to DCP and don't work for custom resources. With the lifecycle model, the orchestrator gains a custom resource path:
 
-- **Stop**: cancels the resource's `CancellationTokenSource` → intervals stop, `RunAsync` token cancelled, `BoundTo` unsubscribes, `OnStopping` fires → framework sets Stopped state.
-- **Start**: creates new CTS, invokes lifecycle callbacks → framework sets Starting → Running.
+- **Stop**: cancels the resource's `CancellationTokenSource`; the `OnLifecycle` callback observes cancellation and returns; the framework disposes tracked disposables and sets the terminal state.
+- **Start**: creates a new CTS and re-invokes the `OnLifecycle` callback; framework fires `BeforeResourceStartedEvent`, sets `Starting`, sets `StartTimeStamp`.
 - **Restart**: stop, then start.
 
 ### Targeted snapshot updates
@@ -1382,6 +1376,7 @@ await ctx.AddUrlAsync(new UrlSnapshot("my-link", "http://example.com", false));
 ```
 
 This eliminates the "snapshot clobbering" problem where DCP's `ResourceSnapshotBuilder.ToSnapshot` would replace entire collections (`Urls`, `EnvironmentVariables`, `Volumes`, `Relationships`) on every watch event, silently discarding user-added data.
+
 
 ---
 
@@ -1617,23 +1612,29 @@ public static class TalkingClockExtensions
         var tockHandResource = new ClockHandResource(name + "-tock-hand");
         var clockResource = new TalkingClockResource(name, tickHandResource, tockHandResource);
 
-        // The framework handles: state machine, timestamps, lifecycle events,
-        // Start/Stop/Restart commands, and WaitFor support.
+        // The framework handles: lifecycle events, timestamps,
+        // Start/Stop/Restart commands, and WaitFor support around OnLifecycle.
         var clockBuilder = builder.AddResource(clockResource)
             .ExcludeFromManifest()
             .WithUrl("https://www.speaking-clock.com/", "Speaking Clock")
             .WithResourceType("TalkingClock")
             .WithProperty(CustomResourceKnownProperties.Source, "Talking Clock")
-            .WithInterval(TimeSpan.FromSeconds(1), async (ctx, tick) =>
+            .OnLifecycle(async (ctx, ct) =>
             {
-                ctx.Logger.LogInformation("The time is {time}", DateTime.UtcNow);
-
-                await ctx.SetStateAsync(tick % 2 == 0
-                    ? new ResourceStateSnapshot("Tick", KnownResourceStateStyles.Success)
-                    : new ResourceStateSnapshot("Tock", KnownResourceStateStyles.Success));
+                await ctx.SetStateAsync(KnownResourceStates.Running, ct);
+                long tick = 0;
+                while (!ct.IsCancellationRequested)
+                {
+                    ctx.Logger.LogInformation("The time is {time}", DateTime.UtcNow);
+                    await ctx.SetStateAsync(tick++ % 2 == 0
+                        ? new ResourceStateSnapshot("Tick", KnownResourceStateStyles.Success)
+                        : new ResourceStateSnapshot("Tock", KnownResourceStateStyles.Success), ct);
+                    await Task.Delay(TimeSpan.FromSeconds(1), ct);
+                }
             });
 
-        // Child resources bind their lifecycle to the parent clock.
+        // Child resources follow the parent clock's lifecycle by waiting on it
+        // inside their own OnLifecycle hook.
         AddHandResource(tickHandResource, "tick");
         AddHandResource(tockHandResource, "tock");
 
@@ -1645,15 +1646,22 @@ public static class TalkingClockExtensions
                 .WithParentRelationship(clockBuilder)
                 .WithResourceType("ClockHand")
                 .WithProperty(CustomResourceKnownProperties.Source, "Talking Clock")
-                .BoundTo(clockBuilder)
-                .WithInterval(TimeSpan.FromSeconds(1), async (ctx, tick) =>
+                .OnLifecycle(async (ctx, ct) =>
                 {
-                    // Alternate on/off in sync with the clock,
-                    // offset by whether this is the tick or tock hand.
-                    var isOn = label == "tick" ? tick % 2 == 0 : tick % 2 != 0;
-                    await ctx.SetStateAsync(isOn
-                        ? new ResourceStateSnapshot("On", KnownResourceStateStyles.Success)
-                        : new ResourceStateSnapshot("Off", KnownResourceStateStyles.Info));
+                    var notifications = ctx.Services.GetRequiredService<ResourceNotificationService>();
+                    await notifications.WaitForResourceHealthyAsync(clockResource.Name, ct);
+
+                    await ctx.SetStateAsync(KnownResourceStates.Running, ct);
+                    long tick = 0;
+                    while (!ct.IsCancellationRequested)
+                    {
+                        var isOn = label == "tick" ? tick % 2 == 0 : tick % 2 != 0;
+                        await ctx.SetStateAsync(isOn
+                            ? new ResourceStateSnapshot("On", KnownResourceStateStyles.Success)
+                            : new ResourceStateSnapshot("Off", KnownResourceStateStyles.Info), ct);
+                        await Task.Delay(TimeSpan.FromSeconds(1), ct);
+                        tick++;
+                    }
                 });
         }
     }
