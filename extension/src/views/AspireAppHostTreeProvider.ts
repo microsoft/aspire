@@ -85,6 +85,31 @@ export function isEnabledCommand(command: ResourceCommandJson | null | undefined
         && (command.state === undefined || command.state === null || command.state === 'Enabled');
 }
 
+/**
+ * Maps a resource command to a Codicon. The CLI command JSON does not carry the dashboard's Fluent
+ * icon name, so we can't reuse the per-command icons shown in the dashboard. Instead we map the
+ * well-known lifecycle command names to distinct Codicons so they aren't all rendered with the same
+ * glyph, and fall back to a generic "run" icon for custom commands. Command names can be emitted
+ * either bare (`start`) or with a `resource-` prefix (`resource-start`) depending on the source, so
+ * we match on the suffix.
+ */
+export function getResourceCommandIcon(commandName: string, isEnabled: boolean): vscode.ThemeIcon {
+    const color = isEnabled ? undefined : new vscode.ThemeColor('disabledForeground');
+    const normalized = commandName.replace(/^resource-/, '');
+    switch (normalized) {
+        case 'start':
+            return new vscode.ThemeIcon('play', color);
+        case 'stop':
+            return new vscode.ThemeIcon('debug-stop', color);
+        case 'restart':
+            return new vscode.ThemeIcon('debug-restart', color);
+        case 'rebuild':
+            return new vscode.ThemeIcon('tools', color);
+        default:
+            return new vscode.ThemeIcon('run', color);
+    }
+}
+
 function appHostIcon(path?: string): vscode.ThemeIcon {
     const icon = path?.endsWith('.csproj') ? 'server-process' : 'file-code';
     return new vscode.ThemeIcon(icon, new vscode.ThemeColor('aspire.brandPurple'));
@@ -306,11 +331,10 @@ class ResourceCommandItem extends vscode.TreeItem {
 
         const isEnabled = isEnabledCommand(commandJson);
 
+        this.iconPath = getResourceCommandIcon(commandName, isEnabled);
         if (isEnabled) {
-            this.iconPath = new vscode.ThemeIcon('run');
             this.contextValue = 'resourceCommand:enabled';
         } else {
-            this.iconPath = new vscode.ThemeIcon('run', new vscode.ThemeColor('disabledForeground'));
             this.description = resourceCommandDisabledDescription;
             this.contextValue = 'resourceCommand:disabled';
         }

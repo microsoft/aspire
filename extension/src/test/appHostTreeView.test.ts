@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
 import * as configInfoProvider from '../utils/configInfoProvider';
 import { AppHostDataRepository, shortenPath, shortenPaths } from '../views/AppHostDataRepository';
-import { AspireAppHostTreeProvider, getResourceContextValue, getResourceIcon, resolveAppHostSourcePath, buildResourceDescription } from '../views/AspireAppHostTreeProvider';
+import { AspireAppHostTreeProvider, getResourceContextValue, getResourceIcon, getResourceCommandIcon, resolveAppHostSourcePath, buildResourceDescription } from '../views/AspireAppHostTreeProvider';
 import type { AppHostDisplayInfo, ResourceJson, ViewMode } from '../views/AppHostDataRepository';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
@@ -327,7 +327,7 @@ suite('AspireAppHostTreeProvider', () => {
 
         assert.strictEqual(commandItem.label, 'Restart');
         assert.strictEqual(commandItem.contextValue, 'resourceCommand:enabled');
-        assert.strictEqual((commandItem.iconPath as vscode.ThemeIcon).id, 'run');
+        assert.strictEqual((commandItem.iconPath as vscode.ThemeIcon).id, 'debug-restart');
         assert.strictEqual(commandItem.command, undefined);
     });
 
@@ -348,7 +348,7 @@ suite('AspireAppHostTreeProvider', () => {
 
         assert.strictEqual(commandItem.label, 'Restart');
         assert.strictEqual(commandItem.contextValue, 'resourceCommand:enabled');
-        assert.strictEqual((commandItem.iconPath as vscode.ThemeIcon).id, 'run');
+        assert.strictEqual((commandItem.iconPath as vscode.ThemeIcon).id, 'debug-restart');
         assert.strictEqual(commandItem.command, undefined);
     });
 
@@ -452,7 +452,7 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(commandItem.label, 'Start');
         assert.strictEqual(commandItem.contextValue, 'resourceCommand:disabled');
         assert.strictEqual(commandItem.description, '(disabled)');
-        assert.strictEqual((commandItem.iconPath as vscode.ThemeIcon).id, 'run');
+        assert.strictEqual((commandItem.iconPath as vscode.ThemeIcon).id, 'play');
         assert.strictEqual(commandItem.command, undefined);
     });
 
@@ -733,6 +733,38 @@ suite('getResourceIcon', () => {
     test('unknown state shows circle-filled', () => {
         const icon = getResourceIcon(makeResource({ state: 'SomeUnknownState' }));
         assert.strictEqual(icon.id, 'circle-filled');
+    });
+});
+
+suite('getResourceCommandIcon', () => {
+    test('start uses play icon', () => {
+        assert.strictEqual(getResourceCommandIcon('start', true).id, 'play');
+    });
+
+    test('stop uses debug-stop icon', () => {
+        assert.strictEqual(getResourceCommandIcon('stop', true).id, 'debug-stop');
+    });
+
+    test('restart uses debug-restart icon', () => {
+        assert.strictEqual(getResourceCommandIcon('restart', true).id, 'debug-restart');
+    });
+
+    test('rebuild uses tools icon', () => {
+        assert.strictEqual(getResourceCommandIcon('rebuild', true).id, 'tools');
+    });
+
+    test('resource- prefixed lifecycle commands map to the same icons', () => {
+        assert.strictEqual(getResourceCommandIcon('resource-restart', true).id, 'debug-restart');
+    });
+
+    test('custom command falls back to run icon', () => {
+        assert.strictEqual(getResourceCommandIcon('migrate-database', true).id, 'run');
+    });
+
+    test('disabled command keeps its icon but is themed disabled', () => {
+        const icon = getResourceCommandIcon('stop', false);
+        assert.strictEqual(icon.id, 'debug-stop');
+        assert.ok(icon.color instanceof vscode.ThemeColor);
     });
 });
 
