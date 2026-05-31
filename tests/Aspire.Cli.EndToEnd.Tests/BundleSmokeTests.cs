@@ -110,4 +110,67 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
         Assert.True(File.Exists(argsOutputPath), $"Expected AppHost to write forwarded args to: {argsOutputPath}");
         Assert.Equal("--from-dotnet-run", File.ReadAllText(argsOutputPath));
     }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task DotNetRunFileBasedAppHostUsesAspireCliBundle()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var projectName = "DotNetRunFileBundleApp";
+
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+
+        await auto.AspireNewCSharpEmptyAppHostAsync(projectName, counter);
+
+        var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
+        var appHostSourcePath = Path.Combine(projectRoot, "apphost.cs");
+        var argsOutputPath = Path.Combine(projectRoot, "apphost-file-args.txt");
+        var containerArgsOutputPath = CliE2ETestHelpers.ToContainerPath(argsOutputPath, workspace);
+
+        Assert.True(File.Exists(appHostSourcePath), $"Expected AppHost source file to exist at: {appHostSourcePath}");
+
+        var appHostSource = File.ReadAllText(appHostSourcePath);
+        Assert.Contains("#:sdk Aspire.AppHost.Sdk", appHostSource);
+        Assert.Contains("var builder = DistributedApplication.CreateBuilder(args);", appHostSource);
+
+        var firstLineEnd = appHostSource.IndexOf('\n', StringComparison.Ordinal);
+        Assert.True(firstLineEnd >= 0, $"Expected file-based AppHost source to contain a newline: {appHostSourcePath}");
+        appHostSource = appHostSource.Insert(firstLineEnd + 1, "#:property AspireUseCliBundle=true\n");
+
+        File.WriteAllText(
+            appHostSourcePath,
+            appHostSource.Replace(
+                "var builder = DistributedApplication.CreateBuilder(args);",
+                $$"""
+                File.WriteAllText({{JsonSerializer.Serialize(containerArgsOutputPath)}}, string.Join("|", args));
+
+                var builder = DistributedApplication.CreateBuilder(args);
+                """));
+
+        await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(projectName)}", counter);
+
+        await auto.TypeAsync("dotnet run --file apphost.cs -- --from-dotnet-run-file");
+        await auto.EnterAsync();
+
+        await auto.WaitUntilAsync(
+            s => s.ContainsText("Press CTRL+C to stop the AppHost and exit."),
+            timeout: TimeSpan.FromMinutes(2),
+            description: "Press CTRL+C message from aspire run");
+
+        await auto.Ctrl().KeyAsync(Hex1bKey.C);
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        Assert.True(File.Exists(argsOutputPath), $"Expected AppHost to write forwarded args to: {argsOutputPath}");
+        Assert.Equal("--from-dotnet-run-file", File.ReadAllText(argsOutputPath));
+    }
 }
