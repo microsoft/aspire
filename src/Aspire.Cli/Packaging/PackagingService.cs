@@ -26,9 +26,10 @@ internal interface IPackagingService
     /// <remarks>
     /// On a CLI whose baked <c>AspireCliChannel</c> identity is <c>daily</c>, <c>local</c>, or
     /// <c>pr-&lt;N&gt;</c>, there is no deterministic way to produce a real staging feed:
-    /// the SHA-specific darc feed (<c>darc-pub-microsoft-aspire-&lt;hash&gt;</c>) only exists
-    /// for stable release branch builds, and falling back to the shared daily feed silently
-    /// resolves daily packages instead of staging ones. To avoid that downgrade
+    /// those identities are not officially published release-branch builds, so no SHA-specific
+    /// darc feed (<c>darc-pub-microsoft-aspire-&lt;hash&gt;</c>) carries their packages, and
+    /// falling back to the shared daily feed silently resolves daily packages instead of staging
+    /// ones. To avoid that downgrade
     /// (see <see href="https://github.com/microsoft/aspire/issues/16652"/>), the service refuses
     /// to fabricate a staging channel from those identities unless the caller has set
     /// <c>overrideStagingFeed</c> or enabled the staging feature flag.
@@ -55,6 +56,12 @@ internal class PackagingService : IPackagingService
     // current Aspire.Cli assembly's InformationalVersion; tests inject a deterministic value
     // because the version baked into the test-host assembly varies by build configuration.
     private readonly Func<bool> _isStableShapedCliVersion;
+    // Provides the running CLI's AssemblyInformationalVersion (which carries the +<commitHash>
+    // build metadata used to derive the SHA-specific darc-pub-microsoft-aspire-<hash> staging
+    // feed). Defaults to reading the Aspire.Cli assembly; tests inject a deterministic value
+    // because the version baked into the test-host assembly varies by build configuration, which
+    // otherwise makes the derived darc feed URL non-deterministic (and therefore un-assertable).
+    private readonly Func<string?> _cliInformationalVersionProvider;
 
     // Cached result of the staging-channel availability check. The inputs (CLI identity,
     // overrideStagingFeed, StagingChannelEnabled feature) are effectively static for the
@@ -70,7 +77,8 @@ internal class PackagingService : IPackagingService
         IConfiguration configuration,
         ILogger<PackagingService> logger,
         Func<string?>? processPathProvider = null,
-        Func<bool>? isStableShapedCliVersion = null)
+        Func<bool>? isStableShapedCliVersion = null,
+        Func<string?>? cliInformationalVersionProvider = null)
     {
         _executionContext = executionContext;
         _nuGetPackageCache = nuGetPackageCache;
@@ -79,6 +87,7 @@ internal class PackagingService : IPackagingService
         _logger = logger;
         _processPathProvider = processPathProvider ?? (() => Environment.ProcessPath);
         _isStableShapedCliVersion = isStableShapedCliVersion ?? IsStableShapedCliVersionFromAssembly;
+        _cliInformationalVersionProvider = cliInformationalVersionProvider ?? GetCliInformationalVersionFromAssembly;
         _stagingUnavailableReasonCache = new Lazy<string?>(ComputeStagingChannelUnavailableReason);
     }
 
@@ -140,24 +149,23 @@ internal class PackagingService : IPackagingService
         var stagingFeatureEnabled = _features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
         if (stagingFeatureEnabled || stagingChannelConfigured || stagingChannelRequested || stagingIdentityChannel)
         {
-            // Default quality selection rules (per staging entry point):
+            // Default quality selection rules (per staging entry point). NOTE: quality controls
+            // version FILTERING only (which versions in the feed are eligible); it no longer
+            // selects the feed itself. Feed PROVENANCE is identity-driven inside
+            // ShouldUseSharedStagingFeed — a staging-identity CLI always resolves Aspire.* from its
+            // own SHA-specific darc-pub-microsoft-aspire-<commit> feed.
             //   - Explicit user opt-in (`stagingChannelConfigured`, `stagingChannelRequested`): Both.
             //     The user picked staging deliberately; they get the broadest matching window.
             //   - `stagingFeatureEnabled` only (no other staging signal): Stable. Preserves the
             //     pre-existing behavior of the staging feature flag.
             //   - `stagingIdentityChannel` (the running CLI itself self-identifies as staging):
-            //     depends on the CLI build's version shape.
+            //     follows the CLI build's version shape so the eligible version window matches the
+            //     packages the build actually shipped.
             //       * Stable-shaped (e.g. "13.4.0", produced during release stabilization when
-            //         StabilizePackageVersion=true) → Stable. The shared dotnet9 daily feed only
-            //         carries prerelease-tagged 13.4.0-preview.* builds, so defaulting to Both
-            //         would route Aspire.* to dotnet9 and fail to resolve the just-shipped
-            //         stable-shaped packages — the bug from
-            //         https://github.com/microsoft/aspire/issues/17527. Routing to Stable selects
-            //         the SHA-derived darc-pub-microsoft-aspire-<hash> feed, where the
-            //         stabilizing build's packages actually live.
-            //       * Prerelease-shaped (e.g. "13.4.0-preview.1.123") → Both. SHA-specific darc
-            //         feeds are only created for stable release-branch builds, so prerelease CLIs
-            //         must use the shared daily feed; the historical Both default is correct.
+            //         StabilizePackageVersion=true) → Stable, so resolution prefers the stable-shaped
+            //         packages on the darc feed (the #17527 scenario).
+            //       * Prerelease-shaped (e.g. "13.4.0-preview.1.123") → Both, so prerelease-tagged
+            //         packages on the darc feed remain eligible.
             PackageChannelQuality defaultQuality;
             if (stagingIdentityChannel)
             {
@@ -165,8 +173,8 @@ internal class PackagingService : IPackagingService
                 // quality MUST follow the CLI build's version shape regardless of how synthesis
                 // was triggered. `init` and many other commands pass requestedChannelName=staging
                 // when identity is staging, so checking `stagingChannelRequested` first would
-                // short-circuit this path and re-introduce the #17527 misroute on stabilizing
-                // builds.
+                // short-circuit this path and re-introduce the #17527 version-filtering mismatch on
+                // stabilizing builds.
                 defaultQuality = _isStableShapedCliVersion()
                     ? PackageChannelQuality.Stable
                     : PackageChannelQuality.Both;
@@ -279,6 +287,24 @@ internal class PackagingService : IPackagingService
         }
     }
 
+    // Reads the running CLI assembly's AssemblyInformationalVersion, which carries the +<commitHash>
+    // build metadata used to derive the SHA-specific darc-pub-microsoft-aspire-<hash> staging feed.
+    // Returns null on any error so callers degrade gracefully (no derived feed) rather than throwing.
+    private static string? GetCliInformationalVersionFromAssembly()
+    {
+        try
+        {
+            return Assembly.GetExecutingAssembly()
+                .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
+                .OfType<AssemblyInformationalVersionAttribute>()
+                .FirstOrDefault()?.InformationalVersion;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private PackageChannel? CreateStagingChannel(PackageChannelQuality defaultQuality)
     {
         // Refuse to synthesize a staging channel on CLI identities that cannot produce a real
@@ -300,12 +326,11 @@ internal class PackagingService : IPackagingService
         var stagingQuality = GetStagingQuality(defaultQuality);
         var hasExplicitFeedOverride = !string.IsNullOrEmpty(_configuration[OverrideStagingFeedConfigKey]);
 
-        // When quality is Prerelease or Both and no explicit feed override is set,
-        // use the shared daily feed instead of the SHA-specific feed. SHA-specific
-        // darc-pub-* feeds are only created for stable-quality builds, so a non-Stable
-        // quality without an explicit feed override can only work with the shared feed.
-        var useSharedFeed = !hasExplicitFeedOverride &&
-                            stagingQuality is not PackageChannelQuality.Stable;
+        // Feed PROVENANCE is decided by the CLI build identity; version FILTERING is decided by
+        // quality. These are independent concerns and must not be conflated (see
+        // https://github.com/microsoft/aspire/issues/16652 for the original misroute, and the
+        // staging-identity prerelease regression that motivated separating them).
+        var useSharedFeed = ShouldUseSharedStagingFeed(hasExplicitFeedOverride, stagingQuality, _executionContext.IdentityChannel);
 
         var stagingFeedUrl = GetStagingFeedUrl(useSharedFeed);
         if (stagingFeedUrl is null)
@@ -339,6 +364,42 @@ internal class PackagingService : IPackagingService
 
     /// <inheritdoc />
     public string? GetStagingChannelUnavailableReason() => _stagingUnavailableReasonCache.Value;
+
+    // Decides whether the synthesized staging channel routes Aspire.* at the SHARED dnceng/dotnet9
+    // daily feed (true) or at the SHA-specific darc-pub-microsoft-aspire-<commit> feed (false).
+    //
+    // The rule is identity-driven, NOT version-shape-driven:
+    //   * Explicit overrideStagingFeed  -> false. The caller named an exact feed; GetStagingFeedUrl
+    //     returns it verbatim, so the shared-vs-darc distinction is moot.
+    //   * staging IDENTITY              -> false (always its own darc feed, any version shape). A CLI
+    //     whose baked AspireCliChannel is `staging` is an officially published release-branch build,
+    //     and darc publishes a per-commit darc-pub-microsoft-aspire-<commit> feed for EVERY such
+    //     build — prerelease-shaped 13.4.0-preview.* and stable-shaped 13.4.0 alike. That feed is
+    //     derived from the CLI's own commit, so it always carries the CLI's matching packages.
+    //     Falling back to the shared dotnet9 daily feed (which only carries main-branch daily
+    //     packages) silently resolves the wrong packages for polyglot apphosts while C# apphosts —
+    //     whose nuget.config has the darc feed baked in — resolve correctly. That asymmetry is the
+    //     bug this method fixes. (A missing darc feed for an officially published staging build is a
+    //     publish/infra failure that should surface as an unresolved package, not be masked by a
+    //     silent downgrade to daily packages.)
+    //   * any other identity opting into staging (stable identity via config pin / StagingChannelEnabled
+    //     feature) -> keep the historical quality-based routing: non-Stable quality uses the shared
+    //     feed, Stable quality uses the SHA feed. Those identities do not own a release-branch darc
+    //     feed of their own, so this preserves prior behavior unchanged.
+    private static bool ShouldUseSharedStagingFeed(bool hasExplicitFeedOverride, PackageChannelQuality stagingQuality, string identityChannel)
+    {
+        if (hasExplicitFeedOverride)
+        {
+            return false;
+        }
+
+        if (string.Equals(identityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName))
+        {
+            return false;
+        }
+
+        return stagingQuality is not PackageChannelQuality.Stable;
+    }
 
     private string? ComputeStagingChannelUnavailableReason()
     {
@@ -395,19 +456,18 @@ internal class PackagingService : IPackagingService
             // Invalid URL, fall through to default behavior
         }
 
-        // Use the shared daily feed when builds aren't marked stable
+        // Use the shared daily feed when the routing policy selected it (see ShouldUseSharedStagingFeed).
         if (useSharedFeed)
         {
             return "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
         }
 
-        // Extract commit hash from assembly version to build staging feed URL
-        // Staging feed URL template: https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{commitHash}/nuget/v3/index.json
-        var assembly = Assembly.GetExecutingAssembly();
-        var informationalVersion = assembly
-            .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
-            .OfType<AssemblyInformationalVersionAttribute>()
-            .FirstOrDefault()?.InformationalVersion;
+        // Derive the SHA-specific staging feed from the CLI's own commit hash, carried in the
+        // AssemblyInformationalVersion build metadata after '+'. Example informational version:
+        //   13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12
+        // yields the feed:
+        //   https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json
+        var informationalVersion = _cliInformationalVersionProvider();
 
         if (informationalVersion is null)
         {

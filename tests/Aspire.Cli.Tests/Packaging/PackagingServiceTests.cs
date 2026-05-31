@@ -112,6 +112,114 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingPrereleaseShaped_RoutesAspirePackagesToDarcFeed()
+    {
+        // Reproduces the C# vs polyglot divergence: a staging-identity CLI with a prerelease-shaped
+        // version (e.g. "13.4.0-preview.1.26280.6") is still an officially published release-branch
+        // build, so Aspire.* must resolve from its own SHA-specific darc-pub-microsoft-aspire-<commit>
+        // feed — NOT the shared dnceng/dotnet9 daily feed (which only carries main-branch daily
+        // packages). Before the fix, useSharedFeed was derived from the version shape (Both quality ->
+        // shared daily feed), which is what broke `aspire add` for TypeScript apphosts while C#
+        // apphosts (with the darc feed baked into nuget.config) resolved correctly.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        // No overrideStagingFeed configured, so the real darc-vs-shared-daily routing is exercised.
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            isStableShapedCliVersion: () => false,
+            cliInformationalVersionProvider: () => "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
+            aspireMapping.Source);
+        Assert.DoesNotContain("dotnet9", aspireMapping.Source);
+
+        // The darc feed needs an isolated global packages folder, and it carries exactly the build's
+        // matching packages, so no CLI-version pin is applied.
+        Assert.True(stagingChannel.ConfigureGlobalPackagesFolder);
+        Assert.Null(stagingChannel.PinnedVersion);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingStableShaped_RoutesAspirePackagesToDarcFeed()
+    {
+        // Regression guard for https://github.com/microsoft/aspire/issues/17527: a stable-shaped
+        // staging CLI ("13.4.0") must resolve Aspire.* from its SHA-specific darc feed with Stable
+        // quality (version filtering). The fix keeps this behavior while also covering the
+        // prerelease-shaped case above.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            isStableShapedCliVersion: () => true,
+            cliInformationalVersionProvider: () => "13.4.0+abcdef1234567890abcdef1234567890abcdef12");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
+
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
+            aspireMapping.Source);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingWithOverrideFeed_UsesOverrideFeed()
+    {
+        // An explicit overrideStagingFeed always wins over identity-based darc derivation.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideStagingFeedConfigKey] = "https://example.com/nuget/v3/index.json"
+            })
+            .Build();
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            configuration,
+            NullLogger<PackagingService>.Instance,
+            isStableShapedCliVersion: () => false,
+            cliInformationalVersionProvider: () => "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal("https://example.com/nuget/v3/index.json", aspireMapping.Source);
+    }
+
+    [Fact]
     public async Task GetChannelsAsync_WhenRequestedChannelIsStaging_IncludesStagingChannel()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
