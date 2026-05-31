@@ -64,8 +64,8 @@ public class AppHostSdkTargetsTests
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(project, ["-p:RunArguments=--custom foo"]);
 
-        Assert.Equal("aspire", properties["RunCommand"]);
-        Assert.Equal($"run --project \"{project.ProjectFile}\" --no-build -- --custom foo", properties["RunArguments"]);
+        Assert.Equal(GetExpectedAspireRunCommand(), properties["RunCommand"]);
+        Assert.Equal(GetExpectedAspireRunArguments(project, "--custom foo"), properties["RunArguments"]);
         Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
     }
 
@@ -90,8 +90,8 @@ public class AppHostSdkTargetsTests
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(project);
 
-        Assert.NotEqual("aspire", properties["RunCommand"]);
-        Assert.NotEqual($"run --project \"{project.ProjectFile}\" --no-build --", properties["RunArguments"]);
+        Assert.NotEqual(GetExpectedAspireRunCommand(), properties["RunCommand"]);
+        Assert.NotEqual(GetExpectedAspireRunArguments(project), properties["RunArguments"]);
     }
 
     [Theory]
@@ -111,8 +111,8 @@ public class AppHostSdkTargetsTests
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(project, extraArguments, environment);
 
-        Assert.NotEqual("aspire", properties["RunCommand"]);
-        Assert.NotEqual($"run --project \"{project.ProjectFile}\" --no-build --", properties["RunArguments"]);
+        Assert.NotEqual(GetExpectedAspireRunCommand(), properties["RunCommand"]);
+        Assert.NotEqual(GetExpectedAspireRunArguments(project), properties["RunArguments"]);
     }
 
     [Fact]
@@ -270,15 +270,12 @@ public class AppHostSdkTargetsTests
         {
             await File.WriteAllTextAsync(Path.Combine(fakeCliDirectory, "aspire.cmd"), """
                 @echo off
-                > "%ASPIRE_TEST_CAPTURE_PATH%" (
+                type nul > "%ASPIRE_TEST_CAPTURE_PATH%"
                 :loop
-                if "%~1"=="" goto done
-                echo %~1
+                if "%~1"=="" exit /b 0
+                >> "%ASPIRE_TEST_CAPTURE_PATH%" echo %~1
                 shift
                 goto loop
-                :done
-                )
-                exit /b 0
                 """);
 
             return;
@@ -326,6 +323,16 @@ public class AppHostSdkTargetsTests
         Assert.True(equalsIndex > prefix.Length, $"Package reference '{packageReference}' did not contain a RID.");
 
         return packageReference[prefix.Length..equalsIndex];
+    }
+
+    private static string GetExpectedAspireRunCommand() => OperatingSystem.IsWindows() ? "cmd" : "aspire";
+
+    private static string GetExpectedAspireRunArguments(RunHookProject project, string? extraArguments = null)
+    {
+        var prefix = OperatingSystem.IsWindows() ? "/C aspire " : string.Empty;
+        var arguments = $"{prefix}run --project \"{project.ProjectFile}\" --no-build --";
+
+        return string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
     }
 
     private static string GetPathEnvironmentVariableName() => OperatingSystem.IsWindows() ? "Path" : "PATH";

@@ -216,10 +216,15 @@ namespace Projects%3B
     <PropertyGroup>
       <_AspireOriginalRunArguments>$(RunArguments)</_AspireOriginalRunArguments>
       <RunCommand Condition="'$(AspireCliPath)' != ''">$(AspireCliPath)</RunCommand>
-      <RunCommand Condition="'$(AspireCliPath)' == ''">aspire</RunCommand>
+      <!-- On Windows, Aspire can be installed as a command shim such as aspire.cmd.
+           dotnet run starts RunCommand directly, so use cmd /C for the default PATH
+           lookup to get the same PATHEXT resolution as an interactive shell. -->
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(OS)' != 'Windows_NT'">aspire</RunCommand>
       <!-- dotnet run appends application arguments after ComputeRunArguments, so the double-dash separator
            must be present even when RunArguments is initially empty. -->
       <RunArguments>run --project "$(MSBuildProjectFullPath)" --no-build --</RunArguments>
+      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(OS)' == 'Windows_NT'">/C aspire $(RunArguments)</RunArguments>
       <RunArguments Condition="'$(_AspireOriginalRunArguments)' != ''">$(RunArguments) $(_AspireOriginalRunArguments)</RunArguments>
       <RunWorkingDirectory>$(MSBuildProjectDirectory)</RunWorkingDirectory>
     </PropertyGroup>
