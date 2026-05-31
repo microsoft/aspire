@@ -92,9 +92,13 @@ export function isEnabledCommand(command: ResourceCommandJson | null | undefined
  * glyph, and fall back to a generic "run" icon for custom commands. Command names can be emitted
  * either bare (`start`) or with a `resource-` prefix (`resource-start`) depending on the source, so
  * we match on the suffix.
+ *
+ * Some Codicons (e.g. `play`, `debug-stop`) carry intrinsic green/red theming that is visually noisy
+ * in a dense tree, so we force a neutral foreground color for enabled commands and the standard
+ * disabled foreground for disabled ones.
  */
 export function getResourceCommandIcon(commandName: string, isEnabled: boolean): vscode.ThemeIcon {
-    const color = isEnabled ? undefined : new vscode.ThemeColor('disabledForeground');
+    const color = new vscode.ThemeColor(isEnabled ? 'icon.foreground' : 'disabledForeground');
     const normalized = commandName.replace(/^resource-/, '');
     switch (normalized) {
         case 'start':
