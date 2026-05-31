@@ -10,6 +10,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography.X509Certificates;
 using Aspire.Dashboard.Model;
+using Aspire.Hosting.Agents;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Ats;
 using Aspire.Hosting.Dcp;
@@ -964,13 +965,17 @@ public static class ResourceBuilderExtensions
         var hasConnectionString = source.Resource is IResourceWithConnectionString && connectionStringSource is not null;
         var hasServiceDiscovery = source.Resource is IResourceWithServiceDiscovery && serviceDiscoverySource is not null;
         var hasExternalService = source.Resource is ExternalServiceResource && externalServiceSource is not null;
+        var agentAnnotation = source.Resource.Annotations.OfType<AgentResourceAnnotation>().LastOrDefault();
+        var hasA2AAgentCard = source.Resource is IResourceWithEndpoints
+            && agentAnnotation is not null
+            && agentAnnotation.Protocols.Any(AgentResourceBuilderExtensions.IsA2AProtocol);
 
         if (hasExternalService && (connectionName is not null || name is not null))
         {
             throw new InvalidOperationException("Reference names are not supported for external services.");
         }
 
-        if (name is not null && !hasServiceDiscovery)
+        if (name is not null && !hasServiceDiscovery && !hasA2AAgentCard)
         {
             throw new InvalidOperationException("Named service references are only supported for resources with service discovery.");
         }
@@ -1008,12 +1013,51 @@ public static class ResourceBuilderExtensions
             appliedReference = true;
         }
 
+        if (hasA2AAgentCard && !hasServiceDiscovery)
+        {
+            var agentName = name ?? connectionName ?? source.Resource.Name;
+            builder = WithA2AAgentReference(builder, (IResourceWithEndpoints)source.Resource, agentAnnotation!, agentName);
+            appliedReference = true;
+        }
+
         if (appliedReference)
         {
             return builder;
         }
 
         throw new InvalidOperationException($"The resource '{source.Resource.Name}' can't be used with withReference because it doesn't provide a connection string, service discovery, or a custom withReference implementation.");
+    }
+
+    private static IResourceBuilder<TDestination> WithA2AAgentReference<TDestination>(
+        IResourceBuilder<TDestination> builder,
+        IResourceWithEndpoints source,
+        AgentResourceAnnotation annotation,
+        string agentName)
+        where TDestination : IResourceWithEnvironment
+    {
+        builder.WithReferenceRelationship(source);
+
+        return builder.WithEnvironment(context =>
+        {
+            var network = context.Resource.IsContainer()
+                ? KnownNetworkIdentifiers.DefaultAspireContainerNetwork
+                : KnownNetworkIdentifiers.LocalhostNetwork;
+            var endpoint = GetDefaultAgentEndpoint(source, network);
+            var envVarName = AgentResourceBuilderExtensions.GetAgentCardEnvironmentVariableName(agentName);
+            context.EnvironmentVariables[envVarName] = AgentResourceBuilderExtensions.CreateA2AAgentCardUrl(endpoint, AgentResourceBuilderExtensions.GetA2AAgentCardPath(annotation));
+        });
+    }
+
+    private static EndpointReference GetDefaultAgentEndpoint(IResourceWithEndpoints source, NetworkIdentifier network)
+    {
+        var endpointName = source.Annotations
+            .OfType<EndpointAnnotation>()
+            .Where(e => e.UriScheme is "http" or "https")
+            .OrderByDescending(e => string.Equals(e.UriScheme, "https", StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Name)
+            .FirstOrDefault() ?? "http";
+
+        return new EndpointReference(source, endpointName, network);
     }
 
     private static Uri CreateUri(string uriString)
@@ -1205,6 +1249,12 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         ApplyEndpoints(builder, source.Resource);
+        if (source.Resource.Annotations.OfType<AgentResourceAnnotation>().LastOrDefault() is { } agentAnnotation &&
+            agentAnnotation.Protocols.Any(AgentResourceBuilderExtensions.IsA2AProtocol))
+        {
+            builder = WithA2AAgentReference(builder, source.Resource, agentAnnotation, source.Resource.Name);
+        }
+
         return builder;
     }
 
@@ -1237,6 +1287,12 @@ public static class ResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(source);
 
         ApplyEndpoints(builder, source.Resource, endpointName: null, name);
+        if (source.Resource.Annotations.OfType<AgentResourceAnnotation>().LastOrDefault() is { } agentAnnotation &&
+            agentAnnotation.Protocols.Any(AgentResourceBuilderExtensions.IsA2AProtocol))
+        {
+            builder = WithA2AAgentReference(builder, source.Resource, agentAnnotation, name);
+        }
+
         return builder;
     }
 

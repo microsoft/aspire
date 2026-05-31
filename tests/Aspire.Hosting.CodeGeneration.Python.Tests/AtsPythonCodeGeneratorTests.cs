@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using Aspire.Hosting.Agents;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TypeSystem;
@@ -166,6 +167,17 @@ public class AtsPythonCodeGeneratorTests
         Assert.NotNull(addContainer);
 
         await Verify(addContainer).UseFileName("HostingAddContainerCapability");
+    }
+
+    [Fact]
+    public void Scanner_HostingAssembly_AgentCapabilities()
+    {
+        var capabilities = ScanCapabilitiesFromHostingAssembly();
+
+        AssertAgentCapability(capabilities, "asAgent", hasCustomPath: false, hasInvocationMode: false);
+        AssertAgentCapability(capabilities, "asAgentWithA2AInvocationMode", hasCustomPath: false, hasInvocationMode: true);
+        AssertAgentCapability(capabilities, "asAgentWithPath", hasCustomPath: true, hasInvocationMode: false);
+        AssertAgentCapability(capabilities, "asAgentWithPathAndA2AInvocationMode", hasCustomPath: true, hasInvocationMode: true);
     }
 
     [Fact]
@@ -356,6 +368,42 @@ public class AtsPythonCodeGeneratorTests
         var hostingAssembly = typeof(DistributedApplication).Assembly;
         var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
         return result.Capabilities;
+    }
+
+    private static void AssertAgentCapability(
+        List<AtsCapabilityInfo> capabilities,
+        string methodName,
+        bool hasCustomPath,
+        bool hasInvocationMode)
+    {
+        var capability = Assert.Single(capabilities, c => c.CapabilityId == $"Aspire.Hosting/{methodName}");
+
+        Assert.Equal(methodName, capability.MethodName);
+        Assert.True(capability.ReturnsBuilder);
+        Assert.Contains(capability.Parameters, p =>
+            p.Name == "protocols" &&
+            p.Type?.Category == AtsTypeCategory.Array &&
+            p.Type.ElementType?.TypeId.EndsWith($".{nameof(AgentProtocol)}", StringComparison.Ordinal) == true);
+
+        if (hasCustomPath)
+        {
+            Assert.Contains(capability.Parameters, p => p.Name == "agentCustomPath" && p.Type?.TypeId == "string");
+        }
+        else
+        {
+            Assert.DoesNotContain(capability.Parameters, p => p.Name == "agentCustomPath");
+        }
+
+        if (hasInvocationMode)
+        {
+            Assert.Contains(capability.Parameters, p =>
+                p.Name == "a2AInvocationMode" &&
+                p.Type?.TypeId.EndsWith($".{nameof(A2AInvocationMode)}", StringComparison.Ordinal) == true);
+        }
+        else
+        {
+            Assert.DoesNotContain(capability.Parameters, p => p.Name == "a2AInvocationMode");
+        }
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromBothAssemblies()
