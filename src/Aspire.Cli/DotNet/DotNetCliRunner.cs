@@ -628,7 +628,8 @@ internal sealed class DotNetCliRunner(
         var env = new Dictionary<string, string>
         {
             [KnownConfigNames.DotnetCliTelemetryOptOut] = "1",
-            [KnownConfigNames.DotnetCliWorkloadUpdateNotifyDisable] = "1"
+            [KnownConfigNames.DotnetCliWorkloadUpdateNotifyDisable] = "1",
+            [KnownConfigNames.SuppressCliRunHook] = "true"
         };
 
         var existingStandardOutputCallback = options.StandardOutputCallback;
@@ -735,6 +736,7 @@ internal sealed class DotNetCliRunner(
         var finalEnv = CreateRunEnvironment(
             env,
             watch,
+            suppressCliRunHook: !isSingleFile,
             backchannelCompletionSource);
 
         return await ExecuteAsync(
@@ -762,6 +764,7 @@ internal sealed class DotNetCliRunner(
         var finalEnv = CreateRunEnvironment(
             env,
             watch: false,
+            suppressCliRunHook: false,
             backchannelCompletionSource);
 
         return await ExecuteAsync(
@@ -778,6 +781,7 @@ internal sealed class DotNetCliRunner(
     private Dictionary<string, string> CreateRunEnvironment(
         IDictionary<string, string>? env,
         bool watch,
+        bool suppressCliRunHook,
         TaskCompletionSource<IAppHostCliBackchannel>? backchannelCompletionSource)
     {
         // We copy the dictionary here because we don't want to mutate the input.
@@ -801,6 +805,11 @@ internal sealed class DotNetCliRunner(
             {
                 finalEnv["DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER"] = "true";
             }
+        }
+
+        if (suppressCliRunHook)
+        {
+            finalEnv[KnownConfigNames.SuppressCliRunHook] = "true";
         }
 
         // Set the backchannel socket path when backchannel is configured
