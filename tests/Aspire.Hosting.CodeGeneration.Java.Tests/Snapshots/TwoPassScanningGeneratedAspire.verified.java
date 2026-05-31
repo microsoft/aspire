@@ -1,4 +1,33 @@
-﻿// ===== AddContainerOptions.java =====
+﻿// ===== A2AInvocationMode.java =====
+// A2AInvocationMode.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** A2AInvocationMode enum. */
+public enum A2AInvocationMode implements WireValueEnum {
+    NON_STREAMING("NonStreaming"),
+    STREAMING("Streaming");
+
+    private final String value;
+
+    A2AInvocationMode(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static A2AInvocationMode fromValue(String value) {
+        for (A2AInvocationMode e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -211,6 +240,37 @@ public class AfterResourcesCreatedEvent extends HandleWrapperBase {
         return (DistributedApplicationModel) result;
     }
 
+}
+
+// ===== AgentProtocol.java =====
+// AgentProtocol.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** AgentProtocol enum. */
+public enum AgentProtocol implements WireValueEnum {
+    A2_AJSON_RPC("A2AJsonRpc"),
+    A2_AGRPC("A2AGrpc"),
+    A2_AHTTP_JSON("A2AHttpJson"),
+    RESPONSES("Responses");
+
+    private final String value;
+
+    AgentProtocol(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static AgentProtocol fromValue(String value) {
+        for (AgentProtocol e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
 }
 
 // ===== Aspire.java =====
@@ -2862,6 +2922,46 @@ public class CSharpAppResource extends ProjectResource {
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
         return (IExecutionConfigurationBuilder) result;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public CSharpAppResource asAgent(AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public CSharpAppResource asAgentWithA2AInvocationMode(A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public CSharpAppResource asAgentWithPath(String agentCustomPath, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public CSharpAppResource asAgentWithPathAndA2AInvocationMode(String agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        return this;
     }
 
     /** Adds an optional string parameter */
@@ -6315,6 +6415,46 @@ public class ContainerResource extends ResourceBuilderBase {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public ContainerResource asAgent(AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public ContainerResource asAgentWithA2AInvocationMode(A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public ContainerResource asAgentWithPath(String agentCustomPath, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public ContainerResource asAgentWithPathAndA2AInvocationMode(String agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
     public ContainerResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
@@ -8561,6 +8701,46 @@ public class DotnetToolResource extends ExecutableResource {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public DotnetToolResource asAgent(AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public DotnetToolResource asAgentWithA2AInvocationMode(A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public DotnetToolResource asAgentWithPath(String agentCustomPath, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public DotnetToolResource asAgentWithPathAndA2AInvocationMode(String agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
     public DotnetToolResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
@@ -10755,6 +10935,46 @@ public class ExecutableResource extends ResourceBuilderBase {
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
         return (IExecutionConfigurationBuilder) result;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public ExecutableResource asAgent(AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public ExecutableResource asAgentWithA2AInvocationMode(A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public ExecutableResource asAgentWithPath(String agentCustomPath, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public ExecutableResource asAgentWithPathAndA2AInvocationMode(String agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        return this;
     }
 
     /** Adds an optional string parameter */
@@ -17310,6 +17530,46 @@ public class ProjectResource extends ResourceBuilderBase {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public ProjectResource asAgent(AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public ProjectResource asAgentWithA2AInvocationMode(A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public ProjectResource asAgentWithPath(String agentCustomPath, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public ProjectResource asAgentWithPathAndA2AInvocationMode(String agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
     public ProjectResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
@@ -20298,6 +20558,46 @@ public class TestDatabaseResource extends ContainerResource {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public TestDatabaseResource asAgent(AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public TestDatabaseResource asAgentWithA2AInvocationMode(A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public TestDatabaseResource asAgentWithPath(String agentCustomPath, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public TestDatabaseResource asAgentWithPathAndA2AInvocationMode(String agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
     public TestDatabaseResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
@@ -22382,6 +22682,46 @@ public class TestRedisResource extends ContainerResource {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public TestRedisResource asAgent(AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public TestRedisResource asAgentWithA2AInvocationMode(A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public TestRedisResource asAgentWithPath(String agentCustomPath, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public TestRedisResource asAgentWithPathAndA2AInvocationMode(String agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        return this;
+    }
+
     public TestDatabaseResource addTestChildDatabase(String name) {
         return addTestChildDatabase(name, null);
     }
@@ -24452,6 +24792,46 @@ public class TestVaultResource extends ContainerResource {
         return (IExecutionConfigurationBuilder) result;
     }
 
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public TestVaultResource asAgent(AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols. */
+    public TestVaultResource asAgentWithA2AInvocationMode(A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public TestVaultResource asAgentWithPath(String agentCustomPath, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        return this;
+    }
+
+    /** Configures the resource as an agent that supports the specified protocols using a custom protocol path. */
+    public TestVaultResource asAgentWithPathAndA2AInvocationMode(String agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol[] protocols) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
+        reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
+        reqArgs.put("protocols", AspireClient.serializeValue(protocols));
+        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        return this;
+    }
+
     /** Adds an optional string parameter */
     public TestVaultResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
@@ -25693,6 +26073,7 @@ public final class WithVolumeOptions {
 }
 
 // ===== sources.txt =====
+.aspire/modules/A2AInvocationMode.java
 .aspire/modules/AddContainerOptions.java
 .aspire/modules/AddDockerfileOptions.java
 .aspire/modules/AddParameterOptions.java
@@ -25700,6 +26081,7 @@ public final class WithVolumeOptions {
 .aspire/modules/AddStepOptions.java
 .aspire/modules/AfterPublishEvent.java
 .aspire/modules/AfterResourcesCreatedEvent.java
+.aspire/modules/AgentProtocol.java
 .aspire/modules/Aspire.java
 .aspire/modules/AspireAction0.java
 .aspire/modules/AspireAction1.java

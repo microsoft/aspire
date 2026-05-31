@@ -334,6 +334,50 @@ impl std::fmt::Display for EndpointProperty {
     }
 }
 
+/// AgentProtocol
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AgentProtocol {
+    #[default]
+    #[serde(rename = "A2AJsonRpc")]
+    A2AJsonRpc,
+    #[serde(rename = "A2AGrpc")]
+    A2AGrpc,
+    #[serde(rename = "A2AHttpJson")]
+    A2AHttpJson,
+    #[serde(rename = "Responses")]
+    Responses,
+}
+
+impl std::fmt::Display for AgentProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::A2AJsonRpc => write!(f, "A2AJsonRpc"),
+            Self::A2AGrpc => write!(f, "A2AGrpc"),
+            Self::A2AHttpJson => write!(f, "A2AHttpJson"),
+            Self::Responses => write!(f, "Responses"),
+        }
+    }
+}
+
+/// A2AInvocationMode
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum A2AInvocationMode {
+    #[default]
+    #[serde(rename = "NonStreaming")]
+    NonStreaming,
+    #[serde(rename = "Streaming")]
+    Streaming,
+}
+
+impl std::fmt::Display for A2AInvocationMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NonStreaming => write!(f, "NonStreaming"),
+            Self::Streaming => write!(f, "Streaming"),
+        }
+    }
+}
+
 /// InputType
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InputType {
@@ -2580,6 +2624,50 @@ impl CSharpAppResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent(&self, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent_with_a2_a_invocation_mode(&self, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path_and_a2_a_invocation_mode(&self, agent_custom_path: &str, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -4972,6 +5060,50 @@ impl ContainerResource {
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
 
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent(&self, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent_with_a2_a_invocation_mode(&self, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path_and_a2_a_invocation_mode(&self, agent_custom_path: &str, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -6761,6 +6893,50 @@ impl DotnetToolResource {
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
 
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent(&self, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent_with_a2_a_invocation_mode(&self, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path_and_a2_a_invocation_mode(&self, agent_custom_path: &str, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -8538,6 +8714,50 @@ impl ExecutableResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent(&self, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent_with_a2_a_invocation_mode(&self, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path_and_a2_a_invocation_mode(&self, agent_custom_path: &str, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
@@ -13543,6 +13763,50 @@ impl ProjectResource {
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
 
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent(&self, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent_with_a2_a_invocation_mode(&self, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path_and_a2_a_invocation_mode(&self, agent_custom_path: &str, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15614,6 +15878,50 @@ impl TestDatabaseResource {
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
 
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent(&self, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent_with_a2_a_invocation_mode(&self, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path_and_a2_a_invocation_mode(&self, agent_custom_path: &str, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
     /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -17134,6 +17442,50 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent(&self, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent_with_a2_a_invocation_mode(&self, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path_and_a2_a_invocation_mode(&self, agent_custom_path: &str, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds a child database to a test Redis resource
@@ -18700,6 +19052,50 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/createExecutionConfiguration", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent(&self, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols.
+    pub fn as_agent_with_a2_a_invocation_mode(&self, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path(&self, agent_custom_path: &str, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
+    }
+
+    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    pub fn as_agent_with_path_and_a2_a_invocation_mode(&self, agent_custom_path: &str, a2_a_invocation_mode: A2AInvocationMode, protocols: Vec<AgentProtocol>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
+        args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
+        args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
     /// Adds an optional string parameter
