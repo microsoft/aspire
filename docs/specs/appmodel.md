@@ -1204,6 +1204,12 @@ public class ResourceContext
     /// The host service provider.
     public IServiceProvider Services { get; }
 
+    /// The resource notification service. Exposed directly for convenience.
+    public ResourceNotificationService Notifications { get; }
+
+    /// The distributed application eventing service. Exposed directly for convenience.
+    public IDistributedApplicationEventing Eventing { get; }
+
     /// Updates the resource state shown in the dashboard.
     public Task SetStateAsync(ResourceStateSnapshot state, CancellationToken ct = default);
     public Task SetStateAsync(string state, CancellationToken ct = default);
@@ -1303,16 +1309,14 @@ When a resource's lifecycle follows another resource, the author waits for the s
 ```csharp
 portBuilder.OnLifecycle(async (ctx, ct) =>
 {
-    var notifications = ctx.Services.GetRequiredService<ResourceNotificationService>();
-
-    await notifications.WaitForResourceHealthyAsync(tunnel.Resource.Name, ct);
+    await ctx.Notifications.WaitForResourceHealthyAsync(tunnel.Resource.Name, ct);
 
     // Port-specific setup...
     await ctx.SetStateAsync(KnownResourceStates.Running, ct);
 
     // Wait for parent to stop, then return. If the parent restarts,
     // the framework's restart logic re-invokes this callback.
-    await notifications.WaitForResourceAsync(tunnel.Resource.Name,
+    await ctx.Notifications.WaitForResourceAsync(tunnel.Resource.Name,
         [KnownResourceStates.Finished, KnownResourceStates.Exited], ct);
 });
 ```
@@ -1648,8 +1652,7 @@ public static class TalkingClockExtensions
                 .WithProperty(CustomResourceKnownProperties.Source, "Talking Clock")
                 .OnLifecycle(async (ctx, ct) =>
                 {
-                    var notifications = ctx.Services.GetRequiredService<ResourceNotificationService>();
-                    await notifications.WaitForResourceHealthyAsync(clockResource.Name, ct);
+                    await ctx.Notifications.WaitForResourceHealthyAsync(clockResource.Name, ct);
 
                     await ctx.SetStateAsync(KnownResourceStates.Running, ct);
                     long tick = 0;

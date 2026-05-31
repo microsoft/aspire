@@ -139,6 +139,18 @@ public class ResourceContext
     /// <summary>The host service provider.</summary>
     public IServiceProvider Services { get; }
 
+    /// <summary>
+    /// The resource notification service. Exposed directly for convenience so authors
+    /// don't have to resolve it from <see cref="Services"/> for common operations like
+    /// <c>WaitForResourceAsync</c> / <c>WaitForResourceHealthyAsync</c>.
+    /// </summary>
+    public ResourceNotificationService Notifications { get; }
+
+    /// <summary>
+    /// The distributed application eventing service. Exposed directly for convenience.
+    /// </summary>
+    public IDistributedApplicationEventing Eventing { get; }
+
     /// <summary>Updates the resource state shown in the dashboard.</summary>
     public Task SetStateAsync(ResourceStateSnapshot state, CancellationToken ct = default);
 
@@ -314,10 +326,8 @@ When a resource's lifecycle follows another resource, the author waits for the s
 ```csharp
 portBuilder.OnLifecycle(async (ctx, ct) =>
 {
-    var notifications = ctx.Services.GetRequiredService<ResourceNotificationService>();
-
     // Wait for the parent tunnel to be ready.
-    await notifications.WaitForResourceHealthyAsync(tunnel.Resource.Name, ct);
+    await ctx.Notifications.WaitForResourceHealthyAsync(tunnel.Resource.Name, ct);
 
     // Do the port-specific setup.
     var port = (DevTunnelPortResource)ctx.Resource;
@@ -330,7 +340,7 @@ portBuilder.OnLifecycle(async (ctx, ct) =>
     // Wait for the parent tunnel to stop, then return so the framework can
     // tear us down. If the parent restarts, the framework's restart logic
     // will re-invoke this callback.
-    await notifications.WaitForResourceAsync(
+    await ctx.Notifications.WaitForResourceAsync(
         tunnel.Resource.Name,
         [KnownResourceStates.Finished, KnownResourceStates.Exited, KnownResourceStates.FailedToStart],
         ct);
