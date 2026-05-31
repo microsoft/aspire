@@ -94,6 +94,8 @@ dotnet test --filter-not-trait "quarantined=true"
 
 To test changes from a specific pull request locally, see [dogfooding-pull-requests.md](/docs/dogfooding-pull-requests.md) for instructions on installing Aspire CLI and NuGet packages built by that PR's CI run.
 
+To validate how the CLI resolves `Aspire.*` packages for **staging** and **stable** release-branch builds (including making an installed PR build behave like a staging build), see [cli-staging-validation.md](/docs/cli-staging-validation.md).
+
 ## Integrations (Formerly Components)
 
 Please check the [Aspire integrations contribution guidelines](/src/Components/README.md) if you intend to make contributions to a new or existing Aspire integration.
