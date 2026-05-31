@@ -28,13 +28,13 @@ internal static class ComputeEnvironmentEndpointResolver
     /// environment is different from the publisher's current compute environment(s).
     /// </summary>
     /// <param name="endpointReferenceExpression">The endpoint reference expression to resolve.</param>
-    /// <param name="expression">
-    /// When this method returns <see langword="true"/>, contains the delegated reference expression.
-    /// </param>
     /// <param name="currentComputeEnvironments">
     /// The compute environment(s) the current publisher is generating artifacts for. When the
     /// endpoint's owning resource deploys to one of these, resolution is left to the local
     /// endpoint map and this method returns <see langword="false"/>.
+    /// </param>
+    /// <param name="expression">
+    /// When this method returns <see langword="true"/>, contains the delegated reference expression.
     /// </param>
     /// <returns>
     /// <see langword="true"/> if the endpoint is owned by a different compute environment and a
@@ -42,10 +42,11 @@ internal static class ComputeEnvironmentEndpointResolver
     /// </returns>
     public static bool TryGetCrossEnvironmentEndpointExpression(
         EndpointReferenceExpression endpointReferenceExpression,
-        [NotNullWhen(true)] out ReferenceExpression? expression,
-        params IComputeEnvironmentResource?[] currentComputeEnvironments)
+        IReadOnlyList<IComputeEnvironmentResource?> currentComputeEnvironments,
+        [NotNullWhen(true)] out ReferenceExpression? expression)
     {
         ArgumentNullException.ThrowIfNull(endpointReferenceExpression);
+        ArgumentNullException.ThrowIfNull(currentComputeEnvironments);
 
         expression = null;
 

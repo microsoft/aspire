@@ -490,7 +490,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 // environment (for example a Foundry hosted agent). In that case delegate to the owning
                 // compute environment instead of looking it up in this environment's local endpoint map.
                 if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-                    ep.Property(EndpointProperty.Url), out var crossExpr, kubernetesEnvironmentResource, kubernetesEnvironmentResource.OwningComputeEnvironment))
+                    ep.Property(EndpointProperty.Url), [kubernetesEnvironmentResource, kubernetesEnvironmentResource.OwningComputeEnvironment], out var crossExpr))
                 {
                     value = crossExpr;
                     continue;
@@ -527,7 +527,7 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
             if (value is EndpointReferenceExpression epExpr)
             {
                 if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-                    epExpr, out var crossExpr, kubernetesEnvironmentResource, kubernetesEnvironmentResource.OwningComputeEnvironment))
+                    epExpr, [kubernetesEnvironmentResource, kubernetesEnvironmentResource.OwningComputeEnvironment], out var crossExpr))
                 {
                     value = crossExpr;
                     continue;

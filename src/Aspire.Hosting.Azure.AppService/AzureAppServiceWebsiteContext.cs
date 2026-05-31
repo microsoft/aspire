@@ -171,7 +171,7 @@ internal sealed class AzureAppServiceWebsiteContext(
             // environment (for example a Foundry hosted agent). In that case delegate to the owning
             // compute environment instead of looking it up in this environment's local endpoint map.
             if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-                ep.Property(EndpointProperty.Url), out var crossExpr, environmentContext.Environment))
+                ep.Property(EndpointProperty.Url), [environmentContext.Environment], out var crossExpr))
             {
                 return ProcessValue(crossExpr, secretType, parent, isSlot);
             }
@@ -216,7 +216,7 @@ internal sealed class AzureAppServiceWebsiteContext(
         if (value is EndpointReferenceExpression epExpr)
         {
             if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-                epExpr, out var crossExpr, environmentContext.Environment))
+                epExpr, [environmentContext.Environment], out var crossExpr))
             {
                 return ProcessValue(crossExpr, secretType, parent, isSlot);
             }

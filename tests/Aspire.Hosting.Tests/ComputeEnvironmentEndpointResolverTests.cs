@@ -21,7 +21,7 @@ public class ComputeEnvironmentEndpointResolverTests
         agent.Resource.Annotations.Add(new DeploymentTargetAnnotation(owningEnv.Resource) { ComputeEnvironment = owningEnv.Resource });
 
         var resolved = ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-            endpoint.Property(EndpointProperty.Url), out var expression, currentEnv.Resource);
+            endpoint.Property(EndpointProperty.Url), [currentEnv.Resource], out var expression);
 
         Assert.True(resolved);
         Assert.NotNull(expression);
@@ -40,7 +40,7 @@ public class ComputeEnvironmentEndpointResolverTests
         agent.Resource.Annotations.Add(new DeploymentTargetAnnotation(currentEnv.Resource) { ComputeEnvironment = currentEnv.Resource });
 
         var resolved = ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-            endpoint.Property(EndpointProperty.Url), out var expression, currentEnv.Resource);
+            endpoint.Property(EndpointProperty.Url), [currentEnv.Resource], out var expression);
 
         Assert.False(resolved);
         Assert.Null(expression);
@@ -59,7 +59,7 @@ public class ComputeEnvironmentEndpointResolverTests
         var endpoint = AddHttpEndpoint(agent.Resource, port: 8080, targetPort: 5000);
 
         var resolved = ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-            endpoint.Property(EndpointProperty.Url), out var expression, currentEnv.Resource);
+            endpoint.Property(EndpointProperty.Url), [currentEnv.Resource], out var expression);
 
         Assert.False(resolved);
         Assert.Null(expression);
@@ -76,7 +76,7 @@ public class ComputeEnvironmentEndpointResolverTests
         var endpoint = AddHttpEndpoint(agent.Resource, port: 8080, targetPort: 5000);
 
         var resolved = ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-            endpoint.Property(EndpointProperty.Url), out var expression, currentEnv.Resource);
+            endpoint.Property(EndpointProperty.Url), [currentEnv.Resource], out var expression);
 
         Assert.False(resolved);
         Assert.Null(expression);
@@ -99,7 +99,7 @@ public class ComputeEnvironmentEndpointResolverTests
         var endpoint = AddHttpEndpoint(agent.Resource, port: 8080, targetPort: 5000);
 
         var resolved = ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-            endpoint.Property(EndpointProperty.Url), out var expression, currentEnv.Resource);
+            endpoint.Property(EndpointProperty.Url), [currentEnv.Resource], out var expression);
 
         Assert.False(resolved);
         Assert.Null(expression);
@@ -123,7 +123,7 @@ public class ComputeEnvironmentEndpointResolverTests
 
         Assert.Throws<InvalidOperationException>(() =>
             ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-                endpoint.Property(EndpointProperty.Url), out _, currentEnv.Resource));
+                endpoint.Property(EndpointProperty.Url), [currentEnv.Resource], out _));
     }
 
     private static EndpointReference AddHttpEndpoint(TestComputeResource resource, int? port, int? targetPort)
