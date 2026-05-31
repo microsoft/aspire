@@ -98,6 +98,7 @@ internal class PackagingService : IPackagingService
     // a project's aspire.config.json pins `channel: staging` on a daily/local CLI.
     private int _stagingRefusalLogged;
     private int _stagingResolutionLogged;
+    private int _stagingFeedDerivationFailedLogged;
 
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null)
     {
@@ -335,6 +336,19 @@ internal class PackagingService : IPackagingService
         var stagingFeedUrl = GetStagingFeedUrl(useSharedFeed);
         if (stagingFeedUrl is null)
         {
+            // Reaching here means synthesis was allowed (IsStagingChannelSynthesisAllowed passed) but the
+            // feed URL could not be produced. The only way that happens without an explicit override is the
+            // darc path failing to derive a commit hash from the CLI's AssemblyInformationalVersion (null,
+            // or no '+<hash>' build metadata). For a staging-identity CLI this should not occur on an
+            // officially published build, so surface it as a warning rather than silently dropping the
+            // channel — otherwise the caller just sees a missing 'staging' channel with no diagnostic
+            // (GetStagingChannelUnavailableReason() returns null because synthesis was permitted).
+            if (Interlocked.Exchange(ref _stagingFeedDerivationFailedLogged, 1) == 0)
+            {
+                _logger.LogWarning(
+                    "Could not synthesize 'staging' package channel: failed to derive a staging feed URL for CLI identity '{Identity}' (no commit hash in the CLI version and no overrideStagingFeed set).",
+                    _executionContext.IdentityChannel);
+            }
             return null;
         }
 
