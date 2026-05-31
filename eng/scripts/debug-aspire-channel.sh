@@ -84,6 +84,14 @@ for r in d.get('resources', []):
     # return the LAST entry. The NuGet flat-container spec orders versions
     # lexicographically by SemVer 2.0 precedence, so the tail is the highest.
     # See https://learn.microsoft.com/nuget/api/package-base-address-resource
+    #
+    # We query Aspire.ProjectTemplates because that's the package whose version
+    # determines what 'aspire new' bakes into aspire.config.json as the SDK
+    # version pin. Integration packages on the same SHA's darc feed can have
+    # a different prerelease/stable shape (e.g. on a stabilizing release branch
+    # Aspire.Hosting.Foundry can be "13.4.0-preview.1.X.Y" while the templates
+    # are stamped "13.4.0"), so the script also exports overrideStagingQuality=Both
+    # to keep the prerelease integration packages visible to 'aspire add'.
     curl -fsS --max-time 10 "${base}aspire.projecttemplates/index.json" 2>/dev/null \
         | python3 -c "
 import sys, json
@@ -231,8 +239,15 @@ run_debug_channel() {
 export channel='staging'
 export overrideCliIdentityChannel='${identity}'
 export overrideCliInformationalVersion='${info_version}'
+# overrideStagingQuality=Both ensures both stable- and prerelease-shaped packages
+# on the darc feed remain eligible. On a stabilizing release branch, integration
+# packages and core packages can be stamped with different shapes for the same
+# SHA (e.g. Aspire.Hosting=13.4.0 stable, Aspire.Hosting.Foundry=13.4.0-preview.X.Y),
+# so the quality filter that auto-selects from the CLI version shape can hide
+# valid packages. See PackagingService.GetStagingQuality.
+export overrideStagingQuality='Both'
 # To revert:
-# unset channel overrideCliIdentityChannel overrideCliInformationalVersion
+# unset channel overrideCliIdentityChannel overrideCliInformationalVersion overrideStagingQuality
 ENV
         return 0
     fi
@@ -334,6 +349,7 @@ ZSHRC
                 channel="staging" \
                     overrideCliIdentityChannel="$identity" \
                     overrideCliInformationalVersion="$info_version" \
+                    overrideStagingQuality="Both" \
                     NUGET_PACKAGES="$nuget_packages" \
                     ASPIRE_DEBUG_BUILD_PROMPT="aspire(${kind}:${sha8})" \
                     ZDOTDIR="$rcdir" \
@@ -347,6 +363,7 @@ BASHRC
                 channel="staging" \
                     overrideCliIdentityChannel="$identity" \
                     overrideCliInformationalVersion="$info_version" \
+                    overrideStagingQuality="Both" \
                     NUGET_PACKAGES="$nuget_packages" \
                     ASPIRE_DEBUG_BUILD_PROMPT="aspire(${kind}:${sha8})" \
                     "$target_shell" --rcfile "$rcdir/bashrc" -i
@@ -360,6 +377,7 @@ BASHRC
                 channel="staging" \
                     overrideCliIdentityChannel="$identity" \
                     overrideCliInformationalVersion="$info_version" \
+                    overrideStagingQuality="Both" \
                     NUGET_PACKAGES="$nuget_packages" \
                     PATH="$shim_root/bin:${PATH}" \
                     ASPIRE_DEBUG_BUILD_PROMPT="aspire(${kind}:${sha8})" \
@@ -396,6 +414,7 @@ JSON
     ( cd "$scratch" && \
         overrideCliIdentityChannel="$identity" \
         overrideCliInformationalVersion="$info_version" \
+        overrideStagingQuality="Both" \
         "$cli_path" add "$package" --debug "${passthrough[@]+"${passthrough[@]}"}" ) > "$log" 2>&1
     set -e
 
