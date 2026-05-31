@@ -56,6 +56,13 @@ public sealed class AgentResourceAnnotation : IResourceAnnotation, IResourceWith
 
         return builder.WithEnvironment(context =>
         {
+            context.Resource.TryGetLastAnnotation<ReferenceEnvironmentInjectionAnnotation>(out var injectionAnnotation);
+            var flags = injectionAnnotation?.Flags ?? ReferenceEnvironmentInjectionFlags.All;
+            if (!flags.HasFlag(ReferenceEnvironmentInjectionFlags.Endpoints))
+            {
+                return;
+            }
+
             var network = context.Resource.IsContainer()
                 ? KnownNetworkIdentifiers.DefaultAspireContainerNetwork
                 : KnownNetworkIdentifiers.LocalhostNetwork;
