@@ -294,6 +294,24 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void GetAgentEndpointProtocols_MapsContainerProtocolsToEndpointProtocols()
+    {
+        var endpointProtocols = AzureHostedAgentResource.GetAgentEndpointProtocols(
+            [
+                new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"),
+                new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "1.0.0"),
+                new ProtocolVersionRecord(ProjectsAgentProtocol.ActivityProtocol, "1.0.0"),
+                new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.1.0")
+            ]);
+
+        Assert.Collection(
+            endpointProtocols,
+            protocol => Assert.Equal(AgentEndpointProtocol.Invocations, protocol),
+            protocol => Assert.Equal(AgentEndpointProtocol.Responses, protocol),
+            protocol => Assert.Equal(AgentEndpointProtocol.Activity, protocol));
+    }
+
+    [Fact]
     public void AsHostedAgent_WithNullOptions_DoesNotSetConfigureCallback()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

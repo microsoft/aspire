@@ -161,10 +161,64 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
             cancellationToken: context.CancellationToken
         ).ConfigureAwait(false);
 
+        await UpdateAgentEndpointProtocolsAsync(projectClient.AgentAdministrationClient, def, context.CancellationToken).ConfigureAwait(false);
+
         // Foundry should do this automatically in the future.
         await AssignFoundryRoleToAgentIdentityAsync(context, project, result.Value, provisioningContext).ConfigureAwait(false);
 
         return result.Value;
+    }
+
+    private async Task UpdateAgentEndpointProtocolsAsync(AgentAdministrationClient agentsClient, HostedAgentConfiguration configuration, CancellationToken cancellationToken)
+    {
+        var endpointProtocols = GetAgentEndpointProtocols(configuration.ContainerProtocolVersions);
+        if (endpointProtocols.Count == 0)
+        {
+            return;
+        }
+
+        var endpoint = new AgentEndpoint();
+        foreach (var protocol in endpointProtocols)
+        {
+            endpoint.Protocols.Add(protocol);
+        }
+
+        // Creating a hosted-agent version does not update the endpoint's advertised protocols;
+        // keep routing in sync so endpoint-scoped invocations can reach the selected version.
+        await agentsClient.PatchAgentObjectAsync(
+            Name,
+            new PatchAgentOptions
+            {
+                AgentEndpoint = endpoint
+            },
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal static IReadOnlyList<AgentEndpointProtocol> GetAgentEndpointProtocols(IEnumerable<ProtocolVersionRecord> protocolVersions)
+    {
+        var endpointProtocols = new List<AgentEndpointProtocol>();
+
+        foreach (var protocolVersion in protocolVersions)
+        {
+            var endpointProtocol = ToAgentEndpointProtocol(protocolVersion.Protocol);
+            if (!endpointProtocols.Contains(endpointProtocol))
+            {
+                endpointProtocols.Add(endpointProtocol);
+            }
+        }
+
+        return endpointProtocols;
+    }
+
+    private static AgentEndpointProtocol ToAgentEndpointProtocol(ProjectsAgentProtocol protocol)
+    {
+        return protocol.ToString() switch
+        {
+            "activity_protocol" => AgentEndpointProtocol.Activity,
+            "invocations" => AgentEndpointProtocol.Invocations,
+            "responses" => AgentEndpointProtocol.Responses,
+            var value => new AgentEndpointProtocol(value)
+        };
     }
 
     private async Task AssignFoundryRoleToAgentIdentityAsync(
