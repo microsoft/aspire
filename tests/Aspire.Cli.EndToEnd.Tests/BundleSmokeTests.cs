@@ -159,7 +159,7 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
 
         await auto.RunCommandAsync($"cd {AspireCliShellCommandHelpers.QuoteBashArg(projectName)}", counter);
 
-        await auto.TypeAsync("dotnet run --file apphost.cs -- --from-dotnet-run-file");
+        await auto.TypeAsync("dotnet run apphost.cs -- --from-dotnet-run-file");
         await auto.EnterAsync();
 
         await auto.WaitUntilAsync(
