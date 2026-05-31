@@ -27,8 +27,9 @@ public class AgentResourceBuilderExtensionsTests
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
         Assert.DoesNotContain(commands, c => c.Name == "agent-a2a-agent-card");
-        Assert.Contains(commands, c => c.Name == "agent-a2a-jsonrpc-send-message" && c.DisplayName == "Send Message" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
-        Assert.Contains(commands, c => c.Name == "agent-responses-send-message" && c.DisplayName == "Send Message");
+        Assert.Contains(commands, c => c.Name == "agent-a2a-jsonrpc-send-message" && c.DisplayName == "Invoke A2A (JSON-RPC)" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
+        Assert.Contains(commands, c => c.Name == "agent-responses-send-message" && c.DisplayName == "Invoke Responses" && !c.IsHighlighted);
+        Assert.Single(commands, c => c.IsHighlighted);
     }
 
     [Fact]
@@ -74,7 +75,43 @@ public class AgentResourceBuilderExtensionsTests
         Assert.Contains(AgentProtocol.A2AHttpJson, annotation.Protocols);
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
-        Assert.Contains(commands, c => c.Name == "agent-a2a-http-json-send-message" && c.DisplayName == "Send Message" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
+        Assert.Contains(commands, c => c.Name == "agent-a2a-http-json-send-message" && c.DisplayName == "Invoke A2A (HTTP+JSON)" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
+    }
+
+    [Fact]
+    public void AsAgent_McpAddsMcpServerAnnotationAndInvocationCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var agent = builder.AddContainer("agent", "image")
+            .WithHttpEndpoint(targetPort: 8080)
+            .AsAgent(AgentProtocol.Mcp);
+
+        var annotation = Assert.Single(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
+        Assert.Contains(AgentProtocol.Mcp, annotation.Protocols);
+        Assert.Single(agent.Resource.Annotations.OfType<McpServerEndpointAnnotation>());
+
+        var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
+        Assert.Contains(commands, c => c.Name == "agent-mcp-call-tool" && c.DisplayName == "Invoke MCP" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
+    }
+
+    [Fact]
+    public void AsAgent_AgUiAndAcpAddInvocationCommands()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var agent = builder.AddContainer("agent", "image")
+            .WithHttpEndpoint(targetPort: 8080)
+            .AsAgent(AgentProtocol.AgUi, AgentProtocol.Acp);
+
+        var annotation = Assert.Single(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
+        Assert.Contains(AgentProtocol.AgUi, annotation.Protocols);
+        Assert.Contains(AgentProtocol.Acp, annotation.Protocols);
+
+        var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
+        Assert.Contains(commands, c => c.Name == "agent-ag-ui-send-message" && c.DisplayName == "Invoke AG-UI" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
+        Assert.Contains(commands, c => c.Name == "agent-acp-run" && c.DisplayName == "Invoke ACP" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && !c.IsHighlighted);
+        Assert.Single(commands, c => c.IsHighlighted);
     }
 
     [Fact]

@@ -548,6 +548,9 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.A2AGrpc));
         Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.A2AHttpJson));
         Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.Responses));
+        Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.Mcp));
+        Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.AgUi));
+        Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.Acp));
 
         var a2AInvocationMode = context.EnumTypes.First(e => e.Name == nameof(A2AInvocationMode));
         Assert.Contains(a2AInvocationMode.ValueInfos, v => v.Name == nameof(A2AInvocationMode.NonStreaming));

@@ -26,5 +26,20 @@ public enum AgentProtocol
     /// <summary>
     /// The OpenAI Responses API protocol.
     /// </summary>
-    Responses
+    Responses,
+
+    /// <summary>
+    /// The Model Context Protocol over Streamable HTTP.
+    /// </summary>
+    Mcp,
+
+    /// <summary>
+    /// The AG-UI protocol.
+    /// </summary>
+    AgUi,
+
+    /// <summary>
+    /// The Agent Communication Protocol.
+    /// </summary>
+    Acp
 }

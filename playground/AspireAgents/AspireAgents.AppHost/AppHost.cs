@@ -10,26 +10,46 @@ var foundry = builder.AddFoundry("agents-foundry");
 var project = foundry.AddProject("agentsproject");
 var chat = project.AddModelDeployment("chat", FoundryModel.OpenAI.Gpt41Mini);
 
-var a2aAgent = builder.AddUvicornApp("weather-a2a-agent", "../weather-agent-python", "weather_agent_python.main:app")
+var a2aAgent = builder.AddUvicornApp("a2a-jsonrpc-agent", "../weather-agent-python", "weather_agent_python.main:app")
     .WithUv()
     .WithReference(project)
     .WithReference(chat)
     .WaitFor(chat)
     .AsAgent(AgentProtocol.A2AJsonRpc);
 
-builder.AddProject<Projects.ResponsesAgent>("weather-responses-agent")
-    .WithHttpEndpoint(env: "PORT", targetPort: 8080)
+builder.AddProject<Projects.ResponsesAgent>("responses-agent")
+    .WithHttpEndpoint(env: "PORT")
     .WithReference(chat)
     .WithReference(a2aAgent)
     .WaitFor(chat)
-    .AsAgent(AgentProtocol.Responses);
+    .AsAgent(AgentProtocol.Responses, AgentProtocol.Mcp);
+
+builder.AddProject<Projects.McpAgent>("mcp-agent")
+    .WithHttpEndpoint(env: "PORT")
+    .WithReference(chat)
+    .WaitFor(chat)
+    .AsAgent(AgentProtocol.Mcp);
+
+builder.AddUvicornApp("ag-ui-agent", "../ag-ui-agent-python", "ag_ui_agent.main:app")
+    .WithUv()
+    .WithReference(project)
+    .WithReference(chat)
+    .WaitFor(chat)
+    .AsAgent(AgentProtocol.AgUi);
+
+builder.AddUvicornApp("acp-agent", "../acp-agent-python", "acp_agent.main:app")
+    .WithUv()
+    .WithReference(project)
+    .WithReference(chat)
+    .WaitFor(chat)
+    .AsAgent(AgentProtocol.Acp);
 
 builder.AddExecutable(
         "agent-env-dump",
         "sh",
         ".",
         "-c",
-        "echo WEATHER_A2A_AGENT_AGENTCARD_URL=$WEATHER_A2A_AGENT_AGENTCARD_URL && sleep 3600")
+        "echo A2A_JSONRPC_AGENT_AGENTCARD_URL=$A2A_JSONRPC_AGENT_AGENTCARD_URL && sleep 3600")
     .WithReference(a2aAgent).WaitFor(a2aAgent);
 
 #if !SKIP_DASHBOARD_REFERENCE

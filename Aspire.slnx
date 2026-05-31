@@ -117,6 +117,8 @@
     <File Path="playground/Directory.Build.props" />
     <File Path="playground/Directory.Build.targets" />
     <File Path="playground/README.md" />
+    <Project Path="playground/AspireAgents/AspireAgents.AppHost/AspireAgents.AppHost.csproj" />
+    <Project Path="playground/AspireAgents/ResponsesAgent/ResponsesAgent.csproj" />
     <Project Path="playground/Playground.ServiceDefaults/Playground.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/playground/BlazorHosted/">

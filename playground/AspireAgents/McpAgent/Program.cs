@@ -5,7 +5,6 @@ using System.ComponentModel;
 using System.Data.Common;
 using Azure.AI.OpenAI;
 using Azure.Identity;
-using Microsoft.Agents.AI.Hosting;
 using Microsoft.Extensions.AI;
 using ModelContextProtocol.Server;
 
@@ -19,34 +18,20 @@ var deploymentName = GetRequiredConnectionValue(chatConnectionBuilder, "Deployme
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls($"http://+:{Environment.GetEnvironmentVariable("PORT") ?? "8080"}");
 
-const string AgentName = "responses-agent";
+WeatherTools.Initialize(
+    new AzureOpenAIClient(new Uri(endpoint), new DefaultAzureCredential())
+        .GetChatClient(deploymentName)
+        .AsIChatClient());
 
-var chatClient = new AzureOpenAIClient(new Uri(endpoint), new DefaultAzureCredential())
-    .GetChatClient(deploymentName)
-    .AsIChatClient();
-
-builder.Services.AddChatClient(chatClient);
-
-[Description("Get a weather forecast for a location.")]
-static string GetWeather([Description("The location to get the weather for.")] string location)
-{
-    return $"The weather in {location} is sunny with a high of 22 C.";
-}
-
-builder.AddAIAgent(AgentName, "You are a concise weather agent. Use tools when users ask for forecasts.")
-    .WithAITool(AIFunctionFactory.Create(GetWeather, name: "get_weather"));
-
-builder.Services.AddOpenAIResponses();
 builder.Services
     .AddMcpServer()
     .WithHttpTransport()
-    .WithTools<McpWeatherTools>();
+    .WithTools<WeatherTools>();
 
 var app = builder.Build();
 
-app.MapOpenAIResponses();
-app.MapMcp("/mcp");
 app.MapGet("/health", () => Results.Ok("Healthy"));
+app.MapMcp("/mcp");
 
 app.Run();
 
@@ -67,12 +52,23 @@ static string GetRequiredConnectionValue(DbConnectionStringBuilder connectionBui
 }
 
 [McpServerToolType]
-public sealed class McpWeatherTools
+public sealed class WeatherTools
 {
-    [McpServerTool(Name = "get_weather")]
-    [Description("Returns a sample weather forecast.")]
-    public static string GetWeather([Description("The location to forecast.")] string location)
+    private static IChatClient? s_chatClient;
+
+    public static void Initialize(IChatClient chatClient)
     {
-        return $"The weather in {location} is sunny with a high of 22 C.";
+        s_chatClient = chatClient;
+    }
+
+    [McpServerTool(Name = "get_weather")]
+    [Description("Uses the Foundry model deployment to answer a weather question.")]
+    public static async Task<string> GetWeather([Description("The location or weather question to answer.")] string location)
+    {
+        var chatClient = s_chatClient ?? throw new InvalidOperationException("The chat client is not initialized.");
+        var response = await chatClient.GetResponseAsync(
+            $"You are a concise weather agent. Answer this weather request: {location}");
+
+        return response.Text;
     }
 }

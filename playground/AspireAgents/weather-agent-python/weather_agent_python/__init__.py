@@ -1,1 +1,1 @@
-"""Weather A2A agent playground."""
+"""A2A JSON-RPC agent playground."""

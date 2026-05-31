@@ -1,22 +1,18 @@
-"""A2A weather agent served with FastAPI and Microsoft Agent Framework."""
+"""A2A JSON-RPC agent served with FastAPI and Microsoft Agent Framework."""
 
-import json
 import logging
 import os
-from typing import Annotated
 
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.routes import create_agent_card_routes, create_jsonrpc_routes
 from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentSkill
-from agent_framework import tool
 from agent_framework.foundry import FoundryChatClient
 from agent_framework.observability import configure_otel_providers
 from agent_framework_a2a import A2AExecutor
 from azure.identity import DefaultAzureCredential
 from fastapi import FastAPI
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from pydantic import Field
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,19 +43,7 @@ def _parse_connection_string(connection_string: str) -> dict[str, str]:
     return values
 
 
-@tool(name="get_weather", description="Get a simple weather forecast for a location.")
-async def get_weather(location: Annotated[str, Field(description="The location to forecast.")]) -> str:
-    return json.dumps(
-        {
-            "location": location,
-            "forecast": "Sunny",
-            "temperatureC": 22,
-            "windKph": 8,
-        }
-    )
-
-
-class WeatherAgentExecutor(A2AExecutor):
+class AgentExecutor(A2AExecutor):
     """A2A executor that adapts a Microsoft Agent Framework agent."""
 
     def __init__(self) -> None:
@@ -69,17 +53,16 @@ class WeatherAgentExecutor(A2AExecutor):
             credential=DefaultAzureCredential(),
             model=deployment,
         ).as_agent(
-            name="weather-a2a-agent",
-            instructions="You are a concise weather agent. Use the weather tool for forecast questions.",
-            tools=[get_weather],
+            name="a2a-jsonrpc-agent",
+            instructions="You are a concise assistant exposed through the Agent2Agent JSON-RPC protocol.",
         )
-        super().__init__(agent, stream=True)
+        super().__init__(agent, stream=False)
 
 
 def _get_agent_card(agent_url: str) -> AgentCard:
     return AgentCard(
-        name="weather-a2a-agent",
-        description="Weather agent exposed through the Agent2Agent protocol.",
+        name="a2a-jsonrpc-agent",
+        description="Basic agent exposed through the Agent2Agent JSON-RPC protocol.",
         version="1.0.0",
         default_input_modes=["text"],
         default_output_modes=["text"],
@@ -90,14 +73,14 @@ def _get_agent_card(agent_url: str) -> AgentCard:
                 protocol_version="1.0",
             )
         ],
-        capabilities=AgentCapabilities(streaming=True, push_notifications=False),
+        capabilities=AgentCapabilities(streaming=False, push_notifications=False),
         skills=[
             AgentSkill(
-                id="weather",
-                name="Weather",
-                description="Provides a simple weather forecast.",
-                examples=["What is the weather in Seattle?"],
-                tags=["weather", "forecast"],
+                id="chat",
+                name="Chat",
+                description="Answers user prompts with the Foundry model deployment.",
+                examples=["Hello, what can you do?"],
+                tags=["chat"],
             )
         ],
     )
@@ -111,7 +94,7 @@ def create_app() -> FastAPI:
     agent_url = f"{base_url.rstrip('/')}/"
     agent_card = _get_agent_card(agent_url)
     handler = DefaultRequestHandler(
-        agent_executor=WeatherAgentExecutor(),
+        agent_executor=AgentExecutor(),
         task_store=InMemoryTaskStore(),
         agent_card=agent_card,
     )

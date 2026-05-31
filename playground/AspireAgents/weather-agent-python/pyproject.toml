@@ -1,17 +1,18 @@
 [project]
-name = "aspire-agents-weather-a2a"
+name = "aspire-agents-a2a-jsonrpc"
 version = "0.1.0"
-description = "A2A weather agent playground for Aspire"
+description = "A2A JSON-RPC agent playground for Aspire"
 requires-python = ">=3.13"
 dependencies = [
-    "agent-framework",
     "agent-framework-a2a",
-    "agent-framework-azure",
+    "agent-framework-foundry",
+    "aiohttp",
     "azure-identity>=1.25.0",
     "fastapi>=0.119.0",
     "opentelemetry-distro>=0.59b0",
     "opentelemetry-exporter-otlp-proto-grpc>=1.38.0",
     "opentelemetry-instrumentation-fastapi>=0.59b0",
+    "sse-starlette",
     "uvicorn>=0.37.0",
 ]
 
