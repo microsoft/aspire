@@ -3,6 +3,7 @@
 
 using System.Net.Http.Json;
 using System.Reflection;
+using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -583,17 +584,20 @@ public class TestingBuilderTests(ITestOutputHelper output)
 
         await app.StartAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
-        // Wait for the dashboard to become healthy, confirming it is actually running.
-        await app.ResourceNotifications.WaitForResourceHealthyAsync(
-            "aspire-dashboard",
-            CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        // Get the allocated dashboard service URI from the app host to confirm the final endpoint.
+        var dashboardServiceHost = app.Services.GetRequiredService<DashboardServiceHost>();
+        var resourceServiceUri = await dashboardServiceHost.GetResourceServiceUriAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        var uri = new Uri(resourceServiceUri);
+        Assert.Equal("127.0.0.1", uri.Host);
+        Assert.NotEqual(0, uri.Port);
     }
 
     [Theory]
     [RequiresFeature(TestFeature.Docker)]
-    [InlineData("https://127.0.0.1:0")]
-    [InlineData("https://[::1]:0")]
-    public async Task LoopbackWithDynamicPorts(string endpointUrl)
+    [InlineData("https://127.0.0.1:0", "127.0.0.1")]
+    [InlineData("https://[::1]:0", "[::1]")]
+    public async Task LoopbackWithDynamicPorts(string endpointUrl, string expectedHost)
     {
         var builder = DistributedApplicationTestingBuilder.Create([], (opt, _) =>
         {
@@ -608,10 +612,13 @@ public class TestingBuilderTests(ITestOutputHelper output)
         await using var app = await builder.BuildAsync();
         await app.StartAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
-        // Wait for the dashboard to become healthy, confirming it is actually running.
-        await app.ResourceNotifications.WaitForResourceHealthyAsync(
-            "aspire-dashboard",
-            CancellationToken.None).DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+        // Get the allocated dashboard service URI from the app host to confirm the final endpoint.
+        var dashboardServiceHost = app.Services.GetRequiredService<DashboardServiceHost>();
+        var resourceServiceUri = await dashboardServiceHost.GetResourceServiceUriAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+
+        var uri = new Uri(resourceServiceUri);
+        Assert.Equal(expectedHost, uri.Host);
+        Assert.NotEqual(0, uri.Port);
     }
 
     [Fact]
