@@ -448,14 +448,28 @@ internal sealed class AddCommand : BaseCommand
         // the latest version within the chosen channel.
         var orderedPackageVersions = packageVersions
             .OrderByDescending(p => p.Channel.Type is PackageChannelType.Implicit)
-            .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
+            .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer)
+            .ToArray();
+
+        // Deduplicate by (Id, Version) keeping the first occurrence — which, thanks to the
+        // ordering above, is the Implicit-channel entry when one exists. Without this, a
+        // polyglot apphost pinned to a channel sees the same package+version surfaced by both
+        // the Implicit channel (because the project-local NuGet.config pins Aspire.* at the
+        // pinned channel's feed) and the pinned Explicit channel, producing two identical
+        // rows in the version prompt and preventing the auto-select path from kicking in.
+        // C# apphosts never hit this because GetConfiguredChannel returns null for C# so the
+        // Explicit channels aren't queried at all.
+        var dedupedPackageVersions = orderedPackageVersions
+            .DistinctBy(p => (p.Package.Id, p.Package.Version))
+            .ToArray();
+
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
-            return orderedPackageVersions.First();
+            return dedupedPackageVersions[0];
         }
 
         // ... otherwise we had better prompt.
-        var version = await PromptForIntegrationVersionAsync(orderedPackageVersions, cancellationToken);
+        var version = await PromptForIntegrationVersionAsync(dedupedPackageVersions, cancellationToken);
 
         return version;
     }
