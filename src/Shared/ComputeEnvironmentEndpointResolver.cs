@@ -51,36 +51,17 @@ internal static class ComputeEnvironmentEndpointResolver
 
         var owningResource = endpointReferenceExpression.Endpoint.Resource;
 
-        // Fast path: if the endpoint's owning resource deploys to one of the current publisher's
-        // compute environments, the endpoint lives in the local endpoint map. Leave resolution to
-        // the existing local lookup so generated artifacts (bicep parameters, helm values, etc.) are
-        // unchanged. GetDeploymentTargetAnnotation(env) accounts for ComputeEnvironmentAnnotation
-        // binding and returns null when the resource does not deploy to that environment.
-        //
-        // For well-formed inputs this loop is redundant with the TryGetEffectiveComputeEnvironment +
-        // ReferenceEquals backstop below (a resource resolves to the current environment in both
-        // places). It is NOT a guard against the multi-target throw: for an unbound resource with
-        // more than one deployment target, GetDeploymentTargetAnnotation(current) throws exactly like
-        // the parameterless overload TryGetEffectiveComputeEnvironment uses. That malformed
-        // configuration is rejected earlier in the pipeline, so it is not reachable here. The loop is
-        // kept as a harmless explicit fast-path; it can be removed if the backstop is preferred.
-        foreach (var current in currentComputeEnvironments)
-        {
-            if (current is not null && owningResource.GetDeploymentTargetAnnotation(current) is not null)
-            {
-                return false;
-            }
-        }
-
-        // The owning resource has no compute environment (for example a plain resource that is not
-        // deployed anywhere). There is nothing to delegate to, so let the local lookup handle it.
+        // Resolve the compute environment the owning resource deploys to. A plain resource that is
+        // not deployed anywhere has none, so there is nothing to delegate to and the local lookup
+        // handles it.
         if (!TryGetEffectiveComputeEnvironment(owningResource, out var owningComputeEnvironment))
         {
             return false;
         }
 
-        // Defensive: if the resolved owning environment is itself one of the current publisher's
-        // environments, prefer the local map.
+        // If the owning resource deploys to one of the current publisher's compute environments, the
+        // endpoint lives in the local endpoint map. Leave resolution to the existing local lookup so
+        // generated artifacts (bicep parameters, helm values, etc.) are unchanged.
         foreach (var current in currentComputeEnvironments)
         {
             if (ReferenceEquals(current, owningComputeEnvironment))

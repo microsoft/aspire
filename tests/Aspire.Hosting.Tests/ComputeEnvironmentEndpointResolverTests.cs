@@ -52,9 +52,8 @@ public class ComputeEnvironmentEndpointResolverTests
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var currentEnv = builder.AddResource(new TestComputeEnvironmentResource("current"));
-        // Bind via WithComputeEnvironment only (no DeploymentTargetAnnotation). The fast-path loop
-        // falls through and the ReferenceEquals backstop catches it after the effective environment
-        // resolves to the current environment.
+        // Bind via WithComputeEnvironment only (no DeploymentTargetAnnotation). The effective
+        // environment resolves to the current environment and the ReferenceEquals backstop catches it.
         var agent = builder.AddResource(new TestComputeResource("agent"))
             .WithComputeEnvironment(currentEnv);
         var endpoint = AddHttpEndpoint(agent.Resource, port: 8080, targetPort: 5000);
@@ -91,8 +90,8 @@ public class ComputeEnvironmentEndpointResolverTests
         var currentEnv = builder.AddResource(new TestComputeEnvironmentResource("current"));
         var otherEnv = builder.AddResource(new TestComputeEnvironmentResource("other"));
         // Explicit binding to the current environment plus deployment targets for both environments.
-        // The binding makes GetDeploymentTargetAnnotation(current) select the current target without
-        // throwing on the multi-target ambiguity.
+        // The binding lets GetComputeEnvironment() short-circuit to the current environment without
+        // hitting the parameterless deployment-target resolver that throws on multi-target ambiguity.
         var agent = builder.AddResource(new TestComputeResource("agent"))
             .WithComputeEnvironment(currentEnv);
         agent.Resource.Annotations.Add(new DeploymentTargetAnnotation(currentEnv.Resource) { ComputeEnvironment = currentEnv.Resource });
@@ -114,9 +113,9 @@ public class ComputeEnvironmentEndpointResolverTests
         var currentEnv = builder.AddResource(new TestComputeEnvironmentResource("current"));
         var otherEnv = builder.AddResource(new TestComputeEnvironmentResource("other"));
         // No binding: an unbound resource with more than one deployment target is ambiguous.
-        // GetDeploymentTargetAnnotation(current) throws, exactly like the parameterless overload used
-        // by TryGetEffectiveComputeEnvironment. This documents that the fast-path loop is NOT a guard
-        // against this throw; the pipeline rejects this configuration earlier in practice.
+        // TryGetEffectiveComputeEnvironment falls back to the parameterless GetDeploymentTargetAnnotation()
+        // which throws. This documents that the resolver does not swallow that ambiguity; the pipeline
+        // rejects this configuration earlier in practice.
         var agent = builder.AddResource(new TestComputeResource("agent"));
         agent.Resource.Annotations.Add(new DeploymentTargetAnnotation(currentEnv.Resource) { ComputeEnvironment = currentEnv.Resource });
         agent.Resource.Annotations.Add(new DeploymentTargetAnnotation(otherEnv.Resource) { ComputeEnvironment = otherEnv.Resource });
