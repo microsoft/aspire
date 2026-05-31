@@ -2,5 +2,16 @@
 
 ## v1.11.0
 
-<!-- aspire-ext-changelog from=9e8262ef832af02cfa8b4ebe9c492178a012aa41 to=16b4165b620fcef7c69de5a93171c4690f2e35df base=1.0.9 -->
-_Release notes are being generated automatically and will replace this placeholder shortly. If this line is still here after the `extension-changelog` workflow runs, copy the deterministic commit list from the pull request description into this entry before merging._
+### Features
+
+- Show discovered AppHosts in the Aspire pane so you can launch them without a workspace `launch.json` ([#17506](https://github.com/microsoft/aspire/pull/17506)).
+- Add support for `launchUrl` in `launchSettings.json` so browser auto-launch targets the configured URL ([#17634](https://github.com/microsoft/aspire/pull/17634)).
+- Add VS Code Go debugging support for Go services running under Aspire ([#17406](https://github.com/microsoft/aspire/pull/17406)).
+
+### Fixes
+
+- Fix AppHost launch path resolution so the extension correctly locates the AppHost project on disk ([#17408](https://github.com/microsoft/aspire/pull/17408)).
+
+### Changes
+
+- Resource data has been removed from `aspire ps`; the extension now streams resource state via `aspire describe` for more accurate and real-time updates ([#17479](https://github.com/microsoft/aspire/pull/17479)).
