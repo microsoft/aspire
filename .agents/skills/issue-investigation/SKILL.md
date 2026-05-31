@@ -43,6 +43,8 @@ Keep scratch notes and downloaded artifacts under the session workspace or `arti
 
 Use labels first, then infer from files, commands, and symptoms. Route to more specialized skills when they match; this skill owns the cross-area triage and context-gathering layer, not the detailed workflows already covered elsewhere.
 
+The table lists repo-local and runtime-provided skills. Invoke a runtime-provided skill only when it appears in the current session's available skills; otherwise continue with this skill's local reproduction steps instead of attempting the handoff.
+
 | Area labels | Common paths | Repro environment and context to gather | Related skills |
 | --- | --- | --- | --- |
 | `area-cli`, `area-acquisition`, `area-templates` | `src/Aspire.Cli/`, `eng/scripts/get-aspire-cli*`, `src/Aspire.ProjectTemplates/` | CLI version, channel, install route, package feeds, clean temp directory, `.aspire` cache state, template name/options, OS/shell | `pr-testing`, `cli-e2e-testing`, `aspire-orchestration` |
@@ -56,7 +58,7 @@ Use labels first, then infer from files, commands, and symptoms. Route to more s
 
 ### Specialized skill routing rules
 
-Invoke the more specific skill instead of re-implementing its process when one of these applies:
+Invoke the more specific skill, when it is available in the current session, instead of re-implementing its process when one of these applies:
 
 | Trigger in the issue | Use skill | What this investigation should still do |
 | --- | --- | --- |
@@ -65,7 +67,7 @@ Invoke the more specific skill instead of re-implementing its process when one o
 | Request to quarantine, unquarantine, disable, or enable tests | `test-management` | Confirm the issue URL and target test names before handoff |
 | CLI E2E test authoring or debugging | `cli-e2e-testing` | Provide the user-facing scenario, target command, and expected terminal behavior |
 | Dashboard unit/component test authoring or debugging | `dashboard-testing` | Provide the dashboard page/component, telemetry shape, and expected UI state |
-| Azure deployment test authoring/debugging or live deployment repro | `deployment-e2e-testing` or `aspire-deployment` | Gather subscription/auth, generated artifacts, resource group, target cloud, and cleanup requirements |
+| Azure deployment test authoring/debugging or live deployment repro | `deployment-e2e-testing`; runtime `aspire-deployment` when available | Gather subscription/auth, generated artifacts, resource group, target cloud, and cleanup requirements |
 | Connection Properties or hosting integration README work | `connection-properties` | Identify the resource type, property names, README path, and expected dashboard behavior |
 | Container image tag/version updates | `update-container-images` | Identify affected integration, current tag, target version constraints, and upstream compatibility notes |
 | Dependency version update | `dependency-update` | Identify package name, current version, target version, and why the update is needed |
@@ -202,7 +204,9 @@ aspire logs <resource> --tail 100
 aspire stop
 ```
 
-If the issue involves the dashboard, use the `playwright-cli` skill to capture the dashboard state and reproduce the issue, including the page, telemetry export, relevant trace/log IDs, and browser console errors. If it involves cloud deployment, record generated artifacts, resource group names, `az`/`azd` versions, and cleanup status.
+If the issue involves the dashboard, use the runtime/plugin-provided `playwright-cli` skill when it is available to capture the dashboard state and reproduce the issue, including the page, telemetry export, relevant trace/log IDs, and browser console errors. If `playwright-cli` is unavailable, capture the same evidence with dashboard exports, Aspire CLI logs/traces or runtime `aspire-monitoring` when available, screenshots, and `dashboard-testing` for test-focused dashboard issues.
+
+If it involves cloud deployment, record generated artifacts, resource group names, `az`/`azd` versions, and cleanup status.
 
 ## Step 5: Reproduce and narrow the cause
 
