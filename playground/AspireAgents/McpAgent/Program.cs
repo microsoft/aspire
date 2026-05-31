@@ -18,7 +18,7 @@ var deploymentName = GetRequiredConnectionValue(chatConnectionBuilder, "Deployme
 var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseUrls($"http://+:{Environment.GetEnvironmentVariable("PORT") ?? "8080"}");
 
-WeatherTools.Initialize(
+QuestionTools.Initialize(
     new AzureOpenAIClient(new Uri(endpoint), new DefaultAzureCredential())
         .GetChatClient(deploymentName)
         .AsIChatClient());
@@ -26,7 +26,7 @@ WeatherTools.Initialize(
 builder.Services
     .AddMcpServer()
     .WithHttpTransport()
-    .WithTools<WeatherTools>();
+    .WithTools<QuestionTools>();
 
 var app = builder.Build();
 
@@ -52,7 +52,7 @@ static string GetRequiredConnectionValue(DbConnectionStringBuilder connectionBui
 }
 
 [McpServerToolType]
-public sealed class WeatherTools
+public sealed class QuestionTools
 {
     private static IChatClient? s_chatClient;
 
@@ -61,13 +61,13 @@ public sealed class WeatherTools
         s_chatClient = chatClient;
     }
 
-    [McpServerTool(Name = "get_weather")]
-    [Description("Uses the Foundry model deployment to answer a weather question.")]
-    public static async Task<string> GetWeather([Description("The location or weather question to answer.")] string location)
+    [McpServerTool(Name = "answer_question")]
+    [Description("Uses the Foundry model deployment to answer a question.")]
+    public static async Task<string> AnswerQuestion([Description("The question to answer.")] string question)
     {
         var chatClient = s_chatClient ?? throw new InvalidOperationException("The chat client is not initialized.");
         var response = await chatClient.GetResponseAsync(
-            $"You are a concise weather agent. Answer this weather request: {location}");
+            $"You are a concise MCP agent. Answer this question: {question}");
 
         return response.Text;
     }
