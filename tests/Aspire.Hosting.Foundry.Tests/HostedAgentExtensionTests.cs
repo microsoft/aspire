@@ -9,6 +9,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.AI.Projects.Agents;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Foundry.Tests;
 
@@ -270,6 +271,33 @@ public class HostedAgentExtensionTests
         var protocol = Assert.Single(configuration.ContainerProtocolVersions);
         Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
         Assert.Equal("1.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_DoesNotForwardFoundryReservedTargetEnvironmentVariables()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithEnvironment("PORT", "8000")
+            .WithEnvironment("AGENT_NAME", "agent")
+            .WithEnvironment("FOUNDRY_MODE", "hosted")
+            .WithEnvironment("MY_VAR", "my-value");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            agent.Resource,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.DoesNotContain("PORT", envVars.Keys);
+        Assert.DoesNotContain("AGENT_NAME", envVars.Keys);
+        Assert.DoesNotContain("FOUNDRY_MODE", envVars.Keys);
+        Assert.Equal("my-value", envVars["MY_VAR"]);
     }
 
     [Theory]

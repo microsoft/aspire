@@ -307,6 +307,15 @@ public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
         var resolvedEnvVars = new Dictionary<string, string>();
         foreach (var (key, value) in collectedEnvVars)
         {
+            if (HostedAgentConfiguration.IsReservedEnvironmentVariableName(key))
+            {
+                // Foundry injects platform-owned variables such as PORT itself. Some Aspire resource
+                // types use these variables to model local/container startup, but forwarding them in
+                // the hosted-agent definition causes Foundry to reject the version payload.
+                logger.LogDebug("Environment variable '{Key}' for resource '{Name}' is reserved by Foundry Hosted Agents and will be skipped.", key, resource.Name);
+                continue;
+            }
+
             switch (value)
             {
                 case null:
