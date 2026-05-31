@@ -210,13 +210,23 @@ ENV
     if [[ "$mode" == "shell" ]]; then
         local cli_dir
         cli_dir="$(dirname "$cli_path")"
+        # Redirect NuGet's global packages folder to an isolated, per-sha directory
+        # so packages restored from the simulated staging feed (which can collide in
+        # version with packages already cached from real feeds) never contaminate the
+        # developer's real global cache (~/.nuget/packages by default). The directory
+        # is keyed by the simulated sha so repeat sessions reuse the same isolated
+        # cache, and is left in place on exit (it lives under the system temp dir).
+        local nuget_packages="${TMPDIR:-/tmp}/aspire-debug-nuget/${sha8}"
+        mkdir -p "$nuget_packages"
         say ">> Launching an interactive subshell. Run 'aspire new', 'aspire add', etc."
         say "   'aspire' resolves to: $cli_path"
+        say "   NuGet packages cache: $nuget_packages (isolated from your global cache)"
         say "   Type 'exit' to leave and restore normal CLI behavior."
         say ""
         channel="staging" \
             overrideCliIdentityChannel="$identity" \
             overrideCliInformationalVersion="$info_version" \
+            NUGET_PACKAGES="$nuget_packages" \
             PATH="${cli_dir}:${PATH}" \
             ASPIRE_DEBUG_BUILD_PROMPT="aspire(${kind}:${sha8})" \
             "${SHELL:-/bin/bash}" -i

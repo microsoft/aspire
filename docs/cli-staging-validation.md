@@ -97,7 +97,9 @@ three modes:
 - **`--print-env` / `-PrintEnv`:** emits `export`/`$env:` lines you apply to your current
   shell. Every subsequent `aspire` command then behaves like the simulated build.
 - **`--shell` / `-Shell`:** opens an interactive subshell with the overrides applied and
-  the target CLI first on `PATH`. Exiting the subshell restores normal behavior.
+  the target CLI first on `PATH`. It also points `NUGET_PACKAGES` at an isolated, per-sha
+  cache so restores from the simulated staging feed never contaminate your real global
+  package cache. Exiting the subshell restores normal behavior.
 
 Common flags: `--sha <commit>` (required, 8–40 hex), `--cli <path>` (CLI to drive),
 `--pr <N>` (install that PR's full-bundle build first, then target it), `--version <ver>`.

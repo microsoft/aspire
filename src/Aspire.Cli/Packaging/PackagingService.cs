@@ -59,6 +59,11 @@ internal class PackagingService : IPackagingService
     //   overrideCliInformationalVersion   - forces the AssemblyInformationalVersion that the SHA
     //                                       derivation and version-shape (quality) checks read,
     //                                       e.g. `13.4.0-preview.1.26280.6+<full-commit-hash>`.
+    //
+    // NOTE: These only route to a feed; they do not create one. They are typically useful only
+    // once the darc-pub-microsoft-aspire-<sha> feed actually exists for the specific commit/version
+    // you are emulating (i.e. an official build for that SHA has been published). Until then the
+    // derived feed URL resolves to nothing and restore will fail to find packages.
     internal const string OverrideCliIdentityChannelConfigKey = "overrideCliIdentityChannel";
     internal const string OverrideCliInformationalVersionConfigKey = "overrideCliInformationalVersion";
 

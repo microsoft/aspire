@@ -138,13 +138,23 @@ function Invoke-DebugChannel {
     # is put first on PATH so a bare 'aspire' resolves to the target build.
     if ($Shell) {
         $cliDir = Split-Path -Parent $Cli
+        # Redirect NuGet's global packages folder to an isolated, per-sha directory
+        # so packages restored from the simulated staging feed (which can collide in
+        # version with packages already cached from real feeds) never contaminate the
+        # developer's real global cache (~/.nuget/packages by default). The directory
+        # is keyed by the simulated sha so repeat sessions reuse the same isolated
+        # cache, and is left in place on exit (it lives under the system temp dir).
+        $nugetPackages = Join-Path ([System.IO.Path]::GetTempPath()) (Join-Path 'aspire-debug-nuget' $sha8)
+        New-Item -ItemType Directory -Path $nugetPackages -Force | Out-Null
         Write-Host '>> Launching a child PowerShell. Run aspire new, aspire add, etc.'
         Write-Host "   'aspire' resolves to: $Cli"
+        Write-Host "   NuGet packages cache: $nugetPackages (isolated from your global cache)"
         Write-Host "   Type 'exit' to leave and restore normal CLI behavior."
         Write-Host ''
         $env:channel = 'staging'
         $env:overrideCliIdentityChannel = $Identity
         $env:overrideCliInformationalVersion = $infoVersion
+        $env:NUGET_PACKAGES = $nugetPackages
         $env:PATH = "$cliDir$([System.IO.Path]::PathSeparator)$env:PATH"
         & (Get-Process -Id $PID).Path -NoExit -NoLogo
         return
