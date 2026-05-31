@@ -243,7 +243,17 @@ public class AzureCognitiveServicesProjectResource :
     private ReferenceExpression GetAgentAddressExpression(EndpointReference endpointReference)
     {
         var resource = endpointReference.Resource;
-        return ReferenceExpression.Create($"{Endpoint}/agents/{resource.Name}");
+
+        // For hosted agents, deployment creates the Foundry agent version using the wrapper
+        // AzureHostedAgentResource.Name (e.g. "agent-ha" for a target named "agent"), not the
+        // target resource name. The published cross-environment URL must point at that deployed
+        // agent name, so prefer the hosted-agent deployment target's name when one exists and fall
+        // back to the resource name for plain (non-hosted) agents.
+        var agentName = resource.GetDeploymentTargetAnnotation(this)?.DeploymentTarget is AzureHostedAgentResource hostedAgent
+            ? hostedAgent.Name
+            : resource.Name;
+
+        return ReferenceExpression.Create($"{Endpoint}/agents/{agentName}");
     }
 
     /// <summary>

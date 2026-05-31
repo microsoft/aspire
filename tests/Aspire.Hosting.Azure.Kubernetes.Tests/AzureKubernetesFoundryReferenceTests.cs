@@ -52,15 +52,15 @@ public class AzureKubernetesFoundryReferenceTests
         await app.RunAsync();
 
         // The resolved environment variable values are emitted into the Helm chart's values.yaml.
-        // The agent endpoint must resolve to the Foundry project endpoint composed with the agent
-        // path. Prior to the fix, publishing threw because the agent endpoint was not present in the
-        // Kubernetes environment's local endpoint map.
+        // The agent endpoint must resolve to the Foundry project endpoint composed with the deployed
+        // hosted agent path because hosted-agent deployment creates the Foundry agent version with the
+        // wrapper resource name.
         var valuesPath = Directory.EnumerateFiles(tempDir.Path, "values.yaml", SearchOption.AllDirectories).Single();
         var values = await File.ReadAllTextAsync(valuesPath);
 
-        Assert.Contains("AGENT_HTTP: \"{project.outputs.endpoint}/agents/agent\"", values);
-        Assert.Contains("AGENT_URL: \"{project.outputs.endpoint}/agents/agent\"", values);
-        Assert.Contains("services__agent__http__0: \"{project.outputs.endpoint}/agents/agent\"", values);
+        Assert.Contains("AGENT_HTTP: \"{project.outputs.endpoint}/agents/agent-ha\"", values);
+        Assert.Contains("AGENT_URL: \"{project.outputs.endpoint}/agents/agent-ha\"", values);
+        Assert.Contains("services__agent__http__0: \"{project.outputs.endpoint}/agents/agent-ha\"", values);
     }
 
     private sealed class Project : IProjectMetadata

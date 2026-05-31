@@ -59,15 +59,15 @@ resource web 'Microsoft.App/containerApps@2025-10-02-preview' = {
             }
             {
               name: 'AGENT_HTTP'
-              value: '${project_outputs_endpoint}/agents/agent'
+              value: '${project_outputs_endpoint}/agents/agent-ha'
             }
             {
               name: 'services__agent__http__0'
-              value: '${project_outputs_endpoint}/agents/agent'
+              value: '${project_outputs_endpoint}/agents/agent-ha'
             }
             {
               name: 'AGENT_URL'
-              value: '${project_outputs_endpoint}/agents/agent'
+              value: '${project_outputs_endpoint}/agents/agent-ha'
             }
           ]
         }
