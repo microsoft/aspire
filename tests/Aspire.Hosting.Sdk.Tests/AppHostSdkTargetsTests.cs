@@ -83,6 +83,41 @@ public class AppHostSdkTargetsTests
     }
 
     [Fact]
+    public async Task ComputeRunArgumentsUsesFileBasedAppHostPathWhenCliBundleIsEnabled()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var appHostDirectory = Path.Combine(tempDirectory.Path, "FileApp");
+        Directory.CreateDirectory(appHostDirectory);
+        var appHostFile = Path.Combine(appHostDirectory, "apphost.cs");
+        await File.WriteAllTextAsync(appHostFile, """
+            var builder = DistributedApplication.CreateBuilder(args);
+            builder.Build().Run();
+            """);
+
+        var extraProjectXml = $$"""
+              <PropertyGroup>
+                <FileBasedProgram>true</FileBasedProgram>
+              </PropertyGroup>
+
+              <ItemGroup>
+                <RuntimeHostConfigurationOption Include="EntryPointFileDirectoryPath">
+                  <Value>{{SecurityElement.Escape(appHostDirectory)}}</Value>
+                </RuntimeHostConfigurationOption>
+                <RuntimeHostConfigurationOption Include="EntryPointFilePath">
+                  <Value>{{SecurityElement.Escape(appHostFile)}}</Value>
+                </RuntimeHostConfigurationOption>
+              </ItemGroup>
+            """;
+        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true, extraProjectXml: extraProjectXml);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(project, ["-p:RunArguments=--custom foo"]);
+
+        Assert.Equal(GetExpectedAspireRunCommand(), properties["RunCommand"]);
+        Assert.Equal(GetExpectedAspireRunArguments(appHostFile, "--custom foo"), properties["RunArguments"]);
+        Assert.Equal(appHostDirectory, properties["RunWorkingDirectory"]);
+    }
+
+    [Fact]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliBundleIsDisabled()
     {
         using var tempDirectory = new TestTempDirectory();
@@ -194,7 +229,7 @@ public class AppHostSdkTargetsTests
         return await File.ReadAllLinesAsync(packageReferencesPath);
     }
 
-    private static async Task<RunHookProject> CreateRunHookProjectAsync(string tempDirectory, bool aspireUseCliBundle)
+    private static async Task<RunHookProject> CreateRunHookProjectAsync(string tempDirectory, bool aspireUseCliBundle, string? extraProjectXml = null)
     {
         var repoRoot = GetRepoRoot();
         var projectDirectory = Path.Combine(tempDirectory, "AppHost");
@@ -218,6 +253,8 @@ public class AppHostSdkTargetsTests
                 <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
                 <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
               </PropertyGroup>
+
+            {{extraProjectXml}}
 
               <Import Project="{{appHostTargetsPath}}" />
 
@@ -328,9 +365,12 @@ public class AppHostSdkTargetsTests
     private static string GetExpectedAspireRunCommand() => OperatingSystem.IsWindows() ? "cmd" : "aspire";
 
     private static string GetExpectedAspireRunArguments(RunHookProject project, string? extraArguments = null)
+        => GetExpectedAspireRunArguments(project.ProjectFile, extraArguments);
+
+    private static string GetExpectedAspireRunArguments(string projectPath, string? extraArguments = null)
     {
         var prefix = OperatingSystem.IsWindows() ? "/C aspire " : string.Empty;
-        var arguments = $"{prefix}run --project \"{project.ProjectFile}\" --no-build --";
+        var arguments = $"{prefix}run --project \"{projectPath}\" --no-build --";
 
         return string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
     }

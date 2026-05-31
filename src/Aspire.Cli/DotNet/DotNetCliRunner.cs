@@ -720,6 +720,7 @@ internal sealed class DotNetCliRunner(
         var noBuildSwitch = noBuild ? "--no-build" : string.Empty;
         var noRestoreSwitch = noRestore && !noBuild ? "--no-restore" : string.Empty; // --no-build implies --no-restore
         var noProfileSwitch = options.NoLaunchProfile ? "--no-launch-profile" : string.Empty;
+        var suppressCliRunHookProperty = $"/p:{KnownConfigNames.SuppressCliRunHook}=true";
         // Add --non-interactive flag when using watch to prevent interactive prompts during automation
         var nonInteractiveSwitch = watch ? "--non-interactive" : string.Empty;
         // Add --verbose flag when using watch and debug is enabled
@@ -728,7 +729,9 @@ internal sealed class DotNetCliRunner(
         string[] cliArgs = isSingleFile switch
         {
             false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, "--project", projectFile.FullName, "--", .. args],
-            true => ["run", noProfileSwitch, "--file", projectFile.FullName, "--", .. args]
+            // File-based --no-build reuses the previously computed run command, so the suppression
+            // property would not be observed and a CLI-launched AppHost can recursively enter the run hook.
+            true => ["run", noRestoreSwitch, noProfileSwitch, suppressCliRunHookProperty, "--file", projectFile.FullName, "--", .. args]
         };
 
         cliArgs = [.. cliArgs.Where(arg => !string.IsNullOrWhiteSpace(arg))];
@@ -736,7 +739,10 @@ internal sealed class DotNetCliRunner(
         var finalEnv = CreateRunEnvironment(
             env,
             watch,
-            suppressCliRunHook: !isSingleFile,
+            // Aspire CLI launches AppHosts by shelling out to dotnet run. If the AppHost SDK run hook
+            // is enabled, every CLI-launched AppHost must suppress the hook to avoid recursive
+            // dotnet run -> aspire run -> dotnet run loops.
+            suppressCliRunHook: true,
             backchannelCompletionSource);
 
         return await ExecuteAsync(
