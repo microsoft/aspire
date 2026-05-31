@@ -221,9 +221,9 @@ Do not stop after the first "could not reproduce" if the environment differs fro
 
 After a repro attempt reaches a clear result, present the evidence to the user and ask what they want to do next instead of taking action automatically. Offer choices that match the outcome:
 
-- **Start a fix** — implement a targeted code/test change now that the issue is reproduced or the likely cause is strong.
+- **Investigate root cause** — inspect the relevant code paths, tests, logs, and telemetry to explain why the reproduced behavior happens without making a fix yet.
+- **Make a fix** — do not post an issue update; implement the targeted code/test change and open a PR once the issue is reproduced or the likely cause is strong enough.
 - **Update the issue** — draft a GitHub issue comment with the investigation evidence.
-- **Do not comment** — leave GitHub unchanged and report the local investigation only.
 
 Before offering to update the issue, prepare a comment draft and scrub it for PII and sensitive details. Do not include local usernames or home directory paths, machine names, tokens, private URLs, subscription IDs, resource group names that identify a customer or user, secrets, credentials, exact private repository paths, or raw logs that may contain any of those values. Replace sensitive paths with placeholders such as `<scratch>`, `<repo>`, or `<redacted>`, and summarize long logs instead of pasting them verbatim. Show the sanitized draft to the user first and ask for approval before posting.
 
@@ -242,7 +242,7 @@ Expected: <expected behavior from issue or docs>
 Likely cause: <confirmed root cause or best hypothesis; say if unconfirmed>
 Artifacts: <paths/links to logs, traces, screenshots, recordings, generated files>
 Proposed issue comment: <sanitized draft shown to user, posted with approval, declined, or not needed>
-Next action: <ask user to choose fix, issue update, no comment, missing info, owner question, or validation path>
+Next action: <ask user to choose root-cause investigation, fix/PR, issue update, missing info, owner question, or validation path>
 ```
 
 Be explicit about confidence. Use "confirmed" only when the evidence directly proves the cause. Use "hypothesis" when the behavior is reproduced but the code-level cause is not yet verified.
