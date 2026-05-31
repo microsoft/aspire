@@ -95,6 +95,24 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
 
             return Task.FromResult<IEnumerable<PipelineStep>>(steps);
         }));
+
+        // In publish mode the Foundry data plane calls back into MCP servers, so any MCP tool that
+        // points at a sibling compute resource (project, container, executable, app service, ACA)
+        // must have that resource deployed before the toolbox registers the URL. Walk the resolved
+        // pipeline graph and wire a tag-based dependency from this resource's deploy-compute step
+        // to every referenced compute resource's deploy-compute step.
+        Annotations.Add(new PipelineConfigurationAnnotation(context =>
+        {
+            var toolboxDeploySteps = context.GetSteps(this, WellKnownPipelineTags.DeployCompute);
+
+            foreach (var referenced in GetMcpReferencedResources(context.Model))
+            {
+                var referencedDeploySteps = context.GetSteps(referenced, WellKnownPipelineTags.DeployCompute);
+                toolboxDeploySteps.DependsOn(referencedDeploySteps);
+            }
+
+            return Task.CompletedTask;
+        }));
     }
 
     /// <summary>
@@ -296,6 +314,7 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         CancellationToken cancellationToken)
     {
         var notificationService = context.Services.GetRequiredService<ResourceNotificationService>();
+        var model = context.Services.GetRequiredService<DistributedApplicationModel>();
         var logger = context.Services.GetRequiredService<ResourceLoggerService>().GetLogger(this);
         try
         {
@@ -304,7 +323,7 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
                 State = new("Waiting for project", KnownResourceStateStyles.Info)
             }).ConfigureAwait(false);
 
-            await WaitForProjectAndToolsAsync(notificationService, cancellationToken).ConfigureAwait(false);
+            await WaitForProjectAndToolsAsync(notificationService, model, cancellationToken).ConfigureAwait(false);
 
             await notificationService.PublishUpdateAsync(this, s => s with
             {
@@ -337,7 +356,7 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
         }
     }
 
-    private async Task WaitForProjectAndToolsAsync(ResourceNotificationService notificationService, CancellationToken cancellationToken)
+    private async Task WaitForProjectAndToolsAsync(ResourceNotificationService notificationService, DistributedApplicationModel model, CancellationToken cancellationToken)
     {
         if (Parent is IAzureResource { ProvisioningTaskCompletionSource: { } projectProvisioning })
         {
@@ -353,7 +372,7 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
 
         // The only sub-resources we need to await are the Azure AI Search project connections
         // backing AzureAISearch toolbox tools. WebSearch needs no provisioning, and MCP tools
-        // expose only a URL expression (see the note in FoundryToolboxMcpToolDefinition).
+        // expose only a URL expression - those are handled separately below.
         var toolConnectionProvisioningTasks = _tools
             .Select(tool => tool switch
             {
@@ -362,6 +381,81 @@ public sealed class FoundryToolboxResource : Resource, IResourceWithParent<Azure
             })
             .OfType<Task>();
 
-        await Task.WhenAll(toolConnectionProvisioningTasks.Select(task => task.WaitAsync(cancellationToken))).ConfigureAwait(false);
+        // Wait for any locally-hosted compute resources targeted by MCP tools before we try to
+        // register their URLs with Foundry. Restrict to IComputeResource + IResourceWithWaitSupport
+        // so we don't block forever on Azure-only or model-only resources that never publish a
+        // Running state via the notification service.
+        var mcpRunModeWaits = GetMcpReferencedResources(model)
+            .Where(r => r is IComputeResource and IResourceWithWaitSupport)
+            .Select(r => notificationService.WaitForResourceAsync(r.Name, KnownResourceStates.Running, cancellationToken));
+
+        await Task.WhenAll(toolConnectionProvisioningTasks
+            .Select(task => task.WaitAsync(cancellationToken))
+            .Concat(mcpRunModeWaits)).ConfigureAwait(false);
+    }
+
+    // Returns the distinct set of resources referenced by the MCP tools' endpoint expressions that
+    // also exist in the current application model. Restricting to model membership avoids waiting on
+    // externally constructed references (e.g. a synthetic EndpointReference produced for test setup)
+    // and avoids self-dependencies that would deadlock the pipeline.
+    private IEnumerable<IResource> GetMcpReferencedResources(DistributedApplicationModel model)
+    {
+        var modelResources = new HashSet<IResource>(model.Resources);
+        var seen = new HashSet<IResource>();
+
+        foreach (var tool in _tools.OfType<FoundryToolboxMcpToolDefinition>())
+        {
+            foreach (var referenced in WalkValueReferences(tool.EndpointExpression).OfType<IResource>())
+            {
+                if (ReferenceEquals(referenced, this))
+                {
+                    continue;
+                }
+
+                if (!modelResources.Contains(referenced))
+                {
+                    continue;
+                }
+
+                if (seen.Add(referenced))
+                {
+                    yield return referenced;
+                }
+            }
+        }
+    }
+
+    // Depth-first walk of every object reachable via IValueWithReferences. Used to surface the
+    // concrete IResource instances that back an arbitrary ReferenceExpression so we can wire
+    // pipeline dependencies and run-mode waits regardless of how the user composed the expression
+    // (raw EndpointReference, EndpointReferenceExpression, nested ReferenceExpression, etc.).
+    private static IEnumerable<object> WalkValueReferences(object root)
+    {
+        var stack = new Stack<object>();
+        var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
+
+        stack.Push(root);
+
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            if (!visited.Add(current))
+            {
+                continue;
+            }
+
+            yield return current;
+
+            if (current is IValueWithReferences withRefs)
+            {
+                foreach (var reference in withRefs.References)
+                {
+                    if (reference is not null)
+                    {
+                        stack.Push(reference);
+                    }
+                }
+            }
+        }
     }
 }

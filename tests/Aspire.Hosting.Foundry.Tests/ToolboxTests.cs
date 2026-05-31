@@ -265,6 +265,157 @@ public class ToolboxTests
             async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
     }
 
+    [Fact]
+    public void WithMcpTool_ConfigureCallback_SetsAuthorizationTokenAndHeaders()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var token = builder.AddParameter("mcp-token", () => "secret-value");
+        var traceparent = builder.AddParameter("traceparent", () => "00-aaaa-bbbb-01");
+
+        var toolbox = project.AddToolbox("field-tools")
+            .WithMcpTool("inventory", "https://inventory.example.com/mcp", t =>
+            {
+                t.AuthorizationTokenExpression = ReferenceExpression.Create($"{token.Resource}");
+                t.Headers["X-Trace-Parent"] = ReferenceExpression.Create($"{traceparent.Resource}");
+                // Header name matching is case-insensitive: writing through one casing and then
+                // reading through another must resolve to the same entry.
+                t.Headers["x-trace-parent"] = ReferenceExpression.Create($"{traceparent.Resource}-2");
+            });
+
+        var def = Assert.IsType<FoundryToolboxMcpToolDefinition>(toolbox.Resource.Tools[0]);
+
+        Assert.NotNull(def.AuthorizationTokenExpression);
+        Assert.Single(def.Headers);
+        Assert.True(def.Headers.ContainsKey("X-TRACE-PARENT"));
+    }
+
+    [Fact]
+    public async Task McpToolDefinition_AuthorizationToken_EmptyValue_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var empty = builder.AddParameter("empty-token", () => string.Empty);
+
+        var def = new FoundryToolboxMcpToolDefinition(
+            "inventory",
+            ReferenceExpression.Create($"https://inventory.example.com/mcp"))
+        {
+            AuthorizationTokenExpression = ReferenceExpression.Create($"{empty.Resource}")
+        };
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            async () => await def.ToProjectsAgentToolAsync(CancellationToken.None));
+        Assert.Contains("authorization token", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task McpToolDefinition_Headers_EmptyValueOmitted_DoesNotThrow()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var present = builder.AddParameter("present", () => "v1");
+        var empty = builder.AddParameter("empty-header", () => string.Empty);
+
+        var def = new FoundryToolboxMcpToolDefinition(
+            "inventory",
+            ReferenceExpression.Create($"https://inventory.example.com/mcp"));
+        def.Headers["X-Present"] = ReferenceExpression.Create($"{present.Resource}");
+        // Empty header values are silently dropped (vs. throwing) so optional headers backed by
+        // parameters can be safely omitted in environments where the upstream value isn't set.
+        def.Headers["X-Optional"] = ReferenceExpression.Create($"{empty.Resource}");
+
+        var projectTool = await def.ToProjectsAgentToolAsync(CancellationToken.None);
+
+        Assert.NotNull(projectTool);
+    }
+
+    [Fact]
+    public async Task AddToolbox_McpTool_PublishConfigurationAnnotation_WiresDependencyOnReferencedCompute()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var mcp = builder.AddContainer("mcp", "ghcr.io/example/mcp")
+            .WithHttpEndpoint(targetPort: 8080, name: "http");
+
+        var toolbox = project.AddToolbox("field-tools")
+            .WithMcpTool("inventory", mcp.GetEndpoint("http"));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Materialize the toolbox's own deploy-compute step via its PipelineStepAnnotation, then
+        // fabricate a stand-in deploy-compute step for the referenced container - in a real publish
+        // run this would come from the AzureContainerApp pipeline. The PipelineConfigurationAnnotation
+        // we're testing wires DependsOnSteps across these two via tag-based lookup, independent of who
+        // produced them.
+        var toolboxStepAnnotation = Assert.Single(toolbox.Resource.Annotations.OfType<PipelineStepAnnotation>());
+        var toolboxSteps = (await toolboxStepAnnotation.CreateStepsAsync(new PipelineStepFactoryContext
+        {
+            PipelineContext = CreatePipelineContext(app, DistributedApplicationOperation.Publish),
+            Resource = toolbox.Resource
+        })).ToList();
+        var toolboxDeploy = Assert.Single(toolboxSteps, s => s.Name == "deploy-field-tools");
+
+        var containerDeploy = new PipelineStep
+        {
+            Name = "deploy-mcp",
+            Action = _ => Task.CompletedTask,
+            Resource = mcp.Resource,
+            Tags = { WellKnownPipelineTags.DeployCompute },
+        };
+
+        var configCtx = new PipelineConfigurationContext
+        {
+            Services = app.Services,
+            Model = model,
+            Steps = new[] { toolboxDeploy, containerDeploy }
+        };
+
+        var configAnnotation = Assert.Single(toolbox.Resource.Annotations.OfType<PipelineConfigurationAnnotation>());
+        await configAnnotation.Callback(configCtx);
+
+        Assert.Contains("deploy-mcp", toolboxDeploy.DependsOnSteps);
+    }
+
+    [Fact]
+    public async Task AddToolbox_McpTool_PublishConfigurationAnnotation_LiteralEndpoint_AddsNoDependency()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var toolbox = project.AddToolbox("field-tools")
+            .WithMcpTool("inventory", "https://inventory.example.com/mcp");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var toolboxStepAnnotation = Assert.Single(toolbox.Resource.Annotations.OfType<PipelineStepAnnotation>());
+        var toolboxSteps = (await toolboxStepAnnotation.CreateStepsAsync(new PipelineStepFactoryContext
+        {
+            PipelineContext = CreatePipelineContext(app, DistributedApplicationOperation.Publish),
+            Resource = toolbox.Resource
+        })).ToList();
+        var toolboxDeploy = Assert.Single(toolboxSteps, s => s.Name == "deploy-field-tools");
+
+        var dependsOnBefore = toolboxDeploy.DependsOnSteps.ToArray();
+
+        var configCtx = new PipelineConfigurationContext
+        {
+            Services = app.Services,
+            Model = model,
+            Steps = new[] { toolboxDeploy }
+        };
+
+        var configAnnotation = Assert.Single(toolbox.Resource.Annotations.OfType<PipelineConfigurationAnnotation>());
+        await configAnnotation.Callback(configCtx);
+
+        // A literal-URI MCP tool has no resource references to walk, so the configuration pass
+        // should leave the existing dependency list untouched.
+        Assert.Equal(dependsOnBefore, toolboxDeploy.DependsOnSteps);
+    }
+
     private static PipelineContext CreatePipelineContext(DistributedApplication app, DistributedApplicationOperation operation)
     {
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();

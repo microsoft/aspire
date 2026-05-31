@@ -88,17 +88,24 @@ public static class FoundryToolboxBuilderExtensions
     /// <param name="builder">The resource builder for the Toolbox.</param>
     /// <param name="name">The tool name.</param>
     /// <param name="endpoint">The MCP endpoint URI.</param>
+    /// <param name="configure">
+    /// Optional callback used to configure the tool definition. Use this to set
+    /// <see cref="FoundryToolboxMcpToolDefinition.AuthorizationTokenExpression"/> or populate
+    /// <see cref="FoundryToolboxMcpToolDefinition.Headers"/> when the MCP server requires
+    /// authentication.
+    /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the union overload instead.")]
     public static IResourceBuilder<FoundryToolboxResource> WithMcpTool(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        string endpoint)
+        string endpoint,
+        Action<FoundryToolboxMcpToolDefinition>? configure = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(endpoint);
 
-        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpoint}"));
+        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpoint}"), configure);
     }
 
     /// <summary>
@@ -107,17 +114,24 @@ public static class FoundryToolboxBuilderExtensions
     /// <param name="builder">The resource builder for the Toolbox.</param>
     /// <param name="name">The tool name.</param>
     /// <param name="endpoint">The MCP endpoint.</param>
+    /// <param name="configure">
+    /// Optional callback used to configure the tool definition. Use this to set
+    /// <see cref="FoundryToolboxMcpToolDefinition.AuthorizationTokenExpression"/> or populate
+    /// <see cref="FoundryToolboxMcpToolDefinition.Headers"/> when the MCP server requires
+    /// authentication.
+    /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the union overload instead.")]
     public static IResourceBuilder<FoundryToolboxResource> WithMcpTool(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        EndpointReference endpoint)
+        EndpointReference endpoint,
+        Action<FoundryToolboxMcpToolDefinition>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
 
-        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpoint}"));
+        return builder.WithMcpTool(name, ReferenceExpression.Create($"{endpoint}"), configure);
     }
 
     /// <summary>
@@ -131,6 +145,8 @@ public static class FoundryToolboxBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(endpoint);
 
+        // Polyglot callers don't yet have a way to express the configure callback so headers/auth
+        // is currently a .NET-only feature. Tracked as a follow-up.
         return endpoint switch
         {
             string endpointString => builder.WithMcpTool(name, endpointString),
@@ -173,13 +189,16 @@ public static class FoundryToolboxBuilderExtensions
     private static IResourceBuilder<FoundryToolboxResource> WithMcpTool(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        ReferenceExpression endpointExpression)
+        ReferenceExpression endpointExpression,
+        Action<FoundryToolboxMcpToolDefinition>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentNullException.ThrowIfNull(endpointExpression);
 
-        builder.Resource.AddTool(new FoundryToolboxMcpToolDefinition(name, endpointExpression));
+        var tool = new FoundryToolboxMcpToolDefinition(name, endpointExpression);
+        configure?.Invoke(tool);
+        builder.Resource.AddTool(tool);
 
         return builder;
     }
