@@ -23,6 +23,37 @@ namespace Aspire.Hosting;
 internal static class ComputeEnvironmentEndpointResolver
 {
     /// <summary>
+    /// Attempts to produce a <see cref="ReferenceExpression"/> for an endpoint's URL by
+    /// delegating to the compute environment that owns the endpoint's resource, when that
+    /// environment is different from the publisher's current compute environment(s).
+    /// </summary>
+    /// <param name="endpointReference">The endpoint reference to resolve.</param>
+    /// <param name="currentComputeEnvironments">
+    /// The compute environment(s) the current publisher is generating artifacts for. When the
+    /// endpoint's owning resource deploys to one of these, resolution is left to the local
+    /// endpoint map and this method returns <see langword="false"/>.
+    /// </param>
+    /// <param name="expression">
+    /// When this method returns <see langword="true"/>, contains the delegated reference expression.
+    /// </param>
+    /// <returns>
+    /// <see langword="true"/> if the endpoint is owned by a different compute environment and a
+    /// delegated expression was produced; otherwise <see langword="false"/>.
+    /// </returns>
+    public static bool TryGetCrossEnvironmentEndpointExpression(
+        EndpointReference endpointReference,
+        IReadOnlyList<IComputeEnvironmentResource?> currentComputeEnvironments,
+        [NotNullWhen(true)] out ReferenceExpression? expression)
+    {
+        ArgumentNullException.ThrowIfNull(endpointReference);
+
+        return TryGetCrossEnvironmentEndpointExpression(
+            endpointReference.Property(EndpointProperty.Url),
+            currentComputeEnvironments,
+            out expression);
+    }
+
+    /// <summary>
     /// Attempts to produce a <see cref="ReferenceExpression"/> for an endpoint property by
     /// delegating to the compute environment that owns the endpoint's resource, when that
     /// environment is different from the publisher's current compute environment(s).

@@ -30,6 +30,26 @@ public class ComputeEnvironmentEndpointResolverTests
     }
 
     [Fact]
+    public async Task EndpointReferenceOverload_DelegatesToOwningEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var currentEnv = builder.AddResource(new TestComputeEnvironmentResource("current"));
+        var owningEnv = builder.AddResource(new TestComputeEnvironmentResource("owning"));
+        var agent = builder.AddResource(new TestComputeResource("agent"));
+        var endpoint = AddHttpEndpoint(agent.Resource, port: 8080, targetPort: 5000);
+        agent.Resource.Annotations.Add(new DeploymentTargetAnnotation(owningEnv.Resource) { ComputeEnvironment = owningEnv.Resource });
+
+        // The EndpointReference overload uses EndpointProperty.Url internally.
+        var resolved = ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+            endpoint, [currentEnv.Resource], out var expression);
+
+        Assert.True(resolved);
+        Assert.NotNull(expression);
+        Assert.Equal("http://agent.example.com:8080", await expression.GetValueAsync(default).DefaultTimeout());
+    }
+
+    [Fact]
     public void OwningResourceDeploysToCurrentEnvironment_ReturnsFalse()
     {
         using var builder = TestDistributedApplicationBuilder.Create();

@@ -226,7 +226,7 @@ internal abstract class BaseContainerAppContext(IResource resource, ContainerApp
             // environment (for example a Foundry hosted agent). In that case delegate to the owning
             // compute environment instead of looking it up in this environment's local endpoint map.
             if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
-                ep.Property(EndpointProperty.Url), [_containerAppEnvironmentContext.Environment], out var crossExpr))
+                ep, [_containerAppEnvironmentContext.Environment], out var crossExpr))
             {
                 return ProcessValue(crossExpr, secretType, parent);
             }
