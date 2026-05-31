@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Azure.AI.Projects.Agents;
+
 namespace Aspire.Hosting.Foundry;
 
-// HostedAgentOptions exposes the subset of HostedAgentConfiguration that is meaningful to non-.NET
-// app hosts. .NET callers should use the AsHostedAgent overload that takes Action<HostedAgentConfiguration>
-// to access the full configuration surface (tools, content filters, container protocol versions, etc.).
+// HostedAgentOptions exposes the subset of HostedAgentConfiguration that can be shared by .NET and
+// polyglot app hosts. .NET callers can use the AsHostedAgent overload that takes
+// Action<HostedAgentConfiguration> when they need the full Azure SDK-specific configuration surface.
 
 /// <summary>
 /// Options that control how a compute resource is deployed as a Microsoft Foundry hosted agent.
@@ -45,6 +47,16 @@ internal sealed class HostedAgentOptions
     /// </summary>
     public IDictionary<string, string> EnvironmentVariables { get; init; } = new Dictionary<string, string>();
 
+    /// <summary>
+    /// Protocol versions that the hosted agent container supports for ingress communication.
+    /// When not set, the hosted agent default responses protocol is used.
+    /// </summary>
+    /// <remarks>
+    /// In run mode, the first protocol entry selects the dashboard URL and HTTP command protocol.
+    /// In publish mode, all entries are emitted to the Foundry hosted agent definition.
+    /// </remarks>
+    public IList<HostedAgentProtocolVersion> Protocols { get; init; } = [];
+
     internal void ApplyTo(HostedAgentConfiguration configuration)
     {
         if (Description is not null)
@@ -73,5 +85,77 @@ internal sealed class HostedAgentOptions
         {
             configuration.EnvironmentVariables[kvp.Key] = kvp.Value;
         }
+
+        var protocols = ValidateProtocols();
+        if (protocols.Count > 0)
+        {
+            var protocolVersionRecords = protocols.Select(ToProtocolVersionRecord).ToArray();
+
+            configuration.ContainerProtocolVersions.Clear();
+            foreach (var record in protocolVersionRecords)
+            {
+                configuration.ContainerProtocolVersions.Add(record);
+            }
+        }
     }
+
+    private IList<HostedAgentProtocolVersion> ValidateProtocols()
+    {
+        if (Protocols is null)
+        {
+            throw new ArgumentNullException(nameof(Protocols), "Hosted agent protocols cannot be null.");
+        }
+
+        foreach (var protocol in Protocols)
+        {
+            ValidateProtocol(protocol);
+        }
+
+        return Protocols;
+    }
+
+    private static void ValidateProtocol(HostedAgentProtocolVersion protocolVersion)
+    {
+        if (protocolVersion is null)
+        {
+            throw new ArgumentNullException(nameof(protocolVersion), "Hosted agent protocols cannot contain null entries.");
+        }
+
+        if (string.IsNullOrWhiteSpace(protocolVersion.Protocol))
+        {
+            ThrowInvalidProtocolProperty(nameof(HostedAgentProtocolVersion.Protocol), "Hosted agent protocol cannot be null, empty, or whitespace.");
+        }
+
+        if (string.IsNullOrWhiteSpace(protocolVersion.Version))
+        {
+            ThrowInvalidProtocolProperty(nameof(HostedAgentProtocolVersion.Version), "Hosted agent protocol version cannot be null, empty, or whitespace.");
+        }
+    }
+
+    private static void ThrowInvalidProtocolProperty(string propertyName, string message)
+    {
+        throw new ArgumentException(message, propertyName);
+    }
+
+    private static ProtocolVersionRecord ToProtocolVersionRecord(HostedAgentProtocolVersion protocolVersion)
+    {
+        return new ProtocolVersionRecord(new ProjectsAgentProtocol(protocolVersion.Protocol), protocolVersion.Version);
+    }
+}
+
+/// <summary>
+/// A protocol and version supported by a Microsoft Foundry hosted agent container.
+/// </summary>
+[AspireDto]
+internal sealed class HostedAgentProtocolVersion
+{
+    /// <summary>
+    /// The protocol name, such as <c>responses</c> or <c>invocations</c>.
+    /// </summary>
+    public required string Protocol { get; init; }
+
+    /// <summary>
+    /// The protocol version, such as <c>1.0.0</c>.
+    /// </summary>
+    public required string Version { get; init; }
 }
