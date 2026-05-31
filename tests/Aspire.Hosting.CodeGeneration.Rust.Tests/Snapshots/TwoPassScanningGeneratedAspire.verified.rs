@@ -334,50 +334,6 @@ impl std::fmt::Display for EndpointProperty {
     }
 }
 
-/// AgentProtocol
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum AgentProtocol {
-    #[default]
-    #[serde(rename = "A2AJsonRpc")]
-    A2AJsonRpc,
-    #[serde(rename = "A2AGrpc")]
-    A2AGrpc,
-    #[serde(rename = "A2AHttpJson")]
-    A2AHttpJson,
-    #[serde(rename = "Responses")]
-    Responses,
-}
-
-impl std::fmt::Display for AgentProtocol {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::A2AJsonRpc => write!(f, "A2AJsonRpc"),
-            Self::A2AGrpc => write!(f, "A2AGrpc"),
-            Self::A2AHttpJson => write!(f, "A2AHttpJson"),
-            Self::Responses => write!(f, "Responses"),
-        }
-    }
-}
-
-/// A2AInvocationMode
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub enum A2AInvocationMode {
-    #[default]
-    #[serde(rename = "NonStreaming")]
-    NonStreaming,
-    #[serde(rename = "Streaming")]
-    Streaming,
-}
-
-impl std::fmt::Display for A2AInvocationMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::NonStreaming => write!(f, "NonStreaming"),
-            Self::Streaming => write!(f, "Streaming"),
-        }
-    }
-}
-
 /// InputType
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum InputType {
@@ -534,6 +490,50 @@ impl std::fmt::Display for UrlDisplayLocation {
         match self {
             Self::SummaryAndDetails => write!(f, "SummaryAndDetails"),
             Self::DetailsOnly => write!(f, "DetailsOnly"),
+        }
+    }
+}
+
+/// AgentProtocol
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AgentProtocol {
+    #[default]
+    #[serde(rename = "A2AJsonRpc")]
+    A2AJsonRpc,
+    #[serde(rename = "A2AGrpc")]
+    A2AGrpc,
+    #[serde(rename = "A2AHttpJson")]
+    A2AHttpJson,
+    #[serde(rename = "Responses")]
+    Responses,
+}
+
+impl std::fmt::Display for AgentProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::A2AJsonRpc => write!(f, "A2AJsonRpc"),
+            Self::A2AGrpc => write!(f, "A2AGrpc"),
+            Self::A2AHttpJson => write!(f, "A2AHttpJson"),
+            Self::Responses => write!(f, "Responses"),
+        }
+    }
+}
+
+/// A2AInvocationMode
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum A2AInvocationMode {
+    #[default]
+    #[serde(rename = "NonStreaming")]
+    NonStreaming,
+    #[serde(rename = "Streaming")]
+    Streaming,
+}
+
+impl std::fmt::Display for A2AInvocationMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NonStreaming => write!(f, "NonStreaming"),
+            Self::Streaming => write!(f, "Streaming"),
         }
     }
 }
@@ -2631,7 +2631,7 @@ impl CSharpAppResource {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -2642,7 +2642,7 @@ impl CSharpAppResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -2653,7 +2653,7 @@ impl CSharpAppResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -2665,7 +2665,7 @@ impl CSharpAppResource {
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -5065,7 +5065,7 @@ impl ContainerResource {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -5076,7 +5076,7 @@ impl ContainerResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -5087,7 +5087,7 @@ impl ContainerResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -5099,7 +5099,7 @@ impl ContainerResource {
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -6898,7 +6898,7 @@ impl DotnetToolResource {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -6909,7 +6909,7 @@ impl DotnetToolResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -6920,7 +6920,7 @@ impl DotnetToolResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -6932,7 +6932,7 @@ impl DotnetToolResource {
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -8721,7 +8721,7 @@ impl ExecutableResource {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -8732,7 +8732,7 @@ impl ExecutableResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -8743,7 +8743,7 @@ impl ExecutableResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -8755,7 +8755,7 @@ impl ExecutableResource {
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -13768,7 +13768,7 @@ impl ProjectResource {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -13779,7 +13779,7 @@ impl ProjectResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -13790,7 +13790,7 @@ impl ProjectResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -13802,7 +13802,7 @@ impl ProjectResource {
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -15883,7 +15883,7 @@ impl TestDatabaseResource {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -15894,7 +15894,7 @@ impl TestDatabaseResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -15905,7 +15905,7 @@ impl TestDatabaseResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -15917,7 +15917,7 @@ impl TestDatabaseResource {
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -17449,7 +17449,7 @@ impl TestRedisResource {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -17460,7 +17460,7 @@ impl TestRedisResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -17471,7 +17471,7 @@ impl TestRedisResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -17483,7 +17483,7 @@ impl TestRedisResource {
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -19059,7 +19059,7 @@ impl TestVaultResource {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgent", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgent", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -19070,7 +19070,7 @@ impl TestVaultResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -19081,7 +19081,7 @@ impl TestVaultResource {
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPath", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPath", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
@@ -19093,7 +19093,7 @@ impl TestVaultResource {
         args.insert("agentCustomPath".to_string(), serde_json::to_value(&agent_custom_path).unwrap_or(Value::Null));
         args.insert("a2AInvocationMode".to_string(), serde_json::to_value(&a2_a_invocation_mode).unwrap_or(Value::Null));
         args.insert("protocols".to_string(), serde_json::to_value(&protocols).unwrap_or(Value::Null));
-        let result = self.client.invoke_capability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", args)?;
+        let result = self.client.invoke_capability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }

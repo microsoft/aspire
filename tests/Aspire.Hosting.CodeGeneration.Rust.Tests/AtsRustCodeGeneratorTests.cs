@@ -171,16 +171,16 @@ public class AtsRustCodeGeneratorTests
     }
 
     [Fact]
-    public void Scanner_HostingAssembly_AgentCapabilities()
+    public void Scanner_AgentsAssembly_AgentCapabilities()
     {
-        var capabilities = ScanCapabilitiesFromHostingAssembly();
+        var capabilities = ScanCapabilitiesFromAgentsAssembly();
 
         AssertAgentCapability(capabilities, "asAgent", hasCustomPath: false, hasInvocationMode: false);
         AssertAgentCapability(capabilities, "asAgentWithA2AInvocationMode", hasCustomPath: false, hasInvocationMode: true);
         AssertAgentCapability(capabilities, "asAgentWithPath", hasCustomPath: true, hasInvocationMode: false);
         AssertAgentCapability(capabilities, "asAgentWithPathAndA2AInvocationMode", hasCustomPath: true, hasInvocationMode: true);
 
-        var context = CreateContextFromHostingAssembly();
+        var context = CreateContextFromAgentsAssembly();
         var agentProtocol = context.EnumTypes.First(e => e.Name == nameof(AgentProtocol));
         Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.A2AJsonRpc));
         Assert.Contains(agentProtocol.ValueInfos, v => v.Name == nameof(AgentProtocol.A2AGrpc));
@@ -333,10 +333,17 @@ public class AtsRustCodeGeneratorTests
         return result.Capabilities;
     }
 
-    private static AtsContext CreateContextFromHostingAssembly()
+    private static List<AtsCapabilityInfo> ScanCapabilitiesFromAgentsAssembly()
     {
-        var hostingAssembly = typeof(DistributedApplication).Assembly;
-        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(agentsAssembly);
+        return result.Capabilities;
+    }
+
+    private static AtsContext CreateContextFromAgentsAssembly()
+    {
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(agentsAssembly);
         return result.ToAtsContext();
     }
 
@@ -346,7 +353,7 @@ public class AtsRustCodeGeneratorTests
         bool hasCustomPath,
         bool hasInvocationMode)
     {
-        var capability = Assert.Single(capabilities, c => c.CapabilityId == $"Aspire.Hosting/{methodName}");
+        var capability = Assert.Single(capabilities, c => c.CapabilityId == $"Aspire.Hosting.Agents/{methodName}");
 
         Assert.Equal(methodName, capability.MethodName);
         Assert.True(capability.ReturnsBuilder);
@@ -381,7 +388,8 @@ public class AtsRustCodeGeneratorTests
         var (testAssembly, hostingAssembly) = LoadBothAssemblies();
 
         // Use ScanAssemblies for proper cross-assembly expansion
-        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, testAssembly]);
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, agentsAssembly, testAssembly]);
         return result.Capabilities;
     }
 
@@ -390,7 +398,8 @@ public class AtsRustCodeGeneratorTests
         var (testAssembly, hostingAssembly) = LoadBothAssemblies();
 
         // Use ScanAssemblies for proper cross-assembly expansion and enum collection
-        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, testAssembly]);
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, agentsAssembly, testAssembly]);
         return result.ToAtsContext();
     }
 

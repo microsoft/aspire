@@ -2929,7 +2929,7 @@ public class CSharpAppResource extends ProjectResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgent", reqArgs);
         return this;
     }
 
@@ -2939,7 +2939,7 @@ public class CSharpAppResource extends ProjectResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -2949,7 +2949,7 @@ public class CSharpAppResource extends ProjectResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPath", reqArgs);
         return this;
     }
 
@@ -2960,7 +2960,7 @@ public class CSharpAppResource extends ProjectResource {
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -6420,7 +6420,7 @@ public class ContainerResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgent", reqArgs);
         return this;
     }
 
@@ -6430,7 +6430,7 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -6440,7 +6440,7 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPath", reqArgs);
         return this;
     }
 
@@ -6451,7 +6451,7 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -8706,7 +8706,7 @@ public class DotnetToolResource extends ExecutableResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgent", reqArgs);
         return this;
     }
 
@@ -8716,7 +8716,7 @@ public class DotnetToolResource extends ExecutableResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -8726,7 +8726,7 @@ public class DotnetToolResource extends ExecutableResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPath", reqArgs);
         return this;
     }
 
@@ -8737,7 +8737,7 @@ public class DotnetToolResource extends ExecutableResource {
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -10942,7 +10942,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgent", reqArgs);
         return this;
     }
 
@@ -10952,7 +10952,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -10962,7 +10962,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPath", reqArgs);
         return this;
     }
 
@@ -10973,7 +10973,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -17535,7 +17535,7 @@ public class ProjectResource extends ResourceBuilderBase {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgent", reqArgs);
         return this;
     }
 
@@ -17545,7 +17545,7 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -17555,7 +17555,7 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPath", reqArgs);
         return this;
     }
 
@@ -17566,7 +17566,7 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -20563,7 +20563,7 @@ public class TestDatabaseResource extends ContainerResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgent", reqArgs);
         return this;
     }
 
@@ -20573,7 +20573,7 @@ public class TestDatabaseResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -20583,7 +20583,7 @@ public class TestDatabaseResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPath", reqArgs);
         return this;
     }
 
@@ -20594,7 +20594,7 @@ public class TestDatabaseResource extends ContainerResource {
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -22687,7 +22687,7 @@ public class TestRedisResource extends ContainerResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgent", reqArgs);
         return this;
     }
 
@@ -22697,7 +22697,7 @@ public class TestRedisResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -22707,7 +22707,7 @@ public class TestRedisResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPath", reqArgs);
         return this;
     }
 
@@ -22718,7 +22718,7 @@ public class TestRedisResource extends ContainerResource {
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -24797,7 +24797,7 @@ public class TestVaultResource extends ContainerResource {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgent", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgent", reqArgs);
         return this;
     }
 
@@ -24807,7 +24807,7 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs);
         return this;
     }
 
@@ -24817,7 +24817,7 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPath", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPath", reqArgs);
         return this;
     }
 
@@ -24828,7 +24828,7 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("agentCustomPath", AspireClient.serializeValue(agentCustomPath));
         reqArgs.put("a2AInvocationMode", AspireClient.serializeValue(a2AInvocationMode));
         reqArgs.put("protocols", AspireClient.serializeValue(protocols));
-        getClient().invokeCapability("Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs);
+        getClient().invokeCapability("Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs);
         return this;
     }
 

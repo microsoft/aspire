@@ -8460,7 +8460,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8472,7 +8472,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         rpc_args['a2AInvocationMode'] = a2_a_invocation_mode
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8484,7 +8484,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         rpc_args['agentCustomPath'] = agent_custom_path
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -8497,7 +8497,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         rpc_args['a2AInvocationMode'] = a2_a_invocation_mode
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9033,7 +9033,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             if _validate_type(_as_agent, typing.Iterable[AgentProtocol]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["protocols"] = typing.cast(typing.Iterable[AgentProtocol], _as_agent)
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgent', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgent', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent'. Expected: Iterable[AgentProtocol]")
         if _as_agent_with_a2_a_invocation_mode := kwargs.pop("as_agent_with_a2_a_invocation_mode", None):
@@ -9041,7 +9041,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["a2AInvocationMode"] = typing.cast(tuple[A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_a2_a_invocation_mode)[0]
                 rpc_args["protocols"] = typing.cast(tuple[A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_a2_a_invocation_mode)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgentWithA2AInvocationMode', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithA2AInvocationMode', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent_with_a2_a_invocation_mode'. Expected: (A2AInvocationMode, Iterable[AgentProtocol])")
         if _as_agent_with_path := kwargs.pop("as_agent_with_path", None):
@@ -9049,7 +9049,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["agentCustomPath"] = typing.cast(tuple[str, typing.Iterable[AgentProtocol]], _as_agent_with_path)[0]
                 rpc_args["protocols"] = typing.cast(tuple[str, typing.Iterable[AgentProtocol]], _as_agent_with_path)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgentWithPath', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithPath', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent_with_path'. Expected: (str, Iterable[AgentProtocol])")
         if _as_agent_with_path_and_a2_a_invocation_mode := kwargs.pop("as_agent_with_path_and_a2_a_invocation_mode", None):
@@ -9058,7 +9058,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 rpc_args["agentCustomPath"] = typing.cast(tuple[str, A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_path_and_a2_a_invocation_mode)[0]
                 rpc_args["a2AInvocationMode"] = typing.cast(tuple[str, A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_path_and_a2_a_invocation_mode)[1]
                 rpc_args["protocols"] = typing.cast(tuple[str, A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_path_and_a2_a_invocation_mode)[2]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgentWithPathAndA2AInvocationMode', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent_with_path_and_a2_a_invocation_mode'. Expected: (str, A2AInvocationMode, Iterable[AgentProtocol])")
         if _test_with_env_callback := kwargs.pop("test_with_env_callback", None):
@@ -9623,7 +9623,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9635,7 +9635,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         rpc_args['a2AInvocationMode'] = a2_a_invocation_mode
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9647,7 +9647,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         rpc_args['agentCustomPath'] = agent_custom_path
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -9660,7 +9660,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         rpc_args['a2AInvocationMode'] = a2_a_invocation_mode
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -10044,7 +10044,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             if _validate_type(_as_agent, typing.Iterable[AgentProtocol]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["protocols"] = typing.cast(typing.Iterable[AgentProtocol], _as_agent)
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgent', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgent', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent'. Expected: Iterable[AgentProtocol]")
         if _as_agent_with_a2_a_invocation_mode := kwargs.pop("as_agent_with_a2_a_invocation_mode", None):
@@ -10052,7 +10052,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["a2AInvocationMode"] = typing.cast(tuple[A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_a2_a_invocation_mode)[0]
                 rpc_args["protocols"] = typing.cast(tuple[A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_a2_a_invocation_mode)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgentWithA2AInvocationMode', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithA2AInvocationMode', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent_with_a2_a_invocation_mode'. Expected: (A2AInvocationMode, Iterable[AgentProtocol])")
         if _as_agent_with_path := kwargs.pop("as_agent_with_path", None):
@@ -10060,7 +10060,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["agentCustomPath"] = typing.cast(tuple[str, typing.Iterable[AgentProtocol]], _as_agent_with_path)[0]
                 rpc_args["protocols"] = typing.cast(tuple[str, typing.Iterable[AgentProtocol]], _as_agent_with_path)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgentWithPath', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithPath', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent_with_path'. Expected: (str, Iterable[AgentProtocol])")
         if _as_agent_with_path_and_a2_a_invocation_mode := kwargs.pop("as_agent_with_path_and_a2_a_invocation_mode", None):
@@ -10069,7 +10069,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 rpc_args["agentCustomPath"] = typing.cast(tuple[str, A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_path_and_a2_a_invocation_mode)[0]
                 rpc_args["a2AInvocationMode"] = typing.cast(tuple[str, A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_path_and_a2_a_invocation_mode)[1]
                 rpc_args["protocols"] = typing.cast(tuple[str, A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_path_and_a2_a_invocation_mode)[2]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgentWithPathAndA2AInvocationMode', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent_with_path_and_a2_a_invocation_mode'. Expected: (str, A2AInvocationMode, Iterable[AgentProtocol])")
         if _test_with_env_callback := kwargs.pop("test_with_env_callback", None):
@@ -10635,7 +10635,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -10647,7 +10647,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         rpc_args['a2AInvocationMode'] = a2_a_invocation_mode
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -10659,7 +10659,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         rpc_args['agentCustomPath'] = agent_custom_path
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -10672,7 +10672,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         rpc_args['a2AInvocationMode'] = a2_a_invocation_mode
         rpc_args['protocols'] = protocols
         result = self._client.invoke_capability(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -11046,7 +11046,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
             if _validate_type(_as_agent, typing.Iterable[AgentProtocol]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["protocols"] = typing.cast(typing.Iterable[AgentProtocol], _as_agent)
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgent', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgent', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent'. Expected: Iterable[AgentProtocol]")
         if _as_agent_with_a2_a_invocation_mode := kwargs.pop("as_agent_with_a2_a_invocation_mode", None):
@@ -11054,7 +11054,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["a2AInvocationMode"] = typing.cast(tuple[A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_a2_a_invocation_mode)[0]
                 rpc_args["protocols"] = typing.cast(tuple[A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_a2_a_invocation_mode)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgentWithA2AInvocationMode', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithA2AInvocationMode', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent_with_a2_a_invocation_mode'. Expected: (A2AInvocationMode, Iterable[AgentProtocol])")
         if _as_agent_with_path := kwargs.pop("as_agent_with_path", None):
@@ -11062,7 +11062,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["agentCustomPath"] = typing.cast(tuple[str, typing.Iterable[AgentProtocol]], _as_agent_with_path)[0]
                 rpc_args["protocols"] = typing.cast(tuple[str, typing.Iterable[AgentProtocol]], _as_agent_with_path)[1]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgentWithPath', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithPath', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent_with_path'. Expected: (str, Iterable[AgentProtocol])")
         if _as_agent_with_path_and_a2_a_invocation_mode := kwargs.pop("as_agent_with_path_and_a2_a_invocation_mode", None):
@@ -11071,7 +11071,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 rpc_args["agentCustomPath"] = typing.cast(tuple[str, A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_path_and_a2_a_invocation_mode)[0]
                 rpc_args["a2AInvocationMode"] = typing.cast(tuple[str, A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_path_and_a2_a_invocation_mode)[1]
                 rpc_args["protocols"] = typing.cast(tuple[str, A2AInvocationMode, typing.Iterable[AgentProtocol]], _as_agent_with_path_and_a2_a_invocation_mode)[2]
-                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/asAgentWithPathAndA2AInvocationMode', rpc_args))
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'as_agent_with_path_and_a2_a_invocation_mode'. Expected: (str, A2AInvocationMode, Iterable[AgentProtocol])")
         if _test_with_env_callback := kwargs.pop("test_with_env_callback", None):

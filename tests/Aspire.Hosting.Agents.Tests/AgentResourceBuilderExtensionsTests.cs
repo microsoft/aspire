@@ -1,12 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.Agents;
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 
-namespace Aspire.Hosting.Tests;
+namespace Aspire.Hosting.Agents.Tests;
 
 [Trait("Partition", "5")]
 public class AgentResourceBuilderExtensionsTests
@@ -182,7 +182,7 @@ public class AgentResourceBuilderExtensionsTests
         public LaunchSettings LaunchSettings { get; } = new();
     }
 
-    private static void AllocateEndpoint(EndpointAnnotation endpoint, string containerHost, int containerPort)
+    private static void AllocateEndpoint(Aspire.Hosting.ApplicationModel.EndpointAnnotation endpoint, string containerHost, int containerPort)
     {
         endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 18080);
         endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(

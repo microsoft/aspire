@@ -17093,7 +17093,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     private async _asAgentInternal(protocols: AgentProtocol[]): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocols };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpcArgs
         );
         return new ContainerResourceImpl(result, this._client);
@@ -17112,7 +17112,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     private async _asAgentWithA2AInvocationModeInternal(a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpcArgs
         );
         return new ContainerResourceImpl(result, this._client);
@@ -17132,7 +17132,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     private async _asAgentWithPathInternal(agentCustomPath: string, protocols: AgentProtocol[]): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocols };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
         );
         return new ContainerResourceImpl(result, this._client);
@@ -17152,7 +17152,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     private async _asAgentWithPathAndA2AInvocationModeInternal(agentCustomPath: string, a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpcArgs
         );
         return new ContainerResourceImpl(result, this._client);
@@ -20833,7 +20833,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     private async _asAgentInternal(protocols: AgentProtocol[]): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocols };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpcArgs
         );
         return new CSharpAppResourceImpl(result, this._client);
@@ -20852,7 +20852,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     private async _asAgentWithA2AInvocationModeInternal(a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpcArgs
         );
         return new CSharpAppResourceImpl(result, this._client);
@@ -20872,7 +20872,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     private async _asAgentWithPathInternal(agentCustomPath: string, protocols: AgentProtocol[]): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocols };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
         );
         return new CSharpAppResourceImpl(result, this._client);
@@ -20892,7 +20892,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     private async _asAgentWithPathAndA2AInvocationModeInternal(agentCustomPath: string, a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpcArgs
         );
         return new CSharpAppResourceImpl(result, this._client);
@@ -24655,7 +24655,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     private async _asAgentInternal(protocols: AgentProtocol[]): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocols };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpcArgs
         );
         return new DotnetToolResourceImpl(result, this._client);
@@ -24674,7 +24674,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     private async _asAgentWithA2AInvocationModeInternal(a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpcArgs
         );
         return new DotnetToolResourceImpl(result, this._client);
@@ -24694,7 +24694,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     private async _asAgentWithPathInternal(agentCustomPath: string, protocols: AgentProtocol[]): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocols };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
         );
         return new DotnetToolResourceImpl(result, this._client);
@@ -24714,7 +24714,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     private async _asAgentWithPathAndA2AInvocationModeInternal(agentCustomPath: string, a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpcArgs
         );
         return new DotnetToolResourceImpl(result, this._client);
@@ -28334,7 +28334,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     private async _asAgentInternal(protocols: AgentProtocol[]): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocols };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpcArgs
         );
         return new ExecutableResourceImpl(result, this._client);
@@ -28353,7 +28353,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     private async _asAgentWithA2AInvocationModeInternal(a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpcArgs
         );
         return new ExecutableResourceImpl(result, this._client);
@@ -28373,7 +28373,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     private async _asAgentWithPathInternal(agentCustomPath: string, protocols: AgentProtocol[]): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocols };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
         );
         return new ExecutableResourceImpl(result, this._client);
@@ -28393,7 +28393,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     private async _asAgentWithPathAndA2AInvocationModeInternal(agentCustomPath: string, a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpcArgs
         );
         return new ExecutableResourceImpl(result, this._client);
@@ -35861,7 +35861,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     private async _asAgentInternal(protocols: AgentProtocol[]): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocols };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpcArgs
         );
         return new ProjectResourceImpl(result, this._client);
@@ -35880,7 +35880,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     private async _asAgentWithA2AInvocationModeInternal(a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpcArgs
         );
         return new ProjectResourceImpl(result, this._client);
@@ -35900,7 +35900,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     private async _asAgentWithPathInternal(agentCustomPath: string, protocols: AgentProtocol[]): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocols };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
         );
         return new ProjectResourceImpl(result, this._client);
@@ -35920,7 +35920,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     private async _asAgentWithPathAndA2AInvocationModeInternal(agentCustomPath: string, a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpcArgs
         );
         return new ProjectResourceImpl(result, this._client);
@@ -40266,7 +40266,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     private async _asAgentInternal(protocols: AgentProtocol[]): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocols };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpcArgs
         );
         return new TestDatabaseResourceImpl(result, this._client);
@@ -40285,7 +40285,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     private async _asAgentWithA2AInvocationModeInternal(a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpcArgs
         );
         return new TestDatabaseResourceImpl(result, this._client);
@@ -40305,7 +40305,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     private async _asAgentWithPathInternal(agentCustomPath: string, protocols: AgentProtocol[]): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocols };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
         );
         return new TestDatabaseResourceImpl(result, this._client);
@@ -40325,7 +40325,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     private async _asAgentWithPathAndA2AInvocationModeInternal(agentCustomPath: string, a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpcArgs
         );
         return new TestDatabaseResourceImpl(result, this._client);
@@ -44923,7 +44923,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     private async _asAgentInternal(protocols: AgentProtocol[]): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocols };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpcArgs
         );
         return new TestRedisResourceImpl(result, this._client);
@@ -44942,7 +44942,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     private async _asAgentWithA2AInvocationModeInternal(a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpcArgs
         );
         return new TestRedisResourceImpl(result, this._client);
@@ -44962,7 +44962,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     private async _asAgentWithPathInternal(agentCustomPath: string, protocols: AgentProtocol[]): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocols };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
         );
         return new TestRedisResourceImpl(result, this._client);
@@ -44982,7 +44982,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     private async _asAgentWithPathAndA2AInvocationModeInternal(agentCustomPath: string, a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpcArgs
         );
         return new TestRedisResourceImpl(result, this._client);
@@ -49643,7 +49643,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     private async _asAgentInternal(protocols: AgentProtocol[]): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocols };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpcArgs
         );
         return new TestVaultResourceImpl(result, this._client);
@@ -49662,7 +49662,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     private async _asAgentWithA2AInvocationModeInternal(a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpcArgs
         );
         return new TestVaultResourceImpl(result, this._client);
@@ -49682,7 +49682,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     private async _asAgentWithPathInternal(agentCustomPath: string, protocols: AgentProtocol[]): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocols };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
         );
         return new TestVaultResourceImpl(result, this._client);
@@ -49702,7 +49702,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     private async _asAgentWithPathAndA2AInvocationModeInternal(agentCustomPath: string, a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpcArgs
         );
         return new TestVaultResourceImpl(result, this._client);
@@ -53893,7 +53893,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     private async _asAgentInternal(protocols: AgentProtocol[]): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, protocols };
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
-            'Aspire.Hosting/asAgent',
+            'Aspire.Hosting.Agents/asAgent',
             rpcArgs
         );
         return new ResourceWithEndpointsImpl(result, this._client);
@@ -53912,7 +53912,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     private async _asAgentWithA2AInvocationModeInternal(a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
-            'Aspire.Hosting/asAgentWithA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithA2AInvocationMode',
             rpcArgs
         );
         return new ResourceWithEndpointsImpl(result, this._client);
@@ -53932,7 +53932,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     private async _asAgentWithPathInternal(agentCustomPath: string, protocols: AgentProtocol[]): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, protocols };
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
-            'Aspire.Hosting/asAgentWithPath',
+            'Aspire.Hosting.Agents/asAgentWithPath',
             rpcArgs
         );
         return new ResourceWithEndpointsImpl(result, this._client);
@@ -53952,7 +53952,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     private async _asAgentWithPathAndA2AInvocationModeInternal(agentCustomPath: string, a2AInvocationMode: A2AInvocationMode, protocols: AgentProtocol[]): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, agentCustomPath, a2AInvocationMode, protocols };
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
-            'Aspire.Hosting/asAgentWithPathAndA2AInvocationMode',
+            'Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode',
             rpcArgs
         );
         return new ResourceWithEndpointsImpl(result, this._client);

@@ -172,9 +172,9 @@ public class AtsJavaCodeGeneratorTests
     }
 
     [Fact]
-    public void Scanner_HostingAssembly_AgentCapabilities()
+    public void Scanner_AgentsAssembly_AgentCapabilities()
     {
-        var capabilities = ScanCapabilitiesFromHostingAssembly();
+        var capabilities = ScanCapabilitiesFromAgentsAssembly();
 
         AssertAgentCapability(capabilities, "asAgent", hasCustomPath: false, hasInvocationMode: false);
         AssertAgentCapability(capabilities, "asAgentWithA2AInvocationMode", hasCustomPath: false, hasInvocationMode: true);
@@ -393,13 +393,20 @@ public class AtsJavaCodeGeneratorTests
         return result.Capabilities;
     }
 
+    private static List<AtsCapabilityInfo> ScanCapabilitiesFromAgentsAssembly()
+    {
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(agentsAssembly);
+        return result.Capabilities;
+    }
+
     private static void AssertAgentCapability(
         List<AtsCapabilityInfo> capabilities,
         string methodName,
         bool hasCustomPath,
         bool hasInvocationMode)
     {
-        var capability = Assert.Single(capabilities, c => c.CapabilityId == $"Aspire.Hosting/{methodName}");
+        var capability = Assert.Single(capabilities, c => c.CapabilityId == $"Aspire.Hosting.Agents/{methodName}");
 
         Assert.Equal(methodName, capability.MethodName);
         Assert.True(capability.ReturnsBuilder);
@@ -434,7 +441,8 @@ public class AtsJavaCodeGeneratorTests
         var (testAssembly, hostingAssembly) = LoadBothAssemblies();
 
         // Use ScanAssemblies for proper cross-assembly expansion
-        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, testAssembly]);
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, agentsAssembly, testAssembly]);
         return result.Capabilities;
     }
 
@@ -443,7 +451,8 @@ public class AtsJavaCodeGeneratorTests
         var (testAssembly, hostingAssembly) = LoadBothAssemblies();
 
         // Use ScanAssemblies for proper cross-assembly expansion and enum collection
-        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, testAssembly]);
+        var agentsAssembly = typeof(AgentResourceBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, agentsAssembly, testAssembly]);
         return result.ToAtsContext();
     }
 

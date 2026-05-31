@@ -146,24 +146,6 @@ const (
 	EndpointPropertyTlsEnabled EndpointProperty = "TlsEnabled"
 )
 
-// AgentProtocol represents AgentProtocol.
-type AgentProtocol string
-
-const (
-	AgentProtocolA2AJsonRpc AgentProtocol = "A2AJsonRpc"
-	AgentProtocolA2AGrpc AgentProtocol = "A2AGrpc"
-	AgentProtocolA2AHttpJson AgentProtocol = "A2AHttpJson"
-	AgentProtocolResponses AgentProtocol = "Responses"
-)
-
-// A2AInvocationMode represents A2AInvocationMode.
-type A2AInvocationMode string
-
-const (
-	A2AInvocationModeNonStreaming A2AInvocationMode = "NonStreaming"
-	A2AInvocationModeStreaming A2AInvocationMode = "Streaming"
-)
-
 // InputType represents InputType.
 type InputType string
 
@@ -227,6 +209,24 @@ type UrlDisplayLocation string
 const (
 	UrlDisplayLocationSummaryAndDetails UrlDisplayLocation = "SummaryAndDetails"
 	UrlDisplayLocationDetailsOnly UrlDisplayLocation = "DetailsOnly"
+)
+
+// AgentProtocol represents AgentProtocol.
+type AgentProtocol string
+
+const (
+	AgentProtocolA2AJsonRpc AgentProtocol = "A2AJsonRpc"
+	AgentProtocolA2AGrpc AgentProtocol = "A2AGrpc"
+	AgentProtocolA2AHttpJson AgentProtocol = "A2AHttpJson"
+	AgentProtocolResponses AgentProtocol = "Responses"
+)
+
+// A2AInvocationMode represents A2AInvocationMode.
+type A2AInvocationMode string
+
+const (
+	A2AInvocationModeNonStreaming A2AInvocationMode = "NonStreaming"
+	A2AInvocationModeStreaming A2AInvocationMode = "Streaming"
 )
 
 // TestPersistenceMode represents TestPersistenceMode.
@@ -1219,7 +1219,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsAgent(protoc
 		"builder": s.handle.ToJSON(),
 	}
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgent", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -1232,7 +1232,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsAgentWithA2A
 	}
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -1245,7 +1245,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsAgentWithPat
 	}
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -1259,7 +1259,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) AsAgentWithPat
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3334,7 +3334,7 @@ func (s *cSharpAppResource) AsAgent(protocols []AgentProtocol) CSharpAppResource
 		"builder": s.handle.ToJSON(),
 	}
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgent", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3347,7 +3347,7 @@ func (s *cSharpAppResource) AsAgentWithA2AInvocationMode(a2AInvocationMode A2AIn
 	}
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3360,7 +3360,7 @@ func (s *cSharpAppResource) AsAgentWithPath(agentCustomPath string, protocols []
 	}
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3374,7 +3374,7 @@ func (s *cSharpAppResource) AsAgentWithPathAndA2AInvocationMode(agentCustomPath 
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6650,7 +6650,7 @@ func (s *containerResource) AsAgent(protocols []AgentProtocol) ContainerResource
 		"builder": s.handle.ToJSON(),
 	}
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgent", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6663,7 +6663,7 @@ func (s *containerResource) AsAgentWithA2AInvocationMode(a2AInvocationMode A2AIn
 	}
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6676,7 +6676,7 @@ func (s *containerResource) AsAgentWithPath(agentCustomPath string, protocols []
 	}
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6690,7 +6690,7 @@ func (s *containerResource) AsAgentWithPathAndA2AInvocationMode(agentCustomPath 
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10158,7 +10158,7 @@ func (s *dotnetToolResource) AsAgent(protocols []AgentProtocol) DotnetToolResour
 		"builder": s.handle.ToJSON(),
 	}
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgent", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10171,7 +10171,7 @@ func (s *dotnetToolResource) AsAgentWithA2AInvocationMode(a2AInvocationMode A2AI
 	}
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10184,7 +10184,7 @@ func (s *dotnetToolResource) AsAgentWithPath(agentCustomPath string, protocols [
 	}
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10198,7 +10198,7 @@ func (s *dotnetToolResource) AsAgentWithPathAndA2AInvocationMode(agentCustomPath
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12909,7 +12909,7 @@ func (s *executableResource) AsAgent(protocols []AgentProtocol) ExecutableResour
 		"builder": s.handle.ToJSON(),
 	}
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgent", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12922,7 +12922,7 @@ func (s *executableResource) AsAgentWithA2AInvocationMode(a2AInvocationMode A2AI
 	}
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12935,7 +12935,7 @@ func (s *executableResource) AsAgentWithPath(agentCustomPath string, protocols [
 	}
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12949,7 +12949,7 @@ func (s *executableResource) AsAgentWithPathAndA2AInvocationMode(agentCustomPath
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -17989,7 +17989,7 @@ func (s *projectResource) AsAgent(protocols []AgentProtocol) ProjectResource {
 		"builder": s.handle.ToJSON(),
 	}
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgent", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18002,7 +18002,7 @@ func (s *projectResource) AsAgentWithA2AInvocationMode(a2AInvocationMode A2AInvo
 	}
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18015,7 +18015,7 @@ func (s *projectResource) AsAgentWithPath(agentCustomPath string, protocols []Ag
 	}
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18029,7 +18029,7 @@ func (s *projectResource) AsAgentWithPathAndA2AInvocationMode(agentCustomPath st
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21140,7 +21140,7 @@ func (s *testDatabaseResource) AsAgent(protocols []AgentProtocol) TestDatabaseRe
 		"builder": s.handle.ToJSON(),
 	}
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgent", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21153,7 +21153,7 @@ func (s *testDatabaseResource) AsAgentWithA2AInvocationMode(a2AInvocationMode A2
 	}
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21166,7 +21166,7 @@ func (s *testDatabaseResource) AsAgentWithPath(agentCustomPath string, protocols
 	}
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21180,7 +21180,7 @@ func (s *testDatabaseResource) AsAgentWithPathAndA2AInvocationMode(agentCustomPa
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23302,7 +23302,7 @@ func (s *testRedisResource) AsAgent(protocols []AgentProtocol) TestRedisResource
 		"builder": s.handle.ToJSON(),
 	}
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgent", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgent", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23315,7 +23315,7 @@ func (s *testRedisResource) AsAgentWithA2AInvocationMode(a2AInvocationMode A2AIn
 	}
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23328,7 +23328,7 @@ func (s *testRedisResource) AsAgentWithPath(agentCustomPath string, protocols []
 	}
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPath", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23342,7 +23342,7 @@ func (s *testRedisResource) AsAgentWithPathAndA2AInvocationMode(agentCustomPath 
 	reqArgs["agentCustomPath"] = serializeValue(agentCustomPath)
 	reqArgs["a2AInvocationMode"] = serializeValue(a2AInvocationMode)
 	if protocols != nil { reqArgs["protocols"] = serializeValue(protocols) }
-	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

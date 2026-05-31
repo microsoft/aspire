@@ -1439,65 +1439,6 @@ namespace Aspire.Hosting
     }
 }
 
-namespace Aspire.Hosting.Agents
-{
-    public enum A2AInvocationMode
-    {
-        NonStreaming = 0,
-        Streaming = 1,
-    }
-
-    public enum AgentProtocol
-    {
-        A2AJsonRpc = 0,
-        A2AGrpc = 1,
-        A2AHttpJson = 2,
-        Responses = 3,
-    }
-
-    public sealed partial class AgentResourceAnnotation : ApplicationModel.IResourceAnnotation
-    {
-        public AgentResourceAnnotation(System.Collections.Generic.IReadOnlySet<AgentProtocol> protocols, string? customPath, A2AInvocationMode a2AInvocationMode) { }
-
-        public A2AInvocationMode A2AInvocationMode { get { throw null; } }
-
-        public string? CustomPath { get { throw null; } }
-
-        public System.Collections.Generic.IReadOnlySet<AgentProtocol> Protocols { get { throw null; } }
-    }
-
-    public static partial class AgentResourceBuilderExtensions
-    {
-        public const string A2AAgentBaseUrlEnvironmentVariableName = "A2A_AGENT_BASE_URL";
-
-        public const string DefaultA2AAgentCardPath = "/.well-known/agent-card.json";
-
-        public const string DefaultA2AHttpJsonSendMessagePath = "/message:send";
-
-        public const string DefaultA2AHttpJsonStreamingMessagePath = "/message:stream";
-
-        public const string DefaultA2AJsonRpcPath = "/";
-
-        public const string DefaultResponsesPath = "/v1/responses";
-
-        [AspireExport]
-        public static ApplicationModel.IResourceBuilder<T> AsAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, params AgentProtocol[] protocols)
-            where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }
-
-        [AspireExport("asAgentWithA2AInvocationMode")]
-        public static ApplicationModel.IResourceBuilder<T> AsAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, A2AInvocationMode a2AInvocationMode, params AgentProtocol[] protocols)
-            where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }
-
-        [AspireExport("asAgentWithPath")]
-        public static ApplicationModel.IResourceBuilder<T> AsAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, string? agentCustomPath, params AgentProtocol[] protocols)
-            where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }
-
-        [AspireExport("asAgentWithPathAndA2AInvocationMode")]
-        public static ApplicationModel.IResourceBuilder<T> AsAgent<T>(this ApplicationModel.IResourceBuilder<T> builder, string? agentCustomPath, A2AInvocationMode a2AInvocationMode, params AgentProtocol[] protocols)
-            where T : ApplicationModel.IResourceWithEndpoints, ApplicationModel.IResourceWithEnvironment, ApplicationModel.IComputeResource { throw null; }
-    }
-}
-
 namespace Aspire.Hosting.ApplicationModel
 {
     [System.Obsolete("The AfterEndpointsAllocatedEvent is deprecated and will be removed in a future version. Use the resource specific events BeforeResourceStartedEvent or ResourceEndpointsAllocatedEvent instead depending on your needs.")]
