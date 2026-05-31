@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix: prerelease-shaped staging CLI incorrectly routed Aspire* packages to shared daily feed instead of SHA-specific darc feed",
+  "mergedAt": "2026-05-31T18:43:05Z",
+  "number": 17743,
+  "runDate": "2026-05-31T20:25:36Z",
+  "status": "included",
+  "title": "Route staging-identity CLI to its darc feed regardless of version shape"
+}

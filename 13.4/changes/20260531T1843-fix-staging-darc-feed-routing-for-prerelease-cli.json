@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where a prerelease-shaped staging-identity CLI incorrectly resolved Aspire* packages from the shared daily feed instead of the build-specific darc-pub-microsoft-aspire-<commit> feed. This caused aspire add in TypeScript (polyglot) apphosts to offer the wrong package versions. Staging-identity CLIs now always route to their own SHA-specific darc feed regardless of version shape.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udce1",
+  "firstMergedAt": "2026-05-31T18:43:05Z",
+  "lastMergedAt": "2026-05-31T18:43:05Z",
+  "name": "Fix staging darc feed routing for prerelease-shaped CLI builds",
+  "owner": "mitchdenny",
+  "prs": [
+    17743
+  ]
+}
