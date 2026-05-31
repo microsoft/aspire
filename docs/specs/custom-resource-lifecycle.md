@@ -471,6 +471,161 @@ Dashboard "Start" click
 
 Resources that implement `IResourceWithoutLifecycle` (or otherwise opt out) are skipped — they do not appear in Start/Stop/Restart command lists.
 
+## Layer 4: Endpoints and DCP interop
+
+Custom resources need to do two things that the layers above don't cover:
+1. **Expose endpoints** that other resources (DCP-managed or not) can resolve through `EndpointReference` and service discovery.
+2. **Interact with DCP-managed resources** — wait for them, reference their endpoints, and (in some cases) extend their snapshot.
+
+### Endpoints on custom resources
+
+Today, only DCP allocates ports. A custom resource that wants to expose an HTTP server has no way to participate in the endpoint allocation pipeline that fills in `AllocatedEndpoint`, and `EndpointReference` against it returns nothing usable.
+
+The proposal: the orchestrator gains an endpoint allocator that runs for **any** resource with `EndpointAnnotation`s, not just DCP resources. For custom resources, the allocator runs as part of the framework ceremony **before** `OnInitializeResource` is invoked.
+
+```csharp
+// Same WithEndpoint API as today.
+builder.AddResource(new InMemoryHttpResource("web"))
+    .WithEndpoint(port: null, targetPort: null, name: "http", scheme: "http")
+    .WithEndpoint(port: null, targetPort: null, name: "https", scheme: "https")
+    .OnInitializeResource(async (ctx, ct) =>
+    {
+        // Endpoints are already allocated by the time the callback runs.
+        var resource = (InMemoryHttpResource)ctx.Resource;
+        var http  = resource.GetEndpoint("http");   // AllocatedEndpoint is populated
+        var https = resource.GetEndpoint("https");
+
+        await using var server = WebApplication.Create();
+        server.Urls.Add(http.Url);
+        server.Urls.Add(https.Url);
+        await server.StartAsync(ct);
+        ctx.Track(server);
+
+        await ctx.SetStateAsync(KnownResourceStates.Running, ct);
+        await Task.Delay(Timeout.Infinite, ct);
+    });
+```
+
+What the framework provides automatically for custom-resource endpoints:
+
+| Concern | Behavior |
+|---------|----------|
+| Port allocation | Walks `EndpointAnnotation`s; for any with `Port == null`, picks an available port from a configurable range (default same as DCP's). |
+| `AllocatedEndpoint` | Populated on each `EndpointAnnotation` before `OnInitializeResource` runs. |
+| `EndpointReference` resolution | Works against the custom resource exactly as it does for a container. |
+| Service discovery export | `WithReference(custom)` exports the allocated endpoints into the consumer's config. |
+| `ResourceEndpointsAllocatedEvent` | Fires after allocation, before `OnInitializeResource`. |
+| Dashboard URLs | Endpoints surface in the dashboard URL list automatically — no `WithUrl` needed for endpoint-derived URLs. |
+| Restart | On Restart, ports are reallocated (or the previously-allocated port is reused if still free). |
+
+Resources that want to opt out of automatic allocation (because they manage their own port assignment) implement `IResourceWithoutAutomaticEndpointAllocation` or pass `WithEndpoint(allocateAutomatically: false, ...)`.
+
+This same allocator path is what `DevTunnelPortResource` would use today instead of hand-constructing `AllocatedEndpoint` inside its callback.
+
+### Interacting with DCP-managed resources
+
+Custom resources frequently need to coordinate with Containers, Projects, and Executables — wait for them to be ready, read their endpoints, or extend their snapshot. The proposal addresses each pattern explicitly.
+
+#### 1. Waiting on a DCP resource
+
+`WaitForResourceHealthyAsync` / `WaitForResourceAsync` on `ctx.Notifications` work uniformly across DCP and custom resources. No new API needed.
+
+```csharp
+.OnInitializeResource(async (ctx, ct) =>
+{
+    await ctx.Notifications.WaitForResourceHealthyAsync("postgres", ct);
+    // ... do work that depends on postgres being ready ...
+});
+```
+
+#### 2. Reading a DCP resource's endpoints
+
+`EndpointReference` is already the right primitive — it works whether the source resource is a container, project, or custom resource:
+
+```csharp
+var dbEndpoint = postgresBuilder.GetEndpoint("tcp");
+
+builder.AddResource(new MigratorResource("migrator"))
+    .OnInitializeResource(async (ctx, ct) =>
+    {
+        await ctx.Notifications.WaitForResourceHealthyAsync(postgresBuilder.Resource.Name, ct);
+
+        // EndpointReference resolves to the actual host/port at runtime.
+        var migrator = new SqlMigrator($"Host={dbEndpoint.Host};Port={dbEndpoint.Port};...");
+        await migrator.RunAsync(ct);
+
+        await ctx.SetStateAsync(KnownResourceStates.Finished, ct);
+    });
+```
+
+#### 3. Extending a DCP resource's snapshot
+
+Adding URLs or properties to an existing DCP resource works because of Layer 1 (source-scoped slices). The user updates land in the `"user"` source and merge with DCP's updates:
+
+```csharp
+builder.AddContainer("nginx", "nginx")
+    .OnInitializeResource(async (ctx, ct) =>
+    {
+        // Adds a URL to a DCP-managed container. The framework keeps it across
+        // DCP refreshes because user-scoped slices are never overwritten by DCP.
+        await ctx.AddUrlAsync(new UrlSnapshot("Docs", "https://nginx.org/", false), ct);
+        await ctx.SetPropertyAsync("origin", "internal-mirror", ct: ct);
+    });
+```
+
+Note: `OnInitializeResource` on a DCP-managed resource doesn't replace DCP's lifecycle — DCP still owns the container's process, state machine, and primary URL set. The user callback runs alongside DCP's management to add user-scoped data. The callback's cancellation token is tied to the DCP resource's lifecycle so it stops when the container stops.
+
+#### 4. Scalar state conflicts on shared resources
+
+URLs, properties, env vars, volumes, and relationships are **collections** — multi-source merging is well-defined.
+
+`State`, `ExitCode`, and timestamps are **scalars** — they have one authoritative owner per resource:
+
+| Resource kind | Owner of scalar state |
+|---|---|
+| DCP-managed (Container/Project/Executable) | DCP |
+| Custom resource using the new `OnInitializeResource` overload | The framework lifecycle host |
+| Custom resource using the legacy `OnInitializeResource` overload | The author |
+
+User attempts to set scalar state via `ctx.SetStateAsync` on a DCP-owned resource go to a **user-override slot** that takes precedence only when explicitly set. This preserves the existing escape hatch (`PublishUpdateAsync(c, s => s with { State = "Custom" })` still works) while making the precedence rules explicit.
+
+### Bound-lifecycle resources (DevTunnelPort): re-start on source restart
+
+The bound-lifecycle case (a custom resource whose lifetime tracks a DCP-managed parent) requires special wiring beyond what the bare lifecycle hook provides. Without help, the author's callback returns when the parent stops, the framework marks the child `Finished`, and nothing re-invokes the callback when the parent restarts.
+
+The framework supplies a single annotation that wires this for the author:
+
+```csharp
+/// <summary>
+/// Causes the framework to re-invoke this resource's OnInitializeResource callback
+/// whenever <paramref name="source"/> transitions back to a healthy state after stopping.
+/// Combined with WaitForResourceAsync calls in the callback, this implements the
+/// bound-lifecycle pattern (e.g. DevTunnelPort following its parent tunnel).
+/// </summary>
+public static IResourceBuilder<T> WithRestartOnSourceRestart<T, TSource>(
+    this IResourceBuilder<T> builder,
+    IResourceBuilder<TSource> source)
+    where T : IResource
+    where TSource : IResource;
+```
+
+With this, the DevTunnelPort example becomes self-restarting:
+
+```csharp
+portBuilder
+    .WithRestartOnSourceRestart(tunnelBuilder)
+    .OnInitializeResource(async (ctx, ct) =>
+    {
+        await ctx.Notifications.WaitForResourceHealthyAsync(tunnel.Resource.Name, ct);
+        // ... setup ...
+        await ctx.SetStateAsync(KnownResourceStates.Running, ct);
+        await ctx.Notifications.WaitForResourceAsync(tunnel.Resource.Name,
+            [KnownResourceStates.Finished, KnownResourceStates.Exited], ct);
+    });
+```
+
+This is the only annotation needed to bridge "manual wait-for-state in the callback" and "framework knows to re-invoke on parent restart." It's strictly additive; resources that don't need this behavior don't use it.
+
 ## TypeScript API
 
 The TypeScript API mirrors the C# API through the polyglot code-generation system.
@@ -626,8 +781,10 @@ Each phase is independently shippable and useful. Phase 1 alone fixes the clobbe
 
 4. **`ResourceContext` lifetime on restart.** On restart, should a fresh `ResourceContext` be created (all tracked disposables disposed, fresh state)? Recommendation: yes — restart is a full stop + start cycle.
 
-5. **Endpoint integration.** Custom resources that expose endpoints (e.g., a user-defined HTTP server resource — see [#16640](https://github.com/microsoft/aspire/issues/16640)) need a way to declare ports that are then surfaced through service discovery and `EndpointReference`. This is adjacent to lifecycle but not covered by this proposal; it's tracked separately.
+5. **Endpoint allocator extraction.** Layer 4 requires factoring the port-allocation logic out of DCP so the orchestrator can drive it for custom resources too. The DCP code path keeps using the extracted allocator unchanged; custom resources call it before `OnInitializeResource`. Scope is contained but the refactor touches DCP — TBD whether to ship Layer 4 in the same PR as Layers 1-3 or as an immediate follow-up.
 
-6. **`ExecutionConfigurationBuilder` integration.** Custom resources that produce a process (env vars + arguments) currently need bespoke coordination (see [#14954](https://github.com/microsoft/aspire/issues/14954)). `IResourceWithArguments` / `IResourceWithEnvironment` interop with `ResourceContext` is a follow-up, not part of this proposal.
+6. **Scalar state on shared resources.** Layer 4 introduces a "user-override slot" for scalar fields (`State`, `ExitCode`) on DCP-managed resources so user callbacks can override DCP's value. Alternative: reject user scalar writes on DCP resources outright (more predictable, more breaking). Recommendation: user-override with logging, matching today's behavior.
 
-7. **Health checks vs `State`.** Continuous health-like signals (`Healthy` / `Degraded`) should be expressed with `WithHealthCheck`, not by overloading the `State` field. This is documentation/guidance, not a code change in this spec.
+7. **`ExecutionConfigurationBuilder` integration.** Custom resources that produce a process (env vars + arguments) currently need bespoke coordination (see [#14954](https://github.com/microsoft/aspire/issues/14954)). `IResourceWithArguments` / `IResourceWithEnvironment` interop with `ResourceContext` is a follow-up, not part of this proposal.
+
+8. **Health checks vs `State`.** Continuous health-like signals (`Healthy` / `Degraded`) should be expressed with `WithHealthCheck`, not by overloading the `State` field. This is documentation/guidance, not a code change in this spec.

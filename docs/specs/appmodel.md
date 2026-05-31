@@ -73,6 +73,7 @@ graph LR
   - [What the Framework Handles Around OnInitializeResource](#what-the-framework-handles-around-oninitializeresource)
   - [Patterns](#patterns)
   - [Start/Stop/Restart Routing](#startstoprestart-routing)
+  - [Endpoints and DCP Interop](#endpoints-and-dcp-interop)
   - [Targeted Snapshot Updates](#targeted-snapshot-updates)
 - [Full Examples](#full-examples)
   - [Example: Derived Container Resource (Redis)](#example-derived-container-resource-redis)
@@ -1371,6 +1372,35 @@ Today, Start/Stop/Restart commands route directly to DCP and don't work for cust
 - **Stop**: cancels the resource's `CancellationTokenSource`; the `OnInitializeResource` callback observes cancellation and returns; the framework disposes tracked disposables and sets the terminal state.
 - **Start**: creates a new CTS and re-invokes the `OnInitializeResource` callback; framework fires `BeforeResourceStartedEvent`, sets `Starting`, sets `StartTimeStamp`.
 - **Restart**: stop, then start.
+
+### Endpoints and DCP interop
+
+Custom resources participate in endpoint allocation and service discovery on equal footing with DCP-managed resources, and can interact with DCP-managed resources without special wiring.
+
+**Endpoints on custom resources.** `WithEndpoint(...)` works the same as it does for containers and projects. The orchestrator allocates ports for any `EndpointAnnotation` whose `Port` is unset before `OnInitializeResource` runs, so `resource.GetEndpoint("name")` returns an endpoint with `AllocatedEndpoint` populated. `EndpointReference`, `WithReference(...)`, and service discovery export work unchanged. `ResourceEndpointsAllocatedEvent` fires after allocation and before the lifecycle callback.
+
+```csharp
+builder.AddResource(new InMemoryHttpResource("web"))
+    .WithEndpoint(name: "http", scheme: "http")
+    .OnInitializeResource(async (ctx, ct) =>
+    {
+        var endpoint = ((InMemoryHttpResource)ctx.Resource).GetEndpoint("http");
+
+        await using var server = WebApplication.Create();
+        server.Urls.Add(endpoint.Url);
+        await server.StartAsync(ct);
+        ctx.Track(server);
+
+        await ctx.SetStateAsync(KnownResourceStates.Running, ct);
+        await Task.Delay(Timeout.Infinite, ct);
+    });
+```
+
+**Waiting on, and reading from, DCP resources.** `ctx.Notifications.WaitForResourceHealthyAsync(name, ct)` works against any resource. `EndpointReference` resolves to live host/port values regardless of whether the source is a container, a project, or a custom resource.
+
+**Extending a DCP resource's snapshot.** Calling `ctx.AddUrlAsync` / `ctx.SetPropertyAsync` on a DCP-managed resource lands in the `"user"` source and survives DCP's snapshot refreshes (Layer 1 prevents clobbering). Scalar fields (`State`, `ExitCode`, timestamps) remain owned by DCP; explicit user writes via `ctx.SetStateAsync` route to a user-override slot that takes precedence only when set.
+
+**Bound-lifecycle resources.** Resources whose lifecycle tracks a parent (such as a `DevTunnelPortResource` that follows a `DevTunnelResource`) use `WithRestartOnSourceRestart(parentBuilder)` so the framework re-invokes the callback when the parent transitions back to a healthy state after stopping. Combined with `WaitForResourceAsync` calls inside the callback, this expresses the bound pattern without subscribing to events by hand.
 
 ### Targeted snapshot updates
 
