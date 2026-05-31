@@ -1,0 +1,119 @@
+# Reusable steps to dispatch a GitHub Actions workflow as the aspire-repo-bot
+# GitHub App via eng/pipelines/scripts/dispatch-github-workflow.ps1. Emits the
+# dispatch step plus a post-step that surfaces the dispatched run / runs URL.
+#
+# Caller's job must:
+#   - have the Aspire-Release-Secrets variable group in scope (provides
+#     $(aspire-bot-app-id) / $(aspire-bot-private-key))
+#   - have checked out the repo (the template references the dispatch script
+#     under $(Build.SourcesDirectory))
+#
+# Workflow inputs are passed as an object; convertToJson serializes them at
+# template expansion and the script reads them from an env var, which avoids
+# embedding the JSON literal in the PowerShell body (would force fragile
+# PS-quoting). AzDO macros ($(...)) inside values are resolved by AzDO before
+# the env mapping is materialized.
+
+parameters:
+  - name: workflowFile
+    displayName: 'GitHub workflow file name (e.g. release-github-tasks.yml)'
+    type: string
+
+  - name: workflowRef
+    displayName: 'Ref to load the workflow YAML from (workflow source only — not what gets validated/released)'
+    type: string
+    default: main
+
+  - name: owner
+    type: string
+    default: microsoft
+
+  - name: repo
+    type: string
+    default: aspire
+
+  - name: inputs
+    displayName: 'Workflow inputs as a name → value object'
+    type: object
+    default: {}
+
+  # When true (default), the script returns immediately after dispatch without
+  # resolving or polling the resulting run. When false, the script polls until
+  # the dispatched run reaches a terminal state and fails this step if the
+  # conclusion is not 'success'.
+  - name: noWait
+    type: boolean
+    default: true
+
+  - name: pollTimeoutMinutes
+    type: number
+    default: 60
+
+  - name: dispatchStepDisplayName
+    type: string
+    default: ''
+
+steps:
+  # pwsh (not powershell): the script chain uses RSA.ImportFromPem (.NET Core
+  # 3.0+ only), which the legacy `powershell:` Windows-PowerShell-on-.NET-
+  # Framework runtime doesn't have.
+  - pwsh: |
+      $inputsObject = $env:DISPATCH_INPUTS_JSON | ConvertFrom-Json
+      $inputs = @{}
+      foreach ($prop in $inputsObject.PSObject.Properties) {
+        $inputs[$prop.Name] = [string]$prop.Value
+      }
+
+      $scriptArgs = @{
+        AppId         = $env:ASPIRE_BOT_APP_ID
+        PrivateKeyPem = $env:ASPIRE_BOT_PRIVATE_KEY
+        Owner         = '${{ parameters.owner }}'
+        Repo          = '${{ parameters.repo }}'
+        WorkflowFile  = '${{ parameters.workflowFile }}'
+        Ref           = '${{ parameters.workflowRef }}'
+        Inputs        = $inputs
+      }
+
+      # Materialize noWait at runtime: AzDO forbids template if-directives
+      # inside string scalars (the |-block script body). Booleans come through
+      # as 'True'/'False'; Convert.ToBoolean normalizes.
+      $noWait = [System.Convert]::ToBoolean($env:DISPATCH_NO_WAIT)
+      if ($noWait) {
+        $scriptArgs.NoWait = $true
+      } else {
+        $scriptArgs.PollTimeoutMinutes = [int]$env:DISPATCH_POLL_TIMEOUT_MINUTES
+      }
+
+      & "$(Build.SourcesDirectory)/eng/pipelines/scripts/dispatch-github-workflow.ps1" @scriptArgs
+    ${{ if ne(parameters.dispatchStepDisplayName, '') }}:
+      displayName: ${{ parameters.dispatchStepDisplayName }}
+    ${{ if eq(parameters.dispatchStepDisplayName, '') }}:
+      displayName: 'Dispatch ${{ parameters.workflowFile }}'
+    env:
+      # AzDO doesn't expose secret variables to scripts by default; the explicit
+      # mapping is required.
+      ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
+      ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
+      DISPATCH_INPUTS_JSON: ${{ convertToJson(parameters.inputs) }}
+      DISPATCH_NO_WAIT: ${{ parameters.noWait }}
+      DISPATCH_POLL_TIMEOUT_MINUTES: ${{ parameters.pollTimeoutMinutes }}
+
+  # Surface the dispatched URL as its own step (easier to spot than scanning
+  # the dispatch step's output). NoWait can only link the workflow runs page;
+  # wait mode resolves the specific run id.
+  - ${{ if eq(parameters.noWait, true) }}:
+    - powershell: |
+        Write-Host ""
+        Write-Host "Dispatched runs page: $env:DISPATCHED_RUNS_URL"
+      displayName: 'Print dispatched runs URL'
+      condition: always()
+      env:
+        DISPATCHED_RUNS_URL: $(DispatchedRunsUrl)
+  - ${{ if eq(parameters.noWait, false) }}:
+    - powershell: |
+        Write-Host ""
+        Write-Host "Dispatched run: $env:DISPATCHED_RUN_URL"
+      displayName: 'Print dispatched run URL'
+      condition: always()
+      env:
+        DISPATCHED_RUN_URL: $(DispatchedRunUrl)

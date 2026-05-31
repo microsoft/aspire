@@ -1,21 +1,16 @@
-# Dispatches the release-github-tasks.yml workflow on microsoft/aspire as the
-# aspire-repo-bot GitHub App, then polls the resulting run until it completes.
-# Exits 0 only if the dispatched run concludes with 'success'.
+# Dispatches a GitHub Actions workflow on a target repository as the
+# aspire-repo-bot GitHub App. With -NoWait, dispatches and returns
+# immediately. Without -NoWait, polls the resulting run until it completes
+# and exits 0 only if conclusion=success.
 #
-# This script is invoked from the AzDO release-publish-nuget pipeline as the
-# final stage of a release. It centralizes the workflow dispatch, run-id
-# resolution, and run polling so the pipeline YAML stays declarative.
+# Auth (mint a GitHub App installation token) is delegated to
+# Get-AspireBotInstallationToken.ps1 so the flow can be reused by other
+# release pipeline scripts.
 #
-# Authentication (mint a GitHub App installation access token) is delegated to
-# Get-AspireBotInstallationToken.ps1 so the same flow can be reused by other
-# release pipeline scripts (e.g. publish-release-cli-assets.ps1).
-#
-# Dispatch + correlation flow (per GitHub API docs):
-#   https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app
-#   1. POST /repos/{owner}/{repo}/actions/workflows/{file}/dispatches with the installation token.
-#   2. Poll GET /repos/.../actions/runs filtered by workflow + branch to find the run we just queued
-#      (workflow_dispatch does not return a run id directly — this is the documented workaround).
-#   3. Poll the run until status=completed; succeed only if conclusion=success.
+# workflow_dispatch returns 204 with no run id, so wait-mode polls
+# /repos/.../actions/runs filtered by workflow + branch + created>=dispatch
+# time to find the run we just queued (the documented workaround):
+#   https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow
 
 [CmdletBinding()]
 param(
@@ -27,7 +22,11 @@ param(
     [Parameter(Mandatory = $true)][string]$Ref,
     [Parameter(Mandatory = $true)][hashtable]$Inputs,
     [Parameter()][int]$PollIntervalSeconds = 30,
-    [Parameter()][int]$PollTimeoutMinutes = 60
+    [Parameter()][int]$PollTimeoutMinutes = 60,
+    # Dispatch and exit immediately without resolving or polling the run. Use
+    # when the dispatching pipeline should treat the GH workflow as
+    # informational signal rather than a gate.
+    [Parameter()][switch]$NoWait
 )
 
 $ErrorActionPreference = 'Stop'
@@ -95,6 +94,15 @@ Invoke-GitHubApi -Method POST `
     -Body $dispatchBody | Out-Null
 Write-Host "✓ Workflow dispatch accepted."
 
+if ($NoWait) {
+    # Fire-and-forget: don't try to resolve a run id or poll. Surface a link to the
+    # workflow runs page so operators can find the dispatched run manually.
+    $runsListUrl = "https://github.com/$Owner/$Repo/actions/workflows/$WorkflowFile"
+    Write-Host "##[section]Dispatched (no wait). See recent runs: $runsListUrl"
+    Write-Host "##vso[task.setvariable variable=DispatchedRunsUrl]$runsListUrl"
+    exit 0
+}
+
 # Resolve the run id. The dispatched run is not always queryable instantly,
 # so retry for up to 2 minutes. Filter by created>=dispatchedAt-30s to allow for
 # clock skew between this runner and GitHub.
@@ -115,13 +123,17 @@ while ([DateTime]::UtcNow -lt $resolveDeadline -and -not $runId) {
     }
 
     if ($runs.workflow_runs -and $runs.workflow_runs.Count -gt 0) {
-        # The list endpoint returns runs newest first. We pick the newest run
-        # that satisfies the created>=dispatchedAt-30s filter — the dispatch we
-        # just issued is by definition the most recent qualifying run on this
-        # branch+workflow. Picking the oldest qualifying run would attach us
-        # to an earlier dispatch within the clock-skew window (e.g. a quick
-        # re-run of this AzDO stage).
-        $candidate = $runs.workflow_runs | Sort-Object -Property created_at -Descending | Select-Object -First 1
+        # List endpoint returns newest first. Picking the newest is correct
+        # when this branch+workflow isn't being dispatched concurrently. Two
+        # simultaneous dispatches against the same workflow+ref can't be
+        # disambiguated (dispatch returns 204 with no id, list doesn't echo
+        # input values) and would mis-attribute one of the two pollers — warn
+        # so the operator sees it.
+        $candidates = $runs.workflow_runs | Sort-Object -Property created_at -Descending
+        if ($candidates.Count -gt 1) {
+            Write-Host "##vso[task.logissue type=warning]Multiple candidate runs ($($candidates.Count)) matched the dispatch filter (workflow=$WorkflowFile branch=$Ref created>=$createdFilter). Selecting newest; concurrent dispatch may have mis-attributed this poller."
+        }
+        $candidate = $candidates | Select-Object -First 1
         $runId = $candidate.id
         $runHtmlUrl = $candidate.html_url
         Write-Host "✓ Resolved dispatched run: $runHtmlUrl (id=$runId)"
