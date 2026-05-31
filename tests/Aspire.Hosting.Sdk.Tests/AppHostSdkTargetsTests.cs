@@ -124,10 +124,11 @@ public class AppHostSdkTargetsTests
         var captureFile = Path.Combine(tempDirectory.Path, "aspire-args.txt");
         await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
 
+        var pathEnvironmentVariable = GetPathEnvironmentVariableName();
         var environment = new Dictionary<string, string>
         {
             ["ASPIRE_TEST_CAPTURE_PATH"] = captureFile,
-            ["PATH"] = $"{fakeCliDirectory.FullName}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}"
+            [pathEnvironmentVariable] = $"{fakeCliDirectory.FullName}{Path.PathSeparator}{Environment.GetEnvironmentVariable(pathEnvironmentVariable)}"
         };
 
         var result = await RunDotNetWithArgumentsAsync(
@@ -326,6 +327,8 @@ public class AppHostSdkTargetsTests
 
         return packageReference[prefix.Length..equalsIndex];
     }
+
+    private static string GetPathEnvironmentVariableName() => OperatingSystem.IsWindows() ? "Path" : "PATH";
 
     private static async Task<(int ExitCode, string Output)> RunDotNetAsync(string workingDirectory, string arguments)
     {
