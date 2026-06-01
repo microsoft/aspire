@@ -411,9 +411,8 @@ public class AtsJavaCodeGeneratorTests
         Assert.Equal(methodName, capability.MethodName);
         Assert.True(capability.ReturnsBuilder);
         Assert.Contains(capability.Parameters, p =>
-            p.Name == "protocols" &&
-            p.Type?.Category == AtsTypeCategory.Array &&
-            p.Type.ElementType?.TypeId.EndsWith($".{nameof(AgentProtocol)}", StringComparison.Ordinal) == true);
+            p.Name == "protocol" &&
+            p.Type?.TypeId.EndsWith($".{nameof(AgentProtocol)}", StringComparison.Ordinal) == true);
 
         if (hasCustomPath)
         {
