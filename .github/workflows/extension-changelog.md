@@ -256,6 +256,11 @@ style template. Match:
   `### Fixes`).
 - Bullet style and level of detail (one concise line per change).
 - Whether bullets reference PRs by number (e.g. `(#NNNN)`) and/or credit authors.
+- When a change has both a tracking issue and an implementation pull request, keep
+  the references distinct and use the correct GitHub URL type for each
+  (`/issues/` for issues, `/pull/` for pull requests). Do not replace a
+  user-facing issue reference with only the implementation PR number if the PR
+  title or body makes the issue the canonical tracking item.
 
 **Do not invent a new format.** Match what is already there. Keep bullets
 concise, factual, and user-facing — describe what changed for someone using the
