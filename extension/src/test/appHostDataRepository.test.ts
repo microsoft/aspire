@@ -129,6 +129,7 @@ suite('AppHostDataRepository', () => {
             }]));
             spawnStub.firstCall.args[3].exitCallback(0);
             await waitForMicrotasks();
+            await waitForMicrotasks();
 
             assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/AppHost.csproj']);
             assert.strictEqual(spawnStub.secondCall.args[3].noExtensionVariables, true);

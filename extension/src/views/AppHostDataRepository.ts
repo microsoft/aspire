@@ -917,7 +917,9 @@ export class AppHostDataRepository {
     }
 
     private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
+        const cliPath = await this._terminalProvider.getAspireCliExecutablePath().catch(error => {
+            throw new AspireCliNotInstalledError(String(error));
+        });
         const command = `aspire describe --follow --apphost ${appHostPath}`;
 
         return new Promise<ResourceJson[]>((resolve, reject) => {

@@ -1,7 +1,8 @@
-import { AppHostDataRepository, ResourceJson } from './views/AppHostDataRepository'
-import { AspireTerminalProvider } from './utils/AspireTerminalProvider'
-import { spawnCliProcess } from './debugger/languages/cli'
-import { AcquiredTestRunSession, TestRunSessionAcquireOptions } from './dcp/TestRunSessionManager'
+import * as path from 'path';
+import { AppHostDataRepository, ResourceJson } from './views/AppHostDataRepository';
+import { AspireTerminalProvider } from './utils/AspireTerminalProvider';
+import { spawnCliProcess } from './debugger/languages/cli';
+import { AcquiredTestRunSession, TestRunSessionAcquireOptions } from './dcp/TestRunSessionManager';
 
 export interface AspireTestRunSessionApi {
 	acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession
@@ -75,26 +76,26 @@ export interface ResourceInfo {
 export function createAspireExtensionApi(dataRepository: AppHostDataRepository, terminalProvider: AspireTerminalProvider, testRunSessions: AspireTestRunSessionApi): AspireExtensionApi {
 	return {
 		async getRunningAppHosts(): Promise<AppHostInfo[]> {
-			const appHosts = await dataRepository.fetchAppHostsOnce()
+			const appHosts = await dataRepository.fetchAppHostsOnce();
 			return appHosts.map(appHost => ({
 				appHostPath: appHost.appHostPath,
 				pid: appHost.appHostPid,
 				dashboardUrl: appHost.dashboardUrl,
 				resources: (appHost.resources ?? []).map(r => mapResource(r, appHost.appHostPath)),
-			}))
+			}));
 		},
 
 		async stopResource(resourceName: string, appHostPath: string): Promise<void> {
-			return executeResourceCommand(terminalProvider, resourceName, appHostPath, 'stop')
+			return executeResourceCommand(terminalProvider, resourceName, appHostPath, 'stop');
 		},
 
 		async startResource(resourceName: string, appHostPath: string): Promise<void> {
-			return executeResourceCommand(terminalProvider, resourceName, appHostPath, 'start')
+			return executeResourceCommand(terminalProvider, resourceName, appHostPath, 'start');
 		},
 
 		acquireTestRunSession: testRunSessions.acquireTestRunSession,
 		releaseTestRunSession: testRunSessions.releaseTestRunSession,
-	}
+	};
 }
 
 function mapResource(resource: ResourceJson, appHostPath: string): ResourceInfo {
@@ -108,46 +109,47 @@ function mapResource(resource: ResourceJson, appHostPath: string): ResourceInfo 
 			.filter(u => !u.isInternal)
 			.map(u => ({ name: u.name, url: u.url })),
 		appHostPath,
-	}
+	};
 }
 
 async function executeResourceCommand(terminalProvider: AspireTerminalProvider, resourceName: string, appHostPath: string, commandName: 'start' | 'stop'): Promise<void> {
-	if (!appHostPath || !appHostPath.trim()) {
-		throw new Error('appHostPath must be a non-empty absolute path')
+	const trimmedAppHostPath = appHostPath.trim();
+	if (!trimmedAppHostPath || !path.isAbsolute(trimmedAppHostPath)) {
+		throw new Error('appHostPath must be a non-empty absolute path');
 	}
 
-	const cliPath = await terminalProvider.getAspireCliExecutablePath()
-	const args = ['resource', resourceName, commandName, '--apphost', appHostPath]
+	const cliPath = await terminalProvider.getAspireCliExecutablePath();
+	const args = ['resource', resourceName, commandName, '--apphost', trimmedAppHostPath];
 	return new Promise<void>((resolve, reject) => {
-		let stdout = ''
-		let stderr = ''
-		let settled = false
+		let stdout = '';
+		let stderr = '';
+		let settled = false;
 
 		spawnCliProcess(terminalProvider, cliPath, args, {
 			noExtensionVariables: true,
-			stdoutCallback: (data) => { stdout += data },
-			stderrCallback: (data) => { stderr += data },
+			stdoutCallback: (data) => { stdout += data; },
+			stderrCallback: (data) => { stderr += data; },
 			exitCallback: (code) => {
 				if (settled) {
-					return
+					return;
 				}
 
-				settled = true
+				settled = true;
 				if (code === 0) {
-					resolve()
+					resolve();
 				} else {
-					const output = (stderr || stdout).trim()
-					reject(new Error(`aspire resource ${commandName} exited with code ${code}${output ? `: ${output}` : ''}`))
+					const output = (stderr || stdout).trim();
+					reject(new Error(`aspire resource ${commandName} exited with code ${code}${output ? `: ${output}` : ''}`));
 				}
 			},
 			errorCallback: (error) => {
 				if (settled) {
-					return
+					return;
 				}
 
-				settled = true
-				reject(error)
+				settled = true;
+				reject(error);
 			},
-		})
-	})
+		});
+	});
 }

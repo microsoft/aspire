@@ -53,6 +53,7 @@ suite('Aspire extension API', () => {
         const api = createApi();
 
         await assert.rejects(() => api.startResource('api', ''), /appHostPath must be a non-empty absolute path/);
+        await assert.rejects(() => api.startResource('api', 'relative/AppHost.csproj'), /appHostPath must be a non-empty absolute path/);
 
         assert.strictEqual(spawnStub.called, false);
     });
