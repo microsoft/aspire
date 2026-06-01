@@ -144,6 +144,7 @@ interface GlobalDescribeStream {
  */
 export class AppHostDataRepository {
     private static readonly _processShutdownGracePeriodMs = 5000;
+    private static readonly _oneShotCommandTimeoutMs = 30000;
 
     private readonly _onDidChangeData = new vscode.EventEmitter<void>();
     readonly onDidChangeData = this._onDidChangeData.event;
@@ -172,6 +173,7 @@ export class AppHostDataRepository {
     private _workspaceAppHost: AppHostDisplayInfo | undefined;
     private _pollingInterval: ReturnType<typeof setInterval> | undefined;
     private _psProcesses = new Set<ChildProcessWithoutNullStreams>();
+    private _oneShotProcesses = new Set<ChildProcessWithoutNullStreams>();
     private _psFetchVersion = 0;
     private _supportsPsFollow = true;
     private _fetchInProgress = false;
@@ -340,6 +342,7 @@ export class AppHostDataRepository {
         this._stopPolling();
         this._stopDescribeWatch();
         this._stopAllGlobalDescribes();
+        this._stopOneShotProcesses();
         this._configChangeDisposable.dispose();
         this._appHostDiscoveryChangeDisposable.dispose();
         this._onDidChangeData.dispose();
@@ -883,6 +886,8 @@ export class AppHostDataRepository {
             let stdout = '';
             let stderr = '';
             let settled = false;
+            let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+            let cliProcess: ChildProcessWithoutNullStreams | undefined;
 
             const settle = (callback: () => void) => {
                 if (settled) {
@@ -890,10 +895,24 @@ export class AppHostDataRepository {
                 }
 
                 settled = true;
+                if (timeoutTimer) {
+                    clearTimeout(timeoutTimer);
+                    timeoutTimer = undefined;
+                }
+                if (cliProcess) {
+                    this._oneShotProcesses.delete(cliProcess);
+                    if (cliProcess.exitCode === null && !cliProcess.killed) {
+                        this._terminateProcess(cliProcess, command);
+                    }
+                }
                 callback();
             };
 
-            spawnCliProcess(this._terminalProvider, cliPath, args, {
+            timeoutTimer = setTimeout(() => {
+                settle(() => reject(new AspireCliFailedError(command, null, stdout, stderr || `timed out after ${AppHostDataRepository._oneShotCommandTimeoutMs}ms`)));
+            }, AppHostDataRepository._oneShotCommandTimeoutMs);
+
+            cliProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
                 noExtensionVariables: true,
                 stdoutCallback: (data) => { stdout += data; },
                 stderrCallback: (data) => { stderr += data; },
@@ -913,6 +932,7 @@ export class AppHostDataRepository {
                     settle(() => reject(new AspireCliNotInstalledError(error.message)));
                 },
             });
+            this._oneShotProcesses.add(cliProcess);
         });
     }
 
@@ -942,6 +962,9 @@ export class AppHostDataRepository {
                 }
                 if (timeoutTimer) {
                     clearTimeout(timeoutTimer);
+                }
+                if (describeProcess) {
+                    this._oneShotProcesses.delete(describeProcess);
                 }
                 if (describeProcess && describeProcess.exitCode === null && !describeProcess.killed) {
                     this._terminateProcess(describeProcess, command);
@@ -996,7 +1019,7 @@ export class AppHostDataRepository {
                         return;
                     }
 
-                    if (code === 0 || resources.size > 0) {
+                    if (code === 0) {
                         settle(() => resolve(Array.from(resources.values())));
                     } else {
                         settle(() => reject(new AspireCliFailedError(command, code, stdout, stderr)));
@@ -1006,7 +1029,15 @@ export class AppHostDataRepository {
                     settle(() => reject(new AspireCliNotInstalledError(error.message)));
                 },
             });
+            this._oneShotProcesses.add(describeProcess);
         });
+    }
+
+    private _stopOneShotProcesses(): void {
+        for (const process of this._oneShotProcesses) {
+            this._terminateProcess(process, 'one-shot aspire command');
+        }
+        this._oneShotProcesses.clear();
     }
 
     private _stopGlobalDescribe(appHostPath: string): void {

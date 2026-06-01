@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as https from 'https';
-import { IncomingHttpHeaders } from 'http';
+import { IncomingHttpHeaders, OutgoingHttpHeaders } from 'http';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import WebSocket from 'ws';
@@ -91,6 +91,34 @@ suite('Aspire DCP server', () => {
 
         assert.strictEqual(response.statusCode, 401);
         assert.strictEqual(startDebuggingStub.called, false);
+    });
+
+    test('lease-backed DCP id rejects server-wide token', async () => {
+        dcpServer = await AspireDcpServer.create(() => null);
+        const lease = dcpServer.acquireTestRunSession({ debug: true });
+        const dcpId = `${lease.sessionId}-api`;
+
+        const response = await requestDcpServer(dcpServer, 'PUT', '/run_session', dcpServer.connectionInfo.token, dcpId, {
+            launch_configurations: [
+                {
+                    type: 'node',
+                    mode: 'Debug',
+                    script_path: '/workspace/app.js'
+                }
+            ]
+        });
+
+        assert.strictEqual(response.statusCode, 401);
+        assert.strictEqual(startDebuggingStub.called, false);
+    });
+
+    test('lease-backed DCP id can query telemetry enabled endpoint', async () => {
+        dcpServer = await AspireDcpServer.create(() => null);
+        const lease = dcpServer.acquireTestRunSession({ debug: true });
+
+        const response = await requestDcpServer(dcpServer, 'GET', '/telemetry/enabled', lease.env.DEBUG_SESSION_TOKEN, `${lease.sessionId}-api`, undefined);
+
+        assert.strictEqual(response.statusCode, 200);
     });
 
     test('release stops lease-backed run sessions and revokes token', async () => {
@@ -199,8 +227,9 @@ suite('Aspire DCP server', () => {
         });
 
         await waitForExpect(() => assert.ok(debugConfig));
-        await dcpServer.releaseTestRunSession(lease.id);
+        const releasePromise = dcpServer.releaseTestRunSession(lease.id);
         emitStartedDebugSession(startListeners, debugConfig!);
+        await releasePromise;
 
         const response = await responsePromise;
 
@@ -294,23 +323,27 @@ async function requestDcpServer(
     path: string,
     token: string,
     dcpId: string,
-    body: unknown): Promise<{ statusCode?: number; body: string; headers: IncomingHttpHeaders }> {
+    body: unknown | undefined): Promise<{ statusCode?: number; body: string; headers: IncomingHttpHeaders }> {
     const [, port] = server.connectionInfo.address.split(':');
-    const bodyJson = JSON.stringify(body);
+    const bodyJson = body === undefined ? undefined : JSON.stringify(body);
 
     return new Promise((resolve, reject) => {
+        const headers: OutgoingHttpHeaders = {
+            Authorization: `Bearer ${token}`,
+            'microsoft-developer-dcp-instance-id': dcpId
+        };
+        if (bodyJson !== undefined) {
+            headers['Content-Type'] = 'application/json';
+            headers['Content-Length'] = Buffer.byteLength(bodyJson);
+        }
+
         const req = https.request({
             hostname: 'localhost',
             port,
             path,
             method,
             rejectUnauthorized: false,
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'microsoft-developer-dcp-instance-id': dcpId,
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(bodyJson)
-            }
+            headers
         }, res => {
             let responseBody = '';
             res.on('data', chunk => responseBody += chunk);
@@ -318,7 +351,9 @@ async function requestDcpServer(
         });
 
         req.on('error', reject);
-        req.write(bodyJson);
+        if (bodyJson !== undefined) {
+            req.write(bodyJson);
+        }
         req.end();
     });
 }

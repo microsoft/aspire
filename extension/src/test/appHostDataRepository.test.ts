@@ -183,6 +183,80 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('fetchAppHostsOnce times out hung ps process', async () => {
+        const clock = sinon.useFakeTimers();
+        const psProcess = new TestChildProcess();
+        spawnStub.returns(psProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const fetchPromise = repository.fetchAppHostsOnce();
+            await waitForMicrotasks();
+
+            await clock.tickAsync(30000);
+
+            await assert.rejects(fetchPromise, (error: unknown) => {
+                assert.ok(error instanceof AspireCliFailedError);
+                assert.match(error.message, /timed out after 30000ms/);
+                return true;
+            });
+            assert.strictEqual(psProcess.killed, true);
+        } finally {
+            repository.dispose();
+            clock.restore();
+        }
+    });
+
+    test('fetchAppHostsOnce rejects describe failure even after partial resource output', async () => {
+        const psProcess = new TestChildProcess();
+        const describeProcess = new TestChildProcess();
+        spawnStub.onFirstCall().returns(psProcess);
+        spawnStub.onSecondCall().returns(describeProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const fetchPromise = repository.fetchAppHostsOnce();
+            await waitForMicrotasks();
+
+            spawnStub.firstCall.args[3].stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                dashboardUrl: 'https://localhost:1234',
+                cliPid: 5678,
+                resources: null,
+            }]));
+            spawnStub.firstCall.args[3].exitCallback(0);
+            await waitForMicrotasks();
+            await waitForMicrotasks();
+
+            spawnStub.secondCall.args[3].lineCallback(JSON.stringify({
+                name: 'api',
+                displayName: 'api',
+                resourceType: 'Project',
+                state: 'Running',
+                stateStyle: null,
+                healthStatus: null,
+                healthReports: null,
+                exitCode: null,
+                dashboardUrl: null,
+                urls: [],
+                commands: null,
+                properties: null,
+            }));
+            spawnStub.secondCall.args[3].stderrCallback('describe failed');
+            spawnStub.secondCall.args[3].exitCallback(1);
+
+            await assert.rejects(fetchPromise, (error: unknown) => {
+                assert.ok(error instanceof AspireCliFailedError);
+                assert.match(error.message, /describe failed/);
+                return true;
+            });
+            assert.strictEqual(describeProcess.killed, true);
+        } finally {
+            repository.dispose();
+        }
+    });
+
     test('describe watch reports minimum CLI version when command help is returned', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 

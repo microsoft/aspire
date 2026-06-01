@@ -58,6 +58,7 @@ export default class AspireDcpServer {
     private wsBySession: Map<string, WebSocket> = new Map();
     private runsBySession: Map<string, AspireResourceDebugSession[]> = new Map();
     private testRunSessionLeaseIdByRunId: Map<string, string> = new Map();
+    private testRunSessionStartByRunId: Map<string, Promise<void>> = new Map();
     private debugAdapterTrackerDisposablesByAdapter: Map<string, vscode.Disposable> = new Map();
     private pendingNotificationQueueByDcpId: Map<string, RunSessionNotification[]> = new Map();
     private testRunSessionManager: TestRunSessionManager;
@@ -82,6 +83,7 @@ export default class AspireDcpServer {
         wss: WebSocketServer,
         runsBySession: Map<string, AspireResourceDebugSession[]>,
         testRunSessionLeaseIdByRunId: Map<string, string>,
+        testRunSessionStartByRunId: Map<string, Promise<void>>,
         wsBySession: Map<string, WebSocket>,
         pendingNotificationQueueByDcpId: Map<string, RunSessionNotification[]>,
         dashboardTelemetry: DashboardTelemetryPassthrough,
@@ -94,6 +96,7 @@ export default class AspireDcpServer {
         this.wss = wss;
         this.runsBySession = runsBySession;
         this.testRunSessionLeaseIdByRunId = testRunSessionLeaseIdByRunId;
+        this.testRunSessionStartByRunId = testRunSessionStartByRunId;
         this.wsBySession = wsBySession;
         this.pendingNotificationQueueByDcpId = pendingNotificationQueueByDcpId;
         this._dashboardTelemetry = dashboardTelemetry;
@@ -157,6 +160,7 @@ export default class AspireDcpServer {
         const pendingNotificationQueueByDcpId = new Map<string, RunSessionNotification[]>();
         const dashboardTelemetry = new DashboardTelemetryPassthrough();
         const testRunSessionLeaseIdByRunId = new Map<string, string>();
+        const testRunSessionStartByRunId = new Map<string, Promise<void>>();
         let testRunSessionManager: TestRunSessionManager | undefined;
         let dcpServerInstance: AspireDcpServer | undefined;
 
@@ -245,6 +249,16 @@ export default class AspireDcpServer {
                 }
 
                 const bearerToken = auth.slice(BEARER_PREFIX.length);
+                const matchingTestRunSessionLease = testRunSessionManager?.tryGetLeaseForDcpId(dcpId);
+                if (matchingTestRunSessionLease) {
+                    const testRunSessionLease = testRunSessionManager?.tryAuthorizeDcpRequest(dcpId, bearerToken);
+                    if (!testRunSessionLease) {
+                        return 'invalid_token';
+                    }
+
+                    return { dcpId, token: bearerToken, testRunSessionLease };
+                }
+
                 const testRunSessionLease = testRunSessionManager?.tryAuthorizeDcpRequest(dcpId, bearerToken);
                 if (testRunSessionLease) {
                     return { dcpId, token: bearerToken, testRunSessionLease };
@@ -287,13 +301,18 @@ export default class AspireDcpServer {
                     return;
                 }
 
-                const result = validateBearerToken(auth);
-                if (result.kind !== 'ok') {
-                    respondToTelemetryBearerFailure(res, result.kind);
+                const authorization = authorizeDcpRequest(auth, dcpId);
+                if (typeof authorization === 'string') {
+                    respondToTelemetryBearerFailure(res, authorization);
                     return;
                 }
 
-                const debugSessionId = getDcpIdPrefix(dcpId);
+                if (authorization.testRunSessionLease) {
+                    next();
+                    return;
+                }
+
+                const debugSessionId = getDcpIdPrefix(authorization.dcpId);
                 if (!debugSessionId || !getDebugSession(debugSessionId)) {
                     respondWithTelemetryAuthError(res, 401, 'InvalidDcpInstanceId', 'Missing valid DCP prefix corresponding to an Aspire debug session.');
                     return;
@@ -324,6 +343,7 @@ export default class AspireDcpServer {
                 const dcpId = authorization.dcpId;
                 const debugSessionId = getDcpIdPrefix(dcpId) ?? authorization.testRunSessionLease?.sessionId;
                 const processes: AspireResourceDebugSession[] = [];
+                let completeTestRunSessionStart: (() => void) | undefined;
 
                 if (!debugSessionId) {
                     const error: ErrorDetails = {
@@ -427,6 +447,10 @@ export default class AspireDcpServer {
                 try {
                     if (authorization.testRunSessionLease) {
                         testRunSessionLeaseIdByRunId.set(runId, authorization.testRunSessionLease.id);
+                        const testRunSessionStart = new Promise<void>(resolve => {
+                            completeTestRunSessionStart = resolve;
+                        });
+                        testRunSessionStartByRunId.set(runId, testRunSessionStart);
                     }
 
                     const config = await createDebugSessionConfiguration(
@@ -533,6 +557,12 @@ export default class AspireDcpServer {
                     const response: ErrorResponse = { error };
                     respondWithError(res, 500, response);
                 }
+                finally {
+                    if (completeTestRunSessionStart) {
+                        completeTestRunSessionStart();
+                        testRunSessionStartByRunId.delete(runId);
+                    }
+                }
             });
 
             app.delete('/run_session/:id', requireHeaders, async (req: Request, res: Response) => {
@@ -631,7 +661,7 @@ export default class AspireDcpServer {
                         certificate: certBase64
                     };
                     testRunSessionManager = new TestRunSessionManager(info);
-                    dcpServerInstance = new AspireDcpServer(info, app, server, wss, runsBySession, testRunSessionLeaseIdByRunId, wsBySession, pendingNotificationQueueByDcpId, dashboardTelemetry, runTelemetryById, debugSessionStats, testRunSessionManager);
+                    dcpServerInstance = new AspireDcpServer(info, app, server, wss, runsBySession, testRunSessionLeaseIdByRunId, testRunSessionStartByRunId, wsBySession, pendingNotificationQueueByDcpId, dashboardTelemetry, runTelemetryById, debugSessionStats, testRunSessionManager);
                     resolve(dcpServerInstance);
                 } else {
                     reject(new Error('Failed to get server address'));
@@ -648,15 +678,28 @@ export default class AspireDcpServer {
 
     async releaseTestRunSession(id: string): Promise<void> {
         const lease = this.testRunSessionManager.release(id);
+
+        if (lease) {
+            this.closeLeaseNotificationConnections(lease);
+        }
+
+        const startSessionPromises: Promise<void>[] = [];
+        for (const [runId, leaseId] of this.testRunSessionLeaseIdByRunId) {
+            if (leaseId === id) {
+                const startPromise = this.testRunSessionStartByRunId.get(runId);
+                if (startPromise) {
+                    startSessionPromises.push(startPromise);
+                }
+            }
+        }
+
+        await Promise.all(startSessionPromises);
+
         const stopSessionPromises: Promise<void>[] = [];
         for (const [runId, leaseId] of this.testRunSessionLeaseIdByRunId) {
             if (leaseId === id) {
                 stopSessionPromises.push(this.stopRunSession(runId));
             }
-        }
-
-        if (lease) {
-            this.closeLeaseNotificationConnections(lease);
         }
 
         await Promise.all(stopSessionPromises);

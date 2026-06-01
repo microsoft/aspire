@@ -328,7 +328,6 @@ export async function activate(context: vscode.ExtensionContext) {
   });
   return {
     rpcServerInfo: rpcServer.connectionInfo,
-    dcpServerInfo: dcpServer.connectionInfo,
     ...api,
   };
 }

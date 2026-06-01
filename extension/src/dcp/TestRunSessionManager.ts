@@ -91,11 +91,6 @@ export class TestRunSessionManager {
             return undefined;
         }
 
-        if (this.isExpired(lease)) {
-            this.leases.delete(lease.id);
-            return undefined;
-        }
-
         const bearerTokenBuffer = Buffer.from(token);
         const expectedTokenBuffer = Buffer.from(lease.token);
         if (bearerTokenBuffer.length !== expectedTokenBuffer.length) {
@@ -109,9 +104,14 @@ export class TestRunSessionManager {
         return lease;
     }
 
-    private tryGetLeaseForDcpId(dcpId: string): TestRunSessionLease | undefined {
+    tryGetLeaseForDcpId(dcpId: string): TestRunSessionLease | undefined {
         for (const lease of this.leases.values()) {
             if (dcpId.startsWith(`${lease.sessionId}-`)) {
+                if (this.isExpired(lease)) {
+                    this.leases.delete(lease.id);
+                    return undefined;
+                }
+
                 return lease;
             }
         }
