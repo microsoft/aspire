@@ -66,6 +66,10 @@ internal static class ResourceSetupHelpers
 
         FluentUISetupHelpers.SetupFluentUIComponents(context);
 
+        var resourcesPageModule = context.JSInterop.SetupModule("/Components/Pages/Resources.razor.js");
+        var resourcesGridKeyboardActivation = resourcesPageModule.SetupModule("initializeResourcesGridKeyboardActivation", _ => true);
+        resourcesGridKeyboardActivation.SetupVoid("dispose", _ => true);
+
         var dimensionManager = context.Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
     }
