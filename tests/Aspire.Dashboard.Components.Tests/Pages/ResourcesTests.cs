@@ -749,6 +749,19 @@ public partial class ResourcesTests : DashboardTestContext
         };
     }
 
+    private static bool GetTabExitsAlways(object options)
+    {
+        var property = options.GetType().GetProperty("tabExitsAlways");
+        Assert.NotNull(property);
+
+        return Assert.IsType<bool>(property.GetValue(options));
+    }
+
+    private static void AssertNotNull(object? argument)
+    {
+        Assert.NotNull(argument);
+    }
+
     [Fact]
     public void ViewOptionsMenu_WiresFocusRestorationWhenHiddenResourcesExist()
     {
@@ -773,6 +786,41 @@ public partial class ResourcesTests : DashboardTestContext
 
         var menuButton = cut.FindComponent<AspireMenuButton>();
         Assert.True(menuButton.Instance.RestoreFocusOnItemClick);
+    }
+
+    [Fact]
+    public void ViewOptionsMenu_Open_InitializesKeyboardNavigation()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("Resource1", "Type1", "Running", null),
+            CreateResource("HiddenResource", "Type2", null, null, isHidden: true),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(
+            this,
+            viewport,
+            dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        var menuButton = cut.FindComponent<AspireMenuButton>();
+        cut.Find($"#{menuButton.Instance.MenuButtonId}").Click();
+
+        var invocation = JSInterop.Invocations.Last(invocation => invocation.Identifier == "initializeAspirePopupKeyboardNavigation");
+        Assert.Collection(invocation.Arguments,
+            argument => Assert.Equal(menuButton.Instance.MenuButtonId, Assert.IsType<string>(argument)),
+            argument => Assert.False(string.IsNullOrEmpty(Assert.IsType<string>(argument))),
+            AssertNotNull,
+            argument =>
+            {
+                var options = Assert.IsAssignableFrom<object>(argument);
+                Assert.True(GetTabExitsAlways(options));
+            });
     }
 
     [Fact]

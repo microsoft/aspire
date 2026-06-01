@@ -334,6 +334,205 @@ window.focusElement = function (selector, suppressFocusVisible) {
     }
 };
 
+const aspirePopupKeyboardNavigationState = new Map();
+
+window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, dotNetHelper, options) {
+    window.disposeAspirePopupKeyboardNavigation(anchorId, popupId);
+
+    const anchorElement = document.getElementById(anchorId);
+    const popupElement = document.getElementById(popupId);
+    if (!anchorElement || !popupElement) {
+        return;
+    }
+
+    const tabExitsAlways = options?.tabExitsAlways ?? options?.TabExitsAlways ?? false;
+
+    const popupKeydownListener = function (ev) {
+        const isEscape = ev.key === "Escape" || ev.keyCode === 27;
+        if (ev.key !== "Tab" && !isEscape) {
+            return;
+        }
+
+        if (isEscape) {
+            stopPopupKeyboardEvent(ev);
+            anchorElement.focus();
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+            return;
+        }
+
+        if (tabExitsAlways) {
+            stopPopupKeyboardEvent(ev);
+            if (ev.shiftKey) {
+                anchorElement.focus();
+            } else {
+                focusNextElementAfterAnchor(anchorElement, popupElement);
+            }
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+            return;
+        }
+
+        const focusableElements = getAspireFocusableElements(popupElement);
+        const activeIndex = findAspireActiveElementIndex(focusableElements);
+
+        if (!ev.shiftKey && (focusableElements.length === 0 || activeIndex === focusableElements.length - 1)) {
+            stopPopupKeyboardEvent(ev);
+            focusNextElementAfterAnchor(anchorElement, popupElement);
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+        } else if (ev.shiftKey && (focusableElements.length === 0 || activeIndex === 0)) {
+            stopPopupKeyboardEvent(ev);
+            anchorElement.focus();
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+        }
+    };
+
+    const anchorKeydownListener = function (ev) {
+        if (ev.key !== "Tab") {
+            return;
+        }
+
+        if (ev.shiftKey) {
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+            return;
+        }
+
+        const firstFocusable = getAspireFocusableElements(popupElement)[0];
+        if (firstFocusable) {
+            stopPopupKeyboardEvent(ev);
+            firstFocusable.focus();
+        } else {
+            stopPopupKeyboardEvent(ev);
+            focusNextElementAfterAnchor(anchorElement, popupElement);
+            dotNetHelper.invokeMethodAsync("CloseAsync");
+        }
+    };
+
+    // Fluent UI's popup keyboard helper currently calculates the next page element from
+    // the inner shadow DOM button for fluent-button anchors. That inner element is not in
+    // document order, so Tab can wrap to the first focusable control on the page. Capture
+    // Tab for Aspire-owned popups before Fluent UI's listener and calculate from the host.
+    popupElement.addEventListener("keydown", popupKeydownListener, true);
+    anchorElement.addEventListener("keydown", anchorKeydownListener, true);
+
+    aspirePopupKeyboardNavigationState.set(getAspirePopupKeyboardNavigationKey(anchorId, popupId), {
+        anchorElement,
+        anchorKeydownListener,
+        popupElement,
+        popupKeydownListener
+    });
+};
+
+window.disposeAspirePopupKeyboardNavigation = function (anchorId, popupId) {
+    const key = getAspirePopupKeyboardNavigationKey(anchorId, popupId);
+    const state = aspirePopupKeyboardNavigationState.get(key);
+    if (!state) {
+        return;
+    }
+
+    state.popupElement.removeEventListener("keydown", state.popupKeydownListener, true);
+    state.anchorElement.removeEventListener("keydown", state.anchorKeydownListener, true);
+    aspirePopupKeyboardNavigationState.delete(key);
+};
+
+function getAspirePopupKeyboardNavigationKey(anchorId, popupId) {
+    return `${anchorId}:${popupId}`;
+}
+
+function stopPopupKeyboardEvent(ev) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    ev.stopImmediatePropagation();
+}
+
+function getAspireFocusableElements(container, excludedContainer) {
+    const focusableSelector = "input, select, textarea, button, object, a[href], area[href], iframe, summary, [tabindex], [contenteditable='true']";
+    const focusableElements = [];
+
+    for (const element of container.querySelectorAll("*")) {
+        if (excludedContainer?.contains(element)) {
+            continue;
+        }
+
+        if (isAspireFocusableElement(element, focusableSelector)) {
+            focusableElements.push(element);
+        }
+    }
+
+    return focusableElements;
+}
+
+function isAspireFocusableElement(element, focusableSelector) {
+    const tagName = element.tagName.toLowerCase();
+    const isFluentInteractiveElement = tagName === "fluent-anchor"
+        || tagName === "fluent-button"
+        || tagName === "fluent-checkbox"
+        || tagName === "fluent-menu-item"
+        || tagName === "fluent-radio"
+        || tagName === "fluent-search"
+        || tagName === "fluent-select"
+        || tagName === "fluent-switch"
+        || tagName === "fluent-tab"
+        || tagName === "fluent-text-field";
+
+    if (!isFluentInteractiveElement && !element.matches(focusableSelector)) {
+        return false;
+    }
+
+    if (!isFluentInteractiveElement && element.tabIndex < 0) {
+        return false;
+    }
+
+    if (element.disabled || element.getAttribute("aria-disabled") === "true") {
+        return false;
+    }
+
+    return isAspireElementVisible(element);
+}
+
+function isAspireElementVisible(element) {
+    if (typeof element.checkVisibility === "function") {
+        return element.checkVisibility();
+    }
+
+    return !!(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
+}
+
+function findAspireActiveElementIndex(focusableElements) {
+    const activeElement = document.activeElement;
+    const deepActiveElement = getAspireDeepActiveElement();
+
+    return focusableElements.findIndex(element =>
+        element === activeElement
+        || element === deepActiveElement
+        || element.contains(deepActiveElement)
+        || element.shadowRoot?.contains(deepActiveElement));
+}
+
+function getAspireDeepActiveElement() {
+    let activeElement = document.activeElement;
+    while (activeElement?.shadowRoot?.activeElement) {
+        activeElement = activeElement.shadowRoot.activeElement;
+    }
+
+    return activeElement;
+}
+
+function focusNextElementAfterAnchor(anchorElement, popupElement) {
+    const root = anchorElement.getRootNode() instanceof Document
+        ? anchorElement.getRootNode().body
+        : document.body;
+    const focusableElements = getAspireFocusableElements(root, popupElement);
+    const anchorIndex = focusableElements.indexOf(anchorElement);
+
+    if (anchorIndex >= 0) {
+        (focusableElements[anchorIndex + 1] ?? anchorElement).focus();
+        return;
+    }
+
+    const nextElement = focusableElements.find(element =>
+        (anchorElement.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0);
+    (nextElement ?? anchorElement).focus();
+}
+
 window.getWindowDimensions = function() {
     return {
         width: window.innerWidth,

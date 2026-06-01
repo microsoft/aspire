@@ -9,9 +9,12 @@ using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenu : FluentComponentBase
+public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 {
     private FluentMenu? _menu;
+    private readonly string _menuId = Identifier.NewId();
+    private DotNetObjectReference<AspireMenu>? _menuReference;
+    private string? _registeredAnchorId;
 
     [Parameter]
     public string? Anchor { get; set; }
@@ -53,12 +56,27 @@ public partial class AspireMenu : FluentComponentBase
 
     private int CalculatedVerticalThreshold => VerticalThreshold ?? (Items.Count * EstimatedItemHeight + MenuVerticalPadding);
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_registeredAnchorId is not null && (!Open || _registeredAnchorId != Anchor))
+        {
+            await DisposeKeyboardNavigationAsync();
+        }
+
+        if (Open && _registeredAnchorId is null && !string.IsNullOrEmpty(Anchor))
+        {
+            var anchor = Anchor;
+            _registeredAnchorId = anchor;
+            _menuReference ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("initializeAspirePopupKeyboardNavigation", anchor, _menuId, _menuReference, new { tabExitsAlways = true });
+        }
+    }
+
+    [JSInvokable]
     public async Task CloseAsync()
     {
-        if (_menu is { } menu)
-        {
-            await menu.CloseAsync();
-        }
+        await SetOpenAsync(false);
+        StateHasChanged();
     }
 
     public async Task OpenAsync(int screenWidth, int screenHeight, int clientX, int clientY)
@@ -103,11 +121,7 @@ public partial class AspireMenu : FluentComponentBase
                 .AddStyle("min-width", "64px")
                 .Build();
 
-            Open = true;
-            if (OpenChanged.HasDelegate)
-            {
-                await OpenChanged.InvokeAsync(Open);
-            }
+            await SetOpenAsync(true);
 
             StateHasChanged();
         }
@@ -119,7 +133,7 @@ public partial class AspireMenu : FluentComponentBase
         {
             await onClick();
         }
-        await OnOpenChanged(false);
+        await SetOpenAsync(false);
 
         if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
         {
@@ -127,12 +141,46 @@ public partial class AspireMenu : FluentComponentBase
         }
     }
 
-    private Task OnOpenChanged(bool open)
+    private async Task OnOpenChanged(bool open)
     {
+        await SetOpenAsync(open);
+    }
+
+    private async Task SetOpenAsync(bool open)
+    {
+        if (!open)
+        {
+            await DisposeKeyboardNavigationAsync();
+        }
+
         Open = open;
 
-        return OpenChanged.HasDelegate
-            ? OpenChanged.InvokeAsync(open)
-            : Task.CompletedTask;
+        if (OpenChanged.HasDelegate)
+        {
+            await OpenChanged.InvokeAsync(open);
+        }
+    }
+
+    private async ValueTask DisposeKeyboardNavigationAsync()
+    {
+        if (_registeredAnchorId is not null)
+        {
+            var registeredAnchorId = _registeredAnchorId;
+            _registeredAnchorId = null;
+            try
+            {
+                await JS.InvokeVoidAsync("disposeAspirePopupKeyboardNavigation", registeredAnchorId, _menuId);
+            }
+            catch (JSDisconnectedException)
+            {
+                // Disposal can run while the Blazor circuit is disconnecting; the browser will drop the listener with the page.
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeKeyboardNavigationAsync();
+        _menuReference?.Dispose();
     }
 }

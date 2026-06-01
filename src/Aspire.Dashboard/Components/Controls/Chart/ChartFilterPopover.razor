@@ -16,22 +16,24 @@
 <FluentPopover AnchorId="@id" @bind-Open="Filter.PopupVisible" VerticalThreshold="@(Math.Min((Filter.Values.Count + 1) * 36 + 48, 300))" AutoFocus="false">
     <Header>@Filter.Name</Header>
     <Body>
-        <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
-            <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
-                            ThreeState="true"
-                            ShowIndeterminate="false"
-                            ThreeStateOrderUncheckToIntermediate="true"
-                            @bind-CheckState:get="Filter.AreAllValuesSelected"
-                            @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(v))"/>
-            @foreach (var tag in ChartFilterTags.GetOrderedValues(Filter.Values))
-            {
-                var isChecked = Filter.SelectedValues.Contains(tag);
-                <FluentCheckbox Label="@tag.Text"
-                                title="@tag.Text"
-                                @key=tag
-                                @bind-Value:get="isChecked"
-                                @bind-Value:set="c => OnTagSelectionChangedAsync(tag, c)"/>
-            }
-        </FluentStack>
+        <AspirePopupFocusNavigation AnchorId="@id" @bind-Open="Filter.PopupVisible">
+            <FluentStack Orientation="Orientation.Vertical" Class="dimension-popup">
+                <FluentCheckbox Label="@Loc[nameof(ControlsStrings.LabelAll)]"
+                                ThreeState="true"
+                                ShowIndeterminate="false"
+                                ThreeStateOrderUncheckToIntermediate="true"
+                                @bind-CheckState:get="Filter.AreAllValuesSelected"
+                                @bind-CheckState:set="@(v => OnAllValuesSelectionChangedAsync(v))"/>
+                @foreach (var tag in ChartFilterTags.GetOrderedValues(Filter.Values))
+                {
+                    var isChecked = Filter.SelectedValues.Contains(tag);
+                    <FluentCheckbox Label="@tag.Text"
+                                    title="@tag.Text"
+                                    @key=tag
+                                    @bind-Value:get="isChecked"
+                                    @bind-Value:set="c => OnTagSelectionChangedAsync(tag, c)"/>
+                }
+            </FluentStack>
+        </AspirePopupFocusNavigation>
     </Body>
 </FluentPopover>
