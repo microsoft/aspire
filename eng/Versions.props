@@ -61,6 +61,13 @@
     <!-- MicroBuild.Core version for VS Code extension signing -->
     <MicrosoftVisualStudioEngMicroBuildCoreVersion>1.0.0</MicrosoftVisualStudioEngMicroBuildCoreVersion>
   </PropertyGroup>
+  <!-- Blazor JS asset package versions — one per supported runtime major version.
+       The dashboard downloads these at build time to extract blazor.web.js for each runtime it may roll-forward to.
+       Versions must be available on the dnceng dotnet-public mirror (originally published to nuget.org). -->
+  <PropertyGroup Label="BlazorAssets">
+    <MicrosoftAspNetCoreAppInternalAssetsNet10Version>10.0.8</MicrosoftAspNetCoreAppInternalAssetsNet10Version>
+    <MicrosoftAspNetCoreAppInternalAssetsNet11Version>11.0.0-preview.4.26230.115</MicrosoftAspNetCoreAppInternalAssetsNet11Version>
+  </PropertyGroup>
   <!-- .NET 10.0 Package Versions -->
   <PropertyGroup Label="Preview">
     <!-- EF -->

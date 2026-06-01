@@ -1,0 +1,11 @@
+@*
+    Emits a versioned blazor.web.js script tag that matches the runtime the dashboard is running on.
+
+    The dashboard targets net8.0 but rolls forward to .NET 10 or 11 at runtime via RollForward=Major.
+    In .NET 10+ the Blazor JS is a static web asset delivered by the SDK, but since we don't target
+    10+ the SDK never provides it. At build time, BlazorAssets.targets downloads the
+    Microsoft.AspNetCore.App.Internal.Assets NuGet package for each supported major version and copies
+    blazor.web.js into wwwroot/framework/blazor.web.{major}.js. This component selects the right file
+    based on the running runtime version.
+*@
+<script src="framework/blazor.web.@(Environment.Version.Major).js"></script>

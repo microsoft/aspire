@@ -339,4 +339,7 @@
     <Content Remove="wwwroot\js\README.md" />
     <None Include="wwwroot\js\README.md" />
   </ItemGroup>
+
+  <Import Project="BlazorAssets.targets" />
+
 </Project>
