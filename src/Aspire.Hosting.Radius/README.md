@@ -86,7 +86,7 @@ Supported credential modes:
 | Provider | Mode | Method |
 |----------|------|--------|
 | Azure | Service Principal | `azure.WithServicePrincipal(tenantId, clientId, clientSecret)` |
-| Azure | Workload Identity | `azure.WithWorkloadIdentity(clientId, tenantId)` |
+| Azure | Workload Identity | `azure.WithWorkloadIdentity(tenantId, clientId)` |
 | AWS   | Access Key        | `aws.WithAccessKey(accessKeyId, secretAccessKey)` |
 | AWS   | IRSA              | `aws.WithIrsa(iamRoleArn)` |
 

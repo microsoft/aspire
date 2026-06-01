@@ -47,9 +47,9 @@ public abstract record AzureRadiusCredential
     /// secret is materialized; the identity is bound at deploy time by the
     /// hosting Kubernetes cluster's OIDC issuer.
     /// </summary>
-    /// <param name="ClientId">Workload identity client (application) GUID.</param>
     /// <param name="TenantId">Azure tenant GUID.</param>
+    /// <param name="ClientId">Workload identity client (application) GUID.</param>
     public sealed record WorkloadIdentity(
-        string ClientId,
-        string TenantId) : AzureRadiusCredential;
+        string TenantId,
+        string ClientId) : AzureRadiusCredential;
 }

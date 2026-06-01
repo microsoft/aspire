@@ -26,7 +26,7 @@ public class CredentialModeOverrideTests
         env.WithAzureProvider(SubId, Rg, azure =>
         {
             azure.WithServicePrincipal(TenantId, ClientId, secret);
-            azure.WithWorkloadIdentity(ClientId, TenantId);
+            azure.WithWorkloadIdentity(TenantId, ClientId);
         });
 
         var ann = env.Resource.Annotations.OfType<RadiusCloudProvidersAnnotation>().Single();
@@ -60,7 +60,7 @@ public class CredentialModeOverrideTests
         const string SecondSub = "44444444-4444-4444-4444-444444444444";
 
         env.WithAzureProvider(SubId, Rg, azure => azure.WithServicePrincipal(TenantId, ClientId, secret));
-        env.WithAzureProvider(SecondSub, "rg2", azure => azure.WithWorkloadIdentity(ClientId, TenantId));
+        env.WithAzureProvider(SecondSub, "rg2", azure => azure.WithWorkloadIdentity(TenantId, ClientId));
 
         var ann = env.Resource.Annotations.OfType<RadiusCloudProvidersAnnotation>().Single();
         Assert.Equal(SecondSub, ann.Azure!.SubscriptionId);

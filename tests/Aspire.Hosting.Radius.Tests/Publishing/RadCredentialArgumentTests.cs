@@ -46,7 +46,7 @@ public class RadCredentialArgumentTests
         var builder = DistributedApplication.CreateBuilder();
         var env = builder.AddRadiusEnvironment("radius");
         env.WithAzureProvider(SubscriptionId, ResourceGroup,
-            azure => azure.WithWorkloadIdentity(ClientId, TenantId));
+            azure => azure.WithWorkloadIdentity(TenantId, ClientId));
 
         var args = await ResolveSingleAsync(env.Resource);
 

@@ -62,7 +62,7 @@ public class MultiEnvironmentProvidersTests
                 azure => azure.WithServicePrincipal(TenantId, ClientId, secret));
         builder.AddRadiusEnvironment("prod")
             .WithAzureProvider(SubB, "rg-prod",
-                azure => azure.WithWorkloadIdentity(ClientId, TenantId));
+                azure => azure.WithWorkloadIdentity(TenantId, ClientId));
 
         builder.AddContainer("api", "nginx");
 

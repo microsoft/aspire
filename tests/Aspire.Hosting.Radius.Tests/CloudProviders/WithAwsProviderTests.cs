@@ -123,6 +123,20 @@ public class WithAwsProviderTests
     }
 
     [Fact]
+    public void WithIrsa_ArnWithRolePath_Accepted()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var env = builder.AddRadiusEnvironment("radius");
+        const string ArnWithPath = "arn:aws:iam::123456789012:role/division/team/RDSAccess";
+
+        env.WithAwsProvider(ValidAccount, ValidRegion, aws => aws.WithIrsa(ArnWithPath));
+
+        var ann = env.Resource.Annotations.OfType<RadiusCloudProvidersAnnotation>().Single();
+        var irsa = Assert.IsType<AwsRadiusCredential.Irsa>(ann.Aws!.Credential);
+        Assert.Equal(ArnWithPath, irsa.IamRoleArn);
+    }
+
+    [Fact]
     public void WithAwsProvider_UnknownRegionAccepted()
     {
         var builder = DistributedApplication.CreateBuilder();

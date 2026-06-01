@@ -32,8 +32,8 @@ public interface IAzureRadiusProviderBuilder
     /// long-lived secret is materialized; the identity is bound at deploy
     /// time by the hosting Kubernetes cluster's OIDC issuer.
     /// </summary>
-    /// <param name="clientId">Workload identity client (application) GUID.</param>
     /// <param name="tenantId">Azure tenant GUID.</param>
+    /// <param name="clientId">Workload identity client (application) GUID.</param>
     /// <returns>This builder for chaining.</returns>
-    IAzureRadiusProviderBuilder WithWorkloadIdentity(string clientId, string tenantId);
+    IAzureRadiusProviderBuilder WithWorkloadIdentity(string tenantId, string clientId);
 }

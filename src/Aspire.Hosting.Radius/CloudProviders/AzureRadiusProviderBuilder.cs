@@ -39,13 +39,13 @@ internal sealed class AzureRadiusProviderBuilder : IAzureRadiusProviderBuilder
         return this;
     }
 
-    public IAzureRadiusProviderBuilder WithWorkloadIdentity(string clientId, string tenantId)
+    public IAzureRadiusProviderBuilder WithWorkloadIdentity(string tenantId, string clientId)
     {
-        CloudProviderValidation.ValidateGuid(clientId, nameof(clientId));
         CloudProviderValidation.ValidateGuid(tenantId, nameof(tenantId));
+        CloudProviderValidation.ValidateGuid(clientId, nameof(clientId));
 
         LogOverrideIfNeeded(nameof(WithWorkloadIdentity));
-        Credential = new AzureRadiusCredential.WorkloadIdentity(clientId, tenantId);
+        Credential = new AzureRadiusCredential.WorkloadIdentity(tenantId, clientId);
         return this;
     }
 

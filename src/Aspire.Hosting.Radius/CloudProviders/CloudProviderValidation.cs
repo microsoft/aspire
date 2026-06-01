@@ -49,6 +49,13 @@ internal static partial class CloudProviderValidation
     [GeneratedRegex(@"^\d{12}$")]
     private static partial Regex AwsAccountIdPattern();
 
-    [GeneratedRegex(@"^arn:aws:iam::\d{12}:role/[\w+=,.@-]+$")]
+    // AWS IAM role ARNs may include a path between "role/" and the role name, e.g.
+    // arn:aws:iam::123456789012:role/division/team/RDSAccess. Each segment (path
+    // segments and the final role name) must be non-empty and may contain the
+    // characters permitted in IAM friendly names; a trailing '/' or empty segment
+    // is rejected. The character class is restricted to ASCII to avoid \w matching
+    // non-ASCII word characters that AWS does not allow.
+    // See https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_identifiers.html#identifiers-friendly-names
+    [GeneratedRegex(@"^arn:aws:iam::\d{12}:role/(?:[A-Za-z0-9+=,.@_-]+/)*[A-Za-z0-9+=,.@_-]+$")]
     private static partial Regex IamRoleArnPattern();
 }

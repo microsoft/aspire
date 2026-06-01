@@ -118,7 +118,7 @@ public class WithAzureProviderTests
         var env = builder.AddRadiusEnvironment("radius");
 
         env.WithAzureProvider(ValidSubscriptionId, ValidResourceGroup,
-            azure => azure.WithWorkloadIdentity(ValidClientId, ValidTenantId));
+            azure => azure.WithWorkloadIdentity(ValidTenantId, ValidClientId));
 
         var ann = env.Resource.Annotations.OfType<RadiusCloudProvidersAnnotation>().Single();
         var wi = Assert.IsType<AzureRadiusCredential.WorkloadIdentity>(ann.Azure!.Credential);
@@ -134,7 +134,7 @@ public class WithAzureProviderTests
 
         var ex = Assert.Throws<ArgumentException>(() => env.WithAzureProvider(
             ValidSubscriptionId, ValidResourceGroup,
-            azure => azure.WithWorkloadIdentity(ValidClientId, "bad")));
+            azure => azure.WithWorkloadIdentity("bad", ValidClientId)));
         Assert.Equal("tenantId", ex.ParamName);
     }
 
@@ -146,7 +146,7 @@ public class WithAzureProviderTests
 
         var ex = Assert.Throws<ArgumentException>(() => env.WithAzureProvider(
             ValidSubscriptionId, ValidResourceGroup,
-            azure => azure.WithWorkloadIdentity("", ValidTenantId)));
+            azure => azure.WithWorkloadIdentity(ValidTenantId, "")));
         Assert.Equal("clientId", ex.ParamName);
     }
 }

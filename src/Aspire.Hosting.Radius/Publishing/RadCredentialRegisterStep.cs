@@ -71,6 +71,14 @@ internal sealed class RadCredentialRegisterStep
             return;
         }
 
+        // Radius cloud-provider credentials are stored per-installation (global), not
+        // per-environment — registering one overwrites any previously registered
+        // credential for the same provider across ALL environments. Fail fast when the
+        // model configures conflicting credentials so the clobber surfaces as a clear
+        // error instead of a silent last-writer-wins surprise at deploy time.
+        // See https://docs.radapp.io/reference/cli/rad_credential_register/
+        ValidateNoConflictingInstallationCredentials(context.Model);
+
         var radAvailable = await RadiusDeploymentPipelineStep.DetectRadCliAsync(cancellationToken).ConfigureAwait(false);
         if (!radAvailable)
         {
@@ -150,6 +158,78 @@ internal sealed class RadCredentialRegisterStep
                 SecretArgFlagSet: []);
         }
     }
+
+    // Detects conflicting installation-global credentials across every Radius environment
+    // in the model. Two environments may legitimately share one credential (e.g. a single
+    // service principal scoped to different subscriptions via per-environment Bicep), so
+    // identity is computed from the credential principal only — scope fields (subscription,
+    // resource group, account, region) and secret material are intentionally excluded.
+    // GUID principals are canonicalized so the same identity expressed with different casing
+    // or formatting is not flagged as a false conflict.
+    internal static void ValidateNoConflictingInstallationCredentials(DistributedApplicationModel model)
+    {
+        var azure = new List<(string Env, string Identity)>();
+        var aws = new List<(string Env, string Identity)>();
+
+        foreach (var env in model.Resources.OfType<RadiusEnvironmentResource>())
+        {
+            var annotation = env.Annotations.OfType<RadiusCloudProvidersAnnotation>().FirstOrDefault();
+            if (annotation is null)
+            {
+                continue;
+            }
+
+            if (annotation.Azure is { } azureConfig)
+            {
+                azure.Add((env.Name, AzureCredentialIdentity(azureConfig.Credential)));
+            }
+
+            if (annotation.Aws is { } awsConfig)
+            {
+                aws.Add((env.Name, AwsCredentialIdentity(awsConfig.Credential)));
+            }
+        }
+
+        ThrowIfConflicting("Azure", azure);
+        ThrowIfConflicting("AWS", aws);
+    }
+
+    private static void ThrowIfConflicting(string provider, IReadOnlyList<(string Env, string Identity)> configured)
+    {
+        var distinctIdentities = configured.Select(static c => c.Identity).Distinct(StringComparer.Ordinal).Count();
+        if (distinctIdentities <= 1)
+        {
+            return;
+        }
+
+        var envNames = string.Join(", ", configured.Select(static c => $"'{c.Env}'").Distinct(StringComparer.Ordinal));
+        throw new InvalidOperationException(
+            $"{provider} cloud-provider credentials are registered per Radius installation (global) and " +
+            $"are shared across all environments, but environments {envNames} configure different {provider} " +
+            "credentials that would overwrite one another. Configure a single shared credential for all " +
+            "environments, or deploy them to separate Radius installations. Diagnostic: ASPIRERADIUS011.");
+    }
+
+    private static string AzureCredentialIdentity(AzureRadiusCredential credential) => credential switch
+    {
+        AzureRadiusCredential.ServicePrincipal sp => $"sp|{Canonicalize(sp.TenantId)}|{Canonicalize(sp.ClientId)}",
+        AzureRadiusCredential.WorkloadIdentity wi => $"wi|{Canonicalize(wi.TenantId)}|{Canonicalize(wi.ClientId)}",
+        _ => throw new InvalidOperationException($"Unknown Azure credential type '{credential.GetType().Name}'."),
+    };
+
+    private static string AwsCredentialIdentity(AwsRadiusCredential credential) => credential switch
+    {
+        // The access key id identifies the principal; it is bound via a parameter, so its
+        // resource name is used as a stable proxy without resolving the value here.
+        AwsRadiusCredential.AccessKey ak => $"access-key|{ak.AccessKeyId.Resource.Name}",
+        AwsRadiusCredential.Irsa irsa => $"irsa|{irsa.IamRoleArn}",
+        _ => throw new InvalidOperationException($"Unknown AWS credential type '{credential.GetType().Name}'."),
+    };
+
+    // Inputs are validated as GUIDs before reaching here; normalize to the canonical "D"
+    // form so differing casing/formatting of the same GUID is not treated as a conflict.
+    private static string Canonicalize(string guid)
+        => Guid.TryParse(guid, out var parsed) ? parsed.ToString("D") : guid;
 
     private static async Task<string> ResolveParameterAsync(
         IResourceBuilder<ParameterResource> parameter,
