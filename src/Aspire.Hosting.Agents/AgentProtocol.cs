@@ -9,19 +9,9 @@ namespace Aspire.Hosting.Agents;
 public enum AgentProtocol
 {
     /// <summary>
-    /// The Agent2Agent protocol using JSON-RPC 2.0 over HTTP.
+    /// The Agent2Agent protocol.
     /// </summary>
-    A2AJsonRpc,
-
-    /// <summary>
-    /// The Agent2Agent protocol using gRPC.
-    /// </summary>
-    A2AGrpc,
-
-    /// <summary>
-    /// The Agent2Agent protocol using HTTP with JSON payloads.
-    /// </summary>
-    A2AHttpJson,
+    A2A,
 
     /// <summary>
     /// The OpenAI Responses API protocol.

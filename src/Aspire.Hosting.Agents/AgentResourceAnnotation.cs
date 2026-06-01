@@ -19,12 +19,10 @@ public sealed class AgentResourceAnnotation : IResourceAnnotation, IResourceWith
     /// </summary>
     /// <param name="protocol">The agent protocol supported by the resource.</param>
     /// <param name="customPath">The custom protocol path, when one is configured.</param>
-    /// <param name="a2AInvocationMode">The invocation mode used by dashboard commands for A2A protocols.</param>
-    public AgentResourceAnnotation(AgentProtocol protocol, string? customPath, A2AInvocationMode a2AInvocationMode)
+    public AgentResourceAnnotation(AgentProtocol protocol, string? customPath)
     {
         Protocol = protocol;
         CustomPath = customPath;
-        A2AInvocationMode = a2AInvocationMode;
     }
 
     /// <summary>
@@ -36,11 +34,6 @@ public sealed class AgentResourceAnnotation : IResourceAnnotation, IResourceWith
     /// Gets the custom protocol path configured for the agent.
     /// </summary>
     public string? CustomPath { get; }
-
-    /// <summary>
-    /// Gets the invocation mode used by dashboard commands for A2A protocols.
-    /// </summary>
-    public A2AInvocationMode A2AInvocationMode { get; }
 
     bool IResourceWithReferenceAnnotation.CanApplyReference(IResource source)
     {

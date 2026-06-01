@@ -19,7 +19,7 @@ public class AgentReferenceEnvironmentTests
         var agent = builder.AddContainer("weather-agent", "image")
             .WithHttpEndpoint(targetPort: 8080)
             .WithEndpoint("http", e => AllocateEndpoint(e, "weather-agent.dev.internal", 8080))
-            .AsAgent(AgentProtocol.A2AJsonRpc);
+            .AsAgent(AgentProtocol.A2A);
 
         var consumer = builder.AddContainer("consumer", "image")
             .WithReference(agent)

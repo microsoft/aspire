@@ -28,21 +28,6 @@ public static class AgentResourceBuilderExtensions
     public const string DefaultA2AAgentCardPath = "/.well-known/agent-card.json";
 
     /// <summary>
-    /// The default A2A JSON-RPC path.
-    /// </summary>
-    public const string DefaultA2AJsonRpcPath = "/";
-
-    /// <summary>
-    /// The default A2A HTTP+JSON message send path.
-    /// </summary>
-    public const string DefaultA2AHttpJsonSendMessagePath = "/message:send";
-
-    /// <summary>
-    /// The default A2A HTTP+JSON streaming message path.
-    /// </summary>
-    public const string DefaultA2AHttpJsonStreamingMessagePath = "/message:stream";
-
-    /// <summary>
     /// The default OpenAI Responses API path.
     /// </summary>
     public const string DefaultResponsesPath = "/v1/responses";
@@ -57,6 +42,11 @@ public static class AgentResourceBuilderExtensions
     /// </summary>
     public const string DefaultAcpPath = "/runs";
 
+    private const string DefaultA2AHttpJsonSendMessagePath = "/message:send";
+    private const string DefaultA2AHttpJsonStreamingMessagePath = "/message:stream";
+    private const string A2AProtocolBindingJsonRpc = "JSONRPC";
+    private const string A2AProtocolBindingHttpJson = "HTTP+JSON";
+
     private static readonly JsonSerializerOptions s_indentedJsonOptions = new() { WriteIndented = true };
 
     /// <summary>
@@ -70,22 +60,7 @@ public static class AgentResourceBuilderExtensions
     public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, AgentProtocol protocol)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return AsAgent(builder, agentCustomPath: null, A2AInvocationMode.NonStreaming, protocol);
-    }
-
-    /// <summary>
-    /// Configures the resource as an agent that supports the specified protocol.
-    /// </summary>
-    /// <typeparam name="T">The type of resource being configured.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="a2AInvocationMode">The invocation mode used by dashboard commands for A2A protocols.</param>
-    /// <param name="protocol">The protocol supported by the agent.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("asAgentWithA2AInvocationMode")]
-    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, A2AInvocationMode a2AInvocationMode, AgentProtocol protocol)
-        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
-    {
-        return AsAgent(builder, agentCustomPath: null, a2AInvocationMode, protocol);
+        return AsAgent(builder, agentCustomPath: null, protocol);
     }
 
     /// <summary>
@@ -100,26 +75,10 @@ public static class AgentResourceBuilderExtensions
     public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, string? agentCustomPath, AgentProtocol protocol)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return AsAgent(builder, agentCustomPath, A2AInvocationMode.NonStreaming, protocol);
-    }
-
-    /// <summary>
-    /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
-    /// </summary>
-    /// <typeparam name="T">The type of resource being configured.</typeparam>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="agentCustomPath">The custom path for protocol-specific dashboard commands and URLs.</param>
-    /// <param name="a2AInvocationMode">The invocation mode used by dashboard commands for A2A protocols.</param>
-    /// <param name="protocol">The protocol supported by the agent.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("asAgentWithPathAndA2AInvocationMode")]
-    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, string? agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol protocol)
-        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
-    {
         ArgumentNullException.ThrowIfNull(builder);
 
         var normalizedPath = NormalizePath(agentCustomPath);
-        var annotation = new AgentResourceAnnotation(protocol, normalizedPath, a2AInvocationMode);
+        var annotation = new AgentResourceAnnotation(protocol, normalizedPath);
 
         builder.WithAnnotation(annotation);
         builder.WithIconName("Agents");
@@ -131,7 +90,7 @@ public static class AgentResourceBuilderExtensions
 
         if (IsA2AProtocol(protocol))
         {
-            ConfigureA2A(builder, endpoint, normalizedPath ?? DefaultA2AAgentCardPath, protocol, a2AInvocationMode, ShouldHighlightCommand);
+            ConfigureA2A(builder, endpoint, normalizedPath ?? DefaultA2AAgentCardPath, ShouldHighlightCommand);
         }
 
         if (protocol is AgentProtocol.Responses)
@@ -180,15 +139,13 @@ public static class AgentResourceBuilderExtensions
 
     internal static bool IsA2AProtocol(AgentProtocol protocol)
     {
-        return protocol is AgentProtocol.A2AJsonRpc or AgentProtocol.A2AGrpc or AgentProtocol.A2AHttpJson;
+        return protocol is AgentProtocol.A2A;
     }
 
     private static void ConfigureA2A<T>(
         IResourceBuilder<T> builder,
         EndpointReference endpoint,
         string agentCardPath,
-        AgentProtocol protocol,
-        A2AInvocationMode invocationMode,
         Func<bool> shouldHighlightCommand)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
@@ -196,49 +153,21 @@ public static class AgentResourceBuilderExtensions
 
         AddProtocolEndpointUrl(builder, endpoint, agentCardPath, "Agent Card");
 
-        if (protocol is AgentProtocol.A2AJsonRpc)
-        {
-            AddHttpCommandIfMissing(
-                builder,
-                commandName: $"{builder.Resource.Name}-a2a-jsonrpc-send-message",
-                path: DefaultA2AJsonRpcPath,
-                displayName: "Invoke A2A (JSON-RPC)",
-                commandOptions: new()
-                {
-                    Method = HttpMethod.Post,
-                    IconName = "ChatSparkle",
-                    IconVariant = IconVariant.Regular,
-                    IsHighlighted = shouldHighlightCommand(),
-                    EndpointSelector = () => endpoint,
-                    PrepareRequest = invocationMode is A2AInvocationMode.Streaming
-                        ? PrepareA2AJsonRpcStreamingRequestAsync
-                        : PrepareA2AJsonRpcRequestAsync,
-                    GetCommandResult = invocationMode is A2AInvocationMode.Streaming
-                        ? GetAgentCommandTextResultAsync
-                        : GetAgentCommandJsonResultAsync
-                });
-        }
-
-        if (protocol is AgentProtocol.A2AHttpJson)
-        {
-            AddHttpCommandIfMissing(
-                builder,
-                commandName: $"{builder.Resource.Name}-a2a-http-json-send-message",
-                path: invocationMode is A2AInvocationMode.Streaming ? DefaultA2AHttpJsonStreamingMessagePath : DefaultA2AHttpJsonSendMessagePath,
-                displayName: "Invoke A2A (HTTP+JSON)",
-                commandOptions: new()
-                {
-                    Method = HttpMethod.Post,
-                    IconName = "ChatSparkle",
-                    IconVariant = IconVariant.Regular,
-                    IsHighlighted = shouldHighlightCommand(),
-                    EndpointSelector = () => endpoint,
-                    PrepareRequest = PrepareA2AHttpJsonRequestAsync,
-                    GetCommandResult = invocationMode is A2AInvocationMode.Streaming
-                        ? GetAgentCommandTextResultAsync
-                        : GetAgentCommandJsonResultAsync
-                });
-        }
+        AddHttpCommandIfMissing(
+            builder,
+            commandName: $"{builder.Resource.Name}-a2a-send-message",
+            path: agentCardPath,
+            displayName: "Invoke A2A",
+            commandOptions: new()
+            {
+                Method = HttpMethod.Get,
+                IconName = "ChatSparkle",
+                IconVariant = IconVariant.Regular,
+                IsHighlighted = shouldHighlightCommand(),
+                EndpointSelector = () => endpoint,
+                PrepareRequest = PrepareA2ARequestAsync,
+                GetCommandResult = GetAgentCommandResultAsync
+            });
     }
 
     private static void ConfigureResponses<T>(IResourceBuilder<T> builder, EndpointReference endpoint, string responsesPath, Func<bool> shouldHighlightCommand)
@@ -319,63 +248,148 @@ public static class AgentResourceBuilderExtensions
             });
     }
 
-    private static async Task PrepareA2AJsonRpcRequestAsync(HttpCommandRequestContext ctx)
+    private static async Task PrepareA2ARequestAsync(HttpCommandRequestContext ctx)
     {
+        var cardUri = ctx.Request.RequestUri ?? throw new InvalidOperationException("Could not determine the A2A agent card URL.");
+        var invocation = await ResolveA2AInvocationAsync(ctx, cardUri).ConfigureAwait(true);
+
         var message = await PromptForAgentMessageAsync(
             ctx,
             title: "A2A Agent",
             message: "Enter a message to send to the agent.",
             placeHolder: "What is the weather in Seattle?").ConfigureAwait(true);
 
-        // A2A JSON-RPC 1.0 sends the abstract SendMessage operation as a JSON-RPC
-        // request over HTTP. The message payload matches the canonical A2A data model.
-        ctx.Request.Headers.Add("A2A-Version", "1.0");
-        ctx.Request.Content = new StringContent(
-            new JsonObject
-            {
-                ["jsonrpc"] = "2.0",
-                ["id"] = Guid.NewGuid().ToString("N"),
-                ["method"] = "SendMessage",
-                ["params"] = CreateA2ASendMessageRequest(message)
-            }.ToString(),
-            Encoding.UTF8,
-            "application/json");
-    }
+        ctx.Request.Method = HttpMethod.Post;
+        ctx.Request.RequestUri = invocation.RequestUri;
+        ctx.Request.Headers.Add("A2A-Version", invocation.ProtocolVersion ?? "1.0");
+        if (invocation.IsStreaming)
+        {
+            ctx.Request.Headers.Accept.ParseAdd("text/event-stream");
+        }
 
-    private static async Task PrepareA2AJsonRpcStreamingRequestAsync(HttpCommandRequestContext ctx)
-    {
-        var message = await PromptForAgentMessageAsync(
-            ctx,
-            title: "A2A Agent",
-            message: "Enter a message to send to the agent.",
-            placeHolder: "What is the weather in Seattle?").ConfigureAwait(true);
+        if (invocation.ProtocolBinding is A2AProtocolBindingJsonRpc)
+        {
+            // A2A JSON-RPC sends the abstract message/send operation as a JSON-RPC
+            // request over HTTP. Streaming support is advertised in the agent card.
+            ctx.Request.Content = new StringContent(
+                new JsonObject
+                {
+                    ["jsonrpc"] = "2.0",
+                    ["id"] = Guid.NewGuid().ToString("N"),
+                    ["method"] = invocation.IsStreaming ? "SendStreamingMessage" : "SendMessage",
+                    ["params"] = CreateA2ASendMessageRequest(message)
+                }.ToString(),
+                Encoding.UTF8,
+                "application/json");
+            return;
+        }
 
-        ctx.Request.Headers.Add("A2A-Version", "1.0");
-        ctx.Request.Content = new StringContent(
-            new JsonObject
-            {
-                ["jsonrpc"] = "2.0",
-                ["id"] = Guid.NewGuid().ToString("N"),
-                ["method"] = "SendStreamingMessage",
-                ["params"] = CreateA2ASendMessageRequest(message)
-            }.ToString(),
-            Encoding.UTF8,
-            "application/json");
-    }
-
-    private static async Task PrepareA2AHttpJsonRequestAsync(HttpCommandRequestContext ctx)
-    {
-        var message = await PromptForAgentMessageAsync(
-            ctx,
-            title: "A2A Agent",
-            message: "Enter a message to send to the agent.",
-            placeHolder: "What is the weather in Seattle?").ConfigureAwait(true);
-
-        ctx.Request.Headers.Add("A2A-Version", "1.0");
         ctx.Request.Content = new StringContent(
             CreateA2ASendMessageRequest(message).ToString(),
             Encoding.UTF8,
             "application/a2a+json");
+    }
+
+    private static async Task<A2AInvocation> ResolveA2AInvocationAsync(HttpCommandRequestContext ctx, Uri cardUri)
+    {
+        using var response = await ctx.HttpClient.GetAsync(cardUri, ctx.CancellationToken).ConfigureAwait(true);
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new InvalidOperationException($"Could not read the A2A agent card at '{cardUri}'. The request failed with status code {(int)response.StatusCode} ({response.StatusCode}).");
+        }
+
+        var card = await response.Content.ReadFromJsonAsync<JsonObject>(cancellationToken: ctx.CancellationToken).ConfigureAwait(true)
+            ?? throw new InvalidOperationException($"The A2A agent card at '{cardUri}' was empty.");
+
+        var streaming = card["capabilities"]?["streaming"]?.GetValue<bool>() is true;
+        var interfaces = GetA2AInterfaces(card, cardUri).ToArray();
+
+        foreach (var agentInterface in interfaces)
+        {
+            if (agentInterface.ProtocolBinding is A2AProtocolBindingJsonRpc)
+            {
+                return new A2AInvocation(agentInterface.Url, agentInterface.ProtocolBinding, agentInterface.ProtocolVersion, streaming);
+            }
+
+            if (agentInterface.ProtocolBinding is A2AProtocolBindingHttpJson)
+            {
+                var requestUri = AppendPath(agentInterface.Url, streaming ? DefaultA2AHttpJsonStreamingMessagePath : DefaultA2AHttpJsonSendMessagePath);
+                return new A2AInvocation(requestUri, agentInterface.ProtocolBinding, agentInterface.ProtocolVersion, streaming);
+            }
+        }
+
+        var bindings = interfaces.Length == 0
+            ? "none"
+            : string.Join(", ", interfaces.Select(agentInterface => agentInterface.ProtocolBinding));
+        throw new InvalidOperationException($"The A2A agent card at '{cardUri}' does not advertise a dashboard-invokable protocol binding. Supported dashboard bindings are JSONRPC and HTTP+JSON. Advertised bindings: {bindings}.");
+    }
+
+    private static IEnumerable<A2AAgentInterface> GetA2AInterfaces(JsonObject card, Uri cardUri)
+    {
+        var supportedInterfaces = card["supportedInterfaces"]?.AsArray();
+        if (supportedInterfaces is not null)
+        {
+            foreach (var item in supportedInterfaces.OfType<JsonObject>())
+            {
+                var agentInterface = CreateA2AAgentInterface(item, cardUri);
+                if (agentInterface is not null)
+                {
+                    yield return agentInterface;
+                }
+            }
+
+            yield break;
+        }
+
+        if (card["url"]?.GetValue<string>() is { Length: > 0 } url)
+        {
+            var protocolBinding = card["preferredTransport"]?.GetValue<string>() ?? A2AProtocolBindingJsonRpc;
+            if (TryCreateUri(cardUri, url, out var interfaceUri))
+            {
+                yield return new A2AAgentInterface(interfaceUri, NormalizeA2AProtocolBinding(protocolBinding), card["protocolVersion"]?.GetValue<string>());
+            }
+        }
+    }
+
+    private static A2AAgentInterface? CreateA2AAgentInterface(JsonObject item, Uri cardUri)
+    {
+        if (item["url"]?.GetValue<string>() is not { Length: > 0 } url ||
+            item["protocolBinding"]?.GetValue<string>() is not { Length: > 0 } protocolBinding ||
+            !TryCreateUri(cardUri, url, out var interfaceUri))
+        {
+            return null;
+        }
+
+        return new A2AAgentInterface(
+            interfaceUri,
+            NormalizeA2AProtocolBinding(protocolBinding),
+            item["protocolVersion"]?.GetValue<string>());
+    }
+
+    private static bool TryCreateUri(Uri baseUri, string url, out Uri uri)
+    {
+        if (Uri.TryCreate(url, UriKind.Absolute, out uri!))
+        {
+            return true;
+        }
+
+        return Uri.TryCreate(baseUri, url, out uri!);
+    }
+
+    private static string NormalizeA2AProtocolBinding(string protocolBinding)
+    {
+        return protocolBinding.Replace("-", "", StringComparison.Ordinal).ToUpperInvariant();
+    }
+
+    private static Uri AppendPath(Uri baseUri, string path)
+    {
+        var builder = new UriBuilder(baseUri);
+        var basePath = builder.Path.TrimEnd('/');
+        builder.Path = $"{basePath}{path}";
+        builder.Query = string.Empty;
+        builder.Fragment = string.Empty;
+
+        return builder.Uri;
     }
 
     private static async Task PrepareResponsesRequestAsync(HttpCommandRequestContext ctx, string agentName)
@@ -533,6 +547,13 @@ public static class AgentResourceBuilderExtensions
             displayImmediately: true);
     }
 
+    private static Task<ExecuteCommandResult> GetAgentCommandResultAsync(HttpCommandResultContext ctx)
+    {
+        return ctx.Response.Content.Headers.ContentType?.MediaType is "application/json" or "application/a2a+json"
+            ? GetAgentCommandJsonResultAsync(ctx)
+            : GetAgentCommandTextResultAsync(ctx);
+    }
+
     private static JsonObject CreateA2ASendMessageRequest(string message)
     {
         return new JsonObject
@@ -595,6 +616,10 @@ public static class AgentResourceBuilderExtensions
 
         return path[0] == '/' ? path : $"/{path}";
     }
+
+    private sealed record A2AAgentInterface(Uri Url, string ProtocolBinding, string? ProtocolVersion);
+
+    private sealed record A2AInvocation(Uri RequestUri, string ProtocolBinding, string? ProtocolVersion, bool IsStreaming);
 
 }
 

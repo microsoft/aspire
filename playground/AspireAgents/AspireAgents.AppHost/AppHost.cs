@@ -17,7 +17,7 @@ var a2aAgent = builder.AddUvicornApp("a2a-jsonrpc-agent", "../weather-agent-pyth
     .WithReference(project)
     .WithReference(chat)
     .WaitFor(chat)
-    .AsAgent(AgentProtocol.A2AJsonRpc);
+    .AsAgent(AgentProtocol.A2A);
 
 builder.AddProject<Projects.ResponsesAgent>("responses-agent")
     .WithHttpEndpoint(env: "PORT")

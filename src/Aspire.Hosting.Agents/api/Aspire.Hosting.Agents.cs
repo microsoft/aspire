@@ -8,27 +8,17 @@
 //------------------------------------------------------------------------------
 namespace Aspire.Hosting.Agents
 {
-    public enum A2AInvocationMode
-    {
-        NonStreaming = 0,
-        Streaming = 1,
-    }
-
     public enum AgentProtocol
     {
-        A2AJsonRpc = 0,
-        A2AGrpc = 1,
-        A2AHttpJson = 2,
-        Responses = 3,
-        AgUi = 4,
-        Acp = 5,
+        A2A = 0,
+        Responses = 1,
+        AgUi = 2,
+        Acp = 3,
     }
 
     public sealed partial class AgentResourceAnnotation : Aspire.Hosting.ApplicationModel.IResourceAnnotation
     {
-        public AgentResourceAnnotation(AgentProtocol protocol, string? customPath, A2AInvocationMode a2AInvocationMode) { }
-
-        public A2AInvocationMode A2AInvocationMode { get { throw null; } }
+        public AgentResourceAnnotation(AgentProtocol protocol, string? customPath) { }
 
         public string? CustomPath { get { throw null; } }
 
@@ -41,12 +31,6 @@ namespace Aspire.Hosting.Agents
 
         public const string DefaultA2AAgentCardPath = "/.well-known/agent-card.json";
 
-        public const string DefaultA2AHttpJsonSendMessagePath = "/message:send";
-
-        public const string DefaultA2AHttpJsonStreamingMessagePath = "/message:stream";
-
-        public const string DefaultA2AJsonRpcPath = "/";
-
         public const string DefaultAcpPath = "/runs";
 
         public const string DefaultAgUiPath = "/ag-ui";
@@ -57,16 +41,8 @@ namespace Aspire.Hosting.Agents
         public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, AgentProtocol protocol)
             where T : Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, Aspire.Hosting.ApplicationModel.IResourceWithEnvironment, Aspire.Hosting.ApplicationModel.IComputeResource { throw null; }
 
-        [Aspire.Hosting.AspireExport("asAgentWithA2AInvocationMode")]
-        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, A2AInvocationMode a2AInvocationMode, AgentProtocol protocol)
-            where T : Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, Aspire.Hosting.ApplicationModel.IResourceWithEnvironment, Aspire.Hosting.ApplicationModel.IComputeResource { throw null; }
-
         [Aspire.Hosting.AspireExport("asAgentWithPath")]
         public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, string? agentCustomPath, AgentProtocol protocol)
-            where T : Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, Aspire.Hosting.ApplicationModel.IResourceWithEnvironment, Aspire.Hosting.ApplicationModel.IComputeResource { throw null; }
-
-        [Aspire.Hosting.AspireExport("asAgentWithPathAndA2AInvocationMode")]
-        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, string? agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol protocol)
             where T : Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, Aspire.Hosting.ApplicationModel.IResourceWithEnvironment, Aspire.Hosting.ApplicationModel.IComputeResource { throw null; }
     }
 }
