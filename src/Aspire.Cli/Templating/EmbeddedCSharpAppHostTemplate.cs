@@ -91,11 +91,20 @@ internal static class EmbeddedCSharpAppHostTemplate
 
         // Conditional blocks in paths are nonsensical (they require multi-line
         // marker pairs) — restrict the path transform to plain token replacement
-        // so a file or directory named e.g. `{{projectName}}.csproj` becomes
+        // so a file or directory named e.g. `{{projectName}}._csproj` becomes
         // `<projectName>.csproj` without the conditional pass throwing on an
         // unmatched start marker.
-        string ApplyPathTransform(string segment) =>
-            ApplyTokens(segment, projectName, aspireVersion, ports, hostName, userSecretsId);
+        //
+        // Embedded source files use the `._csproj` extension instead of `.csproj`
+        // so the repo-wide MSBuild traversal (eng/Build.props) does not pick them
+        // up as real projects and try to resolve the unsubstituted
+        // `Aspire.AppHost.Sdk/{{aspireVersion}}` reference. The path transform
+        // restores `.csproj` for the rendered output.
+        string ApplyPathTransform(string segment)
+        {
+            var tokensApplied = ApplyTokens(segment, projectName, aspireVersion, ports, hostName, userSecretsId);
+            return RewriteTemplateProjectExtension(tokensApplied);
+        }
 
         logger.LogDebug(
             "Rendering embedded C# AppHost project template to '{OutputPath}' (project '{ProjectName}', Aspire version '{AspireVersion}').",
@@ -111,6 +120,31 @@ internal static class EmbeddedCSharpAppHostTemplate
         var source = new EmbeddedResourceTemplateSource(typeof(EmbeddedCSharpAppHostTemplate).Assembly, "csharp-apphost");
         var renderer = new TemplateRenderer(logger);
         await renderer.RenderAsync(source, outputPath, ApplyContentTransform, cancellationToken, ApplyPathTransform);
+    }
+
+    // Source files in the embedded template tree use the `._csproj` extension
+    // so the repo-wide MSBuild traversal (eng/Build.props) does not match them.
+    // Rewrite to `.csproj` (and the analogous `._fsproj` / `._vbproj` shapes for
+    // forward compatibility) only on the trailing segment of the path so a
+    // directory that happens to contain that token is not affected.
+    private static string RewriteTemplateProjectExtension(string segment)
+    {
+        if (segment.EndsWith("._csproj", StringComparison.Ordinal))
+        {
+            return string.Concat(segment.AsSpan(0, segment.Length - "._csproj".Length), ".csproj");
+        }
+
+        if (segment.EndsWith("._fsproj", StringComparison.Ordinal))
+        {
+            return string.Concat(segment.AsSpan(0, segment.Length - "._fsproj".Length), ".fsproj");
+        }
+
+        if (segment.EndsWith("._vbproj", StringComparison.Ordinal))
+        {
+            return string.Concat(segment.AsSpan(0, segment.Length - "._vbproj".Length), ".vbproj");
+        }
+
+        return segment;
     }
 
     private static string ApplyTokens(
