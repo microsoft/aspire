@@ -1,6 +1,8 @@
 // Copyright The OpenTelemetry Authors
 // SPDX-License-Identifier: Apache-2.0
 
+#nullable enable
+
 // Note: For some targets this file will contain more than one type/namespace.
 #pragma warning disable IDE0161 // Convert to file-scoped namespace
 

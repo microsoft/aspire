@@ -5,6 +5,8 @@
 // Usages of the non-AOT-compatible version can be moved over to this one when they need to support AOT/trimming.
 // Copied from https://github.com/open-telemetry/opentelemetry-dotnet/blob/86a6ba0b7f7ed1f5e84e5a6610e640989cd3ae9f/src/Shared/DiagnosticSourceInstrumentation/PropertyFetcher.cs#L30
 
+#nullable enable
+
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 
