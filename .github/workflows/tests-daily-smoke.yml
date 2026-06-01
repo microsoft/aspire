@@ -3,11 +3,6 @@
 # This workflow installs the latest daily Aspire CLI (not from source) and runs
 # a minimal set of E2E tests to verify core scenarios still work.
 #
-# DO NOT MERGE: this branch temporarily repurposes this workflow for a one-off
-# full CLI E2E run against the stable release channel. The `schedule:` trigger
-# is removed, the test filter is widened to all classes, polyglot+java images
-# are built and loaded, and the timeout is raised. Revert before merging so the
-# daily smoke goes back to running a narrow set against `dev`.
 name: Daily CLI Smoke Tests
 
 on:
@@ -16,7 +11,7 @@ on:
       quality:
         description: 'Install quality (dev, staging, release)'
         required: false
-        default: 'release'
+        default: 'dev'
         type: choice
         options:
           - dev
@@ -28,6 +23,10 @@ on:
         default: ''
         type: string
 
+  schedule:
+    # Run daily at 6 AM UTC
+    - cron: '0 6 * * *'
+
 permissions:
   contents: read
 
@@ -36,13 +35,13 @@ jobs:
     name: Build CLI E2E Docker image
     uses: ./.github/workflows/build-cli-e2e-image.yml
     with:
-      includePolyglotImages: true
+      includePolyglotImages: false
 
   smoke-test:
-    name: CLI Full E2E (${{ inputs.quality || 'release' }})
+    name: CLI Smoke Test (${{ inputs.quality || 'dev' }})
     needs: build_cli_e2e_image
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -64,15 +63,14 @@ jobs:
       - name: Download and load prebuilt CLI E2E Docker image
         uses: ./.github/actions/download-cli-e2e-images
         with:
-          require-polyglot: 'true'
-          require-java: 'true'
+          require-polyglot: 'false'
 
       - name: Build E2E test project
         run: dotnet build tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj
 
-      - name: Run full CLI E2E suite against ${{ inputs.quality || 'release' }}
+      - name: Run smoke tests against daily build
         env:
-          ASPIRE_E2E_QUALITY: ${{ inputs.quality || 'release' }}
+          ASPIRE_E2E_QUALITY: ${{ inputs.quality || 'dev' }}
           # When non-empty, asserts `aspire --version` after install equals this
           # value. Empty/whitespace is treated as "skip assertion".
           ASPIRE_E2E_EXPECTED_VERSION: ${{ inputs.expectedVersion }}
@@ -82,11 +80,12 @@ jobs:
             --no-build \
             -- \
             --report-trx \
-            --report-trx-filename "FullCliE2E.trx" \
+            --report-trx-filename "DailyCliSmoke.trx" \
             --results-directory ${{ github.workspace }}/testresults \
+            --filter-class "*SmokeTests" \
             --filter-not-trait "quarantined=true" \
             --filter-not-trait "outerloop=true" \
-            --hangdump --hangdump-type none --hangdump-timeout 30m
+            --hangdump --hangdump-type none --hangdump-timeout 15m
 
       - name: Upload logs and test results
         id: upload-logs
