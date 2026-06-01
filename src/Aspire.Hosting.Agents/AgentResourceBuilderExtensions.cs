@@ -60,100 +60,91 @@ public static class AgentResourceBuilderExtensions
     private static readonly JsonSerializerOptions s_indentedJsonOptions = new() { WriteIndented = true };
 
     /// <summary>
-    /// Configures the resource as an agent that supports the specified protocols.
+    /// Configures the resource as an agent that supports the specified protocol.
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder.</param>
-    /// <param name="protocols">The protocols supported by the agent.</param>
+    /// <param name="protocol">The protocol supported by the agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <exception cref="ArgumentException">Thrown when no protocols are specified.</exception>
     [AspireExport]
-    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, params AgentProtocol[] protocols)
+    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, AgentProtocol protocol)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return AsAgent(builder, agentCustomPath: null, A2AInvocationMode.NonStreaming, protocols);
+        return AsAgent(builder, agentCustomPath: null, A2AInvocationMode.NonStreaming, protocol);
     }
 
     /// <summary>
-    /// Configures the resource as an agent that supports the specified protocols.
+    /// Configures the resource as an agent that supports the specified protocol.
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="a2AInvocationMode">The invocation mode used by dashboard commands for A2A protocols.</param>
-    /// <param name="protocols">The protocols supported by the agent.</param>
+    /// <param name="protocol">The protocol supported by the agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <exception cref="ArgumentException">Thrown when no protocols are specified.</exception>
     [AspireExport("asAgentWithA2AInvocationMode")]
-    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, A2AInvocationMode a2AInvocationMode, params AgentProtocol[] protocols)
+    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, A2AInvocationMode a2AInvocationMode, AgentProtocol protocol)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return AsAgent(builder, agentCustomPath: null, a2AInvocationMode, protocols);
+        return AsAgent(builder, agentCustomPath: null, a2AInvocationMode, protocol);
     }
 
     /// <summary>
-    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="agentCustomPath">The custom path for protocol-specific dashboard commands and URLs.</param>
-    /// <param name="protocols">The protocols supported by the agent.</param>
+    /// <param name="protocol">The protocol supported by the agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <exception cref="ArgumentException">Thrown when no protocols are specified.</exception>
     [AspireExport("asAgentWithPath")]
-    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, string? agentCustomPath, params AgentProtocol[] protocols)
+    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, string? agentCustomPath, AgentProtocol protocol)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        return AsAgent(builder, agentCustomPath, A2AInvocationMode.NonStreaming, protocols);
+        return AsAgent(builder, agentCustomPath, A2AInvocationMode.NonStreaming, protocol);
     }
 
     /// <summary>
-    /// Configures the resource as an agent that supports the specified protocols using a custom protocol path.
+    /// Configures the resource as an agent that supports the specified protocol using a custom protocol path.
     /// </summary>
     /// <typeparam name="T">The type of resource being configured.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="agentCustomPath">The custom path for protocol-specific dashboard commands and URLs.</param>
     /// <param name="a2AInvocationMode">The invocation mode used by dashboard commands for A2A protocols.</param>
-    /// <param name="protocols">The protocols supported by the agent.</param>
+    /// <param name="protocol">The protocol supported by the agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <exception cref="ArgumentException">Thrown when no protocols are specified.</exception>
     [AspireExport("asAgentWithPathAndA2AInvocationMode")]
-    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, string? agentCustomPath, A2AInvocationMode a2AInvocationMode, params AgentProtocol[] protocols)
+    public static IResourceBuilder<T> AsAgent<T>(this IResourceBuilder<T> builder, string? agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol protocol)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(protocols);
-
-        if (protocols.Length == 0)
-        {
-            throw new ArgumentException("At least one agent protocol must be specified.", nameof(protocols));
-        }
 
         var normalizedPath = NormalizePath(agentCustomPath);
-        var protocolSet = protocols.ToHashSet();
-        var annotation = new AgentResourceAnnotation(protocolSet, normalizedPath, a2AInvocationMode);
+        var annotation = new AgentResourceAnnotation(protocol, normalizedPath, a2AInvocationMode);
 
-        builder.WithAnnotation(annotation, ResourceAnnotationMutationBehavior.Replace);
+        builder.WithAnnotation(annotation);
         builder.WithIconName("Agents");
 
         var endpoint = GetAgentEndpoint(builder);
-        var hasHighlightedCommand = false;
+        var hasHighlightedCommand = builder.Resource.Annotations
+            .OfType<ResourceCommandAnnotation>()
+            .Any(command => command.IsHighlighted);
 
-        if (protocolSet.Any(IsA2AProtocol))
+        if (IsA2AProtocol(protocol))
         {
-            ConfigureA2A(builder, endpoint, normalizedPath ?? DefaultA2AAgentCardPath, protocolSet, a2AInvocationMode, ShouldHighlightCommand);
+            ConfigureA2A(builder, endpoint, normalizedPath ?? DefaultA2AAgentCardPath, protocol, a2AInvocationMode, ShouldHighlightCommand);
         }
 
-        if (protocolSet.Contains(AgentProtocol.Responses))
+        if (protocol is AgentProtocol.Responses)
         {
             ConfigureResponses(builder, endpoint, normalizedPath ?? DefaultResponsesPath, ShouldHighlightCommand);
         }
 
-        if (protocolSet.Contains(AgentProtocol.AgUi))
+        if (protocol is AgentProtocol.AgUi)
         {
             ConfigureAgUi(builder, endpoint, normalizedPath ?? DefaultAgUiPath, ShouldHighlightCommand);
         }
 
-        if (protocolSet.Contains(AgentProtocol.Acp))
+        if (protocol is AgentProtocol.Acp)
         {
             ConfigureAcp(builder, endpoint, normalizedPath ?? DefaultAcpPath, builder.Resource.Name, ShouldHighlightCommand);
         }
@@ -196,7 +187,7 @@ public static class AgentResourceBuilderExtensions
         IResourceBuilder<T> builder,
         EndpointReference endpoint,
         string agentCardPath,
-        IReadOnlySet<AgentProtocol> protocols,
+        AgentProtocol protocol,
         A2AInvocationMode invocationMode,
         Func<bool> shouldHighlightCommand)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
@@ -205,7 +196,7 @@ public static class AgentResourceBuilderExtensions
 
         AddProtocolEndpointUrl(builder, endpoint, agentCardPath, "Agent Card");
 
-        if (protocols.Contains(AgentProtocol.A2AJsonRpc))
+        if (protocol is AgentProtocol.A2AJsonRpc)
         {
             AddHttpCommandIfMissing(
                 builder,
@@ -228,7 +219,7 @@ public static class AgentResourceBuilderExtensions
                 });
         }
 
-        if (protocols.Contains(AgentProtocol.A2AHttpJson))
+        if (protocol is AgentProtocol.A2AHttpJson)
         {
             AddHttpCommandIfMissing(
                 builder,

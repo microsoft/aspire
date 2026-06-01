@@ -26,13 +26,13 @@ namespace Aspire.Hosting.Agents
 
     public sealed partial class AgentResourceAnnotation : Aspire.Hosting.ApplicationModel.IResourceAnnotation
     {
-        public AgentResourceAnnotation(System.Collections.Generic.IReadOnlySet<AgentProtocol> protocols, string? customPath, A2AInvocationMode a2AInvocationMode) { }
+        public AgentResourceAnnotation(AgentProtocol protocol, string? customPath, A2AInvocationMode a2AInvocationMode) { }
 
         public A2AInvocationMode A2AInvocationMode { get { throw null; } }
 
         public string? CustomPath { get { throw null; } }
 
-        public System.Collections.Generic.IReadOnlySet<AgentProtocol> Protocols { get { throw null; } }
+        public AgentProtocol Protocol { get { throw null; } }
     }
 
     public static partial class AgentResourceBuilderExtensions
@@ -54,19 +54,19 @@ namespace Aspire.Hosting.Agents
         public const string DefaultResponsesPath = "/v1/responses";
 
         [Aspire.Hosting.AspireExport]
-        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, params AgentProtocol[] protocols)
+        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, AgentProtocol protocol)
             where T : Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, Aspire.Hosting.ApplicationModel.IResourceWithEnvironment, Aspire.Hosting.ApplicationModel.IComputeResource { throw null; }
 
         [Aspire.Hosting.AspireExport("asAgentWithA2AInvocationMode")]
-        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, A2AInvocationMode a2AInvocationMode, params AgentProtocol[] protocols)
+        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, A2AInvocationMode a2AInvocationMode, AgentProtocol protocol)
             where T : Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, Aspire.Hosting.ApplicationModel.IResourceWithEnvironment, Aspire.Hosting.ApplicationModel.IComputeResource { throw null; }
 
         [Aspire.Hosting.AspireExport("asAgentWithPath")]
-        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, string? agentCustomPath, params AgentProtocol[] protocols)
+        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, string? agentCustomPath, AgentProtocol protocol)
             where T : Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, Aspire.Hosting.ApplicationModel.IResourceWithEnvironment, Aspire.Hosting.ApplicationModel.IComputeResource { throw null; }
 
         [Aspire.Hosting.AspireExport("asAgentWithPathAndA2AInvocationMode")]
-        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, string? agentCustomPath, A2AInvocationMode a2AInvocationMode, params AgentProtocol[] protocols)
+        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, string? agentCustomPath, A2AInvocationMode a2AInvocationMode, AgentProtocol protocol)
             where T : Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, Aspire.Hosting.ApplicationModel.IResourceWithEnvironment, Aspire.Hosting.ApplicationModel.IComputeResource { throw null; }
     }
 }

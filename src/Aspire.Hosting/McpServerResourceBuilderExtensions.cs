@@ -568,7 +568,7 @@ public static class McpServerResourceBuilderExtensions
                 .Where(value => value is not null)
                 .Select(value =>
                 {
-                    var option = value!.GetValue<string>();
+                    var option = GetMcpJsonValueAsString(value!);
                     return new KeyValuePair<string, string>(option, option);
                 })
                 .ToArray();
@@ -722,6 +722,15 @@ public static class McpServerResourceBuilderExtensions
         }
 
         return null;
+    }
+
+    private static string GetMcpJsonValueAsString(JsonNode value)
+    {
+        return value switch
+        {
+            JsonValue jsonValue when jsonValue.TryGetValue<string>(out var stringValue) => stringValue,
+            _ => value.ToJsonString()
+        };
     }
 
     private static JsonObject CreateMcpToolArgumentsTemplate(McpTool tool)

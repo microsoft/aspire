@@ -33,18 +33,12 @@ builder.AddProject<Projects.McpAgent>("mcp-agent")
     .WaitFor(chat)
     .WithMcpServer();
 
-builder.AddUvicornApp("ag-ui-agent", "../ag-ui-agent-python", "ag_ui_agent.main:app")
+builder.AddUvicornApp("agui-acp-agent", "../agui-acp-agent-python", "agui_acp_agent.main:app")
     .WithUv()
     .WithReference(project)
     .WithReference(chat)
     .WaitFor(chat)
-    .AsAgent(AgentProtocol.AgUi);
-
-builder.AddUvicornApp("acp-agent", "../acp-agent-python", "acp_agent.main:app")
-    .WithUv()
-    .WithReference(project)
-    .WithReference(chat)
-    .WaitFor(chat)
+    .AsAgent(AgentProtocol.AgUi)
     .AsAgent(AgentProtocol.Acp);
 
 builder.AddExecutable(

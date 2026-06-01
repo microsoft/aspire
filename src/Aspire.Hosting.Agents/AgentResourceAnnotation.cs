@@ -8,27 +8,29 @@ namespace Aspire.Hosting.Agents;
 /// <summary>
 /// Describes agent-specific metadata for a resource.
 /// </summary>
+/// <remarks>
+/// A resource can have multiple <see cref="AgentResourceAnnotation"/> instances when it exposes multiple agent protocols.
+/// Each annotation describes one protocol and its path configuration.
+/// </remarks>
 public sealed class AgentResourceAnnotation : IResourceAnnotation, IResourceWithReferenceAnnotation
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="AgentResourceAnnotation"/> class.
     /// </summary>
-    /// <param name="protocols">The agent protocols supported by the resource.</param>
+    /// <param name="protocol">The agent protocol supported by the resource.</param>
     /// <param name="customPath">The custom protocol path, when one is configured.</param>
     /// <param name="a2AInvocationMode">The invocation mode used by dashboard commands for A2A protocols.</param>
-    public AgentResourceAnnotation(IReadOnlySet<AgentProtocol> protocols, string? customPath, A2AInvocationMode a2AInvocationMode)
+    public AgentResourceAnnotation(AgentProtocol protocol, string? customPath, A2AInvocationMode a2AInvocationMode)
     {
-        ArgumentNullException.ThrowIfNull(protocols);
-
-        Protocols = protocols;
+        Protocol = protocol;
         CustomPath = customPath;
         A2AInvocationMode = a2AInvocationMode;
     }
 
     /// <summary>
-    /// Gets the agent protocols supported by the resource.
+    /// Gets the agent protocol supported by the resource.
     /// </summary>
-    public IReadOnlySet<AgentProtocol> Protocols { get; }
+    public AgentProtocol Protocol { get; }
 
     /// <summary>
     /// Gets the custom protocol path configured for the agent.
@@ -42,7 +44,7 @@ public sealed class AgentResourceAnnotation : IResourceAnnotation, IResourceWith
 
     bool IResourceWithReferenceAnnotation.CanApplyReference(IResource source)
     {
-        return source is IResourceWithEndpoints && Protocols.Any(AgentResourceBuilderExtensions.IsA2AProtocol);
+        return source is IResourceWithEndpoints && AgentResourceBuilderExtensions.IsA2AProtocol(Protocol);
     }
 
     IResourceBuilder<TDestination> IResourceWithReferenceAnnotation.WithReference<TDestination>(

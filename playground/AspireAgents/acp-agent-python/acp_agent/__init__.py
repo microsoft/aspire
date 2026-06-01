@@ -1,1 +1,0 @@
-"""ACP agent playground package."""

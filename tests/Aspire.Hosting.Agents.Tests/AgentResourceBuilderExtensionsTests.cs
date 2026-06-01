@@ -18,17 +18,36 @@ public class AgentResourceBuilderExtensionsTests
 
         var agent = builder.AddContainer("agent", "image")
             .WithHttpEndpoint(targetPort: 8080)
-            .AsAgent(AgentProtocol.A2AJsonRpc, AgentProtocol.Responses);
+            .AsAgent(AgentProtocol.A2AJsonRpc);
 
         var annotation = Assert.Single(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
-        Assert.Contains(AgentProtocol.A2AJsonRpc, annotation.Protocols);
-        Assert.Contains(AgentProtocol.Responses, annotation.Protocols);
+        Assert.Equal(AgentProtocol.A2AJsonRpc, annotation.Protocol);
         Assert.Equal(A2AInvocationMode.NonStreaming, annotation.A2AInvocationMode);
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
         Assert.DoesNotContain(commands, c => c.Name == "agent-a2a-agent-card");
         Assert.Contains(commands, c => c.Name == "agent-a2a-jsonrpc-send-message" && c.DisplayName == "Invoke A2A (JSON-RPC)" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
-        Assert.Contains(commands, c => c.Name == "agent-responses-send-message" && c.DisplayName == "Invoke Responses" && !c.IsHighlighted);
+        Assert.Single(commands, c => c.IsHighlighted);
+    }
+
+    [Fact]
+    public void AsAgent_CanBeCalledMultipleTimesForMultipleProtocolPaths()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var agent = builder.AddContainer("agent", "image")
+            .WithHttpEndpoint(targetPort: 8080)
+            .AsAgent("/a2a-card.json", AgentProtocol.A2AJsonRpc)
+            .AsAgent("/responses", AgentProtocol.Responses);
+
+        var annotations = agent.Resource.Annotations.OfType<AgentResourceAnnotation>().ToArray();
+        Assert.Equal(2, annotations.Length);
+        Assert.Contains(annotations, a => a.Protocol == AgentProtocol.A2AJsonRpc && a.CustomPath == "/a2a-card.json");
+        Assert.Contains(annotations, a => a.Protocol == AgentProtocol.Responses && a.CustomPath == "/responses");
+
+        var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
+        Assert.Contains(commands, c => c.Name == "agent-a2a-jsonrpc-send-message" && c.IsHighlighted);
+        Assert.Contains(commands, c => c.Name == "agent-responses-send-message" && !c.IsHighlighted);
         Assert.Single(commands, c => c.IsHighlighted);
     }
 
@@ -42,7 +61,7 @@ public class AgentResourceBuilderExtensionsTests
             .AsAgent(AgentProtocol.A2AGrpc);
 
         var annotation = Assert.Single(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
-        Assert.Contains(AgentProtocol.A2AGrpc, annotation.Protocols);
+        Assert.Equal(AgentProtocol.A2AGrpc, annotation.Protocol);
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
         Assert.DoesNotContain(commands, c => c.Name.Contains("-a2a-", StringComparison.Ordinal) && c.Name.EndsWith("-send-message", StringComparison.Ordinal));
@@ -72,7 +91,7 @@ public class AgentResourceBuilderExtensionsTests
             .AsAgent(AgentProtocol.A2AHttpJson);
 
         var annotation = Assert.Single(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
-        Assert.Contains(AgentProtocol.A2AHttpJson, annotation.Protocols);
+        Assert.Equal(AgentProtocol.A2AHttpJson, annotation.Protocol);
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
         Assert.Contains(commands, c => c.Name == "agent-a2a-http-json-send-message" && c.DisplayName == "Invoke A2A (HTTP+JSON)" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
@@ -85,11 +104,13 @@ public class AgentResourceBuilderExtensionsTests
 
         var agent = builder.AddContainer("agent", "image")
             .WithHttpEndpoint(targetPort: 8080)
-            .AsAgent(AgentProtocol.AgUi, AgentProtocol.Acp);
+            .AsAgent(AgentProtocol.AgUi)
+            .AsAgent(AgentProtocol.Acp);
 
-        var annotation = Assert.Single(agent.Resource.Annotations.OfType<AgentResourceAnnotation>());
-        Assert.Contains(AgentProtocol.AgUi, annotation.Protocols);
-        Assert.Contains(AgentProtocol.Acp, annotation.Protocols);
+        var annotations = agent.Resource.Annotations.OfType<AgentResourceAnnotation>().ToArray();
+        Assert.Equal(2, annotations.Length);
+        Assert.Contains(annotations, a => a.Protocol == AgentProtocol.AgUi);
+        Assert.Contains(annotations, a => a.Protocol == AgentProtocol.Acp);
 
         var commands = agent.Resource.Annotations.OfType<ResourceCommandAnnotation>().ToArray();
         Assert.Contains(commands, c => c.Name == "agent-ag-ui-send-message" && c.DisplayName == "Invoke AG-UI" && c.IconName == "ChatSparkle" && c.IconVariant == IconVariant.Regular && c.IsHighlighted);
@@ -180,19 +201,6 @@ public class AgentResourceBuilderExtensionsTests
         var ex = Assert.Throws<InvalidOperationException>(() => consumer.WithReference(source));
 
         Assert.Equal("The resource 'endpoint-only' can't be used with withReference because it doesn't provide a connection string, service discovery, or a custom withReference implementation.", ex.Message);
-    }
-
-    [Fact]
-    public void AsAgent_ThrowsWhenNoProtocolsAreSpecified()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var agent = builder.AddContainer("agent", "image")
-            .WithHttpEndpoint(targetPort: 8080);
-
-        var ex = Assert.Throws<ArgumentException>(() => agent.AsAgent());
-
-        Assert.Equal("protocols", ex.ParamName);
     }
 
     private sealed class ProjectA : IProjectMetadata

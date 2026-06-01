@@ -10,7 +10,7 @@ enum:Aspire.Hosting.Agents.A2AInvocationMode = NonStreaming | Streaming
 enum:Aspire.Hosting.Agents.AgentProtocol = A2AJsonRpc | A2AGrpc | A2AHttpJson | Responses | AgUi | Acp
 
 # Capabilities
-Aspire.Hosting.Agents/asAgent(protocols: enum:Aspire.Hosting.Agents.AgentProtocol[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
-Aspire.Hosting.Agents/asAgentWithA2AInvocationMode(a2AInvocationMode: enum:Aspire.Hosting.Agents.A2AInvocationMode, protocols: enum:Aspire.Hosting.Agents.AgentProtocol[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
-Aspire.Hosting.Agents/asAgentWithPath(agentCustomPath: string, protocols: enum:Aspire.Hosting.Agents.AgentProtocol[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
-Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode(agentCustomPath: string, a2AInvocationMode: enum:Aspire.Hosting.Agents.A2AInvocationMode, protocols: enum:Aspire.Hosting.Agents.AgentProtocol[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting.Agents/asAgent(protocol: enum:Aspire.Hosting.Agents.AgentProtocol) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting.Agents/asAgentWithA2AInvocationMode(a2AInvocationMode: enum:Aspire.Hosting.Agents.A2AInvocationMode, protocol: enum:Aspire.Hosting.Agents.AgentProtocol) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting.Agents/asAgentWithPath(agentCustomPath: string, protocol: enum:Aspire.Hosting.Agents.AgentProtocol) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting.Agents/asAgentWithPathAndA2AInvocationMode(agentCustomPath: string, a2AInvocationMode: enum:Aspire.Hosting.Agents.A2AInvocationMode, protocol: enum:Aspire.Hosting.Agents.AgentProtocol) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints

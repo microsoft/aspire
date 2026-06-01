@@ -1,10 +1,11 @@
-"""ACP agent served with the official Agent Communication Protocol SDK."""
+"""AG-UI and ACP agent served with Microsoft Agent Framework."""
 
 import os
 
 from acp_sdk.models import Message, MessagePart
 from acp_sdk.server import Context, Server
 from acp_sdk.server.app import create_app
+from agent_framework.ag_ui import add_agent_framework_fastapi_endpoint
 from agent_framework.foundry import FoundryChatClient
 from azure.identity import DefaultAzureCredential
 
@@ -49,14 +50,14 @@ agent = FoundryChatClient(
     credential=DefaultAzureCredential(),
     model=deployment,
 ).as_agent(
-    name="acp-agent",
-    instructions="You are a concise assistant exposed through the Agent Communication Protocol.",
+    name="agui-acp-agent",
+    instructions="You are a concise assistant exposed through AG-UI and ACP.",
 )
 
 
 @server.agent(
-    name="acp-agent",
-    description="Foundry-backed ACP agent.",
+    name="agui-acp-agent",
+    description="Foundry-backed AG-UI and ACP agent.",
     input_content_types=["text/plain"],
     output_content_types=["text/plain"],
 )
@@ -66,7 +67,7 @@ async def acp_agent(input: list[Message], context: Context) -> Message:
 
     response = await agent.run(_get_text(input))
     return Message(
-        role="agent/acp-agent",
+        role="agent/agui-acp-agent",
         parts=[
             MessagePart(
                 content_type="text/plain",
@@ -77,6 +78,7 @@ async def acp_agent(input: list[Message], context: Context) -> Message:
 
 
 app = create_app(*server.agents)
+add_agent_framework_fastapi_endpoint(app, agent, "/ag-ui")
 
 
 @app.get("/health")
