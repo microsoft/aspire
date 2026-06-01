@@ -12,8 +12,7 @@ public class RadCredentialRedactionTests
     {
         var args = new[]
         {
-            "credential", "register", "azure-sp",
-            "--name", "aspire-radius-azure",
+            "credential", "register", "azure", "sp",
             "--tenant-id", "tenant-value",
             "--client-id", "client-value",
             "--client-secret", "PLAINTEXT-SECRET",
@@ -35,8 +34,7 @@ public class RadCredentialRedactionTests
     {
         var args = new[]
         {
-            "credential", "register", "aws-access-key",
-            "--name", "aspire-radius-aws",
+            "credential", "register", "aws", "access-key",
             "--access-key-id", "AKIAEXAMPLE",
             "--secret-access-key", "SUPER-SECRET",
         };
@@ -55,11 +53,82 @@ public class RadCredentialRedactionTests
     [Fact]
     public void RedactSecretArgs_NoSecretFlagsConfigured_ReturnsArgsVerbatim()
     {
-        var args = new[] { "credential", "register", "aws-irsa", "--name", "n", "--iam-role", "arn:..." };
+        var args = new[] { "credential", "register", "aws", "irsa", "--iam-role", "arn:..." };
         var secretFlags = new HashSet<string>(StringComparer.Ordinal);
 
         var result = RadCredentialRegisterStep.RedactSecretArgs(args, secretFlags);
 
         Assert.Equal(args, result);
+    }
+
+    [Fact]
+    public void ExtractSecretValues_ReturnsValuesFollowingSecretFlags()
+    {
+        var args = new[]
+        {
+            "credential", "register", "azure", "sp",
+            "--tenant-id", "tenant-value",
+            "--client-secret", "PLAINTEXT-SECRET",
+        };
+        var secretFlags = new HashSet<string>(StringComparer.Ordinal) { "--client-secret" };
+
+        var values = RadCredentialRegisterStep.ExtractSecretValues(args, secretFlags);
+
+        Assert.Equal(new[] { "PLAINTEXT-SECRET" }, values);
+    }
+
+    [Fact]
+    public void ExtractSecretValues_SkipsEmptyValues()
+    {
+        var args = new[] { "--client-secret", "" };
+        var secretFlags = new HashSet<string>(StringComparer.Ordinal) { "--client-secret" };
+
+        var values = RadCredentialRegisterStep.ExtractSecretValues(args, secretFlags);
+
+        Assert.Empty(values);
+    }
+
+    [Fact]
+    public void RedactSecretValues_ScrubsSecretFromText_LeavesOtherTextAlone()
+    {
+        var text = "Error: invalid value 'PLAINTEXT-SECRET' for flag --client-secret";
+
+        var result = RadCredentialRegisterStep.RedactSecretValues(text, new[] { "PLAINTEXT-SECRET" });
+
+        Assert.DoesNotContain("PLAINTEXT-SECRET", result);
+        Assert.Contains("***", result);
+        Assert.Contains("--client-secret", result);
+    }
+
+    [Fact]
+    public void RedactSecretValues_EmptySecretValue_IsNoOp()
+    {
+        var text = "some error text";
+
+        var result = RadCredentialRegisterStep.RedactSecretValues(text, new[] { "" });
+
+        Assert.Equal(text, result);
+    }
+
+    [Fact]
+    public void RedactSecretValues_NoSecretValues_ReturnsTextVerbatim()
+    {
+        var text = "some error text";
+
+        var result = RadCredentialRegisterStep.RedactSecretValues(text, Array.Empty<string>());
+
+        Assert.Equal(text, result);
+    }
+
+    [Fact]
+    public void RedactSecretValues_OverlappingSecrets_RedactsLongestFirst_NoRemainderLeaks()
+    {
+        var text = "value ABCDEF was rejected";
+
+        var result = RadCredentialRegisterStep.RedactSecretValues(text, new[] { "ABC", "ABCDEF" });
+
+        Assert.DoesNotContain("ABC", result);
+        Assert.DoesNotContain("DEF", result);
+        Assert.Equal("value *** was rejected", result);
     }
 }

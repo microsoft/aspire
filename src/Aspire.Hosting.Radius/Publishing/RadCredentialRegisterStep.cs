@@ -65,7 +65,7 @@ internal sealed class RadCredentialRegisterStep
             return;
         }
 
-        var entries = BuildEntries(annotation, _environment.Name).ToList();
+        var entries = BuildEntries(annotation).ToList();
         if (entries.Count == 0)
         {
             return;
@@ -87,14 +87,22 @@ internal sealed class RadCredentialRegisterStep
         }
     }
 
-    private static IEnumerable<CredentialEntry> BuildEntries(
-        RadiusCloudProvidersAnnotation annotation, string envName)
+    // The 'rad credential register' grammar uses TWO positional tokens — provider
+    // then auth-mode — and has NO '--name' flag (credentials are per-provider,
+    // per-installation). For example:
+    //   rad credential register azure sp  --client-id <id> --client-secret <secret> --tenant-id <tenant>
+    //   rad credential register azure wi  --client-id <id> --tenant-id <tenant>
+    //   rad credential register aws access-key --access-key-id <id> --secret-access-key <secret>
+    //   rad credential register aws irsa  --iam-role <roleArn>
+    // See https://docs.radapp.io/reference/cli/rad_credential_register/ and its subcommands.
+    internal static IEnumerable<CredentialEntry> BuildEntries(
+        RadiusCloudProvidersAnnotation annotation)
     {
         if (annotation.Azure?.Credential is AzureRadiusCredential.ServicePrincipal sp)
         {
             yield return new CredentialEntry(
-                Kind: "azure-sp",
-                Name: $"aspire-{envName}-azure",
+                Provider: "azure",
+                Mode: "sp",
                 ArgumentFactories:
                 [
                     _ => Task.FromResult(("--tenant-id", sp.TenantId)),
@@ -107,8 +115,8 @@ internal sealed class RadCredentialRegisterStep
         if (annotation.Azure?.Credential is AzureRadiusCredential.WorkloadIdentity wi)
         {
             yield return new CredentialEntry(
-                Kind: "azure-wi",
-                Name: $"aspire-{envName}-azure",
+                Provider: "azure",
+                Mode: "wi",
                 ArgumentFactories:
                 [
                     _ => Task.FromResult(("--client-id", wi.ClientId)),
@@ -120,8 +128,8 @@ internal sealed class RadCredentialRegisterStep
         if (annotation.Aws?.Credential is AwsRadiusCredential.AccessKey ak)
         {
             yield return new CredentialEntry(
-                Kind: "aws-access-key",
-                Name: $"aspire-{envName}-aws",
+                Provider: "aws",
+                Mode: "access-key",
                 ArgumentFactories:
                 [
                     async ct => ("--access-key-id", await ResolveParameterAsync(ak.AccessKeyId, ct).ConfigureAwait(false)),
@@ -133,8 +141,8 @@ internal sealed class RadCredentialRegisterStep
         if (annotation.Aws?.Credential is AwsRadiusCredential.Irsa irsa)
         {
             yield return new CredentialEntry(
-                Kind: "aws-irsa",
-                Name: $"aspire-{envName}-aws",
+                Provider: "aws",
+                Mode: "irsa",
                 ArgumentFactories:
                 [
                     _ => Task.FromResult(("--iam-role", irsa.IamRoleArn)),
@@ -157,6 +165,10 @@ internal sealed class RadCredentialRegisterStep
         CancellationToken cancellationToken)
     {
         var stderr = new StringBuilder();
+        // Collect the resolved secret values so they can be scrubbed from any stderr
+        // the 'rad' CLI emits — it may echo a rejected flag's value back in an error,
+        // which would otherwise leak the secret into logs and the thrown exception.
+        var secretValues = ExtractSecretValues(args, secretFlags);
         using var process = new Process();
         process.StartInfo = new ProcessStartInfo
         {
@@ -175,15 +187,16 @@ internal sealed class RadCredentialRegisterStep
         {
             if (e.Data is not null)
             {
-                logger.LogInformation("rad (stdout): {Output}", e.Data);
+                logger.LogInformation("rad (stdout): {Output}", RedactSecretValues(e.Data, secretValues));
             }
         };
         process.ErrorDataReceived += (_, e) =>
         {
             if (e.Data is not null)
             {
-                stderr.AppendLine(e.Data);
-                logger.LogWarning("rad (stderr): {Error}", e.Data);
+                var redacted = RedactSecretValues(e.Data, secretValues);
+                stderr.AppendLine(redacted);
+                logger.LogWarning("rad (stderr): {Error}", redacted);
             }
         };
 
@@ -219,15 +232,52 @@ internal sealed class RadCredentialRegisterStep
         return result;
     }
 
-    private sealed record CredentialEntry(
-        string Kind,
-        string Name,
+    // Pulls the value token that follows each secret flag so the literal secret can be
+    // scrubbed from free-form text (e.g. stderr). Empty/whitespace values are skipped
+    // to avoid turning every character of a line into '***'.
+    internal static IReadOnlyList<string> ExtractSecretValues(
+        IReadOnlyList<string> args, HashSet<string> secretFlags)
+    {
+        var values = new List<string>();
+        for (var i = 0; i < args.Count - 1; i++)
+        {
+            if (secretFlags.Contains(args[i]) && !string.IsNullOrWhiteSpace(args[i + 1]))
+            {
+                values.Add(args[i + 1]);
+            }
+        }
+        return values;
+    }
+
+    internal static string RedactSecretValues(string text, IReadOnlyList<string> secretValues)
+    {
+        if (string.IsNullOrEmpty(text) || secretValues.Count == 0)
+        {
+            return text;
+        }
+
+        // Redact longest-first (and de-duplicated) so that a secret which is a substring of
+        // another secret cannot mask the longer one and leave its remainder exposed.
+        foreach (var value in secretValues
+            .Where(static v => !string.IsNullOrEmpty(v))
+            .Distinct(StringComparer.Ordinal)
+            .OrderByDescending(static v => v.Length))
+        {
+            text = text.Replace(value, "***", StringComparison.Ordinal);
+        }
+        return text;
+    }
+
+    internal sealed record CredentialEntry(
+        string Provider,
+        string Mode,
         IReadOnlyList<Func<CancellationToken, Task<(string Flag, string Value)>>> ArgumentFactories,
         HashSet<string> SecretArgFlagSet)
     {
         internal async Task<IReadOnlyList<string>> ResolveArgumentsAsync(CancellationToken cancellationToken)
         {
-            var args = new List<string> { "credential", "register", Kind, "--name", Name };
+            // Provider and Mode are two separate positional tokens; there is no --name flag.
+            var args = new List<string> { "credential", "register", Provider, Mode };
             foreach (var factory in ArgumentFactories)
             {
                 var (flag, value) = await factory(cancellationToken).ConfigureAwait(false);
