@@ -153,4 +153,31 @@
 
   </Target>
 
+  <!--
+    Generate a catalog (.cat) file covering template JS files for VS signing compliance.
+    Template JS files (Bootstrap, eslint configs) are customer-modifiable — users edit them
+    after project creation. Authenticode signing would append a visible // SIG // block and
+    break on modification. Catalog signing hashes the files into a .cat without modifying them.
+    The .cat is signed by Arcade (FileExtensionSignInfo in eng/Signing.props) and included in
+    the NuGet so it flows through dotnet-project-system -> Aspire.vsix -> VS.
+    Only runs on Windows (makecat.exe requires Windows SDK).
+  -->
+  <Target Name="GenerateCatalogFiles"
+          AfterTargets="CopyTemplatesToIntermediateOutputPath"
+          BeforeTargets="AddTemplatesToPackageAsContent"
+          Condition="$([MSBuild]::IsOSPlatform('Windows'))">
+    <PropertyGroup>
+      <_ContentRoot>$(IntermediateOutputPath)content\templates</_ContentRoot>
+      <_CatOutputPath>$(IntermediateOutputPath)aspire-templates.cat</_CatOutputPath>
+      <_ErrorFlag Condition="'$(ContinuousIntegrationBuild)' == 'true' or '$(OfficialBuild)' == 'true'">-ErrorIfMakecatNotFound</_ErrorFlag>
+    </PropertyGroup>
+
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -Command &quot;&amp; '$(RepoRoot)eng\generate-catalog.ps1' -RootPath '$(_ContentRoot)' -CatOutputPath '$(_CatOutputPath)' -Filter '*.js' -RunMakecat $(_ErrorFlag)&quot;"
+          StandardOutputImportance="High" />
+
+    <ItemGroup Condition="Exists('$(_CatOutputPath)')">
+      <Content Include="$(_CatOutputPath)" PackagePath="content/templates/" />
+    </ItemGroup>
+  </Target>
+
 </Project>
