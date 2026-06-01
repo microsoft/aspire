@@ -7,6 +7,12 @@ import { createMessageConnection } from 'vscode-jsonrpc';
 import { StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node';
 import { getAndActivateExtension } from '../common';
 import { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
+import { AcquiredTestRunSession, TestRunSessionAcquireOptions } from '../../dcp/TestRunSessionManager';
+
+interface TestRunSessionApi {
+	acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession;
+	releaseTestRunSession(id: string): Promise<void>;
+}
 
 suite('End-to-end RPC server auth tests', () => {
 	vscode.window.showInformationMessage('Starting end-to-end rpc server tests.');
@@ -29,6 +35,25 @@ suite('End-to-end RPC server auth tests', () => {
 
 		// Act & Assert
 		assert.rejects(() => connection.sendRequest('ping', { token: 'invalid-token' }));
+	});
+
+	test('exports test run session API for C# Dev Kit', async () => {
+		const extension = await getAndActivateExtension();
+
+		await waitForExpect(() => {
+			assert.ok(extension.exports.acquireTestRunSession);
+			assert.ok(extension.exports.releaseTestRunSession);
+		}, 2000, 50);
+
+		const api = extension.exports as TestRunSessionApi;
+		const lease = api.acquireTestRunSession({ debug: true });
+
+		assert.ok(lease.id);
+		assert.ok(lease.env.DEBUG_SESSION_TOKEN);
+		assert.ok(lease.env.DEBUG_SESSION_PORT);
+		assert.strictEqual(lease.env.DCP_INSTANCE_ID_PREFIX, `${lease.sessionId}-`);
+
+		await api.releaseTestRunSession(lease.id);
 	});
 
 	async function getRealRpcServer() {

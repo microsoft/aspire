@@ -322,7 +322,10 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(restoreCommandRegistration);
 
   // Return exported API for tests or other extensions
-  const api = createAspireExtensionApi(dataRepository, terminalProvider);
+  const api = createAspireExtensionApi(dataRepository, terminalProvider, {
+    acquireTestRunSession: (options) => dcpServer.acquireTestRunSession(options),
+    releaseTestRunSession: (id) => dcpServer.releaseTestRunSession(id),
+  });
   return {
     rpcServerInfo: rpcServer.connectionInfo,
     dcpServerInfo: dcpServer.connectionInfo,

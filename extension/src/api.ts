@@ -1,7 +1,12 @@
-import * as vscode from 'vscode'
 import { AppHostDataRepository, ResourceJson } from './views/AppHostDataRepository'
 import { AspireTerminalProvider } from './utils/AspireTerminalProvider'
 import { spawnCliProcess } from './debugger/languages/cli'
+import { AcquiredTestRunSession, TestRunSessionAcquireOptions } from './dcp/TestRunSessionManager'
+
+export interface AspireTestRunSessionApi {
+	acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession
+	releaseTestRunSession(id: string): Promise<void>
+}
 
 /**
  * Public API exported by the Aspire extension for consumption by other extensions (e.g. C# Dev Kit).
@@ -26,9 +31,14 @@ export interface AspireExtensionApi {
 	startResource(resourceName: string, appHostPath: string): Promise<void>
 
 	/**
-	 * Event fired when AppHost or resource state changes.
+	 * Acquires DCP connection environment for a test process that starts an AppHost in-process.
 	 */
-	onDidChangeAppHosts: vscode.Event<void>
+	acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession
+
+	/**
+	 * Releases a test-run DCP lease and stops resources started through it.
+	 */
+	releaseTestRunSession(id: string): Promise<void>
 }
 
 export interface AppHostInfo {
@@ -62,7 +72,7 @@ export interface ResourceInfo {
 /**
  * Creates the public API object backed by the given data repository.
  */
-export function createAspireExtensionApi(dataRepository: AppHostDataRepository, terminalProvider: AspireTerminalProvider): AspireExtensionApi {
+export function createAspireExtensionApi(dataRepository: AppHostDataRepository, terminalProvider: AspireTerminalProvider, testRunSessions: AspireTestRunSessionApi): AspireExtensionApi {
 	return {
 		async getRunningAppHosts(): Promise<AppHostInfo[]> {
 			const appHosts = await dataRepository.fetchAppHostsOnce()
@@ -75,46 +85,15 @@ export function createAspireExtensionApi(dataRepository: AppHostDataRepository, 
 		},
 
 		async stopResource(resourceName: string, appHostPath: string): Promise<void> {
-			const cliPath = await terminalProvider.getAspireCliExecutablePath()
-			const args = ['resource', resourceName, 'stop']
-			if (appHostPath) {
-				args.push('--apphost', appHostPath)
-			}
-			return new Promise<void>((resolve, reject) => {
-				spawnCliProcess(terminalProvider, cliPath, args, {
-					exitCallback: (code) => {
-						if (code === 0) {
-							resolve()
-						} else {
-							reject(new Error(`aspire resource stop exited with code ${code}`))
-						}
-					},
-					errorCallback: (error) => reject(error),
-				})
-			})
+			return executeResourceCommand(terminalProvider, resourceName, appHostPath, 'stop')
 		},
 
 		async startResource(resourceName: string, appHostPath: string): Promise<void> {
-			const cliPath = await terminalProvider.getAspireCliExecutablePath()
-			const args = ['resource', resourceName, 'start']
-			if (appHostPath) {
-				args.push('--apphost', appHostPath)
-			}
-			return new Promise<void>((resolve, reject) => {
-				spawnCliProcess(terminalProvider, cliPath, args, {
-					exitCallback: (code) => {
-						if (code === 0) {
-							resolve()
-						} else {
-							reject(new Error(`aspire resource start exited with code ${code}`))
-						}
-					},
-					errorCallback: (error) => reject(error),
-				})
-			})
+			return executeResourceCommand(terminalProvider, resourceName, appHostPath, 'start')
 		},
 
-		onDidChangeAppHosts: dataRepository.onDidChangeData,
+		acquireTestRunSession: testRunSessions.acquireTestRunSession,
+		releaseTestRunSession: testRunSessions.releaseTestRunSession,
 	}
 }
 
@@ -130,4 +109,45 @@ function mapResource(resource: ResourceJson, appHostPath: string): ResourceInfo 
 			.map(u => ({ name: u.name, url: u.url })),
 		appHostPath,
 	}
+}
+
+async function executeResourceCommand(terminalProvider: AspireTerminalProvider, resourceName: string, appHostPath: string, commandName: 'start' | 'stop'): Promise<void> {
+	if (!appHostPath || !appHostPath.trim()) {
+		throw new Error('appHostPath must be a non-empty absolute path')
+	}
+
+	const cliPath = await terminalProvider.getAspireCliExecutablePath()
+	const args = ['resource', resourceName, commandName, '--apphost', appHostPath]
+	return new Promise<void>((resolve, reject) => {
+		let stdout = ''
+		let stderr = ''
+		let settled = false
+
+		spawnCliProcess(terminalProvider, cliPath, args, {
+			noExtensionVariables: true,
+			stdoutCallback: (data) => { stdout += data },
+			stderrCallback: (data) => { stderr += data },
+			exitCallback: (code) => {
+				if (settled) {
+					return
+				}
+
+				settled = true
+				if (code === 0) {
+					resolve()
+				} else {
+					const output = (stderr || stdout).trim()
+					reject(new Error(`aspire resource ${commandName} exited with code ${code}${output ? `: ${output}` : ''}`))
+				}
+			},
+			errorCallback: (error) => {
+				if (settled) {
+					return
+				}
+
+				settled = true
+				reject(error)
+			},
+		})
+	})
 }

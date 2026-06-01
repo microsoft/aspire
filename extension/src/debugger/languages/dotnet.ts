@@ -30,16 +30,21 @@ interface IDotNetService {
 }
 
 class DotNetService implements IDotNetService {
-    private _debugSession: AspireDebugSession;
+    private _debugSession?: AspireDebugSession;
 
-    constructor(debugSession: AspireDebugSession) {
+    constructor(debugSession?: AspireDebugSession) {
         this._debugSession = debugSession;
     }
 
     execFileAsync = util.promisify(execFile);
 
     writeToDebugConsole(message: string, category: 'stdout' | 'stderr', addNewLine: boolean = false): void {
-        this._debugSession.sendMessage(message, addNewLine, category);
+        if (this._debugSession) {
+            this._debugSession.sendMessage(message, addNewLine, category);
+        }
+        else {
+            extensionLogOutputChannel.appendLine(message);
+        }
     }
 
     async getAndActivateDevKit(): Promise<boolean> {
@@ -253,7 +258,7 @@ function createDotNetRunArguments(projectPath: string, baseProfileArgs: string |
     return dotnetRunArgs;
 }
 
-export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
+export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession?: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
     return {
         resourceType: 'project',
         debugAdapter: 'coreclr',

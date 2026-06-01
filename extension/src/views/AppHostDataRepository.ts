@@ -88,6 +88,34 @@ export interface AppHostDisplayInfo {
     resources: ResourceJson[] | null | undefined;
 }
 
+export class AspireCliNotInstalledError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'AspireCliNotInstalledError';
+    }
+}
+
+export class AspireCliFailedError extends Error {
+    constructor(
+        public readonly command: string,
+        public readonly exitCode: number | null,
+        public readonly stdout: string,
+        public readonly stderr: string) {
+        super(`${command} exited with code ${exitCode}${getCommandOutputSuffix(stdout, stderr)}`);
+        this.name = 'AspireCliFailedError';
+    }
+}
+
+export class AspireCliParseError extends Error {
+    constructor(
+        public readonly command: string,
+        public readonly output: string,
+        innerError: unknown) {
+        super(`Failed to parse ${command} output: ${String(innerError)}`);
+        this.name = 'AspireCliParseError';
+    }
+}
+
 export type ViewMode = 'workspace' | 'global';
 
 interface GlobalDescribeStream {
@@ -297,46 +325,14 @@ export class AppHostDataRepository {
         this._syncPolling();
     }
 
-    /**
-     * Performs a one-shot `aspire ps --resources` call and returns the results directly.
-     * Independent of the polling lifecycle — works regardless of panel visibility.
-     */
     async fetchAppHostsOnce(): Promise<AppHostDisplayInfo[]> {
-        const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const args = ['ps', '--format', 'json', '--resources'];
+        const appHosts = await this._runCliJson<AppHostDisplayInfo[] | AppHostDisplayInfo>('aspire ps', ['ps', '--format', 'json']);
+        const appHostList = Array.isArray(appHosts) ? appHosts : [appHosts];
 
-        return new Promise<AppHostDisplayInfo[]>((resolve) => {
-            let stdout = '';
-            let stderr = '';
-            let resolved = false;
-
-            spawnCliProcess(this._terminalProvider, cliPath, args, {
-                noExtensionVariables: true,
-                stdoutCallback: (data) => { stdout += data; },
-                stderrCallback: (data) => { stderr += data; },
-                exitCallback: (code) => {
-                    if (resolved) { return; }
-                    resolved = true;
-                    if (code === 0) {
-                        try {
-                            resolve(JSON.parse(stdout));
-                        } catch {
-                            extensionLogOutputChannel.warn(`Failed to parse aspire ps output in fetchAppHostsOnce`);
-                            resolve([]);
-                        }
-                    } else {
-                        extensionLogOutputChannel.warn(`aspire ps exited with code ${code} in fetchAppHostsOnce: ${stderr}`);
-                        resolve([]);
-                    }
-                },
-                errorCallback: (error) => {
-                    if (resolved) { return; }
-                    resolved = true;
-                    extensionLogOutputChannel.warn(`aspire ps error in fetchAppHostsOnce: ${error.message}`);
-                    resolve([]);
-                },
-            });
-        });
+        return Promise.all(appHostList.map(async appHost => ({
+            ...appHost,
+            resources: await this._fetchAppHostResourcesOnce(appHost.appHostPath),
+        })));
     }
 
     dispose(): void {
@@ -864,6 +860,7 @@ export class AppHostDataRepository {
         if (!trimmed) {
             return;
         }
+
         try {
             const resource: ResourceJson = JSON.parse(trimmed);
             if (resource.name) {
@@ -875,6 +872,139 @@ export class AppHostDataRepository {
         } catch (e) {
             extensionLogOutputChannel.warn(`Failed to parse describe NDJSON line for ${stream.appHostPath}: ${e}`);
         }
+    }
+
+    private async _runCliJson<T>(command: string, args: string[]): Promise<T> {
+        const cliPath = await this._terminalProvider.getAspireCliExecutablePath().catch(error => {
+            throw new AspireCliNotInstalledError(String(error));
+        });
+
+        return new Promise<T>((resolve, reject) => {
+            let stdout = '';
+            let stderr = '';
+            let settled = false;
+
+            const settle = (callback: () => void) => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                callback();
+            };
+
+            spawnCliProcess(this._terminalProvider, cliPath, args, {
+                noExtensionVariables: true,
+                stdoutCallback: (data) => { stdout += data; },
+                stderrCallback: (data) => { stderr += data; },
+                exitCallback: (code) => {
+                    if (code !== 0) {
+                        settle(() => reject(new AspireCliFailedError(command, code, stdout, stderr)));
+                        return;
+                    }
+
+                    try {
+                        settle(() => resolve(JSON.parse(stdout)));
+                    } catch (error) {
+                        settle(() => reject(new AspireCliParseError(command, stdout, error)));
+                    }
+                },
+                errorCallback: (error) => {
+                    settle(() => reject(new AspireCliNotInstalledError(error.message)));
+                },
+            });
+        });
+    }
+
+    private async _fetchAppHostResourcesOnce(appHostPath: string): Promise<ResourceJson[]> {
+        const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
+        const command = `aspire describe --follow --apphost ${appHostPath}`;
+
+        return new Promise<ResourceJson[]>((resolve, reject) => {
+            const resources = new Map<string, ResourceJson>();
+            let stderr = '';
+            let stdout = '';
+            let settled = false;
+            let quietTimer: ReturnType<typeof setTimeout> | undefined;
+            let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+            let describeProcess: ChildProcessWithoutNullStreams | undefined;
+
+            const settle = (callback: () => void) => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                if (quietTimer) {
+                    clearTimeout(quietTimer);
+                }
+                if (timeoutTimer) {
+                    clearTimeout(timeoutTimer);
+                }
+                if (describeProcess && describeProcess.exitCode === null && !describeProcess.killed) {
+                    this._terminateProcess(describeProcess, command);
+                }
+                callback();
+            };
+
+            const scheduleQuietCompletion = () => {
+                if (quietTimer) {
+                    clearTimeout(quietTimer);
+                }
+
+                quietTimer = setTimeout(() => {
+                    settle(() => resolve(Array.from(resources.values())));
+                }, 250);
+            };
+
+            timeoutTimer = setTimeout(() => {
+                settle(() => resolve(Array.from(resources.values())));
+            }, 3000);
+
+            describeProcess = spawnCliProcess(this._terminalProvider, cliPath, ['describe', '--follow', '--format', 'json', '--apphost', appHostPath], {
+                noExtensionVariables: true,
+                lineCallback: (line) => {
+                    if (settled) {
+                        return;
+                    }
+
+                    const trimmed = line.trim();
+                    if (!trimmed) {
+                        return;
+                    }
+
+                    stdout += `${line}\n`;
+                    try {
+                        const resource: ResourceJson = JSON.parse(trimmed);
+                        if (resource.name) {
+                            resources.set(resource.name, resource);
+                            scheduleQuietCompletion();
+                        }
+                    } catch (error) {
+                        settle(() => reject(new AspireCliParseError(command, line, error)));
+                    }
+                },
+                stderrCallback: (data) => {
+                    if (stderr.length < 4000) {
+                        stderr += data;
+                    }
+                },
+                exitCallback: (code) => {
+                    if (settled) {
+                        return;
+                    }
+
+                    if (code === 0 || resources.size > 0) {
+                        settle(() => resolve(Array.from(resources.values())));
+                    } else {
+                        settle(() => reject(new AspireCliFailedError(command, code, stdout, stderr)));
+                    }
+                },
+                errorCallback: (error) => {
+                    settle(() => reject(new AspireCliNotInstalledError(error.message)));
+                },
+            });
+        });
     }
 
     private _stopGlobalDescribe(appHostPath: string): void {
@@ -1492,6 +1622,12 @@ function isWindowsDriveSegment(segment: string): boolean {
 
 function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
+}
+
+function getCommandOutputSuffix(stdout: string, stderr: string): string {
+    const output = (stderr || stdout).trim();
+
+    return output ? `: ${output}` : '';
 }
 
 function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {

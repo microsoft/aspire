@@ -6,7 +6,7 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
-import { AppHostDataRepository } from '../views/AppHostDataRepository';
+import { AppHostDataRepository, AspireCliFailedError } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import type { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import * as cliModule from '../debugger/languages/cli';
@@ -103,6 +103,83 @@ suite('AppHostDataRepository', () => {
         assert.deepStrictEqual(spawnStub.firstCall.args[2], ['describe', '--follow', '--format', 'json']);
 
         repository.dispose();
+    });
+
+    test('fetchAppHostsOnce uses ps without resources and describes each AppHost', async () => {
+        const clock = sinon.useFakeTimers();
+        const psProcess = new TestChildProcess();
+        const describeProcess = new TestChildProcess();
+        spawnStub.onFirstCall().returns(psProcess);
+        spawnStub.onSecondCall().returns(describeProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const fetchPromise = repository.fetchAppHostsOnce();
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ps', '--format', 'json']);
+            assert.strictEqual(spawnStub.firstCall.args[3].noExtensionVariables, true);
+
+            spawnStub.firstCall.args[3].stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1234,
+                dashboardUrl: 'https://localhost:1234',
+                cliPid: 5678,
+                resources: null,
+            }]));
+            spawnStub.firstCall.args[3].exitCallback(0);
+            await waitForMicrotasks();
+
+            assert.deepStrictEqual(spawnStub.secondCall.args[2], ['describe', '--follow', '--format', 'json', '--apphost', '/workspace/AppHost.csproj']);
+            assert.strictEqual(spawnStub.secondCall.args[3].noExtensionVariables, true);
+
+            spawnStub.secondCall.args[3].lineCallback(JSON.stringify({
+                name: 'api',
+                displayName: 'api',
+                resourceType: 'Project',
+                state: 'Running',
+                stateStyle: null,
+                healthStatus: null,
+                healthReports: null,
+                exitCode: null,
+                dashboardUrl: null,
+                urls: [],
+                commands: null,
+                properties: null,
+            }));
+            await clock.tickAsync(250);
+
+            const appHosts = await fetchPromise;
+
+            assert.strictEqual(describeProcess.killed, true);
+            assert.strictEqual(appHosts.length, 1);
+            assert.strictEqual(appHosts[0].resources?.[0].name, 'api');
+        } finally {
+            repository.dispose();
+            clock.restore();
+        }
+    });
+
+    test('fetchAppHostsOnce rejects ps failures with CLI diagnostics', async () => {
+        const psProcess = new TestChildProcess();
+        spawnStub.returns(psProcess);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            const fetchPromise = repository.fetchAppHostsOnce();
+            await waitForMicrotasks();
+
+            spawnStub.firstCall.args[3].stderrCallback('Unrecognized command or argument --resources');
+            spawnStub.firstCall.args[3].exitCallback(2);
+
+            await assert.rejects(fetchPromise, (error: unknown) => {
+                assert.ok(error instanceof AspireCliFailedError);
+                assert.match(error.message, /Unrecognized command or argument --resources/);
+                return true;
+            });
+        } finally {
+            repository.dispose();
+        }
     });
 
     test('describe watch reports minimum CLI version when command help is returned', async () => {
