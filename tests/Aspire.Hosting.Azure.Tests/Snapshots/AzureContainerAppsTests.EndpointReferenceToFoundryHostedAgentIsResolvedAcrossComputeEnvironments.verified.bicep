@@ -11,9 +11,13 @@ param env_outputs_azure_container_registry_managed_identity_id string
 
 param web_containerimage string
 
+param web_identity_outputs_id string
+
 param web_containerport string
 
 param project_outputs_endpoint string
+
+param web_identity_outputs_clientid string
 
 resource web 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'web'
@@ -69,6 +73,14 @@ resource web 'Microsoft.App/containerApps@2025-10-02-preview' = {
               name: 'AGENT_URL'
               value: '${project_outputs_endpoint}/agents/agent-ha'
             }
+            {
+              name: 'AZURE_CLIENT_ID'
+              value: web_identity_outputs_clientid
+            }
+            {
+              name: 'AZURE_TOKEN_CREDENTIALS'
+              value: 'ManagedIdentityCredential'
+            }
           ]
         }
       ]
@@ -80,6 +92,7 @@ resource web 'Microsoft.App/containerApps@2025-10-02-preview' = {
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: {
+      '${web_identity_outputs_id}': { }
       '${env_outputs_azure_container_registry_managed_identity_id}': { }
     }
   }

@@ -15,6 +15,10 @@ param web_containerport string
 
 param project_outputs_endpoint string
 
+param web_identity_outputs_id string
+
+param web_identity_outputs_clientid string
+
 param env_outputs_azure_app_service_dashboard_uri string
 
 param env_outputs_azure_website_contributor_managed_identity_id string
@@ -38,6 +42,7 @@ resource webapp 'Microsoft.Web/sites@2025-03-01' = {
   location: location
   properties: {
     serverFarmId: env_outputs_planid
+    keyVaultReferenceIdentity: web_identity_outputs_id
     siteConfig: {
       numberOfWorkers: 30
       linuxFxVersion: 'SITECONTAINERS'
@@ -71,6 +76,14 @@ resource webapp 'Microsoft.Web/sites@2025-03-01' = {
         {
           name: 'AGENT_URL'
           value: '${project_outputs_endpoint}/agents/agent-ha'
+        }
+        {
+          name: 'AZURE_CLIENT_ID'
+          value: web_identity_outputs_clientid
+        }
+        {
+          name: 'AZURE_TOKEN_CREDENTIALS'
+          value: 'ManagedIdentityCredential'
         }
         {
           name: 'ASPIRE_ENVIRONMENT_NAME'
@@ -107,6 +120,7 @@ resource webapp 'Microsoft.Web/sites@2025-03-01' = {
     type: 'UserAssigned'
     userAssignedIdentities: {
       '${env_outputs_azure_container_registry_managed_identity_id}': { }
+      '${web_identity_outputs_id}': { }
     }
   }
 }
