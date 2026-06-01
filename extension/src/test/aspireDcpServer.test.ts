@@ -6,6 +6,7 @@ import * as vscode from 'vscode';
 import WebSocket from 'ws';
 import AspireDcpServer from '../dcp/AspireDcpServer';
 import waitForExpect from 'wait-for-expect';
+import { SessionTerminatedNotification } from '../dcp/types';
 
 suite('Aspire DCP server', () => {
     let dcpServer: AspireDcpServer;
@@ -248,6 +249,42 @@ suite('Aspire DCP server', () => {
         await dcpServer.releaseTestRunSession(lease.id);
 
         await closed;
+    });
+
+    test('release does not leave queued lease notifications from stop cleanup', async () => {
+        dcpServer = await AspireDcpServer.create(() => null);
+        const lease = dcpServer.acquireTestRunSession({ debug: true });
+        const dcpId = `${lease.sessionId}-api`;
+
+        const response = await requestDcpServer(dcpServer, 'PUT', '/run_session', lease.env.DEBUG_SESSION_TOKEN, dcpId, {
+            launch_configurations: [
+                {
+                    type: 'node',
+                    mode: 'Debug',
+                    script_path: '/workspace/app.js'
+                }
+            ],
+            args: [],
+            env: []
+        });
+        const runId = getRunIdFromLocation(response.headers.location);
+
+        stopDebuggingStub.callsFake(async () => {
+            await new Promise<void>(resolve => setImmediate(resolve));
+
+            const notification: SessionTerminatedNotification = {
+                notification_type: 'sessionTerminated',
+                session_id: runId,
+                dcp_id: dcpId,
+                exit_code: 0
+            };
+            dcpServer.sendNotification(notification);
+        });
+
+        await dcpServer.releaseTestRunSession(lease.id);
+        const pendingNotifications = (dcpServer as unknown as { pendingNotificationQueueByDcpId: Map<string, unknown[]> }).pendingNotificationQueueByDcpId;
+
+        assert.strictEqual(pendingNotifications.has(dcpId), false);
     });
 });
 

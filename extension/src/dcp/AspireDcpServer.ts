@@ -660,6 +660,10 @@ export default class AspireDcpServer {
         }
 
         await Promise.all(stopSessionPromises);
+
+        if (lease) {
+            this.closeLeaseNotificationConnections(lease);
+        }
     }
 
     sendNotification(notification: RunSessionNotification) {
