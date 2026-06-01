@@ -1,10 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ClientModel.Primitives;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Azure.AI.Projects.Agents;
-using OpenAI.Responses;
 
 namespace Aspire.Hosting.Foundry;
 
@@ -45,10 +46,37 @@ public sealed class FoundryToolboxWebSearchToolDefinition : FoundryToolboxToolDe
 
     internal override ValueTask<ProjectsAgentTool> ToProjectsAgentToolAsync(CancellationToken cancellationToken)
     {
-        // ResponseTool.CreateWebSearchTool() produces an OpenAI WebSearchTool; AsAgentTool() lifts
-        // it into the Azure.AI.Projects.Agents wire shape that AgentToolboxes.CreateToolboxVersion
-        // expects.
-        return new ValueTask<ProjectsAgentTool>(ResponseTool.CreateWebSearchTool().AsAgentTool());
+        // Build the OpenAI Responses "web_search" tool wire JSON by hand and read it back as a
+        // ProjectsAgentTool, bypassing ModelReaderWriter.Write on an OpenAI.Responses tool entirely.
+        //
+        // The natural implementation here is:
+        //
+        //   var openAiTool = OpenAI.Responses.ResponseTool.CreateWebSearchTool();
+        //   var agentTool  = openAiTool.AsAgentTool(); // round-trips via ModelReaderWriter.Write
+        //
+        // That works in a normal .NET process where every assembly is loaded once. It does NOT
+        // work in the polyglot (e.g. JavaScript/TypeScript) AppHostServer host process. That host
+        // ships its own copy of OpenAI + System.ClientModel inside its application folder, and
+        // loads hosting integrations into an isolated AssemblyLoadContext (see Aspire.Hosting.RemoteHost
+        // IntegrationLoadContext). Today the host carries System.ClientModel 1.10.0 while this
+        // integration is built against System.ClientModel 1.11.0; the load policy resolves the
+        // newer SCM into the probe ALC but keeps OpenAI bound to the older SCM in the default ALC.
+        // The two SCMs surface as distinct CLR assemblies, so the WebSearchTool instance (loaded
+        // in the default ALC) implements IPersistableModel<WebSearchTool> against default-ALC SCM,
+        // while ModelReaderWriter.Write<WebSearchTool> runs from probe-ALC SCM and checks
+        // `model is IPersistableModel<T>` against probe-ALC SCM. The interface check returns false
+        // and SCM throws the misleading "WebSearchTool must implement IEnumerable or IPersistableModel".
+        //
+        // Constructing the wire JSON ourselves keeps everything inside types that are shared across
+        // ALCs (BCL + Azure.AI.Projects.Agents in the probe ALC), so the cross-ALC mismatch never
+        // comes into play. The Read side is fine because AzureAIProjectsAgentsContext is resolved
+        // from the same ALC as the SCM it talks to.
+        //
+        // The OpenAI Responses "web_search" tool has a fixed wire shape: {"type":"web_search"}.
+        // See https://platform.openai.com/docs/api-reference/responses/create#responses-create-tools.
+        var json = BinaryData.FromString("""{"type":"web_search"}""");
+        var agentTool = ModelReaderWriter.Read<ProjectsAgentTool>(json, ModelReaderWriterOptions.Json, AzureAIProjectsAgentsContext.Default);
+        return new ValueTask<ProjectsAgentTool>(agentTool!);
     }
 }
 
@@ -147,16 +175,52 @@ public sealed class FoundryToolboxMcpToolDefinition : FoundryToolboxToolDefiniti
             }
         }
 
-        // Always go through the full ResponseTool.CreateMcpTool overload so the auth/header path is
-        // exercised consistently. Both parameters accept null with the same effect as omitting them.
-        return ResponseTool.CreateMcpTool(
-            serverLabel: Name,
-            serverUri: new Uri(endpoint),
-            authorizationToken: authorizationToken,
-            serverDescription: null,
-            headers: headers,
-            allowedTools: null,
-            toolCallApprovalPolicy: null).AsAgentTool();
+        // Build the OpenAI Responses "mcp" tool wire JSON by hand and read it back as a
+        // ProjectsAgentTool. See the comment on FoundryToolboxWebSearchToolDefinition for the
+        // underlying cross-ALC System.ClientModel version mismatch that makes the natural
+        // `ResponseTool.CreateMcpTool(...).AsAgentTool()` round-trip throw in the polyglot
+        // (e.g. JavaScript/TypeScript) AppHostServer host process. Constructing the JSON
+        // ourselves keeps everything inside types that are consistent across the integration's
+        // ALC (BCL + Azure.AI.Projects.Agents + that ALC's copy of System.ClientModel).
+        //
+        // OpenAI Responses "mcp" tool wire shape:
+        //   {
+        //     "type": "mcp",
+        //     "server_label": "<required>",
+        //     "server_url":   "<absolute uri>",          // optional, but required for hosted MCP
+        //     "authorization":"<token>",                  // optional bearer token (sans "Bearer ")
+        //     "headers":      { "<name>": "<value>", ... } // optional extra headers
+        //   }
+        // See https://platform.openai.com/docs/api-reference/responses/create#responses-create-tools
+        // and openai-dotnet's McpTool.Serialization.cs for the exact property names.
+        using var stream = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            writer.WriteStartObject();
+            writer.WriteString("type", "mcp");
+            writer.WriteString("server_label", Name);
+            writer.WriteString("server_url", new Uri(endpoint).AbsoluteUri);
+
+            if (!string.IsNullOrEmpty(authorizationToken))
+            {
+                writer.WriteString("authorization", authorizationToken);
+            }
+
+            if (headers is { Count: > 0 })
+            {
+                writer.WriteStartObject("headers");
+                foreach (var header in headers)
+                {
+                    writer.WriteString(header.Key, header.Value);
+                }
+                writer.WriteEndObject();
+            }
+
+            writer.WriteEndObject();
+        }
+
+        var json = BinaryData.FromBytes(stream.ToArray());
+        return ModelReaderWriter.Read<ProjectsAgentTool>(json, ModelReaderWriterOptions.Json, AzureAIProjectsAgentsContext.Default)!;
     }
 }
 

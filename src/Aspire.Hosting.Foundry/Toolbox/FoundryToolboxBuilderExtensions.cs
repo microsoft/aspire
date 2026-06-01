@@ -139,7 +139,10 @@ public static class FoundryToolboxBuilderExtensions
     /// </summary>
     /// <param name="builder">The resource builder for the Toolbox.</param>
     /// <param name="name">The tool name.</param>
-    /// <param name="endpoint">The MCP endpoint (string URI or endpoint reference).</param>
+    /// <param name="endpoint">The MCP endpoint. A string URI, an <see cref="EndpointReference"/>
+    /// pointing at a resource endpoint, or a <see cref="ReferenceExpression"/> for cases where the
+    /// endpoint URL needs to be composed (for example, appending the MCP server's mount path or
+    /// chaining through a public ingress like a dev tunnel).</param>
     /// <param name="options">Optional auth/headers configuration.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
@@ -147,7 +150,7 @@ public static class FoundryToolboxBuilderExtensions
     internal static IResourceBuilder<FoundryToolboxResource> WithMcpToolForPolyglot(
         this IResourceBuilder<FoundryToolboxResource> builder,
         string name,
-        [AspireUnion(typeof(string), typeof(EndpointReference))] object endpoint,
+        [AspireUnion(typeof(string), typeof(EndpointReference), typeof(ReferenceExpression))] object endpoint,
         FoundryToolboxMcpToolOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -173,7 +176,11 @@ public static class FoundryToolboxBuilderExtensions
         {
             string endpointString => builder.WithMcpTool(name, endpointString, configure),
             EndpointReference endpointReference => builder.WithMcpTool(name, endpointReference, configure),
-            _ => throw new ArgumentException("Endpoint must be a string or endpoint reference.", nameof(endpoint))
+            // ReferenceExpression lets polyglot callers compose URLs (e.g. `refExpr\`${endpoint}/mcp\``)
+            // because the polyglot type system can't express a templated string built from a typed
+            // endpoint reference any other way.
+            ReferenceExpression endpointExpression => builder.WithMcpTool(name, endpointExpression, configure),
+            _ => throw new ArgumentException("Endpoint must be a string, endpoint reference, or reference expression.", nameof(endpoint))
         };
     }
 
