@@ -86,7 +86,7 @@ internal sealed class DevTunnelCliClient(IConfiguration configuration) : IDevTun
 
                     // Ensure tunnel access controls are set as specified in options by resetting existing policies first.
                     // Ports get deleted and recreated separately, so we only need to reset access on the tunnel itself here.
-                    logger?.LogTrace("Clearing access policies for dev tunnel '{TunnelId}'.", tunnelId);
+                    logger?.LogTrace("Clearing access policies for dev tunnel '{TunnelId}'.", resolvedTunnelId);
                     (var accessStatus, exitCode, error) = await CallCliAsJsonAsync<DevTunnelAccessStatus>(
                         (stdout, stderr, log, ct) => _cli.ResetAccessAsync(resolvedTunnelId, portNumber: null, stdout, stderr, log, ct),
                         logger, cancellationToken).ConfigureAwait(false);

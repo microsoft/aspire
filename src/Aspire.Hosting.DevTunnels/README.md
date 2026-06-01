@@ -99,7 +99,7 @@ When creating a dev tunnel, you can optionally specify the Azure region where th
 If not set, when attempting to connect to an existing dev tunnel, it is possible based on ping a different region is chosen. This will create a new dev tunnel in that region,
 which may be undesired if testing registered webhooks or a similar scenario.
 
-To prevent this behaviour, it is recommended to explicity set the desired region. 
+To prevent this behaviour, it is recommended to explicitly set the desired region.
 
 ```csharp
 var options = new DevTunnelOptions

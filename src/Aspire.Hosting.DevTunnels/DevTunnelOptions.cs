@@ -27,6 +27,9 @@ public sealed class DevTunnelOptions
     /// Optional region to create the dev tunnel in.
     /// If not specified, the region will be selected automatically based on the ping.
     /// </summary>
+    /// <remarks>
+    /// Set this value, for example to <code>DevTunnelRegion.NorthEurope</code>, when an existing tunnel must be reused in a specific service region.
+    /// </remarks>
     public DevTunnelRegion? Region { get; set; }
 
     internal string RegionCode =>
