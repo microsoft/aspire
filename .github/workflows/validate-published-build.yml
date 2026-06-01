@@ -89,6 +89,21 @@ jobs:
           $matrix = ConvertTo-Json @{ include = @($cliE2ETests) } -Compress -Depth 10
           "cli_e2e_matrix=$matrix" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
 
+      - name: Write run parameters summary
+        if: always()
+        run: |
+          {
+            echo "## Run parameters"
+            echo ""
+            echo "| Parameter | Value |"
+            echo "|---|---|"
+            echo "| Quality (channel) | \`${{ inputs.quality || 'release' }}\` |"
+            echo "| Expected version | \`${{ inputs.version || '13.4.0' }}\` |"
+            echo "| Triggered by | \`${{ github.event_name }}\` |"
+            echo "| Ref | \`${{ github.ref }}\` |"
+            echo "| SHA | \`${{ github.sha }}\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   build_cli_e2e_image:
     name: Build CLI E2E Docker image
     uses: ./.github/workflows/build-cli-e2e-image.yml
@@ -237,8 +252,22 @@ jobs:
 
             if compgen -G "$versions_dir/*.env" > /dev/null; then
               for version_file in "$versions_dir"/*.env; do
-                echo "- \`$(basename "$version_file" .env)\`"
-                sed 's/^/  - /' "$version_file"
+                # Each file contains key=value lines emitted by
+                # CliE2EAutomatorHelpers.BuildVersionRecordCommand:
+                #   test=...
+                #   mode=...
+                #   strategy=...
+                #   expected=...
+                #   version=...
+                #   baseVersion=...
+                # Show the test name as the bullet, with just strategy + installed
+                # version below — the rest is noise for an at-a-glance summary.
+                test_name=$(sed -n 's/^test=//p' "$version_file" | head -n1)
+                strategy=$(sed -n 's/^strategy=//p' "$version_file" | head -n1)
+                version=$(sed -n 's/^version=//p' "$version_file" | head -n1)
+                echo "- \`${test_name:-(unknown test)}\`"
+                echo "  - strategy: ${strategy:-(unknown)}"
+                echo "  - version: \`${version:-(unknown)}\`"
               done
             else
               echo "No Aspire CLI version records were produced."
