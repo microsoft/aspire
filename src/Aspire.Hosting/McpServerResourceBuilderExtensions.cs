@@ -190,6 +190,7 @@ public static class McpServerResourceBuilderExtensions
     private static async Task PrepareMcpToolCallRequestAsync(HttpCommandRequestContext ctx)
     {
         var initializeResponse = await SendMcpJsonRpcRequestAsync(ctx, CreateMcpInitializeRequest(), sessionId: null).ConfigureAwait(true);
+        using var initializeHttpResponse = initializeResponse.Response;
         var sessionId = initializeResponse.Response.Headers.TryGetValues("Mcp-Session-Id", out var sessionIds) ? sessionIds.FirstOrDefault() : null;
 
         await SendMcpJsonRpcNotificationAsync(ctx, "notifications/initialized", sessionId).ConfigureAwait(true);
@@ -198,6 +199,7 @@ public static class McpServerResourceBuilderExtensions
             ctx,
             CreateMcpJsonRpcRequest("tools/list", new JsonObject()),
             sessionId).ConfigureAwait(true);
+        using var toolsListHttpResponse = toolsListResponse.Response;
 
         var tools = ReadMcpTools(toolsListResponse.Payload);
         if (tools.Count == 0)

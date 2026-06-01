@@ -83,7 +83,7 @@ public static class AgentResourceBuilderExtensions
         builder.WithAnnotation(annotation);
         builder.WithIconName("Agents");
 
-        var endpoint = GetAgentEndpoint(builder);
+        var endpoint = GetAgentEndpoint(builder, KnownNetworkIdentifiers.LocalhostNetwork);
         var hasHighlightedCommand = builder.Resource.Annotations
             .OfType<ResourceCommandAnnotation>()
             .Any(command => command.IsHighlighted);
@@ -149,7 +149,12 @@ public static class AgentResourceBuilderExtensions
         Func<bool> shouldHighlightCommand)
         where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
     {
-        builder.WithEnvironment(A2AAgentBaseUrlEnvironmentVariableName, ReferenceExpression.Create($"{endpoint.Property(EndpointProperty.Url)}"));
+        var advertisedEndpoint = GetAgentEndpoint(
+            builder,
+            builder.Resource.IsContainer()
+                ? KnownNetworkIdentifiers.DefaultAspireContainerNetwork
+                : KnownNetworkIdentifiers.LocalhostNetwork);
+        builder.WithEnvironment(A2AAgentBaseUrlEnvironmentVariableName, ReferenceExpression.Create($"{advertisedEndpoint.Property(EndpointProperty.Url)}"));
 
         AddProtocolEndpointUrl(builder, endpoint, agentCardPath, "Agent Card");
 
@@ -306,14 +311,15 @@ public static class AgentResourceBuilderExtensions
 
         foreach (var agentInterface in interfaces)
         {
+            var interfaceUri = CreateDashboardReachableA2AUri(cardUri, agentInterface.Url);
             if (agentInterface.ProtocolBinding is A2AProtocolBindingJsonRpc)
             {
-                return new A2AInvocation(agentInterface.Url, agentInterface.ProtocolBinding, agentInterface.ProtocolVersion, streaming);
+                return new A2AInvocation(interfaceUri, agentInterface.ProtocolBinding, agentInterface.ProtocolVersion, streaming);
             }
 
             if (agentInterface.ProtocolBinding is A2AProtocolBindingHttpJson)
             {
-                var requestUri = AppendPath(agentInterface.Url, streaming ? DefaultA2AHttpJsonStreamingMessagePath : DefaultA2AHttpJsonSendMessagePath);
+                var requestUri = AppendPath(interfaceUri, streaming ? DefaultA2AHttpJsonStreamingMessagePath : DefaultA2AHttpJsonSendMessagePath);
                 return new A2AInvocation(requestUri, agentInterface.ProtocolBinding, agentInterface.ProtocolVersion, streaming);
             }
         }
@@ -379,6 +385,22 @@ public static class AgentResourceBuilderExtensions
     private static string NormalizeA2AProtocolBinding(string protocolBinding)
     {
         return protocolBinding.Replace("-", "", StringComparison.Ordinal).ToUpperInvariant();
+    }
+
+    private static Uri CreateDashboardReachableA2AUri(Uri cardUri, Uri interfaceUri)
+    {
+        // A containerized agent should advertise a container-network URL in its card so
+        // container consumers can call it. The dashboard command reads that same card
+        // through the selected Aspire endpoint, so keep the advertised path but use the
+        // already-resolved card endpoint origin for host-side invocation.
+        var builder = new UriBuilder(interfaceUri)
+        {
+            Scheme = cardUri.Scheme,
+            Host = cardUri.Host,
+            Port = cardUri.IsDefaultPort ? -1 : cardUri.Port
+        };
+
+        return builder.Uri;
     }
 
     private static Uri AppendPath(Uri baseUri, string path)
@@ -594,7 +616,7 @@ public static class AgentResourceBuilderExtensions
         builder.WithHttpCommand(path, displayName, endpointSelector: commandOptions.EndpointSelector, commandName, commandOptions);
     }
 
-    private static EndpointReference GetAgentEndpoint<T>(IResourceBuilder<T> builder)
+    private static EndpointReference GetAgentEndpoint<T>(IResourceBuilder<T> builder, NetworkIdentifier network)
         where T : IResourceWithEndpoints
     {
         var endpointName = builder.Resource.Annotations
@@ -604,7 +626,7 @@ public static class AgentResourceBuilderExtensions
             .Select(e => e.Name)
             .FirstOrDefault() ?? "http";
 
-        return new EndpointReference(builder.Resource, endpointName, KnownNetworkIdentifiers.LocalhostNetwork);
+        return new EndpointReference(builder.Resource, endpointName, network);
     }
 
     private static string? NormalizePath(string? path)

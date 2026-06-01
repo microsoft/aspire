@@ -108,12 +108,12 @@ public class AgentResourceBuilderExtensionsTests
 
         var agent = builder.AddContainer("agent", "image")
             .WithHttpEndpoint(targetPort: 8080)
-            .WithEndpoint("http", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 18080))
+            .WithEndpoint("http", e => AllocateEndpoint(e, "agent.dev.internal", 8080))
             .AsAgent(AgentProtocol.A2A);
 
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(agent.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
-        Assert.Equal("http://localhost:18080", config[AgentResourceBuilderExtensions.A2AAgentBaseUrlEnvironmentVariableName]);
+        Assert.Equal("http://agent.dev.internal:8080", config[AgentResourceBuilderExtensions.A2AAgentBaseUrlEnvironmentVariableName]);
     }
 
     [Theory]
@@ -121,6 +121,8 @@ public class AgentResourceBuilderExtensionsTests
     [InlineData("JSONRPC", true, "http://localhost:8080/a2a", "http://localhost:8080/a2a", "SendStreamingMessage")]
     [InlineData("HTTP+JSON", false, "http://localhost:8080/a2a", "http://localhost:8080/a2a/message:send", null)]
     [InlineData("HTTP+JSON", true, "http://localhost:8080/a2a", "http://localhost:8080/a2a/message:stream", null)]
+    [InlineData("JSONRPC", false, "http://agent.dev.internal:8080/a2a", "http://localhost:8080/a2a", "SendMessage")]
+    [InlineData("HTTP+JSON", false, "http://agent.dev.internal:8080/a2a", "http://localhost:8080/a2a/message:send", null)]
     public async Task InvokeA2AReadsAgentCardAndChoosesBinding(string protocolBinding, bool streaming, string interfaceUrl, string expectedUrl, string? expectedJsonRpcMethod)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
