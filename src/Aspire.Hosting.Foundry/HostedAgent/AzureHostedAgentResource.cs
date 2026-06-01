@@ -25,7 +25,10 @@ namespace Aspire.Hosting.Foundry;
 /// </summary>
 public class AzureHostedAgentResource : Resource, IResourceWithEnvironment
 {
-    private const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
+    // The "Azure AI User" built-in role (data-plane access to Foundry agents/inference). Granted to
+    // the agent's own instance identity below, and to consumers that reference the agent (see
+    // HostedAgentResourceBuilderExtensions.GrantHostedAgentConsumerRoles).
+    internal const string AzureAIUserRoleDefinitionId = "53ca6127-db72-4b80-b1b0-d745d6d5456d";
 
     /// <summary>
     /// Creates a new instance of the <see cref="AzureHostedAgentResource"/> class.

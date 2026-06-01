@@ -5,6 +5,7 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Azure.AI.Projects.Agents;
@@ -446,6 +447,88 @@ public class HostedAgentExtensionTests
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    [Fact]
+    public void AsHostedAgent_StampsReferenceRoleAssignmentAnnotationOnTarget_WithAzureAIUserRole()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var account = Assert.Single(builder.Resources.OfType<FoundryResource>());
+
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
+        Assert.Same(account, annotation.Target);
+        Assert.Contains(annotation.Roles, role =>
+            string.Equals(role.Id, AzureHostedAgentResource.AzureAIUserRoleDefinitionId, StringComparison.OrdinalIgnoreCase));
+#pragma warning restore ASPIREAZURE003
+    }
+
+    [Fact]
+    public void AsHostedAgent_ReferenceRoleAssignmentAnnotation_GrantsOnlyAzureAIUserRole()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var account = Assert.Single(builder.Resources.OfType<FoundryResource>());
+        Assert.True(account.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaults));
+
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
+
+        // The implied grant is least-privilege: only "Azure AI User" is required to invoke the agent.
+        var role = Assert.Single(annotation.Roles);
+        Assert.Equal(AzureHostedAgentResource.AzureAIUserRoleDefinitionId, role.Id, ignoreCase: true);
+
+        // The account's default data-plane roles must NOT be folded in here. A consumer that references
+        // the account directly still receives them via the preparer's normal walk, and a consumer that
+        // explicitly suppresses them must keep them suppressed.
+        foreach (var defaultRole in defaults.Roles)
+        {
+            Assert.DoesNotContain(annotation.Roles, r => string.Equals(r.Id, defaultRole.Id, StringComparison.OrdinalIgnoreCase));
+        }
+#pragma warning restore ASPIREAZURE003
+    }
+
+    [Fact]
+    public void AsHostedAgent_MultipleHostedAgents_EachTargetCarriesItsOwnReferenceRoleAssignment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var otherProject = builder.AddFoundry("account2")
+            .AddProject("other-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+        builder.AddPythonApp("agent2", "./app.py", "main:app")
+            .AsHostedAgent(otherProject);
+
+        var hostedAgents = builder.Resources.OfType<AzureHostedAgentResource>().ToList();
+        Assert.Equal(2, hostedAgents.Count);
+
+        var account = Assert.Single(builder.Resources.OfType<FoundryResource>(), r => r.Name == "account");
+        var account2 = Assert.Single(builder.Resources.OfType<FoundryResource>(), r => r.Name == "account2");
+
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        var targets = hostedAgents
+            .Select(a => Assert.Single(a.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>()).Target)
+            .ToList();
+
+        Assert.Contains(account, targets);
+        Assert.Contains(account2, targets);
+#pragma warning restore ASPIREAZURE003
+    }
 
     private sealed class Project : IProjectMetadata
     {
