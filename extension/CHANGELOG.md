@@ -6,7 +6,6 @@
 
 - Add VS Code telemetry signals for engagement, AppHost launches, command invocations, debug sessions, and dashboard telemetry passthrough; all events respect the VS Code `telemetry.telemetryLevel` setting ([#17723](https://github.com/microsoft/aspire/pull/17723)).
 
-
 ## v1.11.0
 
 ### Features
