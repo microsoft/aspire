@@ -243,6 +243,38 @@ public partial class ResourcesTests : DashboardTestContext
         });
     }
 
+    [Theory]
+    [InlineData(false, true, "vertical")]
+    [InlineData(true, true, "vertical")]
+    [InlineData(false, false, "horizontal")]
+    [InlineData(true, false, "horizontal")]
+    public void ResourceTabs_OrientationRespondsToUltraLowWidth(bool isDesktop, bool isUltraLowWidth, string expectedOrientation)
+    {
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: isUltraLowWidth);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource(
+                "Resource1",
+                "Type1",
+                "Running",
+                ImmutableArray.Create(new HealthReportViewModel("Null", null, "Description1", null))),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(
+            this,
+            viewport,
+            dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        var tabs = cut.Find("fluent-tabs.resources-tab-header");
+        Assert.Equal(expectedOrientation, tabs.GetAttribute("orientation"));
+        Assert.All(cut.FindAll("fluent-tab"), tab => Assert.True(tab.HasAttribute("fixed")));
+    }
+
     [Fact]
     public void ResourceFilters_ApplyExistingFiltersOnInitialRender()
     {

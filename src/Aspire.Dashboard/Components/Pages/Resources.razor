@@ -101,22 +101,29 @@
                             *@
                             @if (!_hideResourceGraph)
                             {
-                                <FluentTabs Class="resources-tab-header" ActiveTabId="@($"tab-{PageViewModel.SelectedViewKind}")" OnTabChange="@OnTabChangeAsync" Size="null">
+                                <FluentTabs Class="resources-tab-header"
+                                            ActiveTabId="@($"tab-{PageViewModel.SelectedViewKind}")"
+                                            OnTabChange="@OnTabChangeAsync"
+                                            Orientation="@(ViewportInformation.IsUltraLowWidth ? Orientation.Vertical : Orientation.Horizontal)"
+                                            Size="null">
                                     <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Table}")"
                                                Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerTableTab)]"
-                                               Icon="@(new Icons.Regular.Size24.Table())">
+                                               Icon="@(new Icons.Regular.Size24.Table())"
+                                               fixed>
                                     </FluentTab>
                                     <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Parameters}")"
                                                Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerParametersTab)]"
-                                               Icon="@(new Icons.Regular.Size24.Key())">
+                                               Icon="@(new Icons.Regular.Size24.Key())"
+                                               fixed>
                                     </FluentTab>
                                     <FluentTab LabelClass="tab-label"
                                                Id="@($"tab-{ResourceViewKind.Graph}")"
                                                aria-label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphAccessibleLabel)]"
                                                Label="@ControlsStringsLoc[nameof(ControlsStrings.ResourcesContainerGraphTab)]"
-                                               Icon="@(new Icons.Regular.Size24.ShareAndroid())">
+                                               Icon="@(new Icons.Regular.Size24.ShareAndroid())"
+                                               fixed>
                                     </FluentTab>
                                 </FluentTabs>
                             }
