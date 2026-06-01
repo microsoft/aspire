@@ -569,7 +569,29 @@ internal sealed class RadiusInfrastructureBuilder
         construct.EnvironmentName = _environment.Name;
         construct.KubernetesNamespace = _environment.Namespace;
         construct.RecipePacks.Add(BuildIdExpression(recipePackConstruct));
+        ApplyCloudProviders(construct);
         return construct;
+    }
+
+    private void ApplyCloudProviders(RadiusEnvironmentConstruct construct)
+    {
+        var annotation = _environment.Annotations
+            .OfType<Annotations.RadiusCloudProvidersAnnotation>()
+            .FirstOrDefault();
+        if (annotation is null)
+        {
+            return;
+        }
+
+        if (annotation.Azure is { } azure)
+        {
+            construct.AzureScope = $"/subscriptions/{azure.SubscriptionId}/resourceGroups/{azure.ResourceGroup}";
+        }
+
+        if (annotation.Aws is { } aws)
+        {
+            construct.AwsScope = $"/planes/aws/aws/accounts/{aws.AccountId}/regions/{aws.Region}";
+        }
     }
 
     private static RadiusApplicationConstruct CreateApplicationConstruct(

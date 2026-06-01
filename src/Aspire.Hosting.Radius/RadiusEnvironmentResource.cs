@@ -54,6 +54,18 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             var publishStep = new RadiusBicepPublishingContext(this).CreatePipelineStep();
             var deployStep = new RadiusDeploymentPipelineStep(this).CreatePipelineStep();
 
+            // Only schedule the credential-register step when the environment
+            // has cloud-provider configuration attached. Apps without the new
+            // WithAzure/WithAws extensions emit byte-identical pipelines.
+            var hasCloudProviders = Annotations
+                .OfType<Annotations.RadiusCloudProvidersAnnotation>()
+                .Any();
+            if (hasCloudProviders)
+            {
+                var registerStep = new RadCredentialRegisterStep(this).CreatePipelineStep();
+                return [prepareStep, publishStep, registerStep, deployStep];
+            }
+
             return [prepareStep, publishStep, deployStep];
         }));
     }

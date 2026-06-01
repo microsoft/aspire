@@ -14,6 +14,8 @@ public sealed class RadiusEnvironmentConstruct : ProvisionableResource
     private BicepValue<string>? _name;
     private BicepList<string>? _recipePacks;
     private BicepValue<string>? _kubernetesNamespace;
+    private BicepValue<string>? _azureScope;
+    private BicepValue<string>? _awsScope;
 
     /// <summary>The resource name.</summary>
     public BicepValue<string> EnvironmentName
@@ -41,6 +43,30 @@ public sealed class RadiusEnvironmentConstruct : ProvisionableResource
         set { Initialize(); _kubernetesNamespace!.Assign(value); }
     }
 
+    /// <summary>
+    /// Scope path of the Azure cloud provider, e.g.
+    /// <c>/subscriptions/{sub}/resourceGroups/{rg}</c>. Emitted as
+    /// <c>properties.providers.azure.scope</c>. Unset for environments that
+    /// do not configure an Azure provider.
+    /// </summary>
+    public BicepValue<string> AzureScope
+    {
+        get { Initialize(); return _azureScope!; }
+        set { Initialize(); _azureScope!.Assign(value); }
+    }
+
+    /// <summary>
+    /// Scope path of the AWS cloud provider, e.g.
+    /// <c>/planes/aws/aws/accounts/{acc}/regions/{region}</c>. Emitted as
+    /// <c>properties.providers.aws.scope</c>. Unset for environments that
+    /// do not configure an AWS provider.
+    /// </summary>
+    public BicepValue<string> AwsScope
+    {
+        get { Initialize(); return _awsScope!; }
+        set { Initialize(); _awsScope!.Assign(value); }
+    }
+
     /// <summary>Initializes a new <see cref="RadiusEnvironmentConstruct"/> with the given Bicep identifier.</summary>
     public RadiusEnvironmentConstruct(string bicepIdentifier)
         : base(bicepIdentifier, new Azure.Core.ResourceType("Radius.Core/environments"), "2025-08-01-preview")
@@ -55,5 +81,11 @@ public sealed class RadiusEnvironmentConstruct : ProvisionableResource
         _kubernetesNamespace = DefineProperty<string>(
             nameof(KubernetesNamespace),
             ["properties", "providers", "kubernetes", "namespace"]);
+        _azureScope = DefineProperty<string>(
+            nameof(AzureScope),
+            ["properties", "providers", "azure", "scope"]);
+        _awsScope = DefineProperty<string>(
+            nameof(AwsScope),
+            ["properties", "providers", "aws", "scope"]);
     }
 }

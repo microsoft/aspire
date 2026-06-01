@@ -57,6 +57,46 @@ builder.AddContainer("api", "myorg/api", "1.0")
 
 Untargeted resources surface a clear error from the core pipeline instead of being silently claimed by one environment.
 
+## Cloud providers
+
+Configure Azure and/or AWS cloud providers directly in the AppHost. The publisher
+emits `properties.providers.azure.scope` / `providers.aws.scope` on the
+`Radius.Core/environments` resource and the deploy pipeline registers
+credentials via `rad credential register` before `rad deploy` runs.
+
+```csharp
+var clientSecret = builder.AddParameter("azure-sp-secret", secret: true);
+
+builder.AddRadiusEnvironment("radius")
+       .WithAzureProvider(
+           subscriptionId: "00000000-0000-0000-0000-000000000000",
+           resourceGroup:  "rg-radius",
+           azure => azure.WithServicePrincipal(
+               tenantId:     "11111111-1111-1111-1111-111111111111",
+               clientId:     "22222222-2222-2222-2222-222222222222",
+               clientSecret: clientSecret))
+       .WithAwsProvider(
+           accountId: "123456789012",
+           region:    "us-west-2",
+           aws => aws.WithIrsa("arn:aws:iam::123456789012:role/radius-irsa"));
+```
+
+Supported credential modes:
+
+| Provider | Mode | Method |
+|----------|------|--------|
+| Azure | Service Principal | `azure.WithServicePrincipal(tenantId, clientId, clientSecret)` |
+| Azure | Workload Identity | `azure.WithWorkloadIdentity(clientId, tenantId)` |
+| AWS   | Access Key        | `aws.WithAccessKey(accessKeyId, secretAccessKey)` |
+| AWS   | IRSA              | `aws.WithIrsa(iamRoleArn)` |
+
+Secret material (Azure SP client secret, AWS access-key pair) must be supplied
+via `builder.AddParameter(..., secret: true)`. The integration never inlines
+secret values into Bicep or manifests; they are resolved at deploy time and
+redacted from any logged command line.
+
+See [specs/003-cloud-providers/quickstart.md](../../../specs/003-cloud-providers/quickstart.md) for an end-to-end walkthrough.
+
 ## Additional documentation
 
 * https://docs.radapp.io/
