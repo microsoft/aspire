@@ -1,5 +1,5 @@
 {
   "appHost": {
-    "path": "{{projectName}}.AppHost/{{projectName}}.AppHost.csproj"
+    "path": "Aspire-StarterApplication.1.AppHost/Aspire-StarterApplication.1.AppHost.csproj"
   }
 }

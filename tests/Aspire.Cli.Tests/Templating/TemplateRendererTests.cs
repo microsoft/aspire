@@ -183,6 +183,77 @@ public class TemplateRendererTests
         Assert.Equal("value=42", File.ReadAllText(Path.Combine(outputDir.Path, "from-path-transformer.txt")));
     }
 
+    [Fact]
+    public async Task RenderAsync_PathTransformerCollision_ThrowsBeforeWritingAnything()
+    {
+        using var sourceDir = new TempDirectory();
+        // Two distinct source files that a buggy path transform collapses onto the
+        // same output path. The renderer must detect this up front and refuse to
+        // render rather than silently letting one file clobber the other.
+        File.WriteAllText(Path.Combine(sourceDir.Path, "a.txt"), "a");
+        File.WriteAllText(Path.Combine(sourceDir.Path, "b.txt"), "b");
+
+        using var outputDir = new TempDirectory();
+        var source = new DirectoryTemplateSource(new DirectoryInfo(sourceDir.Path));
+        var renderer = new TemplateRenderer(NullLogger.Instance);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => renderer.RenderAsync(
+            source,
+            outputDir.Path,
+            content => content,
+            CancellationToken.None,
+            pathTransformer: _ => "same.txt"));
+
+        Assert.Contains("render to", ex.Message);
+        // Nothing should have been written because the collision is detected before the write loop.
+        Assert.Empty(Directory.GetFiles(outputDir.Path));
+    }
+
+    [Fact]
+    public async Task RenderAsync_PathTransformerEscapesOutputRoot_Throws()
+    {
+        using var sourceDir = new TempDirectory();
+        File.WriteAllText(Path.Combine(sourceDir.Path, "evil.txt"), "x");
+
+        using var outputDir = new TempDirectory();
+        var source = new DirectoryTemplateSource(new DirectoryInfo(sourceDir.Path));
+        var renderer = new TemplateRenderer(NullLogger.Instance);
+
+        // A transformer that injects a traversal segment must be rejected — either by
+        // the per-segment guard (separator/'..' in a segment) or the containment check.
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => renderer.RenderAsync(
+            source,
+            outputDir.Path,
+            content => content,
+            CancellationToken.None,
+            pathTransformer: _ => ".."));
+
+        Assert.NotNull(ex);
+        Assert.Empty(Directory.GetFiles(outputDir.Path));
+    }
+
+    [Fact]
+    public async Task RenderAsync_PathTransformerInjectsSeparator_Throws()
+    {
+        using var sourceDir = new TempDirectory();
+        File.WriteAllText(Path.Combine(sourceDir.Path, "file.txt"), "x");
+
+        using var outputDir = new TempDirectory();
+        var source = new DirectoryTemplateSource(new DirectoryInfo(sourceDir.Path));
+        var renderer = new TemplateRenderer(NullLogger.Instance);
+
+        // A single segment must stay a single segment; a transform that splits it
+        // into two directories is rejected so token expansion can't restructure the tree.
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => renderer.RenderAsync(
+            source,
+            outputDir.Path,
+            content => content,
+            CancellationToken.None,
+            pathTransformer: _ => "nested/file.txt"));
+
+        Assert.Contains("valid single path segment", ex.Message);
+    }
+
     private sealed class TempDirectory : IDisposable
     {
         public TempDirectory()

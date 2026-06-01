@@ -7,13 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\{{projectName}}.ServiceDefaults\{{projectName}}.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\Aspire-StarterApplication.1.ServiceDefaults\Aspire-StarterApplication.1.ServiceDefaults.csproj" />
   </ItemGroup>
 
-{{#useRedisCache}}
   <ItemGroup>
-    <PackageReference Include="Aspire.StackExchange.Redis.OutputCaching" Version="{{aspireVersion}}" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="{{aspNetCoreOpenApi10Version}}" />
   </ItemGroup>
 
-{{/useRedisCache}}
 </Project>

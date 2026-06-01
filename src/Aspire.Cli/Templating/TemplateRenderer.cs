@@ -84,10 +84,16 @@ internal sealed class TemplateRenderer
         var files = source.EnumerateFiles();
         _logger.LogDebug("Rendering {FileCount} template files to '{OutputPath}'.", files.Count, outputPath);
 
+        var fullOutputRoot = Path.GetFullPath(outputPath);
+
+        // Resolve every transformed path up front so a misbehaving path transform
+        // (two sources collapsing to one target, a traversal sequence, or a
+        // separator injected into a segment) fails before any byte is written
+        // rather than silently overwriting or escaping the output directory.
+        var plannedFiles = new List<(TemplateFile File, string FilePath)>(files.Count);
+        var claimedPaths = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in files)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-
             // Apply the path transformer to every '/'-separated segment so file
             // names AND directory names can be templated (e.g. `{{projectName}}.csproj`
             // or `{{projectName}}.AppHost/AppHost.cs`).
@@ -96,6 +102,33 @@ internal sealed class TemplateRenderer
             // Source-side paths are always '/'-separated by contract on TemplateFile.
             var nativeRelative = transformedRelative.Replace('/', Path.DirectorySeparatorChar);
             var filePath = Path.Combine(outputPath, nativeRelative);
+            var fullFilePath = Path.GetFullPath(filePath);
+
+            // Defense in depth: a transformed path must stay inside the output root.
+            if (!fullFilePath.StartsWith(fullOutputRoot + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                && !string.Equals(fullFilePath, fullOutputRoot, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Template file '{file.RelativePath}' resolved to '{fullFilePath}', which is outside the output directory '{fullOutputRoot}'.");
+            }
+
+            // Use a case-insensitive comparer so a collision that would only
+            // manifest on a case-insensitive file system (Windows/macOS) is still
+            // caught when rendering on Linux.
+            if (claimedPaths.TryGetValue(fullFilePath, out var existingSource))
+            {
+                throw new InvalidOperationException(
+                    $"Template files '{existingSource}' and '{file.RelativePath}' both render to '{fullFilePath}'. Adjust the template path replacements so each source maps to a distinct output path.");
+            }
+
+            claimedPaths.Add(fullFilePath, file.RelativePath);
+            plannedFiles.Add((file, filePath));
+        }
+
+        foreach (var (file, filePath) in plannedFiles)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
             var fileDirectory = Path.GetDirectoryName(filePath);
             if (!string.IsNullOrEmpty(fileDirectory))
             {
@@ -133,7 +166,22 @@ internal sealed class TemplateRenderer
         var segments = relativePath.Split('/');
         for (var i = 0; i < segments.Length; i++)
         {
-            segments[i] = pathTransformer(segments[i]);
+            var transformed = pathTransformer(segments[i]);
+
+            // A transformed segment must remain a single, well-formed path segment.
+            // Reject separators (a token expansion that injected one), empty
+            // segments, and the relative specifiers '.'/'..' so a template can
+            // never assemble a traversal or collapse two segments into one.
+            if (transformed.Length == 0
+                || transformed is "." or ".."
+                || transformed.Contains('/')
+                || transformed.Contains('\\'))
+            {
+                throw new InvalidOperationException(
+                    $"Template path segment '{segments[i]}' transformed to '{transformed}', which is not a valid single path segment.");
+            }
+
+            segments[i] = transformed;
         }
 
         return string.Join('/', segments);

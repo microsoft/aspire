@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Text;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
@@ -116,42 +115,43 @@ internal static class EmbeddedCSharpStarterTemplate
         var hostName = EmbeddedCSharpAppHostTemplate.ComputeLocalhostTldHostName(projectName);
         var generatedClassNamePrefix = ComputeGeneratedClassNamePrefix(projectName);
 
+        // Symbol VALUES are computed here in C# (ports, GUID, derived names,
+        // package versions); the template.json manifest only declares which
+        // literal in the template tree maps to which of these symbols. The
+        // package-version symbols come from AssemblyMetadata baked into Aspire.Cli
+        // at build time (see EmbeddedTemplatePackageVersions / Aspire.Cli.csproj).
+        var symbols = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["projectName"] = projectName,
+            ["generatedClassNamePrefix"] = generatedClassNamePrefix,
+            ["aspireVersion"] = aspireVersion,
+            ["userSecretsId"] = userSecretsId,
+            ["hostName"] = hostName,
+            ["appHostHttpPort"] = appHostPorts.DashboardHttpPort.ToString(CultureInfo.InvariantCulture),
+            ["appHostHttpsPort"] = appHostPorts.DashboardHttpsPort.ToString(CultureInfo.InvariantCulture),
+            ["appHostOtlpHttpPort"] = appHostPorts.OtlpHttpPort.ToString(CultureInfo.InvariantCulture),
+            ["appHostOtlpHttpsPort"] = appHostPorts.OtlpHttpsPort.ToString(CultureInfo.InvariantCulture),
+            ["appHostResourceHttpPort"] = appHostPorts.ResourceServiceHttpPort.ToString(CultureInfo.InvariantCulture),
+            ["appHostResourceHttpsPort"] = appHostPorts.ResourceServiceHttpsPort.ToString(CultureInfo.InvariantCulture),
+            ["webHttpPort"] = starterPorts.WebHttpPort.ToString(CultureInfo.InvariantCulture),
+            ["webHttpsPort"] = starterPorts.WebHttpsPort.ToString(CultureInfo.InvariantCulture),
+            ["apiServiceHttpPort"] = starterPorts.ApiServiceHttpPort.ToString(CultureInfo.InvariantCulture),
+            ["apiServiceHttpsPort"] = starterPorts.ApiServiceHttpsPort.ToString(CultureInfo.InvariantCulture),
+            ["microsoftExtensionsHttpResilienceVersion"] = EmbeddedTemplatePackageVersions.MicrosoftExtensionsHttpResilienceVersion,
+            ["microsoftExtensionsServiceDiscoveryVersion"] = EmbeddedTemplatePackageVersions.MicrosoftExtensionsServiceDiscoveryVersion,
+            ["openTelemetryExporterVersion"] = EmbeddedTemplatePackageVersions.OpenTelemetryExporterOpenTelemetryProtocolVersion,
+            ["openTelemetryHostingVersion"] = EmbeddedTemplatePackageVersions.OpenTelemetryInstrumentationExtensionsHostingVersion,
+            ["openTelemetryInstrumentationAspNetCoreVersion"] = EmbeddedTemplatePackageVersions.OpenTelemetryInstrumentationAspNetCoreVersion,
+            ["openTelemetryInstrumentationHttpVersion"] = EmbeddedTemplatePackageVersions.OpenTelemetryInstrumentationHttpVersion,
+            ["openTelemetryInstrumentationRuntimeVersion"] = EmbeddedTemplatePackageVersions.OpenTelemetryInstrumentationRuntimeVersion,
+            ["aspNetCoreOpenApi10Version"] = EmbeddedTemplatePackageVersions.MicrosoftAspNetCoreOpenApiPreviewVersion
+        };
+
         var conditions = new Dictionary<string, bool>(StringComparer.Ordinal)
         {
             ["useRedisCache"] = useRedisCache,
             ["localhostTld"] = useLocalhostTld
         };
-
-        string ApplyContentTransform(string content)
-        {
-            var tokensApplied = ApplyTokens(
-                content,
-                projectName,
-                generatedClassNamePrefix,
-                aspireVersion,
-                appHostPorts,
-                starterPorts,
-                hostName,
-                userSecretsId);
-            return ConditionalBlockProcessor.Process(tokensApplied, conditions);
-        }
-
-        // See EmbeddedCSharpAppHostTemplate for the rationale on splitting the
-        // path transform from the content transform (Mustache conditionals can
-        // only live inside file content, not in path segments).
-        string ApplyPathTransform(string segment)
-        {
-            var tokensApplied = ApplyTokens(
-                segment,
-                projectName,
-                generatedClassNamePrefix,
-                aspireVersion,
-                appHostPorts,
-                starterPorts,
-                hostName,
-                userSecretsId);
-            return EmbeddedTemplatePathHelpers.RewriteTemplateProjectExtension(tokensApplied);
-        }
 
         logger.LogDebug(
             "Rendering embedded C# starter template to '{OutputPath}' (project '{ProjectName}', Aspire version '{AspireVersion}', UseRedisCache={UseRedisCache}, LocalhostTld={LocalhostTld}).",
@@ -167,8 +167,8 @@ internal static class EmbeddedCSharpStarterTemplate
         }
 
         var source = new EmbeddedResourceTemplateSource(typeof(EmbeddedCSharpStarterTemplate).Assembly, "csharp-starter");
-        var renderer = new TemplateRenderer(logger);
-        await renderer.RenderAsync(source, outputPath, ApplyContentTransform, cancellationToken, ApplyPathTransform);
+        var renderer = new ManifestTemplateRenderer(logger);
+        await renderer.RenderAsync(source, outputPath, symbols, conditions, cancellationToken);
     }
 
     /// <summary>
@@ -181,50 +181,5 @@ internal static class EmbeddedCSharpStarterTemplate
     internal static string ComputeGeneratedClassNamePrefix(string projectName)
     {
         return s_generatedClassNamePrefixRegex.Replace(projectName, "_");
-    }
-
-    private static string ApplyTokens(
-        string content,
-        string projectName,
-        string generatedClassNamePrefix,
-        string aspireVersion,
-        AppHostProfilePorts appHostPorts,
-        StarterProfilePorts starterPorts,
-        string hostName,
-        string userSecretsId)
-    {
-        var sb = new StringBuilder(content);
-
-        sb.Replace("{{projectName}}", projectName);
-        sb.Replace("{{generatedClassNamePrefix}}", generatedClassNamePrefix);
-        sb.Replace("{{aspireVersion}}", aspireVersion);
-        sb.Replace("{{userSecretsId}}", userSecretsId);
-        sb.Replace("{{hostName}}", hostName);
-
-        sb.Replace("{{appHostHttpPort}}", appHostPorts.DashboardHttpPort.ToString(CultureInfo.InvariantCulture));
-        sb.Replace("{{appHostHttpsPort}}", appHostPorts.DashboardHttpsPort.ToString(CultureInfo.InvariantCulture));
-        sb.Replace("{{appHostOtlpHttpPort}}", appHostPorts.OtlpHttpPort.ToString(CultureInfo.InvariantCulture));
-        sb.Replace("{{appHostOtlpHttpsPort}}", appHostPorts.OtlpHttpsPort.ToString(CultureInfo.InvariantCulture));
-        sb.Replace("{{appHostResourceHttpPort}}", appHostPorts.ResourceServiceHttpPort.ToString(CultureInfo.InvariantCulture));
-        sb.Replace("{{appHostResourceHttpsPort}}", appHostPorts.ResourceServiceHttpsPort.ToString(CultureInfo.InvariantCulture));
-
-        sb.Replace("{{webHttpPort}}", starterPorts.WebHttpPort.ToString(CultureInfo.InvariantCulture));
-        sb.Replace("{{webHttpsPort}}", starterPorts.WebHttpsPort.ToString(CultureInfo.InvariantCulture));
-        sb.Replace("{{apiServiceHttpPort}}", starterPorts.ApiServiceHttpPort.ToString(CultureInfo.InvariantCulture));
-        sb.Replace("{{apiServiceHttpsPort}}", starterPorts.ApiServiceHttpsPort.ToString(CultureInfo.InvariantCulture));
-
-        // The four package-version tokens consumed by the embedded starter
-        // template come from AssemblyMetadata baked into Aspire.Cli at build
-        // time (see EmbeddedTemplatePackageVersions / Aspire.Cli.csproj).
-        sb.Replace("{{microsoftExtensionsHttpResilienceVersion}}", EmbeddedTemplatePackageVersions.MicrosoftExtensionsHttpResilienceVersion);
-        sb.Replace("{{microsoftExtensionsServiceDiscoveryVersion}}", EmbeddedTemplatePackageVersions.MicrosoftExtensionsServiceDiscoveryVersion);
-        sb.Replace("{{openTelemetryExporterVersion}}", EmbeddedTemplatePackageVersions.OpenTelemetryExporterOpenTelemetryProtocolVersion);
-        sb.Replace("{{openTelemetryHostingVersion}}", EmbeddedTemplatePackageVersions.OpenTelemetryInstrumentationExtensionsHostingVersion);
-        sb.Replace("{{openTelemetryInstrumentationAspNetCoreVersion}}", EmbeddedTemplatePackageVersions.OpenTelemetryInstrumentationAspNetCoreVersion);
-        sb.Replace("{{openTelemetryInstrumentationHttpVersion}}", EmbeddedTemplatePackageVersions.OpenTelemetryInstrumentationHttpVersion);
-        sb.Replace("{{openTelemetryInstrumentationRuntimeVersion}}", EmbeddedTemplatePackageVersions.OpenTelemetryInstrumentationRuntimeVersion);
-        sb.Replace("{{aspNetCoreOpenApi10Version}}", EmbeddedTemplatePackageVersions.MicrosoftAspNetCoreOpenApiPreviewVersion);
-
-        return sb.ToString();
     }
 }

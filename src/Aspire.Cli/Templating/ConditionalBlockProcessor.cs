@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using System.Text.RegularExpressions;
 
 namespace Aspire.Cli.Templating;
@@ -41,11 +40,34 @@ internal static partial class ConditionalBlockProcessor
             content = ProcessBlock(content, blockName, startMarkerChar: '^', !include);
         }
 
-        Debug.Assert(
-            !LeftoverMarkerPattern().IsMatch(content),
-            $"Template content contains unprocessed conditional markers. Ensure all block names are included in the conditions dictionary.");
+        // A single Process call is expected to resolve every conditional block, so a
+        // leftover marker means the template referenced a condition the caller never
+        // supplied. Fail loudly in all build configurations rather than shipping the
+        // raw marker to the user.
+        EnsureNoConditionalMarkers(content);
 
         return content;
+    }
+
+    /// <summary>
+    /// Throws when <paramref name="content"/> still contains a conditional-block
+    /// marker (<c>{{#name}}</c>, <c>{{^name}}</c>, or <c>{{/name}}</c>) after all
+    /// known conditions have been processed. Unlike the <see cref="Process"/>
+    /// debug assertion, this runs in every build configuration so a template that
+    /// references an undeclared condition fails loudly instead of shipping the raw
+    /// marker to the user. It deliberately matches only the <c>#</c>/<c>^</c>/<c>/</c>
+    /// marker forms, so ordinary <c>{{token}}</c> text (e.g. the
+    /// <c>{{ApiService_HostAddress}}</c> variables in Visual Studio <c>.http</c>
+    /// files) is left untouched.
+    /// </summary>
+    internal static void EnsureNoConditionalMarkers(string content)
+    {
+        var match = LeftoverMarkerPattern().Match(content);
+        if (match.Success)
+        {
+            throw new InvalidOperationException(
+                $"Template content contains an unprocessed conditional marker '{match.Value}'. Ensure every condition used by the template is declared in its manifest and supplied at render time.");
+        }
     }
 
     [GeneratedRegex(@"\{\{[#/^][a-zA-Z][\w-]*\}\}")]

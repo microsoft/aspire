@@ -78,33 +78,28 @@ internal static class EmbeddedCSharpAppHostTemplate
         var userSecretsId = Guid.NewGuid().ToString("D", CultureInfo.InvariantCulture);
         var hostName = ComputeLocalhostTldHostName(projectName);
 
+        // Symbol VALUES are computed here in C# (ports, GUID, derived host name,
+        // versions); the template.json manifest only declares which literal in the
+        // template tree maps to which of these symbols. Computation stays in code,
+        // declaration stays in JSON.
+        var symbols = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["projectName"] = projectName,
+            ["aspireVersion"] = aspireVersion,
+            ["userSecretsId"] = userSecretsId,
+            ["hostName"] = hostName,
+            ["httpPort"] = ports.DashboardHttpPort.ToString(CultureInfo.InvariantCulture),
+            ["httpsPort"] = ports.DashboardHttpsPort.ToString(CultureInfo.InvariantCulture),
+            ["otlpHttpPort"] = ports.OtlpHttpPort.ToString(CultureInfo.InvariantCulture),
+            ["otlpHttpsPort"] = ports.OtlpHttpsPort.ToString(CultureInfo.InvariantCulture),
+            ["resourceHttpPort"] = ports.ResourceServiceHttpPort.ToString(CultureInfo.InvariantCulture),
+            ["resourceHttpsPort"] = ports.ResourceServiceHttpsPort.ToString(CultureInfo.InvariantCulture)
+        };
+
         var conditions = new Dictionary<string, bool>(StringComparer.Ordinal)
         {
             ["localhostTld"] = useLocalhostTld
         };
-
-        string ApplyContentTransform(string content)
-        {
-            var tokensApplied = ApplyTokens(content, projectName, aspireVersion, ports, hostName, userSecretsId);
-            return ConditionalBlockProcessor.Process(tokensApplied, conditions);
-        }
-
-        // Conditional blocks in paths are nonsensical (they require multi-line
-        // marker pairs) — restrict the path transform to plain token replacement
-        // so a file or directory named e.g. `{{projectName}}._csproj` becomes
-        // `<projectName>.csproj` without the conditional pass throwing on an
-        // unmatched start marker.
-        //
-        // Embedded source files use the `._csproj` extension instead of `.csproj`
-        // so the repo-wide MSBuild traversal (eng/Build.props) does not pick them
-        // up as real projects and try to resolve the unsubstituted
-        // `Aspire.AppHost.Sdk/{{aspireVersion}}` reference. The path transform
-        // restores `.csproj` for the rendered output.
-        string ApplyPathTransform(string segment)
-        {
-            var tokensApplied = ApplyTokens(segment, projectName, aspireVersion, ports, hostName, userSecretsId);
-            return EmbeddedTemplatePathHelpers.RewriteTemplateProjectExtension(tokensApplied);
-        }
 
         logger.LogDebug(
             "Rendering embedded C# AppHost project template to '{OutputPath}' (project '{ProjectName}', Aspire version '{AspireVersion}').",
@@ -118,33 +113,8 @@ internal static class EmbeddedCSharpAppHostTemplate
         }
 
         var source = new EmbeddedResourceTemplateSource(typeof(EmbeddedCSharpAppHostTemplate).Assembly, "csharp-apphost");
-        var renderer = new TemplateRenderer(logger);
-        await renderer.RenderAsync(source, outputPath, ApplyContentTransform, cancellationToken, ApplyPathTransform);
-    }
-
-    // Source files in the embedded template tree use the `._csproj` extension
-    // so the repo-wide MSBuild traversal (eng/Build.props) does not match them.
-    // The path transformer rewrites to `.csproj` on output via
-    // EmbeddedTemplatePathHelpers.RewriteTemplateProjectExtension.
-    private static string ApplyTokens(
-        string content,
-        string projectName,
-        string aspireVersion,
-        AppHostProfilePorts ports,
-        string hostName,
-        string userSecretsId)
-    {
-        return content
-            .Replace("{{projectName}}", projectName)
-            .Replace("{{aspireVersion}}", aspireVersion)
-            .Replace("{{userSecretsId}}", userSecretsId)
-            .Replace("{{hostName}}", hostName)
-            .Replace("{{httpPort}}", ports.DashboardHttpPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{httpsPort}}", ports.DashboardHttpsPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{otlpHttpPort}}", ports.OtlpHttpPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{otlpHttpsPort}}", ports.OtlpHttpsPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{resourceHttpPort}}", ports.ResourceServiceHttpPort.ToString(CultureInfo.InvariantCulture))
-            .Replace("{{resourceHttpsPort}}", ports.ResourceServiceHttpsPort.ToString(CultureInfo.InvariantCulture));
+        var renderer = new ManifestTemplateRenderer(logger);
+        await renderer.RenderAsync(source, outputPath, symbols, conditions, cancellationToken);
     }
 
     /// <summary>
