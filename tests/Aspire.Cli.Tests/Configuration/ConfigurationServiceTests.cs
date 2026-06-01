@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
@@ -23,14 +25,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
             File.WriteAllText(settingsFilePath, existingContent);
         }
 
-        var logsDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "logs"));
-        var executionContext = new CliExecutionContext(
-            workspace.WorkspaceRoot,
-            new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives")),
-            new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
-            logsDir,
-            "test.log");
+        var executionContext = workspace.CreateExecutionContext();
 
         var configBuilder = new ConfigurationBuilder();
         var configuration = configBuilder.Build();
@@ -213,6 +208,84 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_WithContinueSearchWhenKeyMissing_WalksUpWhenNearestConfigDoesNotContainKey()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "sdk": {
+                "version": "10.0.0-preview.5.26311.1"
+              }
+            }
+            """);
+
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+        await File.WriteAllTextAsync(
+            Path.Combine(srcDirectory.FullName, AspireConfigFile.FileName),
+            """
+            {
+              "packages": {
+                "Aspire.Hosting.Redis": ""
+              }
+            }
+            """);
+
+        var value = await service.GetConfigurationFromDirectoryAsync("sdk.version", srcDirectory, continueSearchWhenKeyMissing: true);
+
+        Assert.Equal("10.0.0-preview.5.26311.1", value);
+    }
+
+    [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_WhenNearestConfigDoesNotContainKey_DoesNotReadParentConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "channel": "daily"
+            }
+            """);
+
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+        await File.WriteAllTextAsync(
+            Path.Combine(srcDirectory.FullName, AspireConfigFile.FileName),
+            """
+            {
+              "language": "csharp"
+            }
+            """);
+
+        var value = await service.GetConfigurationFromDirectoryAsync("channel", srcDirectory);
+
+        Assert.Null(value);
+    }
+
+    [Fact]
+    public async Task GetConfigurationFromDirectoryAsync_FindsNearestParentConfigWhenStartDirectoryHasNoConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, _) = CreateService(
+            workspace,
+            """
+            {
+              "channel": "daily"
+            }
+            """);
+
+        var srcDirectory = workspace.WorkspaceRoot.CreateSubdirectory("src");
+
+        var value = await service.GetConfigurationFromDirectoryAsync("channel", srcDirectory);
+
+        Assert.Equal("daily", value);
+    }
+
+    [Fact]
     public async Task SetConfigurationAsync_SetsNestedValues()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -224,5 +297,65 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
         var result = File.ReadAllText(settingsFilePath);
         Assert.Contains("appHost", result);
         Assert.Contains("MyApp/MyApp.csproj", result);
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_WritesBooleanStringAsJsonString()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, "{}");
+
+        await service.SetConfigurationAsync("features.polyglotSupportEnabled", "true", isGlobal: false);
+
+        // Value is written as a JSON string "true", not a JSON boolean true.
+        // The FlexibleBooleanConverter handles parsing "true" -> bool on read.
+        var json = JsonNode.Parse(File.ReadAllText(settingsFilePath));
+        var node = json!["features"]!["polyglotSupportEnabled"];
+        Assert.Equal(JsonValueKind.String, node!.GetValueKind());
+        Assert.Equal("true", node.GetValue<string>());
+
+        // Verify round-trip through AspireConfigFile.Load still works
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(config?.Features);
+        Assert.True(config.Features["polyglotSupportEnabled"]);
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_ChannelWithBooleanLikeValue_StaysAsString()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, "{}");
+
+        // "true" is a valid channel value and must remain a string in JSON
+        // to avoid corrupting the string-typed Channel property.
+        await service.SetConfigurationAsync("channel", "true", isGlobal: false);
+
+        // Must be a JSON string "true", not a JSON boolean true
+        var json = JsonNode.Parse(File.ReadAllText(settingsFilePath));
+        var node = json!["channel"];
+        Assert.Equal(JsonValueKind.String, node!.GetValueKind());
+        Assert.Equal("true", node.GetValue<string>());
+
+        // Verify it round-trips correctly through AspireConfigFile.Load
+        var config = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(config);
+        Assert.Equal("true", config.Channel);
+    }
+
+    [Fact]
+    public async Task SetConfigurationAsync_WritesStringValueAsString()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (service, settingsFilePath) = CreateService(workspace, "{}");
+
+        await service.SetConfigurationAsync("channel", "daily", isGlobal: false);
+
+        var json = JsonNode.Parse(File.ReadAllText(settingsFilePath));
+        var node = json!["channel"];
+        Assert.Equal(JsonValueKind.String, node!.GetValueKind());
+        Assert.Equal("daily", node.GetValue<string>());
     }
 }

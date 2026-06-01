@@ -106,6 +106,7 @@ public static class MauiAndroidExtensions
     /// <param name="name">The name of the Android device resource.</param>
     /// <param name="deviceId">Optional device ID to target a specific Android device. If not specified, uses the only attached device (requires exactly one device to be connected).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new Android device platform resource that will run the MAUI application
     /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start 
@@ -142,7 +143,7 @@ public static class MauiAndroidExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport("addAndroidDevice", Description = "Adds an Android device resource for a .NET MAUI project.")]
+    [AspireExport]
     public static IResourceBuilder<MauiAndroidDeviceResource> AddAndroidDevice(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name,
@@ -299,6 +300,7 @@ public static class MauiAndroidExtensions
     /// <param name="name">The name of the Android emulator resource.</param>
     /// <param name="emulatorId">Optional emulator ID to target a specific Android emulator. If not specified, uses the currently running emulator or starts the default emulator.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new Android emulator platform resource that will run the MAUI application
     /// targeting the Android platform using <c>dotnet run</c>. The resource does not auto-start 
@@ -336,7 +338,7 @@ public static class MauiAndroidExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport("addAndroidEmulator", Description = "Adds an Android emulator resource for a .NET MAUI project.")]
+    [AspireExport]
     public static IResourceBuilder<MauiAndroidEmulatorResource> AddAndroidEmulator(
         this IResourceBuilder<MauiProjectResource> builder,
         [ResourceName] string name,

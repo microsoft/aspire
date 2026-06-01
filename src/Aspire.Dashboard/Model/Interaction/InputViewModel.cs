@@ -17,24 +17,9 @@ public sealed class InputViewModel
 
     public void SetInput(InteractionInput input)
     {
-        string value;
-        if (Input == null)
-        {
-            value = input.Value;
-        }
-        else
-        {
-            // Only overwrite the local value if the input was loading and is no longer loading (update could have come from server)
-            // This avoids changes in local values being overwritten by a dynamic server update.
-            if (Input.Loading && !input.Loading)
-            {
-                value = input.Value;
-            }
-            else
-            {
-                value = Input.Value;
-            }
-        }
+        var value = Input is null || ShouldUseIncomingValue(Input, input)
+            ? input.Value
+            : Input.Value;
         input.Value = value;
 
         Input = input;
@@ -44,7 +29,12 @@ public sealed class InputViewModel
                 .Select(option => new SelectViewModel<string> { Id = option.Key, Name = option.Value, })
                 .ToList();
 
-            SelectOptions = optionsVM;
+            // Only update the options if they have changed to avoid unnecessarily recreating the FluentSelect component.
+            if (!OptionsEqual(SelectOptions, optionsVM))
+            {
+                SelectOptions = optionsVM;
+                ChoiceVersion++;
+            }
 
             // Default to the first option if no placeholder is set, the value is empty, and custom choice is disabled.
             // This is done so the input model value matches frontend behavior (FluentSelect defaults to the first option)
@@ -56,6 +46,19 @@ public sealed class InputViewModel
     }
 
     public List<SelectViewModel<string>> SelectOptions { get; private set; } = [];
+
+    /// <summary>
+    /// Incremented each time <see cref="SelectOptions"/> is rebuilt so Blazor
+    /// recreates the choice input component when options change, avoiding a race
+    /// where the web component clears the bound value during an options refresh.
+    /// </summary>
+    public int ChoiceVersion { get; private set; }
+
+    /// <summary>
+    /// A key unique per input that changes when <see cref="ChoiceVersion"/> changes.
+    /// Used as a Blazor <c>@key</c> on FluentSelect / FluentCombobox.
+    /// </summary>
+    public string InputKey => $"{Input.Name}_{ChoiceVersion}";
 
     public IEnumerable<SelectViewModel<string>> FilteredOptions()
     {
@@ -101,4 +104,29 @@ public sealed class InputViewModel
 
     // Used to track secret text visibility state
     public bool IsSecretTextVisible { get; set; }
+
+    private static bool OptionsEqual(List<SelectViewModel<string>> existing, List<SelectViewModel<string>> incoming)
+    {
+        if (existing.Count != incoming.Count)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < existing.Count; i++)
+        {
+            if (existing[i].Id != incoming[i].Id || existing[i].Name != incoming[i].Name)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool ShouldUseIncomingValue(InteractionInput current, InteractionInput incoming)
+    {
+        // Preserve local edits during ordinary updates, but accept server-provided values when
+        // dynamic loading completes or when the input is disabled and therefore server-owned.
+        return (current.Loading && !incoming.Loading) || incoming.Disabled;
+    }
 }

@@ -28,6 +28,7 @@ public class AtsMarshallerTests
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonPropertyName", Name = "DtoWithJsonPropertyName", ClrType = typeof(DtoWithJsonPropertyName), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonIgnore", Name = "DtoWithJsonIgnore", ClrType = typeof(DtoWithJsonIgnore), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithReadOnlyProperty", Name = "DtoWithReadOnlyProperty", ClrType = typeof(DtoWithReadOnlyProperty), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithInitListProperties", Name = "DtoWithInitListProperties", ClrType = typeof(DtoWithInitListProperties), Properties = [] },
             ],
             EnumTypes = []
         };
@@ -45,6 +46,36 @@ public class AtsMarshallerTests
     {
         return CreateTestMarshaller(registry);
     }
+
+    public static TheoryData<Type, JsonValue, object> WholeDoubleAdditionalIntegralTypes => new()
+    {
+        { typeof(byte), JsonValue.Create(42.0)!, (byte)42 },
+        { typeof(short), JsonValue.Create(42.0)!, (short)42 },
+        { typeof(uint), JsonValue.Create(42.0)!, 42u },
+        { typeof(ulong), JsonValue.Create(42.0)!, 42ul },
+        { typeof(ushort), JsonValue.Create(42.0)!, (ushort)42 },
+        { typeof(sbyte), JsonValue.Create(42.0)!, (sbyte)42 },
+    };
+
+    public static TheoryData<Type, JsonValue> FractionalAdditionalIntegralTypes => new()
+    {
+        { typeof(byte), JsonValue.Create(42.5)! },
+        { typeof(short), JsonValue.Create(42.5)! },
+        { typeof(uint), JsonValue.Create(42.5)! },
+        { typeof(ulong), JsonValue.Create(42.5)! },
+        { typeof(ushort), JsonValue.Create(42.5)! },
+        { typeof(sbyte), JsonValue.Create(42.5)! },
+    };
+
+    public static TheoryData<Type, JsonValue> OverflowAdditionalIntegralTypes => new()
+    {
+        { typeof(byte), JsonValue.Create(256.0)! },
+        { typeof(short), JsonValue.Create(32768.0)! },
+        { typeof(uint), JsonValue.Create(-1.0)! },
+        { typeof(ulong), JsonValue.Create(-1.0)! },
+        { typeof(ushort), JsonValue.Create(65536.0)! },
+        { typeof(sbyte), JsonValue.Create(128.0)! },
+    };
 
     [Theory]
     [InlineData(typeof(string))]
@@ -220,6 +251,47 @@ public class AtsMarshallerTests
         var result = AtsMarshaller.ConvertPrimitive(value!, typeof(int));
 
         Assert.Equal(42, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_ConvertsIntFromWholeDouble()
+    {
+        var value = JsonValue.Create(11433.0);
+
+        var result = AtsMarshaller.ConvertPrimitive(value!, typeof(int));
+
+        Assert.Equal(11433, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_ThrowsForIntFromFractionalDouble()
+    {
+        var value = JsonValue.Create(11433.5);
+
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value!, typeof(int)));
+    }
+
+    [Theory]
+    [MemberData(nameof(WholeDoubleAdditionalIntegralTypes))]
+    public void ConvertPrimitive_ConvertsWholeDoubleForAdditionalIntegralTypes(Type targetType, JsonValue value, object expected)
+    {
+        var result = AtsMarshaller.ConvertPrimitive(value, targetType);
+
+        Assert.Equal(expected, result);
+    }
+
+    [Theory]
+    [MemberData(nameof(FractionalAdditionalIntegralTypes))]
+    public void ConvertPrimitive_RejectsFractionalDoubleForAdditionalIntegralTypes(Type targetType, JsonValue value)
+    {
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value, targetType));
+    }
+
+    [Theory]
+    [MemberData(nameof(OverflowAdditionalIntegralTypes))]
+    public void ConvertPrimitive_RejectsOutOfRangeValuesForAdditionalIntegralTypes(Type targetType, JsonValue value)
+    {
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value, targetType));
     }
 
     [Fact]
@@ -500,6 +572,24 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public void ConvertPrimitive_ConvertsLongFromWholeDouble()
+    {
+        var value = JsonValue.Create(5000000000d);
+
+        var result = AtsMarshaller.ConvertPrimitive(value!, typeof(long));
+
+        Assert.Equal(5000000000L, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_RejectsLongFromUnsafeDouble()
+    {
+        var value = JsonValue.Create(9007199254740992d);
+
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value!, typeof(long)));
+    }
+
+    [Fact]
     public void ConvertPrimitive_ConvertsDouble()
     {
         var value = JsonValue.Create(3.14159);
@@ -507,6 +597,16 @@ public class AtsMarshallerTests
         var result = AtsMarshaller.ConvertPrimitive(value!, typeof(double));
 
         Assert.Equal(3.14159, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_ConvertsLargeDoubleWithoutDecimalCoercion()
+    {
+        var value = JsonValue.Create(1e100);
+
+        var result = AtsMarshaller.ConvertPrimitive(value!, typeof(double));
+
+        Assert.Equal(1e100, result);
     }
 
     [Fact]
@@ -527,6 +627,14 @@ public class AtsMarshallerTests
         var result = AtsMarshaller.ConvertPrimitive(value!, typeof(decimal));
 
         Assert.Equal(123.456m, result);
+    }
+
+    [Fact]
+    public void ConvertPrimitive_RejectsDecimalFromOutOfRangeDouble()
+    {
+        var value = JsonValue.Create(1e100);
+
+        Assert.Throws<InvalidCastException>(() => AtsMarshaller.ConvertPrimitive(value!, typeof(decimal)));
     }
 
     [Fact]
@@ -603,6 +711,35 @@ public class AtsMarshallerTests
         var dto = Assert.IsType<TestDto>(result);
         Assert.Equal("test", dto.Name);
         Assert.Equal(5, dto.Count);
+    }
+
+    [Fact]
+    public async Task UnmarshalFromJson_UnmarshalsDtoInitListProperties()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["name"] = "test",
+            ["addressPrefixes"] = new JsonArray("203.0.113.0/24", "198.51.100.0/24"),
+            ["addressPrefixReferences"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = "10.0.0.0/24"
+                    }
+                }
+            }
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithInitListProperties), context);
+
+        var dto = Assert.IsType<DtoWithInitListProperties>(result);
+        Assert.Equal("test", dto.Name);
+        Assert.Equal(["203.0.113.0/24", "198.51.100.0/24"], dto.AddressPrefixes);
+        var reference = Assert.Single(dto.AddressPrefixReferences);
+        Assert.Equal("10.0.0.0/24", await reference.GetValueAsync(default));
     }
 
     [Fact]
@@ -969,6 +1106,16 @@ public class AtsMarshallerTests
     {
         public string? Name { get; set; }
         public string Computed { get; } = "read-only";
+    }
+
+    [AspireDto]
+    private sealed class DtoWithInitListProperties
+    {
+        public string? Name { get; set; }
+
+        public List<string> AddressPrefixes { get; init; } = ["default"];
+
+        public List<ReferenceExpression> AddressPrefixReferences { get; init; } = [];
     }
 
     [Fact]

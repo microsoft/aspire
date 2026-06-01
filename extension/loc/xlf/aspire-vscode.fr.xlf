@@ -172,7 +172,7 @@
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.noCsprojFound">
         <source xml:lang="en">No apphost found in the current workspace.</source>
-        <target state="translated">Apphost introuvable dans l’espace de travail actuel.</target>
+        <target state="translated">AppHost introuvable dans l’espace de travail actuel.</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.noOutputFromMsbuild">
         <source xml:lang="en">No output from msbuild.</source>

@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "AzureStorageEndToEnd.AppHost/AzureStorageEndToEnd.AppHost.csproj"
+  }
+}

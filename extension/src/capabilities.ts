@@ -13,6 +13,8 @@ export type Capability =
     | 'ms-dotnettools.csharp' // Older AppHost versions used this extension identifier instead of project
     | 'python' // Support for running Python projects
     | 'ms-python.python' // Older AppHost versions used this extension identifier instead of python
+    | 'go' // Support for running Go projects
+    | 'golang.go' // Older AppHost versions used this extension identifier instead of go
     | 'node' // Support for running Node.js projects
     | 'browser' // Support for browser debugging (built-in to VS Code via js-debug)
     | 'azure-functions'; // Support for running Azure Functions projects
@@ -34,6 +36,10 @@ export function isCsharpInstalled() {
 
 export function isPythonInstalled() {
     return isExtensionInstalled("ms-python.python");
+}
+
+export function isGoInstalled() {
+    return isExtensionInstalled("golang.go");
 }
 
 export function isAzureFunctionsExtensionInstalled() {
@@ -67,6 +73,11 @@ export function getSupportedCapabilities(): Capabilities {
     if (isPythonInstalled()) {
         capabilities.push("python");
         capabilities.push("ms-python.python");
+    }
+
+    if (isGoInstalled()) {
+        capabilities.push("go");
+        capabilities.push("golang.go");
     }
 
     if (isNodeInstalled()) {

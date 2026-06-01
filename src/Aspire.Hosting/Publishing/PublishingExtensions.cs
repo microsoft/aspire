@@ -11,6 +11,7 @@ namespace Aspire.Hosting.Pipelines;
 /// Extension methods for <see cref="IReportingStep"/> and <see cref="IReportingTask"/> to provide direct operations.
 /// </summary>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExportIgnore(Reason = "Convenience wrapper over pipeline APIs — use the dedicated ATS pipeline exports instead.")]
 public static class PublishingExtensions
 {
     /// <summary>

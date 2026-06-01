@@ -10,27 +10,43 @@ namespace Aspire.Hosting
 {
     public static partial class AzureAppServiceComputeResourceExtensions
     {
+        [AspireExport(Description = "Publishes the compute resource as an Azure App Service website or deployment slot")]
         public static ApplicationModel.IResourceBuilder<T> PublishAsAzureAppServiceWebsite<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<Azure.AzureResourceInfrastructure, global::Azure.Provisioning.AppService.WebSite>? configure = null, System.Action<Azure.AzureResourceInfrastructure, global::Azure.Provisioning.AppService.WebSiteSlot>? configureSlot = null)
+            where T : ApplicationModel.IComputeResource { throw null; }
+
+        [AspireExport(Description = "Skips Azure App Service environment variable name validation for the compute resource")]
+        public static ApplicationModel.IResourceBuilder<T> SkipEnvironmentVariableNameChecks<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : ApplicationModel.IComputeResource { throw null; }
     }
 
     public static partial class AzureAppServiceEnvironmentExtensions
     {
+        [AspireExport(Description = "Adds an Azure App Service environment resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> AddAzureAppServiceEnvironment(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> applicationInsightsLocation) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureApplicationInsightsResource> applicationInsightsBuilder) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, string applicationInsightsLocation) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withAzureApplicationInsights dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithAzureApplicationInsights(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder) { throw null; }
 
+        [AspireExport(Description = "Configures whether the Aspire dashboard is included in the Azure App Service environment")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithDashboard(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, bool enable = true) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withDeploymentSlot dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithDeploymentSlot(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> deploymentSlot) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withDeploymentSlot dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithDeploymentSlot(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, string deploymentSlot) { throw null; }
+
+        [AspireExport(Description = "Configures whether HTTP endpoints are automatically upgraded to HTTPS in Azure App Service")]
+        public static ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> WithHttpsUpgrade(this ApplicationModel.IResourceBuilder<Azure.AzureAppServiceEnvironmentResource> builder, bool upgrade = true) { throw null; }
     }
 }
 
@@ -44,11 +60,15 @@ namespace Aspire.Hosting.Azure
 
         ApplicationModel.ReferenceExpression ApplicationModel.IContainerRegistry.Name { get { throw null; } }
 
+        IAzureContainerRegistryResource? IAzureComputeEnvironmentResource.ContainerRegistry { get { throw null; } }
+
         ApplicationModel.ReferenceExpression IAzureContainerRegistry.ManagedIdentityId { get { throw null; } }
 
         public BicepOutputReference AzureAppInsightsConnectionStringReference { get { throw null; } }
 
         public BicepOutputReference AzureAppInsightsInstrumentationKeyReference { get { throw null; } }
+
+        public AzureContainerRegistryResource? ContainerRegistry { get { throw null; } }
 
         public BicepOutputReference DashboardUriReference { get { throw null; } }
 
@@ -56,7 +76,11 @@ namespace Aspire.Hosting.Azure
 
         public override global::Azure.Provisioning.Primitives.ProvisionableResource AddAsExistingResource(AzureResourceInfrastructure infra) { throw null; }
 
-        ApplicationModel.ReferenceExpression ApplicationModel.IComputeEnvironmentResource.GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public ApplicationModel.ReferenceExpression GetEndpointPropertyExpression(ApplicationModel.EndpointReferenceExpression endpointReferenceExpression) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIRECOMPUTE002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public ApplicationModel.ReferenceExpression GetHostAddressExpression(ApplicationModel.EndpointReference endpointReference) { throw null; }
     }
 
     public sealed partial class AzureAppServiceWebsiteCustomizationAnnotation : ApplicationModel.IResourceAnnotation

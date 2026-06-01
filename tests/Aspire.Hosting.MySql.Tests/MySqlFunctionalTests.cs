@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Data;
 using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
@@ -147,7 +149,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Directory.CreateTempSubdirectory().FullName;
+                bindMountPath = Path.Combine(Directory.CreateTempSubdirectory().FullName, "data");
 
                 mysql1.WithDataBindMount(bindMountPath);
             }
@@ -285,7 +287,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             {
                 try
                 {
-                    Directory.Delete(bindMountPath);
+                    Directory.Delete(Path.GetDirectoryName(bindMountPath)!, recursive: true);
                 }
                 catch
                 {
@@ -306,9 +308,17 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 10, BackoffType = DelayBackoffType.Linear, Delay = TimeSpan.FromSeconds(2), ShouldHandle = new PredicateBuilder().Handle<MySqlException>() })
             .Build();
 
-        var bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
-        Directory.CreateDirectory(bindMountPath);
+        if (!OperatingSystem.IsWindows())
+        {
+            const UnixFileMode BindMountPermissions =
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+
+            File.SetUnixFileMode(bindMountPath, BindMountPermissions);
+        }
 
         try
         {
@@ -393,9 +403,7 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 10, BackoffType = DelayBackoffType.Linear, Delay = TimeSpan.FromSeconds(2), ShouldHandle = new PredicateBuilder().Handle<MySqlException>() })
             .Build();
 
-        var initFilesPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-        Directory.CreateDirectory(initFilesPath);
+        var initFilesPath = Directory.CreateTempSubdirectory().FullName;
 
         try
         {
@@ -566,14 +574,14 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
 
             var passwordParameter = builder.AddParameter("pwd", "p@ssw0rd1", secret: true);
             var mysql = builder
-                .AddMySql("resource", password: passwordParameter).WithLifetime(ContainerLifetime.Persistent)
-                .WithPhpMyAdmin(c => c.WithLifetime(ContainerLifetime.Persistent))
+                .AddMySql("resource", password: passwordParameter).WithPersistentLifetime()
+                .WithPhpMyAdmin(c => c.WithPersistentLifetime())
                 .AddDatabase("db");
 
             if (useMultipleInstances)
             {
                 var passwordParameter2 = builder.AddParameter("pwd2", "p@ssw0rd2", secret: true);
-                builder.AddMySql("resource2", password: passwordParameter2).WithLifetime(ContainerLifetime.Persistent);
+                builder.AddMySql("resource2", password: passwordParameter2).WithPersistentLifetime();
             }
 
             var app = builder.Build();

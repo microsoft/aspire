@@ -74,11 +74,7 @@ public sealed class AcaCompactNamingDeploymentTests(ITestOutputHelper output)
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create single-file AppHost
             output.WriteLine("Step 3: Creating single-file AppHost...");
@@ -89,13 +85,7 @@ public sealed class AcaCompactNamingDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5: Modify apphost.cs with a long environment name and a container with volume.
             // Use WithCompactResourceNaming() so the storage account name preserves the uniqueString.
@@ -109,7 +99,14 @@ builder.AddAzureContainerAppEnvironment("my-long-env-name")
        .WithCompactResourceNaming();
 
 // Container with a volume triggers storage account creation
-builder.AddContainer("worker", "mcr.microsoft.com/dotnet/samples", "aspnetapp")
+// Use the Azure Container Instances "hello world" sample as a generic linux container.
+// We previously used mcr.microsoft.com/dotnet/samples:aspnetapp, but per
+// https://github.com/dotnet/dotnet-docker/blob/main/README.samples.md#support those images
+// are not stable and can break at any time (see dotnet/dotnet-docker#7191). The Azure
+// container demo image is owned by a different team and has stable multi-arch manifests.
+// Also pin the image digest so the test cannot break if the tag is republished.
+builder.AddContainer("worker", "mcr.microsoft.com/azuredocs/aci-helloworld", "latest")
+       .WithImageSHA256("456a1150aa41340a14c7be1342deda2cde9e6e7df9fde6b8a69de0ae04f92fad")
        .WithVolume("data", "/app/data");
 
 builder.Build().Run();
@@ -133,7 +130,7 @@ builder.Build().Run();
             output.WriteLine("Step 7: Deploying with compact naming...");
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("PIPELINE SUCCEEDED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Verify storage account was created and name contains uniqueString
@@ -151,7 +148,11 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 9: Exit
+            // Step 9: Clean up Azure resources using aspire destroy
+            output.WriteLine("Step 9: Destroying Azure deployment...");
+            await auto.AspireDestroyAsync(counter);
+
+            // Step 10: Exit
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 

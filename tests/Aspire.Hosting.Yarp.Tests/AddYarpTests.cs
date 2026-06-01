@@ -84,6 +84,29 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void VerifyResourceRouteDestinationUsesLatestEndpointScheme()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var backend = builder.AddResource(new TestServiceDiscoveryResource("backend"))
+            .WithHttpEndpoint();
+
+        var yarp = builder.AddYarp("yarp")
+            .WithConfiguration(config =>
+            {
+                config.AddRoute("/api/{**catchall}", backend);
+            });
+
+        backend.WithEndpoint("http", endpoint => endpoint.UriScheme = "https");
+
+        var env = new Dictionary<string, object>();
+        YarpEnvConfigGenerator.PopulateEnvVariables(env, yarp.Resource.Routes, yarp.Resource.Clusters);
+
+        var address = Assert.Contains("REVERSEPROXY__CLUSTERS__cluster_backend__DESTINATIONS__destination1__ADDRESS", env);
+        Assert.Equal("https://backend", address);
+    }
+
+    [Fact]
     public async Task VerifyWithStaticFilesAddsEnvironmentVariable()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
@@ -450,5 +473,12 @@ public class AddYarpTests(ITestOutputHelper testOutputHelper)
 
     private sealed class TestContainerFilesResource(string name) : ContainerResource(name), IResourceWithContainerFiles
     {
+    }
+
+    private sealed class TestServiceDiscoveryResource(string name) : IResourceWithServiceDiscovery
+    {
+        public string Name => name;
+
+        public ResourceAnnotationCollection Annotations { get; } = new ResourceAnnotationCollection();
     }
 }

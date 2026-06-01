@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
+
 using System.Data;
 using System.Net;
 using Aspire.TestUtilities;
@@ -221,7 +223,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
             }
             else
             {
-                bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+                bindMountPath = Path.Combine(Directory.CreateTempSubdirectory().FullName, "data");
 
                 postgres1.WithDataBindMount(bindMountPath);
             }
@@ -345,7 +347,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
             {
                 try
                 {
-                    Directory.Delete(bindMountPath, recursive: true);
+                    Directory.Delete(Path.GetDirectoryName(bindMountPath)!, recursive: true);
                 }
                 catch
                 {
@@ -366,9 +368,17 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 3, Delay = TimeSpan.FromSeconds(2) })
             .Build();
 
-        var bindMountPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+        var bindMountPath = Directory.CreateTempSubdirectory().FullName;
 
-        Directory.CreateDirectory(bindMountPath);
+        if (!OperatingSystem.IsWindows())
+        {
+            const UnixFileMode BindMountPermissions =
+                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
+                UnixFileMode.OtherRead | UnixFileMode.OtherExecute;
+
+            File.SetUnixFileMode(bindMountPath, BindMountPermissions);
+        }
 
         try
         {
@@ -454,9 +464,7 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
             .AddRetry(new() { MaxRetryAttempts = 3, Delay = TimeSpan.FromSeconds(2) })
             .Build();
 
-        var initFilesPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-        Directory.CreateDirectory(initFilesPath);
+        var initFilesPath = Directory.CreateTempSubdirectory().FullName;
 
         try
         {
@@ -553,9 +561,9 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
 
             var passwordParameter = builder.AddParameter("pwd", "p@ssword1", secret: true);
             builder
-                .AddPostgres("resource", password: passwordParameter).WithLifetime(ContainerLifetime.Persistent)
-                .WithPgWeb(c => c.WithLifetime(ContainerLifetime.Persistent))
-                .WithPgAdmin(c => c.WithLifetime(ContainerLifetime.Persistent))
+                .AddPostgres("resource", password: passwordParameter).WithPersistentLifetime()
+                .WithPgWeb(c => c.WithPersistentLifetime())
+                .WithPgAdmin(c => c.WithPersistentLifetime())
                 .AddDatabase("mydb");
 
             var app = builder.Build();

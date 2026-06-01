@@ -23,45 +23,50 @@ internal sealed class SequenceCounter
 
 /// <summary>
 /// Represents the available Aspire project templates for <c>aspire new</c>.
-/// The enum values correspond to the order in the template selection list.
 /// </summary>
 internal enum AspireTemplate
 {
     /// <summary>
-    /// Starter App (ASP.NET Core/Blazor) — the 1st option (default).
+    /// Starter App (ASP.NET Core/Blazor).
     /// Prompts: template, project name, output path, URLs, Redis, test project.
     /// </summary>
     Starter,
 
     /// <summary>
-    /// Starter App (ASP.NET Core/React) — 2nd option.
+    /// Starter App (ASP.NET Core/React, C# AppHost).
     /// Prompts: template, project name, output path, URLs, Redis. No test project prompt.
     /// </summary>
     JsReact,
 
     /// <summary>
-    /// Starter App (Express/React) — 3rd option.
+    /// Starter App (Express/React, TypeScript AppHost).
     /// Prompts: template, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
     ExpressReact,
 
     /// <summary>
-    /// Starter App (FastAPI/React) — 4th option.
+    /// Starter App (FastAPI/React, TypeScript AppHost).
     /// Prompts: template, project name, output path, URLs, Redis. No test project prompt.
     /// </summary>
     PythonReact,
 
     /// <summary>
-    /// Empty (C# AppHost) — 5th option.
-    /// Prompts: template, project name, output path, URLs. No language, Redis, or test project prompt.
+    /// Empty (TypeScript AppHost).
+    /// Prompts: template, language, project name, output path, URLs. No Redis or test project prompt.
+    /// </summary>
+    TypeScriptEmptyAppHost,
+
+    /// <summary>
+    /// Empty AppHost.
+    /// Prompts: template, language, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
     EmptyAppHost,
 
     /// <summary>
-    /// Empty (TypeScript AppHost) — 6th option.
-    /// Prompts: template, project name, output path, URLs. No language, Redis, or test project prompt.
+    /// Empty (Java AppHost) — visible only in the language picker when experimental Java support is enabled.
+    /// Prompts: template, language, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
-    TypeScriptEmptyAppHost,
+    JavaEmptyAppHost,
 }
 
 /// <summary>
@@ -74,7 +79,7 @@ internal static class Hex1bTestHelpers
     /// Uses default dimensions of 160x48 unless overridden.
     /// </summary>
     /// <param name="testName">The test name used for the recording file path. Defaults to the calling method name.</param>
-    /// <param name="localSubDir">The subdirectory name under the temp folder for local (non-CI) recordings.</param>
+    /// <param name="localSubDir">The subdirectory name under the local <c>TestResults/recordings</c> directory.</param>
     /// <param name="width">The terminal width in columns. Defaults to 160.</param>
     /// <param name="height">The terminal height in rows. Defaults to 48.</param>
     /// <returns>A configured <see cref="Hex1bTerminal"/> instance. Caller is responsible for disposal.</returns>
@@ -84,6 +89,13 @@ internal static class Hex1bTestHelpers
         int height = 48,
         [CallerMemberName] string testName = "")
     {
+        // Prefer the xUnit-reported test method name so that when a [Fact]/[Theory]
+        // delegates into a private helper (e.g. *Core methods), the .cast file is
+        // still named after the public test the TRX records an outcome for. The CLI
+        // E2E recording-comment workflow joins .cast files to TRX outcomes by name;
+        // when the helper name leaks in via `[CallerMemberName]`, no TRX entry
+        // matches and the test ends up tagged "Unknown" on every PR.
+        testName = ResolveTestMethodName(testName);
         var recordingPath = GetTestResultsRecordingPath(testName, localSubDir);
 
         var builder = Hex1bTerminal.CreateBuilder()
@@ -98,10 +110,10 @@ internal static class Hex1bTestHelpers
     /// <summary>
     /// Gets the path for storing asciinema recordings that will be uploaded as CI artifacts.
     /// In CI, this returns a path under $GITHUB_WORKSPACE/testresults/recordings/.
-    /// Locally, this returns a path under the system temp directory.
+    /// Locally, this returns a path under the test output <c>TestResults/recordings/</c> directory.
     /// </summary>
     /// <param name="testName">The name of the test (used as the recording filename).</param>
-    /// <param name="localSubDir">The subdirectory name under the temp folder for local (non-CI) recordings.</param>
+    /// <param name="localSubDir">The subdirectory name under the local <c>TestResults/recordings</c> directory.</param>
     /// <returns>The full path to the .cast recording file.</returns>
     internal static string GetTestResultsRecordingPath(string testName, string localSubDir)
     {
@@ -115,12 +127,26 @@ internal static class Hex1bTestHelpers
         }
         else
         {
-            // Local development - use temp directory
-            recordingsDir = Path.Combine(Path.GetTempPath(), localSubDir, "recordings");
+            // Local development - keep recordings with the rest of the test output.
+            recordingsDir = Path.Combine(AppContext.BaseDirectory, "TestResults", "recordings", localSubDir);
         }
 
         Directory.CreateDirectory(recordingsDir);
         return Path.Combine(recordingsDir, $"{testName}.cast");
+    }
+
+    /// <summary>
+    /// Resolves the test method name for naming a recording file. Prefers the xUnit-reported
+    /// <c>TestContext.Current.TestCase.TestMethodName</c> when running inside a live test
+    /// context, so a recording created from inside a private helper still gets named after
+    /// the public <c>[Fact]</c>/<c>[Theory]</c> that the TRX records an outcome for. Falls
+    /// back to the <see cref="CallerMemberNameAttribute"/>-supplied name when no test context
+    /// is available.
+    /// </summary>
+    internal static string ResolveTestMethodName(string callerMemberName)
+    {
+        var fromXunit = Xunit.TestContext.Current?.TestCase?.TestMethodName;
+        return !string.IsNullOrEmpty(fromXunit) ? fromXunit : callerMemberName;
     }
 
     /// <summary>
@@ -200,56 +226,6 @@ internal static class Hex1bTestHelpers
     }
 
     /// <summary>
-    /// Waits for a successful command prompt, but fails fast if an error prompt is detected.
-    /// Unlike <see cref="WaitForSuccessPrompt"/>, this method also watches for error prompts
-    /// (ERR:N pattern) and throws immediately instead of waiting for the full timeout.
-    /// Use this for commands that may fail due to transient errors (e.g., CLI downloads).
-    /// </summary>
-    internal static Hex1bTerminalInputSequenceBuilder WaitForSuccessPromptFailFast(
-        this Hex1bTerminalInputSequenceBuilder builder,
-        SequenceCounter counter,
-        TimeSpan? timeout = null)
-    {
-        var effectiveTimeout = timeout ?? TimeSpan.FromSeconds(500);
-        var sawError = false;
-
-        return builder.WaitUntil(snapshot =>
-            {
-                var successSearcher = new CellPatternSearcher()
-                    .FindPattern(counter.Value.ToString())
-                    .RightText(" OK] $ ");
-
-                if (successSearcher.Search(snapshot).Count > 0)
-                {
-                    return true;
-                }
-
-                var errorSearcher = new CellPatternSearcher()
-                    .FindPattern(counter.Value.ToString())
-                    .RightText(" ERR:");
-
-                if (errorSearcher.Search(snapshot).Count > 0)
-                {
-                    sawError = true;
-                    return true;
-                }
-
-                return false;
-            }, effectiveTimeout)
-            .WaitUntil(_ =>
-            {
-                if (sawError)
-                {
-                    throw new InvalidOperationException(
-                        $"Command failed with non-zero exit code (detected ERR prompt at sequence {counter.Value}). Check the terminal recording for details.");
-                }
-
-                counter.Increment();
-                return true;
-            }, TimeSpan.FromSeconds(1));
-    }
-
-    /// <summary>
     /// Increments the sequence counter.
     /// </summary>
     internal static Hex1bTerminalInputSequenceBuilder IncrementSequence(
@@ -302,8 +278,7 @@ internal static class Hex1bTestHelpers
         return builder
             .WaitUntil(s => agentInitPrompt.Search(s).Count > 0, timeout ?? TimeSpan.FromSeconds(120))
             .Wait(500)
-            .Type("n")
-            .Enter();
+            .Type("n");
     }
 
     /// <summary>
@@ -327,8 +302,6 @@ internal static class Hex1bTestHelpers
         var agentInitPrompt = new CellPatternSearcher()
             .Find("configure AI agent environments");
 
-        var agentInitFound = false;
-
         return builder
             // Wait for either the agent init prompt (new CLI) or the success prompt (old CLI).
             // Uses the full timeout since aspire new project creation can take minutes.
@@ -336,7 +309,6 @@ internal static class Hex1bTestHelpers
             {
                 if (agentInitPrompt.Search(s).Count > 0)
                 {
-                    agentInitFound = true;
                     return true;
                 }
                 var successSearcher = new CellPatternSearcher()
@@ -345,11 +317,10 @@ internal static class Hex1bTestHelpers
                 return successSearcher.Search(s).Count > 0;
             }, effectiveTimeout)
             .Wait(500)
-            // Type 'n' + Enter unconditionally:
+            // Type 'n' unconditionally:
             // - Agent init: declines the prompt, CLI exits, success prompt appears
-            // - No agent init: 'n' runs at bash (command not found), produces error prompt
+            // - No agent init: 'n' is typed at bash but not submitted; the existing success prompt remains and Ctrl+U clears the pending input
             .Type("n")
-            .Enter()
             // Wait for the aspire command's success prompt (already on screen or appears after decline)
             .WaitUntil(s =>
             {
@@ -358,15 +329,12 @@ internal static class Hex1bTestHelpers
                     .RightText(" OK] $ ");
                 return successSearcher.Search(s).Count > 0;
             }, effectiveTimeout)
+            .Ctrl().Key(Hex1bKey.U)
             // Increment counter correctly for both cases:
             // - Agent init: one increment for the aspire command
-            // - No agent init: two increments (aspire command + the 'n' error command)
+            // - No agent init: one increment for the aspire command
             .WaitUntil(_ =>
             {
-                if (!agentInitFound)
-                {
-                    counter.Increment();
-                }
                 counter.Increment();
                 return true;
             }, TimeSpan.FromSeconds(1));
@@ -406,6 +374,9 @@ internal static class Hex1bTestHelpers
         var waitingForOutputPathPrompt = new CellPatternSearcher()
             .Find("Enter the output path");
 
+        var waitingForAppHostLanguagePrompt = new CellPatternSearcher()
+            .Find("Which language would you like to use?");
+
         var waitingForUrlsPrompt = new CellPatternSearcher()
             .Find("Use *.dev.localhost URLs");
 
@@ -423,7 +394,7 @@ internal static class Hex1bTestHelpers
 
             case AspireTemplate.JsReact:
                 var jsReactSelected = new CellPatternSearcher()
-                    .Find("> Starter App (ASP.NET Core/React)");
+                    .Find("> Starter App (ASP.NET Core/React, C# AppHost)");
                 builder.Key(Hex1bKey.DownArrow)
                     .WaitUntil(s => jsReactSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
                     .Enter();
@@ -431,7 +402,7 @@ internal static class Hex1bTestHelpers
 
             case AspireTemplate.ExpressReact:
                 var expressReactSelected = new CellPatternSearcher()
-                    .Find("> Starter App (Express/React)");
+                    .Find("> Starter App (Express/React, TypeScript AppHost)");
                 builder.Key(Hex1bKey.DownArrow)
                     .Key(Hex1bKey.DownArrow)
                     .WaitUntil(s => expressReactSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
@@ -440,7 +411,7 @@ internal static class Hex1bTestHelpers
 
             case AspireTemplate.PythonReact:
                 var pythonReactSelected = new CellPatternSearcher()
-                    .Find("> Starter App (FastAPI/React)");
+                    .Find("> Starter App (FastAPI/React, TypeScript AppHost)");
                 builder.Key(Hex1bKey.DownArrow)
                     .Key(Hex1bKey.DownArrow)
                     .Key(Hex1bKey.DownArrow)
@@ -449,15 +420,26 @@ internal static class Hex1bTestHelpers
                 break;
 
             case AspireTemplate.EmptyAppHost:
-                var emptyAppHostSelected = new CellPatternSearcher()
-                    .Find("> Empty AppHost");
-                builder.Key(Hex1bKey.DownArrow)
-                    .Key(Hex1bKey.DownArrow)
-                    .Key(Hex1bKey.DownArrow)
-                    .Key(Hex1bKey.DownArrow)
-                    .WaitUntil(s => emptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
+                builder.Type("Empty AppHost")
                     .Enter()
+                    .WaitUntil(s => waitingForAppHostLanguagePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
                     .Enter(); // Select C# language
+                break;
+
+            case AspireTemplate.TypeScriptEmptyAppHost:
+                builder.Type("Empty AppHost")
+                    .Enter()
+                    .WaitUntil(s => waitingForAppHostLanguagePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
+                    .Type("TypeScript")
+                    .Enter();
+                break;
+
+            case AspireTemplate.JavaEmptyAppHost:
+                builder.Type("Empty AppHost")
+                    .Enter()
+                    .WaitUntil(s => waitingForAppHostLanguagePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
+                    .Type("Java")
+                    .Enter();
                 break;
         }
 
@@ -483,11 +465,12 @@ internal static class Hex1bTestHelpers
 
             if (!useRedisCache)
             {
-                // Default is "Yes", navigate to "No"
-                builder.Key(Hex1bKey.DownArrow);
+                builder.Type("n");
             }
-
-            builder.Enter();
+            else
+            {
+                builder.Enter();
+            }
         }
 
         // Step 7: Test project prompt (only Starter)
@@ -529,47 +512,6 @@ internal static class Hex1bTestHelpers
             .WaitUntil(s => waitingForInitComplete.Search(s).Count > 0, TimeSpan.FromMinutes(2))
             .DeclineAgentInitPrompt()
             .WaitForSuccessPrompt(counter, TimeSpan.FromMinutes(2));
-    }
-
-    /// <summary>
-    /// Installs the Aspire CLI Bundle from a specific pull request's artifacts.
-    /// The bundle is a self-contained distribution that includes:
-    /// - Native AOT Aspire CLI
-    /// - .NET runtime
-    /// - Dashboard, DCP, AppHost Server (for polyglot apps)
-    /// This is required for polyglot (TypeScript, Python) AppHost scenarios which
-    /// cannot use SDK-based fallback mode.
-    /// </summary>
-    /// <param name="builder">The sequence builder.</param>
-    /// <param name="prNumber">The pull request number to download from.</param>
-    /// <param name="counter">The sequence counter for prompt detection.</param>
-    /// <returns>The builder for chaining.</returns>
-    internal static Hex1bTerminalInputSequenceBuilder InstallAspireBundleFromPullRequest(
-        this Hex1bTerminalInputSequenceBuilder builder,
-        int prNumber,
-        SequenceCounter counter)
-    {
-        // The install script may not be on main yet, so we need to fetch it from the PR's branch.
-        // Use the PR head SHA (not branch ref) to avoid CDN caching on raw.githubusercontent.com
-        // which can serve stale script content for several minutes after a push.
-        string command;
-        if (OperatingSystem.IsWindows())
-        {
-            // PowerShell: Get PR head SHA, then fetch and run install script from that SHA
-            command = $"$ref = (gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha'); " +
-                      $"iex \"& {{ $(irm https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.ps1) }} {prNumber}\"";
-        }
-        else
-        {
-            // Bash: Get PR head SHA, then fetch and run install script from that SHA
-            command = $"ref=$(gh api repos/microsoft/aspire/pulls/{prNumber} --jq '.head.sha') && " +
-                      $"curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/$ref/eng/scripts/get-aspire-cli-pr.sh | bash -s -- {prNumber}";
-        }
-
-        return builder
-            .Type(command)
-            .Enter()
-            .WaitForSuccessPromptFailFast(counter, TimeSpan.FromSeconds(300));
     }
 
     /// <summary>

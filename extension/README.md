@@ -135,7 +135,7 @@ Right-click a resource to start, stop, or restart it, view its logs, run resourc
 
 The dashboard gives you a live view of your running app — all your resources and their health, endpoint URLs, console logs from every service, structured logs (via OpenTelemetry), distributed traces across services, and metrics.
 
-![Aspire Dashboard showing running resources](resources/aspire-dashboard-dark.png)
+![Aspire Dashboard showing running resources](https://raw.githubusercontent.com/microsoft/aspire/main/extension/resources/aspire-dashboard-dark.png)
 
 It opens automatically when you start your app. You can pick which browser it uses with the `aspire.dashboardBrowser` setting — system default browser, or Chrome, Edge, or Firefox as a debug session. When using a debug browser, the `aspire.closeDashboardOnDebugEnd` setting controls whether it closes automatically when you stop debugging. Firefox also requires the [Firefox Debugger](https://marketplace.visualstudio.com/items?itemName=firefox-devtools.vscode-firefox-debug) extension.
 
@@ -213,6 +213,10 @@ Found a bug or have an idea? File it on the [microsoft/aspire](https://github.co
 
 - [Report a bug](https://github.com/microsoft/aspire/issues/new?template=10_bug_report.yml&labels=area-extension)
 - [Request a feature](https://github.com/microsoft/aspire/issues/new?template=20_feature-request.yml&labels=area-extension)
+
+### Contributing
+
+See [CONTRIBUTING.md](https://github.com/microsoft/aspire/blob/main/extension/CONTRIBUTING.md) for setup, project layout, the extension-only inner loop, and running tests. Good first issues are tagged [`area-extension` + `good first issue`](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3Aarea-extension+label%3A%22good+first+issue%22).
 
 ### Learn more
 

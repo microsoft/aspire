@@ -69,13 +69,11 @@ internal sealed class OrchestratorHostService : IHostedLifecycleService, IAsyncD
 
     public Task StartedAsync(CancellationToken cancellationToken)
     {
-        AspireEventSource.Instance.DcpHostStartupStop();
         return Task.CompletedTask;
     }
 
     public Task StartingAsync(CancellationToken cancellationToken)
     {
-        AspireEventSource.Instance.DcpHostStartupStart();
         return Task.CompletedTask;
     }
 

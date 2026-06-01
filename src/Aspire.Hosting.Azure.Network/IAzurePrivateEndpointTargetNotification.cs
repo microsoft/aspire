@@ -3,7 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 
-namespace Aspire.Hosting.Azure.Network;
+namespace Aspire.Hosting.Azure;
 
 /// <summary>
 /// An optional interface that can be implemented by resources that are targets for

@@ -125,5 +125,28 @@ internal sealed class PlaywrightCliRunner(ILogger<PlaywrightCliRunner> logger) :
             logger.LogDebug(ex, "Failed to run playwright-cli install --skills");
             return false;
         }
+        finally
+        {
+            // playwright-cli install --skills may leave behind an empty .playwright
+            // directory in the working directory. Clean it up if it exists and is empty.
+            CleanupEmptyPlaywrightDirectory(workingDirectory);
+        }
+    }
+
+    private void CleanupEmptyPlaywrightDirectory(string workingDirectory)
+    {
+        try
+        {
+            var playwrightDir = Path.Combine(workingDirectory, ".playwright");
+            if (Directory.Exists(playwrightDir) && Directory.GetFileSystemEntries(playwrightDir).Length == 0)
+            {
+                Directory.Delete(playwrightDir);
+                logger.LogDebug("Removed empty .playwright directory from {WorkingDirectory}", workingDirectory);
+            }
+        }
+        catch (IOException ex)
+        {
+            logger.LogDebug(ex, "Failed to clean up .playwright directory in {WorkingDirectory}", workingDirectory);
+        }
     }
 }

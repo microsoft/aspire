@@ -59,7 +59,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
         Options.Add(s_outputOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var integrationProject = parseResult.GetValue(s_integrationArgument)!;
         var language = parseResult.GetValue(s_languageOption)!;
@@ -68,22 +68,19 @@ internal sealed class SdkGenerateCommand : BaseCommand
         // Validate the integration project exists
         if (!integrationProject.Exists)
         {
-            InteractionService.DisplayError($"Integration project not found: {integrationProject.FullName}");
-            return ExitCodeConstants.FailedToFindProject;
+            return CommandResult.Failure(CliExitCodes.FailedToFindProject, $"Integration project not found: {integrationProject.FullName}");
         }
 
         if (!integrationProject.Extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase))
         {
-            InteractionService.DisplayError($"Expected a .csproj file, got: {integrationProject.Extension}");
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Expected a .csproj file, got: {integrationProject.Extension}");
         }
 
         // Resolve the language info
         var languageInfo = await GetLanguageInfoAsync(language, cancellationToken);
         if (languageInfo is null)
         {
-            InteractionService.DisplayError($"Unsupported language: {language}");
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Unsupported language: {language}");
         }
 
         // Create output directory if it doesn't exist
@@ -92,10 +89,10 @@ internal sealed class SdkGenerateCommand : BaseCommand
             outputDir.Create();
         }
 
-        return await InteractionService.ShowStatusAsync(
+        return CommandResult.FromExitCode(await InteractionService.ShowStatusAsync(
             $"Generating {languageInfo.DisplayName} SDK from {integrationProject.Name}...",
             async () => await GenerateSdkAsync(integrationProject, languageInfo, outputDir, cancellationToken),
-            emoji: KnownEmojis.Hammer);
+            emoji: KnownEmojis.Hammer));
     }
 
     private async Task<LanguageInfo?> GetLanguageInfoAsync(string language, CancellationToken cancellationToken)
@@ -114,6 +111,8 @@ internal sealed class SdkGenerateCommand : BaseCommand
         DirectoryInfo outputDir,
         CancellationToken cancellationToken)
     {
+        var integrationAssemblyName = IntegrationAssemblyNameResolver.Resolve(integrationProject);
+
         // Use a temporary directory for the AppHost server
         var tempDir = Path.Combine(Path.GetTempPath(), "aspire-sdk-gen", Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(tempDir);
@@ -135,7 +134,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
 
             // Add the integration project as a project reference
             integrations.Add(IntegrationReference.FromProject(
-                Path.GetFileNameWithoutExtension(integrationProject.FullName),
+                integrationAssemblyName,
                 integrationProject.FullName));
 
             _logger.LogDebug("Building AppHost server for SDK generation");
@@ -143,7 +142,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
             var prepareResult = await appHostServerProject.PrepareAsync(
                 VersionHelper.GetDefaultTemplateVersion(),
                 integrations,
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
             if (!prepareResult.Success)
             {
@@ -155,63 +154,46 @@ internal sealed class SdkGenerateCommand : BaseCommand
                         InteractionService.DisplayMessage(KnownEmojis.Wrench, line);
                     }
                 }
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
 
-            // Start the server
-            var currentPid = Environment.ProcessId;
-            var (socketPath, serverProcess, _) = appHostServerProject.Run(currentPid, new Dictionary<string, string>());
+            await using var serverSession = AppHostServerSession.Start(
+                appHostServerProject,
+                environmentVariables: null,
+                debug: false,
+                _logger);
 
-            try
+            // Connect and generate code
+            var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
+
+            _logger.LogDebug("Generating {Language} SDK via RPC", languageInfo.CodeGenerator);
+            var generatedFiles = await rpcClient.GenerateCodeForAssemblyAsync(languageInfo.CodeGenerator, integrationAssemblyName, cancellationToken);
+
+            // Write generated files
+            var outputDirFullPath = Path.GetFullPath(outputDir.FullName);
+            foreach (var (fileName, content) in generatedFiles)
             {
-                // Connect and generate code
-                await using var rpcClient = await AppHostRpcClient.ConnectAsync(socketPath, cancellationToken);
+                var filePath = Path.GetFullPath(Path.Combine(outputDir.FullName, fileName));
 
-                _logger.LogDebug("Generating {Language} SDK via RPC", languageInfo.CodeGenerator);
-                var generatedFiles = await rpcClient.GenerateCodeAsync(languageInfo.CodeGenerator, cancellationToken);
-
-                // Write generated files
-                var outputDirFullPath = Path.GetFullPath(outputDir.FullName);
-                foreach (var (fileName, content) in generatedFiles)
+                // Validate path is within output directory (prevent path traversal)
+                if (!filePath.StartsWith(outputDirFullPath, StringComparison.OrdinalIgnoreCase))
                 {
-                    var filePath = Path.GetFullPath(Path.Combine(outputDir.FullName, fileName));
-
-                    // Validate path is within output directory (prevent path traversal)
-                    if (!filePath.StartsWith(outputDirFullPath, StringComparison.OrdinalIgnoreCase))
-                    {
-                        _logger.LogWarning("Skipping file with invalid path: {FileName}", fileName);
-                        continue;
-                    }
-
-                    var fileDirectory = Path.GetDirectoryName(filePath);
-                    if (!string.IsNullOrEmpty(fileDirectory))
-                    {
-                        Directory.CreateDirectory(fileDirectory);
-                    }
-                    await File.WriteAllTextAsync(filePath, content, cancellationToken);
-                    _logger.LogDebug("Wrote {FileName}", fileName);
+                    _logger.LogWarning("Skipping file with invalid path: {FileName}", fileName);
+                    continue;
                 }
 
-                InteractionService.DisplaySuccess($"Generated {generatedFiles.Count} files in {outputDir.FullName}");
-
-                return ExitCodeConstants.Success;
+                var fileDirectory = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(fileDirectory))
+                {
+                    Directory.CreateDirectory(fileDirectory);
+                }
+                await File.WriteAllTextAsync(filePath, content, cancellationToken);
+                _logger.LogDebug("Wrote {FileName}", fileName);
             }
-            finally
-            {
-                // Stop the server - just try to kill, catch if already exited
-                try
-                {
-                    serverProcess.Kill(entireProcessTree: true);
-                }
-                catch (InvalidOperationException)
-                {
-                    // Process already exited - this is fine
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Error killing AppHost server process");
-                }
-            }
+
+            InteractionService.DisplaySuccess($"Generated {generatedFiles.Count} files in {outputDir.FullName}");
+
+            return CliExitCodes.Success;
         }
         finally
         {

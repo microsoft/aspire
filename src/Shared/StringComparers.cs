@@ -17,7 +17,7 @@ internal static class StringComparers
     public static StringComparer ResourceOwnerKind => StringComparer.Ordinal;
     public static StringComparer ResourceOwnerUid => StringComparer.Ordinal;
     public static StringComparer UserTextSearch => StringComparer.CurrentCultureIgnoreCase;
-    public static StringComparer EnvironmentVariableName => StringComparer.InvariantCultureIgnoreCase;
+    public static StringComparer EnvironmentVariableName => StringComparer.OrdinalIgnoreCase;
     public static StringComparer Url => StringComparer.OrdinalIgnoreCase;
     public static StringComparer UrlPath => StringComparer.OrdinalIgnoreCase;
     public static StringComparer UrlHost => StringComparer.OrdinalIgnoreCase;
@@ -33,6 +33,9 @@ internal static class StringComparers
     public static StringComparer CliInputOrOutput => StringComparer.Ordinal;
     public static StringComparer InteractionInputName => StringComparer.OrdinalIgnoreCase;
     public static StringComparer NetworkID => StringComparer.Ordinal;
+    public static StringComparer NuGetPackageId => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer FullTextSearch => StringComparer.OrdinalIgnoreCase;
+    public static StringComparer ChannelName => StringComparer.OrdinalIgnoreCase;
 }
 
 internal static class StringComparisons
@@ -47,7 +50,7 @@ internal static class StringComparisons
     public static StringComparison ResourceOwnerKind => StringComparison.Ordinal;
     public static StringComparison ResourceOwnerUid => StringComparison.Ordinal;
     public static StringComparison UserTextSearch => StringComparison.CurrentCultureIgnoreCase;
-    public static StringComparison EnvironmentVariableName => StringComparison.InvariantCultureIgnoreCase;
+    public static StringComparison EnvironmentVariableName => StringComparison.OrdinalIgnoreCase;
     public static StringComparison Url => StringComparison.OrdinalIgnoreCase;
     public static StringComparison UrlPath => StringComparison.OrdinalIgnoreCase;
     public static StringComparison UrlHost => StringComparison.OrdinalIgnoreCase;
@@ -63,4 +66,7 @@ internal static class StringComparisons
     public static StringComparison CliInputOrOutput => StringComparison.Ordinal;
     public static StringComparison InteractionInputName => StringComparison.OrdinalIgnoreCase;
     public static StringComparison NetworkID => StringComparison.Ordinal;
+    public static StringComparison NuGetPackageId => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison FullTextSearch => StringComparison.OrdinalIgnoreCase;
+    public static StringComparison ChannelName => StringComparison.OrdinalIgnoreCase;
 }

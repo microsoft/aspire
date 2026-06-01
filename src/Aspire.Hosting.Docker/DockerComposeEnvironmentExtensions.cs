@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker;
 using Aspire.Hosting.Docker.Resources;
-using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Pipelines;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -15,9 +18,49 @@ public static class DockerComposeEnvironmentExtensions
 {
     internal static IDistributedApplicationBuilder AddDockerComposeInfrastructureCore(this IDistributedApplicationBuilder builder)
     {
-        builder.Services.TryAddEventingSubscriber<DockerComposeInfrastructure>();
+        // Register the pipeline step idempotently. AddDockerComposeInfrastructureCore can be
+        // called more than once (e.g. when AddDockerComposeEnvironment is called for multiple
+        // environments). The marker singleton ensures we only add the step the first time.
+        //
+        // The per-environment work (creating Docker Compose service resources and DeploymentTargetAnnotations)
+        // is registered as a separate per-environment pipeline step on DockerComposeEnvironmentResource.
+        // This global step only validates that no resource has a PublishAsDockerComposeService annotation
+        // when there are no DockerComposeEnvironmentResource instances in the model.
+        if (builder.Services.All(d => d.ServiceType != typeof(DockerComposePipelineStepMarker)))
+        {
+            builder.Services.AddSingleton<DockerComposePipelineStepMarker>();
+
+            builder.Pipeline.AddStep(
+                name: DockerComposePipelineStepMarker.StepName,
+                action: ctx =>
+                {
+                    if (!ctx.ExecutionContext.IsPublishMode)
+                    {
+                        return Task.CompletedTask;
+                    }
+
+                    if (!ctx.Model.Resources.OfType<DockerComposeEnvironmentResource>().Any())
+                    {
+                        foreach (var r in ctx.Model.GetComputeResources())
+                        {
+                            if (r.HasAnnotationOfType<DockerComposeServiceCustomizationAnnotation>())
+                            {
+                                throw new InvalidOperationException($"Resource '{r.Name}' is configured to publish as a Docker Compose service, but there are no '{nameof(DockerComposeEnvironmentResource)}' resources. Ensure you have added one by calling '{nameof(AddDockerComposeEnvironment)}'.");
+                            }
+                        }
+                    }
+
+                    return Task.CompletedTask;
+                },
+                requiredBy: WellKnownPipelineSteps.BeforeStart);
+        }
 
         return builder;
+    }
+
+    private sealed class DockerComposePipelineStepMarker
+    {
+        public const string StepName = "validate-docker-compose";
     }
 
     /// <summary>
@@ -26,7 +69,8 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the Docker Compose environment resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{DockerComposeEnvironmentResource}"/>.</returns>
-    [AspireExport("addDockerComposeEnvironment", Description = "Adds a Docker Compose publishing environment")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> AddDockerComposeEnvironment(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -62,7 +106,8 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="DockerComposeEnvironmentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withProperties", Description = "Configures properties of the Docker Compose environment", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithProperties(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<DockerComposeEnvironmentResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -79,8 +124,12 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder"> The Docker compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="ComposeFile"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>This method is not available in polyglot app hosts because <see cref="ComposeFile"/> and its nested types are not exported to ATS.</remarks>
-    [AspireExportIgnore(Reason = "ComposeFile and its nested types are not exported to ATS.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// This callback runs after the Docker Compose model has been generated and before it is written to disk.
+    /// Use it to customize the generated <see cref="ComposeFile"/> for the environment.
+    /// </remarks>
+    [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureComposeFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<ComposeFile> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -96,14 +145,14 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the captured environment variables.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
-    /// This method is not available in polyglot app hosts.
     /// <para>
     /// This callback is invoked during the prepare phase, allowing programmatic modification of the environment variables
-    /// that will be written to the .env file adjacent to the Docker Compose file.
+    /// that will be written to the environment-specific <c>.env</c> file adjacent to the Docker Compose file.
     /// </para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Action<IDictionary<string, CapturedEnvironmentVariable>> callbacks are not ATS-compatible.")]
+    [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureEnvFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<IDictionary<string, CapturedEnvironmentVariable>> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -119,7 +168,8 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="enabled">Whether to enable the dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withDashboard", Description = "Enables or disables the Aspire dashboard for the Docker Compose environment")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithDashboard(this IResourceBuilder<DockerComposeEnvironmentResource> builder, bool enabled = true)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -135,7 +185,8 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the dashboard service.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("configureDashboard", MethodName = "configureDashboard", Description = "Configures the Aspire dashboard resource for the Docker Compose environment", RunSyncOnBackgroundThread = true)]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("configureDashboard", MethodName = "configureDashboard", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithDashboard(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<IResourceBuilder<DockerComposeAspireDashboardResource>> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);

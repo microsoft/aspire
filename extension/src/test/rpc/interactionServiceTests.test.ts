@@ -1,9 +1,12 @@
 import * as assert from 'assert';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 
 import { IInteractionService, InteractionService } from '../../server/interactionService';
-import { ICliRpcClient, ValidationResult } from '../../server/rpcClient';
+import { ICliRpcClient, RpcClient, ValidationResult } from '../../server/rpcClient';
 import { extensionLogOutputChannel } from '../../utils/logging';
 import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AspireDebugSession } from '../../debugger/AspireDebugSession';
@@ -173,6 +176,43 @@ suite('InteractionService endpoints', () => {
 		showInformationMessageSpy.restore();
 	});
 
+	test("displaySuccess clears active progress notification", async () => {
+		const testInfo = await createTestRpcServer();
+		const showInformationMessageStub = sinon.stub(vscode.window, 'showInformationMessage').resolves();
+
+		try {
+			testInfo.interactionService.showStatus('Executing test command...');
+			assert.strictEqual((testInfo.interactionService as any)._progressNotifier.isActive, true);
+
+			testInfo.interactionService.displaySuccess('Test success message');
+
+			assert.strictEqual((testInfo.interactionService as any)._progressNotifier.isActive, false);
+		}
+		finally {
+			showInformationMessageStub.restore();
+		}
+	});
+
+	test("RPC close clears active progress notification", async () => {
+		let closeHandler: (() => void) | undefined;
+		const messageConnection = {
+			onClose: (handler: () => void) => {
+				closeHandler = handler;
+				return { dispose: () => { } };
+			},
+			sendRequest: sinon.stub()
+		} as any;
+
+		const rpcClient = new RpcClient({} as any, messageConnection, null, () => null);
+
+		rpcClient.interactionService.showStatus('Scanning for running AppHosts...');
+		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, true);
+
+		closeHandler!();
+
+		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, false);
+	});
+
 	test("displaySubtleMessage endpoint", async () => {
 		const testInfo = await createTestRpcServer();
 		const setStatusBarMessageSpy = sinon.spy(vscode.window, 'setStatusBarMessage');
@@ -187,6 +227,110 @@ suite('InteractionService endpoints', () => {
 		testInfo.interactionService.displayEmptyLine();
 		assert.ok(stub.calledWith('\n'));
 		stub.restore();
+	});
+
+	test("openEditor adds folder to existing workspace", async () => {
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-open-editor-'));
+		const workspacePath = path.join(tempRoot, 'workspace');
+		const projectPath = path.join(tempRoot, 'MyFirstApp');
+		await fs.mkdir(workspacePath);
+		await fs.mkdir(projectPath);
+
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const testInfo = await createTestRpcServer();
+			const workspaceFolder = {
+				uri: vscode.Uri.file(workspacePath),
+				name: 'workspace',
+				index: 0
+			} as vscode.WorkspaceFolder;
+
+			sandbox.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+			sandbox.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) =>
+				uri.fsPath === workspaceFolder.uri.fsPath ? workspaceFolder : undefined);
+			const updateWorkspaceFoldersStub = sandbox.stub(vscode.workspace, 'updateWorkspaceFolders').returns(true);
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+
+			await testInfo.interactionService.openEditor(projectPath);
+
+			assert.strictEqual(updateWorkspaceFoldersStub.callCount, 1, 'Should update workspace folders once');
+			const updateArgs = updateWorkspaceFoldersStub.getCall(0).args;
+			assert.strictEqual(updateArgs[0], 1, 'Should add after existing workspace folders');
+			assert.strictEqual(updateArgs[1], 0, 'Should not remove existing workspace folders');
+			assertPathEqual(updateArgs[2].uri.fsPath, projectPath, 'Should add the new project folder');
+			assert.strictEqual(executeCommandStub.callCount, 0, 'Should not replace the workspace with vscode.openFolder');
+		}
+		finally {
+			sandbox.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
+		}
+	});
+
+	test("openEditor opens folder when there is no workspace", async () => {
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-open-editor-'));
+		const projectPath = path.join(tempRoot, 'MyFirstApp');
+		await fs.mkdir(projectPath);
+
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const testInfo = await createTestRpcServer();
+
+			sandbox.stub(vscode.workspace, 'workspaceFolders').value(undefined);
+			sandbox.stub(vscode.workspace, 'getWorkspaceFolder').returns(undefined);
+			const updateWorkspaceFoldersStub = sandbox.stub(vscode.workspace, 'updateWorkspaceFolders').returns(true);
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+
+			await testInfo.interactionService.openEditor(projectPath);
+
+			assert.strictEqual(updateWorkspaceFoldersStub.callCount, 0, 'Should not update workspace folders when no workspace exists');
+			assert.strictEqual(executeCommandStub.callCount, 1, 'Should open the new project folder');
+			const executeArgs = executeCommandStub.getCall(0).args;
+			assert.strictEqual(executeArgs[0], 'vscode.openFolder');
+			assertPathEqual(executeArgs[1].fsPath, projectPath);
+			assert.deepStrictEqual(executeArgs[2], { forceNewWindow: false });
+		}
+		finally {
+			sandbox.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
+		}
+	});
+
+	test("openEditor shows warning when folder cannot be added to existing workspace", async () => {
+		const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aspire-open-editor-'));
+		const workspacePath = path.join(tempRoot, 'workspace');
+		const projectPath = path.join(tempRoot, 'MyFirstApp');
+		await fs.mkdir(workspacePath);
+		await fs.mkdir(projectPath);
+
+		const sandbox = sinon.createSandbox();
+
+		try {
+			const testInfo = await createTestRpcServer();
+			const workspaceFolder = {
+				uri: vscode.Uri.file(workspacePath),
+				name: 'workspace',
+				index: 0
+			} as vscode.WorkspaceFolder;
+
+			sandbox.stub(vscode.workspace, 'workspaceFolders').value([workspaceFolder]);
+			sandbox.stub(vscode.workspace, 'getWorkspaceFolder').callsFake((uri: vscode.Uri) =>
+				uri.fsPath === workspaceFolder.uri.fsPath ? workspaceFolder : undefined);
+			sandbox.stub(vscode.workspace, 'updateWorkspaceFolders').returns(false);
+			const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves();
+			const showWarningMessageStub = sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+
+			await testInfo.interactionService.openEditor(projectPath);
+
+			assert.strictEqual(executeCommandStub.callCount, 0, 'Should not replace the workspace with vscode.openFolder');
+			assert.strictEqual(showWarningMessageStub.callCount, 1, 'Should warn when the project folder was not added');
+			assert.ok(showWarningMessageStub.getCall(0).args[0].includes(projectPath), 'Warning should include the project folder path');
+		}
+		finally {
+			sandbox.restore();
+			await fs.rm(tempRoot, { recursive: true, force: true });
+		}
 	});
 
 	test("displayDashboardUrls writes URLs to output channel and shows info message when autoLaunch is notification", async () => {
@@ -300,6 +444,16 @@ type RpcServerTestInfo = {
 	rpcClient: ICliRpcClient;
 	interactionService: IInteractionService;
 };
+
+function assertPathEqual(actual: string, expected: string, message?: string) {
+	assert.strictEqual(normalizePathForComparison(actual), normalizePathForComparison(expected), message);
+}
+
+function normalizePathForComparison(value: string) {
+	const normalized = path.normalize(value);
+
+	return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
 
 class TestCliRpcClient implements ICliRpcClient {
     debugSessionId: string | null;

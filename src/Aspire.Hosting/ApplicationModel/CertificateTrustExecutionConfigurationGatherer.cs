@@ -152,6 +152,7 @@ public class CertificateTrustExecutionConfigurationData : IExecutionConfiguratio
 /// Context for configuring certificate trust configuration properties.
 /// </summary>
 [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireDto]
 public class CertificateTrustExecutionConfigurationContext
 {
     /// <summary>

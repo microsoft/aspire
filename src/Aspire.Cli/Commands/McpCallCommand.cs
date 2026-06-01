@@ -7,6 +7,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -48,12 +49,13 @@ internal sealed class McpCallCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         AspireCliTelemetry telemetry,
         ILogger<McpCallCommand> logger)
         : base("call", McpCommandStrings.CallCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
 
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_toolArgument);
@@ -61,7 +63,7 @@ internal sealed class McpCallCommand : BaseCommand
         Options.Add(s_appHostOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var toolName = parseResult.GetValue(s_toolArgument)!;
@@ -77,8 +79,7 @@ internal sealed class McpCallCommand : BaseCommand
 
         if (!result.Success)
         {
-            _interactionService.DisplayError(result.ErrorMessage);
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, CliExitCodes.FailedToDotnetRunAppHost));
         }
 
         var connection = result.Connection!;
@@ -92,8 +93,7 @@ internal sealed class McpCallCommand : BaseCommand
                 using var doc = JsonDocument.Parse(inputJson);
                 if (doc.RootElement.ValueKind != JsonValueKind.Object)
                 {
-                    _interactionService.DisplayError("Invalid JSON input: expected a JSON object.");
-                    return ExitCodeConstants.InvalidCommand;
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, "Invalid JSON input: expected a JSON object.");
                 }
                 var dict = new Dictionary<string, JsonElement>();
                 foreach (var prop in doc.RootElement.EnumerateObject())
@@ -104,8 +104,7 @@ internal sealed class McpCallCommand : BaseCommand
             }
             catch (JsonException ex)
             {
-                _interactionService.DisplayError($"Invalid JSON input: {ex.Message}");
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid JSON input: {ex.Message}");
             }
         }
 
@@ -142,15 +141,14 @@ internal sealed class McpCallCommand : BaseCommand
 
             if (callResult.IsError == true)
             {
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(CliExitCodes.InvalidCommand);
             }
 
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
         catch (Exception ex)
         {
-            _interactionService.DisplayError($"Failed to call tool '{toolName}' on resource '{resourceName}': {ex.Message}");
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Failed to call tool '{toolName}' on resource '{resourceName}': {ex.Message}");
         }
     }
 }

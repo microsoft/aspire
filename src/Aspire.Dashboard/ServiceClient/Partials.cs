@@ -117,7 +117,7 @@ partial class Resource
         ImmutableArray<CommandViewModel> GetCommands()
         {
             return Commands
-                .Select(c => new CommandViewModel(c.Name, MapState(c.State), c.DisplayName, c.DisplayDescription, c.ConfirmationMessage, c.Parameter, c.IsHighlighted, c.IconName, MapIconVariant(c.IconVariant)))
+                .Select(c => new CommandViewModel(c.Name, MapState(c.State), c.DisplayName, c.DisplayDescription, c.ConfirmationMessage, c.ArgumentInputs.ToImmutableArray(), c.IsHighlighted, c.IconName, MapIconVariant(c.IconVariant)))
                 .ToImmutableArray();
 
             static CommandViewModelState MapState(ResourceCommandState state)
@@ -196,10 +196,28 @@ partial class ResourceCommandResponse
 {
     public ResourceCommandResponseViewModel ToViewModel()
     {
+        // Map deprecated error_message to message for backward compatibility.
+#pragma warning disable CS0612 // Type or member is obsolete
+        var resolvedMessage = HasMessage ? Message : ErrorMessage;
+#pragma warning restore CS0612 // Type or member is obsolete
+
         return new ResourceCommandResponseViewModel()
         {
-            ErrorMessage = ErrorMessage,
-            Kind = (Dashboard.Model.ResourceCommandResponseKind)Kind
+            ErrorMessage = resolvedMessage,
+            Message = resolvedMessage,
+            Kind = (Dashboard.Model.ResourceCommandResponseKind)Kind,
+            Result = Result is not null ? new ResourceCommandResultViewModel
+            {
+                Value = Result.Value,
+                Format = Result.Format switch
+                {
+                    CommandResultFormat.Text => Dashboard.Model.CommandResultFormat.Text,
+                    CommandResultFormat.Json => Dashboard.Model.CommandResultFormat.Json,
+                    CommandResultFormat.Markdown => Dashboard.Model.CommandResultFormat.Markdown,
+                    _ => Dashboard.Model.CommandResultFormat.Text
+                },
+                DisplayImmediately = Result.DisplayImmediately
+            } : null
         };
     }
 }

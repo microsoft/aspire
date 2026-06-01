@@ -39,7 +39,7 @@ resource env_law 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   tags: tags
 }
 
-resource env 'Microsoft.App/managedEnvironments@2025-01-01' = {
+resource env 'Microsoft.App/managedEnvironments@2025-07-01' = {
   name: take('env${uniqueString(resourceGroup().id)}', 24)
   location: location
   properties: {
@@ -60,7 +60,7 @@ resource env 'Microsoft.App/managedEnvironments@2025-01-01' = {
   tags: tags
 }
 
-resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2024-10-02-preview' = {
+resource aspireDashboard 'Microsoft.App/managedEnvironments/dotNetComponents@2025-10-02-preview' = {
   name: 'aspire-dashboard'
   properties: {
     componentType: 'AspireDashboard'
@@ -102,6 +102,8 @@ resource env_acr 'Microsoft.ContainerRegistry/registries@2025-04-01' = {
 output name string = env_acr.name
 
 output loginServer string = env_acr.properties.loginServer
+
+output id string = env_acr.id
 
 // Resource: myvnet
 @description('The location for the resource(s) to be deployed.')

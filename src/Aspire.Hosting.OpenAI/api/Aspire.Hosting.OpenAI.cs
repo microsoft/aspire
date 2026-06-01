@@ -10,21 +10,27 @@ namespace Aspire.Hosting
 {
     public static partial class OpenAIExtensions
     {
+        [AspireExport(Description = "Adds an OpenAI model resource.")]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIModelResource> AddModel(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> builder, string name, string model) { throw null; }
 
+        [AspireExport(Description = "Adds an OpenAI resource to the distributed application model.")]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> AddOpenAI(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
+        [AspireExport(Description = "Configures the API key for the OpenAI resource.")]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> WithApiKey(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> apiKey) { throw null; }
 
+        [AspireExport(Description = "Configures the endpoint URI for the OpenAI resource.")]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> WithEndpoint(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> builder, string endpoint) { throw null; }
 
+        [AspireExport(Description = "Adds a health check for the OpenAI model resource.")]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIModelResource> WithHealthCheck(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIModelResource> builder) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.OpenAI
 {
-    public partial class OpenAIModelResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<OpenAIResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    [System.Diagnostics.DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, Model = {Model}")]
+    public partial class OpenAIModelResource : ApplicationModel.Resource, ApplicationModel.IResourceWithParent<OpenAIResource>, ApplicationModel.IResourceWithParent, ApplicationModel.IResource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public OpenAIModelResource(string name, string model, OpenAIResource parent) : base(default!) { }
 
@@ -37,7 +43,7 @@ namespace Aspire.Hosting.OpenAI
         System.Collections.Generic.IEnumerable<System.Collections.Generic.KeyValuePair<string, ApplicationModel.ReferenceExpression>> ApplicationModel.IResourceWithConnectionString.GetConnectionProperties() { throw null; }
     }
 
-    public sealed partial class OpenAIResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueProvider, ApplicationModel.IValueWithReferences
+    public sealed partial class OpenAIResource : ApplicationModel.Resource, ApplicationModel.IResourceWithConnectionString, ApplicationModel.IResource, ApplicationModel.IExpressionValue, ApplicationModel.IValueProvider, ApplicationModel.IManifestExpressionProvider, ApplicationModel.IValueWithReferences
     {
         public OpenAIResource(string name, ApplicationModel.ParameterResource key) : base(default!) { }
 

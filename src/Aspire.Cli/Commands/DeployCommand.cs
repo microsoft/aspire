@@ -51,7 +51,7 @@ internal sealed class DeployCommand : PipelineCommandBase
         }
 
         // Add --log-level and --envionment flags if specified
-        var logLevel = parseResult.GetValue(s_logLevelOption);
+        var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
 
         if (!string.IsNullOrEmpty(logLevel))
         {
@@ -76,6 +76,8 @@ internal sealed class DeployCommand : PipelineCommandBase
     }
 
     protected override string GetCanceledMessage() => DeployCommandStrings.DeploymentCanceled;
+
+    protected override string? GetTargetStepName(ParseResult parseResult) => "deploy";
 
     protected override string GetProgressMessage(ParseResult parseResult)
     {

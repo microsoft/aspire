@@ -150,15 +150,13 @@
   <data name="NonInteractiveArgumentDescription" xml:space="preserve">
     <value>Run the command in non-interactive mode, disabling all interactive prompts and spinners</value>
   </data>
-  <data name="FirstTimeUseWelcome" xml:space="preserve">
-    <value>Welcome to Aspire! Learn more about Aspire at https://aspire.dev</value>
-  </data>
   <data name="FirstTimeUseTelemetryNotice" xml:space="preserve">
     <value>Telemetry
 ---------
 
 The Aspire CLI collects usage data. It is collected by Microsoft and is used to help us improve your experience. You can opt out of telemetry by setting the ASPIRE_CLI_TELEMETRY_OPTOUT environment variable to '1' or 'true' using your preferred shell.
 
-Read more about Aspire CLI telemetry: https://aka.ms/aspire/cli-telemetry</value>
+Read more about Aspire CLI telemetry: {0}</value>
+    <comment>{0} is a clickable URL</comment>
   </data>
 </root>

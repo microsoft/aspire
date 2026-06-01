@@ -118,13 +118,16 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>List running apphosts</value>
+    <value>List running AppHosts</value>
   </data>
   <data name="JsonOptionDescription" xml:space="preserve">
     <value>Output format (Table or Json)</value>
   </data>
   <data name="HeaderPath" xml:space="preserve">
     <value>Path</value>
+  </data>
+  <data name="HeaderSdk" xml:space="preserve">
+    <value>SDK</value>
   </data>
   <data name="HeaderPid" xml:space="preserve">
     <value>PID</value>
@@ -138,7 +141,10 @@
   <data name="UnknownPath" xml:space="preserve">
     <value>Unknown</value>
   </data>
-  <data name="ResourcesOptionDescription" xml:space="preserve">
-    <value>Include resource details for each running apphost. Only applies to JSON output.</value>
+  <data name="FollowOptionDescription" xml:space="preserve">
+    <value>Keep running and emit updates as running AppHosts change. JSON output is emitted as newline-delimited full snapshots.</value>
+  </data>
+  <data name="FollowRequiresJson" xml:space="preserve">
+    <value>The --follow option only supports JSON output. Use --format json.</value>
   </data>
 </root>

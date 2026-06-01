@@ -10,6 +10,7 @@ namespace Aspire.Hosting
 {
     public static partial class AzureLogAnalyticsWorkspaceExtensions
     {
+        [AspireExport(Description = "Adds an Azure Log Analytics Workspace resource")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureLogAnalyticsWorkspaceResource> AddAzureLogAnalyticsWorkspace(this IDistributedApplicationBuilder builder, string name) { throw null; }
     }
 }
@@ -23,9 +24,11 @@ namespace Aspire.Hosting.Azure
         public AzureLogAnalyticsWorkspaceResource Workspace { get { throw null; } }
     }
 
-    public partial class AzureLogAnalyticsWorkspaceResource : AzureProvisioningResource
+    public partial class AzureLogAnalyticsWorkspaceResource : AzureProvisioningResource, IAzureNspAssociationTarget, ApplicationModel.IResource
     {
         public AzureLogAnalyticsWorkspaceResource(string name, System.Action<AzureResourceInfrastructure> configureInfrastructure) : base(default!, default!) { }
+
+        public BicepOutputReference Id { get { throw null; } }
 
         public BicepOutputReference NameOutputReference { get { throw null; } }
 

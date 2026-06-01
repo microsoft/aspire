@@ -67,7 +67,7 @@
     <value>Solution detected: {0}</value>
   </data>
   <data name="CreatingAppHostProject" xml:space="preserve">
-    <value>Creating apphost project...</value>
+    <value>Creating AppHost project...</value>
   </data>
   <data name="CreatingServiceDefaultsProject" xml:space="preserve">
     <value>Creating ServiceDefaults project...</value>
@@ -76,7 +76,7 @@
     <value>Adding projects to solution...</value>
   </data>
   <data name="NoSolutionFoundCreatingSingleFileAppHost" xml:space="preserve">
-    <value>No solution file found. Creating single-file apphost...</value>
+    <value>No solution file found. Creating single-file AppHost...</value>
   </data>
   <data name="AspireInitializationComplete" xml:space="preserve">
     <value>Aspire initialization complete!</value>
@@ -88,7 +88,7 @@
     <value>Solution has already been initialized with Aspire.</value>
   </data>
   <data name="AddingAppHostProjectToSolution" xml:space="preserve">
-    <value>Adding apphost project to solution...</value>
+    <value>Adding AppHost project to solution...</value>
   </data>
   <data name="AddingServiceDefaultsProjectToSolution" xml:space="preserve">
     <value>Adding ServiceDefaults project to solution...</value>
@@ -97,9 +97,39 @@
     <value>Resolving template version...</value>
   </data>
   <data name="SolutionAndProjectInSameDirectory" xml:space="preserve">
-    <value>The solution file '{0}' and project file '{1}' are in the same directory. The apphost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</value>
+    <value>The solution file '{0}' and project file '{1}' are in the same directory. The AppHost and ServiceDefaults projects cannot be created inside an existing project directory. Move the solution file to a parent directory or the project file to a subdirectory.</value>
   </data>
   <data name="LanguageOptionDescription" xml:space="preserve">
-    <value>The programming language for the apphost (csharp, typescript)</value>
+    <value>The programming language for the AppHost (csharp, typescript)</value>
+  </data>
+  <data name="AppHostCreatedRunOne" xml:space="preserve">
+    <value>Aspire AppHost created! To complete setup, run:</value>
+  </data>
+  <data name="AppHostCreatedRunOneOf" xml:space="preserve">
+    <value>Aspire AppHost created! To complete setup, run one of:</value>
+  </data>
+  <data name="DeprecatedOptionWarning" xml:space="preserve">
+    <value>`aspire init {0}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.</value>
+  </data>
+  <data name="FileAlreadyExistsSkipping" xml:space="preserve">
+    <value>{0} already exists — skipping.</value>
+  </data>
+  <data name="CreatedFile" xml:space="preserve">
+    <value>Created {0}</value>
+  </data>
+  <data name="InstallingAspireProjectTemplates" xml:space="preserve">
+    <value>Installing Aspire project templates...</value>
+  </data>
+  <data name="CreatingAppHostFromTemplate" xml:space="preserve">
+    <value>Creating AppHost from template...</value>
+  </data>
+  <data name="FailedToCreateAppHostFromTemplate" xml:space="preserve">
+    <value>Failed to create AppHost from template (exit code {0}).</value>
+  </data>
+  <data name="FailedToParseExistingConfig" xml:space="preserve">
+    <value>Failed to parse existing {0} at '{1}': {2}</value>
+  </data>
+  <data name="FixOrRemoveConfigAndRerun" xml:space="preserve">
+    <value>Fix or remove {0} and re-run `aspire init`.</value>
   </data>
 </root>

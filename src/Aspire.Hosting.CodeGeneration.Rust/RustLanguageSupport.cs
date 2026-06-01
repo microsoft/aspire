@@ -9,12 +9,13 @@ namespace Aspire.Hosting.CodeGeneration.Rust;
 /// Provides language support for Rust AppHosts.
 /// Implements scaffolding, detection, and runtime configuration.
 /// </summary>
-public sealed class RustLanguageSupport : ILanguageSupport
+internal sealed class RustLanguageSupport : ILanguageSupport
 {
     /// <summary>
     /// The language/runtime identifier for Rust.
     /// </summary>
     private const string LanguageId = "rust";
+    private const string AppHostFileName = "apphost.rs";
 
     /// <summary>
     /// The code generation target language. This maps to the ICodeGenerator.Language property.
@@ -22,7 +23,7 @@ public sealed class RustLanguageSupport : ILanguageSupport
     private const string CodeGenTarget = "Rust";
 
     private const string LanguageDisplayName = "Rust";
-    private static readonly string[] s_detectionPatterns = ["apphost.rs"];
+    private static readonly string[] s_detectionPatterns = [AppHostFileName];
 
     /// <inheritdoc />
     public string Language => LanguageId;
@@ -37,7 +38,7 @@ public sealed class RustLanguageSupport : ILanguageSupport
             // Aspire Rust AppHost
             // For more information, see: https://aspire.dev
 
-            #[path = "../.modules/mod.rs"]
+            #[path = "../.aspire/modules/mod.rs"]
             mod aspire;
 
             use aspire::*;
@@ -68,8 +69,8 @@ public sealed class RustLanguageSupport : ILanguageSupport
             lazy_static = "1.4"
             """;
 
-        // Create apphost.rs marker file for detection
-        files["apphost.rs"] = """
+        // Create the marker file the CLI uses to recognize Rust AppHosts.
+        files[AppHostFileName] = """
             // Aspire Rust AppHost marker file
             // This file is used to detect the project type.
             // The actual entry point is in src/main.rs.
@@ -105,7 +106,7 @@ public sealed class RustLanguageSupport : ILanguageSupport
     /// <inheritdoc />
     public DetectionResult Detect(string directoryPath)
     {
-        var appHostPath = Path.Combine(directoryPath, "apphost.rs");
+        var appHostPath = Path.Combine(directoryPath, AppHostFileName);
         if (!File.Exists(appHostPath))
         {
             return DetectionResult.NotFound;
@@ -117,7 +118,7 @@ public sealed class RustLanguageSupport : ILanguageSupport
             return DetectionResult.NotFound;
         }
 
-        return DetectionResult.Found(LanguageId, "apphost.rs");
+        return DetectionResult.Found(LanguageId, AppHostFileName);
     }
 
     /// <inheritdoc />

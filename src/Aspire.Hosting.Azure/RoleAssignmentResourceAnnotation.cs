@@ -6,12 +6,12 @@ using Aspire.Hosting.ApplicationModel;
 namespace Aspire.Hosting.Azure;
 
 /// <summary>
-/// An annotation that points to the AzureProvisioningResource that contains the role assignments for an Azure resource.
+/// An annotation that points to the resource that contains the role assignments for an Azure resource.
 /// </summary>
-internal sealed class RoleAssignmentResourceAnnotation(AzureProvisioningResource rolesResource) : IResourceAnnotation
+internal sealed class RoleAssignmentResourceAnnotation(AzureRoleAssignmentResource rolesResource) : IResourceAnnotation
 {
     /// <summary>
-    /// The AzureProvisioningResource that contains the role assignments for the Azure resource.
+    /// The resource that contains the role assignments for the Azure resource.
     /// </summary>
-    public AzureProvisioningResource RolesResource { get; } = rolesResource;
+    public AzureRoleAssignmentResource RolesResource { get; } = rolesResource;
 }

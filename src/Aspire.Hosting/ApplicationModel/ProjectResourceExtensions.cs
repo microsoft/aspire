@@ -13,6 +13,7 @@ public static class ProjectResourceExtensions
     /// </summary>
     /// <param name="model">The distributed application model.</param>
     /// <returns>An enumerable collection of project resources.</returns>
+    [AspireExportIgnore(Reason = "Application model inspection helper — not part of the ATS surface.")]
     public static IEnumerable<ProjectResource> GetProjectResources(this DistributedApplicationModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
@@ -26,6 +27,7 @@ public static class ProjectResourceExtensions
     /// <param name="projectResource">The project resource.</param>
     /// <returns>The project metadata.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the project resource doesn't have project metadata.</exception>
+    [AspireExportIgnore(Reason = "Project metadata is a .NET-specific contract and is not part of the ATS surface.")]
     public static IProjectMetadata GetProjectMetadata(this ProjectResource projectResource)
     {
         ArgumentNullException.ThrowIfNull(projectResource);

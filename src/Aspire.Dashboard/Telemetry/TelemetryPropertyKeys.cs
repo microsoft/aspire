@@ -53,7 +53,4 @@ public static class TelemetryPropertyKeys
     public const string AIAssistantSelectedModel = AspireDashboardPropertyPrefix + "AIAssistant.SelectedModel";
     public const string AIAssistantToolCalls = AspireDashboardPropertyPrefix + "AIAssistant.ToolCalls";
     public const string AIAssistantFeedbackType = AspireDashboardPropertyPrefix + "AIAssistant.FeedbackType";
-
-    // MCP tool call properties
-    public const string McpToolName = AspireDashboardPropertyPrefix + "Mcp.ToolName";
 }

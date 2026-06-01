@@ -28,7 +28,7 @@ internal class PublishCommandPrompter(IInteractionService interactionService) : 
             PublishCommandStrings.SelectAPublisher,
             publishers,
             p => p.EscapeMarkup(),
-            cancellationToken
+            cancellationToken: cancellationToken
         );
     }
 }
@@ -59,7 +59,7 @@ internal sealed class PublishCommand : PipelineCommandBase
         }
 
         // Add --log-level and --envionment flags if specified
-        var logLevel = parseResult.GetValue(s_logLevelOption);
+        var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
 
         if (!string.IsNullOrEmpty(logLevel))
         {
@@ -84,6 +84,8 @@ internal sealed class PublishCommand : PipelineCommandBase
     }
 
     protected override string GetCanceledMessage() => InteractionServiceStrings.OperationCancelled;
+
+    protected override string? GetTargetStepName(ParseResult parseResult) => "publish";
 
     protected override string GetProgressMessage(ParseResult parseResult) => "Executing step publish";
 }

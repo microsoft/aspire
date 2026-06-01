@@ -10,21 +10,27 @@ namespace Aspire.Hosting
 {
     public static partial class ValkeyBuilderExtensions
     {
+        [AspireExport(Description = "Adds a Valkey container resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> AddValkey(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null) { throw null; }
 
+        [AspireExportIgnore(Reason = "Convenience overload. Use the overload with optional password parameter instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> AddValkey(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
+        [AspireExport(Description = "Adds a data bind mount for Valkey and enables persistence")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport(Description = "Adds a data volume for Valkey and enables persistence")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
+        [AspireExport(Description = "Configures Valkey persistence")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> WithPersistence(this ApplicationModel.IResourceBuilder<ApplicationModel.ValkeyResource> builder, System.TimeSpan? interval = null, long keysChangedThreshold = 1) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
-    public partial class ValkeyResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences
+    [AspireExport(ExposeProperties = true)]
+    public partial class ValkeyResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences
     {
         public ValkeyResource(string name, ParameterResource password) : base(default!, default) { }
 

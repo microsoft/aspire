@@ -63,7 +63,7 @@ namespace Aspire.Hosting.Azure.Resources {
         /// <summary>
         ///   Looks up a localized string similar to The model contains Azure resources that require an Azure Subscription.
         ///
-        ///To learn more, see the [Azure provisioning docs](https://aka.ms/dotnet/aspire/azure/provisioning)..
+        ///To learn more, see the [Azure provisioning docs](https://aka.ms/aspire/azure/provisioning)..
         /// </summary>
         internal static string InputsMessage {
             get {

@@ -8,7 +8,6 @@ Aspire CLI is distributed via [WinGet](https://learn.microsoft.com/windows/packa
 
 ```powershell
 winget install Microsoft.Aspire              # stable
-# winget install Microsoft.Aspire.Prerelease   # preview (not yet supported)
 ```
 
 ## Contents
@@ -16,8 +15,9 @@ winget install Microsoft.Aspire              # stable
 | Directory / File               | Description                                                                      |
 |--------------------------------|----------------------------------------------------------------------------------|
 | `microsoft.aspire/`            | Manifest templates for stable releases                                           |
-| `microsoft.aspire.prerelease/` | Manifest templates for prerelease builds                                         |
 | `generate-manifests.ps1`       | Downloads installers, computes SHA256 hashes, generates manifests from templates |
+| `prepare-manifest-artifact.ps1` | Prepares CI artifacts by generating, validating, and adding dogfood helpers      |
+| `dogfood.ps1`                  | Installs generated manifests locally, optionally using downloaded native archives |
 
 Each manifest set contains three YAML files following the [WinGet manifest schema v1.10](https://learn.microsoft.com/windows/package-manager/package/manifest):
 
@@ -41,16 +41,26 @@ Windows only (x64, arm64). Installers are zip archives containing a portable `as
 ## Artifact URLs
 
 ```text
-https://ci.dot.net/public/aspire/{VERSION}/aspire-cli-win-{arch}-{VERSION}.zip
+https://ci.dot.net/public/aspire/{ARTIFACT_VERSION}/aspire-cli-win-{arch}-{VERSION}.zip
 ```
 
 Where arch is `x64` or `arm64`.
 
 ## CI Pipeline
 
-| Pipeline                              | Prepares                                       | Publishes             |
-|---------------------------------------|------------------------------------------------|-----------------------|
-| `azure-pipelines.yml` (prepare stage) | Stable manifests (artifacts only) | —                     |
-| `release-publish-nuget.yml` (release) | —                                              | Stable manifests only |
+| Pipeline                              | Prepares                                        | Publishes             |
+|---------------------------------------|-------------------------------------------------|-----------------------|
+| `.github/workflows/tests.yml`         | Prerelease manifests (artifacts only)           | —                     |
+| `azure-pipelines.yml` (prepare stage) | Stable or prerelease manifests (artifacts only) | —                     |
+| `release-publish-nuget.yml` (release) | —                                               | Stable manifests only |
 
 Publishing submits a PR to `microsoft/winget-pkgs` using `wingetcreate submit`.
+
+To dogfood a GitHub Actions artifact locally, download the `winget-manifests-prerelease`
+artifact and the `cli-native-archives-win-*` artifacts into the same parent directory, then run:
+
+```powershell
+.\dogfood.ps1 -ArchiveRoot ..
+```
+
+If `Microsoft.Aspire` is already installed through WinGet, uninstall it first or pass `-Force` to allow the local dogfood manifest to replace it.

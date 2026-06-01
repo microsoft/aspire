@@ -156,6 +156,15 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to HTTPS development certificate was partially trusted. Continuing because partial trust is usable for CLI HTTPS diagnostics on Linux; browser trust may still be incomplete..
+        /// </summary>
+        internal static string TrustPartialSuccess {
+            get {
+                return ResourceManager.GetString("TrustPartialSuccess", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Trusting development certificate (may require elevated permissions)....
         /// </summary>
         internal static string TrustProgress {

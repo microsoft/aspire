@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "NodeJS TypeScript service for PostgresEndToEnd playground",
   "main": "app.ts",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "ts-node app.ts",
     "dev": "ts-node app.ts"
@@ -12,7 +15,7 @@
     "pg": "^8.11.3",
     "@azure/identity": "^4.0.0",
     "@azure/core-auth": "^1.10.1",
-    "uuid": "^9.0.1",
+    "uuid": "^14.0.0",
     "jws": "^3.2.3"
   },
   "devDependencies": {
@@ -22,5 +25,8 @@
     "@types/uuid": "^9.0.7",
     "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
+  },
+  "overrides": {
+    "uuid": "$uuid"
   }
 }

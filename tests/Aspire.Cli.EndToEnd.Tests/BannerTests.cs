@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -18,19 +19,18 @@ public sealed class BannerTests(ITestOutputHelper output)
     public async Task Banner_DisplayedOnFirstRun()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Delete the first-time use sentinel file to simulate first run
         // The sentinel is stored at ~/.aspire/cli/cli.firstUseSentinel
@@ -46,65 +46,54 @@ public sealed class BannerTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire cache clear");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
-            s => s.ContainsText("Welcome to the") && s.ContainsText("Telemetry"),
+            s => s.ContainsText(RootCommandStrings.BannerWelcomeText) && s.ContainsText("Telemetry"),
             timeout: TimeSpan.FromSeconds(30), description: "waiting for banner and telemetry notice on first run");
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
     public async Task Banner_DisplayedWithExplicitFlag()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Clear screen to have a clean slate for pattern matching
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire --banner");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
-            s => s.ContainsText("Welcome to the") && s.ContainsText("CLI"),
+            s => s.ContainsText(RootCommandStrings.BannerWelcomeText) && s.ContainsText("CLI"),
             timeout: TimeSpan.FromSeconds(30), description: "waiting for banner with version info");
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/14307")]
     public async Task Banner_NotDisplayedWithNoLogoFlag()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Delete the first-time use sentinel file to simulate first run,
         // but use --nologo to suppress the banner
@@ -114,27 +103,21 @@ public sealed class BannerTests(ITestOutputHelper output)
         await auto.ClearScreenAsync(counter);
         await auto.TypeAsync("aspire --nologo --help");
         await auto.EnterAsync();
+        // Wait for the help hint that appears at the very end of help output.
+        // This ensures the full help text has been rendered to the visible console
+        // before we check for the absence of the banner.
         await auto.WaitUntilAsync(s =>
         {
-            // Wait for help output to confirm command completed
-            if (!s.ContainsText("Commands:"))
-            {
-                return false;
-            }
-
             // Verify the banner does NOT appear
-            if (s.ContainsText("Welcome to the"))
+            if (s.ContainsText(RootCommandStrings.BannerWelcomeText))
             {
                 throw new InvalidOperationException(
                     "Unexpected banner displayed when --nologo flag was used!");
             }
 
-            return true;
-        }, timeout: TimeSpan.FromSeconds(30), description: "waiting for help output without banner");
+            // Only return true once the help hint is visible at the end of the output
+            return s.ContainsText(HelpGroupStrings.HelpHint);
+        }, timeout: TimeSpan.FromSeconds(30), description: "waiting for help output to complete");
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

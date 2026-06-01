@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net.Sockets;
+using System.Reflection;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -13,6 +15,147 @@ public class WithEndpointTests
 {
     // copied from /src/Shared/StringComparers.cs to avoid ambiguous reference since StringComparers exists internally in multiple Hosting assemblies.
     private static StringComparison EndpointAnnotationName => StringComparison.OrdinalIgnoreCase;
+
+    [Fact]
+    public void EndpointIsProxiedBinaryCompatibilityOverloadsExist()
+    {
+        Assert.NotNull(GetPublicStaticMethod(
+            typeof(ResourceBuilderExtensions),
+            nameof(ResourceBuilderExtensions.WithEndpoint),
+            typeof(IResourceBuilder<>),
+            typeof(int?),
+            typeof(int?),
+            typeof(string),
+            typeof(string),
+            typeof(string),
+            typeof(bool),
+            typeof(bool?),
+            typeof(ProtocolType?)));
+
+        Assert.NotNull(GetPublicStaticMethod(
+            typeof(ResourceBuilderExtensions),
+            nameof(ResourceBuilderExtensions.WithEndpoint),
+            typeof(IResourceBuilder<>),
+            typeof(int?),
+            typeof(int?),
+            typeof(string),
+            typeof(string),
+            typeof(string),
+            typeof(bool),
+            typeof(bool?)));
+
+        Assert.NotNull(GetPublicStaticMethod(
+            typeof(ResourceBuilderExtensions),
+            nameof(ResourceBuilderExtensions.WithHttpEndpoint),
+            typeof(IResourceBuilder<>),
+            typeof(int?),
+            typeof(int?),
+            typeof(string),
+            typeof(string),
+            typeof(bool)));
+
+        Assert.NotNull(GetPublicStaticMethod(
+            typeof(ResourceBuilderExtensions),
+            nameof(ResourceBuilderExtensions.WithHttpsEndpoint),
+            typeof(IResourceBuilder<>),
+            typeof(int?),
+            typeof(int?),
+            typeof(string),
+            typeof(string),
+            typeof(bool)));
+
+        var withEndpointProxySupport = GetPublicStaticMethod(
+            typeof(ContainerResourceBuilderExtensions),
+            nameof(ContainerResourceBuilderExtensions.WithEndpointProxySupport),
+            typeof(IResourceBuilder<>),
+            typeof(bool));
+
+        Assert.NotNull(withEndpointProxySupport);
+        var constraint = Assert.Single(withEndpointProxySupport.GetGenericArguments()[0].GetGenericParameterConstraints());
+        Assert.Equal(typeof(ContainerResource), constraint);
+
+        Assert.NotNull(GetPublicConstructor(
+            typeof(EndpointAnnotation),
+            typeof(ProtocolType),
+            typeof(string),
+            typeof(string),
+            typeof(string),
+            typeof(int?),
+            typeof(int?),
+            typeof(bool?),
+            typeof(bool)));
+
+        Assert.NotNull(GetPublicConstructor(
+            typeof(EndpointAnnotation),
+            typeof(ProtocolType),
+            typeof(NetworkIdentifier),
+            typeof(string),
+            typeof(string),
+            typeof(string),
+            typeof(int?),
+            typeof(int?),
+            typeof(bool?),
+            typeof(bool)));
+
+        var isProxiedProperty = typeof(EndpointAnnotation).GetProperty(nameof(EndpointAnnotation.IsProxied), BindingFlags.Public | BindingFlags.Instance);
+        Assert.NotNull(isProxiedProperty);
+        Assert.Equal(typeof(bool), isProxiedProperty.PropertyType);
+    }
+
+    [Fact]
+    public void EndpointAnnotationConstructorOmissionLeavesProxySettingUnset()
+    {
+        var endpoint = new EndpointAnnotation(ProtocolType.Tcp);
+
+        Assert.True(endpoint.IsProxied);
+        Assert.Null(endpoint.IsExplicitlyProxied);
+    }
+
+    [Fact]
+    public void EndpointAnnotationBoolCompatibilityConstructorPreservesExplicitProxySetting()
+    {
+        var constructor = GetPublicConstructor(
+            typeof(EndpointAnnotation),
+            typeof(ProtocolType),
+            typeof(string),
+            typeof(string),
+            typeof(string),
+            typeof(int?),
+            typeof(int?),
+            typeof(bool?),
+            typeof(bool));
+
+        var endpoint = Assert.IsType<EndpointAnnotation>(constructor!.Invoke([ProtocolType.Tcp, "http", null, "http", null, null, null, true]));
+
+        Assert.True(endpoint.IsProxied);
+        Assert.True(endpoint.IsExplicitlyProxied);
+    }
+
+    [Fact]
+    public void WithHttpEndpointOmittedIsProxiedLeavesProxySettingUnset()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("app", "image")
+            .WithHttpEndpoint(name: "http");
+
+        var endpoint = Assert.Single(container.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.True(endpoint.IsProxied);
+        Assert.Null(endpoint.IsExplicitlyProxied);
+    }
+
+    [Fact]
+    public void WithHttpEndpointBoolCompatibilityOverloadPreservesExplicitProxySetting()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var container = builder.AddContainer("app", "image");
+        ResourceBuilderExtensions.WithHttpEndpoint(container, port: null, targetPort: null, name: "http", env: null, isProxied: true);
+
+        var endpoint = Assert.Single(container.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.True(endpoint.IsProxied);
+        Assert.True(endpoint.IsExplicitlyProxied);
+    }
 
     [Fact]
     public void WithEndpointInvokesCallback()
@@ -29,6 +172,28 @@ public class WithEndpointTests
         var endpoint = projectA.Resource.Annotations.OfType<EndpointAnnotation>()
             .Where(e => string.Equals(e.Name, "mybinding", EndpointAnnotationName)).Single();
         Assert.Equal(2000, endpoint.Port);
+    }
+
+    private static MethodInfo? GetPublicStaticMethod(Type declaringType, string methodName, params Type[] parameterTypes)
+    {
+        return declaringType.GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .SingleOrDefault(method =>
+                method.Name == methodName &&
+                method.GetParameters().Select(parameter => NormalizeGenericParameterType(parameter.ParameterType)).SequenceEqual(parameterTypes));
+    }
+
+    private static ConstructorInfo? GetPublicConstructor(Type declaringType, params Type[] parameterTypes)
+    {
+        return declaringType.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+            .SingleOrDefault(constructor =>
+                constructor.GetParameters().Select(parameter => parameter.ParameterType).SequenceEqual(parameterTypes));
+    }
+
+    private static Type NormalizeGenericParameterType(Type parameterType)
+    {
+        return parameterType.IsGenericType && parameterType.GetGenericTypeDefinition() == typeof(IResourceBuilder<>)
+            ? typeof(IResourceBuilder<>)
+            : parameterType;
     }
 
     [Fact]
@@ -154,47 +319,78 @@ public class WithEndpointTests
     }
 
     [Fact]
-    public void EndpointsWithTwoPortsSameNameThrows()
+    public void WithHttpEndpointCallbackCreatesHttpEndpointWhenMissing()
     {
-        var ex = Assert.Throws<DistributedApplicationException>(() =>
-        {
-            using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create();
 
-            builder.AddProject<ProjectA>("projecta")
-                    .WithHttpsEndpoint(3000, 1000, name: "mybinding")
-                    .WithHttpsEndpoint(3000, 2000, name: "mybinding");
-        });
+        var container = builder.AddContainer("app", "image")
+            .WithHttpEndpointCallback(_ => { }, name: "callback-http");
 
-        Assert.Equal("Endpoint with name 'mybinding' already exists. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/dotnet/aspire/networking", ex.Message);
+        var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>()
+            .Single(endpoint => string.Equals(endpoint.Name, "callback-http", EndpointAnnotationName));
+
+        Assert.Equal("http", endpoint.UriScheme);
+        Assert.Equal("http", endpoint.Transport);
+        Assert.Equal(ProtocolType.Tcp, endpoint.Protocol);
     }
 
     [Fact]
-    public void AddingTwoEndpointsWithDefaultNames()
+    public void WithHttpsEndpointCallbackCreatesHttpsEndpointWhenMissing()
     {
-        var ex = Assert.Throws<DistributedApplicationException>(() =>
-        {
-            using var builder = TestDistributedApplicationBuilder.Create();
+        using var builder = TestDistributedApplicationBuilder.Create();
 
-            builder.AddProject<ProjectA>("projecta")
-                    .WithHttpsEndpoint(3000, 1000)
-                    .WithHttpsEndpoint(3000, 2000);
-        });
+        var container = builder.AddContainer("app", "image")
+            .WithHttpsEndpointCallback(_ => { }, name: "callback-https");
 
-        Assert.Equal("Endpoint with name 'https' already exists. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/dotnet/aspire/networking", ex.Message);
+        var endpoint = container.Resource.Annotations.OfType<EndpointAnnotation>()
+            .Single(endpoint => string.Equals(endpoint.Name, "callback-https", EndpointAnnotationName));
+
+        Assert.Equal("https", endpoint.UriScheme);
+        Assert.Equal("http", endpoint.Transport);
+        Assert.Equal(ProtocolType.Tcp, endpoint.Protocol);
     }
 
     [Fact]
-    public void EndpointsWithSinglePortSameNameThrows()
+    public void EndpointsWithTwoPortsSameNameUpdatesExisting()
     {
-        var ex = Assert.Throws<DistributedApplicationException>(() =>
-        {
-            using var builder = TestDistributedApplicationBuilder.Create();
-            builder.AddProject<ProjectB>("projectb")
-                   .WithHttpsEndpoint(1000, name: "mybinding")
-                   .WithHttpsEndpoint(2000, name: "mybinding");
-        });
+        using var builder = TestDistributedApplicationBuilder.Create();
 
-        Assert.Equal("Endpoint with name 'mybinding' already exists. Endpoint name may not have been explicitly specified and was derived automatically from scheme argument (e.g. 'http', 'https', or 'tcp'). Multiple calls to WithEndpoint (and related methods) may result in a conflict if name argument is not specified. Each endpoint must have a unique name. For more information on networking in Aspire see: https://aka.ms/dotnet/aspire/networking", ex.Message);
+        builder.AddProject<ProjectA>("projecta")
+                .WithHttpsEndpoint(3000, 1000, name: "mybinding")
+                .WithHttpsEndpoint(3000, 2000, name: "mybinding");
+
+        var resource = Assert.Single(builder.Resources.OfType<ProjectResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "mybinding");
+        Assert.Equal(3000, endpoint.Port);
+        Assert.Equal(2000, endpoint.TargetPort);
+    }
+
+    [Fact]
+    public void AddingTwoEndpointsWithDefaultNamesUpdatesExisting()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddProject<ProjectA>("projecta")
+                .WithHttpsEndpoint(3000, 1000)
+                .WithHttpsEndpoint(3000, 2000);
+
+        var resource = Assert.Single(builder.Resources.OfType<ProjectResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "https");
+        Assert.Equal(3000, endpoint.Port);
+        Assert.Equal(2000, endpoint.TargetPort);
+    }
+
+    [Fact]
+    public void EndpointsWithSinglePortSameNameUpdatesExisting()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        builder.AddProject<ProjectB>("projectb")
+               .WithHttpsEndpoint(1000, name: "mybinding")
+               .WithHttpsEndpoint(2000, name: "mybinding");
+
+        var resource = Assert.Single(builder.Resources.OfType<ProjectResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "mybinding");
+        Assert.Equal(2000, endpoint.Port);
     }
 
     [Fact]
@@ -706,6 +902,196 @@ public class WithEndpointTests
         public string ProjectPath => "projectpath";
 
         public LaunchSettings? LaunchSettings => null;
+    }
+
+    [Fact]
+    public void WithHttpEndpointUpdatesPortOnExistingEndpoint()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpEndpoint()
+            .WithHttpEndpoint(port: 5000);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "http");
+        Assert.Equal(5000, endpoint.Port);
+    }
+
+    [Fact]
+    public void WithHttpsEndpointUpdatesPortOnExistingEndpoint()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpsEndpoint()
+            .WithHttpsEndpoint(port: 5001);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "https");
+        Assert.Equal(5001, endpoint.Port);
+    }
+
+    [Fact]
+    public void WithHttpEndpointUpdatePreservesExistingTargetPort()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithHttpEndpoint(port: 5000);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "http");
+        Assert.Equal(5000, endpoint.Port);
+        Assert.Equal(8080, endpoint.TargetPort);
+    }
+
+    [Fact]
+    public void WithHttpEndpointUpdatePreservesExistingEnvVar()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpEndpoint(env: "PORT")
+            .WithHttpEndpoint(port: 3000);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "http");
+        Assert.Equal(3000, endpoint.Port);
+        Assert.Equal("PORT", endpoint.TargetPortEnvironmentVariable);
+    }
+
+    [Fact]
+    public void WithHttpEndpointUpdatePreservesIsProxiedFalse()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpEndpoint(port: 8080, isProxied: false)
+            .WithHttpEndpoint(targetPort: 3000);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "http");
+        Assert.Equal(8080, endpoint.Port);
+        Assert.Equal(3000, endpoint.TargetPort);
+        Assert.False(endpoint.IsProxied);
+    }
+
+    [Fact]
+    public void WithHttpEndpointUpdateDoesNotDuplicateEnvAnnotation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpEndpoint(env: "PORT")
+            .WithHttpEndpoint(port: 3000, env: "PORT");
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var envAnnotations = resource.Annotations.OfType<EnvironmentCallbackAnnotation>().ToList();
+        // Should have exactly one env callback for PORT, not two
+        Assert.Single(envAnnotations);
+    }
+
+    [Fact]
+    public async Task WithHttpEndpointUpdateReplacesEnvVar()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddExecutable("foo", "foo", ".")
+            .WithHttpEndpoint(targetPort: 3001, env: "PORT")
+            .WithHttpEndpoint(env: "NEW_PORT");
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.GetExecutableResources());
+
+        var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+
+        // NEW_PORT should be set, PORT should not
+        Assert.True(config.ContainsKey("NEW_PORT"));
+        Assert.False(config.ContainsKey("PORT"));
+    }
+
+    [Fact]
+    public void WithEndpointUpdateDoesNotChangeScheme()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpEndpoint(name: "api")
+            .WithHttpsEndpoint(name: "api", port: 8443);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "api");
+        // Scheme should remain "http" from the first call
+        Assert.Equal("http", endpoint.UriScheme);
+        Assert.Equal(8443, endpoint.Port);
+    }
+
+    [Fact]
+    public void WithEndpointUpdateCanSetIsProxiedToTrue()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpEndpoint(port: 8080, isProxied: false)
+            .WithHttpEndpoint(port: 9090, isProxied: true);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "http");
+        Assert.Equal(9090, endpoint.Port);
+        Assert.True(endpoint.IsProxied);
+    }
+
+    [Fact]
+    public void WithEndpointUpdateCanSetIsProxiedToFalse()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithHttpEndpoint(port: 8080)
+            .WithHttpEndpoint(isProxied: false);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "http");
+        Assert.Equal(8080, endpoint.Port);
+        Assert.False(endpoint.IsProxied);
+    }
+
+    [Fact]
+    public void WithEndpointUpdateChangesIsExternal()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("mycontainer", "myimage")
+            .WithEndpoint(scheme: "http", name: "http")
+            .WithEndpoint(name: "http", isExternal: true);
+
+        using var app = builder.Build();
+
+        var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
+        var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "http");
+        Assert.True(endpoint.IsExternal);
     }
 
     private sealed class ProjectA : IProjectMetadata

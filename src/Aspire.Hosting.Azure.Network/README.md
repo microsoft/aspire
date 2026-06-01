@@ -1,6 +1,6 @@
 # Aspire.Hosting.Azure.Network library
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure Azure Virtual Networks, Subnets, NAT Gateways, Public IP Addresses, Network Security Groups, and Private Endpoints.
+Provides extension methods and resource definitions for an Aspire AppHost to configure Azure Virtual Networks, Subnets, NAT Gateways, Public IP Addresses, Network Security Groups, Network Security Perimeters, and Private Endpoints.
 
 ## Getting started
 
@@ -116,6 +116,33 @@ var subnet = vnet.AddSubnet("web-subnet", "10.0.1.0/24")
 
 A single NSG can be shared across multiple subnets.
 
+### Adding Network Security Perimeters
+
+A Network Security Perimeter (NSP) groups PaaS resources into a logical security boundary. Resources within the perimeter can communicate with each other, while public access is restricted by access rules:
+
+```csharp
+var nsp = builder.AddNetworkSecurityPerimeter("my-nsp")
+    .WithAccessRule(new AzureNspAccessRule
+    {
+        Name = "allow-my-ip",
+        Direction = NetworkSecurityPerimeterAccessRuleDirection.Inbound,
+        AddressPrefixes = { "203.0.113.0/24" }
+    });
+
+var storage = builder.AddAzureStorage("storage");
+var keyVault = builder.AddAzureKeyVault("kv");
+
+storage.WithNetworkSecurityPerimeter(nsp);
+keyVault.WithNetworkSecurityPerimeter(nsp);
+```
+
+Associations use `Enforced` access mode by default, which blocks non-compliant public traffic. Use `Learning` mode to log violations without blocking, which is useful when onboarding resources to identify required access rules:
+
+```csharp
+// Learning mode — logs violations without blocking traffic
+storage.WithNetworkSecurityPerimeter(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
+```
+
 ### Adding Private Endpoints
 
 Create a private endpoint to securely connect to Azure resources over a private network:
@@ -155,6 +182,7 @@ storage.ConfigureInfrastructure(infra =>
 * https://learn.microsoft.com/azure/virtual-network/
 * https://learn.microsoft.com/azure/nat-gateway/
 * https://learn.microsoft.com/azure/private-link/
+* https://learn.microsoft.com/azure/private-link/network-security-perimeter-concepts
 
 ## Feedback & contributing
 

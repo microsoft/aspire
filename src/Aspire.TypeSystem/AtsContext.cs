@@ -10,7 +10,7 @@ namespace Aspire.TypeSystem;
 /// </summary>
 /// <remarks>
 /// <para>
-/// The ATS type system has three distinct categories of types, each with different
+/// The ATS type system has four distinct categories of exported metadata, each with different
 /// serialization and code generation behavior:
 /// </para>
 /// <list type="bullet">
@@ -35,6 +35,13 @@ namespace Aspire.TypeSystem;
 ///     <description>
 ///     Enum types discovered in capability signatures. These are serialized as strings.
 ///     The TypeScript SDK generates TypeScript enums with string values.
+///     </description>
+///   </item>
+///   <item>
+///     <term>Exported Values (<see cref="ExportedValues"/>)</term>
+///     <description>
+///     Immutable values marked with <c>[AspireValue]</c>. These are snapped during scanning and emitted
+///     as predefined value catalogs in generated guest SDKs.
 ///     </description>
 ///   </item>
 /// </list>
@@ -70,6 +77,11 @@ public sealed class AtsContext
     /// Code generators create enum definitions for these types.
     /// </summary>
     public required IReadOnlyList<AtsEnumTypeInfo> EnumTypes { get; init; }
+
+    /// <summary>
+    /// Gets the exported immutable values discovered during scanning.
+    /// </summary>
+    public IReadOnlyList<AtsExportedValueInfo> ExportedValues { get; init; } = [];
 
     /// <summary>
     /// Gets any diagnostics (warnings/errors) generated during scanning.

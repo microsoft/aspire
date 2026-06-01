@@ -9,7 +9,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)AzurePortalUrls.cs" Link="AzurePortalUrls.cs" />
     <Compile Include="$(SharedDir)BicepFormattingHelpers.cs" LinkBase="Shared\BicepFormattingHelpers.cs" />
+    <Compile Include="$(SharedDir)ContainerRegistryInfrastructure.cs" LinkBase="Shared\ContainerRegistryInfrastructure.cs" />
     <Compile Include="$(SharedDir)ResourceNameComparer.cs" LinkBase="Shared\ResourceNameComparer.cs" />
   </ItemGroup>
 

@@ -231,8 +231,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
             workitemprefix: "FullProject_Part",
             collection: "MyPartition",
             extraTestArgs: "--filter-trait \"Partition=MyPartition\"",
-            testSessionTimeout: "30m",
-            testHangTimeout: "15m",
+            mtpBaseArgs: "--hangdump-timeout 15m --timeout 30m",
             supportedOSes: ["linux"]);
 
         var canonicalMatrix = Path.Combine(_tempDir.Path, "canonical.json");
@@ -254,8 +253,7 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         Assert.Equal("FullProject_Part", expandedEntry.Workitemprefix);
         Assert.Equal("MyPartition", expandedEntry.Collection);
         Assert.Equal("--filter-trait \"Partition=MyPartition\"", expandedEntry.ExtraTestArgs);
-        Assert.Equal("30m", expandedEntry.TestSessionTimeout);
-        Assert.Equal("15m", expandedEntry.TestHangTimeout);
+        Assert.Equal("--hangdump-timeout 15m --timeout 30m", expandedEntry.MtpBaseArgs);
         Assert.Equal("ubuntu-latest", expandedEntry.RunsOn);
     }
 
@@ -599,13 +597,13 @@ public class ExpandTestMatrixGitHubTests : IDisposable
         var e2eEntries = nugetsLinux.Include.Where(e => e.ProjectName == "LinuxE2E").ToArray();
         Assert.Single(e2eEntries);
         Assert.Equal("ubuntu-latest", e2eEntries[0].RunsOn);
-        Assert.True(e2eEntries[0].RequiresNugets);
+        Assert.True(e2eEntries[0].Properties.GetValueOrDefault("requiresNugets"));
 
         // CLI E2E: 1 project × 1 OS = 1, in requires-cli-archive matrix
         var cliE2eEntries = cliArchiveMatrix.Include.Where(e => e.ProjectName == "CliE2E").ToArray();
         Assert.Single(cliE2eEntries);
         Assert.Equal("ubuntu-latest", cliE2eEntries[0].RunsOn);
-        Assert.True(cliE2eEntries[0].RequiresCliArchive);
+        Assert.True(cliE2eEntries[0].Properties.GetValueOrDefault("requiresCliArchive"));
 
         // Total no-nugets: 3 + 6 = 9, Total nugets: 1 (linux only), Total cli-archive: 1
         Assert.Equal(9, allNoNugets.Length);

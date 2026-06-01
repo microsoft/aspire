@@ -3,9 +3,12 @@
 
 using Aspire.TestUtilities;
 using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 
 namespace Aspire.Hosting.Tests.Eventing;
 
@@ -258,11 +261,36 @@ public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOu
         await app.StartAsync();
 
         var allFired = ManualResetEvent.WaitAll(
-            [beforeStartEventFired.WaitHandle, afterEndpointsAllocatedEventFired.WaitHandle, afterResourcesCreatedEventFired.WaitHandle],
+            [beforeStartEventFired.WaitHandle, afterResourcesCreatedEventFired.WaitHandle],
             TimeSpan.FromSeconds(10)
             );
 
         Assert.True(allFired);
+        Assert.False(afterEndpointsAllocatedEventFired.IsSet);
+        await app.StopAsync();
+    }
+
+    [Fact]
+    public async Task ObsoleteAfterEndpointsAllocatedEventSubscriptionLogsWarning()
+    {
+        var testSink = new TestSink();
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Services.AddLogging(logging => logging.AddProvider(new TestLoggerProvider(testSink)));
+#pragma warning disable CS0618 // Type or member is obsolete
+        builder.Eventing.Subscribe<AfterEndpointsAllocatedEvent>((e, ct) => Task.CompletedTask);
+#pragma warning restore CS0618 // Type or member is obsolete
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+#pragma warning disable CS0618 // Type or member is obsolete
+        Assert.Contains(testSink.Writes, w =>
+            w.LogLevel == LogLevel.Warning &&
+            w.Message?.Contains(nameof(AfterEndpointsAllocatedEvent), StringComparison.Ordinal) == true &&
+            w.Message?.Contains(nameof(ResourceEndpointsAllocatedEvent), StringComparison.Ordinal) == true);
+#pragma warning restore CS0618 // Type or member is obsolete
+
         await app.StopAsync();
     }
 
@@ -336,7 +364,167 @@ public class DistributedApplicationBuilderEventingTests(ITestOutputHelper testOu
         await resourceStoppedTcs.Task.DefaultTimeout();
     }
 
+    [Fact]
+    public async Task OnBeforeStartSubscribesToBeforeStartEvent()
+    {
+        var eventFired = new ManualResetEventSlim();
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.OnBeforeStart((e, ct) =>
+        {
+            Assert.NotNull(e.Services);
+            Assert.NotNull(e.Model);
+            eventFired.Set();
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var fired = eventFired.Wait(TimeSpan.FromSeconds(10));
+        Assert.True(fired);
+
+        await app.StopAsync();
+    }
+
+    [Fact]
+    public async Task OnAfterResourcesCreatedSubscribesToAfterResourcesCreatedEvent()
+    {
+        var eventFired = new ManualResetEventSlim();
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Eventing.Subscribe<AfterResourcesCreatedEvent>((e, ct) =>
+        {
+            Assert.NotNull(e.Services);
+            Assert.NotNull(e.Model);
+            eventFired.Set();
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var fired = eventFired.Wait(TimeSpan.FromSeconds(10));
+        Assert.True(fired);
+
+        await app.StopAsync();
+    }
+
+    [Fact]
+    public async Task OnBeforePublishSubscribesToBeforePublishEvent()
+    {
+        var eventFired = false;
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.OnBeforePublish((e, ct) =>
+        {
+            Assert.NotNull(e.Model);
+            eventFired = true;
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+
+        // Manually publish the event to verify subscription
+        var testEvent = new BeforePublishEvent(app.Services, new([]));
+        await eventing.PublishAsync(testEvent, CancellationToken.None);
+
+        Assert.True(eventFired);
+    }
+
+    [Fact]
+    public async Task OnAfterPublishSubscribesToAfterPublishEvent()
+    {
+        var eventFired = false;
+
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.OnAfterPublish((e, ct) =>
+        {
+            Assert.NotNull(e.Model);
+            eventFired = true;
+            return Task.CompletedTask;
+        });
+
+        using var app = builder.Build();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+
+        // Manually publish the event to verify subscription
+        var testEvent = new AfterPublishEvent(app.Services, new([]));
+        await eventing.PublishAsync(testEvent, CancellationToken.None);
+
+        Assert.True(eventFired);
+    }
+
+    [Fact]
+    public void OnBeforeStartReturnsBuilderForChaining()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var result = builder.OnBeforeStart((e, ct) => Task.CompletedTask);
+
+        Assert.Same(builder, result);
+    }
+
+    [Fact]
+    public void OnBeforePublishReturnsBuilderForChaining()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var result = builder.OnBeforePublish((e, ct) => Task.CompletedTask);
+
+        Assert.Same(builder, result);
+    }
+
+    [Fact]
+    public void OnAfterPublishReturnsBuilderForChaining()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var result = builder.OnAfterPublish((e, ct) => Task.CompletedTask);
+
+        Assert.Same(builder, result);
+    }
+
+    [Fact]
+    public void SubscribeToInterfaceThrowsArgumentException()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            builder.Eventing.Subscribe<IDistributedApplicationEvent>((_, _) => Task.CompletedTask));
+
+        Assert.Contains("IDistributedApplicationEvent", ex.Message);
+        Assert.Contains("concrete", ex.Message);
+    }
+
+    [Fact]
+    public void SubscribeToAbstractClassThrowsArgumentException()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            builder.Eventing.Subscribe<AbstractDummyEvent>((_, _) => Task.CompletedTask));
+
+        Assert.Contains("AbstractDummyEvent", ex.Message);
+        Assert.Contains("concrete", ex.Message);
+    }
+
+    [Fact]
+    public void SubscribeResourceScopedToInterfaceThrowsArgumentException()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var resource = builder.AddResource(new TestResource("test"));
+
+        var ex = Assert.Throws<ArgumentException>(() =>
+            builder.Eventing.Subscribe<IDistributedApplicationResourceEvent>(resource.Resource, (_, _) => Task.CompletedTask));
+
+        Assert.Contains("IDistributedApplicationResourceEvent", ex.Message);
+        Assert.Contains("concrete", ex.Message);
+    }
+
     public class DummyEvent : IDistributedApplicationEvent
+    {
+    }
+
+    public abstract class AbstractDummyEvent : IDistributedApplicationEvent
     {
     }
 

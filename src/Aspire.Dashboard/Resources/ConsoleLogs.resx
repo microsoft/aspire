@@ -130,6 +130,9 @@
   <data name="ConsoleLogsLogsNotYetAvailable" xml:space="preserve">
     <value>Logs not yet available</value>
   </data>
+  <data name="ConsoleLogsNoLogsFound" xml:space="preserve">
+    <value>No logs found</value>
+  </data>
   <data name="ConsoleLogsWatchingLogs" xml:space="preserve">
     <value>Watching logs...</value>
   </data>

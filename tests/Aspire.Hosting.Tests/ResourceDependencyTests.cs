@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests;
@@ -55,6 +56,46 @@ public class ResourceDependencyTests
         var dependencies = await frontend.Resource.GetResourceDependenciesAsync(executionContext);
 
         Assert.Contains(api.Resource, dependencies);
+    }
+
+    [Fact]
+    public async Task HostUrlDependencyOnlyIncludesMatchingHostEndpoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var host = builder.AddResource(new TestHostResource("host"))
+            .WithEndpoint("http", endpoint =>
+            {
+                endpoint.Port = 17092;
+                endpoint.TargetPort = 1234;
+            });
+
+        var nonHostEndpoint = new EndpointAnnotation(
+            System.Net.Sockets.ProtocolType.Tcp,
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            uriScheme: "http",
+            name: "internal",
+            port: 17092,
+            targetPort: 17092);
+
+        var nonHost = builder.AddResource(new TestHostResource("nonHost"))
+            .WithAnnotation(nonHostEndpoint);
+
+        var container = builder.AddContainer("container", "alpine")
+            .WithEnvironment("URL", new HostUrl("http://localhost:17092/path"));
+
+        var serviceProvider = new TestServiceProvider()
+            .AddService(new DistributedApplicationModel(builder.Resources));
+        var executionContext = new DistributedApplicationExecutionContext(
+            new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+            {
+                ServiceProvider = serviceProvider
+            });
+
+        var dependencies = await container.Resource.GetResourceDependenciesAsync(executionContext);
+
+        Assert.Contains(host.Resource, dependencies);
+        Assert.DoesNotContain(nonHost.Resource, dependencies);
     }
 
     [Fact]
@@ -759,7 +800,10 @@ public class ResourceDependencyTests
 
         var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
         var dependencies = await ResourceExtensions.GetDependenciesAsync(
-            [a.Resource, d.Resource], executionContext, ResourceDependencyDiscoveryMode.DirectOnly);
+            [a.Resource, d.Resource], executionContext, new ResourceDependencyDiscoveryOptions
+            {
+                DiscoveryMode = ResourceDependencyDiscoveryMode.DirectOnly
+            });
 
         // DirectOnly should only include B and E (direct deps), not C and F
         Assert.Contains(b.Resource, dependencies);

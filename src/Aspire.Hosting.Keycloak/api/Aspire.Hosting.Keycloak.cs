@@ -10,29 +10,38 @@ namespace Aspire.Hosting
 {
     public static partial class KeycloakResourceBuilderExtensions
     {
+        [AspireExport(Description = "Adds a Keycloak container resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> AddKeycloak(this IDistributedApplicationBuilder builder, string name, int? port = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? adminUsername = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? adminPassword = null) { throw null; }
 
+        [AspireExport(Description = "Adds a data bind mount for Keycloak")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, string source) { throw null; }
 
+        [AspireExport(Description = "Adds a data volume for Keycloak")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, string? name = null) { throw null; }
 
+        [AspireExport(Description = "Disables Keycloak features")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithDisabledFeatures(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, params string[] features) { throw null; }
 
+        [AspireExport(Description = "Enables Keycloak features")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithEnabledFeatures(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, params string[] features) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithOtlpExporter(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, OtlpProtocol protocol) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withOtlpExporter dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithOtlpExporter(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder) { throw null; }
 
         [System.Obsolete("Use WithRealmImport(string import) instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithRealmImport(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, string import, bool isReadOnly) { throw null; }
 
+        [AspireExportIgnore(Reason = "Parameter name 'import' is a reserved keyword in TypeScript. Use the internal ATS-compatible overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> WithRealmImport(this ApplicationModel.IResourceBuilder<ApplicationModel.KeycloakResource> builder, string import) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
+    [AspireExport(ExposeProperties = true)]
     public sealed partial class KeycloakResource : ContainerResource, IResourceWithServiceDiscovery, IResourceWithEndpoints, IResource
     {
         public KeycloakResource(string name, ParameterResource? admin, ParameterResource adminPassword) : base(default!, default) { }

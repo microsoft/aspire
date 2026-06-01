@@ -47,7 +47,6 @@ In order to provision a Key Vault resource as part of an Aspire application you 
 
 ```csharp
 var builder = DistributedApplication.CreateBuilder(args);
-builder.AddAzureProvisioner();
 
 var keyVault = builder.AddAzureKeyVault("mykeyvault");
 

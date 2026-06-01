@@ -94,21 +94,32 @@ internal sealed class DashboardServiceData : IDisposable
         _cts.Dispose();
     }
 
-    internal async Task<(ExecuteCommandResultType result, string? errorMessage)> ExecuteCommandAsync(string resourceId, string type, CancellationToken cancellationToken)
+    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value, InteractionInputCollection? invalidArguments)> ExecuteCommandAsync(string resourceId, string type, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         try
         {
-            var result = await _resourceCommandService.ExecuteCommandAsync(resourceId, type, cancellationToken).ConfigureAwait(false);
+            var result = await _resourceCommandService.ExecuteCommandAsync(
+                resourceId,
+                type,
+                new ResourceCommandExecutionOptions
+                {
+                    ArgumentValues = options.ArgumentValues,
+                    ArgumentsProvided = options.ArgumentValues is not null,
+                    NonInteractive = options.NonInteractive
+                },
+                cancellationToken).ConfigureAwait(false);
             if (result.Canceled)
             {
-                return (ExecuteCommandResultType.Canceled, result.ErrorMessage);
+                return (ExecuteCommandResultType.Canceled, result.Message, null, null);
             }
-            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.ErrorMessage);
+            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.Message, result.Data, result.InvalidArguments);
         }
         catch
         {
             // Note: Exception is already logged in the command executor.
-            return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.");
+            return (ExecuteCommandResultType.Failure, "Unhandled exception thrown while executing command.", null, null);
         }
     }
 
@@ -237,6 +248,13 @@ internal sealed class DashboardServiceData : IDisposable
             inputToUpdate.DynamicLoadingState!.QueueLoad(options);
         }
     }
+}
+
+internal sealed class ExecuteResourceCommandOptions
+{
+    public IReadOnlyDictionary<string, string?>? ArgumentValues { get; init; }
+
+    public bool NonInteractive { get; init; }
 }
 
 internal enum ExecuteCommandResultType

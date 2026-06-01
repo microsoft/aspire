@@ -35,6 +35,7 @@ export class RpcClient implements ICliRpcClient {
 
         this._messageConnection.onClose(() => {
             this._connectionClosed = true;
+            this.interactionService.clearProgressNotification();
             extensionLogOutputChannel.info('JSON-RPC connection closed');
         });
     }

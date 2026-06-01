@@ -3,7 +3,10 @@
 
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Configuration;
@@ -11,12 +14,24 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
-public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposable
+public class GuestAppHostProjectTests : IDisposable
 {
-    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
+    private const string AspNetCoreEnvironmentVariableName = "ASPNETCORE_ENVIRONMENT";
+
+    private readonly TemporaryWorkspace _workspace;
+    private readonly IConfiguration _configuration;
+    private readonly ProfilingTelemetry _profilingTelemetry;
+
+    public GuestAppHostProjectTests(ITestOutputHelper outputHelper)
+    {
+        _workspace = TemporaryWorkspace.Create(outputHelper);
+        _configuration = new ConfigurationBuilder().Build();
+        _profilingTelemetry = new ProfilingTelemetry(_configuration);
+    }
 
     public void Dispose()
     {
+        _profilingTelemetry.Dispose();
         _workspace.Dispose();
         GC.SuppressFinalize(this);
     }
@@ -302,7 +317,7 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
     [Fact]
     public void GetServerEnvironmentVariables_ParsesLaunchSettingsWithComments()
     {
-        var project = CreateGuestAppHostProject(_workspace.WorkspaceRoot);
+        var project = CreateGuestAppHostProject();
 
         var propertiesDir = _workspace.CreateDirectory("Properties");
         var launchSettingsPath = Path.Combine(propertiesDir.FullName, "launchSettings.json");
@@ -333,7 +348,564 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
         Assert.False(envVars.ContainsKey("ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"));
     }
 
-    private static GuestAppHostProject CreateGuestAppHostProject(DirectoryInfo workspaceRoot)
+    [Fact]
+    public void GetServerEnvironmentVariables_UsesRequestedDefaultEnvironment()
+    {
+        var envVars = GuestAppHostProject.GetServerEnvironmentVariables(
+            launchProfileEnvironmentVariables: null,
+            defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+    }
+
+    [Fact]
+    public void GetServerEnvironmentVariables_IgnoresLaunchProfileEnvironmentVariablesWhenRequested()
+    {
+        var envVars = GuestAppHostProject.GetServerEnvironmentVariables(
+            launchProfileEnvironmentVariables: new Dictionary<string, string>
+            {
+                ["ASPNETCORE_URLS"] = "https://localhost:16319;http://localhost:16320",
+                ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                ["DOTNET_ENVIRONMENT"] = "Development",
+                ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "https://localhost:17269",
+                ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:18269"
+            },
+            defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
+            includeLaunchProfileEnvironmentVariables: false,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
+        Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
+        Assert.Equal("https://localhost:18269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
+        Assert.False(envVars.ContainsKey("ASPIRE_ENVIRONMENT"));
+    }
+
+    [Fact]
+    public void GetServerEnvironmentVariables_EnvironmentArgumentTakesPrecedenceOverLaunchProfileEnvironmentVariables()
+    {
+        var envVars = GuestAppHostProject.GetServerEnvironmentVariables(
+            launchProfileEnvironmentVariables: new Dictionary<string, string>
+            {
+                ["ASPNETCORE_URLS"] = "https://localhost:16319;http://localhost:16320",
+                ["ASPIRE_ENVIRONMENT"] = "Development",
+                ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                ["DOTNET_ENVIRONMENT"] = "Development",
+            },
+            defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>(),
+            args: ["--environment", "Staging"]);
+
+        Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
+        Assert.Equal("Development", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Development", envVars["ASPIRE_ENVIRONMENT"]);
+    }
+
+    [Fact]
+    public void CreateGuestEnvironmentVariables_MergesLaunchProfileContextAndAdditionalEnvironmentVariables()
+    {
+        var project = CreateGuestAppHostProject();
+
+        var aspireConfigPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        File.WriteAllText(aspireConfigPath, """
+            {
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://localhost:16319;http://localhost:16320",
+                  "environmentVariables": {
+                    "ASPIRE_ENVIRONMENT": "Staging",
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:17269",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:18269"
+                  }
+                }
+              }
+            }
+            """);
+
+        var envVars = project.CreateGuestEnvironmentVariables(
+            _workspace.WorkspaceRoot,
+            new Dictionary<string, string>
+            {
+                ["CUSTOM_CONTEXT_VARIABLE"] = "context",
+                ["ASPNETCORE_URLS"] = "http://context"
+            },
+            new Dictionary<string, string>
+            {
+                ["SSL_CERT_DIR"] = "/tmp/certs"
+            });
+
+        Assert.Equal("context", envVars["CUSTOM_CONTEXT_VARIABLE"]);
+        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
+        Assert.Equal("Staging", envVars["ASPIRE_ENVIRONMENT"]);
+        Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+        Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
+        Assert.Equal("https://localhost:18269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
+        Assert.Equal("/tmp/certs", envVars["SSL_CERT_DIR"]);
+    }
+
+    [Fact]
+    public void CreateGuestEnvironmentVariables_IgnoresLaunchProfileEnvironmentVariablesWhenRequested()
+    {
+        var envVars = GuestAppHostProject.CreateGuestEnvironmentVariables(
+            contextEnvironmentVariables: new Dictionary<string, string>(),
+            launchProfileEnvironmentVariables: new Dictionary<string, string>
+            {
+                ["ASPNETCORE_URLS"] = "https://localhost:16319;http://localhost:16320",
+                ["ASPIRE_ENVIRONMENT"] = "Development",
+                ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                ["DOTNET_ENVIRONMENT"] = "Development",
+                ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "https://localhost:17269",
+                ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:18269"
+            },
+            defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
+            includeLaunchProfileEnvironmentVariables: false,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+        Assert.Equal("https://localhost:16319;http://localhost:16320", envVars["ASPNETCORE_URLS"]);
+        Assert.Equal("https://localhost:17269", envVars["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]);
+        Assert.Equal("https://localhost:18269", envVars["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]);
+        Assert.False(envVars.ContainsKey("ASPIRE_ENVIRONMENT"));
+    }
+
+    [Fact]
+    public void CreateGuestEnvironmentVariables_EnvironmentArgumentTakesPrecedenceOverLaunchProfileEnvironmentVariables()
+    {
+        var envVars = GuestAppHostProject.CreateGuestEnvironmentVariables(
+            contextEnvironmentVariables: new Dictionary<string, string>(),
+            launchProfileEnvironmentVariables: new Dictionary<string, string>
+            {
+                ["ASPIRE_ENVIRONMENT"] = "Development",
+                ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                ["DOTNET_ENVIRONMENT"] = "Development",
+            },
+            defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>(),
+            args: ["--environment", "Staging"]);
+
+        Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
+        Assert.Equal("Development", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Development", envVars["ASPIRE_ENVIRONMENT"]);
+    }
+
+    [Fact]
+    public void CreateGuestEnvironmentVariables_InheritedAspireEnvironmentOverridesDefaultEnvironment()
+    {
+        var envVars = GuestAppHostProject.CreateGuestEnvironmentVariables(
+            contextEnvironmentVariables: new Dictionary<string, string>(),
+            launchProfileEnvironmentVariables: null,
+            defaultEnvironment: AppHostEnvironmentDefaults.ProductionEnvironmentName,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>
+            {
+                [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Staging"
+            });
+
+        Assert.Equal("Staging", envVars["DOTNET_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+    }
+
+    [Fact]
+    public void CreateGuestEnvironmentVariables_DotnetEnvironmentTakesPrecedenceOverAspireEnvironment()
+    {
+        var envVars = GuestAppHostProject.CreateGuestEnvironmentVariables(
+            contextEnvironmentVariables: new Dictionary<string, string>
+            {
+                [AppHostEnvironmentDefaults.DotNetEnvironmentVariableName] = "Production",
+                [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Staging"
+            },
+            launchProfileEnvironmentVariables: null,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("Production", envVars["DOTNET_ENVIRONMENT"]);
+        Assert.False(envVars.ContainsKey("ASPNETCORE_ENVIRONMENT"));
+        Assert.Equal("Staging", envVars["ASPIRE_ENVIRONMENT"]);
+    }
+
+    [Fact]
+    public void CreateGuestEnvironmentVariables_AspireEnvironmentTakesPrecedenceOverAspNetCoreEnvironment()
+    {
+        var envVars = GuestAppHostProject.CreateGuestEnvironmentVariables(
+            contextEnvironmentVariables: new Dictionary<string, string>
+            {
+                [AppHostEnvironmentDefaults.AspireEnvironmentVariableName] = "Testing",
+                [AspNetCoreEnvironmentVariableName] = "Staging"
+            },
+            launchProfileEnvironmentVariables: null,
+            inheritedEnvironmentVariables: new Dictionary<string, string?>());
+
+        Assert.Equal("Testing", envVars["DOTNET_ENVIRONMENT"]);
+        Assert.Equal("Staging", envVars["ASPNETCORE_ENVIRONMENT"]);
+        Assert.Equal("Testing", envVars["ASPIRE_ENVIRONMENT"]);
+    }
+
+    [Fact]
+    public void ConvertGeneratedFilesForLegacyTypeScriptAppHost_UsesTsFilesAndJsSpecifiers()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["aspire.mts"] = "import { refExpr } from './base.mjs';\n// aspire.mts",
+            ["base.mts"] = "export type { MarshalledHandle } from './transport.mjs';\n// base.mts",
+            ["transport.mts"] = "// transport.mts"
+        };
+
+        var convertedFiles = GuestAppHostProject.ConvertGeneratedFilesForLegacyTypeScriptAppHost(files);
+
+        Assert.Equal(["aspire.ts", "base.ts", "transport.ts"], convertedFiles.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("import { refExpr } from './base.js';\n// aspire.ts", convertedFiles["aspire.ts"]);
+        Assert.Equal("export type { MarshalledHandle } from './transport.js';\n// base.ts", convertedFiles["base.ts"]);
+        Assert.Equal("// transport.ts", convertedFiles["transport.ts"]);
+    }
+
+    /// <summary>
+    /// Regression test for issue #17077: <c>aspire update</c> must not leave
+    /// <c>aspire.config.json</c> advanced to newer package versions when guest SDK
+    /// regeneration fails.
+    /// </summary>
+    /// <remarks>
+    /// The test drives <see cref="GuestAppHostProject.UpdatePackagesAsync"/> through the
+    /// code path that detects updates, then expects the call to throw from
+    /// <c>BuildAndGenerateSdkAsync</c> because <see cref="TestAppHostServerProjectFactory.CreateAsync"/>
+    /// throws. The on-disk config should still contain the original versions.
+    /// </remarks>
+    [Fact]
+    public async Task UpdatePackagesAsync_WhenRegenerationFails_DoesNotMutateConfig()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var fakeCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "test" }
+                ])
+        };
+
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var project = CreateGuestAppHostProject(
+            interactionService: interactionService,
+            identityChannel: "pr-99999");
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = implicitChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => project.UpdatePackagesAsync(context, CancellationToken.None));
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal("1.0.0", reloaded.SdkVersion);
+        Assert.NotNull(reloaded.Packages);
+        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"]);
+        Assert.Null(reloaded.Channel);
+    }
+
+    [Fact]
+    public async Task AddPackageAsync_WhenRegenerationFails_DoesNotMutateConfig()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (appPath, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(appPath))
+        };
+
+        var project = CreateGuestAppHostProject(appHostServerProjectFactory: factory);
+
+        var result = await project.AddPackageAsync(
+            new AddPackageContext
+            {
+                AppHostFile = new FileInfo(appHostPath),
+                PackageId = "Aspire.Hosting.Redis",
+                PackageVersion = "2.0.0",
+            },
+            CancellationToken.None);
+
+        Assert.False(result);
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal("1.0.0", reloaded.SdkVersion);
+        Assert.NotNull(reloaded.Packages);
+        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"]);
+        Assert.False(reloaded.Packages.ContainsKey("Aspire.Hosting.Redis"));
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_ExplicitStableChannel_WhenRegenerationFails_DoesNotMutateConfig()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "channel": "staging",
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var stableCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "stable" }
+                ])
+        };
+
+        var stableChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Stable,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire.*", "stable")],
+            stableCache,
+            features: new TestFeatures());
+
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var project = CreateGuestAppHostProject(interactionService: interactionService);
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = stableChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => project.UpdatePackagesAsync(context, CancellationToken.None));
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal(PackageChannelNames.Staging, reloaded.Channel);
+        Assert.Equal("1.0.0", reloaded.SdkVersion);
+        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"]);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_ExplicitStagingChannel_WhenRegenerationFails_DoesNotMutateConfig()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var stagingCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "staging" }
+                ])
+        };
+
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", "staging")],
+            stagingCache,
+            features: new TestFeatures());
+
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var project = CreateGuestAppHostProject(interactionService: interactionService);
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = stagingChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => project.UpdatePackagesAsync(context, CancellationToken.None));
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Null(reloaded.Channel);
+        Assert.Equal("1.0.0", reloaded.SdkVersion);
+        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"]);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_ExplicitStableChannel_DoesNotPersistStableChannelWhenProjectIsUpToDate()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "2.0.0" },
+              "channel": "staging",
+              "packages": { "Aspire.Hosting": "2.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var stableCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "stable" }
+                ])
+        };
+
+        var stableChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Stable,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire.*", "stable")],
+            stableCache,
+            features: new TestFeatures());
+
+        var project = CreateGuestAppHostProject();
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = stableChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
+
+        Assert.False(result.UpdatesApplied);
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal(PackageChannelNames.Staging, reloaded.Channel);
+        Assert.Equal("2.0.0", reloaded.SdkVersion);
+        Assert.Equal("2.0.0", reloaded.Packages?["Aspire.Hosting"]);
+    }
+
+    /// <summary>
+    /// Regression test for the v3 channel refactor: <c>aspire run</c> must be a pure read
+    /// for <c>aspire.config.json#channel</c>. A no-op rewrite (same value) or a silent
+    /// identity-channel pin (when unset) on every invocation is not useful work and
+    /// hides intent — the seed write at <c>aspire init</c> / scaffolding time and the
+    /// explicit channel resolution in <c>aspire update</c> are the only legitimate
+    /// channel-write paths.
+    /// </summary>
+    /// <remarks>
+    /// The test seeds <c>aspire.config.json</c> with a known channel value, drives
+    /// <see cref="GuestAppHostProject.RunAsync"/> past the channel-write site (via a
+    /// fake <see cref="IAppHostServerProject"/> that returns a failed prepare result so
+    /// <c>RunAsync</c> takes the early <c>FailedToBuildArtifacts</c> return), and then
+    /// reloads <c>aspire.config.json</c> from disk to assert the on-disk channel is
+    /// unchanged. The identity channel is set to a distinctive value
+    /// (<c>pr-99999</c>) so any accidental identity pin would be detectable.
+    /// </remarks>
+    [Theory]
+    [InlineData("stable")]
+    [InlineData(null)]
+    public async Task RunAsync_DoesNotMutateConfigChannel(string? seededChannel)
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var seededJson = seededChannel is null
+            ? """
+              {
+                "sdk": { "version": "1.0.0" },
+                "packages": { "Aspire.Hosting": "1.0.0" }
+              }
+              """
+            : $$"""
+              {
+                "sdk": { "version": "1.0.0" },
+                "channel": "{{seededChannel}}",
+                "packages": { "Aspire.Hosting": "1.0.0" }
+              }
+              """;
+        await File.WriteAllTextAsync(configPath, seededJson);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        // Drive RunAsync past the (now-removed) channel-write site by returning a fake
+        // apphost server whose PrepareAsync reports failure. RunAsync takes the early
+        // FailedToBuildArtifacts return without touching the network or starting a server.
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(path))
+        };
+
+        var project = CreateGuestAppHostProject(
+            identityChannel: "pr-99999",
+            appHostServerProjectFactory: factory);
+
+        var context = new AppHostProjectContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            WorkingDirectory = _workspace.WorkspaceRoot,
+        };
+
+        var exitCode = await project.RunAsync(context, CancellationToken.None);
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        // Pre-fix, RunAsync would have written `seededChannel ?? "pr-99999"` here on every
+        // invocation. Post-fix, RunAsync is a pure read for the channel.
+        Assert.Equal(seededChannel, reloaded.Channel);
+    }
+
+    private GuestAppHostProject CreateGuestAppHostProject()
+        => CreateGuestAppHostProject(interactionService: null, identityChannel: "local");
+
+    private GuestAppHostProject CreateGuestAppHostProject(
+        TestInteractionService? interactionService = null,
+        string identityChannel = "local",
+        TestAppHostServerProjectFactory? appHostServerProjectFactory = null)
     {
         var language = new LanguageInfo(
             LanguageId: "typescript/nodejs",
@@ -342,30 +914,28 @@ public class GuestAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposa
             DetectionPatterns: ["apphost.ts"],
             CodeGenerator: "TypeScript");
 
-        // Point the config service at a non-existent file so GetConfigDirectory
-        // falls back to the directory we pass to GetServerEnvironmentVariables.
-        var configService = new TestConfigurationService
-        {
-            SettingsFilePath = Path.Combine(workspaceRoot.FullName, "nonexistent", "settings.json")
-        };
+        var logFilePath = Path.Combine(_workspace.WorkspaceRoot.FullName, $"test-guest-{Guid.NewGuid()}.log");
 
-        var configuration = new ConfigurationBuilder().Build();
-
-        var logFilePath = Path.Combine(Path.GetTempPath(), $"test-guest-{Guid.NewGuid()}.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(AppContext.BaseDirectory),
+            identityChannel: identityChannel,
+            logFilePath: logFilePath);
 
         return new GuestAppHostProject(
             language: language,
-            interactionService: new TestInteractionService(),
+            interactionService: interactionService ?? new TestInteractionService(),
             backchannel: new TestAppHostBackchannel(),
-            appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
+            appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
             packagingService: new TestPackagingService(),
-            configuration: configuration,
-            configurationService: configService,
-            features: new Features(configuration, NullLogger<Features>.Instance),
+            configuration: _configuration,
+            features: new Features(_configuration, NullLogger<Features>.Instance),
             languageDiscovery: new TestLanguageDiscovery(),
+            executionContext: executionContext,
             logger: NullLogger<GuestAppHostProject>.Instance,
-            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()));
+            fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
+            profilingTelemetry: _profilingTelemetry);
     }
+
 }

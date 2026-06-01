@@ -92,12 +92,10 @@ internal sealed class DockerComposePublishingContext(
                         Resource = serviceResource.TargetResource,
                         CancellationToken = cancellationToken
                     };
-                    await dockerfileBuildAnnotation.MaterializeDockerfileAsync(dockerfileContext, cancellationToken).ConfigureAwait(false);
 
                     // Copy to a resource-specific path in the output folder for publishing
                     var resourceDockerfilePath = Path.Combine(OutputPath, $"{serviceResource.TargetResource.Name}.Dockerfile");
-                    Directory.CreateDirectory(OutputPath);
-                    File.Copy(dockerfileBuildAnnotation.DockerfilePath, resourceDockerfilePath, overwrite: true);
+                    await dockerfileBuildAnnotation.EmitDockerfileArtifactsAsync(dockerfileContext, resourceDockerfilePath).ConfigureAwait(false);
                 }
 
                 var composeService = await serviceResource.BuildComposeServiceAsync().ConfigureAwait(false);

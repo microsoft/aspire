@@ -74,12 +74,8 @@ public sealed class AcaCustomRegistryDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
-            // Step 2: Set up CLI environment (in CI)
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI from local build...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            // Step 2: Set up CLI environment
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create starter project using aspire new with interactive prompts
             output.WriteLine("Step 3: Creating starter project...");
@@ -96,26 +92,14 @@ public sealed class AcaCustomRegistryDeploymentTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 6: Add Aspire.Hosting.Azure.ContainerRegistry package
             output.WriteLine("Step 6: Adding Azure Container Registry hosting package...");
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.ContainerRegistry");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 7: Modify AppHost.cs to add custom ACR and ACA environment
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
@@ -153,24 +137,9 @@ builder.Build().Run();
 
             // Step 10: Deploy to Azure Container Apps using aspire deploy
             output.WriteLine("Step 10: Starting Azure Container Apps deployment...");
-            var pipelineSucceeded = false;
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
-            await auto.WaitUntilAsync(s =>
-            {
-                if (s.ContainsText("PIPELINE SUCCEEDED"))
-                {
-                    pipelineSucceeded = true;
-                    return true;
-                }
-                return s.ContainsText("PIPELINE FAILED");
-            }, timeout: TimeSpan.FromMinutes(35), description: "pipeline succeeded or failed");
-
-            if (!pipelineSucceeded)
-            {
-                throw new InvalidOperationException("Deployment pipeline failed. Check the terminal output for details.");
-            }
-
+            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(35));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 11: Extract deployment URLs and verify endpoints with retry

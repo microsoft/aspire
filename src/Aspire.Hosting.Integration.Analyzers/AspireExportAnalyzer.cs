@@ -13,15 +13,82 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Aspire.Hosting.Analyzers;
 
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public partial class AspireExportAnalyzer : DiagnosticAnalyzer
+internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
 {
     private const string RunSyncOnBackgroundThreadPropertyName = "RunSyncOnBackgroundThread";
+    private const string ExposeMethodsPropertyName = "ExposeMethods";
+    private const string ExposePropertiesPropertyName = "ExposeProperties";
+    private const string MethodNamePropertyName = "MethodName";
+    private const string DescriptionPropertyName = "Description";
 
     // Matches: valid method name (camelCase identifier, may contain dots for namespacing)
     // Examples: addRedis, addContainer, Dictionary.set
     private static readonly Regex s_exportIdPattern = new(
         @"^[a-zA-Z][a-zA-Z0-9.]*$",
         RegexOptions.Compiled);
+
+    private readonly struct CapabilityExport : IEquatable<CapabilityExport>
+    {
+        public CapabilityExport(string source, Location location)
+        {
+            Source = source;
+            Location = location;
+        }
+
+        public string Source { get; }
+
+        public Location Location { get; }
+
+        public bool Equals(CapabilityExport other)
+        {
+            return Source == other.Source && Location.Equals(other.Location);
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is CapabilityExport other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return StringComparer.Ordinal.GetHashCode(Source) ^ Location.GetHashCode();
+        }
+    }
+
+    private readonly struct GeneratedMethodNameExport : IEquatable<GeneratedMethodNameExport>
+    {
+        public GeneratedMethodNameExport(string source, Location location, string effectiveExportId)
+        {
+            Source = source;
+            Location = location;
+            EffectiveExportId = effectiveExportId;
+        }
+
+        public string Source { get; }
+
+        public Location Location { get; }
+
+        public string EffectiveExportId { get; }
+
+        public bool Equals(GeneratedMethodNameExport other)
+        {
+            return Source == other.Source &&
+                Location.Equals(other.Location) &&
+                EffectiveExportId == other.EffectiveExportId;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is GeneratedMethodNameExport other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return StringComparer.Ordinal.GetHashCode(Source) ^
+                Location.GetHashCode() ^
+                StringComparer.Ordinal.GetHashCode(EffectiveExportId);
+        }
+    }
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => Diagnostics.SupportedDiagnostics;
 
@@ -47,6 +114,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             // Type not found in compilation, nothing to analyze
             return;
         }
+
+        var currentAssemblyExportedTypes = GetAssemblyExportedTypes(context.Compilation.Assembly, aspireExportAttribute);
 
         // Try to get AspireExportIgnoreAttribute for ASPIREEXPORT008
         INamedTypeSymbol? aspireExportIgnoreAttribute = null;
@@ -74,16 +143,36 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // Key: (exportId, targetTypeFullName), Value: list of (method, location)
         var exportsByKey = new ConcurrentDictionary<(string ExportId, string TargetType), ConcurrentBag<(IMethodSymbol Method, Location Location)>>();
 
+        // Collection for ASPIREEXPORT013: track generated capability IDs across the assembly.
+        var capabilityIds = new ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>>();
+
+        // Collection for ASPIREEXPORT014: track generated member names per generated target type.
+        var generatedMethodNames = new ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>>();
+        AnalyzeAssemblyExportedTypes(context.Compilation, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
+
         context.RegisterSymbolAction(
-            c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, exportsByKey),
+            c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, currentAssemblyExportedTypes, exportsByKey, capabilityIds, generatedMethodNames),
             SymbolKind.Method);
+
+        context.RegisterSymbolAction(
+            c => AnalyzeNamedType(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames),
+            SymbolKind.NamedType);
+
+        context.RegisterSymbolAction(
+            c => AnalyzeProperty(c, aspireExportAttribute),
+            SymbolKind.Property);
+
+        context.RegisterCompilationEndAction(c => ReportAssemblyExportDescriptions(c, aspireExportAttribute));
 
         // At the end of compilation, report duplicate export IDs
         context.RegisterCompilationEndAction(c => ReportDuplicateExports(c, exportsByKey));
+        context.RegisterCompilationEndAction(c => ReportDuplicateCapabilityIds(c, capabilityIds));
+        context.RegisterCompilationEndAction(c => ReportDuplicateGeneratedMethodNames(c, generatedMethodNames));
 
         // Warn when exported builder methods invoke synchronous callback delegates inline. Deferred callbacks
         // that are stored for later execution are fine, and exports that opt into background-thread dispatch
         // are handled safely by the runtime.
+        var inlineDelegateInvocationCache = new ConcurrentDictionary<ISymbol, ImmutableHashSet<int>>(SymbolEqualityComparer.Default);
         context.RegisterOperationBlockStartAction(c =>
         {
             if (c.OwningSymbol is not IMethodSymbol method ||
@@ -109,7 +198,13 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
             var reportedParameters = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
             c.RegisterOperationAction(
-                oc => AnalyzeInlineSynchronousDelegateInvocation(oc, method, synchronousDelegateParameters, reportedParameters),
+                oc => AnalyzeInlineSynchronousDelegateInvocation(
+                    oc,
+                    context.Compilation.Assembly,
+                    method,
+                    synchronousDelegateParameters,
+                    reportedParameters,
+                    inlineDelegateInvocationCache),
                 OperationKind.Invocation);
         });
     }
@@ -120,7 +215,10 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol aspireExportAttribute,
         INamedTypeSymbol? aspireExportIgnoreAttribute,
         INamedTypeSymbol? aspireUnionAttribute,
-        ConcurrentDictionary<(string ExportId, string TargetType), ConcurrentBag<(IMethodSymbol Method, Location Location)>> exportsByKey)
+        HashSet<ITypeSymbol> currentAssemblyExportedTypes,
+        ConcurrentDictionary<(string ExportId, string TargetType), ConcurrentBag<(IMethodSymbol Method, Location Location)>> exportsByKey,
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
     {
         var method = (IMethodSymbol)context.Symbol;
 
@@ -145,10 +243,23 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             }
         }
 
-        // ASPIREEXPORT008: Check for missing export attributes on builder extension methods
-        if (exportAttribute is null && !hasExportIgnore && !isObsolete)
+        var containingTypeHasExportIgnore = false;
+        if (!hasExportIgnore && aspireExportIgnoreAttribute is not null)
         {
-            AnalyzeMissingExportAttribute(context, method, wellKnownTypes, aspireExportAttribute);
+            foreach (var attr in method.ContainingType.GetAttributes())
+            {
+                if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, aspireExportIgnoreAttribute))
+                {
+                    containingTypeHasExportIgnore = true;
+                    break;
+                }
+            }
+        }
+
+        // ASPIREEXPORT008: Check for missing export attributes on builder extension methods
+        if (exportAttribute is null && !hasExportIgnore && !containingTypeHasExportIgnore && !isObsolete)
+        {
+            AnalyzeMissingExportAttribute(context, method, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
         }
 
         if (exportAttribute is null)
@@ -158,9 +269,12 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         var attributeSyntax = exportAttribute.ApplicationSyntaxReference?.GetSyntax(context.CancellationToken);
         var location = attributeSyntax?.GetLocation() ?? method.Locations.FirstOrDefault() ?? Location.None;
+        AnalyzeExportDescription(context, exportAttribute, location);
+
+        var containingTypeExportAttribute = GetContainingTypeAspireExportAttribute(method.ContainingType, aspireExportAttribute);
 
         // Rule 1: Method must be static
-        if (!method.IsStatic)
+        if (!method.IsStatic && containingTypeExportAttribute is null)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.s_exportMethodMustBeStatic,
@@ -170,7 +284,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         // Rule 2: Validate export ID format
         var exportId = GetExportId(exportAttribute);
-        if (exportId is not null && !s_exportIdPattern.IsMatch(exportId))
+        var isExportIdFormatValid = exportId is not null && s_exportIdPattern.IsMatch(exportId);
+        if (exportId is not null && !isExportIdFormatValid)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.s_invalidExportIdFormat,
@@ -178,8 +293,51 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                 exportId));
         }
 
+        // Compute the effective export ID: either from the explicit attribute or auto-derived from method name (camelCase)
+        // Normalize empty/invalid exportId to null so the fallback applies
+        var derivedExportId = GetDerivedExportId(method, containingTypeExportAttribute);
+        var normalizedExportId = isExportIdFormatValid ? exportId : null;
+        var effectiveExportId = normalizedExportId ?? derivedExportId;
+
+        // Track the runtime capability ID for static exports. Instance exports are tracked from
+        // their containing type so ExposeMethods/ExposeProperties semantics match the scanner.
+        if (method.IsStatic && effectiveExportId is not null)
+        {
+            AddCapabilityExport(
+                capabilityIds,
+                $"{context.Compilation.Assembly.Identity.Name}/{effectiveExportId}",
+                GetMethodDisplayString(method),
+                location);
+
+            var generatedMethodName = GetNamedStringArgument(exportAttribute, MethodNamePropertyName) ?? effectiveExportId;
+            var generatedTargetType = GetGeneratedTargetTypeName(method);
+
+            AddGeneratedMethodNameExport(
+                generatedMethodNames,
+                generatedMethodName,
+                generatedTargetType,
+                effectiveExportId,
+                GetMethodDisplayString(method),
+                location);
+        }
+
+        // Rule 2b (ASPIREEXPORT011): Warn when explicit id matches the convention-derived name.
+        // Suppressed when Rule 7 (ASPIREEXPORT009) also fires — the two give contradictory advice
+        // (ASPIREEXPORT011 says "remove the id"; ASPIREEXPORT009 says "make the id more specific"),
+        // so only the actionable ASPIREEXPORT009 should appear.
+        if (isExportIdFormatValid &&
+            string.Equals(exportId, derivedExportId, StringComparison.Ordinal) &&
+            !HasConcreteResourceBuilderTargetParameter(method, wellKnownTypes))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.s_redundantExportId,
+                location,
+                exportId,
+                method.Name));
+        }
+
         // Rule 3: Validate return type is ATS-compatible
-        if (!IsAtsCompatibleType(method.ReturnType, wellKnownTypes, aspireExportAttribute))
+        if (!IsAtsCompatibleType(method.ReturnType, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes))
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.s_returnTypeMustBeAtsCompatible,
@@ -191,7 +349,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // Rule 4: Validate parameter types are ATS-compatible
         foreach (var parameter in method.Parameters)
         {
-            if (!IsAtsCompatibleParameter(parameter, wellKnownTypes, aspireExportAttribute))
+            if (!IsAtsCompatibleParameter(parameter, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     Diagnostics.s_parameterTypeMustBeAtsCompatible,
@@ -204,24 +362,280 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             // Rule 5 (ASPIREEXPORT005/006): Validate [AspireUnion] on parameters
             if (aspireUnionAttribute is not null)
             {
-                AnalyzeUnionAttribute(context, parameter.GetAttributes(), aspireUnionAttribute, wellKnownTypes, aspireExportAttribute);
+                AnalyzeUnionAttribute(context, parameter.GetAttributes(), aspireUnionAttribute, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
             }
         }
 
         // Rule 6 (ASPIREEXPORT007): Track export for duplicate detection
-        if (exportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
+        if (effectiveExportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
         {
             var targetType = method.Parameters[0].Type;
             var targetTypeName = targetType.ToDisplayString();
-            var key = (exportId, targetTypeName);
+            var key = (effectiveExportId, targetTypeName);
             var bag = exportsByKey.GetOrAdd(key, _ => new ConcurrentBag<(IMethodSymbol, Location)>());
             bag.Add((method, location));
         }
 
         // Rule 7 (ASPIREEXPORT009): Warn when export name may collide across integrations
-        if (exportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
+        if (effectiveExportId is not null && method.IsExtensionMethod && method.Parameters.Length > 0)
         {
-            AnalyzeExportNameUniqueness(context, method, exportId, wellKnownTypes, location);
+            AnalyzeExportNameUniqueness(context, method, effectiveExportId, wellKnownTypes, location);
+        }
+
+        // Rule 8 (ASPIREEXPORT012): Check that callback parameter types (Action<T>/Func<T>) have [AspireExport]
+        AnalyzeCallbackContextTypes(context, method, aspireExportAttribute, location);
+    }
+
+    private static void AnalyzeNamedType(
+        SymbolAnalysisContext context,
+        WellKnownTypes wellKnownTypes,
+        INamedTypeSymbol aspireExportAttribute,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
+    {
+        var type = (INamedTypeSymbol)context.Symbol;
+        AnalyzeDtoType(type, wellKnownTypes, aspireExportIgnoreAttribute, context);
+
+        var typeExportAttribute = GetContainingTypeAspireExportAttribute(type, aspireExportAttribute);
+        if (typeExportAttribute is not null)
+        {
+            var location = GetAttributeLocation(typeExportAttribute, context.CancellationToken) ?? type.Locations.FirstOrDefault() ?? Location.None;
+            AnalyzeExportDescription(context, typeExportAttribute, location);
+        }
+
+        AnalyzeContextType(type, typeExportAttribute, context.Compilation.Assembly.Identity.Name, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
+    }
+
+    private static void AnalyzeProperty(SymbolAnalysisContext context, INamedTypeSymbol aspireExportAttribute)
+    {
+        var property = (IPropertySymbol)context.Symbol;
+        var propertyExportAttribute = GetAspireExportAttribute(property, aspireExportAttribute);
+        if (propertyExportAttribute is null)
+        {
+            return;
+        }
+
+        var location = GetAttributeLocation(propertyExportAttribute, context.CancellationToken) ?? property.Locations.FirstOrDefault() ?? Location.None;
+        AnalyzeExportDescription(context, propertyExportAttribute, location);
+    }
+
+    private static void AnalyzeDtoType(
+        INamedTypeSymbol type,
+        WellKnownTypes wellKnownTypes,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
+        SymbolAnalysisContext context)
+    {
+        if (!HasAspireDtoAttribute(type))
+        {
+            return;
+        }
+
+        foreach (var property in GetInstanceProperties(type))
+        {
+            if (IsMutableCollectionType(property.Type, wellKnownTypes) &&
+                property.SetMethod is null &&
+                !property.IsStatic &&
+                property.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
+                !HasAspireExportIgnoreAttribute(property, aspireExportIgnoreAttribute))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.s_dtoMutableCollectionPropertyMustBeInitSettable,
+                    property.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault() ?? Location.None,
+                    $"{type.Name}.{property.Name}"));
+            }
+        }
+    }
+
+    private static void ReportAssemblyExportDescriptions(CompilationAnalysisContext context, INamedTypeSymbol aspireExportAttribute)
+    {
+        foreach (var attribute in context.Compilation.Assembly.GetAttributes())
+        {
+            if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, aspireExportAttribute))
+            {
+                continue;
+            }
+
+            var location = GetAttributeLocation(attribute, context.CancellationToken) ?? Location.None;
+            if (HasNamedArgument(attribute, DescriptionPropertyName))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(Diagnostics.s_descriptionShouldUseXmlDocs, location));
+            }
+        }
+    }
+
+    private static void AnalyzeAssemblyExportedTypes(
+        Compilation compilation,
+        INamedTypeSymbol aspireExportAttribute,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        CancellationToken cancellationToken)
+    {
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
+            if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, aspireExportAttribute) ||
+                !TryGetAssemblyExportedType(attribute, out var exportedType) ||
+                exportedType is not INamedTypeSymbol namedType ||
+                (!IsBooleanNamedArgumentEnabled(attribute, ExposePropertiesPropertyName) &&
+                 !IsBooleanNamedArgumentEnabled(attribute, ExposeMethodsPropertyName)))
+            {
+                continue;
+            }
+
+            AnalyzeContextType(namedType, attribute, compilation.Assembly.Identity.Name, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, cancellationToken);
+        }
+    }
+
+    private static void AnalyzeContextType(
+        INamedTypeSymbol type,
+        AttributeData? typeExportAttribute,
+        string assemblyName,
+        INamedTypeSymbol aspireExportAttribute,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        CancellationToken cancellationToken)
+    {
+        if (typeExportAttribute is null)
+        {
+            return;
+        }
+
+        if (HasAspireExportIgnoreAttribute(type, aspireExportIgnoreAttribute))
+        {
+            return;
+        }
+
+        var exposeProperties = IsBooleanNamedArgumentEnabled(typeExportAttribute, ExposePropertiesPropertyName);
+        var exposeMethods = IsBooleanNamedArgumentEnabled(typeExportAttribute, ExposeMethodsPropertyName);
+
+        if (!exposeProperties && !exposeMethods)
+        {
+            var hasExportedMember = type.GetMembers()
+                .Any(member => member is IMethodSymbol or IPropertySymbol &&
+                    GetAspireExportAttribute(member, aspireExportAttribute) is not null);
+
+            if (!hasExportedMember)
+            {
+                return;
+            }
+        }
+
+        var package = GetCapabilityPackage(type, assemblyName);
+        var typeName = GetRuntimeTypeName(type);
+        var typeId = $"{package}/{typeName}";
+        var generatedTargetType = GetGeneratedTargetTypeName(type);
+
+        foreach (var property in GetInstanceProperties(type))
+        {
+            if (property.IsStatic ||
+                HasAspireExportIgnoreAttribute(property, aspireExportIgnoreAttribute))
+            {
+                continue;
+            }
+
+            var memberExportAttribute = GetAspireExportAttribute(property, aspireExportAttribute);
+            var isPublicGetter = property.GetMethod?.DeclaredAccessibility == Accessibility.Public;
+            if (!ShouldExportMember(isPublicGetter, exposeProperties, memberExportAttribute))
+            {
+                continue;
+            }
+
+            var location = GetAttributeLocation(memberExportAttribute, cancellationToken) ??
+                property.Locations.FirstOrDefault() ??
+                Location.None;
+            var customMethodName = memberExportAttribute is null ? null : GetExportId(memberExportAttribute);
+            var methodNameOverride = GetNamedStringArgument(memberExportAttribute, MethodNamePropertyName);
+            var getterMethodName = methodNameOverride ?? ToCamelCase(property.Name);
+
+            if (property.GetMethod is not null)
+            {
+                var getMethodName = customMethodName ?? $"{typeName}.{getterMethodName}";
+                AddCapabilityExport(
+                    capabilityIds,
+                    $"{package}/{getMethodName}",
+                    property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    location);
+
+                AddGeneratedMethodNameExport(
+                    generatedMethodNames,
+                    getterMethodName,
+                    generatedTargetType,
+                    getMethodName,
+                    property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    location);
+            }
+
+            if (property.SetMethod is { IsInitOnly: false })
+            {
+                var setterMethodNameSuffix = methodNameOverride is { Length: > 0 }
+                    ? char.ToUpperInvariant(methodNameOverride[0]) + methodNameOverride.Substring(1)
+                    : property.Name;
+                var setterMethodName = $"set{setterMethodNameSuffix}";
+                AddCapabilityExport(
+                    capabilityIds,
+                    $"{typeId}.{setterMethodName}",
+                    property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    location);
+
+                AddGeneratedMethodNameExport(
+                    generatedMethodNames,
+                    setterMethodName,
+                    generatedTargetType,
+                    $"{typeId}.{setterMethodName}",
+                    property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    location);
+            }
+        }
+
+        foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
+        {
+            if (method.IsStatic ||
+                method.MethodKind != MethodKind.Ordinary ||
+                IsSpecialRuntimeMethod(method) ||
+                method.IsGenericMethod ||
+                HasAspireExportIgnoreAttribute(method, aspireExportIgnoreAttribute))
+            {
+                continue;
+            }
+
+            var memberExportAttribute = GetAspireExportAttribute(method, aspireExportAttribute);
+            if (!ShouldExportMember(method.DeclaredAccessibility == Accessibility.Public, exposeMethods, memberExportAttribute))
+            {
+                continue;
+            }
+
+            var customMethodName = memberExportAttribute is null ? null : GetExportId(memberExportAttribute);
+            var methodCapabilityName = customMethodName ?? (exposeMethods
+                ? $"{typeName}.{ToCamelCase(method.Name)}"
+                : ToCamelCase(method.Name));
+            var location = GetAttributeLocation(memberExportAttribute, cancellationToken) ??
+                method.Locations.FirstOrDefault() ??
+                Location.None;
+
+            AddCapabilityExport(
+                capabilityIds,
+                $"{package}/{methodCapabilityName}",
+                GetMethodDisplayString(method),
+                location);
+        }
+    }
+
+    private static IEnumerable<IPropertySymbol> GetInstanceProperties(INamedTypeSymbol type)
+    {
+        var seenPropertyNames = new HashSet<string>(StringComparer.Ordinal);
+        for (INamedTypeSymbol? current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (property.IsStatic || !seenPropertyNames.Add(property.Name))
+                {
+                    continue;
+                }
+
+                yield return property;
+            }
         }
     }
 
@@ -229,7 +643,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         SymbolAnalysisContext context,
         IMethodSymbol method,
         WellKnownTypes wellKnownTypes,
-        INamedTypeSymbol aspireExportAttribute)
+        INamedTypeSymbol aspireExportAttribute,
+        HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
         // Only check public static extension methods
         if (!method.IsStatic || !method.IsExtensionMethod || method.DeclaredAccessibility != Accessibility.Public)
@@ -244,13 +659,13 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         // Only check methods extending exported handle types that participate in ATS.
         var firstParamType = method.Parameters[0].Type;
-        if (!RequiresExplicitExportCoverage(firstParamType, wellKnownTypes, aspireExportAttribute))
+        if (!RequiresExplicitExportCoverage(firstParamType, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes))
         {
             return;
         }
 
         // Determine the incompatibility reason (if any) to include in the warning
-        var reason = GetIncompatibilityReason(method, wellKnownTypes, aspireExportAttribute);
+        var reason = GetIncompatibilityReason(method, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
         var location = method.Locations.FirstOrDefault() ?? Location.None;
 
         context.ReportDiagnostic(Diagnostic.Create(
@@ -258,6 +673,35 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             location,
             method.Name,
             reason ?? "Add [AspireExport] if ATS-compatible, or [AspireExportIgnore] with a reason."));
+    }
+
+    /// <summary>
+    /// Returns true when the method satisfies the ASPIREEXPORT009 preconditions (open-generic
+    /// <c>IResourceBuilder&lt;T&gt;</c> first parameter plus at least one concrete
+    /// <c>IResourceBuilder&lt;ConcreteType&gt;</c> parameter), independently of what the export ID is.
+    /// Used to suppress ASPIREEXPORT011 when ASPIREEXPORT009 would fire for the same method.
+    /// </summary>
+    private static bool HasConcreteResourceBuilderTargetParameter(IMethodSymbol method, WellKnownTypes wellKnownTypes)
+    {
+        if (!method.IsExtensionMethod || method.Parameters.Length < 2)
+        {
+            return false;
+        }
+
+        if (!IsOpenGenericResourceBuilder(method.Parameters[0].Type, wellKnownTypes))
+        {
+            return false;
+        }
+
+        for (var i = 1; i < method.Parameters.Length; i++)
+        {
+            if (GetConcreteResourceBuilderTypeName(method.Parameters[i].Type, wellKnownTypes) is not null)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void AnalyzeExportNameUniqueness(
@@ -328,37 +772,380 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             suggestedName));
     }
 
+    /// <summary>
+    /// Checks that callback parameter types (e.g., Action&lt;HelmChartOptions&gt;) in exported methods
+    /// have [AspireExport] so their members are visible to TypeScript.
+    /// </summary>
+    private static void AnalyzeCallbackContextTypes(
+        SymbolAnalysisContext context,
+        IMethodSymbol method,
+        INamedTypeSymbol aspireExportAttribute,
+        Location location)
+    {
+        foreach (var parameter in method.Parameters)
+        {
+            var paramType = parameter.Type;
+
+            // Unwrap nullable (Action<T>? → Action<T>)
+            if (paramType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } nullable)
+            {
+                paramType = nullable.TypeArguments[0];
+            }
+
+            // Check if this is a delegate type (Action<T>, Func<T, ...>, custom delegate)
+            if (paramType is not INamedTypeSymbol namedType || !IsDelegateType(namedType))
+            {
+                continue;
+            }
+
+            // Extract the type arguments of the delegate (Action<T> → T, Func<T, R> → T)
+            var invokeMethod = namedType.DelegateInvokeMethod;
+            if (invokeMethod is null)
+            {
+                continue;
+            }
+
+            foreach (var delegateParam in invokeMethod.Parameters)
+            {
+                var contextType = delegateParam.Type;
+                if (contextType is not INamedTypeSymbol contextNamedType)
+                {
+                    continue;
+                }
+
+                // Skip primitive types, string, well-known framework types
+                if (contextNamedType.SpecialType != SpecialType.None ||
+                    contextNamedType.TypeKind is TypeKind.Enum or TypeKind.Interface)
+                {
+                    continue;
+                }
+
+                // Skip types with no public instance members worth exporting
+                var hasPublicMembers = contextNamedType.GetMembers()
+                    .Any(m => m.DeclaredAccessibility == Accessibility.Public &&
+                              !m.IsStatic &&
+                              m is IMethodSymbol { MethodKind: MethodKind.Ordinary } or IPropertySymbol);
+                if (!hasPublicMembers)
+                {
+                    continue;
+                }
+
+                // Check if the type has [AspireExport] or [AspireDto]
+                var hasExport = false;
+                foreach (var attr in contextNamedType.GetAttributes())
+                {
+                    if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, aspireExportAttribute))
+                    {
+                        hasExport = true;
+                        break;
+                    }
+
+                    // [AspireDto] types are already exported for serialization
+                    if (attr.AttributeClass?.Name == "AspireDtoAttribute")
+                    {
+                        hasExport = true;
+                        break;
+                    }
+                }
+
+                if (!hasExport)
+                {
+                    // Only warn for types defined in the same compilation (same assembly).
+                    // We can't add attributes to types from external packages.
+                    if (!SymbolEqualityComparer.Default.Equals(contextNamedType.ContainingAssembly, method.ContainingAssembly))
+                    {
+                        continue;
+                    }
+
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        Diagnostics.s_callbackContextTypeMissingExport,
+                        location,
+                        contextNamedType.Name,
+                        method.Name));
+                }
+            }
+        }
+    }
+
+    private static bool IsDelegateType(INamedTypeSymbol type)
+    {
+        return type.TypeKind == TypeKind.Delegate ||
+               type.BaseType?.SpecialType == SpecialType.System_MulticastDelegate;
+    }
+
     private static void AnalyzeInlineSynchronousDelegateInvocation(
         OperationAnalysisContext context,
+        IAssemblySymbol assembly,
         IMethodSymbol method,
         IReadOnlyDictionary<string, IParameterSymbol> synchronousDelegateParameters,
-        ConcurrentDictionary<string, byte> reportedParameters)
+        ConcurrentDictionary<string, byte> reportedParameters,
+        ConcurrentDictionary<ISymbol, ImmutableHashSet<int>> inlineDelegateInvocationCache)
     {
         var invocation = (IInvocationOperation)context.Operation;
 
-        if (invocation.TargetMethod.MethodKind != MethodKind.DelegateInvoke ||
-            invocation.Syntax is not InvocationExpressionSyntax invocationSyntax ||
+        if (invocation.Syntax is not InvocationExpressionSyntax invocationSyntax ||
             IsInsideNestedCallback(invocationSyntax))
         {
             return;
         }
 
-        var parameterName = GetInvokedDelegateParameterName(invocationSyntax);
-        if (parameterName is null || !synchronousDelegateParameters.TryGetValue(parameterName, out var parameter))
+        if (invocation.TargetMethod.MethodKind == MethodKind.DelegateInvoke)
         {
+            var parameterName = GetInvokedDelegateParameterName(invocationSyntax);
+            if (parameterName is null || !synchronousDelegateParameters.TryGetValue(parameterName, out var parameter))
+            {
+                return;
+            }
+
+            ReportInlineSynchronousDelegateInvocation(context, method, reportedParameters, invocationSyntax.GetLocation(), parameter);
             return;
         }
 
-        if (!reportedParameters.TryAdd(parameterName, default))
+        foreach (var argument in invocation.Arguments)
         {
-            return;
+            if (argument.Parameter is null ||
+                GetReferencedParameter(argument.Value) is not { } referencedParameter ||
+                !synchronousDelegateParameters.TryGetValue(referencedParameter.Name, out var callbackParameter))
+            {
+                continue;
+            }
+
+            var targetInvokedParameters = GetInlineInvokedDelegateParameterOrdinals(
+                invocation.TargetMethod,
+                assembly,
+                inlineDelegateInvocationCache,
+                new HashSet<ISymbol>(SymbolEqualityComparer.Default),
+                context.CancellationToken);
+
+            if (!targetInvokedParameters.Contains(argument.Parameter.Ordinal))
+            {
+                continue;
+            }
+
+            ReportInlineSynchronousDelegateInvocation(context, method, reportedParameters, invocationSyntax.GetLocation(), callbackParameter);
+        }
+    }
+
+    private static void ReportInlineSynchronousDelegateInvocation(
+        OperationAnalysisContext context,
+        IMethodSymbol method,
+        ConcurrentDictionary<string, byte> reportedParameters,
+        Location location,
+        IParameterSymbol parameter)
+    {
+        if (reportedParameters.TryAdd(parameter.Name, default))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.s_exportedSyncDelegateInvokedInline,
+                location,
+                method.Name,
+                parameter.Name));
+        }
+    }
+
+    private static ImmutableHashSet<int> GetInlineInvokedDelegateParameterOrdinals(
+        IMethodSymbol method,
+        IAssemblySymbol assembly,
+        ConcurrentDictionary<ISymbol, ImmutableHashSet<int>> cache,
+        HashSet<ISymbol> visiting,
+        CancellationToken cancellationToken)
+    {
+        if (cache.TryGetValue(method, out var cached))
+        {
+            return cached;
         }
 
-        context.ReportDiagnostic(Diagnostic.Create(
-            Diagnostics.s_exportedSyncDelegateInvokedInline,
-            invocationSyntax.GetLocation(),
-            method.Name,
-            parameter.Name));
+        if (!SymbolEqualityComparer.Default.Equals(method.ContainingAssembly, assembly) ||
+            method.DeclaringSyntaxReferences.Length == 0 ||
+            !visiting.Add(method))
+        {
+            return ImmutableHashSet<int>.Empty;
+        }
+
+        try
+        {
+            var result = ComputeInlineInvokedDelegateParameterOrdinals(method, assembly, cache, visiting, cancellationToken);
+            cache.TryAdd(method, result);
+            return result;
+        }
+        finally
+        {
+            visiting.Remove(method);
+        }
+    }
+
+    private static ImmutableHashSet<int> ComputeInlineInvokedDelegateParameterOrdinals(
+        IMethodSymbol method,
+        IAssemblySymbol assembly,
+        ConcurrentDictionary<ISymbol, ImmutableHashSet<int>> cache,
+        HashSet<ISymbol> visiting,
+        CancellationToken cancellationToken)
+    {
+        var synchronousDelegateParameterOrdinals = method.Parameters
+            .Where(IsSynchronousDelegateParameter)
+            .Select(static p => p.Ordinal)
+            .ToImmutableHashSet();
+
+        if (synchronousDelegateParameterOrdinals.Count == 0)
+        {
+            return ImmutableHashSet<int>.Empty;
+        }
+
+        var syntax = method.DeclaringSyntaxReferences[0].GetSyntax(cancellationToken);
+        var result = ImmutableHashSet.CreateBuilder<int>();
+
+        foreach (var invocationSyntax in syntax.DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (IsInsideNestedCallback(invocationSyntax))
+            {
+                continue;
+            }
+
+            var parameterName = GetInvokedDelegateParameterName(invocationSyntax);
+            var parameter = parameterName is null
+                ? null
+                : method.Parameters.FirstOrDefault(p => p.Name == parameterName);
+            if (parameter is not null && synchronousDelegateParameterOrdinals.Contains(parameter.Ordinal))
+            {
+                result.Add(parameter.Ordinal);
+                continue;
+            }
+
+            foreach (var targetMethod in ResolveSameTypeMethodInvocations(method, invocationSyntax))
+            {
+                foreach (var argument in invocationSyntax.ArgumentList.Arguments)
+                {
+                    if (GetReferencedParameterName(argument.Expression) is not { } referencedParameterName)
+                    {
+                        continue;
+                    }
+
+                    var referencedParameter = method.Parameters.FirstOrDefault(p => p.Name == referencedParameterName);
+                    var targetParameterOrdinal = GetTargetParameterOrdinal(targetMethod, argument, invocationSyntax.ArgumentList);
+
+                    if (referencedParameter is null ||
+                        targetParameterOrdinal is null ||
+                        !synchronousDelegateParameterOrdinals.Contains(referencedParameter.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    var targetInvokedParameters = GetInlineInvokedDelegateParameterOrdinals(
+                        targetMethod,
+                        assembly,
+                        cache,
+                        visiting,
+                        cancellationToken);
+
+                    if (targetInvokedParameters.Contains(targetParameterOrdinal.Value))
+                    {
+                        result.Add(referencedParameter.Ordinal);
+                    }
+                }
+            }
+        }
+
+        return result.ToImmutable();
+    }
+
+    private static IParameterSymbol? GetReferencedParameter(IOperation operation)
+    {
+        while (operation is IConversionOperation conversion)
+        {
+            operation = conversion.Operand;
+        }
+
+        return operation is IParameterReferenceOperation parameterReference
+            ? parameterReference.Parameter
+            : null;
+    }
+
+    private static IEnumerable<IMethodSymbol> ResolveSameTypeMethodInvocations(IMethodSymbol containingMethod, InvocationExpressionSyntax invocation)
+    {
+        // Analyzer rules prohibit fetching a SemanticModel for arbitrary helper syntax here, so helper
+        // summaries use the exact operation symbol at the export boundary and bounded syntax matching
+        // for subsequent calls inside the same helper type.
+        var methodName = invocation.Expression switch
+        {
+            IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+            MemberAccessExpressionSyntax memberAccess => memberAccess.Name.Identifier.ValueText,
+            _ => null
+        };
+
+        if (methodName is null || containingMethod.ContainingType is null)
+        {
+            yield break;
+        }
+
+        foreach (var member in containingMethod.ContainingType.GetMembers(methodName).OfType<IMethodSymbol>())
+        {
+            if (member.DeclaringSyntaxReferences.Length == 0 ||
+                !CouldAcceptArguments(member, invocation.ArgumentList))
+            {
+                continue;
+            }
+
+            yield return member;
+        }
+    }
+
+    private static bool CouldAcceptArguments(IMethodSymbol targetMethod, ArgumentListSyntax argumentList)
+    {
+        var positionalArgumentCount = 0;
+        foreach (var argument in argumentList.Arguments)
+        {
+            if (argument.NameColon is not null)
+            {
+                if (!targetMethod.Parameters.Any(p => p.Name == argument.NameColon.Name.Identifier.ValueText))
+                {
+                    return false;
+                }
+
+                continue;
+            }
+
+            positionalArgumentCount++;
+        }
+
+        if (positionalArgumentCount > targetMethod.Parameters.Length)
+        {
+            return false;
+        }
+
+        var suppliedNames = new HashSet<string>(argumentList.Arguments
+            .Where(static a => a.NameColon is not null)
+            .Select(static a => a.NameColon!.Name.Identifier.ValueText),
+            StringComparer.Ordinal);
+
+        return targetMethod.Parameters
+            .Where(static p => !p.IsOptional)
+            .All(p => p.Ordinal < positionalArgumentCount || suppliedNames.Contains(p.Name));
+    }
+
+    private static int? GetTargetParameterOrdinal(IMethodSymbol targetMethod, ArgumentSyntax argument, ArgumentListSyntax argumentList)
+    {
+        if (argument.NameColon is not null)
+        {
+            var parameter = targetMethod.Parameters.FirstOrDefault(p => p.Name == argument.NameColon.Name.Identifier.ValueText);
+            return parameter?.Ordinal;
+        }
+
+        var ordinal = argumentList.Arguments.IndexOf(argument);
+        return ordinal >= 0 && ordinal < targetMethod.Parameters.Length
+            ? ordinal
+            : null;
+    }
+
+    private static string? GetReferencedParameterName(ExpressionSyntax expression)
+    {
+        while (expression is ParenthesizedExpressionSyntax parenthesized)
+        {
+            expression = parenthesized.Expression;
+        }
+
+        return expression is IdentifierNameSyntax identifier
+            ? identifier.Identifier.ValueText
+            : null;
     }
 
     private static bool IsInsideNestedCallback(InvocationExpressionSyntax invocation)
@@ -487,6 +1274,44 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
     }
 
+    private static string GetGeneratedTargetTypeName(IMethodSymbol method)
+    {
+        if (!method.IsExtensionMethod || method.Parameters.Length == 0)
+        {
+            return "<global>";
+        }
+
+        var targetType = method.Parameters[0].Type;
+        var targetTypeName = targetType.ToDisplayString();
+        if (targetType is not INamedTypeSymbol { IsGenericType: true } namedTargetType)
+        {
+            return targetTypeName;
+        }
+
+        var typeParameterConstraints = namedTargetType.TypeArguments
+            .OfType<ITypeParameterSymbol>()
+            .Select(typeParameter =>
+            {
+                var constraints = string.Join("&", typeParameter.ConstraintTypes.Select(static t => t.ToDisplayString()));
+                return constraints.Length > 0
+                    ? $"{typeParameter.Name}:{constraints}"
+                    : typeParameter.Name;
+            })
+            .ToArray();
+
+        if (typeParameterConstraints.Length == 0)
+        {
+            return targetTypeName;
+        }
+
+        return $"{targetTypeName} where {string.Join(",", typeParameterConstraints)}";
+    }
+
+    private static string GetGeneratedTargetTypeName(INamedTypeSymbol resourceType)
+    {
+        return $"Aspire.Hosting.ApplicationModel.IResourceBuilder<{resourceType.ToDisplayString()}>";
+    }
+
     /// <summary>
     /// If the type is IResourceBuilder&lt;ConcreteType&gt; (not open generic), returns the ConcreteType name; otherwise null.
     /// </summary>
@@ -505,8 +1330,10 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                 return null;
             }
 
-            // Check that the type argument is a concrete type, not a type parameter
-            if (namedType.TypeArguments.Length == 1 && namedType.TypeArguments[0] is not ITypeParameterSymbol)
+            // Check that the type argument is a concrete resource type, not a type parameter or interface.
+            if (namedType.TypeArguments.Length == 1 &&
+                namedType.TypeArguments[0] is not ITypeParameterSymbol &&
+                namedType.TypeArguments[0].TypeKind is not TypeKind.Interface)
             {
                 return namedType.TypeArguments[0].Name;
             }
@@ -548,17 +1375,19 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
     private static bool RequiresExplicitExportCoverage(
         ITypeSymbol type,
         WellKnownTypes wellKnownTypes,
-        INamedTypeSymbol aspireExportAttribute)
+        INamedTypeSymbol aspireExportAttribute,
+        HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
         return IsBuilderType(type, wellKnownTypes) ||
                IsResourceType(type, wellKnownTypes) ||
-               HasAspireExportAttribute(type, aspireExportAttribute);
+               HasAspireExportAttribute(type, aspireExportAttribute, currentAssemblyExportedTypes);
     }
 
     private static string? GetIncompatibilityReason(
         IMethodSymbol method,
         WellKnownTypes wellKnownTypes,
-        INamedTypeSymbol aspireExportAttribute)
+        INamedTypeSymbol aspireExportAttribute,
+        HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
         var reasons = new List<string>();
 
@@ -611,7 +1440,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             // Check delegate types more carefully
             if (IsDelegateType(paramType))
             {
-                var reason = GetDelegateIncompatibilityReason(param, paramType, wellKnownTypes, aspireExportAttribute);
+                var reason = GetDelegateIncompatibilityReason(param, paramType, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
                 if (reason is not null)
                 {
                     reasons.Add(reason);
@@ -619,14 +1448,14 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                 continue;
             }
 
-            if (!IsAtsCompatibleValueType(paramType, wellKnownTypes, aspireExportAttribute))
+            if (!IsAtsCompatibleValueType(paramType, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes))
             {
                 reasons.Add($"parameter '{param.Name}' of type '{paramType.ToDisplayString()}' is not ATS-compatible");
             }
         }
 
         // Check return type
-        if (!IsAtsCompatibleType(method.ReturnType, wellKnownTypes, aspireExportAttribute))
+        if (!IsAtsCompatibleType(method.ReturnType, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes))
         {
             reasons.Add($"return type '{method.ReturnType.ToDisplayString()}' is not ATS-compatible");
         }
@@ -643,7 +1472,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         IParameterSymbol param,
         ITypeSymbol delegateType,
         WellKnownTypes wellKnownTypes,
-        INamedTypeSymbol _)
+        INamedTypeSymbol aspireExportAttribute,
+        HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
         if (delegateType is not INamedTypeSymbol namedDelegate)
         {
@@ -661,13 +1491,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         foreach (var delegateParam in invokeMethod.Parameters)
         {
             var dpType = delegateParam.Type;
-            var dpTypeName = dpType.ToDisplayString();
-
-            // Check for known incompatible context types
-            if (dpTypeName is "System.IServiceProvider" or
-                "System.Text.Json.Utf8JsonWriter" or
-                "System.Threading.CancellationToken" or
-                "System.Net.Http.HttpRequestMessage")
+            if (!IsAtsCompatibleValueType(dpType, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes))
             {
                 return $"parameter '{param.Name}' uses delegate with '{dpType.Name}' which is not ATS-compatible";
             }
@@ -700,7 +1524,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         ImmutableArray<AttributeData> attributes,
         INamedTypeSymbol aspireUnionAttribute,
         WellKnownTypes wellKnownTypes,
-        INamedTypeSymbol aspireExportAttribute)
+        INamedTypeSymbol aspireExportAttribute,
+        HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
         foreach (var attr in attributes)
         {
@@ -745,7 +1570,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             {
                 if (typeConstant.Value is INamedTypeSymbol typeSymbol)
                 {
-                    if (!IsAtsCompatibleValueType(typeSymbol, wellKnownTypes, aspireExportAttribute))
+                    if (!IsAtsCompatibleValueType(typeSymbol, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes))
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
                             Diagnostics.s_unionTypeMustBeAtsCompatible,
@@ -779,6 +1604,88 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
     }
 
+    private static void ReportDuplicateCapabilityIds(
+        CompilationAnalysisContext context,
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds)
+    {
+        foreach (var kvp in capabilityIds.OrderBy(kvp => kvp.Key, StringComparer.Ordinal))
+        {
+            var exports = kvp.Value
+                .Distinct()
+                .OrderBy(static e => e.Location.SourceSpan.Start)
+                .ThenBy(static e => e.Source, StringComparer.Ordinal)
+                .ToArray();
+
+            if (exports.Length <= 1)
+            {
+                continue;
+            }
+
+            var sources = string.Join(", ", exports.Select(static e => e.Source).Distinct(StringComparer.Ordinal));
+            foreach (var export in exports)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.s_duplicatePolyglotCapabilityId,
+                    export.Location,
+                    kvp.Key,
+                    sources));
+            }
+        }
+    }
+
+    private static void ReportDuplicateGeneratedMethodNames(
+        CompilationAnalysisContext context,
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
+    {
+        foreach (var kvp in generatedMethodNames.OrderBy(kvp => kvp.Key.TargetType, StringComparer.Ordinal).ThenBy(kvp => kvp.Key.MethodName, StringComparer.Ordinal))
+        {
+            var exports = kvp.Value
+                .Distinct()
+                .OrderBy(static e => e.Location.SourceSpan.Start)
+                .ThenBy(static e => e.Source, StringComparer.Ordinal)
+                .ToArray();
+
+            if (exports.Length <= 1 ||
+                exports.Select(static e => e.EffectiveExportId).Distinct(StringComparer.Ordinal).Count() <= 1)
+            {
+                continue;
+            }
+
+            var sources = string.Join(", ", exports.Select(static e => e.Source).Distinct(StringComparer.Ordinal));
+            foreach (var export in exports)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.s_duplicateGeneratedMethodName,
+                    export.Location,
+                    kvp.Key.MethodName,
+                    kvp.Key.TargetType,
+                    sources));
+            }
+        }
+    }
+
+    private static void AddCapabilityExport(
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
+        string capabilityId,
+        string source,
+        Location location)
+    {
+        var bag = capabilityIds.GetOrAdd(capabilityId, _ => []);
+        bag.Add(new CapabilityExport(source, location));
+    }
+
+    private static void AddGeneratedMethodNameExport(
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        string methodName,
+        string targetType,
+        string effectiveExportId,
+        string source,
+        Location location)
+    {
+        var bag = generatedMethodNames.GetOrAdd((methodName, targetType), _ => []);
+        bag.Add(new GeneratedMethodNameExport(source, location, effectiveExportId));
+    }
+
     private static string? GetExportId(AttributeData attribute)
     {
         if (attribute.ConstructorArguments.Length > 0 &&
@@ -787,6 +1694,159 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             return id;
         }
         return null;
+    }
+
+    private static string? GetDerivedExportId(IMethodSymbol method, AttributeData? containingTypeExportAttribute)
+    {
+        if (string.IsNullOrEmpty(method.Name))
+        {
+            return null;
+        }
+
+        var camelCaseName = char.ToLowerInvariant(method.Name[0]) + method.Name.Substring(1);
+
+        // Non-static methods auto-exposed via ExposeMethods=true use TypeName.methodName to avoid collisions
+        if (!method.IsStatic && IsExposeMethodsEnabled(containingTypeExportAttribute))
+        {
+            return $"{GetRuntimeTypeName(method.ContainingType)}.{camelCaseName}";
+        }
+
+        return camelCaseName;
+    }
+
+    private static string GetRuntimeTypeName(INamedTypeSymbol type)
+    {
+        return type.MetadataName;
+    }
+
+    private static bool IsSpecialRuntimeMethod(IMethodSymbol method)
+    {
+        return method.MethodKind != MethodKind.Ordinary ||
+            method.Name is "GetType" or "ToString" or "Equals" or "GetHashCode";
+    }
+
+    private static string ToCamelCase(string name)
+    {
+        return string.IsNullOrEmpty(name)
+            ? name
+            : char.ToLowerInvariant(name[0]) + name.Substring(1);
+    }
+
+    private static bool IsExposeMethodsEnabled(AttributeData? exportAttribute)
+    {
+        return IsBooleanNamedArgumentEnabled(exportAttribute, ExposeMethodsPropertyName);
+    }
+
+    private static bool IsBooleanNamedArgumentEnabled(AttributeData? exportAttribute, string argumentName)
+    {
+        if (exportAttribute is null)
+        {
+            return false;
+        }
+
+        foreach (var namedArgument in exportAttribute.NamedArguments)
+        {
+            if (namedArgument.Key == argumentName &&
+                namedArgument.Value.Value is bool enabled)
+            {
+                return enabled;
+            }
+        }
+
+        return false;
+    }
+
+    private static string? GetNamedStringArgument(AttributeData? exportAttribute, string argumentName)
+    {
+        if (exportAttribute is null)
+        {
+            return null;
+        }
+
+        foreach (var namedArgument in exportAttribute.NamedArguments)
+        {
+            if (namedArgument.Key == argumentName &&
+                namedArgument.Value.Value is string value)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static void AnalyzeExportDescription(SymbolAnalysisContext context, AttributeData exportAttribute, Location location)
+    {
+        if (HasNamedArgument(exportAttribute, DescriptionPropertyName))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(Diagnostics.s_descriptionShouldUseXmlDocs, location));
+        }
+    }
+
+    private static bool HasNamedArgument(AttributeData exportAttribute, string argumentName)
+    {
+        foreach (var namedArgument in exportAttribute.NamedArguments)
+        {
+            if (namedArgument.Key == argumentName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static AttributeData? GetAspireExportAttribute(ISymbol symbol, INamedTypeSymbol aspireExportAttribute)
+    {
+        foreach (var attr in symbol.GetAttributes())
+        {
+            if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, aspireExportAttribute))
+            {
+                return attr;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasAspireExportIgnoreAttribute(ISymbol symbol, INamedTypeSymbol? aspireExportIgnoreAttribute)
+    {
+        if (aspireExportIgnoreAttribute is null)
+        {
+            return false;
+        }
+
+        foreach (var attr in symbol.GetAttributes())
+        {
+            if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, aspireExportIgnoreAttribute))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ShouldExportMember(bool isPublic, bool exposeAll, AttributeData? exportAttribute)
+    {
+        return exportAttribute is not null || (exposeAll && isPublic);
+    }
+
+    private static string GetCapabilityPackage(INamedTypeSymbol type, string assemblyName)
+    {
+        return type.ContainingNamespace.IsGlobalNamespace
+            ? assemblyName
+            : type.ContainingNamespace.ToDisplayString();
+    }
+
+    private static string GetMethodDisplayString(IMethodSymbol method)
+    {
+        return method.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+    }
+
+    private static Location? GetAttributeLocation(AttributeData? attribute, CancellationToken cancellationToken)
+    {
+        return attribute?.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation();
     }
 
     private static bool TryGetEffectiveAspireExportAttribute(IMethodSymbol method, INamedTypeSymbol aspireExportAttribute, out AttributeData? exportAttribute, out AttributeData? containingTypeExportAttribute)
@@ -853,7 +1913,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
     private static bool IsAtsCompatibleType(
         ITypeSymbol type,
         WellKnownTypes wellKnownTypes,
-        INamedTypeSymbol aspireExportAttribute)
+        INamedTypeSymbol aspireExportAttribute,
+        HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
         // void is allowed
         if (type.SpecialType == SpecialType.System_Void)
@@ -861,21 +1922,22 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             return true;
         }
 
-        // Task and Task<T> are allowed (for async methods)
-        if (IsTaskType(type, wellKnownTypes, aspireExportAttribute))
+        // Task, Task<T>, ValueTask, and ValueTask<T> are allowed (for async methods)
+        if (IsAsyncResultType(type, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes))
         {
             return true;
         }
 
-        return IsAtsCompatibleValueType(type, wellKnownTypes, aspireExportAttribute);
+        return IsAtsCompatibleValueType(type, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
     }
 
-    private static bool IsTaskType(
+    private static bool IsAsyncResultType(
         ITypeSymbol type,
         WellKnownTypes wellKnownTypes,
-        INamedTypeSymbol aspireExportAttribute)
+        INamedTypeSymbol aspireExportAttribute,
+        HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
-        // Check for Task
+        // Check for Task / ValueTask
         try
         {
             var taskType = wellKnownTypes.Get(WellKnownTypeData.WellKnownType.System_Threading_Tasks_Task);
@@ -889,7 +1951,20 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             // Type not found
         }
 
-        // Check for Task<T>
+        try
+        {
+            var valueTaskType = wellKnownTypes.Get(WellKnownTypeData.WellKnownType.System_Threading_Tasks_ValueTask);
+            if (SymbolEqualityComparer.Default.Equals(type, valueTaskType))
+            {
+                return true;
+            }
+        }
+        catch (InvalidOperationException)
+        {
+            // Type not found
+        }
+
+        // Check for Task<T> / ValueTask<T>
         if (type is INamedTypeSymbol namedType && namedType.IsGenericType)
         {
             try
@@ -899,7 +1974,21 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                 {
                     // Validate the T in Task<T> is also ATS-compatible
                     return namedType.TypeArguments.Length == 1 &&
-                           IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute);
+                           IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
+                }
+            }
+            catch (InvalidOperationException)
+            {
+                // Type not found
+            }
+
+            try
+            {
+                var valueTaskOfTType = wellKnownTypes.Get(WellKnownTypeData.WellKnownType.System_Threading_Tasks_ValueTask_1);
+                if (SymbolEqualityComparer.Default.Equals(namedType.OriginalDefinition, valueTaskOfTType))
+                {
+                    return namedType.TypeArguments.Length == 1 &&
+                           IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
                 }
             }
             catch (InvalidOperationException)
@@ -914,7 +2003,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
     private static bool IsAtsCompatibleValueType(
         ITypeSymbol type,
         WellKnownTypes wellKnownTypes,
-        INamedTypeSymbol? aspireExportAttribute = null)
+        INamedTypeSymbol? aspireExportAttribute = null,
+        HashSet<ITypeSymbol>? currentAssemblyExportedTypes = null)
     {
         // Handle nullable types
         if (type is INamedTypeSymbol namedType &&
@@ -939,11 +2029,11 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // Arrays of ATS-compatible types
         if (type is IArrayTypeSymbol arrayType)
         {
-            return IsAtsCompatibleValueType(arrayType.ElementType, wellKnownTypes, aspireExportAttribute);
+            return IsAtsCompatibleValueType(arrayType.ElementType, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
         }
 
         // Collection types (Dictionary, List, IReadOnlyList, etc.)
-        if (IsAtsCompatibleCollectionType(type, wellKnownTypes, aspireExportAttribute))
+        if (IsAtsCompatibleCollectionType(type, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes))
         {
             return true;
         }
@@ -961,7 +2051,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         // Types with [AspireExport] or [AspireDto] attribute
-        if (aspireExportAttribute != null && HasAspireExportAttribute(type, aspireExportAttribute))
+        if (aspireExportAttribute != null && HasAspireExportAttribute(type, aspireExportAttribute, currentAssemblyExportedTypes))
         {
             return true;
         }
@@ -1063,11 +2153,22 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
     private static bool IsAtsCompatibleCollectionType(
         ITypeSymbol type,
         WellKnownTypes wellKnownTypes,
-        INamedTypeSymbol? aspireExportAttribute)
+        INamedTypeSymbol? aspireExportAttribute,
+        HashSet<ITypeSymbol>? currentAssemblyExportedTypes)
     {
-        if (type is not INamedTypeSymbol namedType || !namedType.IsGenericType)
+        if (type is not INamedTypeSymbol namedType)
         {
             return false;
+        }
+
+        if (!namedType.IsGenericType)
+        {
+            return namedType is
+            {
+                ContainingNamespace.Name: "Collections",
+                ContainingNamespace.ContainingNamespace.Name: "System",
+                Name: "IDictionary" or "IList"
+            };
         }
 
         // Dictionary<K,V> and IDictionary<K,V>
@@ -1076,8 +2177,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         {
             // Validate key and value types are ATS-compatible
             return namedType.TypeArguments.Length == 2 &&
-                   IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute) &&
-                   IsAtsCompatibleValueType(namedType.TypeArguments[1], wellKnownTypes, aspireExportAttribute);
+                   IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes) &&
+                   IsAtsCompatibleValueType(namedType.TypeArguments[1], wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
         }
 
         // List<T> and IList<T>
@@ -1085,7 +2186,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IList_1))
         {
             return namedType.TypeArguments.Length == 1 &&
-                   IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute);
+                   IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
         }
 
         // IReadOnlyList<T> and IReadOnlyCollection<T>
@@ -1094,21 +2195,21 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IEnumerable_1))
         {
             return namedType.TypeArguments.Length == 1 &&
-                   IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute);
+                   IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
         }
 
         // IReadOnlyDictionary<K,V>
         if (TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IReadOnlyDictionary_2))
         {
             return namedType.TypeArguments.Length == 2 &&
-                   IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute) &&
-                   IsAtsCompatibleValueType(namedType.TypeArguments[1], wellKnownTypes, aspireExportAttribute);
+                   IsAtsCompatibleValueType(namedType.TypeArguments[0], wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes) &&
+                   IsAtsCompatibleValueType(namedType.TypeArguments[1], wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
         }
 
         return false;
     }
 
-    private static bool HasAspireExportAttribute(ITypeSymbol type, INamedTypeSymbol aspireExportAttribute)
+    private static bool HasAspireExportAttribute(ITypeSymbol type, INamedTypeSymbol aspireExportAttribute, HashSet<ITypeSymbol>? currentAssemblyExportedTypes)
     {
         // Check direct attributes on the type
         foreach (var attr in type.GetAttributes())
@@ -1117,6 +2218,11 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             {
                 return true;
             }
+        }
+
+        if (currentAssemblyExportedTypes?.Contains(type) == true)
+        {
+            return true;
         }
 
         var containingAssembly = type.ContainingAssembly;
@@ -1140,6 +2246,26 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         return false;
+    }
+
+    private static HashSet<ITypeSymbol> GetAssemblyExportedTypes(IAssemblySymbol assembly, INamedTypeSymbol aspireExportAttribute)
+    {
+        var exportedTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+
+        foreach (var attr in assembly.GetAttributes())
+        {
+            if (!SymbolEqualityComparer.Default.Equals(attr.AttributeClass, aspireExportAttribute))
+            {
+                continue;
+            }
+
+            if (TryGetAssemblyExportedType(attr, out var exportedType) && exportedType is not null)
+            {
+                exportedTypes.Add(exportedType);
+            }
+        }
+
+        return exportedTypes;
     }
 
     private static bool TryGetAssemblyExportedType(AttributeData attribute, out ITypeSymbol? exportedType)
@@ -1179,6 +2305,14 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         return false;
+    }
+
+    private static bool IsMutableCollectionType(ITypeSymbol type, WellKnownTypes wellKnownTypes)
+    {
+        return TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_Dictionary_2) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IDictionary_2) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_List_1) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IList_1);
     }
 
     private static bool IsResourceType(ITypeSymbol type, WellKnownTypes wellKnownTypes)
@@ -1234,7 +2368,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
     private static bool IsAtsCompatibleParameter(
         IParameterSymbol parameter,
         WellKnownTypes wellKnownTypes,
-        INamedTypeSymbol aspireExportAttribute)
+        INamedTypeSymbol aspireExportAttribute,
+        HashSet<ITypeSymbol> currentAssemblyExportedTypes)
     {
         var type = parameter.Type;
 
@@ -1247,10 +2382,10 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // params arrays are allowed if element type is compatible
         if (parameter.IsParams && type is IArrayTypeSymbol arrayType)
         {
-            return IsAtsCompatibleValueType(arrayType.ElementType, wellKnownTypes, aspireExportAttribute);
+            return IsAtsCompatibleValueType(arrayType.ElementType, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
         }
 
-        return IsAtsCompatibleValueType(type, wellKnownTypes, aspireExportAttribute);
+        return IsAtsCompatibleValueType(type, wellKnownTypes, aspireExportAttribute, currentAssemblyExportedTypes);
     }
 
     private static bool IsDelegateType(ITypeSymbol type)

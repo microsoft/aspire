@@ -79,7 +79,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resources[0].ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -138,7 +137,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resources[0].ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -193,7 +191,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resources[0].ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -248,7 +245,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resources[0].ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -319,7 +315,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resources[0].ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -396,7 +391,6 @@ public class TraceTests
         var traces1 = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resources[0].ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -438,7 +432,6 @@ public class TraceTests
         var traces2 = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resources[0].ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -493,7 +486,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -562,7 +554,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -639,7 +630,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -729,7 +719,6 @@ public class TraceTests
         var traces1 = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -745,7 +734,6 @@ public class TraceTests
         var traces2 = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -813,7 +801,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resources[0].ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -865,7 +852,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -937,7 +923,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resources[0].ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1044,7 +1029,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1114,7 +1098,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1178,7 +1161,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1197,7 +1179,6 @@ public class TraceTests
         traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1216,7 +1197,6 @@ public class TraceTests
         traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1237,6 +1217,7 @@ public class TraceTests
     [InlineData(KnownResourceFields.ServiceNameField, "resource1")]
     [InlineData(KnownResourceFields.ServiceNameField, "TestPeer")]
     [InlineData(KnownSourceFields.NameField, "TestScope")]
+    [InlineData(KnownTraceFields.DurationField, "540000")]
     public void GetTraces_KnownFilters(string name, string value)
     {
         // Arrange
@@ -1268,7 +1249,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1284,7 +1264,6 @@ public class TraceTests
         traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = [
@@ -1302,6 +1281,167 @@ public class TraceTests
     }
 
     [Fact]
+    public void GetTraces_FiltersPagingAndMaxDuration_ComputedFromAllMatchingTraces()
+    {
+        var repository = CreateRepository();
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "resource1", instanceId: "123"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMilliseconds(1), endTime: s_testTime.AddMilliseconds(11), attributes: [KeyValuePair.Create("dynamic.filter", "match")]),
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMilliseconds(2), endTime: s_testTime.AddMilliseconds(22), attributes: [KeyValuePair.Create("dynamic.filter", "match")]),
+                            CreateSpan(traceId: "3", spanId: "3-1", startTime: s_testTime.AddMilliseconds(3), endTime: s_testTime.AddMilliseconds(33), attributes: [KeyValuePair.Create("dynamic.filter", "other")]),
+                            CreateSpan(traceId: "4", spanId: "4-1", startTime: s_testTime.AddMilliseconds(4), endTime: s_testTime.AddMilliseconds(44), attributes: [KeyValuePair.Create("dynamic.filter", "match")]),
+                            CreateSpan(traceId: "5", spanId: "5-1", startTime: s_testTime.AddMilliseconds(5), endTime: s_testTime.AddMilliseconds(55), attributes: [KeyValuePair.Create("dynamic.filter", "match")])
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+
+        // This pins the behavior expected from an optimized single-pass implementation:
+        // dynamic field filters, known duration filters, paging, total count, and max
+        // duration must all be computed from the same filtered trace set. MaxDuration
+        // intentionally comes from all matching traces, not just the returned page.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = new ResourceKey("resource1", InstanceId: null),
+            StartIndex = 1,
+            Count = 1,
+            Filters =
+            [
+                new FieldTelemetryFilter { Field = "dynamic.filter", Condition = FilterCondition.Equals, Value = "match" },
+                new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.GreaterThanOrEqual, Value = "20" }
+            ]
+        });
+
+        Assert.Equal(3, traces.PagedResult.TotalItemCount);
+        Assert.Equal(TimeSpan.FromMilliseconds(50), traces.MaxDuration);
+        Assert.Collection(traces.PagedResult.Items,
+            trace =>
+            {
+                AssertId("4", trace.TraceId);
+                Assert.Equal(TimeSpan.FromMilliseconds(40), trace.Duration);
+            });
+    }
+
+    [Fact]
+    public void GetTraces_DurationFilter_AppliesTraceLevelDuration()
+    {
+        // Verifies that the duration filter uses the trace's overall duration (first span
+        // start to latest span end), not individual span durations. A trace with a 100ms
+        // root span containing a 5ms child span should match "> 50ms" (trace is 100ms)
+        // but NOT "< 10ms" (even though the child span is only 5ms).
+        var repository = CreateRepository();
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "resource1", instanceId: "123"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // Root span: 100ms duration
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMilliseconds(0), endTime: s_testTime.AddMilliseconds(100)),
+                            // Child span: 5ms duration (well under any "short" threshold)
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMilliseconds(10), endTime: s_testTime.AddMilliseconds(15), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+
+        var resourceKey = new ResourceKey("resource1", InstanceId: null);
+
+        // Duration filter "> 50ms" should match because trace duration is 100ms.
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = resourceKey,
+            StartIndex = 0,
+            Count = 10,
+            Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.GreaterThan, Value = "50" }]
+        });
+
+        Assert.Single(traces.PagedResult.Items);
+
+        // Duration filter "< 10ms" should NOT match because trace duration is 100ms,
+        // even though the child span is only 5ms.
+        traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = resourceKey,
+            StartIndex = 0,
+            Count = 10,
+            Filters = [new FieldTelemetryFilter { Field = KnownTraceFields.DurationField, Condition = FilterCondition.LessThan, Value = "10" }]
+        });
+
+        Assert.Empty(traces.PagedResult.Items);
+    }
+
+    [Fact]
+    public void GetTraces_NotEqualFilter_NonMatchingValue_ReturnsTrace()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "resource1", instanceId: "123"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10), attributes: [KeyValuePair.Create("key1", "value1")]) }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+
+        // Act - filter for key1 != "other_value" should return the trace since key1 is "value1"
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKey = new ResourceKey("resource1", InstanceId: null),
+            StartIndex = 0,
+            Count = 10,
+            Filters = [
+                new FieldTelemetryFilter { Field = "key1", Condition = FilterCondition.NotEqual, Value = "other_value" }
+            ]
+        });
+
+        // Assert
+        Assert.Collection(traces.PagedResult.Items,
+            trace =>
+            {
+                AssertId("1", trace.TraceId);
+            });
+    }
+
+    [Fact]
     public void AddTraces_OutOfOrder_FullName()
     {
         // Arrange
@@ -1309,7 +1449,6 @@ public class TraceTests
         var request = new GetTracesRequest
         {
             ResourceKey = new ResourceKey("TestService", "TestId"),
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1512,7 +1651,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resource.ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1630,7 +1768,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1709,7 +1846,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1815,7 +1951,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1907,7 +2042,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = null,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -1980,7 +2114,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = uninstrumentedPeerApp.ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2059,7 +2192,6 @@ public class TraceTests
         var traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = resources[0].ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2101,7 +2233,6 @@ public class TraceTests
         traces = repository.GetTraces(new GetTracesRequest
         {
             ResourceKey = uninstrumentedPeerApp.ResourceKey,
-            FilterText = string.Empty,
             StartIndex = 0,
             Count = 10,
             Filters = []
@@ -2164,5 +2295,563 @@ public class TraceTests
                 Assert.Equal("abc-def", resource.InstanceId);
                 Assert.True(resource.UninstrumentedPeer);
             });
+    }
+
+    [Fact]
+    public void GetSpans_ReturnsAllSpans()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10)),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(5), endTime: s_testTime.AddMinutes(10), parentSpanId: "1-1"),
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(8))
+                        }
+                    }
+                }
+            }
+        });
+
+        // Act
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = []
+        });
+
+        // Assert
+        Assert.Equal(3, result.PagedResult.TotalItemCount);
+        Assert.Equal(3, result.PagedResult.Items.Count);
+    }
+
+    [Fact]
+    public void GetSpans_FilterByTraceId_ReturnsMatchingSpans()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10)),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(5), endTime: s_testTime.AddMinutes(10), parentSpanId: "1-1"),
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(8))
+                        }
+                    }
+                }
+            }
+        });
+
+        // Act
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [],
+            TraceId = "31" // hex prefix of "1"
+        });
+
+        // Assert
+        Assert.Equal(2, result.PagedResult.TotalItemCount);
+        Assert.All(result.PagedResult.Items, s => AssertId("1", s.TraceId));
+    }
+
+    [Fact]
+    public void GetSpans_FilterByHasError_ReturnsErrorSpansOnly()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10), status: new Status { Code = Status.Types.StatusCode.Error }),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(5), endTime: s_testTime.AddMinutes(10), parentSpanId: "1-1", status: new Status { Code = Status.Types.StatusCode.Ok })
+                        }
+                    }
+                }
+            }
+        });
+
+        // Act
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [],
+            HasError = true
+        });
+
+        // Assert
+        Assert.Equal(1, result.PagedResult.TotalItemCount);
+        AssertId("1-1", result.PagedResult.Items[0].SpanId);
+    }
+
+    [Fact]
+    public void GetSpans_FilterByHasErrorFalse_ReturnsNonErrorSpansOnly()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10), status: new Status { Code = Status.Types.StatusCode.Error }),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(5), endTime: s_testTime.AddMinutes(10), parentSpanId: "1-1", status: new Status { Code = Status.Types.StatusCode.Ok })
+                        }
+                    }
+                }
+            }
+        });
+
+        // Act
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [],
+            HasError = false
+        });
+
+        // Assert
+        Assert.Equal(1, result.PagedResult.TotalItemCount);
+        AssertId("1-2", result.PagedResult.Items[0].SpanId);
+    }
+
+    [Fact]
+    public void GetSpans_FilterByResource_ReturnsMatchingSpans()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service-a", instanceId: "a1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10))
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service-b", instanceId: "b1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(8))
+                        }
+                    }
+                }
+            }
+        });
+
+        var resources = repository.GetResources();
+        var serviceA = resources.Single(r => r.ResourceName == "service-a");
+
+        // Act
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = serviceA.ResourceKey,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = []
+        });
+
+        // Assert
+        Assert.Equal(1, result.PagedResult.TotalItemCount);
+        AssertId("1-1", result.PagedResult.Items[0].SpanId);
+    }
+
+    [Fact]
+    public void GetSpans_FilterByDuration_ReturnsMatchingSpans()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            // 9 minutes = 540000ms
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10)),
+                            // 1 minute = 60000ms
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(5), endTime: s_testTime.AddMinutes(6), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        // Act - filter for spans with duration >= 100000ms (100s)
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.DurationField,
+                    Condition = FilterCondition.GreaterThanOrEqual,
+                    Value = "100000"
+                }
+            ]
+        });
+
+        // Assert - only the long span matches
+        Assert.Equal(1, result.PagedResult.TotalItemCount);
+        AssertId("1-1", result.PagedResult.Items[0].SpanId);
+    }
+
+    [Fact]
+    public void GetSpans_FilterByTextFragments_ReturnsMatchingSpans()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10), attributes: [KeyValuePair.Create("http.url", "https://example.com/api")]),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(5), endTime: s_testTime.AddMinutes(10), parentSpanId: "1-1", attributes: [KeyValuePair.Create("db.system", "postgresql")])
+                        }
+                    }
+                }
+            }
+        });
+
+        // Act
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [],
+            TextFragments = ["example.com"]
+        });
+
+        // Assert
+        Assert.Equal(1, result.PagedResult.TotalItemCount);
+        AssertId("1-1", result.PagedResult.Items[0].SpanId);
+    }
+
+    [Fact]
+    public void GetSpans_Pagination_ReturnsCorrectPage()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10)),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(10), parentSpanId: "1-1"),
+                            CreateSpan(traceId: "1", spanId: "1-3", startTime: s_testTime.AddMinutes(3), endTime: s_testTime.AddMinutes(10), parentSpanId: "1-1")
+                        }
+                    }
+                }
+            }
+        });
+
+        // Act - get second page (skip 1, take 1)
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 1,
+            Count = 1,
+            Filters = []
+        });
+
+        // Assert
+        Assert.Equal(3, result.PagedResult.TotalItemCount);
+        Assert.Single(result.PagedResult.Items);
+        AssertId("1-2", result.PagedResult.Items[0].SpanId);
+    }
+
+    [Fact]
+    public void GetSpans_CombinedFilters_ReturnsMatchingSpans()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10), status: new Status { Code = Status.Types.StatusCode.Error }, attributes: [KeyValuePair.Create("http.url", "https://example.com")]),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(5), endTime: s_testTime.AddMinutes(10), parentSpanId: "1-1", status: new Status { Code = Status.Types.StatusCode.Ok }, attributes: [KeyValuePair.Create("http.url", "https://example.com")]),
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(8), status: new Status { Code = Status.Types.StatusCode.Error }, attributes: [KeyValuePair.Create("db.system", "redis")])
+                        }
+                    }
+                }
+            }
+        });
+
+        // Act - filter for error spans with "example.com" text
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [],
+            HasError = true,
+            TextFragments = ["example.com"]
+        });
+
+        // Assert
+        Assert.Equal(1, result.PagedResult.TotalItemCount);
+        AssertId("1-1", result.PagedResult.Items[0].SpanId);
+    }
+
+    [Fact]
+    public void GetSpans_EmptyRepository_ReturnsEmpty()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        // Act
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = []
+        });
+
+        // Assert
+        Assert.Equal(0, result.PagedResult.TotalItemCount);
+        Assert.Empty(result.PagedResult.Items);
+    }
+
+    [Fact]
+    public void GetSpans_UnknownResource_ReturnsEmpty()
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10))
+                        }
+                    }
+                }
+            }
+        });
+
+        // Act
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = ResourceKey.Create("nonexistent", "unknown"),
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = []
+        });
+
+        // Assert
+        Assert.Equal(0, result.PagedResult.TotalItemCount);
+        Assert.Empty(result.PagedResult.Items);
+    }
+
+    [Theory]
+    [InlineData("747261636531", 1)] // full hex trace ID — prefix match
+    [InlineData("7472616", 1)] // 7 chars — meets ShortenedIdLength, prefix match
+    [InlineData("747261", 0)] // 6 chars — below ShortenedIdLength, requires exact match
+    public void GetSpans_TraceIdPrefixLength_MatchesShortenedIds(string traceIdFilter, int expectedCount)
+    {
+        // Arrange
+        var repository = CreateRepository();
+
+        // Use a trace ID whose hex representation is "747261636531" (UTF-8 bytes of "trace1")
+        var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: traceId, spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(10)),
+                            CreateSpan(traceId: "other", spanId: "2-1", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(8))
+                        }
+                    }
+                }
+            }
+        });
+
+        // Act
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [],
+            TraceId = traceIdFilter
+        });
+
+        // Assert
+        Assert.Equal(expectedCount, result.PagedResult.TotalItemCount);
+    }
+
+    [Fact]
+    public void GetSpans_DisabledFiltersAreIgnored()
+    {
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "trace1", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)),
+                            CreateSpan(traceId: "trace1", spanId: "span2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3))
+                        }
+                    }
+                }
+            }
+        });
+
+        // Enabled filter matches span name containing "span1", disabled filter would exclude everything
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKey = null,
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.NameField,
+                    Value = "span1",
+                    Condition = FilterCondition.Contains,
+                    Enabled = true
+                },
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.NameField,
+                    Value = "IMPOSSIBLE",
+                    Condition = FilterCondition.Contains,
+                    Enabled = false
+                }
+            ]
+        });
+
+        // The disabled filter should be ignored — only the enabled "span1" filter applies
+        Assert.Equal(1, result.PagedResult.TotalItemCount);
+        Assert.Contains("span1", result.PagedResult.Items[0].Name);
     }
 }

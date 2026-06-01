@@ -37,7 +37,7 @@ internal sealed class AzurePrivateDnsZoneResource : AzureProvisioningResource
     /// <summary>
     /// Gets the "name" output reference from the Private DNS Zone resource.
     /// </summary>
-    public BicepOutputReference NameOutput => new("name", this);
+    public BicepOutputReference NameOutputReference => new("name", this);
 
     /// <summary>
     /// Tracks VNet Links for this DNS Zone, keyed by VNet resource.
@@ -66,7 +66,7 @@ internal sealed class AzurePrivateDnsZoneResource : AzureProvisioningResource
             infra,
             dnsZone))
         {
-            dnsZone.Name = NameOutput.AsProvisioningParameter(infra);
+            dnsZone.Name = NameOutputReference.AsProvisioningParameter(infra);
         }
 
         infra.Add(dnsZone);

@@ -8,22 +8,6 @@ namespace Aspire.Hosting.Foundry;
 public partial class FoundryModel
 {
     /// <summary>
-    /// Models published by AI21 Labs.
-    /// </summary>
-    public static partial class AI21Labs
-    {
-        /// <summary>
-        /// A 398B parameters (94B active) multilingual model, offering a 256K long context window, function calling, structured output, and grounded generation.
-        /// </summary>
-        public static readonly FoundryModel AI21Jamba15Large = new() { Name = "AI21-Jamba-1.5-Large", Version = "1", Format = "AI21 Labs" };
-
-        /// <summary>
-        /// A 52B parameters (12B active) multilingual model, offering a 256K long context window, function calling, structured output, and grounded generation.
-        /// </summary>
-        public static readonly FoundryModel AI21Jamba15Mini = new() { Name = "AI21-Jamba-1.5-Mini", Version = "1", Format = "AI21 Labs" };
-    }
-
-    /// <summary>
     /// Models published by Anthropic.
     /// </summary>
     public static partial class Anthropic
@@ -31,31 +15,49 @@ public partial class FoundryModel
         /// <summary>
         /// Claude Haiku 4.5 delivers near-frontier performance for a wide range of use cases, and stands out as one of the best coding and agent models – with the right speed and cost to power free products and scaled sub-agents.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel ClaudeHaiku45 = new() { Name = "claude-haiku-4-5", Version = "20251001", Format = "Anthropic" };
+
+        /// <summary>
+        /// Claude Mythos Preview (gated research preview) is a new class of intelligence for cybersecurity, coding, and long-running agents. Only available as a gated research preview with access prioritized for defensive cybersecurity use cases
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeMythosPreview = new() { Name = "claude-mythos-preview", Version = "1", Format = "Anthropic" };
 
         /// <summary>
         /// Claude Opus 4.1 is an industry leader for coding. It delivers sustained performance on long-running tasks that require focused effort and thousands of steps, significantly expanding what AI agents can solve.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel ClaudeOpus41 = new() { Name = "claude-opus-4-1", Version = "20250805", Format = "Anthropic" };
 
         /// <summary>
         /// Claude Opus 4.5 is Anthropic’s most intelligent model, and an industry leader across coding, agents, computer use, and enterprise workflows. With a 200K token context window and 64K max output, Opus 4.5 is ideal for production code, sophisticated agents, o
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel ClaudeOpus45 = new() { Name = "claude-opus-4-5", Version = "20251101", Format = "Anthropic" };
 
         /// <summary>
-        /// Claude Opus 4.6 is the latest version of Anthropic's most intelligent model, and the world's best model for coding, enterprise agents, and professional work. With a 1M token context window (beta) and 128K max output, Opus 4.6 is ideal for production code,
+        /// Claude Opus 4.6 is the latest version of Anthropic's most intelligent model, and the world's best model for coding, enterprise agents, and professional work. With a 1M token context window and 128K max output, Opus 4.6 is ideal for production code, sophist
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel ClaudeOpus46 = new() { Name = "claude-opus-4-6", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
+        /// Claude Opus 4.7 is our most capable generally available model, advancing performance across coding, enterprise workflows, and long-running agentic tasks.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeOpus47 = new() { Name = "claude-opus-4-7", Version = "1", Format = "Anthropic" };
 
         /// <summary>
         /// Claude Sonnet 4.5 is Anthropic's most capable model for complex agents and an industry leader for coding and computer use.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel ClaudeSonnet45 = new() { Name = "claude-sonnet-4-5", Version = "20250929", Format = "Anthropic" };
 
         /// <summary>
-        /// Claude Sonnet 4.6 delivers frontier intelligence at scale—built for coding, agents, and enterprise workflows. With a 1M token context window (beta) and 128K max output, Sonnet 4.6 is ideal for coding, agents, office tasks, financial analysis, cybersecurity
+        /// Claude Sonnet 4.6 delivers frontier intelligence at scale—built for coding, agents, and enterprise workflows. With a 1M token context window and 128K max output, Sonnet 4.6 is ideal for coding, agents, office tasks, financial analysis, cybersecurity, and c
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel ClaudeSonnet46 = new() { Name = "claude-sonnet-4-6", Version = "1", Format = "Anthropic" };
     }
 
@@ -67,21 +69,25 @@ public partial class FoundryModel
         /// <summary>
         /// Generate images with amazing image quality, prompt adherence, and diversity at blazing fast speeds. FLUX1.1 [pro] delivers six times faster image generation and achieved the highest Elo score on Artificial Analysis benchmarks when launched, surpassing all
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Flux11Pro = new() { Name = "FLUX-1.1-pro", Version = "1", Format = "Black Forest Labs" };
 
         /// <summary>
         /// Generate and edit images through both text and image prompts. FLUX.1 Kontext is a multimodal flow matching model that enables both text-to-image generation and in-context image editing. Modify images while maintaining character consistency and performing l
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Flux1KontextPro = new() { Name = "FLUX.1-Kontext-pro", Version = "1", Format = "Black Forest Labs" };
 
         /// <summary>
         /// Professional text-to-image generation with adjustable inference steps and guidance scale for fine-tuned control. Features superior typography and text rendering, supports up to 4MP resolution, 32K prompt tokens, and up to 8 reference images. Ideal for deve
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Flux2Flex = new() { Name = "FLUX.2-flex", Version = "1", Format = "Black Forest Labs" };
 
         /// <summary>
         /// Generate and edit images through both text and image prompts. FLUX.2-pro is a multimodal flow matching model that enables both text-to-image generation and in-context image editing. Modify images while maintaining character consistency and performing local
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Flux2Pro = new() { Name = "FLUX.2-pro", Version = "1", Format = "Black Forest Labs" };
     }
 
@@ -93,51 +99,49 @@ public partial class FoundryModel
         /// <summary>
         /// Command A is a highly efficient generative model that excels at agentic and multilingual use cases.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel CohereCommandA = new() { Name = "cohere-command-a", Version = "4", Format = "Cohere" };
 
         /// <summary>
         /// Command R is a scalable generative model targeting RAG and Tool Use to enable production-scale AI for enterprise.
         /// </summary>
-        public static readonly FoundryModel CohereCommandR = new() { Name = "Cohere-command-r", Version = "1", Format = "Cohere" };
-
-        /// <summary>
-        /// Command R is a scalable generative model targeting RAG and Tool Use to enable production-scale AI for enterprise.
-        /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel CohereCommandR082024 = new() { Name = "Cohere-command-r-08-2024", Version = "1", Format = "Cohere" };
 
         /// <summary>
         /// Command R+ is a state-of-the-art RAG-optimized model designed to tackle enterprise-grade workloads.
         /// </summary>
-        public static readonly FoundryModel CohereCommandRPlus = new() { Name = "Cohere-command-r-plus", Version = "1", Format = "Cohere" };
-
-        /// <summary>
-        /// Command R+ is a state-of-the-art RAG-optimized model designed to tackle enterprise-grade workloads.
-        /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel CohereCommandRPlus082024 = new() { Name = "Cohere-command-r-plus-08-2024", Version = "1", Format = "Cohere" };
 
         /// <summary>
         /// Cohere Embed English is the market's leading text representation model used for semantic search, retrieval-augmented generation (RAG), classification, and clustering.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel CohereEmbedV3English = new() { Name = "Cohere-embed-v3-english", Version = "1", Format = "Cohere" };
 
         /// <summary>
         /// Cohere Embed Multilingual is the market's leading text representation model used for semantic search, retrieval-augmented generation (RAG), classification, and clustering.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel CohereEmbedV3Multilingual = new() { Name = "Cohere-embed-v3-multilingual", Version = "1", Format = "Cohere" };
 
         /// <summary>
         /// Rerank improves search systems by sorting documents based on their semantic similarity to a query
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel CohereRerankV40Fast = new() { Name = "Cohere-rerank-v4.0-fast", Version = "2", Format = "Cohere" };
 
         /// <summary>
         /// Rerank improves search systems by sorting documents based on their semantic similarity to a query
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel CohereRerankV40Pro = new() { Name = "Cohere-rerank-v4.0-pro", Version = "1", Format = "Cohere" };
 
         /// <summary>
         /// Embed 4 transforms texts and images into numerical vectors
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel EmbedV40 = new() { Name = "embed-v-4-0", Version = "6", Format = "Cohere" };
     }
 
@@ -149,37 +153,50 @@ public partial class FoundryModel
         /// <summary>
         /// DeepSeek-R1 excels at reasoning tasks using a step-by-step training process, such as language, scientific reasoning, and coding tasks.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel DeepSeekR1 = new() { Name = "DeepSeek-R1", Version = "1", Format = "DeepSeek" };
 
         /// <summary>
         /// The DeepSeek R1 0528 model has improved reasoning capabilities, this version also offers a reduced hallucination rate, enhanced support for function calling, and better experience for vibe coding.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel DeepSeekR10528 = new() { Name = "DeepSeek-R1-0528", Version = "1", Format = "DeepSeek" };
 
         /// <summary>
         /// A strong Mixture-of-Experts (MoE) language model with 671B total parameters with 37B activated for each token.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel DeepSeekV3 = new() { Name = "DeepSeek-V3", Version = "1", Format = "DeepSeek" };
 
         /// <summary>
         /// DeepSeek-V3-0324 demonstrates notable improvements over its predecessor, DeepSeek-V3, in several key aspects, including enhanced reasoning, improved function calling, and superior code generation capabilities.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel DeepSeekV30324 = new() { Name = "DeepSeek-V3-0324", Version = "1", Format = "DeepSeek" };
-
-        /// <summary>
-        /// DeepSeek-V3.1 is a hybrid model that enhances tool usage, thinking efficiency, and supports both thinking and non-thinking modes via chat template switching
-        /// </summary>
-        public static readonly FoundryModel DeepSeekV31 = new() { Name = "DeepSeek-V3.1", Version = "1", Format = "DeepSeek" };
 
         /// <summary>
         /// DeepSeek-V3.2, a model that harmonizes high computational efficiency with superior reasoning and agent performance
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel DeepSeekV32 = new() { Name = "DeepSeek-V3.2", Version = "1", Format = "DeepSeek" };
 
         /// <summary>
         /// DeepSeek-V3.2 Speciale, a model that harmonizes high computational efficiency with superior reasoning and agent performance
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel DeepSeekV32Speciale = new() { Name = "DeepSeek-V3.2-Speciale", Version = "1", Format = "DeepSeek" };
+
+        /// <summary>
+        /// DeepSeek V4 is an efficient MoE model family with 1M context and near state-of-the-art open-source reasoning performance.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel DeepSeekV4Flash = new() { Name = "DeepSeek-V4-Flash", Version = "2026-04-23", Format = "DeepSeek" };
+
+        /// <summary>
+        /// DeepSeek V4 is an efficient MoE model family with 1M context and near state-of-the-art open-source reasoning performance.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel DeepSeekV4Pro = new() { Name = "DeepSeek-V4-Pro", Version = "2026-04-23", Format = "DeepSeek" };
     }
 
     /// <summary>
@@ -190,51 +207,37 @@ public partial class FoundryModel
         /// <summary>
         /// Excels in image reasoning capabilities on high-res images for visual understanding apps.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Llama3211BVisionInstruct = new() { Name = "Llama-3.2-11B-Vision-Instruct", Version = "6", Format = "Meta" };
 
         /// <summary>
         /// Advanced image reasoning capabilities for visual understanding agentic apps.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Llama3290BVisionInstruct = new() { Name = "Llama-3.2-90B-Vision-Instruct", Version = "5", Format = "Meta" };
-
-        /// <summary>
-        /// Llama 3.3 70B Instruct offers enhanced reasoning, math, and instruction following with performance comparable to Llama 3.1 405B.
-        /// </summary>
-        public static readonly FoundryModel Llama3370BInstruct = new() { Name = "Llama-3.3-70B-Instruct", Version = "9", Format = "Meta" };
 
         /// <summary>
         /// Llama 4 Maverick 17B 128E Instruct FP8 is great at precise image understanding and creative writing, offering high quality at a lower price compared to Llama 3.3 70B
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Llama4Maverick17B128EInstructFP8 = new() { Name = "Llama-4-Maverick-17B-128E-Instruct-FP8", Version = "3", Format = "Meta" };
 
         /// <summary>
         /// Llama 4 Scout 17B 16E Instruct is great at multi-document summarization, parsing extensive user activity for personalized tasks, and reasoning over vast codebases.
         /// </summary>
-        public static readonly FoundryModel Llama4Scout17B16EInstruct = new() { Name = "Llama-4-Scout-17B-16E-Instruct", Version = "2", Format = "Meta" };
-
-        /// <summary>
-        /// A powerful 70-billion parameter model excelling in reasoning, coding, and broad language applications.
-        /// </summary>
-        public static readonly FoundryModel MetaLlama370BInstruct = new() { Name = "Meta-Llama-3-70B-Instruct", Version = "9", Format = "Meta" };
-
-        /// <summary>
-        /// A versatile 8-billion parameter model optimized for dialogue and text generation tasks.
-        /// </summary>
-        public static readonly FoundryModel MetaLlama38BInstruct = new() { Name = "Meta-Llama-3-8B-Instruct", Version = "9", Format = "Meta" };
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Llama4Scout17B16EInstruct = new() { Name = "Llama-4-Scout-17B-16E-Instruct", Version = "4", Format = "Meta" };
 
         /// <summary>
         /// The Llama 3.1 instruction tuned text only models are optimized for multilingual dialogue use cases and outperform many of the available open source and closed chat models on common industry benchmarks.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel MetaLlama31405BInstruct = new() { Name = "Meta-Llama-3.1-405B-Instruct", Version = "1", Format = "Meta" };
 
         /// <summary>
         /// The Llama 3.1 instruction tuned text only models are optimized for multilingual dialogue use cases and outperform many of the available open source and closed chat models on common industry benchmarks.
         /// </summary>
-        public static readonly FoundryModel MetaLlama3170BInstruct = new() { Name = "Meta-Llama-3.1-70B-Instruct", Version = "4", Format = "Meta" };
-
-        /// <summary>
-        /// The Llama 3.1 instruction tuned text only models are optimized for multilingual dialogue use cases and outperform many of the available open source and closed chat models on common industry benchmarks.
-        /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel MetaLlama318BInstruct = new() { Name = "Meta-Llama-3.1-8B-Instruct", Version = "6", Format = "Meta" };
     }
 
@@ -427,13 +430,13 @@ public partial class FoundryModel
         ///     <item>
         ///       <description>
         ///         <para>
-        ///           <b>Scalable and Reliable</b>: Built on Azure’s cloud infrastructure, the Azure AI Content Safety service scales automatically to meet demand, from small business applications to global enterprise workloads.</para>
+        ///           <b>Scalable and Reliable</b>: Built on Azure's cloud infrastructure, the Azure AI Content Safety service scales automatically to meet demand, from small business applications to global enterprise workloads.</para>
         ///       </description>
         ///     </item>
         ///     <item>
         ///       <description>
         ///         <para>
-        ///           <b>Security and Compliance</b>: Azure AI Content Safety runs on Azure’s secure cloud infrastructure, ensuring data privacy and compliance with global standards. User data is not stored after the translation process.</para>
+        ///           <b>Security and Compliance</b>: Azure AI Content Safety runs on Azure's secure cloud infrastructure, ensuring data privacy and compliance with global standards. User data is not stored after the translation process.</para>
         ///       </description>
         ///     </item>
         ///     <item>
@@ -492,6 +495,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>Explore pricing options here: <see href="https://azure.microsoft.com/pricing/details/cognitive-services/content-safety/">Azure AI Content Safety - Pricing | Microsoft Azure</see>.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureAIContentSafety = new() { Name = "Azure-AI-Content-Safety", Version = "1", Format = "Microsoft" };
 
         /// <summary>
@@ -632,6 +636,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>View up-to-date pay-as-you-go pricing details here: <see href="https://azure.microsoft.com/en-us/pricing/details/content-understanding/">Azure AI Content Understanding pricing</see>.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureAIContentUnderstanding = new() { Name = "Azure-AI-Content-Understanding", Version = "1", Format = "Microsoft" };
 
         /// <summary>
@@ -932,6 +937,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>View up-to-date pricing information for the pay-as-you-go pricing model here: <see href="https://azure.microsoft.com/pricing/details/ai-document-intelligence/">Azure AI Document Intelligence pricing</see>.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureAIDocumentIntelligence = new() { Name = "Azure-AI-Document-Intelligence", Version = "1", Format = "Microsoft" };
 
         /// <summary>
@@ -1102,6 +1108,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>View up-to-date pricing information for the pay-as-you-go pricing model here: <see href="https://azure.microsoft.com/pricing/details/cognitive-services/computer-vision">Azure AI Vision pricing</see>.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureAIVision = new() { Name = "Azure-AI-Vision", Version = "1", Format = "Microsoft" };
 
         /// <summary>
@@ -1192,6 +1199,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>Learn more in the full <see href="https://aka.ms/content-understanding-doc">Azure AI Content Understanding documentation</see>.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureContentUnderstandingLayout = new() { Name = "Azure-Content-Understanding-Layout", Version = "1", Format = "Microsoft" };
 
         /// <summary>
@@ -1267,126 +1275,606 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>Learn more in the full <see href="https://aka.ms/content-understanding-doc">Azure AI Content Understanding documentation</see>.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureContentUnderstandingRead = new() { Name = "Azure-Content-Understanding-Read", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        /// PII Redaction for Conversation automatically detects and masks sensitive information such as names, addresses, phone numbers, credit card details, and other personally identifiable information (PII) in meeting transcripts.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel AzureLanguageConversationalPiiRedaction = new() { Name = "Azure-Language-Conversational-PII-redaction", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        /// PII Redaction for Documents automatically detects and masks sensitive information such as names, addresses, phone numbers, credit card details, and other personally identifiable information (PII) in native documents including PDF, Word, and text files.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel AzureLanguageDocumentPiiRedaction = new() { Name = "Azure-Language-Document-PII-redaction", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// Language detection quickly and accurately identifies the language of any text, supporting over 100 languages and dialects, including the ISO 15924 standard for a select number of languages.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureLanguageLanguageDetection = new() { Name = "Azure-Language-Language-detection", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        /// Text Analytics for Health extracts and labels relevant medical information from unstructured clinical text, including doctors' notes, discharge summaries, and electronic health records, using named entity recognition, relation extraction, entity linking, a
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel AzureLanguageTextAnalyticsForHealth = new() { Name = "Azure-Language-Text-Analytics-for-Health", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// PII Redaction for Text automatically detects and masks sensitive information such as names, addresses, phone numbers, credit card details, and other personally identifiable information (PII) in unstructured text.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureLanguageTextPiiRedaction = new() { Name = "Azure-Language-Text-PII-redaction", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// Transcribes streaming or recorded audio into readable text across 140+ languages and dialects. Accuracy can be further optimized with custom models for your specialized use cases.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureSpeechSpeechToText = new() { Name = "Azure-Speech-Speech-to-text", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        /// Translates streaming or recorded audio into text or audio across 140+ languages and dialects. Accuracy can be further optimized with custom models for your specialized use cases.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel AzureSpeechSpeechTranslation = new() { Name = "Azure-Speech-Speech-Translation", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         ///   <para>Text-to-speech enables your applications, tools, or devices to convert text into natural synthesized speech. It leverages advanced out-of-the-box [prebuilt neural voices](<see href="https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?t">https://learn.microsoft.com/en-us/azure/ai-services/speech-service/language-support?t</see></para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureSpeechTextToSpeech = new() { Name = "Azure-Speech-Text-to-speech", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// Text to speech avatar converts text into a digital video of a human (either a standard avatar or a custom text to speech avatar) speaking with a natural-sounding voice. The text to speech avatar video can be synthesized asynchronously or in real time. Deve
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureSpeechTextToSpeechAvatar = new() { Name = "Azure-Speech-Text-to-speech-Avatar", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// Voice Live API is a single unified API that enables low-latency, high-quality speech to speech interactions for voice agents.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureSpeechVoiceLive = new() { Name = "Azure-Speech-Voice-Live", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// Document translation is a cloud-based, multilingual service that uses AI to translate documents from one language to another while preserving the document layout.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureTranslatorDocumentTranslation = new() { Name = "Azure-Translator-Document-translation", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// Text translation is a cloud-based, multilingual service that uses neural machine translation models (NMT) and/or large language models (LLM) to translate text from one language to another, supporting 135 languages.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureTranslatorTextTranslation = new() { Name = "Azure-Translator-Text-translation", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// MAI-DS-R1 is a DeepSeek-R1 reasoning model that has been post-trained by the Microsoft AI team to fill in information gaps in the previous version of the model and improve its harm protections while maintaining R1 reasoning capabilities.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel MaiDSR1 = new() { Name = "MAI-DS-R1", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        /// MAI-Transcribe-1 is an ASR model built to deliver high quality batch transcription whenever the user speaks. It is designed to achieve high accuracy across 25 languages and to adapt seamlessly to diverse accents, dialects, and regional speech patterns.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MaiTranscribe1 = new() { Name = "MAI-Transcribe-1", Version = "2026-01-23", Format = "Microsoft" };
+
+        /// <summary>
+        /// MAI-Voice-1 is a text-to-speech (TTS) model that generates high-quality single-speaker speech and, soon, multi-speaker speech for public preview. It produces audio that strictly follows the input transcript and supports per-turn emotion control as well as
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MaiVoice1 = new() { Name = "MAI-Voice-1", Version = "2025-12-18", Format = "Microsoft" };
 
         /// <summary>
         /// Model router is a deployable AI model that is trained to select the most suitable large language model (LLM) for a given prompt.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel ModelRouter = new() { Name = "model-router", Version = "2025-11-18", Format = "Microsoft" };
 
         /// <summary>
         /// Same Phi-3-medium model, but with a larger context size for RAG or few shot prompting.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi3Medium128kInstruct = new() { Name = "Phi-3-medium-128k-instruct", Version = "7", Format = "Microsoft" };
 
         /// <summary>
         /// A 14B parameters model, proves better quality than Phi-3-mini, with a focus on high-quality, reasoning-dense data.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi3Medium4kInstruct = new() { Name = "Phi-3-medium-4k-instruct", Version = "6", Format = "Microsoft" };
 
         /// <summary>
         /// Same Phi-3-mini model, but with a larger context size for RAG or few shot prompting.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi3Mini128kInstruct = new() { Name = "Phi-3-mini-128k-instruct", Version = "13", Format = "Microsoft" };
 
         /// <summary>
         /// Tiniest member of the Phi-3 family. Optimized for both quality and low latency.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi3Mini4kInstruct = new() { Name = "Phi-3-mini-4k-instruct", Version = "15", Format = "Microsoft" };
 
         /// <summary>
         /// Same Phi-3-small model, but with a larger context size for RAG or few shot prompting.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi3Small128kInstruct = new() { Name = "Phi-3-small-128k-instruct", Version = "5", Format = "Microsoft" };
 
         /// <summary>
         /// A 7B parameters model, proves better quality than Phi-3-mini, with a focus on high-quality, reasoning-dense data.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi3Small8kInstruct = new() { Name = "Phi-3-small-8k-instruct", Version = "6", Format = "Microsoft" };
+
+        /// <summary>
+        ///   <para>
+        ///     <b>Model Summary</b>
+        ///   </para>
+        ///   <para>Phi-3 Vision is a lightweight, state-of-the-art open multimodal model built upon datasets which include - synthetic data and filtered publicly available websites - with a focus on very high-quality, reasoning dense data both on text and vision.  The model belongs to the Phi-3 model family, and the multimodal version comes with 128K context length (in tokens) it can support. The model underwent a rigorous enhancement process, incorporating both supervised fine-tuning and direct preference optimization to ensure precise instruction adherence and robust safety measures.</para>
+        ///   <para>Resources and Technical Documentation:</para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <see href="https://aka.ms/phi3blog-april">Phi-3 Microsoft Blog</see>
+        ///         </para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <see href="https://aka.ms/phi3-tech-report">Phi-3 Technical Report</see>
+        ///         </para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Training</b>
+        ///   </para>
+        ///   <para>
+        ///     <b>Model</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>Architecture: Phi-3-Vision-128K-Instruct has 4.2B parameters and contains image encoder, connector, projector, and Phi-3 Mini language model.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Inputs: Text and Image. It’s best suited for prompts using the chat format.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Context length: 128K tokens</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>GPUs: 512 H100-80G</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Training time: 1.5 days</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Training data: 500B vision and text tokens</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Outputs: Generated text in response to the input</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Dates: Our models were trained between February and April 2024</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Status: This is a static model trained on an offline text dataset with cutoff date Mar 15, 2024. Future versions of the tuned models may be released as we improve models.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Release Type: Open weight release</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Release dates: The model weight is released on May 21, 2024.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Datasets</b>
+        ///   </para>
+        ///   <para>Our training data includes a wide variety of sources, and is a combination of</para>
+        ///   <list type="number">
+        ///     <item>
+        ///       <description>
+        ///         <para>publicly available documents filtered rigorously for quality, selected high-quality educational data and code;</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>selected high-quality image-text interleave;</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>newly created synthetic, “textbook-like” data for the purpose of teaching math, coding, common sense reasoning, general knowledge of the world (science, daily activities, theory of mind, etc.), newly created image data, e.g., chart/table/diagram/slides;</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>high quality chat format supervised data covering various topics to reflect human preferences on different aspects such as instruct-following, truthfulness, honesty and helpfulness.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>The data collection process involved sourcing information from publicly available documents, with a meticulous approach to filtering out undesirable documents and images. To safeguard privacy, we carefully filtered various image and text data sources to remove or scrub any potentially personal data from the training data.</para>
+        ///   <para>More details can be found in the <see href="https://aka.ms/phi3-tech-report">Phi-3 Technical Report</see>.</para>
+        ///   <para>
+        ///     <b>Benchmarks</b>
+        ///   </para>
+        ///   <para>To understand the capabilities, we compare Phi-3 Vision-128K-Instruct with a set of models over a variety of zero-shot benchmarks using our internal benchmark platform.</para>
+        ///   <para> </para>
+        ///   <para>Benchmark</para>
+        ///   <para>Phi-3 Vision-128K-In1</para>
+        ///   <para>LlaVA-1.6 Vicuna-7B</para>
+        ///   <para>QWEN-VL Chat</para>
+        ///   <para>Llama3-Llava-Next-8B</para>
+        ///   <para>Claude-3 Haiku</para>
+        ///   <para>Gemini 1.0 Pro V</para>
+        ///   <para>GPT-4V-Turbo</para>
+        ///   <para>MMMU</para>
+        ///   <para>40.4</para>
+        ///   <para>34.2</para>
+        ///   <para>39.0</para>
+        ///   <para>36.4</para>
+        ///   <para>40.7</para>
+        ///   <para>42.0</para>
+        ///   <para>55.5</para>
+        ///   <para>MMBench</para>
+        ///   <para>80.5</para>
+        ///   <para>76.3</para>
+        ///   <para>75.8</para>
+        ///   <para>79.4</para>
+        ///   <para>62.4</para>
+        ///   <para>80.0</para>
+        ///   <para>86.1</para>
+        ///   <para>ScienceQA</para>
+        ///   <para>90.8</para>
+        ///   <para>70.6</para>
+        ///   <para>67.2</para>
+        ///   <para>73.7</para>
+        ///   <para>72.0</para>
+        ///   <para>79.7</para>
+        ///   <para>75.7</para>
+        ///   <para>MathVista</para>
+        ///   <para>44.5</para>
+        ///   <para>31.5</para>
+        ///   <para>29.4</para>
+        ///   <para>34.8</para>
+        ///   <para>33.2</para>
+        ///   <para>35.0</para>
+        ///   <para>47.5</para>
+        ///   <para>InterGPS</para>
+        ///   <para>38.1</para>
+        ///   <para>20.5</para>
+        ///   <para>22.3</para>
+        ///   <para>24.6</para>
+        ///   <para>32.1</para>
+        ///   <para>28.6</para>
+        ///   <para>41.0</para>
+        ///   <para>AI2D</para>
+        ///   <para>76.7</para>
+        ///   <para>63.1</para>
+        ///   <para>59.8</para>
+        ///   <para>66.9</para>
+        ///   <para>60.3</para>
+        ///   <para>62.8</para>
+        ///   <para>74.7</para>
+        ///   <para>ChartQA</para>
+        ///   <para>81.4</para>
+        ///   <para>55.0</para>
+        ///   <para>50.9</para>
+        ///   <para>65.8</para>
+        ///   <para>59.3</para>
+        ///   <para>58.0</para>
+        ///   <para>62.3</para>
+        ///   <para>TextVQA</para>
+        ///   <para>70.9</para>
+        ///   <para>64.6</para>
+        ///   <para>59.4</para>
+        ///   <para>55.7</para>
+        ///   <para>62.7</para>
+        ///   <para>64.7</para>
+        ///   <para>68.1</para>
+        ///   <para>POPE</para>
+        ///   <para>85.8</para>
+        ///   <para>87.2</para>
+        ///   <para>82.6</para>
+        ///   <para>87.0</para>
+        ///   <para>74.4</para>
+        ///   <para>84.2</para>
+        ///   <para>83.7</para>
+        ///   <para>
+        ///     <b>Intended Uses</b>
+        ///   </para>
+        ///   <para>
+        ///     <b>Primary use cases</b>
+        ///   </para>
+        ///   <para>The model is intended for broad commercial and research use in English. The model provides uses for general purpose AI systems and applications with visual and text input capabilities which require</para>
+        ///   <list type="number">
+        ///     <item>
+        ///       <description>
+        ///         <para>memory/compute constrained environments;</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>latency bound scenarios;</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>general image understanding;</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>OCR;</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>chart and table understanding.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>The model is designed to accelerate research on efficient language and multimodal models, for use as a building block for generative AI powered features.</para>
+        ///   <para>
+        ///     <b>Use case considerations</b>
+        ///   </para>
+        ///   <para>The model is not specifically designed or evaluated for all downstream purposes. Developers should consider common limitations of language models as they select use cases, and evaluate and mitigate for accuracy, safety, and fairness before using within a specific downstream use case, particularly for high-risk scenarios. Developers should be aware of and adhere to applicable laws or regulations (including privacy, trade compliance laws, etc.) that are relevant to their use case.</para>
+        ///   <para>Nothing contained in this Model Card should be interpreted as or deemed a restriction or modification to the license the model is released under.</para>
+        ///   <para>
+        ///     <b>Responsible AI Considerations</b>
+        ///   </para>
+        ///   <para>Like other models, the Phi family of models can potentially behave in ways that are unfair, unreliable, or offensive. Some of the limiting behaviors to be aware of include:</para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>Quality of Service: The Phi models are trained primarily on English text. Languages other than English will experience worse performance English language varieties with less representation in the training data might experience worse performance than standard American English.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Representation of Harms &amp; Perpetuation of Stereotypes: These models can over- or under-represent groups of people, erase representation of some groups, or reinforce demeaning or negative stereotypes. Despite safety post-training, these limitations may still be present due to differing levels of representation of different groups or prevalence of examples of negative stereotypes in training data that reflect real-world patterns and societal biases.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Inappropriate or Offensive Content: These models may produce other types of inappropriate or offensive content, which may make it inappropriate to deploy for sensitive contexts without additional mitigations that are specific to the use case.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Information Reliability: Language models can generate nonsensical content or fabricate content that might sound reasonable but is inaccurate or outdated.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Limited Scope for Code: Majority of Phi-3 training data is based in Python and use common packages such as "typing, math, random, collections, datetime, itertools". If the model generates Python scripts that utilize other packages or scripts in other languages, we strongly recommend users manually verify all API uses.</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>Developers should apply responsible AI best practices and are responsible for ensuring that a specific use case complies with relevant laws and regulations (e.g. privacy, trade, etc.). Important areas for consideration include:</para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>Allocation: Models may not be suitable for scenarios that could have consequential impact on legal status or the allocation of resources or life opportunities (ex: housing, employment, credit, etc.) without further assessments and additional debiasing techniques.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>High-Risk Scenarios: Developers should assess suitability of using models in high-risk scenarios where unfair, unreliable or offensive outputs might be extremely costly or lead to harm. This includes providing advice in sensitive or expert domains where accuracy and reliability are critical (ex: legal or health advice). Additional safeguards should be implemented at the application level according to the deployment context.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Misinformation: Models may produce inaccurate information. Developers should follow transparency best practices and inform end-users they are interacting with an AI system. At the application level, developers can build feedback mechanisms and pipelines to ground responses in use-case specific, contextual information, a technique known as Retrieval Augmented Generation (RAG).</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Generation of Harmful Content: Developers should assess outputs for their context and use available safety classifiers or custom solutions appropriate for their use case.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Misuse: Other forms of misuse such as fraud, spam, or malware production may be possible, and developers should ensure that their applications do not violate applicable laws and regulations.</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>Identification of individuals: models with vision capabilities may have the potential to uniquely identify individuals in images. Safety post-training steers the model to refuse such requests, but developers should consider and implement, as appropriate, additional mitigations or user consent flows as required in their respective jurisdiction, (e.g., building measures to blur faces in image inputs before processing).</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Inference Samples</b>
+        ///   </para>
+        ///   <para>Inference type</para>
+        ///   <para>Python sample (Notebook)</para>
+        ///   <para>CLI with YAML</para>
+        ///   <para>Real time</para>
+        ///   <para>
+        ///     <see href="https://aka.ms/azureml-infer-sdk-image-text-to-text-generation">image-text-to-text-generation-online-endpoint.ipynb</see>image-text-to-text-generation-online-endpoint.ipynb</para>
+        ///   <para>
+        ///     <see href="https://aka.ms/azureml-infer-cli-image-text-to-text-generation">image-text-to-text-generation-online-endpoint.sh</see>image-text-to-text-generation-online-endpoint.sh</para>
+        ///   <para>
+        ///     <b>Sample inputs and outputs (for real-time inference)</b>
+        ///   </para>
+        ///   <para>Phi-3-vision model only supports single image per conversation. Specifically, please refer to below grid:</para>
+        ///   <para />
+        ///   <para>Single-turn</para>
+        ///   <para>Multi-turn conversation</para>
+        ///   <para>Single Image</para>
+        ///   <para>Yes</para>
+        ///   <para>Yes</para>
+        ///   <para>Multiple Images</para>
+        ///   <para>No</para>
+        ///   <para>No</para>
+        ///   <para>
+        ///     <b>Sample Input</b>
+        ///   </para>
+        ///   <code>
+        /// {
+        ///   "input_data": {
+        ///     "input_string": [
+        ///       {
+        ///         "role": "user",
+        ///         "content": [
+        ///           {
+        ///             "type": "image_url",
+        ///             "image_url": {
+        ///               "url": "https://www.ilankelman.org/stopsigns/australia.jpg"
+        ///             }
+        ///           },
+        ///           {
+        ///             "type": "text",
+        ///             "text": "What is shown in this image? Be extremely detailed and specific."
+        ///           }
+        ///         ]
+        ///       }
+        ///     ],
+        ///     "parameters": { "temperature": 0.7, "max_new_tokens": 2048 }
+        ///   }
+        /// }</code>
+        ///   <para>
+        ///     <b>Sample Output</b>
+        ///   </para>
+        ///   <code>
+        /// {
+        ///   "output": " The image captures a vibrant street scene. Dominating the left side of the image is a red stop sign, standing on a white pole. Adjacent to the stop sign, a white lion statue adds a touch of symbolism to the scene. \n\nThe background is filled with colorful buildings, including a red one and a yellow one, adding a lively atmosphere to the scene. The blue sky overhead and a clear white road underneath it complete the picture. \n\nAdding to the cultural context, there are Chinese characters visible in the background, suggesting the presence of a Chinese influence in this location. The overall scene is a blend of urban life and cultural elements."
+        /// 
+        /// }</code>
+        ///   <para>
+        ///     <b>Software</b>
+        ///   </para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <see href="https://github.com/pytorch/pytorch">PyTorch</see>
+        ///         </para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <see href="https://github.com/huggingface/transformers">Transformers</see>
+        ///         </para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>
+        ///           <see href="https://github.com/HazyResearch/flash-attention">Flash-Attention</see>
+        ///         </para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>Hardware</b>
+        ///   </para>
+        ///   <para>Note that by default, the Phi-3-Vision-128K model uses flash attention, which requires certain types of GPU hardware to run. We have tested on the following GPU types:</para>
+        ///   <list type="bullet">
+        ///     <item>
+        ///       <description>
+        ///         <para>NVIDIA A100</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>NVIDIA A6000</para>
+        ///       </description>
+        ///     </item>
+        ///     <item>
+        ///       <description>
+        ///         <para>NVIDIA H100</para>
+        ///       </description>
+        ///     </item>
+        ///   </list>
+        ///   <para>
+        ///     <b>License</b>
+        ///   </para>
+        ///   <para>The model is licensed under the MIT license.</para>
+        ///   <para>
+        ///     <b>Trademarks</b>
+        ///   </para>
+        ///   <para>This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft trademarks or logos is subject to and must follow <see href="https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks">Microsoft’s Trademark &amp; Brand Guidelines</see>. Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship. Any use of third-party trademarks or logos are subject to those third-party’s policies.</para>
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Phi3Vision128kInstruct = new() { Name = "Phi-3-vision-128k-instruct", Version = "2", Format = "Microsoft" };
 
         /// <summary>
         /// Refresh of Phi-3-mini model.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi35MiniInstruct = new() { Name = "Phi-3.5-mini-instruct", Version = "6", Format = "Microsoft" };
 
         /// <summary>
         /// A new mixture of experts model
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi35MoEInstruct = new() { Name = "Phi-3.5-MoE-instruct", Version = "5", Format = "Microsoft" };
 
         /// <summary>
         /// Refresh of Phi-3-vision model.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi35VisionInstruct = new() { Name = "Phi-3.5-vision-instruct", Version = "2", Format = "Microsoft" };
 
         /// <summary>
         /// Phi-4 14B, a highly capable model for low latency scenarios.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi4 = new() { Name = "Phi-4", Version = "7", Format = "Microsoft" };
 
         /// <summary>
         /// 3.8B parameters Small Language Model outperforming larger models in reasoning, math, coding, and function-calling
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi4MiniInstruct = new() { Name = "Phi-4-mini-instruct", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// Lightweight math reasoning model optimized for multi-step problem solving
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi4MiniReasoning = new() { Name = "Phi-4-mini-reasoning", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// First small multimodal model to have 3 modality inputs (text, audio, image), excelling in quality and efficiency
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi4MultimodalInstruct = new() { Name = "Phi-4-multimodal-instruct", Version = "2", Format = "Microsoft" };
 
         /// <summary>
         /// State-of-the-art open-weight reasoning model.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Phi4Reasoning = new() { Name = "Phi-4-reasoning", Version = "1", Format = "Microsoft" };
     }
 
@@ -1398,56 +1886,43 @@ public partial class FoundryModel
         /// <summary>
         /// Codestral 25.01 by Mistral AI is designed for code generation, supporting 80+ programming languages, and optimized for tasks like code completion and fill-in-the-middle
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Codestral2501 = new() { Name = "Codestral-2501", Version = "2", Format = "Mistral AI" };
 
         /// <summary>
         /// Ministral 3B is a state-of-the-art Small Language Model (SLM) optimized for edge computing and on-device applications. As it is designed for low-latency and compute-efficient inference, it it also the perfect model for standard GenAI applications that have
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Ministral3B = new() { Name = "Ministral-3B", Version = "1", Format = "Mistral AI" };
 
         /// <summary>
         /// Document conversion to markdown with interleaved images and text
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel MistralDocumentAi2505 = new() { Name = "mistral-document-ai-2505", Version = "1", Format = "Mistral AI" };
 
         /// <summary>
         /// Document conversion to markdown with interleaved images and text
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel MistralDocumentAi2512 = new() { Name = "mistral-document-ai-2512", Version = "1", Format = "Mistral AI" };
-
-        /// <summary>
-        /// Mistral Large (2407) is an advanced Large Language Model (LLM) with state-of-the-art reasoning, knowledge and coding capabilities.
-        /// </summary>
-        public static readonly FoundryModel MistralLarge2407 = new() { Name = "Mistral-large-2407", Version = "1", Format = "Mistral AI" };
-
-        /// <summary>
-        /// Mistral Large 24.11 offers enhanced system prompts, advanced reasoning and function calling capabilities.
-        /// </summary>
-        public static readonly FoundryModel MistralLarge2411 = new() { Name = "Mistral-Large-2411", Version = "2", Format = "Mistral AI" };
 
         /// <summary>
         /// Mistral Large 3 is a state-of-the-art General-purpose Multimodal granular Mixture-of-Experts model with 39B active parameters, 673B total parameters featuring 128 experts per layer and Multi-Latent attention.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel MistralLarge3 = new() { Name = "Mistral-Large-3", Version = "1", Format = "Mistral AI" };
 
         /// <summary>
         /// Mistral Medium 3 is an advanced Large Language Model (LLM) with state-of-the-art reasoning, knowledge, coding and vision capabilities.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel MistralMedium2505 = new() { Name = "mistral-medium-2505", Version = "1", Format = "Mistral AI" };
-
-        /// <summary>
-        /// Mistral Nemo is a cutting-edge Language Model (LLM) boasting state-of-the-art reasoning, world knowledge, and coding capabilities within its size category.
-        /// </summary>
-        public static readonly FoundryModel MistralNemo = new() { Name = "Mistral-Nemo", Version = "1", Format = "Mistral AI" };
-
-        /// <summary>
-        /// Mistral Small can be used on any language-based task that requires high efficiency and low latency.
-        /// </summary>
-        public static readonly FoundryModel MistralSmall = new() { Name = "Mistral-small", Version = "1", Format = "Mistral AI" };
 
         /// <summary>
         /// Enhanced Mistral Small 3 with multimodal capabilities and a 128k context length.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel MistralSmall2503 = new() { Name = "mistral-small-2503", Version = "1", Format = "Mistral AI" };
     }
 
@@ -1459,11 +1934,13 @@ public partial class FoundryModel
         /// <summary>
         /// codex-mini is a fine-tuned variant of the o4-mini model, designed to deliver rapid, instruction-following performance for developers working in CLI workflows. Whether you're automating shell commands, editing scripts, or refactoring repositories, Codex-Min
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel CodexMini = new() { Name = "codex-mini", Version = "2025-05-16", Format = "OpenAI" };
 
         /// <summary>
         /// computer-use-preview is the model for Computer Use Agent for use in Responses API. You can use computer-use-preview model to get instructions to control a browser on your computer screen and take action on a user's behalf.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel ComputerUsePreview = new() { Name = "computer-use-preview", Version = "2025-03-11", Format = "OpenAI" };
 
         /// <summary>
@@ -1584,6 +2061,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>The provider has not supplied this information.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel DallE3 = new() { Name = "dall-e-3", Version = "3.0", Format = "OpenAI" };
 
         /// <summary>
@@ -1704,6 +2182,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>The provider has not supplied this information.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Davinci002 = new() { Name = "davinci-002", Version = "3", Format = "OpenAI" };
 
         /// <summary>
@@ -1824,6 +2303,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>The provider has not supplied this information.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt35Turbo = new() { Name = "gpt-35-turbo", Version = "0125", Format = "OpenAI" };
 
         /// <summary>
@@ -1971,6 +2451,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>The provider has not supplied this information.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt35Turbo16k = new() { Name = "gpt-35-turbo-16k", Version = "0613", Format = "OpenAI" };
 
         /// <summary>
@@ -2137,6 +2618,7 @@ public partial class FoundryModel
         ///     <b>More information</b>
         ///   </para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt35TurboInstruct = new() { Name = "gpt-35-turbo-instruct", Version = "0914", Format = "OpenAI" };
 
         /// <summary>
@@ -2340,6 +2822,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>The provider has not supplied this information.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4 = new() { Name = "gpt-4", Version = "turbo-2024-04-09", Format = "OpenAI" };
 
         /// <summary>
@@ -2460,61 +2943,73 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>The provider has not supplied this information.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt432k = new() { Name = "gpt-4-32k", Version = "0613", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-4.1 outperforms gpt-4o across the board, with major gains in coding, instruction following, and long-context understanding
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt41 = new() { Name = "gpt-4.1", Version = "2025-04-14", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-4.1-mini outperform gpt-4o-mini across the board, with major gains in coding, instruction following, and long-context handling
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt41Mini = new() { Name = "gpt-4.1-mini", Version = "2025-04-14", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-4.1-nano provides gains in coding, instruction following, and long-context handling along with lower latency and cost
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt41Nano = new() { Name = "gpt-4.1-nano", Version = "2025-04-14", Format = "OpenAI" };
 
         /// <summary>
         /// the largest and strongest general purpose model in the gpt model family up to date, best suited for diverse text and image tasks.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt45Preview = new() { Name = "gpt-4.5-preview", Version = "2025-02-27", Format = "OpenAI" };
 
         /// <summary>
         /// OpenAI's most advanced multimodal model in the gpt-4o family. Can handle both text and image inputs.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4o = new() { Name = "gpt-4o", Version = "2024-11-20", Format = "OpenAI" };
 
         /// <summary>
         /// Best suited for rich, asynchronous audio input/output interactions, such as creating spoken summaries from text.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4oAudioPreview = new() { Name = "gpt-4o-audio-preview", Version = "2024-12-17", Format = "OpenAI" };
 
         /// <summary>
         /// An affordable, efficient AI solution for diverse text and image tasks.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4oMini = new() { Name = "gpt-4o-mini", Version = "2024-07-18", Format = "OpenAI" };
 
         /// <summary>
         /// Best suited for rich, asynchronous audio input/output interactions, such as creating spoken summaries from text.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4oMiniAudioPreview = new() { Name = "gpt-4o-mini-audio-preview", Version = "2024-12-17", Format = "OpenAI" };
 
         /// <summary>
         /// Best suited for rich, asynchronous audio input/output interactions, such as creating spoken summaries from text.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4oMiniRealtimePreview = new() { Name = "gpt-4o-mini-realtime-preview", Version = "2024-12-17", Format = "OpenAI" };
 
         /// <summary>
         /// A highly efficient and cost effective speech-to-text solution that deliverables reliable and accurate transcripts.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4oMiniTranscribe = new() { Name = "gpt-4o-mini-transcribe", Version = "2025-12-15", Format = "OpenAI" };
 
         /// <summary>
         /// An advanced text-to-speech solution designed to convert written text into natural-sounding speech.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4oMiniTts = new() { Name = "gpt-4o-mini-tts", Version = "2025-12-15", Format = "OpenAI" };
 
         /// <summary>
@@ -2688,216 +3183,301 @@ public partial class FoundryModel
         ///     </item>
         ///   </list>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4oRealtimePreview = new() { Name = "gpt-4o-realtime-preview", Version = "2024-12-17", Format = "OpenAI" };
 
         /// <summary>
         /// A cutting-edge speech-to-text solution that deliverables reliable and accurate transcripts.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4oTranscribe = new() { Name = "gpt-4o-transcribe", Version = "2025-03-20", Format = "OpenAI" };
 
         /// <summary>
         /// A cutting-edge speech-to-text solution that deliverables reliable and accurate transcripts; now equipped with diarization support aka identifying different speakers through the transcription.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt4oTranscribeDiarize = new() { Name = "gpt-4o-transcribe-diarize", Version = "2025-10-15", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5 is designed for logic-heavy and multi-step tasks.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt5 = new() { Name = "gpt-5", Version = "2025-08-07", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5-chat (preview) is an advanced, natural, multimodal, and context-aware conversations for enterprise applications.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt5Chat = new() { Name = "gpt-5-chat", Version = "2025-10-03", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5-codex is designed for steerability, front end development, and interactivity.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt5Codex = new() { Name = "gpt-5-codex", Version = "2025-09-15", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5-mini is a lightweight version for cost-sensitive applications.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt5Mini = new() { Name = "gpt-5-mini", Version = "2025-08-07", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5-nano is optimized for speed, ideal for applications requiring low latency.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt5Nano = new() { Name = "gpt-5-nano", Version = "2025-08-07", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5-pro uses more compute to think harder and provide consistently better answers.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt5Pro = new() { Name = "gpt-5-pro", Version = "2025-10-06", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5.1 is designed for logic-heavy and multi-step tasks.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt51 = new() { Name = "gpt-5.1", Version = "2025-11-13", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5.1-chat (preview) is an advanced, natural, multimodal, and context-aware conversations for enterprise applications.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt51Chat = new() { Name = "gpt-5.1-chat", Version = "2025-11-13", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5.1-codex is designed for steerability, front end development, and interactivity.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt51Codex = new() { Name = "gpt-5.1-codex", Version = "2025-11-13", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5.1-codex-max is agentic coding model designed to streamline complex development workflows with advanced efficiency
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt51CodexMax = new() { Name = "gpt-5.1-codex-max", Version = "2025-12-04", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5.1-codex-mini is designed for steerability, front end development, and interactivity.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt51CodexMini = new() { Name = "gpt-5.1-codex-mini", Version = "2025-11-13", Format = "OpenAI" };
 
         /// <summary>
         /// GPT-5.2 is engineered for enterprise agent scenarios—delivering structured, auditable outputs, reliable tool use, and governed integrations.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt52 = new() { Name = "gpt-5.2", Version = "2025-12-11", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5.2-chat (preview) is an advanced, natural, multimodal, and context-aware conversations for enterprise applications.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt52Chat = new() { Name = "gpt-5.2-chat", Version = "2026-02-10", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5.2-codex is designed for steerability, front end development, and interactivity.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt52Codex = new() { Name = "gpt-5.2-codex", Version = "2026-01-14", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5.3-chat (preview) is an advanced, natural, multimodal, and context-aware conversations for enterprise applications.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt53Chat = new() { Name = "gpt-5.3-chat", Version = "2026-03-03", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-5.3-codex is designed for steerability, front end development, and interactivity.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt53Codex = new() { Name = "gpt-5.3-codex", Version = "2026-02-24", Format = "OpenAI" };
 
         /// <summary>
         /// GPT‑5.4 is OpenAI’s most capable frontier model, built to deliver faster, more reliable results for complex professional work.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt54 = new() { Name = "gpt-5.4", Version = "2026-03-05", Format = "OpenAI" };
+
+        /// <summary>
+        /// GPT‑5.4‑mini is a compact, cost‑efficient model designed for reliable performance across high‑volume, everyday AI workloads.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt54Mini = new() { Name = "gpt-5.4-mini", Version = "2026-03-17", Format = "OpenAI" };
+
+        /// <summary>
+        /// GPT‑5.4‑nano is a lightweight, ultra‑efficient model designed for low‑latency, cost‑effective tasks at massive scale.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt54Nano = new() { Name = "gpt-5.4-nano", Version = "2026-03-17", Format = "OpenAI" };
 
         /// <summary>
         /// GPT‑5.4-Pro is OpenAI’s most capable frontier model, built to deliver faster, more reliable results for complex professional work.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Gpt54Pro = new() { Name = "gpt-5.4-pro", Version = "2026-03-05", Format = "OpenAI" };
+
+        /// <summary>
+        /// GPT‑5.5 is OpenAI’s most capable frontier model, built to deliver faster, more reliable results for complex professional work.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt55 = new() { Name = "gpt-5.5", Version = "2026-04-24", Format = "OpenAI" };
 
         /// <summary>
         /// Best suited for rich, asynchronous audio input/output interactions, such as creating spoken summaries from text.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptAudio = new() { Name = "gpt-audio", Version = "2025-08-28", Format = "OpenAI" };
 
         /// <summary>
         /// A new S2S (speech to speech) model with improved instruction following.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptAudio15 = new() { Name = "gpt-audio-1.5", Version = "2026-02-23", Format = "OpenAI" };
 
         /// <summary>
         /// Best suited for rich, asynchronous audio input/output interactions, such as creating spoken summaries from text.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptAudioMini = new() { Name = "gpt-audio-mini", Version = "2025-10-06", Format = "OpenAI" };
+
+        /// <summary>
+        /// gpt-chat-latest (preview) is an advanced, natural, multimodal, and context-aware conversations for enterprise applications.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptChatLatest = new() { Name = "gpt-chat-latest", Version = "2026-05-05", Format = "OpenAI" };
 
         /// <summary>
         /// An efficient AI solution for diverse text and image tasks, including text to image, image to image, inpainting, and prompt transformation.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptImage1 = new() { Name = "gpt-image-1", Version = "2025-04-15", Format = "OpenAI" };
 
         /// <summary>
         /// An efficient AI solution for diverse text and image tasks, including high quality, cheap text to image generation
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptImage1Mini = new() { Name = "gpt-image-1-mini", Version = "2025-10-06", Format = "OpenAI" };
 
         /// <summary>
         /// An efficient AI solution for diverse text and image tasks, including high quality, and editing scenarios
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptImage15 = new() { Name = "gpt-image-1.5", Version = "2025-12-16", Format = "OpenAI" };
 
         /// <summary>
-        /// Push the open model frontier with GPT-OSS models, released under the permissive Apache 2.0 license, allowing anyone to use, modify, and deploy them freely.
+        /// An efficient AI solution for diverse text and image tasks, including high quality, and editing scenarios
         /// </summary>
-        public static readonly FoundryModel GptOss120b = new() { Name = "gpt-oss-120b", Version = "4", Format = "OpenAI" };
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptImage2 = new() { Name = "gpt-image-2", Version = "2026-04-21", Format = "OpenAI" };
 
         /// <summary>
         /// Push the open model frontier with GPT-OSS models, released under the permissive Apache 2.0 license, allowing anyone to use, modify, and deploy them freely.
         /// </summary>
-        public static readonly FoundryModel GptOss20b = new() { Name = "gpt-oss-20b", Version = "11", Format = "OpenAI" };
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptOss120b = new() { Name = "gpt-oss-120b", Version = "4", Format = "OpenAI" };
 
         /// <summary>
         /// A new S2S (speech to speech) model with improved instruction following.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptRealtime = new() { Name = "gpt-realtime", Version = "2025-08-28", Format = "OpenAI" };
 
         /// <summary>
         /// A new S2S (speech to speech) model with improved instruction following.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptRealtime15 = new() { Name = "gpt-realtime-1.5", Version = "2026-02-23", Format = "OpenAI" };
+
+        /// <summary>
+        /// Gpt‑realtime‑2 is a next‑generation speech‑to‑speech reasoning model that processes live audio input and generates audio responses with built‑in reasoning, enabling low‑latency conversational voice interactions.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptRealtime2 = new() { Name = "gpt-realtime-2", Version = "2026-05-07", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-realtime-mini is a smaller version of gpt-realtime S2S (speech to speech) model built on chive architecture. This model excels at instruction following and is optimized for cost efficiency.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptRealtimeMini = new() { Name = "gpt-realtime-mini", Version = "2025-12-15", Format = "OpenAI" };
+
+        /// <summary>
+        /// Gpt‑realtime‑translate is a low‑latency streaming model that converts spoken audio into translated output in real time, enabling live cross‑language communication within voice applications.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptRealtimeTranslate = new() { Name = "gpt-realtime-translate", Version = "2026-05-07", Format = "OpenAI" };
+
+        /// <summary>
+        /// A new STT (speech to text) model with realtime capability.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptRealtimeWhisper = new() { Name = "gpt-realtime-whisper", Version = "2026-05-07", Format = "OpenAI" };
 
         /// <summary>
         /// Focused on advanced reasoning and solving complex problems, including math and science tasks. Ideal for applications that require deep contextual understanding and agentic workflows.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel O1 = new() { Name = "o1", Version = "2024-12-17", Format = "OpenAI" };
 
         /// <summary>
         /// Smaller, faster, and 80% cheaper than o1-preview, performs well at code generation and small context operations.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel O1Mini = new() { Name = "o1-mini", Version = "2024-09-12", Format = "OpenAI" };
 
         /// <summary>
         /// Focused on advanced reasoning and solving complex problems, including math and science tasks. Ideal for applications that require deep contextual understanding and agentic workflows.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel O1Preview = new() { Name = "o1-preview", Version = "1", Format = "OpenAI" };
 
         /// <summary>
         /// o3 includes significant improvements on quality and safety while supporting the existing features of o1 and delivering comparable or better performance.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel O3 = new() { Name = "o3", Version = "2025-04-16", Format = "OpenAI" };
 
         /// <summary>
         /// The o3 series of models are trained with reinforcement learning to think before they answer and perform complex reasoning. The o1-pro model uses more compute to think harder and provide consistently better answers.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel O3DeepResearch = new() { Name = "o3-deep-research", Version = "2025-06-26", Format = "OpenAI" };
 
         /// <summary>
         /// o3-mini includes the o1 features with significant cost-efficiencies for scenarios requiring high performance.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel O3Mini = new() { Name = "o3-mini", Version = "2025-01-31", Format = "OpenAI" };
 
         /// <summary>
         /// The o3 series of models are trained with reinforcement learning to think before they answer and perform complex reasoning. The o1-pro model uses more compute to think harder and provide consistently better answers.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel O3Pro = new() { Name = "o3-pro", Version = "2025-06-10", Format = "OpenAI" };
 
         /// <summary>
         /// o4-mini includes significant improvements on quality and safety while supporting the existing features of o3-mini and delivering comparable or better performance.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel O4Mini = new() { Name = "o4-mini", Version = "2025-04-16", Format = "OpenAI" };
 
         /// <summary>
         /// An efficient AI solution to generate videos
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Sora = new() { Name = "sora", Version = "2025-05-02", Format = "OpenAI" };
 
         /// <summary>
         /// Text-embedding-3 series models are the latest and most capable embedding model from OpenAI.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel TextEmbedding3Large = new() { Name = "text-embedding-3-large", Version = "1", Format = "OpenAI" };
 
         /// <summary>
         /// Text-embedding-3 series models are the latest and most capable embedding model from OpenAI.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel TextEmbedding3Small = new() { Name = "text-embedding-3-small", Version = "1", Format = "OpenAI" };
 
         /// <summary>
@@ -3040,6 +3620,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>The provider has not supplied this information.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel TextEmbeddingAda002 = new() { Name = "text-embedding-ada-002", Version = "2", Format = "OpenAI" };
 
         /// <summary>
@@ -3171,6 +3752,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>The provider has not supplied this information.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Tts = new() { Name = "tts", Version = "001", Format = "OpenAI" };
 
         /// <summary>
@@ -3302,6 +3884,7 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>The provider has not supplied this information.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel TtsHd = new() { Name = "tts-hd", Version = "001", Format = "OpenAI" };
 
         /// <summary>
@@ -3438,11 +4021,12 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>The provider has not supplied this information.</para>
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Whisper = new() { Name = "whisper", Version = "001", Format = "OpenAI" };
     }
 
     /// <summary>
-    /// Models published by Stability AI.
+    /// Models published by StabilityAI.
     /// </summary>
     public static partial class StabilityAI
     {
@@ -3473,7 +4057,7 @@ public partial class FoundryModel
         ///     <item>
         ///       <description>
         ///         <para>
-        ///           <b>Seamless Azure integration:</b> Standard Azure AI Foundry experience, with support managed by the model provider.</para>
+        ///           <b>Seamless Azure integration:</b> Standard Microsoft Foundry experience, with support managed by the model provider.</para>
         ///       </description>
         ///     </item>
         ///     <item>
@@ -3578,7 +4162,8 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>We believe in safe, responsible AI practices and take deliberate measures to ensure Integrity starts at the early stages of development. This means we have taken and continue to take reasonable steps to prevent the misuse of Stable Diffusion 3.5 by bad actors. For more information about our approach to Safety please visit our Stable Safety page.</para>
         /// </summary>
-        public static readonly FoundryModel StableDiffusion35Large = new() { Name = "Stable-Diffusion-3.5-Large", Version = "1", Format = "Stability AI" };
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel StableDiffusion35Large = new() { Name = "Stable-Diffusion-3.5-Large", Version = "1", Format = "StabilityAI" };
 
         /// <summary>
         ///   <para>
@@ -3607,7 +4192,7 @@ public partial class FoundryModel
         ///     <item>
         ///       <description>
         ///         <para>
-        ///           <b>Seamless Azure integration:</b> Standard Azure AI Foundry experience, with support managed by the model provider.</para>
+        ///           <b>Seamless Azure integration:</b> Standard Microsoft Foundry experience, with support managed by the model provider.</para>
         ///       </description>
         ///     </item>
         ///     <item>
@@ -3741,7 +4326,8 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>We believe in safe, responsible AI practices and take deliberate measures to ensure Integrity starts at the early stages of development. For more information about our approach to Safety please visit our <see href="https://stability.ai/safety">Stable Safety</see> page.</para>
         /// </summary>
-        public static readonly FoundryModel StableImageCore = new() { Name = "Stable-Image-Core", Version = "1", Format = "Stability AI" };
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel StableImageCore = new() { Name = "Stable-Image-Core", Version = "1", Format = "StabilityAI" };
 
         /// <summary>
         ///   <para>
@@ -3770,7 +4356,7 @@ public partial class FoundryModel
         ///     <item>
         ///       <description>
         ///         <para>
-        ///           <b>Seamless Azure integration:</b> Standard Azure AI Foundry experience, with support managed by the model provider.</para>
+        ///           <b>Seamless Azure integration:</b> Standard Microsoft Foundry experience, with support managed by the model provider.</para>
         ///       </description>
         ///     </item>
         ///     <item>
@@ -3925,7 +4511,8 @@ public partial class FoundryModel
         ///   </para>
         ///   <para>We believe in safe, responsible AI practices and take deliberate measures to ensure Integrity starts at the early stages of development. For more information about our approach to Safety please visit our <see href="https://stability.ai/safety">Stable Safety</see> page.</para>
         /// </summary>
-        public static readonly FoundryModel StableImageUltra = new() { Name = "Stable-Image-Ultra", Version = "1", Format = "Stability AI" };
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel StableImageUltra = new() { Name = "Stable-Image-Ultra", Version = "1", Format = "StabilityAI" };
     }
 
     /// <summary>
@@ -3934,43 +4521,57 @@ public partial class FoundryModel
     public static partial class XAI
     {
         /// <summary>
-        /// Grok 3 is xAI's debut model, pretrained by Colossus at supermassive scale to excel in specialized domains like finance, healthcare, and the law.
-        /// </summary>
-        public static readonly FoundryModel Grok3 = new() { Name = "grok-3", Version = "1", Format = "xAI" };
-
-        /// <summary>
-        /// Grok 3 Mini is a lightweight model that thinks before responding. Trained on mathematic and scientific problems, it is great for logic-based tasks.
-        /// </summary>
-        public static readonly FoundryModel Grok3Mini = new() { Name = "grok-3-mini", Version = "1", Format = "xAI" };
-
-        /// <summary>
         /// Grok 4 is the latest reasoning model from xAI with advanced reasoning and tool-use capabilities, enabling it to achieve new state-of-the-art performance across challenging academic and industry benchmarks.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Grok4 = new() { Name = "grok-4", Version = "1", Format = "xAI" };
 
         /// <summary>
         /// Grok 4.1 Fast Non‑Reasoning is designed for low‑latency, near‑instant responses, emphasizing speed, high‑quality outputs, and smooth tool‑calling in agentic workflows, making it well‑suited for high‑throughput, real‑time scenarios where immediate responses
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Grok41FastNonReasoning = new() { Name = "grok-4-1-fast-non-reasoning", Version = "1", Format = "xAI" };
 
         /// <summary>
         /// Grok 4.1 Fast Reasoning is a frontier multimodal model built for high‑performance, agentic execution—combining strong reasoning, advanced tool calling, and agentic search to handle complex tasks with speed and precision. It delivers natural, fluid dialogue
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Grok41FastReasoning = new() { Name = "grok-4-1-fast-reasoning", Version = "1", Format = "xAI" };
+
+        /// <summary>
+        /// Grok 4.2 is xAI’s latest large language model, built for strong reasoning, multimodal understanding, and enterprise use. It improves instruction following, honesty, and calibration over earlier Grok versions, while supporting both single‑agent and multi‑ag
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Grok420NonReasoning = new() { Name = "grok-4-20-non-reasoning", Version = "1", Format = "xAI" };
+
+        /// <summary>
+        /// Grok 4.2 is xAI’s latest large language model, built for strong reasoning, multimodal understanding, and enterprise use. It improves instruction following, honesty, and calibration over earlier Grok versions, while supporting both single‑agent and multi‑ag
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Grok420Reasoning = new() { Name = "grok-4-20-reasoning", Version = "1", Format = "xAI" };
 
         /// <summary>
         /// Grok 4 Fast is an efficiency-focused large language model developed by xAI, pre-trained on general-purpose data and post-trained on task demonstrations and tool use, with built-in safety features including refusal behaviors, a fixed system prompt enforcing
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Grok4FastNonReasoning = new() { Name = "grok-4-fast-non-reasoning", Version = "1", Format = "xAI" };
 
         /// <summary>
         /// Grok 4 Fast is an efficiency-focused large language model developed by xAI, pre-trained on general-purpose data and post-trained on task demonstrations and tool use, with built-in safety features including refusal behaviors, a fixed system prompt enforcing
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel Grok4FastReasoning = new() { Name = "grok-4-fast-reasoning", Version = "1", Format = "xAI" };
+
+        /// <summary>
+        /// Grok 4.3 is the latest model from xAI, with advanced reasoning, productivity, and multi-agent capabilities, enabling it to achieve state-of-the-art performance across challenging academic and industry benchmarks.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Grok43 = new() { Name = "grok-4.3", Version = "1", Format = "xAI" };
 
         /// <summary>
         /// Grok Code Fast 1 is a fast, economical AI model for agentic coding, built from scratch with a new architecture, trained on programming-rich data, and fine-tuned for real-world coding tasks like bug fixes and project setup.
         /// </summary>
+        [AspireValue("FoundryModels")]
         public static readonly FoundryModel GrokCodeFast1 = new() { Name = "grok-code-fast-1", Version = "1", Format = "xAI" };
     }
 }

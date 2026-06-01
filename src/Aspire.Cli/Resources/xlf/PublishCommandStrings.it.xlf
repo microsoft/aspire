@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="it" original="../PublishCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Generate deployment artifacts for an apphost (Preview)</source>
+        <source>Generate deployment artifacts for an AppHost</source>
         <target state="needs-review-translation">Genera artefatti della distribuzione per un AppHost Aspire. (Anteprima)</target>
         <note />
       </trans-unit>
@@ -33,12 +33,12 @@
         <note />
       </trans-unit>
       <trans-unit id="OutputPathArgumentDescription">
-        <source>The output path for the generated artifacts. Defaults to './aspire-output' if not specified.</source>
+        <source>The output path for the generated artifacts. Defaults to the AppHost directory's 'aspire-output' folder if not specified.</source>
         <target state="needs-review-translation">Percorso di output per gli artefatti generati. Se non viene specificato alcun valore, l'impostazione predefinita è './aspire-output'.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire apphost project file</source>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="needs-review-translation">Percorso del file di un progetto AppHost di Aspire.</target>
         <note />
       </trans-unit>

@@ -24,13 +24,42 @@ internal sealed class DoCommand : PipelineCommandBase
     public DoCommand(IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger<DoCommand> logger, IAnsiConsole ansiConsole)
         : base("do", DoCommandStrings.Description, runner, interactionService, projectLocator, telemetry, features, updateNotifier, executionContext, hostEnvironment, projectFactory, configuration, logger, ansiConsole)
     {
-        var isExtensionHost = ExtensionHelper.IsExtensionHost(interactionService, out _, out _);
         _stepArgument = new Argument<string>("step")
         {
             Description = DoCommandStrings.StepArgumentDescription,
-            Arity = isExtensionHost ? ArgumentArity.ZeroOrOne : ArgumentArity.ExactlyOne
+            Arity = ArgumentArity.ZeroOrOne
         };
         Arguments.Add(_stepArgument);
+
+        Validators.Add(result =>
+        {
+            var step = result.GetValue(_stepArgument);
+            var listSteps = result.GetValue(s_listStepsOption);
+            if (!string.IsNullOrEmpty(step))
+            {
+                return;
+            }
+
+            if (listSteps)
+            {
+                // `aspire do --list-steps` with no step has no meaningful scope: the listing for
+                // `do` is always relative to a target step. Surface a friendly error pointing at
+                // common starting steps and the docs rather than launching the AppHost and
+                // crashing mid-pipeline (see https://github.com/microsoft/aspire/issues/17526).
+                // This applies in the extension host too because `--list-steps` does not flow
+                // through the interactive step prompt in GetRunArgumentsAsync, so without this
+                // error the extension would still hit the original crash path.
+                result.AddError(DoCommandStrings.ListStepsRequiresStep);
+                return;
+            }
+
+            // For a plain `aspire do` invocation, the extension host prompts the user for a step
+            // later in GetRunArgumentsAsync, so don't add a validation error there.
+            if (!ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
+            {
+                result.AddError(DoCommandStrings.StepArgumentRequired);
+            }
+        });
     }
 
     protected override string OperationCompletedPrefix => DoCommandStrings.OperationCompletedPrefix;
@@ -67,7 +96,7 @@ internal sealed class DoCommand : PipelineCommandBase
         }
 
         // Add --log-level and --environment flags if specified
-        var logLevel = parseResult.GetValue(s_logLevelOption);
+        var logLevel = parseResult.GetValue(s_pipelineLogLevelOption);
         if (!string.IsNullOrEmpty(logLevel))
         {
             baseArgs.AddRange(["--log-level", logLevel!]);
@@ -92,8 +121,15 @@ internal sealed class DoCommand : PipelineCommandBase
 
     protected override string GetCanceledMessage() => DoCommandStrings.OperationCanceled;
 
+    protected override string? GetTargetStepName(ParseResult parseResult) => parseResult.GetValue(_stepArgument);
+
     protected override string GetProgressMessage(ParseResult parseResult)
     {
+        if (parseResult.GetValue(s_listStepsOption))
+        {
+            return "Listing pipeline steps";
+        }
+
         var step = parseResult.GetValue(_stepArgument);
         return $"Executing step {step}";
     }

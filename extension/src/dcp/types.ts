@@ -38,10 +38,22 @@ export interface PythonLaunchConfiguration extends ExecutableLaunchConfiguration
 
     module?: string;
     interpreter_path?: string;
+    working_directory?: string;
 }
 
 export function isPythonLaunchConfiguration(obj: any): obj is PythonLaunchConfiguration {
     return obj && obj.type === 'python';
+}
+
+export interface GoLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "go";
+    program?: string;
+    working_directory?: string;
+    build_flags?: string;
+}
+
+export function isGoLaunchConfiguration(obj: any): obj is GoLaunchConfiguration {
+    return obj && obj.type === 'go';
 }
 
 export interface NodeLaunchConfiguration extends ExecutableLaunchConfiguration {
@@ -163,6 +175,7 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     command?: AspireCommandType;
     args?: string[];
     step?: string;
+    env?: { [key: string]: string };
 }
 
 interface AspireDebuggersConfiguration {

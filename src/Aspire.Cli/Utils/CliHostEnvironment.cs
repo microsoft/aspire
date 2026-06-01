@@ -69,7 +69,8 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
     public CliHostEnvironment(IConfiguration configuration, bool nonInteractive)
     {
         // If --non-interactive is explicitly set, disable interactive input and output.
-        // This takes precedence over all other settings including ASPIRE_PLAYGROUND.
+        // ANSI support is still determined from the host configuration so explicit
+        // output settings such as NO_COLOR or ASPIRE_ANSI_PASS_THRU continue to apply.
         if (nonInteractive)
         {
             SupportsInteractiveInput = false;
@@ -97,17 +98,8 @@ internal sealed class CliHostEnvironment : ICliHostEnvironment
         {
             // If there is no explicit configuration to enable or disable ANSI support, attempt to detect it.
             // This is required because some terminals don't support ANSI output, e.g. https://github.com/microsoft/aspire/issues/13737
-
-            // TODO: Creating a fake console here is a hack to run ANSI detection logic.
-            // Update this to use AnsiCapabilities once it's available in Spectre.Console 0.60+ instead of creating a full AnsiConsole instance.
-            var ansiConsole = AnsiConsole.Create(new AnsiConsoleSettings
-            {
-                Out = new AnsiConsoleOutput(TextWriter.Null),
-                Ansi = AnsiSupport.Detect,
-                ColorSystem = ColorSystemSupport.Detect
-            });
-
-            supportsAnsi = ansiConsole.Profile.Capabilities.Ansi;
+            var capabilities = AnsiCapabilities.Create(TextWriter.Null);
+            supportsAnsi = capabilities.Ansi;
         }
 
         return supportsAnsi;

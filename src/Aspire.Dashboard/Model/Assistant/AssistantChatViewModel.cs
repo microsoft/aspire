@@ -95,7 +95,7 @@ public sealed class AssistantChatViewModel : IDisposable
     private const int MaximumResponseLength = 1024 * 1024 * 10;
     // Small, cheap, fast model for follow up questions.
     private const string FollowUpQuestionsModel = "gpt-4o-mini";
-    private static readonly string[] s_defaultModels = ["gpt-4.1", "gpt-4o"];
+    private static readonly string[] s_defaultModels = ["gpt-5.4", "gpt-4.1", "gpt-4o"];
     // Older models that VS Code returns as available models. Don't show them in the model selector.
     // There are better, cheaper alternatives that should always be used.
     private static readonly string[] s_oldModels = ["gpt-4", "gpt-4-turbo", "gpt-3.5-turbo"];

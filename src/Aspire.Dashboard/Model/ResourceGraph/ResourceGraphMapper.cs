@@ -34,7 +34,7 @@ public static class ResourceGraphMapper
 
         var endpoint = ResourceUrlHelpers.GetUrls(r, includeInternalUrls: false, includeNonEndpointUrls: false).FirstOrDefault()
             ?? ResourceUrlHelpers.GetUrls(r, includeInternalUrls: false, includeNonEndpointUrls: true).FirstOrDefault();
-        var resolvedEndpointText = ResolvedEndpointText(endpoint);
+        var resolvedEndpointText = r.IsParameter ? null : ResolvedEndpointText(endpoint);
         var resourceName = ResourceViewModel.GetResourceName(r, resourcesByName);
         var color = ColorGenerator.Instance.GetColorVariableByKey(resourceName);
 
@@ -61,7 +61,7 @@ public static class ResourceGraphMapper
                 Tooltip = stateIcon.Text ?? r.State
             },
             ReferencedNames = resolvedNames.Distinct().OrderBy(n => n).ToImmutableArray(),
-            EndpointUrl = endpoint?.Url,
+            EndpointUrl = r.IsParameter ? null : endpoint?.Url,
             EndpointText = resolvedEndpointText
         };
 

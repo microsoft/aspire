@@ -33,6 +33,10 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
         shell: false
     });
 
+    // Set UTF-8 encoding so Node reassembles multi-byte characters across chunk boundaries instead of yielding broken bytes.
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+
     if (options?.lineCallback) {
         const rl = readline.createInterface(child.stdout);
         rl.on('line', line => {
@@ -40,12 +44,12 @@ export function spawnCliProcess(terminalProvider: AspireTerminalProvider, comman
         });
     }
 
-    child.stdout.on("data", (data) => {
-        options?.stdoutCallback?.(new String(data).toString());
+    child.stdout.on("data", (data: string) => {
+        options?.stdoutCallback?.(data);
     });
 
-    child.stderr.on("data", (data) => {
-        options?.stderrCallback?.(new String(data).toString());
+    child.stderr.on("data", (data: string) => {
+        options?.stderrCallback?.(data);
     });
 
     child.on('error', (error) => {

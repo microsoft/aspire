@@ -19,7 +19,16 @@
 
     <!-- Self-contained single-file publish settings (applied only during publish via Bundle.proj) -->
     <PublishSingleFile>true</PublishSingleFile>
+
+    <!-- Locate the SDK's trustedroots directory for NuGet signature verification certificates -->
+    <_SdkTrustedRootsDir>$([System.IO.Path]::Combine($([System.IO.Path]::GetDirectoryName($(BundledRuntimeIdentifierGraphFile))), 'trustedroots'))</_SdkTrustedRootsDir>
   </PropertyGroup>
+
+  <!-- Embed NuGet trusted root certificates from the .NET SDK for signature verification on Linux -->
+  <ItemGroup>
+    <EmbeddedResource Include="$(_SdkTrustedRootsDir)\*.pem" />
+    <EmbeddedResource Update="$(_SdkTrustedRootsDir)\*.pem" LogicalName="%(Filename)%(Extension)" />
+  </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Dashboard\Aspire.Dashboard.csproj" />
@@ -27,10 +36,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Provided by the .NET SDK and points to the SDK's RuntimeIdentifierGraph.json file. -->
+    <EmbeddedResource Include="$(BundledRuntimeIdentifierGraphFile)" LogicalName="Aspire.Managed.RuntimeIdentifierGraph.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="NuGet.Commands" />
     <PackageReference Include="NuGet.Protocol" />
     <PackageReference Include="NuGet.Resolver" />
     <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Shared\BundleDiscovery.cs" />
+    <Compile Include="$(SharedDir)BundleVersionLease.cs" Link="Shared\BundleVersionLease.cs" />
+    <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="NuGet\IntegrationPackageProbeManifest.cs" />
   </ItemGroup>
 
   <!-- Exclude unwanted files from publish output -->

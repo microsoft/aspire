@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "DatabaseMigration.AppHost/DatabaseMigration.AppHost.csproj"
+  }
+}

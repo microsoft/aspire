@@ -13,19 +13,22 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="resource">The resource.</param>
 /// <param name="urls">The URLs for the resource.</param>
 /// <param name="cancellationToken">A <see cref="CancellationToken"/>.</param>
-[AspireExport(ExposeProperties = true)]
+[AspireExport]
 public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext executionContext, IResource resource, List<ResourceUrlAnnotation>? urls = null, CancellationToken cancellationToken = default)
 {
     /// <summary>
     /// Gets the resource this the URLs are associated with.
     /// </summary>
+    [AspireExport]
     public IResource Resource { get; } = resource;
 
     /// <summary>
     /// Gets an endpoint reference from <see cref="Resource"/> for the specified endpoint name.<br/>
     /// If <see cref="Resource"/> does not implement <see cref="IResourceWithEndpoints"/> then returns <c>null</c>.
     /// </summary>
+    /// <ats-summary>Gets an endpoint reference from the associated resource</ats-summary>
     /// <param name="name">The name of the endpoint.</param>
+    [AspireExport]
     public EndpointReference? GetEndpoint(string name) =>
         Resource switch
         {
@@ -62,7 +65,20 @@ public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext 
     public ILogger Logger { get; set; } = NullLogger.Instance;
 
     /// <summary>
+    /// Gets the editor used to manipulate displayed URLs in polyglot callbacks.
+    /// </summary>
+    [AspireExport("ResourceUrlsCallbackContext.urls", MethodName = "urls")]
+    internal ResourceUrlsEditor UrlsEditor => new(ExecutionContext, Urls, CancellationToken);
+
+    /// <summary>
+    /// Gets the logger facade used by polyglot callbacks.
+    /// </summary>
+    [AspireExport]
+    internal LogFacade Log => new(() => Logger);
+
+    /// <summary>
     /// Gets the execution context associated with this invocation of the AppHost.
     /// </summary>
+    [AspireExport]
     public DistributedApplicationExecutionContext ExecutionContext { get; } = executionContext ?? throw new ArgumentNullException(nameof(executionContext));
 }

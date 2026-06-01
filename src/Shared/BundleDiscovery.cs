@@ -4,6 +4,7 @@
 // This file is source-linked into multiple projects:
 // - Aspire.Hosting
 // - Aspire.Cli
+// - Aspire.Managed
 // Do not add project-specific dependencies.
 
 using System.Runtime.InteropServices;
@@ -42,6 +43,11 @@ internal static class BundleDiscovery
     public const string ManagedPathEnvVar = "ASPIRE_MANAGED_PATH";
 
     /// <summary>
+    /// Environment variable containing the leased version directory for bundle-owned child processes.
+    /// </summary>
+    public const string BundleVersionDirectoryEnvVar = "ASPIRE_BUNDLE_VERSION_DIR";
+
+    /// <summary>
     /// Environment variable to force SDK mode (skip bundle detection).
     /// </summary>
     public const string UseGlobalDotNetEnvVar = "ASPIRE_USE_GLOBAL_DOTNET";
@@ -64,6 +70,13 @@ internal static class BundleDiscovery
     /// Directory name for the managed binary in the bundle layout.
     /// </summary>
     public const string ManagedDirectoryName = "managed";
+
+    /// <summary>
+    /// Directory name for the single top-level reparse point that links to the
+    /// active versioned bundle directory. Components (<c>managed/</c> and <c>dcp/</c>)
+    /// are resolved as subdirectories of this link target.
+    /// </summary>
+    public const string BundleDirectoryName = "bundle";
 
     // ═══════════════════════════════════════════════════════════════════════
     // EXECUTABLE NAMES (without path, just the file name)
@@ -277,31 +290,7 @@ internal static class BundleDiscovery
     /// </summary>
     public static string GetCurrentRuntimeIdentifier()
     {
-        var arch = RuntimeInformation.OSArchitecture switch
-        {
-            Architecture.X64 => "x64",
-            Architecture.X86 => "x86",
-            Architecture.Arm64 => "arm64",
-            Architecture.Arm => "arm",
-            _ => "x64"
-        };
-
-        if (OperatingSystem.IsWindows())
-        {
-            return $"win-{arch}";
-        }
-
-        if (OperatingSystem.IsMacOS())
-        {
-            return $"osx-{arch}";
-        }
-
-        if (OperatingSystem.IsLinux())
-        {
-            return $"linux-{arch}";
-        }
-
-        return $"unknown-{arch}";
+        return RuntimeInformation.RuntimeIdentifier;
     }
 
     /// <summary>

@@ -1,5 +1,6 @@
 # Reusable template for submitting WinGet manifests via wingetcreate.
-# Used by both the prerelease flow (azure-pipelines.yml) and the release flow (release-publish-nuget.yml).
+# Used by the release flow (release-publish-nuget.yml) to publish the stable
+# Aspire package (Microsoft.Aspire) to WinGet.
 
 parameters:
   - name: manifestArtifactPath
@@ -11,7 +12,7 @@ parameters:
     displayName: 'Package version (used in PR title). If empty, extracted from manifest directory structure.'
   - name: packageIdentifier
     type: string
-    displayName: 'WinGet package identifier (e.g. Microsoft.Aspire or Microsoft.Aspire.Prerelease)'
+    displayName: 'WinGet package identifier (e.g. Microsoft.Aspire)'
   - name: dryRun
     type: boolean
     default: false
@@ -21,6 +22,7 @@ steps:
   - powershell: |
       $ErrorActionPreference = 'Stop'
       $manifestRoot = '${{ parameters.manifestArtifactPath }}'
+      $packageId = '${{ parameters.packageIdentifier }}'
 
       Write-Host "=== WinGet Manifests ==="
       Get-ChildItem -Path $manifestRoot -Recurse | Format-Table FullName
@@ -35,14 +37,42 @@ steps:
         exit 1
       }
 
-      Write-Host "Manifest directory: $manifestDir"
-      Write-Host "##vso[task.setvariable variable=WinGetManifestDir]$manifestDir"
+      $submissionDir = Join-Path '$(Build.StagingDirectory)' 'winget-submit-manifests'
+      if (Test-Path $submissionDir) {
+        Remove-Item -Path $submissionDir -Recurse -Force
+      }
 
-      # Extract version from manifest directory name (e.g., .../Microsoft.Aspire/13.2.0/)
+      New-Item -ItemType Directory -Path $submissionDir -Force | Out-Null
+      Get-ChildItem -Path $manifestDir -File -Filter "*.yaml" | ForEach-Object {
+        Copy-Item -Path $_.FullName -Destination (Join-Path $submissionDir $_.Name) -Force
+      }
+
+      Get-ChildItem -Path $submissionDir -File -Filter "*.locale.*.yaml" | ForEach-Object {
+        $content = Get-Content -Raw -Path $_.FullName
+        $content = $content -replace '(?m)^(\s*ReleaseNotesUrl:\s*).+$', '${1}https://aspire.dev'
+        [IO.File]::WriteAllText($_.FullName, $content, [Text.UTF8Encoding]::new($false))
+      }
+
+      Write-Host "Manifest directory: $submissionDir"
+      Write-Host "##vso[task.setvariable variable=WinGetManifestDir]$submissionDir"
+
+      $versionManifestPath = Join-Path $submissionDir "$packageId.yaml"
+
+      # Extract version from the version manifest when no explicit version is provided.
       $version = '${{ parameters.version }}'
       if ([string]::IsNullOrWhiteSpace($version)) {
-        $version = Split-Path $manifestDir -Leaf
-        Write-Host "Extracted version from directory: $version"
+        if (Test-Path $versionManifestPath) {
+          $versionMatch = Select-String -Path $versionManifestPath -Pattern '^\s*PackageVersion:\s*(.+)\s*$' | Select-Object -First 1
+          if ($versionMatch) {
+            $version = $versionMatch.Matches[0].Groups[1].Value.Trim()
+            Write-Host "Extracted version from version manifest: $version"
+          }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($version)) {
+          $version = Split-Path $manifestDir -Leaf
+          Write-Host "Fell back to directory name for version: $version"
+        }
       } else {
         Write-Host "Using provided version: $version"
       }
@@ -102,6 +132,17 @@ steps:
       }
       Write-Host "All installer URLs are accessible."
     displayName: '🟣Validate installer URLs from manifest'
+    # Only run when we'd actually submit (matches the Submit step condition).
+    # On non-production branches the manifest URLs point to artifacts that aren't
+    # published at their canonical ci.dot.net paths, so reachability checks fail
+    # meaninglessly; in dry-run we're not submitting anything so URL probing is
+    # equally moot.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -137,6 +178,13 @@ steps:
 
       Write-Host "ReleaseNotesUrl is valid."
     displayName: '🟣Validate ReleaseNotesUrl'
+    # Same gate as the installer-URL validation above and the Submit step below.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -144,6 +192,16 @@ steps:
       Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "$(Build.StagingDirectory)/wingetcreate.exe"
       Write-Host "wingetcreate downloaded successfully"
     displayName: '🟣Install wingetcreate'
+    # Skip when no Submit step will run. wingetcreate is only used to submit to
+    # the upstream winget-pkgs repo, so dry-run and non-production-branch builds
+    # gain nothing from downloading it and instead pick up an aka.ms-redirect
+    # failure surface for free.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -160,8 +218,102 @@ steps:
       Write-Host "Submitting WinGet manifests for $packageId version $version"
       Write-Host "Manifest directory: $manifestDir"
       Write-Host "Manifest files:"
-      Get-ChildItem -Path $manifestDir -Filter "*.yaml" | ForEach-Object { Write-Host "  - $($_.Name)" }
+      Get-ChildItem -Path $manifestDir -File -Filter "*.yaml" | Sort-Object Name | ForEach-Object { Write-Host "  - $($_.Name)" }
 
+      $versionManifest = Join-Path $manifestDir "$packageId.yaml"
+      $installerManifest = Join-Path $manifestDir "$packageId.installer.yaml"
+      $localeManifests = Get-ChildItem -Path $manifestDir -File -Filter "$packageId.locale.*.yaml" | Sort-Object Name
+
+      $missingManifests = @()
+      foreach ($requiredManifest in @($versionManifest, $installerManifest)) {
+        if (-not (Test-Path $requiredManifest)) {
+          $missingManifests += $requiredManifest
+        }
+      }
+
+      if ($localeManifests.Count -eq 0) {
+        Write-Error "No locale manifests were found for $packageId in $manifestDir"
+        exit 1
+      }
+
+      if ($missingManifests.Count -gt 0) {
+        Write-Error "Missing required manifest files: $($missingManifests -join ', ')"
+        exit 1
+      }
+
+      $headers = @{
+        Authorization = "Bearer $token"
+        Accept = "application/vnd.github+json"
+        "User-Agent" = "dotnet-aspire-release-pipeline"
+        "X-GitHub-Api-Version" = "2022-11-28"
+      }
+
+      function Invoke-GitHubApi {
+        param(
+          [string]$Method,
+          [string]$Uri,
+          [object]$Body
+        )
+
+        $params = @{
+          Method = $Method
+          Uri = $Uri
+          Headers = $headers
+          ErrorAction = 'Stop'
+        }
+
+        if ($null -ne $Body) {
+          $params.Body = ($Body | ConvertTo-Json -Depth 10)
+          $params.ContentType = 'application/json'
+        }
+
+        return Invoke-RestMethod @params
+      }
+
+      function Invoke-GitHubGraphQL {
+        param(
+          [string]$Query,
+          [object]$Variables
+        )
+
+        $response = Invoke-GitHubApi -Method Post -Uri 'https://api.github.com/graphql' -Body @{
+          query = $Query
+          variables = $Variables
+        }
+
+        if ($response.errors) {
+          $messages = ($response.errors | ForEach-Object { $_.message }) -join '; '
+          throw "GitHub GraphQL request failed: $messages"
+        }
+
+        return $response.data
+      }
+
+      function Invoke-WithRetry {
+        param(
+          [scriptblock]$ScriptBlock,
+          [string]$Operation,
+          [int]$MaxAttempts = 12,
+          [int]$DelaySeconds = 10
+        )
+
+        for ($attempt = 1; $attempt -le $MaxAttempts; $attempt++) {
+          try {
+            return & $ScriptBlock
+          }
+          catch {
+            if ($attempt -eq $MaxAttempts) {
+              throw
+            }
+
+            Write-Host "$Operation failed on attempt $attempt/$($MaxAttempts): $($_.Exception.Message)"
+            Write-Host "Retrying in $DelaySeconds seconds..."
+            Start-Sleep -Seconds $DelaySeconds
+          }
+        }
+      }
+
+      Write-Host "Submitting clean manifest directory to wingetcreate: $manifestDir"
       $output = & "$(Build.StagingDirectory)/wingetcreate.exe" submit $manifestDir `
         --token $token `
         --prtitle "Update $packageId to version $version" 2>&1
@@ -175,8 +327,58 @@ steps:
         exit $exitCode
       }
 
+      $pullRequestNumbers = @([regex]::Matches($outputText, 'https://github\.com/microsoft/winget-pkgs/pull/(\d+)') |
+        ForEach-Object { $_.Groups[1].Value } |
+        Select-Object -Unique
+      )
+
+      if ($pullRequestNumbers.Count -ne 1) {
+        Write-Error "Expected exactly one microsoft/winget-pkgs PR URL in wingetcreate output so it can be converted to draft; found $($pullRequestNumbers.Count)."
+        exit 1
+      }
+
+      $pullRequestNumber = $pullRequestNumbers[0]
+      $pullRequestUrl = "https://github.com/microsoft/winget-pkgs/pull/$pullRequestNumber"
+      $pullRequest = Invoke-WithRetry -Operation "Fetching WinGet PR #$pullRequestNumber" -ScriptBlock {
+        Invoke-GitHubApi -Method Get -Uri "https://api.github.com/repos/microsoft/winget-pkgs/pulls/$pullRequestNumber" -Body $null
+      }
+
+      if (-not [bool]$pullRequest.draft) {
+        Write-Host "Converting WinGet PR #$pullRequestNumber to draft..."
+
+        $convertPullRequestToDraftMutation = 'mutation ConvertPullRequestToDraft($pullRequestId: ID!) {
+          convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
+            pullRequest {
+              number
+              isDraft
+              url
+            }
+          }
+        }'
+
+        $graphQlData = Invoke-WithRetry -Operation "Converting WinGet PR #$pullRequestNumber to draft" -ScriptBlock {
+          Invoke-GitHubGraphQL -Query $convertPullRequestToDraftMutation -Variables @{
+            pullRequestId = $pullRequest.node_id
+          }
+        }
+
+        if (-not $graphQlData.convertPullRequestToDraft.pullRequest.isDraft) {
+          throw "Failed to convert WinGet PR #$pullRequestNumber to draft."
+        }
+      }
+
+      Write-Host "WinGet PR #$pullRequestNumber is draft: $pullRequestUrl"
       Write-Host "Successfully submitted WinGet manifest for $packageId $version"
     displayName: '🟣Submit to WinGet'
-    condition: and(succeeded(), eq('${{ parameters.dryRun }}', 'false'))
+    # Guard: only submit to WinGet from production branches.
+    # 1ES PT branch validation surfaces this as a non-blocking warning, which is too easy to miss;
+    # a hard condition stops accidental submissions from feature, fork or dogfood branches.
+    # _IsProductionBranch is defined in eng/pipelines/common-variables.yml.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
     env:
       WINGET_CREATE_GITHUB_TOKEN: $(aspire-winget-bot-pat)

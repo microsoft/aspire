@@ -29,6 +29,8 @@ Instructions for GitHub Copilot and other AI coding agents working with the Aspi
 * Never change global.json unless explicitly asked to.
 * Never change package.json or package-lock.json files unless explicitly asked to.
 * Never change NuGet.config files unless explicitly asked to.
+* Do not use cryptographic hashes such as SHA-256 when the hash is not security-related. Prefer `System.IO.Hashing.XxHash3` when you need a stable non-cryptographic hash.
+* When code needs a temporary directory, prefer the repository temp directory abstractions first (for example `IFileSystemService.TempDirectory` / `ITempFileSystemService`) and otherwise use `Directory.CreateTempSubdirectory()` instead of `Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())`; if you need a temporary file path, place it under a securely created temp directory.
 * Don't update files under `*/api/*.cs` (e.g. src/Aspire.Hosting/api/Aspire.Hosting.cs) as they are generated.
 
 ## Code Review Instructions
@@ -74,6 +76,119 @@ When reviewing pull requests:
 * Use `nameof` instead of string literals when referring to member names.
 * Place private class declarations at the bottom of the file.
 
+### Code comments
+
+* Err on the side of over-commenting code when the reasoning is not obvious. Comments should explain **WHY** code is written a particular way; the **WHY** is the most important part.
+* Do comment non-obvious implementation details: concurrency hazards, lifecycle constraints, compatibility requirements, platform quirks, upstream workarounds, and intentional deviations from the obvious helper or API.
+* When parsing strings, logs, command output, protocol payloads, or other loosely structured data, include a comment with an example of the raw format being parsed. Show edge cases, escaping rules, delimiters, optional fields, or malformed-but-observed inputs when they affect the parser.
+* When code follows an external standard, protocol, or ecosystem convention, include valid links to the relevant source material so future readers can verify the rule and understand why the code follows it.
+* Do not add comments that simply narrate clear code, such as "set the timeout" immediately before assigning a timeout.
+* Keep workaround comments close to the workaround. Include an issue link when the workaround is tied to an upstream bug, and describe the condition for removing it when that is known.
+
+Good comments explain the constraint or tradeoff:
+
+```csharp
+// Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+var stdoutTask = process.StandardOutput.ReadToEndAsync();
+var stderrTask = process.StandardError.ReadToEndAsync();
+```
+
+```csharp
+// Endpoint adoption runs on the command path, so fail quickly when stale metadata
+// points at a dead or reused port.
+var timeout = TimeSpan.FromSeconds(2);
+```
+
+```csharp
+// The temporary config is disposed when this method returns. That is intentional:
+// only `dotnet new install` consumes the config; later template creation uses the
+// already-installed template hive and ambient NuGet configuration.
+using var temporaryConfig = await TemporaryNuGetConfig.CreateAsync(mappings);
+```
+
+```csharp
+// Workaround for an upstream library bug on Windows where URI SANs are formatted
+// differently than the verifier expects. Cryptographic verification still runs;
+// only the identity checks are performed manually from the certificate extensions.
+var result = await VerifyWithManualIdentityFallbackAsync(bundle, cancellationToken);
+```
+
+```csharp
+public required IReadOnlyList<PipelineStep> Steps
+{
+    get;
+    init
+    {
+        field = value;
+        // IMPORTANT: The ResourceNameComparer must be used here to ensure correct lookup behavior
+        // based on resource names, NOT the default reference equality. This is because resources
+        // may be swapped out (referred to as bait-and-switch) during model transformations.
+        StepToResourceMap = field.ToLookup(s => s.Resource, s => s, new ResourceNameComparer());
+    }
+}
+```
+
+```csharp
+// Output sensitive message content for GenAI.
+// A convention for libraries that output GenAI telemetry is to use
+// `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`.
+// See:
+// - https://opentelemetry.io/blog/2024/otel-generative-ai/
+// - https://github.com/search?q=org%3Aopen-telemetry+OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT&type=code
+context.EnvironmentVariables[KnownOtelConfigNames.InstrumentationGenAiCaptureMessageContent] = "true";
+```
+
+```csharp
+// If we have multiple endpoints for the same scheme, differentiate them by appending a number.
+// Start numbering with the second endpoint so the first stays just http/https, which preserves
+// the same behavior as "dotnet run". Only do this in Run mode because, in Publish mode, those
+// extra endpoints with generic names would not be easily usable.
+var endpointName = bindingAddress.Scheme;
+if (endpointCountByScheme[bindingAddress.Scheme] > 1)
+{
+    endpointName += endpointCountByScheme[bindingAddress.Scheme];
+}
+```
+
+```csharp
+// The implementation here is less than ideal, but we don't have a clean way of building resource
+// types that change their behavior based on context. In this case, publish mode needs the resource
+// to behave like a ContainerResource instead of a ProjectResource, so we remove the ProjectResource
+// from the application model and add a new ContainerResource in its place.
+//
+// There are still dangling references to the original ProjectResource in the application model, but
+// in publish mode it won't be used. This is a limitation of the current design.
+builder.ApplicationBuilder.Resources.Remove(builder.Resource);
+```
+
+Parsing comments should show the raw shape and important edge cases:
+
+```csharp
+// Parse resource log lines emitted as:
+//   [2026-05-10T18:34:22.123Z] frontend stdout: Now listening on: http://localhost:5221
+// The message can contain additional ':' characters, so split only on the first
+// " stdout: " or " stderr: " delimiter after the resource name.
+var match = s_logLineRegex.Match(line);
+```
+
+```csharp
+// The endpoint metadata sidecar uses the DevTools /json/version shape:
+//   { "webSocketDebuggerUrl": "ws://127.0.0.1:50981/devtools/browser/<id>" }
+// Older Chromium builds can omit the property while the browser is still starting;
+// treat that as a retryable probe failure rather than invalid metadata.
+var endpoint = payload.WebSocketDebuggerUrl;
+```
+
+Avoid comments that restate the code:
+
+```csharp
+// Set the timeout to two seconds.
+var timeout = TimeSpan.FromSeconds(2);
+
+// Create a list.
+var resources = new List<Resource>();
+```
+
 ### Nullable Reference Types
 
 * Declare variables non-nullable, and check for `null` at entry points.
@@ -93,6 +208,7 @@ When reviewing pull requests:
 - **Skip Native Build**: Add `/p:SkipNativeBuild=true` to avoid slow native AOT compilation (~1-2 minutes saved)
 - **Clean Build**: `./build.sh --rebuild`
 - **Package Generation**: `./build.sh --pack` to create NuGet packages
+- If you need to disable the terminal logger for `dotnet`/build-related commands, prefer setting `MSBUILDTERMINALLOGGER=false` instead of passing `-tl:false`; avoid `-tl:false` on commands that may invoke tests because it can be forwarded to the test host and fail under Microsoft.Testing.Platform native runner mode
 
 #### Build Troubleshooting
 - If temporarily introducing warnings during refactoring, add `/p:TreatWarningsAsErrors=false` to prevent build failure
@@ -145,19 +261,28 @@ kill <pid>
 * Copy existing style in nearby files for test method names and capitalization.
 * Do not leave newly-added tests commented out. All added tests should be building and passing.
 * Do not use Directory.SetCurrentDirectory in tests as it can cause side effects when tests execute concurrently.
+* Prefer using shared test service implementations (e.g., project-level `TestServices/` or `Helpers/` directories, or the cross-project `tests/Shared/` folder) rather than creating private implementation classes within individual test files. Reusing existing test fakes and helpers keeps tests consistent, reduces duplication, and makes maintenance easier. Do not create private test classes when a shared one already exists or can be extended.
+* MTP diagnostic args (hang dump, crash dump, exit code handling) are defined in `eng/Testing.props` via `MtpBaseArgs`. Do not hardcode these args in workflow YAML. See [docs/ci/mtp-args-pipeline.md](docs/ci/mtp-args-pipeline.md) for details.
+* Use `Verify` (snapshot testing) for generated artifacts (files, serialized output, structured text). Prefer `await Verify(value, "ext")` over `Assert.Contains` / `Assert.DoesNotContain` / `Assert.Equal` on the same value. Run the test once to generate the `.received.` file, review it, then rename it to `.verified.` to accept it.
 
 ## Running tests
 
 (1) Build from the root with `./build.sh` (~3-5 minutes).
 (2) If that produces errors, fix those errors and build again. Repeat until the build is successful.
-(3) To run tests for a specific project: `dotnet test tests/ProjectName.Tests/ProjectName.Tests.csproj --no-build -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"`
+(3) To run tests for a specific project: `dotnet test --project tests/ProjectName.Tests/ProjectName.Tests.csproj --no-build --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"`
 
 Note that tests for a project can be executed without first building from the root.
 
 (4) To run specific tests, include the filter after `--`:
 ```bash
-dotnet test tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
+
+(5) To apply a timeout for a specific test run use `--hangdump` and `--hangdump-timeout` options after `--`, for example:
+```bash
+dotnet test --project tests/Aspire.Hosting.Testing.Tests/Aspire.Hosting.Testing.Tests.csproj --no-launch-profile -- --filter-method "*.TestingBuilderHasAllPropertiesFromRealBuilder" --hangdump --hangdump-timeout 2m
+```
+You need both options (`--hangdump-timeout` does not work without `--hangdump`). Timeout can be expressed in minutes (e.g. `3m` for 3-minute timeout), or seconds (e.g. `30s` for 30-seconds timeout).
 
 **Important**: Avoid passing `--no-build` unless you have just built in the same session and there have been no code changes since. In automation or while iterating on code, omit `--no-build` so changes are compiled and picked up by the test run.
 
@@ -167,11 +292,11 @@ This repo uses **Microsoft.Testing.Platform (MTP)** as the test runner, not VSTe
 
 ```bash
 # WRONG - VSTest-style filter, will hang with MTP
-dotnet test tests/Project.Tests/Project.Tests.csproj --filter "FullyQualifiedName~ClassName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --filter "FullyQualifiedName~ClassName"
 
 # CORRECT - MTP-native filters go after the -- separator
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-class "*.ClassName"
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-method "*.MethodName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-class "*.ClassName"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-method "*.MethodName"
 ```
 
 All test filtering must use MTP-native switches placed **after `--`**. See the filter switches listed below for the full set of options.
@@ -182,10 +307,10 @@ When running tests in automated environments (including Copilot agent), **always
 
 ```bash
 # Correct - excludes quarantined and outerloop tests (use this in automation)
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 
 # For specific test filters, combine with quarantine and outerloop exclusion
-dotnet test tests/Project.Tests/Project.Tests.csproj -- --filter-method "TestName" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
+dotnet test --project tests/Project.Tests/Project.Tests.csproj --no-launch-profile -- --filter-method "TestName" --filter-not-trait "quarantined=true" --filter-not-trait "outerloop=true"
 ```
 
 Never run all tests without the quarantine and outerloop filters in automated environments, as this will include flaky tests that are known to fail intermittently and long-running tests that slow down CI.
@@ -229,6 +354,7 @@ These switches can be repeated to run tests on multiple classes or methods at on
 - **`ci.yml`**: Main CI workflow triggered on PRs and pushes to main/release branches
 - **Build validation**: Includes package generation, API compatibility checks, template validation
 - **Workflow matcher maintenance**: When changing CI workflow job or step names that are referenced by automation or tests, update the corresponding workflow helpers, behavior tests, and docs together. For the transient rerun workflow, keep `.github/workflows/auto-rerun-transient-ci-failures.js`, `tests/Infrastructure.Tests/WorkflowScripts/AutoRerunTransientCiFailuresTests.cs`, and `docs/ci/auto-rerun-transient-ci-failures.md` aligned with the live workflow YAML.
+- **⚠️ Quarantine and outerloop tests are easily broken** because they primarily run on schedule, not on most PRs. Changes to `tests-quarantine.yml`, `tests-outerloop.yml`, `specialized-test-runner.yml`, or `run-tests.yml` will automatically trigger the affected workflow(s) on the PR via `paths:` filters. Verify the triggered runs pass before merging.
 
 #### Azure DevOps (secondary, does NOT run tests on PRs)
 - **`eng/pipelines/azure-pipelines-public.yml`**: Weekly scheduled pipeline (Monday midnight UTC) that builds and runs tests on Helix
@@ -252,8 +378,8 @@ These switches can be repeated to run tests on multiple classes or methods at on
 - Such tests are not run as part of the regular tests workflow (`tests.yml`).
     - Instead they are run in the `Quarantine` workflow (`tests-quarantine.yml`).
 - A github issue url is used with the attribute
-- To **reproduce or fix** a flaky/quarantined test, use the `fix-flaky-test` skill (`.github/skills/fix-flaky-test/SKILL.md`).
-- To **quarantine or unquarantine** a test, use the `test-management` skill (`.github/skills/test-management/SKILL.md`).
+- To **reproduce or fix** a flaky/quarantined test, use the `fix-flaky-test` skill (`.agents/skills/fix-flaky-test/SKILL.md`).
+- To **quarantine or unquarantine** a test, use the `test-management` skill (`.agents/skills/test-management/SKILL.md`).
 
 Example: `[QuarantinedTest("..issue url..")]`
 
@@ -384,15 +510,20 @@ For most development tasks, following these instructions should be sufficient to
 
 ## Available Skills
 
-The following specialized skills are available in `.github/skills/`:
+The following specialized skills are available in `.agents/skills/`:
 
 - **cli-e2e-testing**: Guide for writing Aspire CLI end-to-end tests using Hex1b terminal automation
+- **ci-test-failures**: Diagnoses GitHub Actions test failures, extracts failed tests from runs, and creates or updates failing-test issues
+- **code-review**: Reviews a GitHub pull request for problems (bugs, security, correctness, convention violations). Use this when asked to review a PR or do a code review.
 - **fix-flaky-test**: Reproduces and fixes flaky/quarantined tests using the CI reproduce workflow (`reproduce-flaky-tests.yml`). Use this when investigating, reproducing, or fixing a flaky or quarantined test.
 - **dashboard-testing**: Guide for writing tests for the Aspire Dashboard using xUnit and bUnit
 - **test-management**: Quarantines or disables flaky/problematic tests using the QuarantineTools utility
 - **connection-properties**: Expert for creating and improving Connection Properties in Aspire resources
 - **dependency-update**: Guides dependency version updates by checking nuget.org, triggering the dotnet-migrate-package Azure DevOps pipeline, and monitoring runs
-- **startup-perf**: Measures Aspire application startup performance using dotnet-trace and the TraceAnalyzer tool
+- **api-review**: Reviews .NET API surface area PRs for design guideline violations, applies rules from .NET Framework Design Guidelines and Aspire conventions, and attributes findings to the author who introduced each API
+- **backport-pr**: Triggers the `/backport` bot on a source PR, waits for the bot-created backport PR, and fills in the shiproom template (Customer Impact, Testing, Risk, Regression?). Use when backporting a fix to a release branch.
+- **startup-perf**: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces
+- **reviewing-aspire-architecture**: Reviews PRs for Aspire-specific architectural patterns across 15 dimensions including API design, resource model, Azure provisioning, pattern conformance, dashboard UX, CLI behavior, and more. Complements the code-review skill with domain knowledge that generic review cannot catch.
 
 ## Pattern-Based Instructions
 
@@ -401,7 +532,12 @@ Additional instructions are automatically applied when editing files matching sp
 | Pattern | Instructions File |
 |---------|-------------------|
 | `src/**/*.cs` | `.github/instructions/xmldoc.instructions.md` - XML documentation standards |
+| `src/Aspire.Hosting/**/*.cs` | `.github/instructions/hosting-core.instructions.md` - Hosting core review patterns |
+| `src/Aspire.Hosting.Azure*/**/*.cs` | `.github/instructions/hosting-azure.instructions.md` - Hosting Azure review patterns |
+| `src/Aspire.Dashboard/**/*.{cs,razor,js}` | `.github/instructions/dashboard.instructions.md` - Dashboard review patterns |
+| `src/Components/**/*.cs` | `.github/instructions/components.instructions.md` - Client integration review patterns |
 | `src/Aspire.Hosting*/README.md` | `.github/instructions/hosting-readme.instructions.md` - Hosting integration READMEs |
 | `src/Components/**/README.md` | `.github/instructions/client-readme.instructions.md` - Client integration READMEs |
 | `tools/QuarantineTools/*` | `.github/instructions/quarantine.instructions.md` - QuarantineTools usage |
 | `tests/**/*.cs` | `.github/instructions/test-review-guidelines.instructions.md` - Flaky test patterns and test review guidelines |
+| `eng/scripts/get-aspire-cli*.sh`, `eng/scripts/get-aspire-cli*.ps1` | `.github/instructions/acquisition-tests.instructions.md` - CLI acquisition script tests |

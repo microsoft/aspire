@@ -104,6 +104,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("GatheringConsoleLogs", resourceCulture);
             }
         }
+
+        internal static string IncludeHiddenOptionDescription {
+            get {
+                return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Gathering resource data....

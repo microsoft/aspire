@@ -1,15 +1,13 @@
-﻿{
+{
   "author": "Microsoft",
   "name": "Host dell'app a file singolo Aspire",
   "description": "AppHost Aspire minimo per scenari a file singolo (.NET 10+).",
   "symbols/Framework/choices/net10.0/description": "Destinazione net10.0",
   "symbols/appHostHttpPort/description": "Numero di porta da usare per l'endpoint HTTP in launchSettings.json. del progetto AppHost.",
   "symbols/appHostOtlpHttpPort/description": "Numero di porta da usare per l'endpoint OTLP HTTP in launchSettings.json. del progetto AppHost.",
-  "symbols/appHostMcpHttpPort/description": "Numero di porta da usare per l'endpoint MCP HTTP in launchSettings.json. del progetto AppHost.",
   "symbols/appHostResourceHttpPort/description": "Numero di porta da usare per l'endpoint HTTP del servizio risorse in launchSettings.json del progetto AppHost.",
   "symbols/appHostHttpsPort/description": "Numero di porta da usare per l'endpoint HTTPS in launchSettings.json. del progetto AppHost. Questa opzione è applicabile solo quando il parametro no-https non viene usato.",
   "symbols/appHostOtlpHttpsPort/description": "Numero di porta da usare per l'endpoint OTLP HTTPS in launchSettings.json. del progetto AppHost.",
-  "symbols/appHostMcpHttpsPort/description": "Numero di porta da usare per l'endpoint MCP HTTPS in launchSettings.json. del progetto AppHost.",
   "symbols/appHostResourceHttpsPort/description": "Numero di porta da usare per l'endpoint HTTPS del servizio risorse in launchSettings.json del progetto AppHost.",
   "symbols/NoHttps/description": "Indica se disattivare HTTPS.",
   "symbols/LocalhostTld/displayName": "Usa il TLD .dev.localhost nell'URL dell'applicazione",

@@ -3,7 +3,6 @@
 
 using Microsoft.AspNetCore.InternalTesting;
 using System.Globalization;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Configuration;
@@ -167,7 +166,7 @@ public class DotNetSdkInstallerTests
             "10.0.100",
             "(not found)");
 
-        Assert.Equal("The Aspire CLI requires .NET SDK version 10.0.100 or later. Detected: (not found).", message);
+        Assert.Equal("C# AppHost requires .NET SDK version 10.0.100 or later. Detected: (not found).", message);
     }
 
     [Fact]
@@ -247,21 +246,5 @@ public class DotNetSdkInstallerTests
                 new KeyValuePair<string, string?>("overrideMinimumSdkVersion", overrideVersion)
             })
             .Build();
-    }
-}
-
-public class TestFeatures : IFeatures
-{
-    private readonly Dictionary<string, bool> _features = new();
-
-    public TestFeatures SetFeature(string featureName, bool value)
-    {
-        _features[featureName] = value;
-        return this;
-    }
-
-    public bool IsFeatureEnabled(string featureName, bool defaultValue = false)
-    {
-        return _features.TryGetValue(featureName, out var value) ? value : defaultValue;
     }
 }

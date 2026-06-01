@@ -148,7 +148,7 @@ internal sealed class VersionCheckService : BackgroundService
             options: new NotificationInteractionOptions
             {
                 LinkText = InteractionStrings.VersionCheckLinkText,
-                LinkUrl = "https://aka.ms/dotnet/aspire/update-latest",
+                LinkUrl = "https://aka.ms/aspire/update-latest",
                 PrimaryButtonText = InteractionStrings.VersionCheckPrimaryButtonText
             },
             cancellationToken: cancellationToken).ConfigureAwait(false);

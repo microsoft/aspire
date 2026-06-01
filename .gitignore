@@ -1,5 +1,9 @@
 syntax: glob
 
+### GitHub Agentic Workflows ###
+.github/aw/logs/
+.worktrees/
+
 ### VisualStudio ###
 
 # Tools directory
@@ -17,6 +21,7 @@ syntax: glob
 
 artifacts/
 artifacts_stage_1/
+BenchmarkDotNet.Artifacts/
 [Dd]ebug/
 [Rr]elease/
 x64/ !eng/common/cross/x64/
@@ -120,6 +125,8 @@ Session.vim
 config.ps1
 **/IISApplications
 
+# Language server cache files
+*.lscache
 
 # Node.js modules
 node_modules/
@@ -127,6 +134,12 @@ node_modules/
 # Maven build outputs
 target/
 dependency-reduced-pom.xml
+
+# Java AppHost build artifacts
+playground/**/.java-build/
+playground/**/*.class
+tests/PolyglotAppHosts/**/.java-build/
+tests/PolyglotAppHosts/**/Java/**/*.class
 
 # Ignore cache created with the Angular CLI.
 .angular/
@@ -157,18 +170,23 @@ dependency-reduced-pom.xml
 
 # Publisher Outputs
 playground/**/publish/
+playground/**/aspire-output/
+playground/**/aspire-manifest.json
 
 # TypeScript AppHost
 playground/**/dist/
+tests/PolyglotAppHosts/**/TypeScript/dist/
+
+# Go AppHost
+tests/PolyglotAppHosts/**/Go/apphost
+tests/PolyglotAppHosts/**/Go/apphost.exe
 
 # Verify
 *.received.*
 
 #Aspire CLI
 .aspire/
-
-# Required for polyglot apps
-!playground/polyglot/**/.aspire/
+.modules/
 
 # Release notes automation output
 tools/ReleaseNotes/analysis-output/
@@ -179,7 +197,9 @@ extension/dist/
 extension/.localization/
 extension/out/
 extension/node_modules/
-extension/.vscode-test/
+extension/.corepack-cache/
+**/.vscode-test/
+extension/.version
 
 # Generated extension localization files (regenerated from XLF during build)
 extension/l10n/bundle.l10n.json
@@ -191,3 +211,6 @@ extension/package.nls.*.json
 
 # Azure Functions local settings (may contain encrypted secrets)
 local.settings.json
+diagnostics.log
+.squad/
+tags

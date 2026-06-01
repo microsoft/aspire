@@ -26,19 +26,36 @@ internal interface ITemplate
     bool IsEmpty { get; }
 
     /// <summary>
+    /// Gets a value indicating whether this template should be shown in the interactive template picker.
+    /// </summary>
+    bool ShowInPrompt { get; }
+
+    /// <summary>
     /// Gets the runtime model used to execute this template.
     /// </summary>
     TemplateRuntime Runtime { get; }
 
     /// <summary>
-    /// Gets a function that derives the output path from a project name.
+    /// Gets a function that derives the default output path from an execution context and a project name.
     /// </summary>
-    Func<string, string> PathDeriver { get; }
+    Func<CliExecutionContext, string, string> PathDeriver { get; }
 
     /// <summary>
     /// Gets the AppHost language identifier associated with this template.
     /// </summary>
     string? LanguageId { get; }
+
+    /// <summary>
+    /// Determines whether this template is available for the selected language.
+    /// </summary>
+    /// <param name="languageId">The selected language identifier.</param>
+    /// <returns><see langword="true"/> if the template is available; otherwise <see langword="false"/>.</returns>
+    bool SupportsLanguage(string languageId);
+
+    /// <summary>
+    /// Gets the AppHost languages that this template can prompt for.
+    /// </summary>
+    IReadOnlyList<string> SelectableAppHostLanguages { get; }
 
     /// <summary>
     /// Applies template-specific command options.

@@ -12,6 +12,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Source-share YARP container image tags with Aspire.Hosting.Yarp -->
+    <Compile Include="..\Aspire.Hosting.Yarp\YarpContainerImageTags.cs" Link="YarpContainerImageTags.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>
 

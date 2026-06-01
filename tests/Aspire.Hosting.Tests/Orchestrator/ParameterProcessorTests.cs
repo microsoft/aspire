@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Pipelines;
@@ -566,7 +567,7 @@ public class ParameterProcessorTests
         Assert.Equal(InteractionStrings.ParametersInputsRememberLabel, saveCheckbox.Label);
         Assert.Equal(InputType.Boolean, saveCheckbox.InputType);
         Assert.False(saveCheckbox.Disabled); // Should be enabled when user secrets are available
-        Assert.Null(saveCheckbox.Description); // No description when enabled
+        Assert.Equal(InteractionStrings.ParametersInputsRememberDescriptionConfigured, saveCheckbox.Description);
         Assert.True(saveCheckbox.EnableDescriptionMarkdown);
     }
 
@@ -870,6 +871,194 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task ProcessParameterAsync_WithInteractionServiceAvailable_AddsSetParameterValueArgument()
+    {
+        // Arrange
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterResource("testParam", "testValue");
+
+        // Act
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        // Assert
+        var setValueCommand = parameter.Annotations.OfType<ResourceCommandAnnotation>()
+            .Single(a => a.Name == KnownResourceCommands.SetParameterCommand);
+
+        Assert.Collection(
+            setValueCommand.Arguments,
+            valueInput =>
+            {
+                Assert.Equal(ParameterProcessor.SetParameterValueName, valueInput.Name);
+                Assert.Equal("testParam", valueInput.Label);
+                Assert.Null(valueInput.Value);
+                Assert.NotNull(valueInput.DynamicLoading);
+                Assert.True(valueInput.Required);
+            },
+            saveInput => Assert.Equal(ParameterProcessor.SaveToUserSecretsName, saveInput.Name));
+
+        var saveToUserSecretsInput = setValueCommand.Arguments.Single(argument => argument.Name == ParameterProcessor.SaveToUserSecretsName);
+        Assert.NotNull(saveToUserSecretsInput.DynamicLoading);
+        var dependsOnInputs = saveToUserSecretsInput.DynamicLoading.DependsOnInputs;
+        Assert.NotNull(dependsOnInputs);
+        Assert.Equal(ParameterProcessor.SetParameterValueName, Assert.Single(dependsOnInputs));
+    }
+
+    [Fact]
+    public async Task ProcessParameterAsync_WithExistingValue_LoadsSetParameterValueArgumentOnStart()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterResource("testParam", "testValue");
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var setValueCommand = parameter.Annotations.OfType<ResourceCommandAnnotation>()
+            .Single(a => a.Name == KnownResourceCommands.SetParameterCommand);
+        var arguments = new InteractionInputCollection(setValueCommand.Arguments);
+        var valueInput = arguments[ParameterProcessor.SetParameterValueName];
+
+        await valueInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = valueInput,
+            AllInputs = arguments,
+            Services = new ServiceCollection().BuildServiceProvider(),
+            CancellationToken = CancellationToken.None
+        }).DefaultTimeout();
+
+        Assert.Equal("testValue", valueInput.Value);
+    }
+
+    [Fact]
+    public async Task ProcessParameterAsync_WithExistingInputValue_DoesNotOverwriteSetParameterValueArgumentOnStart()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterResource("testParam", "testValue");
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var setValueCommand = parameter.Annotations.OfType<ResourceCommandAnnotation>()
+            .Single(a => a.Name == KnownResourceCommands.SetParameterCommand);
+        var arguments = new InteractionInputCollection(setValueCommand.Arguments);
+        var valueInput = arguments[ParameterProcessor.SetParameterValueName];
+        valueInput.Value = "callerValue";
+
+        await valueInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = valueInput,
+            AllInputs = arguments,
+            Services = new ServiceCollection().BuildServiceProvider(),
+            CancellationToken = CancellationToken.None
+        }).DefaultTimeout();
+
+        Assert.Equal("callerValue", valueInput.Value);
+    }
+
+    [Fact]
+    public async Task ProcessParameterAsync_WithSavedState_DefaultsSaveArgumentToTrue()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var deploymentStateManager = new CapturingMockDeploymentStateManager();
+        var parameter = CreateParameterResource("testParam", "testValue");
+        var section = await deploymentStateManager.AcquireSectionAsync(parameter.ConfigurationKey).DefaultTimeout();
+        section.SetValue("testValue");
+        await deploymentStateManager.SaveSectionAsync(section).DefaultTimeout();
+
+        var parameterProcessor = CreateParameterProcessor(
+            interactionService: testInteractionService,
+            deploymentStateManager: deploymentStateManager,
+            userSecretsManager: new MockUserSecretsManager());
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var setValueCommand = parameter.Annotations.OfType<ResourceCommandAnnotation>()
+            .Single(a => a.Name == KnownResourceCommands.SetParameterCommand);
+        var arguments = new InteractionInputCollection(setValueCommand.Arguments);
+        var valueInput = arguments[ParameterProcessor.SetParameterValueName];
+        var saveInput = arguments[ParameterProcessor.SaveToUserSecretsName];
+
+        await valueInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = valueInput,
+            AllInputs = arguments,
+            Services = new ServiceCollection().BuildServiceProvider(),
+            CancellationToken = CancellationToken.None
+        }).DefaultTimeout();
+
+        await saveInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = saveInput,
+            AllInputs = arguments,
+            Services = new ServiceCollection().BuildServiceProvider(),
+            CancellationToken = CancellationToken.None
+        }).DefaultTimeout();
+
+        Assert.Equal("true", saveInput.Value);
+    }
+
+    [Fact]
+    public async Task ProcessParameterAsync_WithoutSavedState_DisablesDeleteParameterUserSecretsArgumentOnStart()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var deploymentStateManager = new CapturingMockDeploymentStateManager();
+        var parameterProcessor = CreateParameterProcessor(
+            interactionService: testInteractionService,
+            deploymentStateManager: deploymentStateManager,
+            userSecretsManager: new MockUserSecretsManager());
+        var parameter = CreateParameterResource("testParam", "testValue");
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var deleteCommand = parameter.Annotations.OfType<ResourceCommandAnnotation>()
+            .Single(a => a.Name == KnownResourceCommands.DeleteParameterCommand);
+        var arguments = new InteractionInputCollection(deleteCommand.Arguments);
+        var deleteInput = arguments[ParameterProcessor.DeleteFromUserSecretsName];
+
+        await deleteInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = deleteInput,
+            AllInputs = arguments,
+            Services = new ServiceCollection().BuildServiceProvider(),
+            CancellationToken = CancellationToken.None
+        }).DefaultTimeout();
+
+        Assert.True(deleteInput.Disabled);
+    }
+
+    [Fact]
+    public async Task ProcessParameterAsync_WithSavedState_EnablesDeleteParameterUserSecretsArgumentOnStart()
+    {
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var deploymentStateManager = new CapturingMockDeploymentStateManager();
+        var parameter = CreateParameterResource("testParam", "testValue");
+        var section = await deploymentStateManager.AcquireSectionAsync(parameter.ConfigurationKey).DefaultTimeout();
+        section.SetValue("testValue");
+        await deploymentStateManager.SaveSectionAsync(section).DefaultTimeout();
+        var parameterProcessor = CreateParameterProcessor(
+            interactionService: testInteractionService,
+            deploymentStateManager: deploymentStateManager,
+            userSecretsManager: new MockUserSecretsManager());
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var deleteCommand = parameter.Annotations.OfType<ResourceCommandAnnotation>()
+            .Single(a => a.Name == KnownResourceCommands.DeleteParameterCommand);
+        var arguments = new InteractionInputCollection(deleteCommand.Arguments);
+        var deleteInput = arguments[ParameterProcessor.DeleteFromUserSecretsName];
+
+        await deleteInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = deleteInput,
+            AllInputs = arguments,
+            Services = new ServiceCollection().BuildServiceProvider(),
+            CancellationToken = CancellationToken.None
+        }).DefaultTimeout();
+
+        Assert.False(deleteInput.Disabled);
+    }
+
+    [Fact]
     public async Task ProcessParameterAsync_WithInteractionServiceNotAvailable_DoesNotAddSetParameterCommand()
     {
         // Arrange
@@ -887,241 +1076,134 @@ public class ParameterProcessorTests
     }
 
     [Fact]
-    public async Task SetParameterAsync_WithUserInput_UpdatesParameterValue()
+    public async Task SetParameterCoreAsync_WithUserInput_UpdatesParameterValue()
     {
-        // Arrange
-        var testInteractionService = new TestInteractionService { IsAvailable = true };
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
-        var parameterProcessor = CreateParameterProcessor(
-            notificationService: notificationService,
-            interactionService: testInteractionService);
+        var parameterProcessor = CreateParameterProcessor();
         var parameter = CreateParameterResource("testParam", "initialValue");
 
-        // Initialize the parameter
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
 
-        // Reset WaitForValueTcs to track updates
         parameter.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // Act - Start the SetParameterAsync task
-        var setValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
+        var result = await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("newValue"), CancellationToken.None).DefaultTimeout();
 
-        // Wait for the input dialog to be presented
-        var inputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(InteractionStrings.SetParameterTitle, inputInteraction.Title);
-        Assert.Equal(InteractionStrings.SetParameterMessage, inputInteraction.Message);
-        // Should have 2 inputs: parameter value input + SaveToUserSecrets checkbox (in run mode)
-        Assert.Equal(2, inputInteraction.Inputs.Count);
-        Assert.Equal("testParam", inputInteraction.Inputs["testParam"].Label);
-        // Existing value should be pre-populated
-        Assert.Equal("initialValue", inputInteraction.Inputs["testParam"].Value);
-        // SaveToUserSecrets shouldn't be true because the existing value isn't saved to sate.
-        Assert.Null(inputInteraction.Inputs[ParameterProcessor.SaveToUserSecretsName].Value);
-
-        // Complete the interaction with a new value
-        inputInteraction.Inputs["testParam"].Value = "newValue";
-        inputInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputInteraction.Inputs));
-
-        // Wait for the set value task to complete
-        await setValueTask.DefaultTimeout();
-
-        // Assert - Parameter value should be updated
+        Assert.True(result.Success);
+        Assert.Equal(string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceSetParameter, parameter.Name), result.Message);
         Assert.Equal("newValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
     }
 
     [Fact]
-    public async Task SetParameterAsync_WhenUserCancels_ParameterValueUnchanged()
+    public async Task SetParameterCoreAsync_WithMissingInput_ParameterValueUnchanged()
     {
-        // Arrange
-        var testInteractionService = new TestInteractionService { IsAvailable = true };
-        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameterProcessor = CreateParameterProcessor();
         var parameter = CreateParameterResource("testParam", "initialValue");
 
-        // Initialize the parameter
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
 
-        // Reset WaitForValueTcs to track updates
-        var originalTcs = parameter.WaitForValueTcs;
         parameter.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        // Act - Start the SetParameterAsync task
-        var setValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
+        var result = await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments(value: null), CancellationToken.None).DefaultTimeout();
 
-        // Wait for the input dialog to be presented
-        var inputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-
-        // Cancel the interaction
-        inputInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInputCollection>());
-
-        // Wait for the set value task to complete
-        await setValueTask.DefaultTimeout();
-
-        // Assert - Parameter value should remain unchanged (WaitForValueTcs not set)
-        Assert.False(parameter.WaitForValueTcs!.Task.IsCompleted);
+        Assert.True(result.Success);
+        Assert.False(parameter.WaitForValueTcs.Task.IsCompleted);
     }
 
     [Fact]
-    public async Task SetParameterAsync_WithSecretParameter_UsesSecretTextInput()
+    public async Task SetParameterCoreAsync_ResolvingLastParameter_CancelsPromptNotification()
     {
-        // Arrange
         var testInteractionService = new TestInteractionService { IsAvailable = true };
         var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
-        var parameter = CreateParameterResource("secretParam", "secretValue", secret: true);
-
-        // Initialize the parameter
-        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
-
-        // Reset WaitForValueTcs to track updates
-        parameter.WaitForValueTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        // Act - Start the SetParameterAsync task
-        var setValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
-
-        // Wait for the input dialog to be presented
-        var inputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-
-        // Assert - Should use SecretText input type for secret parameters
-        Assert.Equal(2, inputInteraction.Inputs.Count);
-        Assert.Equal(InputType.SecretText, inputInteraction.Inputs["secretParam"].InputType);
-        // Existing value should be pre-populated for secrets too
-        Assert.Equal("secretValue", inputInteraction.Inputs["secretParam"].Value);
-
-        // Complete the interaction
-        inputInteraction.Inputs["secretParam"].Value = "newSecretValue";
-        inputInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputInteraction.Inputs));
-
-        await setValueTask.DefaultTimeout();
-
-        // Assert - Parameter value should be updated
-        Assert.Equal("newSecretValue", await parameter.WaitForValueTcs!.Task.DefaultTimeout());
-    }
-
-    [Fact]
-    public async Task SetParameterAsync_ResolvingLastParameter_CancelsPromptNotification()
-    {
-        // Arrange
-        var testInteractionService = new TestInteractionService { IsAvailable = true };
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
-        var parameterProcessor = CreateParameterProcessor(
-            notificationService: notificationService,
-            interactionService: testInteractionService);
-
         var parameter = CreateParameterWithMissingValue("testParam");
 
-        // Use InitializeParametersAsync to properly set up the internal state
-        // This will trigger HandleUnresolvedParametersAsync in a background task
-        // with the internal _allParametersResolvedCts.Token
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
 
-        // Wait for the notification to appear from the background task
         var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
         Assert.Equal(InteractionStrings.ParametersBarTitle, notificationInteraction.Title);
+        Assert.False(notificationInteraction.CancellationToken.IsCancellationRequested);
 
-        // Capture the cancellation token passed to the notification
-        var notificationCancellationToken = notificationInteraction.CancellationToken;
-        Assert.False(notificationCancellationToken.IsCancellationRequested);
+        var result = await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("resolvedValue"), CancellationToken.None).DefaultTimeout();
 
-        // Now use SetParameterAsync to resolve the parameter (which is the last unresolved parameter)
-        var setValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
-
-        // Wait for the SetParameterAsync input dialog to appear
-        var inputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(InteractionStrings.SetParameterTitle, inputInteraction.Title);
-
-        // Complete the SetParameterAsync interaction with a value
-        inputInteraction.Inputs["testParam"].Value = "resolvedValue";
-        inputInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputInteraction.Inputs));
-
-        await setValueTask.DefaultTimeout();
-
-        // The parameter should be resolved with the correct value
+        Assert.True(result.Success);
         Assert.Equal("resolvedValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
-
-        // Assert - The notification's cancellation token should now be canceled
-        // because the last parameter was resolved via SetParameterAsync
-        Assert.True(notificationCancellationToken.IsCancellationRequested);
+        Assert.True(notificationInteraction.CancellationToken.IsCancellationRequested);
     }
 
     [Fact]
-    public async Task SetParameterAsync_CalledTwice_SecondInteractionShowsPreviousValueAndSaveChecked()
+    public async Task SetParameterCoreAsync_CalledTwice_UpdatesPreviousValueAndSavedState()
     {
-        // Arrange
-        var testInteractionService = new TestInteractionService { IsAvailable = true };
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
         var capturingStateManager = new CapturingMockDeploymentStateManager();
-        var parameterProcessor = CreateParameterProcessor(
-            notificationService: notificationService,
-            interactionService: testInteractionService,
-            deploymentStateManager: capturingStateManager);
-
+        var parameterProcessor = CreateParameterProcessor(deploymentStateManager: capturingStateManager);
         var parameter = CreateParameterWithMissingValue("testParam");
 
-        // Initialize the parameter - this starts HandleUnresolvedParametersAsync in background
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
 
-        // Wait for the notification to appear from the background task
-        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
-        Assert.Equal(InteractionStrings.ParametersBarTitle, notificationInteraction.Title);
-
-        // First SetParameterAsync call - set and save a value
-        var firstSetValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
-
-        // Wait for the first input dialog
-        var firstInputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
-        Assert.Equal(InteractionStrings.SetParameterTitle, firstInputInteraction.Title);
-
-        // First time: no saved state, so SaveToUserSecrets should be null/unchecked
-        Assert.Null(firstInputInteraction.Inputs[ParameterProcessor.SaveToUserSecretsName].Value);
-
-        // Set the value and enable save
-        firstInputInteraction.Inputs["testParam"].Value = "firstValue";
-        firstInputInteraction.Inputs[ParameterProcessor.SaveToUserSecretsName].Value = "true";
-        firstInputInteraction.CompletionTcs.SetResult(InteractionResult.Ok(firstInputInteraction.Inputs));
-
-        await firstSetValueTask.DefaultTimeout();
-
-        // Verify first value was set
+        await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("firstValue", saveToUserSecrets: "true"), CancellationToken.None).DefaultTimeout();
         Assert.Equal("firstValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.True(capturingStateManager.State.TryGetPropertyValue($"Parameters:{parameter.Name}", out var savedValueNode));
+        Assert.Equal("firstValue", savedValueNode?.GetValue<string>());
 
-        // Second SetParameterAsync call - should show previously set value
-        var secondSetValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
+        await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("secondValue", saveToUserSecrets: "true"), CancellationToken.None).DefaultTimeout();
 
-        // Wait for the second input dialog
-        var secondInputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
-        Assert.Equal(InteractionStrings.SetParameterTitle, secondInputInteraction.Title);
-
-        // Assert - Second interaction should have the previously set value pre-populated
-        Assert.Equal("firstValue", secondInputInteraction.Inputs["testParam"].Value);
-
-        // Assert - SaveToUserSecrets should be checked (true) since parameter has saved state
-        Assert.Equal("true", secondInputInteraction.Inputs[ParameterProcessor.SaveToUserSecretsName].Value);
-
-        // Complete the second interaction with a new value
-        secondInputInteraction.Inputs["testParam"].Value = "secondValue";
-        secondInputInteraction.CompletionTcs.SetResult(InteractionResult.Ok(secondInputInteraction.Inputs));
-
-        await secondSetValueTask.DefaultTimeout();
-
-        // Verify second value was set
         Assert.Equal("secondValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.True(capturingStateManager.State.TryGetPropertyValue($"Parameters:{parameter.Name}", out savedValueNode));
+        Assert.Equal("secondValue", savedValueNode?.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SetParameterAsync_WithUserInput_UpdatesParameterValueAndSavedState()
+    {
+        var capturingStateManager = new CapturingMockDeploymentStateManager();
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(
+            interactionService: testInteractionService,
+            deploymentStateManager: capturingStateManager);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var setParameterTask = parameterProcessor.SetParameterAsync(parameter, CancellationToken.None);
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionStrings.SetParameterTitle, inputsInteraction.Title);
+        inputsInteraction.Inputs[ParameterProcessor.SetParameterValueName].Value = "newValue";
+        inputsInteraction.Inputs[ParameterProcessor.SaveToUserSecretsName].Value = "true";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
+        await setParameterTask.DefaultTimeout();
+
+        Assert.Equal("newValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+        Assert.True(capturingStateManager.State.TryGetPropertyValue($"Parameters:{parameter.Name}", out var savedValueNode));
+        Assert.Equal("newValue", savedValueNode?.GetValue<string>());
+    }
+
+    private static InteractionInputCollection CreateSetParameterArguments(string? value, string? saveToUserSecrets = null)
+    {
+        return new InteractionInputCollection([
+            new InteractionInput
+            {
+                Name = ParameterProcessor.SetParameterValueName,
+                InputType = InputType.Text,
+                Value = value
+            },
+            new InteractionInput
+            {
+                Name = ParameterProcessor.SaveToUserSecretsName,
+                InputType = InputType.Boolean,
+                Value = saveToUserSecrets
+            }
+        ]);
+    }
+
+    private static InteractionInputCollection CreateDeleteParameterArguments(string? deleteFromUserSecrets = null)
+    {
+        return new InteractionInputCollection([
+            new InteractionInput
+            {
+                Name = ParameterProcessor.DeleteFromUserSecretsName,
+                InputType = InputType.Boolean,
+                Value = deleteFromUserSecrets
+            }
+        ]);
     }
 
     private static ParameterProcessor CreateParameterProcessor(
@@ -1167,6 +1249,8 @@ public class ParameterProcessorTests
         {
             return Task.CompletedTask;
         }
+
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {
@@ -1357,213 +1441,133 @@ public class ParameterProcessorTests
     }
 
     [Fact]
-    public async Task SetParameterAsync_WithSavedState_OnlyShowsValueAndSaveInputs()
+    public async Task DeleteParameterCoreAsync_DeletesFromDeploymentState()
     {
-        // Arrange
         var capturingStateManager = new CapturingMockDeploymentStateManager();
-        var testInteractionService = new TestInteractionService { IsAvailable = true };
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
-        var parameterProcessor = CreateParameterProcessor(
-            notificationService: notificationService,
-            interactionService: testInteractionService,
-            deploymentStateManager: capturingStateManager);
-
+        var parameterProcessor = CreateParameterProcessor(deploymentStateManager: capturingStateManager);
         var parameter = CreateParameterResource("testParam", "initialValue");
 
-        // Initialize the parameter
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
-
-        // First SetParameterAsync call - set and save a value to establish saved state
-        var firstSetValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
-
-        var firstInputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
-        // First time: should have 2 inputs (value + save)
-        Assert.Equal(2, firstInputInteraction.Inputs.Count);
-
-        // Set the value and save it
-        firstInputInteraction.Inputs["testParam"].Value = "savedValue";
-        firstInputInteraction.Inputs[ParameterProcessor.SaveToUserSecretsName].Value = "true";
-        firstInputInteraction.CompletionTcs.SetResult(InteractionResult.Ok(firstInputInteraction.Inputs));
-
-        await firstSetValueTask.DefaultTimeout();
-
-        // Second SetParameterAsync call - should still only have 2 inputs (delete is now a separate command)
-        var secondSetValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
-
-        var secondInputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
-
-        // Assert - Should have 2 inputs: value + save (delete is now a separate command)
-        Assert.Equal(2, secondInputInteraction.Inputs.Count);
-        Assert.True(secondInputInteraction.Inputs.ContainsName("testParam"));
-        Assert.True(secondInputInteraction.Inputs.ContainsName(ParameterProcessor.SaveToUserSecretsName));
-
-        // Complete the interaction
-        secondInputInteraction.CompletionTcs.SetResult(InteractionResult.Ok(secondInputInteraction.Inputs));
-
-        await secondSetValueTask.DefaultTimeout();
-    }
-
-    [Fact]
-    public async Task DeleteParameterAsync_DeletesFromDeploymentState()
-    {
-        // Arrange
-        var capturingStateManager = new CapturingMockDeploymentStateManager();
-        var testInteractionService = new TestInteractionService { IsAvailable = true };
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
-        var parameterProcessor = CreateParameterProcessor(
-            notificationService: notificationService,
-            interactionService: testInteractionService,
-            deploymentStateManager: capturingStateManager);
-
-        var parameter = CreateParameterResource("testParam", "initialValue");
-
-        // Initialize the parameter
-        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
-
-        // First SetParameterAsync call - set and save a value to establish saved state
-        var firstSetValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
-
-        var firstInputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
-        firstInputInteraction.Inputs["testParam"].Value = "savedValue";
-        firstInputInteraction.Inputs[ParameterProcessor.SaveToUserSecretsName].Value = "true";
-        firstInputInteraction.CompletionTcs.SetResult(InteractionResult.Ok(firstInputInteraction.Inputs));
-
-        await firstSetValueTask.DefaultTimeout();
-
-        // Verify value was saved
+        await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("savedValue", saveToUserSecrets: "true"), CancellationToken.None).DefaultTimeout();
         Assert.True(capturingStateManager.State.Count > 0);
 
-        // Call DeleteParameterAsync to delete the value - need to run in background as it shows a prompt
-        var deleteTask = Task.Run(async () =>
-        {
-            await parameterProcessor.DeleteParameterAsync(parameter);
-        });
+        var result = await parameterProcessor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(deleteFromUserSecrets: "true"), CancellationToken.None).DefaultTimeout();
 
-        // Wait for the delete confirmation dialog
-        var deleteConfirmation = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
-        Assert.Equal(InteractionStrings.DeleteParameterTitle, deleteConfirmation.Title);
-        // Should have delete from user secrets checkbox since value is saved
-        Assert.True(deleteConfirmation.Inputs.ContainsName(ParameterProcessor.DeleteFromUserSecretsName));
-        Assert.Null(deleteConfirmation.Inputs[ParameterProcessor.DeleteFromUserSecretsName].Value);
-
-        // Confirm the deletion with delete from user secrets checked
-        deleteConfirmation.Inputs[ParameterProcessor.DeleteFromUserSecretsName].Value = "true";
-        deleteConfirmation.CompletionTcs.SetResult(InteractionResult.Ok(deleteConfirmation.Inputs));
-
-        await deleteTask.DefaultTimeout();
-
-        // Assert - State should be cleared
-        // The section still exists but should have no data
+        Assert.True(result.Success);
+        Assert.Equal(string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceDeletedParameter, parameter.Name), result.Message);
         var section = await capturingStateManager.AcquireSectionAsync($"Parameters:{parameter.Name}").DefaultTimeout();
         Assert.Empty(section.Data);
     }
 
     [Fact]
-    public async Task SetParameterAsync_WithoutSavedState_DoesNotShowDeleteCheckbox()
+    public async Task DeleteParameterCoreAsync_WithoutDeleteFromUserSecrets_DoesNotDeleteDeploymentState()
     {
-        // Arrange
-        var testInteractionService = new TestInteractionService { IsAvailable = true };
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
-        var parameterProcessor = CreateParameterProcessor(
-            notificationService: notificationService,
-            interactionService: testInteractionService);
-
+        var capturingStateManager = new CapturingMockDeploymentStateManager();
+        var parameterProcessor = CreateParameterProcessor(deploymentStateManager: capturingStateManager);
         var parameter = CreateParameterResource("testParam", "initialValue");
 
-        // Initialize the parameter
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("savedValue", saveToUserSecrets: "true"), CancellationToken.None).DefaultTimeout();
 
-        // Act - Start the SetParameterAsync task
-        var setValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
+        var result = await parameterProcessor.DeleteParameterCoreAsync(parameter, new InteractionInputCollection([]), CancellationToken.None).DefaultTimeout();
 
-        // Wait for the input dialog to be presented
-        var inputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
-
-        // Assert - Should only have 2 inputs (value + save), no delete checkbox
-        Assert.Equal(2, inputInteraction.Inputs.Count);
-        Assert.True(inputInteraction.Inputs.ContainsName("testParam"));
-        Assert.True(inputInteraction.Inputs.ContainsName(ParameterProcessor.SaveToUserSecretsName));
-        Assert.False(inputInteraction.Inputs.ContainsName("DeleteParameter"));
-
-        // Complete the interaction
-        inputInteraction.CompletionTcs.SetResult(InteractionResult.Cancel<InteractionInputCollection>());
-        await setValueTask.DefaultTimeout();
+        Assert.True(result.Success);
+        Assert.True(capturingStateManager.State.TryGetPropertyValue($"Parameters:{parameter.Name}", out var savedValueNode));
+        Assert.Equal("savedValue", savedValueNode?.GetValue<string>());
     }
 
     [Fact]
-    public async Task DeleteParameterAsync_AddsParameterBackToUnresolvedAndStartsResolutionTask()
+    public async Task DeleteParameterCoreAsync_WhenDeploymentStateDeleteFails_ReturnsFailure()
     {
-        // Arrange
-        var capturingStateManager = new CapturingMockDeploymentStateManager();
-        var testInteractionService = new TestInteractionService { IsAvailable = true };
-        var notificationService = ResourceNotificationServiceTestHelpers.Create();
-        var parameterProcessor = CreateParameterProcessor(
-            notificationService: notificationService,
-            interactionService: testInteractionService,
-            deploymentStateManager: capturingStateManager);
-
+        var capturingStateManager = new CapturingMockDeploymentStateManager { ThrowOnDeleteSection = true };
+        var parameterProcessor = CreateParameterProcessor(deploymentStateManager: capturingStateManager);
         var parameter = CreateParameterResource("testParam", "initialValue");
 
-        // Initialize the parameter
         await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("savedValue", saveToUserSecrets: "true"), CancellationToken.None).DefaultTimeout();
 
-        // First SetParameterAsync call - set and save a value to establish saved state
-        var firstSetValueTask = Task.Run(async () =>
-        {
-            await parameterProcessor.SetParameterAsync(parameter);
-        });
+        var result = await parameterProcessor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(deleteFromUserSecrets: "true"), CancellationToken.None).DefaultTimeout();
 
-        var firstInputInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
-        firstInputInteraction.Inputs["testParam"].Value = "savedValue";
-        firstInputInteraction.Inputs[ParameterProcessor.SaveToUserSecretsName].Value = "true";
-        firstInputInteraction.CompletionTcs.SetResult(InteractionResult.Ok(firstInputInteraction.Inputs));
+        Assert.False(result.Success);
+        Assert.Equal("Failed to delete parameter 'testParam'.", result.Message);
+        Assert.True(capturingStateManager.State.TryGetPropertyValue($"Parameters:{parameter.Name}", out var savedValueNode));
+        Assert.Equal("savedValue", savedValueNode?.GetValue<string>());
+    }
 
-        await firstSetValueTask.DefaultTimeout();
+    [Fact]
+    public async Task DeleteParameterCoreAsync_AddsParameterBackToUnresolvedAndStartsResolutionTask()
+    {
+        var capturingStateManager = new CapturingMockDeploymentStateManager();
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(
+            interactionService: testInteractionService,
+            deploymentStateManager: capturingStateManager);
+        var parameter = CreateParameterResource("testParam", "initialValue");
 
-        // Call DeleteParameterAsync to delete the value - need to run in background as it shows a prompt
-        var deleteTask = Task.Run(async () =>
-        {
-            await parameterProcessor.DeleteParameterAsync(parameter);
-        });
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+        await parameterProcessor.SetParameterCoreAsync(parameter, CreateSetParameterArguments("savedValue", saveToUserSecrets: "true"), CancellationToken.None).DefaultTimeout();
+        await parameterProcessor.DeleteParameterCoreAsync(parameter, CreateDeleteParameterArguments(), CancellationToken.None).DefaultTimeout();
 
-        // Wait for the delete confirmation dialog
-        var deleteConfirmation = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
-        Assert.Equal(InteractionStrings.DeleteParameterTitle, deleteConfirmation.Title);
-
-        // Confirm the deletion
-        deleteConfirmation.CompletionTcs.SetResult(InteractionResult.Ok(deleteConfirmation.Inputs));
-
-        await deleteTask.DefaultTimeout();
-
-        // After delete, the resolution task should start and show a notification
         var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
         Assert.Equal(InteractionStrings.ParametersBarTitle, notificationInteraction.Title);
 
-        // Dismiss the notification to proceed to inputs dialog
         notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
 
-        // The inputs dialog should appear with the deleted parameter
         var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
         Assert.Equal(InteractionStrings.ParametersInputsTitle, inputsInteraction.Title);
         Assert.True(inputsInteraction.Inputs.ContainsName("testParam"));
 
-        // Complete the interaction with a new value
         inputsInteraction.Inputs["testParam"].Value = "newValue";
         inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
 
-        // Verify the parameter was resolved with the new value
+        Assert.Equal("newValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
+    }
+
+    [Fact]
+    public async Task DeleteParameterAsync_DeletesFromDeploymentState()
+    {
+        var capturingStateManager = new CapturingMockDeploymentStateManager();
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(
+            interactionService: testInteractionService,
+            deploymentStateManager: capturingStateManager);
+        var parameter = CreateParameterResource("testParam", "initialValue");
+
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        var setParameterTask = parameterProcessor.SetParameterAsync(parameter, CancellationToken.None);
+
+        var setInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        setInteraction.Inputs[ParameterProcessor.SetParameterValueName].Value = "savedValue";
+        setInteraction.Inputs[ParameterProcessor.SaveToUserSecretsName].Value = "true";
+        setInteraction.CompletionTcs.SetResult(InteractionResult.Ok(setInteraction.Inputs));
+
+        await setParameterTask.DefaultTimeout();
+        Assert.True(capturingStateManager.State.Count > 0);
+
+        var deleteParameterTask = parameterProcessor.DeleteParameterAsync(parameter, CancellationToken.None);
+
+        var deleteInteraction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionStrings.DeleteParameterTitle, deleteInteraction.Title);
+        Assert.True(deleteInteraction.Inputs.ContainsName(ParameterProcessor.DeleteFromUserSecretsName));
+        Assert.Null(deleteInteraction.Inputs[ParameterProcessor.DeleteFromUserSecretsName].Value);
+        deleteInteraction.Inputs[ParameterProcessor.DeleteFromUserSecretsName].Value = "true";
+        deleteInteraction.CompletionTcs.SetResult(InteractionResult.Ok(deleteInteraction.Inputs));
+
+        await deleteParameterTask.DefaultTimeout();
+
+        var section = await capturingStateManager.AcquireSectionAsync($"Parameters:{parameter.Name}").DefaultTimeout();
+        Assert.Empty(section.Data);
+
+        var notificationInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(InteractionStrings.ParametersBarTitle, notificationInteraction.Title);
+        notificationInteraction.CompletionTcs.SetResult(InteractionResult.Ok(true));
+
+        var inputsInteraction = await testInteractionService.Interactions.Reader.ReadAsync().AsTask().DefaultTimeout();
+        Assert.Equal(InteractionStrings.ParametersInputsTitle, inputsInteraction.Title);
+        inputsInteraction.Inputs["testParam"].Value = "newValue";
+        inputsInteraction.CompletionTcs.SetResult(InteractionResult.Ok(inputsInteraction.Inputs));
+
         Assert.Equal("newValue", await parameter.GetValueAsync(CancellationToken.None).DefaultTimeout());
     }
 
@@ -1577,6 +1581,7 @@ public class ParameterProcessorTests
         // Provides the flattened state for verification, matching what FileDeploymentStateManager saves to disk
         public JsonObject State => _flattenedState ?? [];
         public string? StateFilePath => null;
+        public bool ThrowOnDeleteSection { get; init; }
 
         public Task<DeploymentStateSection> AcquireSectionAsync(string sectionName, CancellationToken cancellationToken = default)
         {
@@ -1602,8 +1607,15 @@ public class ParameterProcessorTests
             return Task.CompletedTask;
         }
 
+        public Task ClearAllStateAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
         public Task DeleteSectionAsync(DeploymentStateSection section, CancellationToken cancellationToken = default)
         {
+            if (ThrowOnDeleteSection)
+            {
+                throw new IOException("Failed to delete section.");
+            }
+
             // Increment version to allow multiple saves with the same instance (mimics FileDeploymentStateManager)
             section.Version++;
 

@@ -1,0 +1,428 @@
+{
+  "events": {
+    "microsoft-aspire.aspire-vscode/command/invoked": {
+      "command": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The Aspire VS Code command identifier that was invoked."
+      },
+      "outcome": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the command completed successfully, was canceled, or failed."
+      },
+      "source": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The extension surface that invoked the command, such as the tree view, walkthrough, editor, or code lens."
+      },
+      "error_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The non-sensitive error type for failed command invocations."
+      },
+      "duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The duration of the command invocation in milliseconds."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/engagement/active": {
+      "trigger": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The extension activity that caused meaningful engagement to be recorded."
+      },
+      "has_csharp_devkit": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the C# Dev Kit extension was detected."
+      },
+      "workspace_folders": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The number of workspace folders in the VS Code window."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/runningAppHostsView/shown": {
+      "view_mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the running AppHosts view was showing global or workspace-scoped data."
+      },
+      "initial_visibility": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the running AppHosts view was visible when tracking started."
+      },
+      "running_apphosts": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The number of running AppHosts displayed in the view."
+      },
+      "total_resources": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The number of resources displayed across running AppHosts."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/debug/appHost/start": {
+      "mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the AppHost was launched in run or debug mode."
+      },
+      "apphost_language": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The AppHost project language detected by the extension."
+      },
+      "apphost_is_directory": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the AppHost launch target was a directory."
+      },
+      "command": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The Aspire command used to start the AppHost."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/debug/appHost/end": {
+      "mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the AppHost was launched in run or debug mode."
+      },
+      "apphost_language": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The AppHost project language detected by the extension."
+      },
+      "ended_with_error": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "Whether the AppHost or any child debug session ended with an error."
+      },
+      "distinct_resource_types": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The distinct Aspire resource types observed in child debug sessions."
+      },
+      "duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The AppHost debug session duration in milliseconds."
+      },
+      "total_child_sessions": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The number of child resource debug sessions started by the AppHost."
+      },
+      "distinct_resource_type_count": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The number of distinct Aspire resource types observed in child debug sessions."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/debug/runSession/start": {
+      "resource_type": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The Aspire resource type associated with the debug run session."
+      },
+      "debugger_extension_matched": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether a VS Code debugger extension matched the resource."
+      },
+      "mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the resource was launched in run or debug mode."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/debug/runSession/end": {
+      "resource_type": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The Aspire resource type associated with the debug run session."
+      },
+      "mode": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "Whether the resource was launched in run or debug mode."
+      },
+      "exit_code_bucket": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The coarse non-sensitive bucket for the process exit code."
+      },
+      "end_reason": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The reason the run session ended."
+      },
+      "error_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The non-sensitive error type for failed run sessions."
+      },
+      "duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The resource debug session duration in milliseconds."
+      },
+      "exit_code": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The numeric process exit code for the resource debug session."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/dashboard/operation": {
+      "dashboard_event_name": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The normalized dashboard event name supplied by the Aspire dashboard."
+      },
+      "dashboard_properties": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing allowlisted non-sensitive dashboard properties."
+      },
+      "dashboard_measurements": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing numeric dashboard measurements."
+      },
+      "dashboard_correlated_with": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded dashboard correlation identifiers associated with the event."
+      },
+      "result": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The dashboard operation result classification."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/dashboard/userTask": {
+      "dashboard_event_name": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The normalized dashboard event name supplied by the Aspire dashboard."
+      },
+      "dashboard_properties": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing allowlisted non-sensitive dashboard properties."
+      },
+      "dashboard_measurements": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing numeric dashboard measurements."
+      },
+      "dashboard_correlated_with": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded dashboard correlation identifiers associated with the event."
+      },
+      "result": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The dashboard user-task result classification."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/dashboard/fault": {
+      "dashboard_event_name": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The normalized dashboard event name supplied by the Aspire dashboard."
+      },
+      "dashboard_properties": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "A JSON object containing allowlisted non-sensitive dashboard fault properties."
+      },
+      "dashboard_measurements": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "A JSON object containing numeric dashboard fault measurements."
+      },
+      "dashboard_correlated_with": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded dashboard correlation identifiers associated with the event."
+      },
+      "fault_severity": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The dashboard fault severity classification."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/dashboard/asset": {
+      "dashboard_event_name": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The normalized dashboard event name supplied by the Aspire dashboard."
+      },
+      "dashboard_properties": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing allowlisted non-sensitive dashboard properties."
+      },
+      "dashboard_measurements": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing numeric dashboard measurements."
+      },
+      "dashboard_correlated_with": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded dashboard correlation identifiers associated with the event."
+      },
+      "asset_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The dashboard asset identifier."
+      },
+      "asset_event_version": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The dashboard asset event version."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/dashboard/scope/start": {
+      "dashboard_event_name": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The normalized dashboard event name supplied by the Aspire dashboard."
+      },
+      "dashboard_properties": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing allowlisted non-sensitive dashboard properties."
+      },
+      "dashboard_measurements": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing numeric dashboard measurements."
+      },
+      "dashboard_correlated_with": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded dashboard correlation identifiers associated with the event."
+      },
+      "operation_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The generated operation identifier used to correlate dashboard scope start and end events."
+      },
+      "scope_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The dashboard scope kind."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/dashboard/scope/end": {
+      "dashboard_event_name": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The normalized dashboard event name supplied by the Aspire dashboard."
+      },
+      "dashboard_properties": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing allowlisted non-sensitive dashboard properties."
+      },
+      "dashboard_measurements": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing numeric dashboard measurements."
+      },
+      "operation_id": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The generated operation identifier used to correlate dashboard scope start and end events."
+      },
+      "scope_kind": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The dashboard scope kind."
+      },
+      "result": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The dashboard scope result classification."
+      },
+      "duration_ms": {
+        "classification": "SystemMetaData",
+        "purpose": "PerformanceAndHealth",
+        "comment": "The dashboard scope duration in milliseconds."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/dashboard/property/set": {
+      "property_name": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The allowlisted dashboard property name."
+      },
+      "dashboard_properties": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing the allowlisted non-sensitive dashboard property value."
+      },
+      "dashboard_measurements": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing numeric dashboard measurements."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/dashboard/property/recurring": {
+      "property_name": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The allowlisted dashboard property name."
+      },
+      "dashboard_properties": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing the allowlisted non-sensitive dashboard property value."
+      },
+      "dashboard_measurements": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing numeric dashboard measurements."
+      }
+    },
+    "microsoft-aspire.aspire-vscode/dashboard/commandLineFlags": {
+      "flag_prefixes": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "The bounded list of command-line flag names observed by the dashboard with values removed."
+      },
+      "dashboard_properties": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing allowlisted non-sensitive dashboard properties."
+      },
+      "dashboard_measurements": {
+        "classification": "SystemMetaData",
+        "purpose": "FeatureInsight",
+        "comment": "A JSON object containing numeric dashboard measurements."
+      }
+    }
+  },
+  "commonProperties": {
+    "apphost_languages": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "The AppHost languages detected in the current workspace."
+    },
+    "apphost_present": {
+      "classification": "SystemMetaData",
+      "purpose": "FeatureInsight",
+      "comment": "Whether the current workspace contains an AppHost."
+    }
+  }
+}

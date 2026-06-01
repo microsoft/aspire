@@ -19,30 +19,29 @@ namespace Aspire.Cli.EndToEnd.Tests;
 public sealed class ProjectReferenceTests(ITestOutputHelper output)
 {
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/15831")]
     public async Task TypeScriptAppHostWithProjectReferenceIntegration()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Step 1: Create a TypeScript AppHost (so we get the SDK version in aspire.config.json)
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 2: Create the integration project, update aspire.config.json, and modify apphost.ts
+        // Step 2: Create the integration project, update aspire.config.json, and modify apphost.mts
         {
             var workDir = workspace.WorkspaceRoot.FullName;
 
@@ -60,7 +59,6 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
                 <Project Sdk="Microsoft.NET.Sdk">
                   <PropertyGroup>
                     <TargetFramework>net10.0</TargetFramework>
-                    <NoWarn>$(NoWarn);ASPIREATS001</NoWarn>
                   </PropertyGroup>
                   <ItemGroup>
                     <PackageReference Include="Aspire.Hosting" Version="{{sdkVersion}}" />
@@ -108,7 +106,7 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
 
                 public static class MyIntegrationExtensions
                 {
-                    [AspireExport("addMyService")]
+                    [AspireExport]
                     public static IResourceBuilder<ContainerResource> AddMyService(
                         this IDistributedApplicationBuilder builder, string name)
                         => builder.AddContainer(name, "redis", "latest");
@@ -125,16 +123,16 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
             var updatedJson = config.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(configPath, updatedJson);
 
-            // Delete the generated .modules folder to force re-codegen with the new integration
-            var modulesDir = Path.Combine(workDir, ".modules");
+            // Delete the generated .aspire/modules folder to force re-codegen with the new integration
+            var modulesDir = Path.Combine(workDir, ".aspire", "modules");
             if (Directory.Exists(modulesDir))
             {
                 Directory.Delete(modulesDir, recursive: true);
             }
 
-            // Update apphost.ts to use the custom integration
-            File.WriteAllText(Path.Combine(workDir, "apphost.ts"), """
-                import { createBuilder } from './.modules/aspire.js';
+            // Update apphost.mts to use the custom integration
+            File.WriteAllText(Path.Combine(workDir, "apphost.mts"), """
+                import { createBuilder } from './.aspire/modules/aspire.mjs';
 
                 const builder = await createBuilder();
                 await builder.addMyService("my-svc");
@@ -162,7 +160,7 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
         // Step 4: Verify the custom integration was code-generated
-        await auto.TypeAsync("grep addMyService .modules/aspire.ts");
+        await auto.TypeAsync("grep addMyService .aspire/modules/aspire.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("addMyService", timeout: TimeSpan.FromSeconds(5));
         await auto.WaitForSuccessPromptAsync(counter);
@@ -185,9 +183,5 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

@@ -6,7 +6,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -44,9 +44,7 @@ internal sealed class DocsListCommand : BaseCommand
         Options.Add(s_formatOption);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -61,8 +59,7 @@ internal sealed class DocsListCommand : BaseCommand
 
         if (docs.Count is 0)
         {
-            InteractionService.DisplayError(DocsCommandStrings.NoDocumentationAvailable);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, DocsCommandStrings.NoDocumentationAvailable);
         }
 
         if (format is OutputFormat.Json)
@@ -91,6 +88,6 @@ internal sealed class DocsListCommand : BaseCommand
             InteractionService.DisplayRenderable(table);
         }
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

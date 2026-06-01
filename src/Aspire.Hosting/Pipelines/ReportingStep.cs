@@ -17,11 +17,13 @@ internal sealed class ReportingStep : IReportingStep
 {
     private readonly ConcurrentDictionary<string, ReportingTask> _tasks = new();
 
-    internal ReportingStep(PipelineActivityReporter reporter, string id, string title)
+    internal ReportingStep(PipelineActivityReporter reporter, string id, string title, string? parentStepId = null, int hierarchyLevel = 0)
     {
         Reporter = reporter;
         Id = id;
         Title = title;
+        ParentStepId = parentStepId;
+        HierarchyLevel = hierarchyLevel;
     }
 
     /// <summary>
@@ -33,6 +35,16 @@ internal sealed class ReportingStep : IReportingStep
     /// The title of the publishing step.
     /// </summary>
     public string Title { get; }
+
+    /// <summary>
+    /// The identifier of the parent step used for hierarchical display.
+    /// </summary>
+    internal string? ParentStepId { get; }
+
+    /// <summary>
+    /// The hierarchical level of the step used for display.
+    /// </summary>
+    internal int HierarchyLevel { get; }
 
     /// <summary>
     /// The completion state of the step. Defaults to InProgress.

@@ -1,20 +1,15 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="ko" original="../DescribeCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Describe resources in a running apphost</source>
+        <source>Describe resources in a running AppHost</source>
         <target state="needs-review-translation">실행 중인 Aspire AppHost의 리소스 스냅샷을 표시합니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Continuously stream resource state changes</source>
         <target state="new">Continuously stream resource state changes</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="HeaderEndpoints">
-        <source>Endpoints</source>
-        <target state="translated">엔드포인트</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderHealth">
@@ -37,13 +32,23 @@
         <target state="translated">형식</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderURLs">
+        <source>URLs</source>
+        <target state="new">URLs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">컴퓨터 사용량에 대한 JSON형식의 출력입니다.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoAppHostFound">
-        <source>No apphost project found.</source>
+        <source>No AppHost project found.</source>
         <target state="needs-review-translation">AppHost 프로젝트를 찾을 수 없습니다.</target>
         <note />
       </trans-unit>

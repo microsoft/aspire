@@ -18,15 +18,32 @@ public class YarpCluster
     internal YarpCluster(ClusterConfig config, params object[] targets)
     {
         ClusterConfig = config;
-        Targets = targets;
+        _targets = targets;
     }
+
+    private readonly object[] _targets;
+
     /// <summary>
     /// Construct a new YarpCluster targeting the endpoint in parameter.
     /// </summary>
     /// <param name="endpoint">The endpoint to target.</param>
     internal YarpCluster(EndpointReference endpoint)
-        : this(endpoint.Resource.Name, $"{endpoint.Scheme}://_{endpoint.EndpointName}.{endpoint.Resource.Name}")
+        : this(endpoint.Resource.Name, endpoint)
     {
+    }
+
+    private static string BuildEndpointTarget(EndpointReference endpoint)
+    {
+        // For endpoints named "http" or "https", use standard resolution without
+        // the named endpoint prefix since the scheme key already matches the scheme.
+        // For all other endpoint names, use the named endpoint DNS-SD convention
+        // which .NET service discovery resolves via the endpoint name in the config key.
+        if (endpoint.IsHttpSchemeNamedEndpoint)
+        {
+            return $"{endpoint.Scheme}://{endpoint.Resource.Name}";
+        }
+
+        return $"{endpoint.Scheme}://_{endpoint.EndpointName}.{endpoint.Resource.Name}";
     }
 
     /// <summary>
@@ -34,7 +51,7 @@ public class YarpCluster
     /// </summary>
     /// <param name="resource">The resource to target.</param>
     internal YarpCluster(IResourceWithServiceDiscovery resource)
-        : this(resource.Name, BuildEndpointUri(resource))
+        : this(resource.Name, resource)
     {
     }
 
@@ -43,7 +60,7 @@ public class YarpCluster
     /// </summary>
     /// <param name="externalService">The external service.</param>
     internal YarpCluster(ExternalServiceResource externalService)
-        : this(externalService.Name, GetAddressFromExternalService(externalService))
+        : this(externalService.Name, externalService)
     {
     }
 
@@ -59,25 +76,74 @@ public class YarpCluster
             ClusterId = $"cluster_{resourceName}",
             Destinations = new Dictionary<string, DestinationConfig>(StringComparer.OrdinalIgnoreCase)
         };
-        Targets = targets;
+        _targets = targets;
     }
 
     internal ClusterConfig ClusterConfig { get; private set; }
 
-    internal object[] Targets { get; private set; }
+    internal object[] Targets => GetResolvedTargets();
 
     internal void Configure(Func<ClusterConfig, ClusterConfig> configure)
     {
         ClusterConfig = configure(ClusterConfig);
     }
 
-    private static object BuildEndpointUri(IResourceWithServiceDiscovery resource)
+    internal object[] GetResolvedTargets()
+    {
+        var targets = new List<object>(_targets.Length);
+        foreach (var target in _targets)
+        {
+            targets.AddRange(ResolveTargets(target));
+        }
+
+        return [.. targets];
+    }
+
+    private static IEnumerable<object> ResolveTargets(object target)
+    {
+        switch (target)
+        {
+            case EndpointReference endpoint:
+                yield return BuildEndpointTarget(endpoint);
+                break;
+            case IResourceWithServiceDiscovery resource:
+                foreach (var resourceTarget in BuildEndpointTargets(resource))
+                {
+                    yield return resourceTarget;
+                }
+                break;
+            case ExternalServiceResource externalService:
+                yield return GetAddressFromExternalService(externalService);
+                break;
+            default:
+                yield return target;
+                break;
+        }
+    }
+
+    private static object[] BuildEndpointTargets(IResourceWithServiceDiscovery resource)
     {
         var resourceName = resource.Name;
 
-        var endpoints = resource.GetEndpoints();
-        var hasHttpsEndpoint = endpoints.Any(e => e.Exists && e.IsHttps);
-        var hasHttpEndpoint = endpoints.Any(e => e.Exists && e.IsHttp);
+        var endpoints = resource.GetEndpoints()
+            .Where(e => e.Exists && !e.ExcludeReferenceEndpoint && (e.IsHttp || e.IsHttps))
+            .ToArray();
+        var schemeNamedEndpoints = endpoints
+            .Where(e => e.IsHttpSchemeNamedEndpoint)
+            .ToArray();
+
+        if (schemeNamedEndpoints.Length == 0)
+        {
+            if (endpoints.Length == 0)
+            {
+                throw new ArgumentException("Cannot find a http or https endpoint for this resource.", nameof(resource));
+            }
+
+            return [.. endpoints.Select(BuildEndpointTarget)];
+        }
+
+        var hasHttpsEndpoint = schemeNamedEndpoints.Any(e => e.IsHttps);
+        var hasHttpEndpoint = schemeNamedEndpoints.Any(e => e.IsHttp);
 
         var scheme = (hasHttpsEndpoint, hasHttpEndpoint) switch
         {
@@ -87,7 +153,7 @@ public class YarpCluster
             _ => throw new ArgumentException("Cannot find a http or https endpoint for this resource.", nameof(resource))
         };
 
-        return $"{scheme}://{resourceName}";
+        return [$"{scheme}://{resourceName}"];
     }
 
     private static object GetAddressFromExternalService(ExternalServiceResource externalService)
@@ -124,7 +190,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the forwarder request configuration for the cluster.
     /// </summary>
-    [AspireExport("withForwarderRequestConfig", Description = "Sets the forwarder request configuration for the cluster.")]
+    [AspireExport]
     internal static YarpCluster WithForwarderRequestConfig(this YarpCluster cluster, YarpForwarderRequestConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -147,7 +213,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the HTTP client configuration for the cluster.
     /// </summary>
-    [AspireExport("withHttpClientConfig", Description = "Sets the HTTP client configuration for the cluster.")]
+    [AspireExport]
     internal static YarpCluster WithHttpClientConfig(this YarpCluster cluster, YarpHttpClientConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -170,7 +236,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the session affinity configuration for the cluster.
     /// </summary>
-    [AspireExport("withSessionAffinityConfig", Description = "Sets the session affinity configuration for the cluster.")]
+    [AspireExport]
     internal static YarpCluster WithSessionAffinityConfig(this YarpCluster cluster, YarpSessionAffinityConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -193,7 +259,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the health check configuration for the cluster.
     /// </summary>
-    [AspireExport("withHealthCheckConfig", Description = "Sets the health check configuration for the cluster.")]
+    [AspireExport]
     internal static YarpCluster WithHealthCheckConfig(this YarpCluster cluster, YarpHealthCheckConfig config)
     {
         ArgumentNullException.ThrowIfNull(config);
@@ -205,7 +271,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the LoadBalancingPolicy for the cluster.
     /// </summary>
-    [AspireExport("withLoadBalancingPolicy", Description = "Sets the load balancing policy for the cluster.")]
+    [AspireExport]
     public static YarpCluster WithLoadBalancingPolicy(this YarpCluster cluster, string policy)
     {
         cluster.Configure(c => c with { LoadBalancingPolicy = policy });
@@ -215,7 +281,7 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the Metadata for the cluster.
     /// </summary>
-    [AspireExport("withClusterMetadata", MethodName = "withMetadata", Description = "Sets metadata for the cluster.")]
+    [AspireExport("withClusterMetadata", MethodName = "withMetadata")]
     public static YarpCluster WithMetadata(this YarpCluster cluster, IReadOnlyDictionary<string, string> metadata)
     {
         cluster.Configure(c => c with { Metadata = metadata });

@@ -31,7 +31,7 @@ public class AttributeDataReaderTests
 
         Assert.NotNull(result);
         Assert.Equal("officialMethod", result.Id);
-        Assert.Equal("Official method description", result.Description);
+        Assert.Null(result.Description);
     }
 
     [Fact]
@@ -67,6 +67,14 @@ public class AttributeDataReaderTests
         var result = AttributeDataReader.HasAspireExportIgnoreData(property);
 
         Assert.False(result);
+    }
+
+    [Fact]
+    public void HasAspireExportIgnoreData_FindsOfficialAttribute_OnType()
+    {
+        var result = AttributeDataReader.HasAspireExportIgnoreData(typeof(OfficialIgnoredType));
+
+        Assert.True(result);
     }
 
     [Fact]
@@ -106,6 +114,17 @@ public class AttributeDataReaderTests
         var result = AttributeDataReader.GetAspireUnionData(param);
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetObsoleteData_FindsOfficialAttribute_OnMethod()
+    {
+        var method = typeof(OfficialAttributeExports).GetMethod(nameof(OfficialAttributeExports.ObsoleteExportMethod))!;
+        var result = AttributeDataReader.GetObsoleteData(method);
+
+        Assert.NotNull(result);
+        Assert.Equal("Official obsolete method", result.Message);
+        Assert.False(result.IsError);
     }
 
     [Fact]
@@ -178,7 +197,7 @@ public class AttributeDataReaderTests
 
     public static class OfficialAttributeExports
     {
-        [AspireExport("officialMethod", Description = "Official method description")]
+        [AspireExport("officialMethod")]
         public static void OfficialExportMethod(IResource resource)
         {
             _ = resource;
@@ -190,10 +209,17 @@ public class AttributeDataReaderTests
             _ = resource;
         }
 
-        [AspireExport("officialUnionMethod")]
+        [AspireExport]
         public static void OfficialUnionMethod([AspireUnion(typeof(string), typeof(int))] object value)
         {
             _ = value;
+        }
+
+        [Obsolete("Official obsolete method")]
+        [AspireExport("obsoleteMethod")]
+        public static void ObsoleteExportMethod(IResource resource)
+        {
+            _ = resource;
         }
     }
 
@@ -214,6 +240,11 @@ public class AttributeDataReaderTests
         public OfficialMethodsResource(string name) : base(name) { }
 
         public void DoSomething() { }
+    }
+
+    [AspireExportIgnore]
+    public class OfficialIgnoredType
+    {
     }
 
     [AspireDto]

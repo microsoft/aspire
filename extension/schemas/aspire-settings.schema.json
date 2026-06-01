@@ -5,10 +5,6 @@
   "title": "Aspire Local Settings",
   "description": "Aspire CLI local configuration file (.aspire/settings.json)",
   "properties": {
-    "appHostPath": {
-      "description": "The path to the AppHost entry point file (e.g., \"Program.cs\", \"app.ts\"). Relative to the directory containing .aspire/settings.json.",
-      "type": "string"
-    },
     "channel": {
       "description": "The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\"). Used by aspire add to determine which NuGet feed to use.",
       "type": "string"

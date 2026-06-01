@@ -253,6 +253,13 @@ public sealed class Service : NamedComposeMember
     public string? Pid { get; set; }
 
     /// <summary>
+    /// Indicates whether the container should run in privileged mode.
+    /// When set to true, the container is granted extended Linux capabilities and device access.
+    /// </summary>
+    [YamlMember(Alias = "privileged")]
+    public bool? Privileged { get; set; }
+
+    /// <summary>
     /// Specifies a list of Linux capabilities to add to the container.
     /// </summary>
     /// <remarks>

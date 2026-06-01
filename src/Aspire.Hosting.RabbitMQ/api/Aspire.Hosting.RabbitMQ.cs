@@ -10,21 +10,27 @@ namespace Aspire.Hosting
 {
     public static partial class RabbitMQBuilderExtensions
     {
+        [AspireExport(Description = "Adds a RabbitMQ container resource")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> AddRabbitMQ(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? userName = null, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? password = null, int? port = null) { throw null; }
 
+        [AspireExport(Description = "Adds a data bind mount to the RabbitMQ container")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
+        [AspireExport(Description = "Adds a data volume to the RabbitMQ container")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithManagementPlugin(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder, int? port) { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> WithManagementPlugin(this ApplicationModel.IResourceBuilder<ApplicationModel.RabbitMQServerResource> builder) { throw null; }
     }
 }
 
 namespace Aspire.Hosting.ApplicationModel
 {
-    public partial class RabbitMQServerResource : ContainerResource, IResourceWithConnectionString, IResource, IManifestExpressionProvider, IValueProvider, IValueWithReferences, IResourceWithEnvironment
+    [AspireExport(ExposeProperties = true)]
+    public partial class RabbitMQServerResource : ContainerResource, IResourceWithConnectionString, IResource, IExpressionValue, IValueProvider, IManifestExpressionProvider, IValueWithReferences, IResourceWithEnvironment
     {
         public RabbitMQServerResource(string name, ParameterResource? userName, ParameterResource password) : base(default!, default) { }
 

@@ -3,6 +3,7 @@
 
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
+using System.Collections.Frozen;
 using System.Globalization;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Caching.Memory;
@@ -17,17 +18,26 @@ internal interface INuGetPackageCache
     Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken);
     Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken);
     Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken);
+    Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Packages that have been superseded and should be hidden from integration listings by default.
+/// </summary>
+internal static class DeprecatedPackages
+{
+    private static readonly FrozenSet<string> s_all = new[]
+    {
+        "Aspire.Hosting.Dapr",
+        "Aspire.Hosting.NodeJs"
+    }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
+    public static bool IsDeprecated(string packageId) => s_all.Contains(packageId);
 }
 
 internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache memoryCache, AspireCliTelemetry telemetry, IFeatures features) : INuGetPackageCache
 {
     private const int SearchPageSize = 1000;
-    
-    // List of deprecated packages that should be filtered by default
-    private static readonly HashSet<string> s_deprecatedPackages = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Aspire.Hosting.Dapr"
-    };
 
     public async Task<IEnumerable<NuGetPackage>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
     {
@@ -87,12 +97,13 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
             var result = await cliRunner.SearchPackagesAsync(
                 workingDirectory,
                 query,
+                exactMatch: false,
                 prerelease,
                 SearchPageSize,
                 skip,
                 nugetConfigFile,
                 useCache, // Pass through the useCache parameter
-                new DotNetCliRunnerInvocationOptions { SuppressLogging = true },
+                new ProcessInvocationOptions { SuppressLogging = true },
                 cancellationToken
                 );
 
@@ -121,6 +132,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
 
         // If no specific filter is specified we use the fallback filter which is useful in most circumstances
         // other that aspire update which really needs to see all the packages to work effectively.
+        var showDeprecatedPackages = features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
         var effectiveFilter = (NuGetPackage p) => 
         {
             if (filter is not null)
@@ -131,9 +143,9 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
             var isOfficialPackage = IsOfficialOrCommunityToolkitPackage(p.Id);
             
             // Apply deprecated package filter unless the user wants to show deprecated packages
-            if (isOfficialPackage && !features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
+            if (isOfficialPackage && !showDeprecatedPackages)
             {
-                return !s_deprecatedPackages.Contains(p.Id);
+                return !DeprecatedPackages.IsDeprecated(p.Id);
             }
 
             return isOfficialPackage;
@@ -156,6 +168,50 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
 
             return isHostingOrCommunityToolkitNamespaced && !isExcluded;
         }
+    }
+
+    public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+
+        var collectedPackages = new List<NuGetPackage>();
+
+        var result = await cliRunner.SearchPackagesAsync(
+                workingDirectory,
+                exactPackageId,
+                exactMatch: true,
+                prerelease,
+                take: 0,
+                skip: 0, // skip and take parameters are ignored when exactMatch is true
+                nugetConfigFile,
+                useCache, // Pass through the useCache parameter
+                new ProcessInvocationOptions { SuppressLogging = true },
+                cancellationToken
+                );
+
+        if (result.ExitCode != 0)
+        {
+            throw new NuGetPackageCacheException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.FailedToSearchForPackages, result.ExitCode));
+        }
+
+        if (result.Packages?.Length > 0)
+        {
+            collectedPackages.AddRange(result.Packages);
+        }
+
+        // If no specific filter is specified we use the fallback filter which is useful in most circumstances
+        // other that aspire update which really needs to see all the packages to work effectively.
+        var effectiveFilter = (NuGetPackage p) =>
+        {
+            // Apply deprecated package filter unless the user wants to show deprecated packages
+            if (!features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
+            {
+                return !DeprecatedPackages.IsDeprecated(p.Id);
+            }
+            return true;
+        };
+
+        return collectedPackages.Where(effectiveFilter);
     }
 }
 

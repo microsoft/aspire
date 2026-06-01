@@ -2,8 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.Logging;
+using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting.ApplicationModel;
+
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
 
 /// <summary>
 /// Represents a command annotation for a resource.
@@ -25,6 +30,44 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         string? iconName,
         IconVariant? iconVariant,
         bool isHighlighted)
+        : this(name, displayName, updateState, executeCommand, displayDescription, parameter, arguments: null, confirmationMessage: confirmationMessage, iconName: iconName, iconVariant: iconVariant, isHighlighted: isHighlighted, visibility: ResourceCommandVisibility.UI | ResourceCommandVisibility.Api, validateArguments: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceCommandAnnotation"/> class.
+    /// </summary>
+    public ResourceCommandAnnotation(
+        string name,
+        string displayName,
+        Func<UpdateCommandStateContext, ResourceCommandState> updateState,
+        Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
+        string? displayDescription,
+        IReadOnlyList<InteractionInput>? arguments,
+        string? confirmationMessage,
+        string? iconName,
+        IconVariant? iconVariant,
+        bool isHighlighted,
+        ResourceCommandVisibility visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
+        Func<InputsDialogValidationContext, Task>? validateArguments = null)
+        : this(name, displayName, updateState, executeCommand, displayDescription, parameter: null, arguments: arguments, confirmationMessage: confirmationMessage, iconName: iconName, iconVariant: iconVariant, isHighlighted: isHighlighted, visibility: visibility, validateArguments: validateArguments)
+    {
+    }
+
+    internal ResourceCommandAnnotation(
+        string name,
+        string displayName,
+        Func<UpdateCommandStateContext, ResourceCommandState> updateState,
+        Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
+        string? displayDescription,
+        object? parameter,
+        IReadOnlyList<InteractionInput>? arguments,
+        string? confirmationMessage,
+        string? iconName,
+        IconVariant? iconVariant,
+        bool isHighlighted,
+        ResourceCommandVisibility visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
+        Func<InputsDialogValidationContext, Task>? validateArguments = null)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(displayName);
@@ -36,11 +79,16 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         UpdateState = updateState;
         ExecuteCommand = executeCommand;
         DisplayDescription = displayDescription;
+#pragma warning disable CS0618 // Parameter is obsolete but still stored for compatibility.
         Parameter = parameter;
+#pragma warning restore CS0618
+        Arguments = arguments ?? [];
+        ValidateArguments = validateArguments;
         ConfirmationMessage = confirmationMessage;
         IconName = iconName;
         IconVariant = iconVariant;
         IsHighlighted = isHighlighted;
+        Visibility = visibility;
     }
 
     /// <summary>
@@ -72,10 +120,30 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     public string? DisplayDescription { get; }
 
     /// <summary>
-    /// Optional parameter that configures the command in some way.
+    /// Obsolete optional parameter that configures the command in some way.
     /// Clients must return any value provided by the server when invoking the command.
     /// </summary>
+    [Obsolete("Use Arguments to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
     public object? Parameter { get; }
+
+    /// <summary>
+    /// Gets the invocation arguments accepted by the command.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The list order is part of the command contract. CLI positional arguments are mapped to this list by index before the
+    /// command executes. Clients that submit named argument payloads, such as Dashboard and MCP clients, map values by
+    /// <see cref="InteractionInput.Name"/>.
+    /// </para>
+    /// </remarks>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public IReadOnlyList<InteractionInput> Arguments { get; }
+
+    /// <summary>
+    /// Gets the callback that validates invocation arguments before the command callback is executed.
+    /// </summary>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public Func<InputsDialogValidationContext, Task>? ValidateArguments { get; }
 
     /// <summary>
     /// When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog
@@ -97,6 +165,11 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// A flag indicating whether the command is highlighted in the UI.
     /// </summary>
     public bool IsHighlighted { get; }
+
+    /// <summary>
+    /// Gets where the command is visible to users and clients.
+    /// </summary>
+    public ResourceCommandVisibility Visibility { get; }
 }
 
 /// <summary>
@@ -115,6 +188,27 @@ public enum IconVariant
 }
 
 /// <summary>
+/// Specifies the format of a command result.
+/// </summary>
+public enum CommandResultFormat
+{
+    /// <summary>
+    /// Plain text result.
+    /// </summary>
+    Text,
+
+    /// <summary>
+    /// JSON result.
+    /// </summary>
+    Json,
+
+    /// <summary>
+    /// Markdown result.
+    /// </summary>
+    Markdown
+}
+
+/// <summary>
 /// A factory for <see cref="ExecuteCommandResult"/>.
 /// </summary>
 public static class CommandResults
@@ -125,10 +219,59 @@ public static class CommandResults
     public static ExecuteCommandResult Success() => new() { Success = true };
 
     /// <summary>
+    /// Produces a success result.
+    /// </summary>
+    public static ExecuteCommandResult Success(string message) => new() { Success = true, Message = message };
+
+    /// <summary>
+    /// Produces a success result with a message and result data.
+    /// </summary>
+    /// <param name="message">The message associated with the result.</param>
+    /// <param name="result">The result data.</param>
+    /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
+    public static ExecuteCommandResult Success(string message, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = true, Message = message, Data = new CommandResultData { Value = result, Format = resultFormat } };
+
+    /// <summary>
+    /// Produces a success result with a message and result data.
+    /// </summary>
+    /// <param name="message">The message associated with the result.</param>
+    /// <param name="result">The result data.</param>
+    /// <param name="resultFormat">The format of the result data.</param>
+    /// <param name="displayImmediately">A value indicating whether the result data should be displayed immediately in the dashboard.</param>
+    /// <remarks>
+    /// When <paramref name="displayImmediately"/> is <see langword="true"/>, the dashboard opens the result dialog
+    /// automatically when the command completes. Other clients can still read the result data from
+    /// <see cref="ExecuteCommandResult.Data"/>.
+    /// </remarks>
+    public static ExecuteCommandResult Success(string message, string result, CommandResultFormat resultFormat, bool displayImmediately) => new() { Success = true, Message = message, Data = new CommandResultData { Value = result, Format = resultFormat, DisplayImmediately = displayImmediately } };
+
+    /// <summary>
+    /// Produces a success result with a message and a value.
+    /// </summary>
+    /// <param name="message">The message associated with the result.</param>
+    /// <param name="value">The value produced by the command.</param>
+    public static ExecuteCommandResult Success(string message, CommandResultData value) => new() { Success = true, Message = message, Data = value };
+
+    /// <summary>
     /// Produces an unsuccessful result with an error message.
     /// </summary>
     /// <param name="errorMessage">An optional error message.</param>
-    public static ExecuteCommandResult Failure(string? errorMessage = null) => new() { Success = false, ErrorMessage = errorMessage };
+    public static ExecuteCommandResult Failure(string? errorMessage = null) => new() { Success = false, Message = errorMessage };
+
+    /// <summary>
+    /// Produces an unsuccessful result with an error message and result data.
+    /// </summary>
+    /// <param name="errorMessage">The error message.</param>
+    /// <param name="result">The result data.</param>
+    /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
+    public static ExecuteCommandResult Failure(string errorMessage, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = false, Message = errorMessage, Data = new CommandResultData { Value = result, Format = resultFormat } };
+
+    /// <summary>
+    /// Produces an unsuccessful result with an error message and a value.
+    /// </summary>
+    /// <param name="errorMessage">The error message.</param>
+    /// <param name="value">The value produced by the command.</param>
+    public static ExecuteCommandResult Failure(string errorMessage, CommandResultData value) => new() { Success = false, Message = errorMessage, Data = value };
 
     /// <summary>
     /// Produces a canceled result.
@@ -161,35 +304,135 @@ public sealed class ExecuteCommandResult
     /// <summary>
     /// An optional error message that can be set when the command is unsuccessful.
     /// </summary>
-    public string? ErrorMessage { get; init; }
+    [Obsolete("Use Message instead.")]
+    public string? ErrorMessage
+    {
+        get => _message;
+        init => _message ??= value;
+    }
+
+    /// <summary>
+    /// An optional message associated with the command result.
+    /// </summary>
+    public string? Message
+    {
+        get => _message;
+        init => _message = value;
+    }
+
+    private string? _message;
+
+    /// <summary>
+    /// An optional value produced by the command.
+    /// </summary>
+    public CommandResultData? Data { get; init; }
+
+    internal InteractionInputCollection? InvalidArguments { get; init; }
+}
+
+/// <summary>
+/// Represents a value produced by a command.
+/// </summary>
+[AspireDto]
+public sealed class CommandResultData
+{
+    /// <summary>
+    /// The value data.
+    /// </summary>
+    public required string Value { get; init; }
+
+    /// <summary>
+    /// The format of the <see cref="Value"/> data.
+    /// </summary>
+    public CommandResultFormat Format { get; init; }
+
+    /// <summary>
+    /// When <see langword="true"/>, the dashboard will immediately display the value in a dialog when the command completes.
+    /// </summary>
+    public bool DisplayImmediately { get; init; }
 }
 
 /// <summary>
 /// Context for <see cref="ResourceCommandAnnotation.UpdateState"/>.
 /// </summary>
+/// <ats-summary>Context for <ats-see cref="!:method:ResourceCommandAnnotation.UpdateState" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public sealed class UpdateCommandStateContext
 {
     /// <summary>
     /// The resource snapshot.
     /// </summary>
+    [AspireExportIgnore(Reason = "CustomResourceSnapshot contains object-valued properties that are not statically representable in polyglot SDKs. Use ResourceSnapshotData for the curated ATS projection.")]
     public required CustomResourceSnapshot ResourceSnapshot { get; init; }
+
+    /// <summary>
+    /// Gets the resource snapshot data available to polyglot command state callbacks.
+    /// </summary>
+    [AspireExport(MethodName = "resourceSnapshot")]
+    internal UpdateCommandStateResourceSnapshot ResourceSnapshotData => UpdateCommandStateResourceSnapshot.FromSnapshot(ResourceSnapshot);
 
     /// <summary>
     /// The service provider.
     /// </summary>
+    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command state callbacks.")]
     public required IServiceProvider ServiceProvider { get; init; }
+}
+
+/// <summary>
+/// Resource snapshot data exposed to polyglot command state callbacks.
+/// </summary>
+[AspireDto]
+internal sealed class UpdateCommandStateResourceSnapshot
+{
+    /// <summary>
+    /// The type of the resource.
+    /// </summary>
+    public required string ResourceType { get; init; }
+
+    /// <summary>
+    /// The current lifecycle state text for the resource.
+    /// </summary>
+    public string? State { get; init; }
+
+    /// <summary>
+    /// The display style for the current lifecycle state.
+    /// </summary>
+    public string? StateStyle { get; init; }
+
+    /// <summary>
+    /// The current health status for the resource.
+    /// </summary>
+    public HealthStatus? HealthStatus { get; init; }
+
+    /// <summary>
+    /// The exit code of the resource.
+    /// </summary>
+    public int? ExitCode { get; init; }
+
+    internal static UpdateCommandStateResourceSnapshot FromSnapshot(CustomResourceSnapshot snapshot)
+    {
+        return new()
+        {
+            ResourceType = snapshot.ResourceType,
+            State = snapshot.State?.Text,
+            StateStyle = snapshot.State?.Style,
+            HealthStatus = snapshot.HealthStatus,
+            ExitCode = snapshot.ExitCode
+        };
+    }
 }
 
 /// <summary>
 /// Context for <see cref="ResourceCommandAnnotation.ExecuteCommand"/>.
 /// </summary>
+/// <ats-summary>Context for <ats-see cref="!:method:ResourceCommandAnnotation.ExecuteCommand" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public sealed class ExecuteCommandContext
 {
     /// <summary>
     /// The service provider.
     /// </summary>
+    [AspireExportIgnore(Reason = "IServiceProvider is not usable from polyglot command callbacks.")]
     public required IServiceProvider ServiceProvider { get; init; }
 
     /// <summary>
@@ -201,4 +444,24 @@ public sealed class ExecuteCommandContext
     /// The cancellation token.
     /// </summary>
     public required CancellationToken CancellationToken { get; init; }
+
+    /// <summary>
+    /// The logger for the resource.
+    /// </summary>
+    public required ILogger Logger { get; init; }
+
+    /// <summary>
+    /// Gets the invocation arguments supplied by the client when the command is executed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The collection contains the arguments described by <see cref="ResourceCommandAnnotation.Arguments"/> with their
+    /// submitted values populated. CLI positional arguments are mapped by declaration order. Dashboard, MCP, and other
+    /// named-payload clients are mapped by <see cref="InteractionInput.Name"/>.
+    /// </para>
+    /// </remarks>
+    public required InteractionInputCollection Arguments { get; init; }
+
 }
+
+#pragma warning restore ASPIREINTERACTION001

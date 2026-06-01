@@ -26,7 +26,7 @@ internal sealed class AcrLoginService : IAcrLoginService
     };
 
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly IContainerRuntime _containerRuntime;
+    private readonly IContainerRuntimeResolver _containerRuntimeResolver;
     private readonly ILogger<AcrLoginService> _logger;
 
     private sealed class AcrRefreshTokenResponse
@@ -42,12 +42,12 @@ internal sealed class AcrLoginService : IAcrLoginService
     /// Initializes a new instance of the <see cref="AcrLoginService"/> class.
     /// </summary>
     /// <param name="httpClientFactory">The HTTP client factory for making OAuth2 exchange requests.</param>
-    /// <param name="containerRuntime">The container runtime for performing registry login.</param>
+    /// <param name="containerRuntimeResolver">The container runtime resolver for performing registry login.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
-    public AcrLoginService(IHttpClientFactory httpClientFactory, IContainerRuntime containerRuntime, ILogger<AcrLoginService> logger)
+    public AcrLoginService(IHttpClientFactory httpClientFactory, IContainerRuntimeResolver containerRuntimeResolver, ILogger<AcrLoginService> logger)
     {
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
-        _containerRuntime = containerRuntime ?? throw new ArgumentNullException(nameof(containerRuntime));
+        _containerRuntimeResolver = containerRuntimeResolver ?? throw new ArgumentNullException(nameof(containerRuntimeResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -76,7 +76,8 @@ internal sealed class AcrLoginService : IAcrLoginService
         _logger.LogDebug("ACR refresh token acquired, length: {TokenLength}", refreshToken.Length);
 
         // Step 3: Login to the registry using container runtime
-        await _containerRuntime.LoginToRegistryAsync(registryEndpoint, AcrUsername, refreshToken, cancellationToken).ConfigureAwait(false);
+        var containerRuntime = await _containerRuntimeResolver.ResolveAsync(cancellationToken).ConfigureAwait(false);
+        await containerRuntime.LoginToRegistryAsync(registryEndpoint, AcrUsername, refreshToken, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<string> ExchangeAadTokenForAcrRefreshTokenAsync(

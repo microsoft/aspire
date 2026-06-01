@@ -102,7 +102,7 @@ The workflow uses concurrency groups based on the issue/PR number to prevent rac
 
 ## Backmerge Release Workflow
 
-The `backmerge-release.yml` workflow automatically creates PRs to merge changes from `release/13.2` back into `main`.
+The `backmerge-release.yml` workflow automatically creates PRs to merge changes from `release/13.3` back into `main`.
 
 ### Schedule
 
@@ -110,8 +110,8 @@ Runs daily at 00:00 UTC (4pm PT during standard time, 5pm PT during daylight sav
 
 ### Behavior
 
-1. **Change Detection**: Checks if `release/13.2` has commits not in `main`
-2. **PR Creation**: If changes exist, creates a PR to merge `release/13.2` → `main`
+1. **Change Detection**: Checks if `release/13.3` has commits not in `main`
+2. **PR Creation**: If changes exist, creates a PR to merge `release/13.3` → `main`
 3. **Auto-merge**: Enables GitHub's auto-merge feature, so the PR merges automatically once approved
 4. **Conflict Handling**: If merge conflicts occur, creates an issue instead of a PR
 

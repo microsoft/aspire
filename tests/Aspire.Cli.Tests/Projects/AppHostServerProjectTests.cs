@@ -2,15 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.AspNetCore.InternalTesting;
+using System.Security.Cryptography;
+using System.Text;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -30,8 +31,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     {
         appPath ??= _workspace.WorkspaceRoot.FullName;
         var runner = new TestDotNetCliRunner();
-        var packagingService = new MockPackagingService();
-        var configurationService = new TestConfigurationService();
+        var packagingService = MockPackagingServiceFactory.Create();
         var logger = NullLogger<DotNetBasedAppHostServerProject>.Instance;
 
         // Generate socket path same way as factory
@@ -40,7 +40,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         // Use workspace root as repo root for testing
         var repoRoot = _workspace.WorkspaceRoot.FullName;
 
-        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, configurationService, logger);
+        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, logger);
     }
 
     [Fact]
@@ -160,6 +160,24 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task CreateProjectFiles_SkipsAspireIntegrationAnalyzerReferences()
+    {
+        var project = CreateProject();
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(packages).DefaultTimeout();
+
+        var doc = XDocument.Load(projectPath);
+        var skipAnalyzersElement = doc.Descendants("SkipAspireIntegrationAnalyzersReference").SingleOrDefault();
+
+        Assert.NotNull(skipAnalyzersElement);
+        Assert.Equal("true", skipAnalyzersElement.Value);
+    }
+
+    [Fact]
     public void DefaultSdkVersion_ReturnsValidVersion()
     {
         // Act
@@ -187,6 +205,38 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public void ProjectModelPath_UsesUserAspireDirectory()
+    {
+        // Arrange
+        var project = CreateProject();
+        var normalizedAppPath = Path.GetFullPath(project.AppDirectoryPath);
+        normalizedAppPath = new Uri(normalizedAppPath).LocalPath;
+        normalizedAppPath = OperatingSystem.IsWindows() ? normalizedAppPath.ToLowerInvariant() : normalizedAppPath;
+
+        var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(normalizedAppPath));
+        var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
+        var expectedRoot = Path.Combine(CliPathHelper.GetAspireHomeDirectory(), "hosts");
+        var expectedPath = Path.Combine(expectedRoot, pathDir);
+        var parentDirectory = Path.GetDirectoryName(project.ProjectModelPath);
+        var isSafeToDelete = string.Equals(project.ProjectModelPath, expectedPath, StringComparison.OrdinalIgnoreCase) &&
+            parentDirectory is not null &&
+            string.Equals(parentDirectory, expectedRoot, StringComparison.OrdinalIgnoreCase);
+
+        try
+        {
+            // Assert
+            Assert.Equal(expectedPath, project.ProjectModelPath);
+        }
+        finally
+        {
+            if (isSafeToDelete && Directory.Exists(project.ProjectModelPath))
+            {
+                Directory.Delete(project.ProjectModelPath, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void UserSecretsId_IsStableForSameAppPath()
     {
         // Arrange
@@ -202,12 +252,12 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
     /// <summary>
     /// Regression test for channel switching bug.
-    /// When a project has a channel configured in .aspire/settings.json (project-local),
+    /// When a project has a channel configured in aspire.config.json (project-local),
     /// the NuGet.config should use that channel's hive path, NOT the global config channel.
     /// 
     /// Bug scenario:
     /// 1. User runs `aspire update` and selects "pr-new" channel
-    /// 2. UpdatePackagesAsync saves channel="pr-new" to project-local .aspire/settings.json
+    /// 2. UpdatePackagesAsync saves channel="pr-new" to project-local aspire.config.json
     /// 3. BuildAndGenerateSdkAsync calls CreateProjectFilesAsync
     /// 4. BUG: CreateProjectFilesAsync reads channel from GLOBAL config (returns "pr-old")
     /// 5. NuGet.config is generated with pr-old hive path instead of pr-new
@@ -224,31 +274,47 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         var prOldHive = hivesDir.CreateSubdirectory("pr-old");
         var prNewHive = hivesDir.CreateSubdirectory("pr-new");
 
-        // Create project-local .aspire/settings.json with channel="pr-new"
+        // Create project-local aspire.config.json with channel="pr-new"
         // This simulates what happens after `aspire update` saves the selected channel
-        var aspireDir = _workspace.WorkspaceRoot.CreateSubdirectory(".aspire");
-        var settingsJson = Path.Combine(aspireDir.FullName, "settings.json");
-        await File.WriteAllTextAsync(settingsJson, """
+        var aspireConfigPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
             {
                 "channel": "pr-new",
-                "sdkVersion": "13.1.0"
+                "sdk": {
+                    "version": "13.1.0"
+                }
             }
             """);
 
-        // Configure global config to return "pr-old" (the WRONG channel)
-        // This simulates a stale global config that hasn't been updated
-        var configurationService = new TestConfigurationService
+        // Create a packaging service that returns explicit channels for both PR hives
+        var prOldHivePath = prOldHive.FullName;
+        var prNewHivePath = prNewHive.FullName;
+        var packagingService = new TestPackagingService
         {
-            OnGetConfiguration = key => key == "channel" ? "pr-old" : null
+            GetChannelsAsyncCallback = _ =>
+            {
+                var nugetCache = new FakeNuGetPackageCache();
+
+                var prOldChannel = PackageChannel.CreateExplicitChannel("pr-old", PackageChannelQuality.Prerelease, new[]
+                {
+                    new PackageMapping("Aspire*", prOldHivePath),
+                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+                }, nugetCache, new TestFeatures());
+
+                var prNewChannel = PackageChannel.CreateExplicitChannel("pr-new", PackageChannelQuality.Prerelease, new[]
+                {
+                    new PackageMapping("Aspire*", prNewHivePath),
+                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+                }, nugetCache, new TestFeatures());
+
+                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache, new TestFeatures());
+
+                return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, prOldChannel, prNewChannel });
+            }
         };
 
-        // Create a packaging service that returns explicit channels for both PR hives
-        var packagingService = new MockPackagingServiceWithExplicitChannels(
-            prOldHive.FullName,
-            prNewHive.FullName);
-
         var runner = new TestDotNetCliRunner();
-        
+
         // Use a real logger to capture debug output for diagnostics
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
@@ -259,7 +325,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         // Use a workspace-local ProjectModelPath for test isolation
         var projectModelPath = Path.Combine(appPath, ".aspire_server");
-        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, configurationService, logger, projectModelPath);
+        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, logger, projectModelPath);
 
         var packages = new List<IntegrationReference>
         {
@@ -303,69 +369,120 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.DoesNotContain(prOldHive.FullName, restoreSources);
     }
 
-    /// <summary>
-    /// Mock packaging service that returns explicit PR channels with specific hive paths.
-    /// Used to test that the correct channel is selected based on project-local settings.
-    /// </summary>
-    private sealed class MockPackagingServiceWithExplicitChannels : IPackagingService
+    [Fact]
+    public async Task CreateProjectFiles_WithPackageSourceOverride_PrependsOverrideToRestoreAdditionalProjectSources()
     {
-        private readonly string _prOldHivePath;
-        private readonly string _prNewHivePath;
-
-        public MockPackagingServiceWithExplicitChannels(string prOldHivePath, string prNewHivePath)
-        {
-            _prOldHivePath = prOldHivePath;
-            _prNewHivePath = prNewHivePath;
-        }
-
-        public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
-        {
-            var nugetCache = new FakeNuGetPackageCache();
-
-            // Create explicit channels for both PR hives
-            var prOldChannel = PackageChannel.CreateExplicitChannel("pr-old", PackageChannelQuality.Prerelease, new[]
+        // Regression for finding #2 of the 2026-05-19 post-merge review: the DotNet-based
+        // (in-repo / dogfood) AppHost path previously declared a packageSourceOverride parameter
+        // on PrepareAsync but ignored it during restore, so `aspire new --source <pr-hive>` was
+        // silently dropped in dev mode. The override now threads through CreateProjectFilesAsync
+        // and prepends to the RestoreAdditionalProjectSources list so the dogfood hive is the
+        // first source NuGet evaluates for any PackageReference fallback in this path.
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        const string overrideSource = "/tmp/aspire-pr-hive/packages";
+        var aspireConfigPath = Path.Combine(appPath, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
             {
-                new PackageMapping("Aspire*", _prOldHivePath),
-                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-            }, nugetCache);
+                "channel": "daily"
+            }
+            """);
 
-            var prNewChannel = PackageChannel.CreateExplicitChannel("pr-new", PackageChannelQuality.Prerelease, new[]
-            {
-                new PackageMapping("Aspire*", _prNewHivePath),
-                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-            }, nugetCache);
+        var nugetCache = new FakeNuGetPackageCache();
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/fake/v3/index.json"),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        }, nugetCache, new TestFeatures());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
+        };
 
-            var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache);
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
 
-            return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, prOldChannel, prNewChannel });
-        }
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectFilePath, _) = await project.CreateProjectFilesAsync(packages, packageSourceOverride: overrideSource, cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.NotNull(restoreSources);
+        var sources = restoreSources!.Split(';');
+        // Override is prepended so the hive wins NuGet's source evaluation order when the same
+        // Aspire package version exists in both the hive and the channel feed.
+        Assert.Equal(overrideSource, sources[0]);
+        Assert.Contains("https://pkgs.dev.azure.com/fake/v3/index.json", sources);
     }
 
-    private sealed class FakeNuGetPackageCache : INuGetPackageCache
+    [Fact]
+    public async Task CreateProjectFiles_WithoutPackageSourceOverride_DoesNotInjectExtraSource()
     {
-        public Task<IEnumerable<NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
+        // Negative companion to the override regression: ensure the no-override path still emits
+        // only the channel sources (i.e., we are not accidentally introducing an empty/null
+        // source that breaks restore on the existing in-repo flow).
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        var aspireConfigPath = Path.Combine(appPath, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "daily"
+            }
+            """);
 
-        public Task<IEnumerable<NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
+        var nugetCache = new FakeNuGetPackageCache();
+        const string channelFeed = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", channelFeed)
+        }, nugetCache, new TestFeatures());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
+        };
 
-        public Task<IEnumerable<NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
 
-        public Task<IEnumerable<NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectFilePath, _) = await project.CreateProjectFilesAsync(packages).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.NotNull(restoreSources);
+        Assert.Equal(channelFeed, restoreSources);
     }
 
     private static void DumpDirectoryTree(string path, ITestOutputHelper output, string indent = "")
     {
         var dirInfo = new DirectoryInfo(path);
         output.WriteLine($"{indent}{dirInfo.Name}/");
-        
+
         foreach (var file in dirInfo.GetFiles())
         {
             output.WriteLine($"{indent}  {file.Name}");
         }
-        
+
         foreach (var dir in dirInfo.GetDirectories())
         {
             DumpDirectoryTree(dir.FullName, output, indent + "  ");

@@ -1,15 +1,25 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="fr" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the app host was lost: {0}.</source>
-        <target state="translated">La connexion à l’hôte de l’application a été perdue : {0}.</target>
+        <source>The connection to the AppHost was lost: {0}</source>
+        <target state="needs-review-translation">La connexion à l’hôte de l’application a été perdue : {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostConnectionLostGeneric">
+        <source>The connection to the application was lost.</source>
+        <target state="new">The connection to the application was lost.</target>
         <note />
       </trans-unit>
       <trans-unit id="AppHostNotCompatibleConsiderUpgrading">
-        <source>The apphost version is not compatible. Please upgrade the apphost or Aspire CLI.</source>
+        <source>The AppHost version is not compatible. Please upgrade the AppHost or Aspire CLI.</source>
         <target state="needs-review-translation">La version de l’AppHost n’est pas compatible. Veuillez mettre à jour l’AppHost ou l’interface CLI Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostShutDown">
+        <source>The application shut down.</source>
+        <target state="new">The application shut down.</target>
         <note />
       </trans-unit>
       <trans-unit id="AspireCLIVersion">
@@ -23,8 +33,8 @@
         <note />
       </trans-unit>
       <trans-unit id="BuildingAppHost">
-        <source>Building apphost...</source>
-        <target state="translated">Génération de l’AppHost…</target>
+        <source>Building AppHost...</source>
+        <target state="needs-review-translation">Génération de l’AppHost…</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingCertificates">
@@ -63,24 +73,24 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the app host. The app host possibly crashed before it was available: {0}.</source>
-        <target state="translated">Une erreur s’est produite lors de la connexion à l’hôte d’application. L’hôte d’application s’est peut-être bloqué avant qu’il ne soit disponible : {0}.</target>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
+        <target state="needs-review-translation">Une erreur s’est produite lors de la connexion à l’hôte d’application. L’hôte d’application s’est peut-être bloqué avant qu’il ne soit disponible : {0}.</target>
         <note />
       </trans-unit>
       <trans-unit id="FindingAppHosts">
-        <source>Finding apphosts...</source>
-        <target state="translated">Recherche des AppHosts…</target>
+        <source>Finding AppHosts...</source>
+        <target state="needs-review-translation">Recherche des AppHosts…</target>
         <note />
       </trans-unit>
       <trans-unit id="InteractiveInputNotSupported">
-        <source>Interactive input is not supported in this environment. Use the --non-interactive flag or ensure the CLI is running in an interactive terminal.</source>
-        <target state="translated">La saisie interactive n'est pas prise en charge dans cet environnement. Utilisez l’indicateur --non-interactive ou assurez-vous que la CLI s’exécute dans un terminal interactif.</target>
+        <source>This prompt requires interactive input but the CLI is running in non-interactive mode. This operation does not yet support non-interactive execution.</source>
+        <target state="needs-review-translation">La saisie interactive n'est pas prise en charge dans cet environnement. Utilisez l’indicateur --non-interactive ou assurez-vous que la CLI s’exécute dans un terminal interactif.</target>
         <note />
       </trans-unit>
       <trans-unit id="MoreInfoNewCliVersion">
-        <source>[dim]For more information, see: [link]{0}[/][/]</source>
-        <target state="translated">Pour découvrir plus d’informations, consultez : [lien]{0}[/][/]</target>
-        <note>Do not translate [dim] and [link]. Also leave [/] as-is. {0} is a URL</note>
+        <source>[dim]For more information, see: {0}[/]</source>
+        <target state="needs-review-translation">Pour découvrir plus d’informations, consultez : [lien]{0}[/][/]</target>
+        <note>Do not translate [dim]. Also leave [/] as-is. {0} is a pre-formatted link</note>
       </trans-unit>
       <trans-unit id="NewCliVersionAvailable">
         <source>[yellow]A new version of Aspire is available: {0}[/]</source>
@@ -92,14 +102,39 @@
         <target state="translated">Aucun élément disponible pour la sélection : {0}</target>
         <note>{0} is the original selection prompt text.</note>
       </trans-unit>
+      <trans-unit id="NoSupportedAppHostsFound">
+        <source>No supported app hosts were found.</source>
+        <target state="new">No supported app hosts were found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NonInteractiveAvailableValues">
+        <source>Available values: {0}</source>
+        <target state="new">Available values: {0}</target>
+        <note>{0} is a comma-separated list of valid values</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveInvalidValue">
+        <source>The value '{0}' is not valid for {1}.</source>
+        <target state="new">The value '{0}' is not valid for {1}.</target>
+        <note>{0} is the provided value. {1} is the option/argument display name.</note>
+      </trans-unit>
+      <trans-unit id="NonInteractiveOptionRequired">
+        <source>The {0} option must be specified when running in non-interactive mode.</source>
+        <target state="new">The {0} option must be specified when running in non-interactive mode.</target>
+        <note>{0} is the option/argument display name like '--publisher' or '&lt;integration&gt;'</note>
+      </trans-unit>
       <trans-unit id="OperationCancelled">
         <source>The operation was canceled.</source>
         <target state="translated">L’opération a été annulée.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeBuilt">
-        <source>The project could not be built. See logs at {0}</source>
-        <target state="translated">Désolé, le projet n’a pas pu être généré. Consultez les journaux à l’emplacement {0}</target>
+        <source>The project could not be built.</source>
+        <target state="new">The project could not be built.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectCouldNotBeCreated">
+        <source>The app could not be created.</source>
+        <target state="new">The app could not be created.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionDoesntExist">
@@ -108,13 +143,23 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedMultipleAppHostsFound">
-        <source>The --apphost option was not specified and multiple app host project files were detected.</source>
-        <target state="translated">L’option --apphost n’a pas été spécifiée et plusieurs fichiers de projet d’hôte d’application ont été détectés.</target>
+        <source>The --apphost option was not specified and multiple AppHost project files were detected.</source>
+        <target state="needs-review-translation">L’option --apphost n’a pas été spécifiée et plusieurs fichiers de projet d’hôte d’application ont été détectés.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectOptionNotSpecifiedNoCsprojFound">
-        <source>The project argument was not specified and no app host project files were detected.</source>
-        <target state="translated">L'argument de projet n'a pas été spécifié et aucun fichier de projet hôte d'application n'a été détecté.</target>
+        <source>The project argument was not specified and no AppHost project files were detected.</source>
+        <target state="needs-review-translation">L'argument de projet n'a pas été spécifié et aucun fichier de projet hôte d'application n'a été détecté.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts">
+        <source>The --apphost option specified a directory that contains multiple AppHost project files.</source>
+        <target state="new">The --apphost option specified a directory that contains multiple AppHost project files.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ProjectOptionSpecifiedDirectoryContainsNoAppHosts">
+        <source>The --apphost option specified a directory that does not contain any AppHost project files.</source>
+        <target state="new">The --apphost option specified a directory that does not contain any AppHost project files.</target>
         <note />
       </trans-unit>
       <trans-unit id="RequiredCapability">
@@ -127,18 +172,23 @@
         <target state="translated">Recherche en cours...</target>
         <note />
       </trans-unit>
+      <trans-unit id="SeeAppHostLogsAt">
+        <source>See AppHost logs at {0}</source>
+        <target state="new">See AppHost logs at {0}</target>
+        <note>{0} is the log file path of the CLI process managing the AppHost</note>
+      </trans-unit>
       <trans-unit id="SeeLogsAt">
         <source>See logs at {0}</source>
         <target state="translated">Consultez les journaux à l’emplacement {0}</target>
         <note>{0} is the log file path</note>
       </trans-unit>
       <trans-unit id="SelectAppHostToUse">
-        <source>Select an apphost to use:</source>
-        <target state="translated">Sélectionnez un AppHost à utiliser :</target>
+        <source>Select an AppHost to use:</source>
+        <target state="needs-review-translation">Sélectionnez un AppHost à utiliser :</target>
         <note />
       </trans-unit>
       <trans-unit id="SpecifiedProjectFileNotAppHostProject">
-        <source>The specified project file is not an Aspire apphost project.</source>
+        <source>The specified project file is not an Aspire AppHost project.</source>
         <target state="needs-review-translation">Le fichier projet spécifié n’est pas un projet Aspire AppHost.</target>
         <note />
       </trans-unit>
@@ -158,8 +208,8 @@
         <note />
       </trans-unit>
       <trans-unit id="UnbuildableAppHostsDetected">
-        <source>No app hosts were found (there may be app hosts project files with syntax errors/invalid SDK versions).</source>
-        <target state="translated">Aucun hôte d’application n’a été trouvé (il peut y avoir des fichiers de projet d’hôtes d’application contenant des erreurs de syntaxe ou des versions de SDK non valides).</target>
+        <source>No AppHosts were found (there may be AppHost project files with syntax errors/invalid SDK versions).</source>
+        <target state="needs-review-translation">Aucun hôte d’application n’a été trouvé (il peut y avoir des fichiers de projet d’hôtes d’application contenant des erreurs de syntaxe ou des versions de SDK non valides).</target>
         <note />
       </trans-unit>
       <trans-unit id="UnexpectedErrorOccurred">
@@ -173,8 +223,8 @@
         <note>{0} is a path</note>
       </trans-unit>
       <trans-unit id="WaitingForDebuggerToAttachToAppHost">
-        <source>Waiting for debugger to attach to app host process</source>
-        <target state="translated">En attente de l’attachement du débogueur au processus de l’hôte d’application</target>
+        <source>Waiting for debugger to attach to AppHost process</source>
+        <target state="needs-review-translation">En attente de l’attachement du débogueur au processus de l’hôte d’application</target>
         <note />
       </trans-unit>
     </body>

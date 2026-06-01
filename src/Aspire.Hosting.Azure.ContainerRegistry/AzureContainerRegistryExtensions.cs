@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Globalization;
 using System.Text;
@@ -25,9 +26,10 @@ public static class AzureContainerRegistryExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is null or empty.</exception>
-    [AspireExport("addAzureContainerRegistry", Description = "Adds an Azure Container Registry resource to the distributed application model.")]
+    [AspireExport]
     public static IResourceBuilder<AzureContainerRegistryResource> AddAzureContainerRegistry(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -35,28 +37,7 @@ public static class AzureContainerRegistryExtensions
 
         builder.AddAzureProvisioning();
 
-        var configureInfrastructure = (AzureResourceInfrastructure infrastructure) =>
-        {
-            var registry = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
-                (identifier, name) =>
-                {
-                    var resource = ContainerRegistryService.FromExisting(identifier);
-                    resource.Name = name;
-                    return resource;
-                },
-                (infrastructure) => new ContainerRegistryService(infrastructure.AspireResource.GetBicepIdentifier())
-                {
-                    Sku = new() { Name = ContainerRegistrySkuName.Basic },
-                    Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
-                });
-
-            infrastructure.Add(registry);
-
-            infrastructure.Add(new ProvisioningOutput("name", typeof(string)) { Value = registry.Name.ToBicepExpression() });
-            infrastructure.Add(new ProvisioningOutput("loginServer", typeof(string)) { Value = registry.LoginServer.ToBicepExpression() });
-        };
-
-        var resource = new AzureContainerRegistryResource(name, configureInfrastructure);
+        var resource = new AzureContainerRegistryResource(name, ContainerRegistryInfrastructure.ConfigureContainerRegistry);
 
         IResourceBuilder<AzureContainerRegistryResource> resourceBuilder;
 
@@ -81,7 +62,7 @@ public static class AzureContainerRegistryExtensions
     /// </summary>
     private static void SubscribeToAddRegistryTargetAnnotations(IDistributedApplicationBuilder builder, AzureContainerRegistryResource registry)
     {
-        builder.Eventing.Subscribe<BeforeStartEvent>((beforeStartEvent, cancellationToken) =>
+        builder.OnBeforeStart((beforeStartEvent, cancellationToken) =>
         {
             foreach (var resource in beforeStartEvent.Model.Resources)
             {
@@ -96,12 +77,14 @@ public static class AzureContainerRegistryExtensions
     /// <summary>
     /// Configures a resource that implements <see cref="IContainerRegistry"/> to use the specified Azure Container Registry.
     /// </summary>
+    /// <ats-summary>Configures a compute environment resource to use an Azure Container Registry.</ats-summary>
     /// <typeparam name="T">The resource type that implements <see cref="IContainerRegistry"/>.</typeparam>
     /// <param name="builder">The resource builder for a resource that implements <see cref="IContainerRegistry"/>.</param>
     /// <param name="registryBuilder">The resource builder for the <see cref="AzureContainerRegistryResource"/> to use.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="registryBuilder"/> is null.</exception>
-    [AspireExport("withContainerRegistryAzureContainerRegistry", MethodName = "withAzureContainerRegistry", Description = "Configures a compute environment resource to use an Azure Container Registry.")]
+    [AspireExport("withContainerRegistryAzureContainerRegistry", MethodName = "withAzureContainerRegistry")]
     public static IResourceBuilder<T> WithAzureContainerRegistry<T>(this IResourceBuilder<T> builder, IResourceBuilder<AzureContainerRegistryResource> registryBuilder)
         where T : IResource, IComputeEnvironmentResource
     {
@@ -117,13 +100,15 @@ public static class AzureContainerRegistryExtensions
     /// <summary>
     /// Gets the <see cref="AzureContainerRegistryResource"/> associated with the specified Azure compute environment resource.
     /// </summary>
+    /// <ats-summary>Gets the Azure Container Registry associated with a compute environment resource.</ats-summary>
     /// <typeparam name="T">The resource type that implements <see cref="IAzureComputeEnvironmentResource"/>.</typeparam>
     /// <param name="builder">The resource builder for the compute environment resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> for the associated registry.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the resource does not have an associated Azure Container Registry,
     /// or when the associated container registry is not an <see cref="AzureContainerRegistryResource"/>.</exception>
-    [AspireExport("getAzureContainerRegistry", Description = "Gets the Azure Container Registry associated with a compute environment resource.")]
+    [AspireExport]
     public static IResourceBuilder<AzureContainerRegistryResource> GetAzureContainerRegistry<T>(this IResourceBuilder<T> builder)
         where T : IResource, IAzureComputeEnvironmentResource
     {
@@ -151,6 +136,7 @@ public static class AzureContainerRegistryExtensions
     /// based on existing purge tasks to avoid conflicts. If a task with the specified name already exists,
     /// an <see cref="ArgumentException"/> is thrown.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="schedule"/> is <see langword="null"/>, empty, or whitespace,
     /// or when <paramref name="taskName"/> conflicts with an existing task.</exception>
@@ -163,7 +149,7 @@ public static class AzureContainerRegistryExtensions
     ///     .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5);
     /// </code>
     /// </example>
-    [AspireExport("withPurgeTask", Description = "Configures a purge task for the Azure Container Registry resource.")]
+    [AspireExport]
     public static IResourceBuilder<AzureContainerRegistryResource> WithPurgeTask(
         this IResourceBuilder<AzureContainerRegistryResource> builder,
         string schedule,
@@ -284,8 +270,9 @@ public static class AzureContainerRegistryExtensions
     /// <param name="target">The target Azure Container Registry resource.</param>
     /// <param name="roles">The Azure Container Registry roles to assign to the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureContainerRegistryRole"/> value.</exception>
-    [AspireExport("withContainerRegistryRoleAssignments", Description = "Assigns Azure Container Registry roles to a resource.")]
+    [AspireExport("withContainerRegistryRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureContainerRegistryResource> target,

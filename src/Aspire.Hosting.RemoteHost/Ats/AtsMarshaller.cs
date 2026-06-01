@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -19,6 +20,7 @@ internal sealed class AtsMarshaller
     private readonly AtsContext _context;
     private readonly CancellationTokenRegistry _cancellationTokenRegistry;
     private readonly Lazy<AtsCallbackProxyFactory> _callbackProxyFactory;
+    private readonly ConditionalWeakTable<UnmarshalContext, JsonSerializerOptions> _dtoJsonOptionsByContext = new();
 
     /// <summary>
     /// Creates a new marshaller instance.
@@ -159,6 +161,45 @@ internal sealed class AtsMarshaller
         };
     }
 
+    /// <summary>
+    /// Marshals a .NET object to JSON for sending to the guest using a declared CLR type.
+    /// </summary>
+    /// <param name="value">The value to marshal.</param>
+    /// <param name="declaredType">The declared type that should be exposed to the guest.</param>
+    /// <returns>The JSON representation, or null if the value is null.</returns>
+    public JsonNode? MarshalToJson(object? value, Type declaredType)
+    {
+        if (value == null)
+        {
+            return null;
+        }
+
+        if (declaredType == typeof(object))
+        {
+            return MarshalToJson(value);
+        }
+
+        if (declaredType == typeof(CancellationToken))
+        {
+            return SerializeCancellationToken((CancellationToken)value);
+        }
+
+        var typeId = AtsTypeMapping.DeriveTypeId(declaredType);
+        var category = _context.GetCategory(declaredType);
+
+        return category switch
+        {
+            AtsTypeCategory.Primitive => SerializePrimitive(value),
+            AtsTypeCategory.Enum => JsonValue.Create(value.ToString()),
+            AtsTypeCategory.Dto => SerializeDto(value),
+            AtsTypeCategory.Array => SerializeArray(value, CreateElementTypeRef(declaredType)),
+            AtsTypeCategory.List => _handles.Marshal(value, typeId),
+            AtsTypeCategory.Dict => _handles.Marshal(value, typeId),
+            AtsTypeCategory.Handle => _handles.Marshal(value, typeId),
+            _ => _handles.Marshal(value, typeId)
+        };
+    }
+
     private static JsonNode? SerializePrimitive(object value)
     {
         var type = value.GetType();
@@ -190,6 +231,132 @@ internal sealed class AtsMarshaller
         return JsonNode.Parse(json);
     }
 
+    private object? DeserializeDto(JsonObject jsonObj, Type targetType, UnmarshalContext context)
+    {
+        try
+        {
+            return jsonObj.Deserialize(targetType, GetDtoJsonOptions(context));
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                $"Failed to deserialize DTO '{targetType.Name}': {ex.Message}");
+        }
+    }
+
+    private JsonSerializerOptions GetDtoJsonOptions(UnmarshalContext context)
+    {
+        return _dtoJsonOptionsByContext.GetValue(context, CreateDtoJsonOptions);
+    }
+
+    private JsonSerializerOptions CreateDtoJsonOptions(UnmarshalContext context)
+    {
+        var options = new JsonSerializerOptions(s_jsonOptions);
+        options.PreferredObjectCreationHandling = JsonObjectCreationHandling.Replace;
+        options.Converters.Add(new CallbackJsonConverterFactory(this, context));
+        options.Converters.Add(new ReferenceExpressionJsonConverterFactory(this, context));
+
+        return options;
+    }
+
+    private sealed class CallbackJsonConverterFactory(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert)
+        {
+            return typeof(Delegate).IsAssignableFrom(typeToConvert);
+        }
+
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+        {
+            return (JsonConverter)Activator.CreateInstance(typeof(CallbackJsonConverter<>).MakeGenericType(typeToConvert), marshaller, context)!;
+        }
+    }
+
+    private sealed class CallbackJsonConverter<TDelegate>(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverter<TDelegate>
+        where TDelegate : Delegate
+    {
+        public override TDelegate? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+            {
+                return null;
+            }
+
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                throw CapabilityException.InvalidArgument(
+                    context.CapabilityId ?? "unknown",
+                    context.ParameterName ?? "unknown",
+                    "Callback parameter must be a string callback ID");
+            }
+
+            var callbackId = reader.GetString();
+            var proxy = marshaller.CreateCallbackProxy(callbackId, typeToConvert, context);
+            return (TDelegate?)proxy;
+        }
+
+        public override void Write(Utf8JsonWriter writer, TDelegate value, JsonSerializerOptions options)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    private object? CreateCallbackProxy(string? callbackId, Type callbackType, UnmarshalContext context)
+    {
+        if (string.IsNullOrEmpty(callbackId))
+        {
+            throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                "Callback parameter must be a string callback ID");
+        }
+
+        try
+        {
+            var proxy = _callbackProxyFactory.Value.CreateProxy(callbackId, callbackType);
+            return proxy ?? throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                $"Failed to create callback proxy for type '{callbackType.Name}'");
+        }
+        catch (Exception ex) when (ex is not CapabilityException)
+        {
+            throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                $"Callback proxy factory not available: {ex.Message}");
+        }
+    }
+
+    private sealed class ReferenceExpressionJsonConverterFactory(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert)
+        {
+            return typeToConvert.FullName == "Aspire.Hosting.ApplicationModel.ReferenceExpression";
+        }
+
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+        {
+            return (JsonConverter)Activator.CreateInstance(typeof(ReferenceExpressionJsonConverter<>).MakeGenericType(typeToConvert), marshaller, context)!;
+        }
+    }
+
+    private sealed class ReferenceExpressionJsonConverter<TReferenceExpression>(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverter<TReferenceExpression>
+    {
+        public override TReferenceExpression? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var node = JsonNode.Parse(ref reader);
+            return (TReferenceExpression?)marshaller.UnmarshalFromJson(node, typeToConvert, context);
+        }
+
+        public override void Write(Utf8JsonWriter writer, TReferenceExpression value, JsonSerializerOptions options)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
     private JsonNode? SerializeArray(object value, AtsTypeRef? elementType)
     {
         var jsonArray = new JsonArray();
@@ -205,6 +372,37 @@ internal sealed class AtsMarshaller
             }
         }
         return jsonArray;
+    }
+
+    private AtsTypeRef? CreateElementTypeRef(Type declaredType)
+    {
+        if (declaredType.IsArray)
+        {
+            return CreateTypeRef(declaredType.GetElementType()!);
+        }
+
+        if (declaredType.IsGenericType)
+        {
+            var genericTypeDefinition = declaredType.GetGenericTypeDefinition();
+            if (genericTypeDefinition == typeof(IReadOnlyList<>)
+                || genericTypeDefinition == typeof(IReadOnlyCollection<>)
+                || genericTypeDefinition == typeof(IEnumerable<>))
+            {
+                return CreateTypeRef(declaredType.GetGenericArguments()[0]);
+            }
+        }
+
+        return null;
+    }
+
+    private AtsTypeRef CreateTypeRef(Type type)
+    {
+        return new AtsTypeRef
+        {
+            TypeId = AtsTypeMapping.DeriveTypeId(type),
+            ClrType = type,
+            Category = _context.GetCategory(type)
+        };
     }
 
     /// <summary>
@@ -335,30 +533,18 @@ internal sealed class AtsMarshaller
             return exprRef.ToReferenceExpression(_handles, capabilityId, paramName);
         }
 
+        if (targetType == typeof(object))
+        {
+            return node is JsonValue value ? ConvertPrimitive(value, targetType) : node;
+        }
+
         // Handle callbacks - any delegate type is treated as a callback
         if (typeof(Delegate).IsAssignableFrom(targetType))
         {
             // Callback ID is passed as a string
             if (node is JsonValue callbackValue && callbackValue.TryGetValue<string>(out var callbackId))
             {
-                Delegate? proxy;
-                try
-                {
-                    proxy = _callbackProxyFactory.Value.CreateProxy(callbackId, targetType);
-                }
-                catch (Exception ex) when (ex is not CapabilityException)
-                {
-                    throw CapabilityException.InvalidArgument(
-                        capabilityId, paramName,
-                        $"Callback proxy factory not available: {ex.Message}");
-                }
-                if (proxy == null)
-                {
-                    throw CapabilityException.InvalidArgument(
-                        capabilityId, paramName,
-                        $"Failed to create callback proxy for type '{targetType.Name}'");
-                }
-                return proxy;
+                return CreateCallbackProxy(callbackId, targetType, context);
             }
             else
             {
@@ -382,41 +568,22 @@ internal sealed class AtsMarshaller
             return CancellationToken.None;
         }
 
-        // Handle primitives
-        if (node is JsonValue value)
+        try
         {
-            return ConvertPrimitive(value, targetType);
-        }
-
-        // Handle JsonArray -> Array or List<T>
-        if (node is JsonArray array)
-        {
-            // T[] arrays
-            if (targetType.IsArray)
+            // Handle primitives
+            if (node is JsonValue value)
             {
-                var elementType = targetType.GetElementType()!;
-                var converted = Array.CreateInstance(elementType, array.Count);
-                for (int i = 0; i < array.Count; i++)
-                {
-                    var elementContext = new UnmarshalContext
-                    {
-                        CapabilityId = context.CapabilityId,
-                        ParameterName = $"{paramName}[{i}]"
-                    };
-                    converted.SetValue(UnmarshalFromJson(array[i], elementType, elementContext), i);
-                }
-                return converted;
+                return ConvertPrimitive(value, targetType);
             }
 
-            // List<T> or IList<T>
-            if (targetType.IsGenericType)
+            // Handle JsonArray -> Array or List<T>
+            if (node is JsonArray array)
             {
-                var genericDef = targetType.GetGenericTypeDefinition();
-                if (genericDef == typeof(List<>) || genericDef == typeof(IList<>) || genericDef == typeof(IEnumerable<>) || genericDef == typeof(ICollection<>) || genericDef == typeof(IReadOnlyList<>) || genericDef == typeof(IReadOnlyCollection<>))
+                // T[] arrays
+                if (targetType.IsArray)
                 {
-                    var elementType = targetType.GetGenericArguments()[0];
-                    var listType = typeof(List<>).MakeGenericType(elementType);
-                    var list = (IList)Activator.CreateInstance(listType)!;
+                    var elementType = targetType.GetElementType()!;
+                    var converted = Array.CreateInstance(elementType, array.Count);
                     for (int i = 0; i < array.Count; i++)
                     {
                         var elementContext = new UnmarshalContext
@@ -424,53 +591,222 @@ internal sealed class AtsMarshaller
                             CapabilityId = context.CapabilityId,
                             ParameterName = $"{paramName}[{i}]"
                         };
-                        list.Add(UnmarshalFromJson(array[i], elementType, elementContext));
+                        converted.SetValue(UnmarshalFromJson(array[i], elementType, elementContext), i);
                     }
-                    return list;
+                    return converted;
                 }
-            }
-        }
 
-        // Handle JsonObject -> Dictionary<string, T> or DTO
-        if (node is JsonObject jsonObj)
-        {
-            // Dictionary<string, T> or IDictionary<string, T>
-            if (targetType.IsGenericType)
-            {
-                var genericDef = targetType.GetGenericTypeDefinition();
-                if (genericDef == typeof(Dictionary<,>) || genericDef == typeof(IDictionary<,>) || genericDef == typeof(IReadOnlyDictionary<,>))
+                // List<T> or IList<T>
+                if (targetType.IsGenericType)
                 {
-                    var genericArgs = targetType.GetGenericArguments();
-                    if (genericArgs[0] == typeof(string))
+                    var genericDef = targetType.GetGenericTypeDefinition();
+                    if (genericDef == typeof(List<>) || genericDef == typeof(IList<>) || genericDef == typeof(IEnumerable<>) || genericDef == typeof(ICollection<>) || genericDef == typeof(IReadOnlyList<>) || genericDef == typeof(IReadOnlyCollection<>))
                     {
-                        var valueType = genericArgs[1];
-                        var dictType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
-                        var dict = (IDictionary)Activator.CreateInstance(dictType)!;
-                        foreach (var prop in jsonObj)
+                        var elementType = targetType.GetGenericArguments()[0];
+                        var listType = typeof(List<>).MakeGenericType(elementType);
+                        var list = (IList)Activator.CreateInstance(listType)!;
+                        for (int i = 0; i < array.Count; i++)
                         {
-                            var valueContext = new UnmarshalContext
+                            var elementContext = new UnmarshalContext
                             {
                                 CapabilityId = context.CapabilityId,
-                                ParameterName = $"{paramName}[{prop.Key}]"
+                                ParameterName = $"{paramName}[{i}]"
                             };
-                            dict[prop.Key] = UnmarshalFromJson(prop.Value, valueType, valueContext);
+                            list.Add(UnmarshalFromJson(array[i], elementType, elementContext));
                         }
-                        return dict;
+                        return list;
                     }
                 }
             }
 
-            // DTOs - must have [AspireDto] attribute
-            if (!AttributeDataReader.HasAspireDtoData(targetType))
+            // Handle JsonObject -> Dictionary<string, T> or DTO
+            if (node is JsonObject jsonObj)
             {
-                throw CapabilityException.InvalidArgument(
-                    capabilityId, paramName,
-                    $"Parameter type '{targetType.Name}' must have [AspireDto] attribute to be deserialized from JSON");
+                // Dictionary<string, T> or IDictionary<string, T>
+                if (targetType.IsGenericType)
+                {
+                    var genericDef = targetType.GetGenericTypeDefinition();
+                    if (genericDef == typeof(Dictionary<,>) || genericDef == typeof(IDictionary<,>) || genericDef == typeof(IReadOnlyDictionary<,>))
+                    {
+                        var genericArgs = targetType.GetGenericArguments();
+                        if (genericArgs[0] == typeof(string))
+                        {
+                            var valueType = genericArgs[1];
+                            var dictType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
+                            var dict = (IDictionary)Activator.CreateInstance(dictType)!;
+                            foreach (var prop in jsonObj)
+                            {
+                                var valueContext = new UnmarshalContext
+                                {
+                                    CapabilityId = context.CapabilityId,
+                                    ParameterName = $"{paramName}[{prop.Key}]"
+                                };
+                                dict[prop.Key] = UnmarshalFromJson(prop.Value, valueType, valueContext);
+                            }
+                            return dict;
+                        }
+                    }
+                }
+
+                // DTOs - must have [AspireDto] attribute
+                if (!AttributeDataReader.HasAspireDtoData(targetType))
+                {
+                    throw CapabilityException.InvalidArgument(
+                        capabilityId, paramName,
+                        $"Parameter type '{targetType.Name}' must have [AspireDto] attribute to be deserialized from JSON");
+                }
+                return DeserializeDto(jsonObj, targetType, context);
             }
-            return JsonSerializer.Deserialize(jsonObj.ToJsonString(), targetType, s_jsonOptions);
+
+            return null;
+        }
+        catch (CapabilityException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (IsTypeMismatchException(ex))
+        {
+            throw CapabilityException.TypeMismatch(
+                capabilityId, paramName, DescribeType(targetType), DescribeJsonNode(node));
+        }
+        catch (JsonException ex)
+        {
+            throw CapabilityException.InvalidArgument(
+                capabilityId, paramName, $"Failed to deserialize '{paramName}' as {DescribeType(targetType)}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Checks if an exception indicates a type mismatch.
+    /// </summary>
+    private static bool IsTypeMismatchException(Exception ex)
+    {
+        // Check for common type mismatch patterns in exception messages
+        var message = ex.Message;
+        return message.Contains("cannot be converted") ||
+            message.Contains("could not be converted") ||
+            message.Contains("is not assignable") ||
+            message.Contains("type mismatch", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Describes a JSON node's type for error reporting.
+    /// </summary>
+    private static string DescribeJsonNode(JsonNode? node)
+    {
+        return node switch
+        {
+            null => "null",
+            JsonValue v when v.TryGetValue<string>(out _) => "string",
+            JsonValue v when v.TryGetValue<bool>(out _) => "bool",
+            JsonValue v when v.TryGetValue<long>(out _) => "number",
+            JsonValue v when v.TryGetValue<double>(out _) => "number",
+            JsonValue => "value",
+            JsonArray => "array",
+            JsonObject obj when obj.ContainsKey("$handle") => "handle",
+            JsonObject => "object",
+            _ => node.GetType().Name
+        };
+    }
+
+    /// <summary>
+    /// Describes a .NET type in a human-readable way for error messages.
+    /// Formats Nullable&lt;T&gt; as the underlying type.
+    /// </summary>
+    private static string DescribeType(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type);
+        if (underlying != null)
+        {
+            return underlying.ToString();
+        }
+        return type.ToString();
+    }
+
+    // IEEE 754 doubles can exactly represent integers only through 2^53 - 1.
+    private const double MaxSafeIntegerDouble = 9_007_199_254_740_991d;
+
+    private static decimal ReadDecimalValue(JsonValue value, Type targetType)
+    {
+        if (value.TryGetValue<int>(out var intValue))
+        {
+            return intValue;
         }
 
-        return null;
+        // Prefer decimal here because this helper is only used for decimal targets.
+        if (value.TryGetValue<decimal>(out var decimalValue))
+        {
+            return decimalValue;
+        }
+
+        if (value.TryGetValue<long>(out var longValue))
+        {
+            return longValue;
+        }
+
+        if (value.TryGetValue<ulong>(out var ulongValue))
+        {
+            return ulongValue;
+        }
+
+        if (value.TryGetValue<double>(out var doubleValue) && double.IsFinite(doubleValue))
+        {
+            try
+            {
+                return (decimal)doubleValue;
+            }
+            catch (OverflowException)
+            {
+                throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
+            }
+        }
+
+        throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
+    }
+
+    private static decimal ReadIntegralNumericValue(JsonValue value, Type targetType, decimal minValue, decimal maxValue)
+    {
+        if (value.TryGetValue<int>(out var intValue))
+        {
+            return ValidateIntegralNumericValue(intValue, targetType, minValue, maxValue);
+        }
+
+        if (value.TryGetValue<long>(out var longValue))
+        {
+            return ValidateIntegralNumericValue(longValue, targetType, minValue, maxValue);
+        }
+
+        if (value.TryGetValue<ulong>(out var ulongValue))
+        {
+            return ValidateIntegralNumericValue(ulongValue, targetType, minValue, maxValue);
+        }
+
+        if (value.TryGetValue<decimal>(out var decimalValue))
+        {
+            return ValidateIntegralNumericValue(decimalValue, targetType, minValue, maxValue);
+        }
+
+        if (value.TryGetValue<double>(out var doubleValue) && double.IsFinite(doubleValue))
+        {
+            if (Math.Abs(doubleValue) > MaxSafeIntegerDouble)
+            {
+                throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
+            }
+
+            return ValidateIntegralNumericValue((decimal)doubleValue, targetType, minValue, maxValue);
+        }
+
+        throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
+    }
+
+    private static decimal ValidateIntegralNumericValue(decimal numericValue, Type targetType, decimal minValue, decimal maxValue)
+    {
+        if (decimal.Truncate(numericValue) != numericValue || numericValue < minValue || numericValue > maxValue)
+        {
+            throw new InvalidCastException($"Value cannot be converted to {targetType.Name}.");
+        }
+
+        return numericValue;
     }
 
     /// <summary>
@@ -479,6 +815,28 @@ internal sealed class AtsMarshaller
     public static object? ConvertPrimitive(JsonValue value, Type targetType)
     {
         var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        // When target type is object (union parameter), infer from JSON value
+        if (underlyingType == typeof(object))
+        {
+            if (value.TryGetValue<string>(out var s))
+            {
+                return s;
+            }
+            if (value.TryGetValue<bool>(out var b))
+            {
+                return b;
+            }
+            if (value.TryGetValue<long>(out var l))
+            {
+                return l;
+            }
+            if (value.TryGetValue<double>(out var d))
+            {
+                return d;
+            }
+            return value.ToJsonString();
+        }
 
         // Handle enums - they come as string names
         if (underlyingType.IsEnum)
@@ -506,12 +864,42 @@ internal sealed class AtsMarshaller
 
         if (underlyingType == typeof(int))
         {
-            return value.GetValue<int>();
+            return decimal.ToInt32(ReadIntegralNumericValue(value, underlyingType, int.MinValue, int.MaxValue));
         }
 
         if (underlyingType == typeof(long))
         {
-            return value.GetValue<long>();
+            return decimal.ToInt64(ReadIntegralNumericValue(value, underlyingType, long.MinValue, long.MaxValue));
+        }
+
+        if (underlyingType == typeof(byte))
+        {
+            return decimal.ToByte(ReadIntegralNumericValue(value, underlyingType, byte.MinValue, byte.MaxValue));
+        }
+
+        if (underlyingType == typeof(short))
+        {
+            return decimal.ToInt16(ReadIntegralNumericValue(value, underlyingType, short.MinValue, short.MaxValue));
+        }
+
+        if (underlyingType == typeof(uint))
+        {
+            return decimal.ToUInt32(ReadIntegralNumericValue(value, underlyingType, uint.MinValue, uint.MaxValue));
+        }
+
+        if (underlyingType == typeof(ulong))
+        {
+            return decimal.ToUInt64(ReadIntegralNumericValue(value, underlyingType, ulong.MinValue, ulong.MaxValue));
+        }
+
+        if (underlyingType == typeof(ushort))
+        {
+            return decimal.ToUInt16(ReadIntegralNumericValue(value, underlyingType, ushort.MinValue, ushort.MaxValue));
+        }
+
+        if (underlyingType == typeof(sbyte))
+        {
+            return decimal.ToSByte(ReadIntegralNumericValue(value, underlyingType, sbyte.MinValue, sbyte.MaxValue));
         }
 
         if (underlyingType == typeof(double))
@@ -521,12 +909,12 @@ internal sealed class AtsMarshaller
 
         if (underlyingType == typeof(float))
         {
-            return (float)value.GetValue<double>();
+            return value.TryGetValue<float>(out var floatValue) ? floatValue : (float)value.GetValue<double>();
         }
 
         if (underlyingType == typeof(decimal))
         {
-            return value.GetValue<decimal>();
+            return ReadDecimalValue(value, underlyingType);
         }
 
         // TimeSpan: accept milliseconds (number) or parseable string

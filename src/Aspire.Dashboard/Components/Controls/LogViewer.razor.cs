@@ -46,6 +46,9 @@ public sealed partial class LogViewer
     [Parameter]
     public bool NoWrapLogs { get; set; }
 
+    [Parameter]
+    public bool ShowNoLogsMessage { get; set; }
+
     private Virtualize<LogEntry>? VirtualizeRef
     {
         get => field;

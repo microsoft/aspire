@@ -13,15 +13,17 @@ using System.Diagnostics;
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using BaseRootCommand = System.CommandLine.RootCommand;
 
 namespace Aspire.Cli.Commands;
 
 internal sealed class RootCommand : BaseRootCommand
 {
+    internal const int DefaultCaptureProfileDelaySeconds = 5;
+
     public static readonly Option<bool> DebugOption = new(CommonOptionNames.Debug, CommonOptionNames.DebugShort)
     {
         Description = RootCommandStrings.DebugArgumentDescription,
@@ -66,6 +68,33 @@ internal sealed class RootCommand : BaseRootCommand
         Recursive = true,
         Hidden = true,
         DefaultValueFactory = _ => false
+    };
+
+    public static readonly Option<bool> StartDebugSessionOption = new(CommonOptionNames.StartDebugSession)
+    {
+        Description = RunCommandStrings.StartDebugSessionArgumentDescription,
+        Recursive = true,
+        DefaultValueFactory = _ => false
+    };
+
+    public static readonly Option<bool> CaptureProfileOption = new("--capture-profile")
+    {
+        Recursive = true,
+        Hidden = true,
+        DefaultValueFactory = _ => false
+    };
+
+    public static readonly Option<FileInfo?> CaptureProfileOutputOption = new("--capture-profile-output")
+    {
+        Recursive = true,
+        Hidden = true
+    };
+
+    public static readonly Option<int> CaptureProfileDelayOption = new("--capture-profile-delay")
+    {
+        Recursive = true,
+        Hidden = true,
+        DefaultValueFactory = _ => DefaultCaptureProfileDelaySeconds
     };
 
     /// <summary>
@@ -113,24 +142,27 @@ internal sealed class RootCommand : BaseRootCommand
         StopCommand stopCommand,
         StartCommand startCommand,
         WaitCommand waitCommand,
+        LsCommand lsCommand,
         ResourceCommand commandCommand,
         PsCommand psCommand,
         DescribeCommand describeCommand,
         LogsCommand logsCommand,
+        IntegrationCommand integrationCommand,
         AddCommand addCommand,
         PublishCommand publishCommand,
         DeployCommand deployCommand,
+        DestroyCommand destroyCommand,
         DoCommand doCommand,
         ConfigCommand configCommand,
         CacheCommand cacheCommand,
         CertificatesCommand certificatesCommand,
         DoctorCommand doctorCommand,
-        ExecCommand execCommand,
         UpdateCommand updateCommand,
         McpCommand mcpCommand,
         AgentCommand agentCommand,
         TelemetryCommand telemetryCommand,
         ExportCommand exportCommand,
+        DashboardCommand dashboardCommand,
         DocsCommand docsCommand,
         SecretCommand secretCommand,
         SdkCommand sdkCommand,
@@ -141,7 +173,6 @@ internal sealed class RootCommand : BaseRootCommand
 #endif
         ExtensionInternalCommand extensionInternalCommand,
         IBundleService bundleService,
-        IFeatures featureFlags,
         IInteractionService interactionService,
         IAnsiConsole ansiConsole)
         : base(RootCommandStrings.Description)
@@ -179,23 +210,30 @@ internal sealed class RootCommand : BaseRootCommand
         Options.Add(BannerOption);
         Options.Add(WaitForDebuggerOption);
         Options.Add(CliWaitForDebuggerOption);
+        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
+        {
+            Options.Add(StartDebugSessionOption);
+        }
+        Options.Add(CaptureProfileOption);
+        Options.Add(CaptureProfileOutputOption);
+        Options.Add(CaptureProfileDelayOption);
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
-        this.SetAction((context, cancellationToken) =>
+        this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>
         {
             var bannerRequested = context.GetValue(BannerOption);
             if (bannerRequested)
             {
                 // If --banner was passed, we've already shown it in Main, just exit successfully
-                return Task.FromResult(ExitCodeConstants.Success);
+                return Task.FromResult((int)CliExitCodes.Success);
             }
 
             // No subcommand provided - show grouped help but return InvalidCommand to signal usage error
             var writer = _ansiConsole.Profile.Out.Writer;
             var consoleWidth = _ansiConsole.Profile.Width;
             GroupedHelpWriter.WriteHelp(this, writer, consoleWidth);
-            return Task.FromResult(ExitCodeConstants.InvalidCommand);
-        });
+            return Task.FromResult((int)CliExitCodes.InvalidCommand);
+        }));
 
         Subcommands.Add(newCommand);
         Subcommands.Add(initCommand);
@@ -203,10 +241,12 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(stopCommand);
         Subcommands.Add(startCommand);
         Subcommands.Add(waitCommand);
+        Subcommands.Add(lsCommand);
         Subcommands.Add(commandCommand);
         Subcommands.Add(psCommand);
         Subcommands.Add(describeCommand);
         Subcommands.Add(logsCommand);
+        Subcommands.Add(integrationCommand);
         Subcommands.Add(addCommand);
         Subcommands.Add(publishCommand);
         Subcommands.Add(configCommand);
@@ -214,6 +254,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(certificatesCommand);
         Subcommands.Add(doctorCommand);
         Subcommands.Add(deployCommand);
+        Subcommands.Add(destroyCommand);
         Subcommands.Add(doCommand);
         Subcommands.Add(updateCommand);
         Subcommands.Add(extensionInternalCommand);
@@ -222,6 +263,7 @@ internal sealed class RootCommand : BaseRootCommand
         Subcommands.Add(telemetryCommand);
         Subcommands.Add(exportCommand);
         Subcommands.Add(docsCommand);
+        Subcommands.Add(dashboardCommand);
         Subcommands.Add(secretCommand);
 
 #if DEBUG
@@ -231,11 +273,6 @@ internal sealed class RootCommand : BaseRootCommand
         if (bundleService.IsBundle)
         {
             Subcommands.Add(setupCommand);
-        }
-
-        if (featureFlags.IsFeatureEnabled(KnownFeatures.ExecCommandEnabled, false))
-        {
-            Subcommands.Add(execCommand);
         }
 
         Subcommands.Add(sdkCommand);

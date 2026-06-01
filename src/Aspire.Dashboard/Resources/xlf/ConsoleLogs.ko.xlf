@@ -27,6 +27,11 @@
         <target state="translated">로그를 아직 사용할 수 없음</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNoLogsFound">
+        <source>No logs found</source>
+        <target state="new">No logs found</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">
         <source>No resource selected</source>
         <target state="translated">리소스를 선택하지 않음</target>

@@ -59,4 +59,32 @@ public class BackchannelJsonSerializerContextTests
         Assert.Equal("select 1", roundTripped["sql"].GetString());
         Assert.Equal(1, roundTripped["limit"].GetInt32());
     }
+
+    [Fact]
+    public void JsonSerializerOptionsCanDeserializePublishingActivityWithoutHierarchyMetadata()
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        var json =
+            """
+            {
+              "Type": "step",
+              "Data": {
+                "Id": "step-1",
+                "StatusText": "Prepare",
+                "CompletionState": "InProgress"
+              }
+            }
+            """;
+
+        var activity = JsonSerializer.Deserialize<PublishingActivity>(json, options);
+
+        Assert.NotNull(activity);
+        Assert.Equal(PublishingActivityTypes.Step, activity.Type);
+        Assert.Equal("step-1", activity.Data.Id);
+        Assert.Equal("Prepare", activity.Data.StatusText);
+        Assert.Null(activity.Data.ParentStepId);
+        Assert.Null(activity.Data.HierarchyLevel);
+        Assert.Null(activity.Data.CompletionMessage);
+        Assert.Equal(CompletionStates.InProgress, activity.Data.CompletionState);
+    }
 }

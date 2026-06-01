@@ -5,8 +5,11 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Configuration;
@@ -24,6 +27,10 @@ namespace Aspire.Cli.Configuration;
 ///   "appHost": { "path": "app.ts", "language": "typescript/nodejs" },
 ///   "sdk": { "version": "9.2.0" },
 ///   "channel": "stable",
+///   "docs": {
+///     "llmsTxtUrl": "https://aspire.dev/llms-full.txt",
+///     "api": { "sitemapUrl": "https://aspire.dev/sitemap-0.xml" }
+///   },
 ///   "features": { "polyglotSupportEnabled": true },
 ///   "profiles": {
 ///     "default": {
@@ -93,6 +100,13 @@ internal sealed class AspireConfigFile
     [JsonPropertyName("features")]
     [Description("Feature flags for enabling/disabling experimental or optional features. Key is feature name, value is enabled (true) or disabled (false).")]
     public Dictionary<string, bool>? Features { get; set; }
+
+    /// <summary>
+    /// Documentation source configuration for aspire docs and aspire docs api.
+    /// </summary>
+    [JsonPropertyName("docs")]
+    [Description("Documentation source overrides for aspire docs and aspire docs api. Leave these unset to use the built-in aspire.dev sources.")]
+    public AspireConfigDocs? Docs { get; set; }
 
     /// <summary>
     /// Launch profiles (ports, env vars). Replaces apphost.run.json.
@@ -173,6 +187,20 @@ internal sealed class AspireConfigFile
         {
             var profiles = ReadApphostRunProfiles(Path.Combine(directory, "apphost.run.json"));
             config = FromLegacy(legacyConfig, profiles);
+
+            // Legacy .aspire/settings.json stores appHostPath relative to the .aspire/ directory,
+            // but aspire.config.json stores it relative to the config file's own directory (the parent
+            // of .aspire/). Re-base the path so it resolves correctly from the new location.
+            // Paths are always stored with '/' separators regardless of platform, but we normalize
+            // to the OS separator for Path operations and back to '/' for storage.
+            if (config.AppHost?.Path is { Length: > 0 } migratedPath && !Path.IsPathRooted(migratedPath))
+            {
+                var legacySettingsDir = Path.Combine(directory, AspireJsonConfiguration.SettingsFolder);
+                var absolutePath = PathNormalizer.NormalizePathForCurrentPlatform(
+                    Path.Combine(legacySettingsDir, migratedPath));
+                config.AppHost.Path = PathNormalizer.NormalizePathForStorage(
+                    Path.GetRelativePath(directory, absolutePath));
+            }
 
             // Persist the migrated config (legacy files are kept for older CLI versions)
             config.Save(directory);
@@ -427,6 +455,39 @@ internal sealed class AspireConfigSdk
     [JsonPropertyName("version")]
     [Description("The Aspire SDK version. Determines the version of Aspire.Hosting packages to use.")]
     public string? Version { get; set; }
+}
+
+/// <summary>
+/// Documentation source configuration within aspire.config.json.
+/// </summary>
+internal sealed class AspireConfigDocs
+{
+    /// <summary>
+    /// Optional override for the llms.txt documentation source consumed by aspire docs.
+    /// </summary>
+    [JsonPropertyName("llmsTxtUrl")]
+    [Description($"""Optional override for the llms.txt documentation source consumed by aspire docs. Defaults to {DocsSourceConfiguration.DefaultLlmsTxtUrl}.""")]
+    public string? LlmsTxtUrl { get; set; }
+
+    /// <summary>
+    /// Optional API reference source overrides consumed by aspire docs api.
+    /// </summary>
+    [JsonPropertyName("api")]
+    [Description("Optional API reference source overrides consumed by aspire docs api. Leave these unset to use the built-in aspire.dev API sources.")]
+    public AspireConfigApiDocs? Api { get; set; }
+}
+
+/// <summary>
+/// API documentation source configuration within aspire.config.json.
+/// </summary>
+internal sealed class AspireConfigApiDocs
+{
+    /// <summary>
+    /// Optional override for the API sitemap consumed by aspire docs api.
+    /// </summary>
+    [JsonPropertyName("sitemapUrl")]
+    [Description($"""Optional override for the API sitemap consumed by aspire docs api. Defaults to {ApiDocsSourceConfiguration.DefaultSitemapUrl}.""")]
+    public string? SitemapUrl { get; set; }
 }
 
 /// <summary>

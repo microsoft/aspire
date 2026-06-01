@@ -149,11 +149,6 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         };
         var mcpConfigPath = Path.Combine(copilotFolder.FullName, "mcp-config.json");
         await File.WriteAllTextAsync(mcpConfigPath, existingConfig.ToJsonString());
-        
-        // Also create the skill file with the SAME content as SkillFileContent to prevent update applicator
-        var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "skills", "aspire", "SKILL.md");
-        Directory.CreateDirectory(Path.GetDirectoryName(skillFilePath)!);
-        await File.WriteAllTextAsync(skillFilePath, CommonAgentApplicators.SkillFileContent);
 
         var copilotCliRunner = new FakeCopilotCliRunner(new SemVersion(1, 0, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
@@ -162,7 +157,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
 
-        // Only the Playwright CLI applicator should be offered (Aspire MCP is configured, skill file is up to date)
+        // Only the Playwright CLI applicator should be offered (Aspire MCP is configured, all skill files are up to date)
         Assert.Single(context.Applicators);
         Assert.Contains(context.Applicators, a => a.Description.Contains("Playwright CLI"));
     }
@@ -196,13 +191,8 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
-        return new CliExecutionContext(
-            workingDirectory: workingDirectory,
-            hivesDirectory: workingDirectory,
-            cacheDirectory: workingDirectory,
-            sdksDirectory: workingDirectory,
-            logsDirectory: workingDirectory,
-            logFilePath: "test.log",
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
             debugMode: false,
             environmentVariables: new Dictionary<string, string?>(),
             homeDirectory: workingDirectory);
@@ -214,14 +204,9 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         {
             ["TERM_PROGRAM"] = "vscode"
         };
-        
-        return new CliExecutionContext(
-            workingDirectory: workingDirectory,
-            hivesDirectory: workingDirectory,
-            cacheDirectory: workingDirectory,
-            sdksDirectory: workingDirectory,
-            logsDirectory: workingDirectory,
-            logFilePath: "test.log",
+
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
             debugMode: false,
             environmentVariables: environmentVariables,
             homeDirectory: workingDirectory);

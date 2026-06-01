@@ -5,8 +5,6 @@
 
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Lifecycle;
 using Azure.Provisioning;
 using Azure.Provisioning.Authorization;
 using Microsoft.Extensions.Options;
@@ -20,11 +18,11 @@ namespace Aspire.Hosting.Azure;
 /// </summary>
 internal sealed class AzureResourcePreparer(
     IOptions<AzureProvisioningOptions> options,
-    DistributedApplicationExecutionContext executionContext) : IDistributedApplicationEventingSubscriber
+    DistributedApplicationExecutionContext executionContext)
 {
-    public async Task OnBeforeStartAsync(BeforeStartEvent @event, CancellationToken cancellationToken)
+    internal async Task PrepareResourcesAsync(DistributedApplicationModel model, CancellationToken cancellationToken)
     {
-        var azureResources = GetAzureResourcesFromAppModel(@event.Model);
+        var azureResources = GetAzureResourcesFromAppModel(model);
         if (azureResources.Count == 0)
         {
             return;
@@ -34,10 +32,10 @@ internal sealed class AzureResourcePreparer(
         {
             // If the app infrastructure does not support targeted identities and role assignments, then we need to ensure that
             // there are no identity or role assignment annotations in the app model because they won't be honored otherwise.
-            EnsureNoIdentityOrRoleAssignmentAnnotations(@event.Model);
+            EnsureNoIdentityOrRoleAssignmentAnnotations(model);
         }
 
-        await BuildRoleAssignmentAnnotations(@event.Model, azureResources, cancellationToken).ConfigureAwait(false);
+        await BuildRoleAssignmentAnnotations(model, azureResources, cancellationToken).ConfigureAwait(false);
 
         // set the ProvisioningBuildOptions on the resource, if necessary
         foreach (var r in azureResources)
@@ -214,8 +212,7 @@ internal sealed class AzureResourcePreparer(
 
                         foreach (var roleAssignmentResource in roleAssignmentResources)
                         {
-                            appModel.Resources.Add(roleAssignmentResource);
-                            prerequisiteResources.Add(roleAssignmentResource);
+                            prerequisiteResources.Add(AddOrGetRoleAssignmentResource(appModel, roleAssignmentResource));
                         }
                     }
                 }
@@ -223,10 +220,7 @@ internal sealed class AzureResourcePreparer(
                 // Add prerequisite infrastructure resources on the compute resource.
                 // Deployment infrastructure subscribers will transfer these to deployment target References
                 // so AzureBicepResource dependency wiring can apply provision ordering.
-                if (prerequisiteResources.Count > 0)
-                {
-                    resource.Annotations.Add(new DeploymentPrerequisitesAnnotation(prerequisiteResources));
-                }
+                AddDeploymentPrerequisitesAnnotation(resource, prerequisiteResources);
             }
 
             if (executionContext.IsRunMode)
@@ -262,7 +256,7 @@ internal sealed class AzureResourcePreparer(
         return result;
     }
 
-    private (AzureUserAssignedIdentityResource IdentityResource, List<AzureBicepResource> RoleAssignmentResources) CreateIdentityAndRoleAssignmentResources(
+    private (AzureUserAssignedIdentityResource IdentityResource, List<AzureRoleAssignmentResource> RoleAssignmentResources) CreateIdentityAndRoleAssignmentResources(
         IResource resource,
         Dictionary<AzureProvisioningResource, IEnumerable<RoleDefinition>> roleAssignments)
     {
@@ -292,16 +286,19 @@ internal sealed class AzureResourcePreparer(
         return (identityResource, roleAssignmentResources);
     }
 
-    private List<AzureBicepResource> CreateRoleAssignmentsResources(
+    private List<AzureRoleAssignmentResource> CreateRoleAssignmentsResources(
         IResource resource,
         Dictionary<AzureProvisioningResource, IEnumerable<RoleDefinition>> roleAssignments,
         AzureUserAssignedIdentityResource appIdentityResource)
     {
-        var roleAssignmentResources = new List<AzureBicepResource>();
+        var roleAssignmentResources = new List<AzureRoleAssignmentResource>();
         foreach (var (targetResource, roles) in roleAssignments)
         {
-            var roleAssignmentResource = new AzureProvisioningResource(
+            var roleAssignmentResource = new AzureRoleAssignmentResource(
                 $"{resource.Name}-roles-{targetResource.Name}",
+                targetResource,
+                resource,
+                appIdentityResource,
                 infra => AddRoleAssignmentsInfrastructure(infra, targetResource, roles, appIdentityResource))
             {
                 ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
@@ -391,20 +388,68 @@ internal sealed class AzureResourcePreparer(
         foreach (var (azureResource, roles) in globalRoleAssignments)
         {
             var roleAssignmentResource = CreateGlobalRoleAssignmentsResource(azureResource, roles);
-            appModel.Resources.Add(roleAssignmentResource);
 
-            azureResource.Annotations.Add(new RoleAssignmentResourceAnnotation(roleAssignmentResource));
+            roleAssignmentResource = AddOrGetRoleAssignmentResource(appModel, roleAssignmentResource);
 
-            roleAssignmentResource.Annotations.Add(new ResourceRelationshipAnnotation(azureResource, KnownRelationshipTypes.Parent));
+            if (!azureResource.Annotations.OfType<RoleAssignmentResourceAnnotation>().Any(a => a.RolesResource == roleAssignmentResource))
+            {
+                azureResource.Annotations.Add(new RoleAssignmentResourceAnnotation(roleAssignmentResource));
+            }
+
+            if (!roleAssignmentResource.Annotations.OfType<ResourceRelationshipAnnotation>().Any(a => a.Resource == azureResource && a.Type == KnownRelationshipTypes.Parent))
+            {
+                roleAssignmentResource.Annotations.Add(new ResourceRelationshipAnnotation(azureResource, KnownRelationshipTypes.Parent));
+            }
         }
     }
 
-    private AzureProvisioningResource CreateGlobalRoleAssignmentsResource(
+    private static AzureRoleAssignmentResource AddOrGetRoleAssignmentResource(DistributedApplicationModel appModel, AzureRoleAssignmentResource roleAssignmentResource)
+    {
+        if (!appModel.Resources.TryGetByName(roleAssignmentResource.Name, out var existingResource))
+        {
+            appModel.Resources.Add(roleAssignmentResource);
+            return roleAssignmentResource;
+        }
+
+        if (existingResource is AzureRoleAssignmentResource existingRoleAssignmentResource &&
+            existingRoleAssignmentResource.TargetAzureResource == roleAssignmentResource.TargetAzureResource &&
+            existingRoleAssignmentResource.OwnerResource == roleAssignmentResource.OwnerResource &&
+            existingRoleAssignmentResource.IdentityResource == roleAssignmentResource.IdentityResource)
+        {
+            return existingRoleAssignmentResource;
+        }
+
+        appModel.Resources.Add(roleAssignmentResource);
+        return roleAssignmentResource;
+    }
+
+    private static void AddDeploymentPrerequisitesAnnotation(IResource resource, HashSet<AzureBicepResource> prerequisiteResources)
+    {
+        if (prerequisiteResources.Count == 0)
+        {
+            return;
+        }
+
+        if (resource.TryGetAnnotationsOfType<DeploymentPrerequisitesAnnotation>(out var existingAnnotations))
+        {
+            prerequisiteResources.ExceptWith(existingAnnotations.SelectMany(a => a.Resources));
+        }
+
+        if (prerequisiteResources.Count > 0)
+        {
+            resource.Annotations.Add(new DeploymentPrerequisitesAnnotation(prerequisiteResources));
+        }
+    }
+
+    private AzureRoleAssignmentResource CreateGlobalRoleAssignmentsResource(
         AzureProvisioningResource targetResource,
         IEnumerable<RoleDefinition> roles)
     {
-        var roleAssignmentResource = new AzureProvisioningResource(
+        var roleAssignmentResource = new AzureRoleAssignmentResource(
             $"{targetResource.Name}-roles",
+            targetResource,
+            ownerResource: null,
+            identityResource: null,
             infra => AddGlobalRoleAssignmentsInfrastructure(infra, targetResource, roles))
         {
             ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
@@ -441,11 +486,5 @@ internal sealed class AzureResourcePreparer(
             new(() => CreatePrincipalParam(AzureBicepResource.KnownParameters.PrincipalName)));
 
         azureResource.AddRoleAssignments(context);
-    }
-
-    public Task SubscribeAsync(IDistributedApplicationEventing eventing, DistributedApplicationExecutionContext executionContext, CancellationToken cancellationToken)
-    {
-        eventing.Subscribe<BeforeStartEvent>(OnBeforeStartAsync);
-        return Task.CompletedTask;
     }
 }

@@ -5,7 +5,7 @@ param env_outputs_azure_container_apps_environment_default_domain string
 
 param env_outputs_azure_container_apps_environment_id string
 
-resource WebFrontEnd 'Microsoft.App/containerApps@2025-01-01' = {
+resource WebFrontEnd 'Microsoft.App/containerApps@2025-07-01' = {
   name: 'webfrontend'
   location: location
   properties: {

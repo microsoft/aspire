@@ -18,13 +18,28 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Resources\transport.ts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.transport.ts" />
-    <EmbeddedResource Include="Resources\base.ts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.base.ts" />
+    <EmbeddedResource Include="Resources\transport.mts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.transport.mts" />
+    <EmbeddedResource Include="Resources\base.mts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.base.mts" />
     <EmbeddedResource Include="Resources\package.json" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.package.json" />
+    <!--
+      eslint.config.mjs and tsconfig.apphost.json are sourced from the ts-starter
+      template under src/Aspire.Cli so the scaffold output, the `aspire init`
+      template, and the vitest lint regression tests all share a single physical
+      source file. Editing one updates them all automatically.
+    -->
+    <EmbeddedResource Include="..\Aspire.Cli\Templating\Templates\ts-starter\eslint.config.mjs" Link="Resources\eslint.config.mjs" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.eslint.config.mjs" />
+    <EmbeddedResource Include="..\Aspire.Cli\Templating\Templates\ts-starter\tsconfig.apphost.json" Link="Resources\tsconfig.apphost.json" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.tsconfig.apphost.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="AppHostProfilePortGenerator.cs" />
+    <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="AtsJsonCodeWriter.cs" />
+    <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="NpmVersionHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Aspire.TypeSystem\Aspire.TypeSystem.csproj" />
+    <PackageReference Include="Semver" />
   </ItemGroup>
 
 </Project>
