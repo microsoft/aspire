@@ -7,7 +7,8 @@
   "communityContributors": [],
   "description": "The Aspire CLI now downloads workflow skills (`aspire`, `aspireify`, `aspire-deployment`) from an external `@microsoft/aspire-skills` npm package instead of embedding them in the CLI binary. Skills are verified via npm provenance and tarball integrity, cached under the Aspire cache directory, and can be updated independently of CLI releases.",
   "docsPrs": [
-    1137
+    1137,
+    1077
   ],
   "docsRequired": true,
   "emoji": "📦",

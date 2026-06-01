@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire#17564 - fix template version pinning in aspire new with --channel",
+  "mergedAt": "2026-06-01T17:42:39Z",
+  "number": 1106,
+  "runDate": "2026-06-01T21:16:11Z",
+  "status": "included",
+  "title": "[docs] Clarify --channel version-pinning behavior for aspire new"
+}

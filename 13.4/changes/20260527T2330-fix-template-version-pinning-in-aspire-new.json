@@ -6,8 +6,10 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "When using a channel flag with `aspire new`, the CLI now pins to the current bundled CLI/SDK version instead of floating to newer incompatible packages, preventing TypeScript AppHost failures caused by version mismatches across releases.",
-  "docsPrs": [],
-  "docsRequired": false,
+  "docsPrs": [
+    1106
+  ],
+  "docsRequired": true,
   "emoji": "📌",
   "firstMergedAt": "2026-05-27T23:30:34Z",
   "lastMergedAt": "2026-05-27T23:30:34Z",
