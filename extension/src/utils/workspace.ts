@@ -33,6 +33,7 @@ const commonExcludePatterns = [
     // IDE/Tool directories
     '**/.vs/**',
     '**/.vscode-test/**',
+    '**/.worktrees/**',
     '**/.idea/**',
     '**/.git/**',
 

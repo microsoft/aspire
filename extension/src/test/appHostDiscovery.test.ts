@@ -7,7 +7,7 @@ import * as path from 'path';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import * as cliModule from '../debugger/languages/cli';
-import { AppHostDiscoveryService, findCandidateForEditorFile, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
+import { AppHostDiscoveryService, findCandidateForEditorFile, findConfiguredAppHostPaths, getDebugTargetForCandidate, selectWorkspaceAppHostPath } from '../utils/appHostDiscovery';
 import type { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 
 suite('AppHost discovery', () => {
@@ -189,6 +189,8 @@ suite('AppHost discovery', () => {
 
                 watcherCallbacks[0](vscode.Uri.file(buildPath('workspace', 'AppHost', 'bin', 'Debug', 'Generated.csproj')));
                 assert.strictEqual(changeCount, 0);
+                watcherCallbacks[0](vscode.Uri.file(buildPath('workspace', '.worktrees', 'feature', 'AppHost', 'AppHost.csproj')));
+                assert.strictEqual(changeCount, 0);
 
                 await service.discover(workspaceFolder);
                 assert.strictEqual(spawnStub.callCount, 1);
@@ -326,6 +328,14 @@ suite('AppHost discovery', () => {
             finally {
                 service.dispose();
             }
+        });
+
+        test('configured AppHost path search excludes git worktree folders', async () => {
+            await findConfiguredAppHostPaths(makeWorkspaceFolder(buildPath('workspace')));
+
+            const excludePatterns = findFilesStub.getCalls().map(call => String(call.args[1]));
+            assert.ok(excludePatterns.length > 0);
+            assert.ok(excludePatterns.every(pattern => pattern.includes('**/.worktrees/**')));
         });
 
         test('selects configured path from recursive config during service discovery', async () => {

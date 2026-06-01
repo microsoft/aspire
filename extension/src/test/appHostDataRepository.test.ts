@@ -8,6 +8,7 @@ import { EventEmitter } from 'events';
 import { PassThrough } from 'stream';
 import { AppHostDataRepository } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import type { AppHostDiscoveryService } from '../utils/appHostDiscovery';
 import * as cliModule from '../debugger/languages/cli';
 
 class TestChildProcess extends EventEmitter {
@@ -817,6 +818,298 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.workspaceAppHostName, 'AppHost.csproj');
         } finally {
             repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace discovery with no AppHost candidates clears loading context', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
+            getAppHostsLineCallback = createLsLineCallback(options);
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify([]));
+            await waitForAppHostDiscovery();
+
+            const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
+            assert.strictEqual(loadingContextCalls.at(-1)?.args[2], false);
+
+            const noAppHostContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
+            assert.strictEqual(noAppHostContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace discovery with only non-buildable AppHost candidates clears loading context', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
+            getAppHostsLineCallback = createLsLineCallback(options);
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify([
+                {
+                    relativePath: 'apps/Store/Store.csproj',
+                    path: '/workspace/apps/Store/Store.csproj',
+                    language: 'csharp',
+                    status: 'possibly-unbuildable',
+                },
+            ]));
+            await waitForAppHostDiscovery();
+
+            const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
+            assert.strictEqual(loadingContextCalls.at(-1)?.args[2], false);
+
+            const noAppHostContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
+            assert.strictEqual(noAppHostContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace discovery with no buildable AppHosts clears stale running state', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        const candidates = [
+            {
+                path: '/workspace/apps/Store/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            },
+        ];
+        const discoveryChanges = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: discoveryChanges.event,
+            discover: async () => candidates,
+            dispose: () => { },
+        };
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => psOptions !== undefined, 'ps watch did not start');
+
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                    appHostPid: 125881,
+                },
+            ]));
+            assert.strictEqual(repository.appHosts.length, 1);
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+
+            candidates.splice(0, candidates.length, {
+                path: '/workspace/apps/Store/Store.csproj',
+                language: 'csharp',
+                status: 'possibly-unbuildable',
+            });
+            discoveryChanges.fire(workspaceFolder);
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(repository.appHosts.length, 0);
+            assert.strictEqual(repository.workspaceAppHost, undefined);
+            const noAppHostContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noAppHosts');
+            assert.strictEqual(noAppHostContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            discoveryChanges.dispose();
+            executeCommandStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace ps failure clears loading context and shows error welcome', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {
+            getAppHostsLineCallback = createLsLineCallback(options);
+            return new TestChildProcess();
+        });
+        spawnStub.onSecondCall().returns(new TestChildProcess());
+        spawnStub.onThirdCall().returns(new TestChildProcess());
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: null,
+                all_project_file_candidates: [
+                    '/workspace/apps/Store/AppHost.csproj',
+                    '/workspace/samples/Store/AppHost.csproj',
+                ],
+                app_host_candidates: [
+                    {
+                        relativePath: 'apps/Store/AppHost.csproj',
+                        path: '/workspace/apps/Store/AppHost.csproj',
+                        language: 'csharp',
+                        status: 'buildable',
+                    },
+                    {
+                        relativePath: 'samples/Store/AppHost.csproj',
+                        path: '/workspace/samples/Store/AppHost.csproj',
+                        language: 'csharp',
+                        status: 'buildable',
+                    },
+                ],
+            }));
+            await waitForAppHostDiscovery();
+
+            const psFollowOptions = spawnStub.secondCall.args[3];
+            psFollowOptions.exitCallback(1);
+            await waitForAppHostDiscovery();
+
+            const psFallbackOptions = spawnStub.thirdCall.args[3];
+            psFallbackOptions.stderrCallback('ps failed');
+            psFallbackOptions.exitCallback(1);
+
+            const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
+            assert.strictEqual(loadingContextCalls.at(-1)?.args[2], false);
+
+            const errorContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
+            assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace ps CLI path failure clears loading context and shows error welcome', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => [
+                {
+                    path: '/workspace/apps/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                },
+                {
+                    path: '/workspace/samples/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                },
+            ],
+        };
+        getCliPathStub.rejects(new Error('CLI missing'));
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+
+            const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
+            assert.strictEqual(loadingContextCalls.at(-1)?.args[2], false);
+
+            const errorContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
+            assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('workspace AppHost discovery failure clears loading context and shows error welcome', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: async () => {
+                throw new Error('aspire ls failed');
+            },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+
+            const loadingContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.loading');
+            assert.strictEqual(loadingContextCalls.at(-1)?.args[2], false);
+
+            const errorContextCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.fetchAppHostsError');
+            assert.strictEqual(errorContextCalls.at(-1)?.args[2], true);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
             workspaceFoldersStub.restore();
         }
     });
