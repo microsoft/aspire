@@ -9,8 +9,7 @@ import process from 'node:process';
 
 const DefaultNpmRegistry = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/';
 // Yarn 1.x `packageManager` strings can carry an integrity suffix when written
-// by `corepack use yarn@<v>` (the workflow CONTRIBUTING.MD points contributors
-// at to update the pin), producing values like
+// by `corepack use yarn@<v>` or similar package-manager tooling, producing values like
 //   "yarn@1.22.22+sha512.f7062e6a5ee1f3aa…".
 // The suffix is optional but its presence must not break us. Match an optional
 // `+<token>` suffix and ignore it; only the version is needed to seed the cache.
@@ -141,8 +140,8 @@ function getCorepackHome() {
     return process.env.COREPACK_HOME;
   }
 
-  // build.sh / build.ps1 / the GitHub Actions workflow / the AzDO pipelines all
-  // set COREPACK_HOME explicitly to a build-scoped directory. This fallback
+  // The GitHub Actions workflow and AzDO pipelines set COREPACK_HOME explicitly
+  // to a build-scoped directory. This fallback
   // exists only for ad-hoc invocations of this script (e.g. local debugging,
   // running `node ./scripts/prepareCorepackYarn.mjs` directly). It mirrors
   // Corepack 0.34.x's own cache-path resolution so we seed the directory

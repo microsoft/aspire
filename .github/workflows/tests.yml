@@ -370,8 +370,8 @@ jobs:
       - name: Validate lockfile registries
         # Allowlist scoped to lines starting with "resolved" (the only lines in
         # yarn.lock that carry a tarball URL — `npm:` aliases don't).
-        # CONTRIBUTING.MD asks contributors to regenerate yarn.lock through the
-        # internal dotnet-public-npm feed; an allowlist catches drift to any
+        # extension/CONTRIBUTING.md documents the internal dotnet-public-npm feed
+        # requirement; an allowlist catches drift to any
         # other public mirror (npmmirror.com, jsr.io, github.com tarballs, ...)
         # rather than only npmjs.org and yarnpkg.com.
         run: |
@@ -398,8 +398,8 @@ jobs:
     # through node.exe, POSIX tar) are only exercised on contributor machines
     # and never on a fresh CI image. extension_tests_win covers the Windows
     # paths; this job covers Linux/macOS. macOS is omitted because the only
-    # platform-specific branch beyond Linux is the cache path, which is
-    # explicitly overridden via COREPACK_HOME in the build entrypoints.
+    # platform-specific branch beyond Linux is the cache path, which this job
+    # explicitly overrides via COREPACK_HOME.
     runs-on: ubuntu-latest
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -434,8 +434,8 @@ jobs:
           corepack enable
       - name: Seed Corepack Yarn cache via prepareCorepackYarn.mjs
         # Exercises the script's non-Windows branches against a clean cache
-        # directory. Failing here means a contributor on Linux/macOS following
-        # CONTRIBUTING.MD would also be broken.
+        # directory. Failing here means the CI/AzDO Corepack bootstrap path would
+        # also be broken.
         run: node ./scripts/prepareCorepackYarn.mjs
       - name: Validate lockfile registries
         # Mirror of the same allowlist guard in extension_tests_win so this

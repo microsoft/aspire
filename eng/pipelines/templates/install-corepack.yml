@@ -14,10 +14,9 @@ steps:
       targetType: 'inline'
       script: |
         # Pinned Corepack shim version, sourced from
-        # extension/scripts/corepack-version.txt so this script,
-        # extension/build.sh, extension/build.ps1, the GitHub Actions
-        # workflow, and every AzDO pipeline that references this template
-        # stay in sync. The Yarn release itself is pinned in
+        # extension/scripts/corepack-version.txt so this template, the GitHub
+        # Actions workflow, and every AzDO pipeline that references this
+        # template stay in sync. The Yarn release itself is pinned in
         # extension/package.json via the `packageManager` field.
         $CorepackVersion = (Get-Content -Raw -Path '$(Build.SourcesDirectory)/extension/scripts/corepack-version.txt').Trim()
         $corepackHome = Join-Path '$(Agent.TempDirectory)' 'corepack'
