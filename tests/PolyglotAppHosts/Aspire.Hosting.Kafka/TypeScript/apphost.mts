@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost — Kafka integration validation
 // Exercises all [AspireExport] methods for Aspire.Hosting.Kafka
 
-import { createBuilder } from './.modules/aspire.mjs';
+import { createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 

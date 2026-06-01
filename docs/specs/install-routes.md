@@ -29,13 +29,13 @@ portable installs, the Aspire home used for hives and local state.
 
 - `winget` / `brew` / `dotnet-tool` → `binaryDir` (flat: bundle extracts beside the binary).
 - `script` / `pr` / `localhive` → `Path.GetDirectoryName(binaryDir)` (bin layout: bundle extracts as a sibling of `bin/`).
-- missing, unreadable, malformed, or unknown `source` sidecar → parent-of-binary, matching the legacy heuristic for pre-sidecar installs.
+- missing, unreadable, malformed, or unknown `source` sidecar → default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`).
 
 `CliPathHelper.GetAspireHomeDirectory` maps sidecar-owned portable installs to
 their install prefix so hives, caches, logs, and SDK state stay with the
 install. `script` and `localhive` use the parent of `bin`; `pr` uses the parent
 of `dogfood/pr-<N>/bin`. Package-manager installs and sidecar-less binaries keep
-the default user-profile Aspire home.
+the default Aspire home (`ASPIRE_HOME` when set, otherwise `$HOME/.aspire`).
 
 ## Per-route authorship
 
@@ -67,7 +67,7 @@ Two mechanical checks guard the contract:
 
 ## Reader-side invariants (runtime)
 
-`BundleService.ComputeDefaultExtractDir` is the single point of truth for layout selection. It performs no path-shape detection: layout is a pure function of the sidecar `source` value (or the fallback when the sidecar is absent, unreadable, malformed, or has an unknown `source`). Unknown `source` values fall back to parent-of-binary for typed bundle layout handling. Coverage lives in `tests/Aspire.Cli.Tests/Bundles/BundleServiceCrossRouteExtractionTests.cs` as a theory over (source × prefix-shape) rows, including the cross-route case where a `brew` sidecar lands under a script-style prefix.
+`BundleService.ComputeDefaultExtractDir` is the single point of truth for layout selection. It performs no path-shape detection: layout is a pure function of the sidecar `source` value (or the fallback when the sidecar is absent, unreadable, malformed, or has an unknown `source`). Unknown `source` values fall back to the default Aspire home so unrecognized installs do not try to write next to the CLI binary. Coverage lives in `tests/Aspire.Cli.Tests/Bundles/BundleServiceCrossRouteExtractionTests.cs` as a theory over (source × prefix-shape) rows, including the cross-route case where a `brew` sidecar lands under a script-style prefix.
 
 `CliPathHelper.GetAspireHomeDirectory` is the single point of truth for Aspire-home selection. It reads the same sidecar but only changes home for Aspire-owned portable routes (`script`, `pr`, and `localhive`); package-manager routes use the user-profile home because their install roots are package-manager-owned. Coverage lives in `tests/Aspire.Cli.Tests/Utils/CliPathHelperTests.cs`.
 

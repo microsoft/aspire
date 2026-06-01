@@ -1,6 +1,6 @@
 # BlazorHosted
 
-This sample demonstrates how to integrate a **hosted Blazor WebAssembly** application (Blazor Web App with Interactive WebAssembly render mode) with .NET Aspire, enabling full observability (logs, traces) and service discovery for both the server and the WASM client.
+This sample demonstrates how to integrate a **hosted Blazor WebAssembly** application (Blazor Web App with Interactive WebAssembly render mode) with Aspire, enabling full observability (logs, traces) and service discovery for both the server and the WASM client.
 
 ## Overview
 

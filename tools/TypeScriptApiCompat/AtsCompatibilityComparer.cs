@@ -256,7 +256,7 @@ internal static class AtsCompatibilityComparer
                 continue;
             }
 
-            if (!string.Equals(baselineParameter.TypeId, currentParameter.TypeId, StringComparison.Ordinal))
+            if (!IsInputTypeCompatible(baselineParameter.TypeId, currentParameter.TypeId))
             {
                 diagnostics.Add(new ApiCompatDiagnostic(
                     "capability-parameter-type-changed",
@@ -316,6 +316,22 @@ internal static class AtsCompatibilityComparer
                 $"Capability '{baselineCapability.CapabilityId}' parameter order changed from '{string.Join(", ", baselineSharedOrder)}' to '{string.Join(", ", currentParameterOrder)}'."));
         }
     }
+
+    private static bool IsInputTypeCompatible(string baselineTypeId, string currentTypeId)
+    {
+        if (string.Equals(baselineTypeId, currentTypeId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        var currentTypes = SplitUnionType(currentTypeId);
+        return SplitUnionType(baselineTypeId).All(currentTypes.Contains);
+    }
+
+    private static IReadOnlySet<string> SplitUnionType(string typeId)
+        => typeId
+            .Split('|', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .ToHashSet(StringComparer.Ordinal);
 
     private static void CompareRemoved(
         string packageName,

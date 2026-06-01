@@ -195,17 +195,16 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
-    public void AddProject_AddsDefaultContainerRegistryInRunMode()
+    public void AddProject_DoesNotAddDefaultContainerRegistryInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var project = builder.AddFoundry("myAIFoundry")
             .AddProject("my-project");
 
-        var registry = Assert.Single(builder.Resources.OfType<AzureContainerRegistryResource>());
-
-        Assert.Equal("my-project-acr", registry.Name);
-        Assert.Same(registry, project.Resource.ContainerRegistry);
+        Assert.DoesNotContain(builder.Resources, r => r.Name == "my-project-acr");
+        Assert.Empty(builder.Resources.OfType<AzureContainerRegistryResource>());
+        Assert.Null(project.Resource.ContainerRegistry);
     }
 
     [Fact]
@@ -280,7 +279,7 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
-    public async Task PublishAsHostedAgent_ResolvesExternalContainerAppReference()
+    public async Task WithComputeEnvironment_ResolvesExternalContainerAppReference()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -295,7 +294,7 @@ public class FoundryExtensionsTests
         var advisorAgent = builder.AddProject<Project>("advisoragent", launchProfileName: null)
             .WithReference(weatherAgent)
             .WaitFor(weatherAgent)
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent(project);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -305,6 +304,7 @@ public class FoundryExtensionsTests
         var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
         environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
         environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -318,7 +318,7 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
-    public async Task PublishAsHostedAgent_DoesNotSetReservedFoundryProjectEndpointEnvironmentVariable()
+    public async Task WithComputeEnvironment_DoesNotSetReservedFoundryProjectEndpointEnvironmentVariable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -326,13 +326,14 @@ public class FoundryExtensionsTests
             .AddProject("my-project");
 
         var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent(project);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var hostedAgent = Assert.Single(model.Resources.OfType<AzureHostedAgentResource>());
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -346,7 +347,7 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
-    public async Task PublishAsHostedAgent_ResolvesReferenceExpressionEnvironmentVariable()
+    public async Task WithComputeEnvironment_ResolvesReferenceExpressionEnvironmentVariable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -363,7 +364,7 @@ public class FoundryExtensionsTests
             {
                 context.EnvironmentVariables["WEATHER_HEALTH_URL"] = ReferenceExpression.Create($"{weatherAgent.GetEndpoint("http")}/health");
             })
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent(project);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -373,6 +374,7 @@ public class FoundryExtensionsTests
         var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
         environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
         environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -386,7 +388,7 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
-    public async Task PublishAsHostedAgent_ResolvesEndpointReferenceExpressionEnvironmentVariable()
+    public async Task WithComputeEnvironment_ResolvesEndpointReferenceExpressionEnvironmentVariable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -403,7 +405,7 @@ public class FoundryExtensionsTests
             {
                 context.EnvironmentVariables["WEATHER_HOST_AND_PORT"] = weatherAgent.GetEndpoint("http").Property(EndpointProperty.HostAndPort);
             })
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent(project);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -413,6 +415,7 @@ public class FoundryExtensionsTests
         var environment = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
         environment.Outputs["AZURE_CONTAINER_APPS_ENVIRONMENT_DEFAULT_DOMAIN"] = "example.azurecontainerapps.io";
         environment.ProvisioningTaskCompletionSource?.TrySetResult();
+        SetFoundryProjectOutputs(project.Resource);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var environmentVariables = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
@@ -426,7 +429,7 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
-    public async Task PublishAsHostedAgent_ThrowsForInternalContainerAppReference()
+    public async Task WithComputeEnvironment_ThrowsForInternalContainerAppReference()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
@@ -442,7 +445,7 @@ public class FoundryExtensionsTests
             .WithReference(weatherAgent)
             .WaitFor(weatherAgent);
 
-        advisorAgent.PublishAsHostedAgent(project);
+        advisorAgent.AsHostedAgent(project);
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -463,10 +466,19 @@ public class FoundryExtensionsTests
         Assert.Contains("internal", ex.Message);
     }
 
+    private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
+    {
+        // These tests call the deployment-time environment resolver directly. In a real publish,
+        // provisioning populates the Foundry project Bicep outputs before references are resolved.
+        // Seed the outputs here so BicepOutputReference.GetValueAsync does not wait for provisioning.
+        project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
+        project.ProvisioningTaskCompletionSource?.TrySetResult();
+    }
+
     private sealed class Project : IProjectMetadata
     {
         public string ProjectPath => "project";
     }
 
 }
-

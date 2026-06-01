@@ -1,7 +1,7 @@
 // Rock Paper Scissors Arena — Aspire TypeScript AppHost
 // A polyglot game: C# Game Master, Python & Node.js players, React frontend, PostgreSQL
 
-import { createBuilder, type ExecuteCommandContext, type ExecuteCommandResult } from './.modules/aspire.mjs';
+import { createBuilder, type ExecuteCommandContext, type ExecuteCommandResult } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 

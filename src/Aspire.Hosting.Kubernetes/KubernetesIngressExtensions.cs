@@ -22,8 +22,8 @@ public static class KubernetesIngressExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
-    /// After creating the ingress, configure routes using
-    /// <see cref="WithRoute(IResourceBuilder{KubernetesIngressResource}, string, EndpointReference, IngressPathType)"/>
+    /// After creating the ingress, configure path-based rules using
+    /// <see cref="WithPath(IResourceBuilder{KubernetesIngressResource}, string, EndpointReference, IngressPathType)"/>
     /// and optionally set an ingress class with <see cref="WithIngressClass(IResourceBuilder{KubernetesIngressResource}, string)"/>.
     /// </para>
     /// </remarks>
@@ -35,7 +35,7 @@ public static class KubernetesIngressExtensions
     ///     .WithIngressClass("nginx");
     ///
     /// var api = builder.AddProject&lt;MyApi&gt;("api");
-    /// ingress.WithRoute("/api", api.GetEndpoint("http"));
+    /// ingress.WithPath("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
     [AspireExport]
@@ -98,7 +98,7 @@ public static class KubernetesIngressExtensions
     }
 
     /// <summary>
-    /// Adds a path-based routing rule to the ingress. The rule matches all hosts and routes
+    /// Adds a path-based rule to the ingress. The rule matches all hosts and forwards
     /// traffic matching the specified path to the given endpoint's backing Kubernetes service.
     /// </summary>
     /// <param name="builder">The ingress resource builder.</param>
@@ -110,11 +110,11 @@ public static class KubernetesIngressExtensions
     /// <example>
     /// <code>
     /// var api = builder.AddProject&lt;MyApi&gt;("api");
-    /// ingress.WithRoute("/api", api.GetEndpoint("http"));
+    /// ingress.WithPath("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
-    [AspireExport("withIngressPathRoute")]
-    public static IResourceBuilder<KubernetesIngressResource> WithRoute(
+    [AspireExport("withIngressPath")]
+    public static IResourceBuilder<KubernetesIngressResource> WithPath(
         this IResourceBuilder<KubernetesIngressResource> builder,
         string path,
         EndpointReference endpoint,
@@ -129,7 +129,7 @@ public static class KubernetesIngressExtensions
             throw new ArgumentException("Path must start with '/'.", nameof(path));
         }
 
-        builder.Resource.Routes.Add(new IngressRouteConfig(
+        builder.Resource.Paths.Add(new IngressPathConfig(
             Host: null,
             Path: path,
             PathType: pathType,
@@ -139,8 +139,8 @@ public static class KubernetesIngressExtensions
     }
 
     /// <summary>
-    /// Adds a host-and-path-based routing rule to the ingress. The rule matches traffic for
-    /// the specified host and path, routing it to the given endpoint's backing Kubernetes service.
+    /// Adds a host-scoped path rule to the ingress. The rule matches traffic for the
+    /// specified host and path, forwarding it to the given endpoint's backing Kubernetes service.
     /// </summary>
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="host">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
@@ -152,11 +152,11 @@ public static class KubernetesIngressExtensions
     /// <example>
     /// <code>
     /// var api = builder.AddProject&lt;MyApi&gt;("api");
-    /// ingress.WithRoute("api.example.com", "/", api.GetEndpoint("http"));
+    /// ingress.WithPath("api.example.com", "/", api.GetEndpoint("http"));
     /// </code>
     /// </example>
-    [AspireExport("withIngressHostRoute")]
-    public static IResourceBuilder<KubernetesIngressResource> WithRoute(
+    [AspireExport("withIngressHostAndPath")]
+    public static IResourceBuilder<KubernetesIngressResource> WithPath(
         this IResourceBuilder<KubernetesIngressResource> builder,
         string host,
         string path,
@@ -173,7 +173,7 @@ public static class KubernetesIngressExtensions
             throw new ArgumentException("Path must start with '/'.", nameof(path));
         }
 
-        builder.Resource.Routes.Add(new IngressRouteConfig(
+        builder.Resource.Paths.Add(new IngressPathConfig(
             Host: host,
             Path: path,
             PathType: pathType,

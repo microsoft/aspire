@@ -453,8 +453,8 @@ if [[ $SKIP_CLI -eq 0 ]]; then
     fi
     mkdir -p "$CLI_BIN_DIR"
 
-    # Copy all files from the publish directory (CLI and its dependencies)
-    if ! cp -f "$CLI_PUBLISH_DIR"/* "$CLI_BIN_DIR"/; then
+    # Copy all files and directories from the publish directory (CLI and its dependencies).
+    if ! cp -Rf "$CLI_PUBLISH_DIR"/. "$CLI_BIN_DIR"/; then
       error "Failed to copy CLI files from $CLI_PUBLISH_DIR to $CLI_BIN_DIR"
       exit 1
     fi

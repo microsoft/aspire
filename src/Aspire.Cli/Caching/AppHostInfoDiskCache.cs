@@ -45,9 +45,9 @@ namespace Aspire.Cli.Caching;
 ///
 /// The cache only stores metadata from the AppHost inspection target, not build outputs or runtime
 /// state, so a stale hit can only reuse stale answers such as the AppHost marker, Aspire.Hosting
-/// version, CLI bundle opt-in, or user-secrets ID. The known stale-hit cases are the inputs MSBuild
-/// can see but this pre-MSBuild fingerprint cannot reliably discover without doing another
-/// evaluation:
+/// version, CLI bundle opt-in, user-secrets ID, or AppHost launch metadata. The known stale-hit
+/// cases are the inputs MSBuild can see but this pre-MSBuild fingerprint cannot reliably discover
+/// without doing another evaluation:
 /// <list type="bullet">
 ///   <item>Edits to <c>.targets</c> or <c>.props</c> files imported from OUTSIDE the project
 ///         directory tree (e.g. <c>&lt;Import Project="..\..\shared.targets"/&gt;</c>).</item>
@@ -63,8 +63,7 @@ namespace Aspire.Cli.Caching;
 /// </remarks>
 internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
 {
-    // Bump this when the cached property set changes so old entries are ignored.
-    // v1 caches: IsAspireHost, AspireHostingVersion, AspireUseCliBundle, UserSecretsId.
+    // Bump this after shipping if the cached property set changes so old entries are ignored.
     private const string SchemaVersion = "v1";
 
     // Keep AppHost inspection entries isolated from other Aspire caches so `aspire cache clear`
@@ -126,6 +125,16 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
             {
                 // Schema mismatch — treat as miss, the new value will overwrite.
                 _logger.LogTrace("AppHost info cache schema mismatch for {Project}", projectFile.FullName);
+                return null;
+            }
+
+            if (entry.ExitCode == 0 && entry.IsAspireHost && string.IsNullOrWhiteSpace(entry.RunCommand))
+            {
+                // Treat entries that successfully inspected an AppHost but are missing RunCommand
+                // as schema-incompatible misses, so the direct launch path can refresh the SDK run
+                // command instead of permanently falling back. The schema marker stays stable
+                // because adding RunCommand is backward compatible for non-AppHost entries.
+                _logger.LogTrace("AppHost info cache entry for {Project} is missing RunCommand", projectFile.FullName);
                 return null;
             }
 
@@ -346,4 +355,22 @@ internal sealed record AppHostInfoCacheEntry
 
     [JsonPropertyName("userSecretsId")]
     public string? UserSecretsId { get; init; }
+
+    [JsonPropertyName("runCommand")]
+    public string? RunCommand { get; init; }
+
+    [JsonPropertyName("targetPath")]
+    public string? TargetPath { get; init; }
+
+    [JsonPropertyName("runWorkingDirectory")]
+    public string? RunWorkingDirectory { get; init; }
+
+    [JsonPropertyName("runArguments")]
+    public string? RunArguments { get; init; }
+
+    [JsonPropertyName("targetFramework")]
+    public string? TargetFramework { get; init; }
+
+    [JsonPropertyName("targetFrameworks")]
+    public string? TargetFrameworks { get; init; }
 }

@@ -11,6 +11,7 @@ public sealed class GetLogsContext
     public required int StartIndex { get; init; }
     public required int Count { get; init; }
     public required List<TelemetryFilter> Filters { get; init; }
+    public string[]? TextFragments { get; init; }
 
     public static GetLogsContext ForResourceKey(ResourceKey resourceKey) => new()
     {

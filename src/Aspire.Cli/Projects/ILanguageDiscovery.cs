@@ -47,9 +47,16 @@ internal sealed record LanguageInfo(
     bool IsExperimental = false)
 {
     /// <summary>
-    /// The default folder name where generated code is placed for guest languages.
+    /// The default folder path where generated code is placed for guest languages.
     /// </summary>
-    internal const string GeneratedFolderName = ".modules";
+    internal static string GeneratedFolderName { get; } = Path.Combine(".aspire", "modules");
+
+    /// <summary>
+    /// The legacy folder path where generated code was placed prior to consolidating
+    /// generated artifacts under <c>.aspire/</c>. Used by the legacy TypeScript
+    /// <c>apphost.ts</c> compatibility path which still imports from <c>./.modules/</c>.
+    /// </summary>
+    internal const string LegacyGeneratedFolderName = ".modules";
 
     /// <summary>
     /// Maximum directory depth used when scanning the file system for language

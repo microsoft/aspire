@@ -46,7 +46,8 @@ internal static class AuxiliaryBackchannelCapabilities
     public const string V2 = "aux.v2";
 
     /// <summary>
-    /// Version 3 capabilities: Batched console log streaming and AppHost startup readiness wait.
+    /// Version 3 capabilities: Batched console log streaming, AppHost startup readiness wait,
+    /// and JSON-valued resource properties when requested by the client.
     /// </summary>
     public const string V3 = "aux.v3";
 }
@@ -240,11 +241,17 @@ internal sealed class GetResourcesRequest : BackchannelRequest
     /// </summary>
     public string? Filter { get; init; }
 
+    /// <summary>
+    /// Gets the auxiliary backchannel capabilities supported by the client.
+    /// </summary>
+    public string[] ClientCapabilities { get; init; } = [];
+
     /// <inheritdoc />
     public override GetResourcesRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
     {
         TraceContext = traceContext,
-        Filter = Filter
+        Filter = Filter,
+        ClientCapabilities = ClientCapabilities
     };
 }
 
@@ -269,11 +276,17 @@ internal sealed class WatchResourcesRequest : BackchannelRequest
     /// </summary>
     public string? Filter { get; init; }
 
+    /// <summary>
+    /// Gets the auxiliary backchannel capabilities supported by the client.
+    /// </summary>
+    public string[] ClientCapabilities { get; init; } = [];
+
     /// <inheritdoc />
     public override WatchResourcesRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
     {
         TraceContext = traceContext,
-        Filter = Filter
+        Filter = Filter,
+        ClientCapabilities = ClientCapabilities
     };
 }
 
@@ -435,6 +448,11 @@ internal sealed class ExecuteResourceCommandRequest : BackchannelRequest
     /// </summary>
     public bool NonInteractive { get; init; } = true;
 
+    /// <summary>
+    /// Gets a value indicating whether the response should include command argument input metadata after dynamic loading.
+    /// </summary>
+    public bool ReturnArgumentInputs { get; init; }
+
     /// <inheritdoc />
     public override ExecuteResourceCommandRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
     {
@@ -443,7 +461,8 @@ internal sealed class ExecuteResourceCommandRequest : BackchannelRequest
         CommandName = CommandName,
         Arguments = Arguments,
         ValidateOnly = ValidateOnly,
-        NonInteractive = NonInteractive
+        NonInteractive = NonInteractive,
+        ReturnArgumentInputs = ReturnArgumentInputs
     };
 }
 
@@ -467,6 +486,11 @@ internal sealed class ExecuteResourceCommandOptions
     /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
     /// </summary>
     public bool NonInteractive { get; init; } = true;
+
+    /// <summary>
+    /// Gets a value indicating whether the response should include command argument input metadata after dynamic loading.
+    /// </summary>
+    public bool ReturnArgumentInputs { get; init; }
 }
 
 /// <summary>
@@ -504,6 +528,12 @@ internal sealed class ExecuteResourceCommandResponse
     /// Gets validation errors for submitted command arguments.
     /// </summary>
     public ResourceCommandArgumentValidationError[] ValidationErrors { get; init; } = [];
+
+    /// <summary>
+    /// Gets command argument input metadata after dynamic loading has run.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceSnapshotCommandArgument[]? ArgumentInputs { get; init; }
 }
 
 /// <summary>
@@ -1204,6 +1234,30 @@ internal sealed class ResourceSnapshotCommandArgument
     /// Gets the maximum length for text inputs.
     /// </summary>
     public int? MaxLength { get; init; }
+
+    /// <summary>
+    /// Gets metadata describing dynamic input loading behavior.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceSnapshotCommandArgumentDynamicLoading? DynamicLoading { get; init; }
+}
+
+/// <summary>
+/// Represents dynamic loading metadata for a resource command argument.
+/// </summary>
+internal sealed class ResourceSnapshotCommandArgumentDynamicLoading
+{
+    /// <summary>
+    /// Gets a value indicating whether the input should always load when prompting starts.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AlwaysLoadOnStart { get; init; }
+
+    /// <summary>
+    /// Gets the input names that trigger reloading when their values change.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? DependsOnInputs { get; init; }
 }
 
 /// <summary>
@@ -1435,3 +1489,4 @@ internal sealed class ResourceLogBatch
     /// </summary>
     public required ResourceLogLine[] Lines { get; init; }
 }
+

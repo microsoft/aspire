@@ -26,6 +26,7 @@ internal sealed class TestInteractionService : IInteractionService
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Action<string>? ShowStatusCallback { get; set; }
     public Action<string>? ShowDynamicStatusCallback { get; set; }
+    public Action<KnownEmoji, string, ConsoleOutput?>? DisplayMessageCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
     public string? LastVersionUpdateCommand { get; private set; }
 
@@ -179,7 +180,7 @@ internal sealed class TestInteractionService : IInteractionService
         return Task.FromResult(choices.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull
     {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
@@ -227,6 +228,8 @@ internal sealed class TestInteractionService : IInteractionService
         {
             DisplayedMessages.Add((emoji, message, consoleOverride));
         }
+
+        DisplayMessageCallback?.Invoke(emoji, message, consoleOverride);
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)

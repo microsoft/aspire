@@ -12,6 +12,7 @@ import { codeLensCommand } from '../loc/strings';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { AppHostLaunchService } from '../services/AppHostLaunchService';
 // Import parsers so they self-register before the provider consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
@@ -123,7 +124,7 @@ function createHarness(opts: {
     const subs: vscode.Disposable[] = [];
     const terminalProvider = new AspireTerminalProvider(subs);
     const repository = new AppHostDataRepository(terminalProvider);
-    const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider);
+    const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider, new AppHostLaunchService());
 
     const appHostsStub = sinon.stub(repository, 'appHosts').get(() => opts.appHosts ?? []);
     const workspaceResourcesStub = sinon.stub(repository, 'workspaceResources').get(() => opts.workspaceResources ?? []);
@@ -227,6 +228,28 @@ suite('AspireCodeLensProvider builder lens', () => {
         harness.dispose();
     });
 
+    test('emits builder lenses when Windows AppHost path casing differs from document path', async () => {
+        const platformStub = sinon.stub(process, 'platform').value('win32');
+        const docPath = p('repo', 'AppHost', 'AppHost.cs');
+        const hostPath = p('repo', 'apphost', 'apphost.csproj');
+        const harness = createHarness({ appHosts: [makeAppHost(hostPath)] });
+
+        try {
+            const doc = createMockDocument(APP_HOST_DOC, docPath);
+            const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+            const builderLenses = lenses.filter(l =>
+                l.command?.command === 'aspire-vscode.codeLensOpenDashboard' ||
+                l.command?.command === 'aspire-vscode.codeLensViewAppHostLogs'
+            );
+
+            assert.strictEqual(builderLenses.length, 2);
+            assert.deepStrictEqual(builderLenses[0].command?.arguments, [hostPath]);
+        } finally {
+            harness.dispose();
+            platformStub.restore();
+        }
+    });
+
     test('does not emit builder lenses when no AppHost is running', async () => {
         const harness = createHarness({});
 
@@ -252,6 +275,46 @@ suite('AspireCodeLensProvider builder lens', () => {
         );
 
         assert.strictEqual(builderLenses.length, 0);
+        harness.dispose();
+    });
+
+    test('does not emit resource lenses from a different running AppHost', async () => {
+        const runningHostPath = p('repo', 'RunningAppHost', 'AppHost.csproj');
+        const stoppedHostPath = p('repo', 'StoppedAppHost', 'AppHost.cs');
+        const runningAppHost = {
+            ...makeAppHost(runningHostPath),
+            resources: [makeResource('cache')],
+        };
+        const harness = createHarness({ appHosts: [runningAppHost] });
+
+        const doc = createMockDocument(APP_HOST_DOC, stoppedHostPath);
+        const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const resourceLenses = lenses.filter(l =>
+            l.command?.command !== 'aspire-vscode.codeLensOpenDashboard'
+            && l.command?.command !== 'aspire-vscode.codeLensViewAppHostLogs'
+            && l.command?.command !== 'aspire-vscode.codeLensDebugPipelineStep'
+        );
+
+        assert.strictEqual(resourceLenses.length, 0);
+        harness.dispose();
+    });
+
+    test('resource reveal lens includes the matching AppHost path', async () => {
+        const firstHostPath = p('repo', 'FirstAppHost', 'AppHost.csproj');
+        const secondHostPath = p('repo', 'SecondAppHost', 'AppHost.csproj');
+        const secondDocPath = p('repo', 'SecondAppHost', 'AppHost.cs');
+        const harness = createHarness({
+            appHosts: [
+                { ...makeAppHost(firstHostPath), resources: [makeResource('cache', { name: 'cache-a' })] },
+                { ...makeAppHost(secondHostPath), resources: [makeResource('cache', { name: 'cache-b' })] },
+            ],
+        });
+
+        const doc = createMockDocument(APP_HOST_DOC, secondDocPath);
+        const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const revealLens = lenses.find(lens => lens.command?.command === 'aspire-vscode.codeLensRevealResource');
+
+        assert.deepStrictEqual(revealLens?.command?.arguments, ['cache', secondHostPath]);
         harness.dispose();
     });
 

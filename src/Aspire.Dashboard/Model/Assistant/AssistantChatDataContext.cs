@@ -173,8 +173,7 @@ public sealed class AssistantChatDataContext
             ResourceKey = resourceKey,
             StartIndex = 0,
             Count = int.MaxValue,
-            Filters = [],
-            FilterText = string.Empty
+            Filters = []
         });
 
         var spans = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items, _outgoingPeerResolvers.ToArray()).ResourceSpans;

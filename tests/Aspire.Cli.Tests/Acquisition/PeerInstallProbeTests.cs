@@ -42,10 +42,29 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
         return Assert.IsType<PeerProbeResult.Ok>(result);
     }
 
+    // Construct a probe with a much wider timeout than production's 5s default.
+    //
+    // These positive-path tests assert how the probe interprets a successful
+    // peer's output, not the timeout behavior — but the FakePeerScript helper
+    // on Windows shells out to cmd.exe (and powershell.exe in the stderr
+    // variant), which under heavy CI load (saturated CPU, slow disk) can take
+    // several seconds just to start. With the production 5s timeout we
+    // intermittently see the probe synthesize
+    // `Failed: "Peer probe timed out after 5.0s."` before the fake peer even
+    // produces stdout, even though the peer would complete instantly given a
+    // bit more wallclock.
+    //
+    // The timeout path itself is covered by ProbeAsync_PeerHangs_TimesOutAndReturnsFailed
+    // and ProbeAsync_CallerCancels_KillsSpawnedProcess, so widening the
+    // budget here removes the CI flake without losing coverage of the 5s
+    // production behavior.
+    private PeerInstallProbe CreateProbeWithGenerousTimeout()
+        => new(TimeSpan.FromSeconds(30), ProbeLogger);
+
     [Fact]
     public async Task ProbeAsync_BinaryNotFound_ReturnsFailed()
     {
-        var probe = new PeerInstallProbe(ProbeLogger);
+        var probe = CreateProbeWithGenerousTimeout();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var missing = Path.Combine(workspace.WorkspaceRoot.FullName, "does-not-exist");
 
@@ -66,7 +85,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
         // default when `--format` is omitted.
         using var fakePeer = FakePeerScript.BuildArgvRecorder(outputHelper);
 
-        var probe = new PeerInstallProbe(ProbeLogger);
+        var probe = CreateProbeWithGenerousTimeout();
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         AssertProbeOk(result);
@@ -99,7 +118,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
                     """,
             exitCode: 0);
 
-        var probe = new PeerInstallProbe(ProbeLogger);
+        var probe = CreateProbeWithGenerousTimeout();
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         var ok = AssertProbeOk(result);
@@ -125,7 +144,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
                     """,
             exitCode: 0);
 
-        var probe = new PeerInstallProbe(ProbeLogger);
+        var probe = CreateProbeWithGenerousTimeout();
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         var ok = AssertProbeOk(result);
@@ -149,7 +168,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
                     """,
             exitCode: 0);
 
-        var probe = new PeerInstallProbe(ProbeLogger);
+        var probe = CreateProbeWithGenerousTimeout();
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         var ok = AssertProbeOk(result);
@@ -238,7 +257,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
             versionStdout: "13.4.0-pr.16817.g790d6fa3\n",
             versionExitCode: 0);
 
-        var probe = new PeerInstallProbe(ProbeLogger);
+        var probe = CreateProbeWithGenerousTimeout();
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         var ok = AssertProbeOk(result);
@@ -261,7 +280,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
             versionStdout: string.Empty,
             versionExitCode: 1);
 
-        var probe = new PeerInstallProbe(ProbeLogger);
+        var probe = CreateProbeWithGenerousTimeout();
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         var failed = Assert.IsType<PeerProbeResult.Failed>(result);
@@ -281,7 +300,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
             versionStdout: string.Empty,
             versionExitCode: 1);
 
-        var probe = new PeerInstallProbe(ProbeLogger);
+        var probe = CreateProbeWithGenerousTimeout();
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         Assert.IsType<PeerProbeResult.Failed>(result);
@@ -300,7 +319,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
             versionStdout: "9.0.0\n",
             versionExitCode: 0);
 
-        var probe = new PeerInstallProbe(ProbeLogger);
+        var probe = CreateProbeWithGenerousTimeout();
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         var ok = AssertProbeOk(result);
@@ -328,7 +347,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
             versionStdout: "9.0.0\n",
             versionExitCode: 0);
 
-        var probe = new PeerInstallProbe(ProbeLogger);
+        var probe = CreateProbeWithGenerousTimeout();
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         var ok = AssertProbeOk(result);
@@ -336,11 +355,12 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
     }
 
     [Fact]
-    public async Task ProbeAsync_PeerHangs_TimesOutAndKills()
+    public async Task ProbeAsync_PeerHangs_TimesOutAndReturnsFailed()
     {
         // Sleep significantly longer than the probe timeout we configure so
         // the timeout path is the one that completes the await.
-        using var fakePeer = FakePeerScript.BuildSleeper(outputHelper, sleepSeconds: 30);
+        var fakeSleep = TimeSpan.FromSeconds(30);
+        using var fakePeer = FakePeerScript.BuildSleeper(outputHelper, sleepSeconds: (int)fakeSleep.TotalSeconds);
 
         // Construct a probe with a deliberately tight timeout so the test
         // doesn't have to wait the production 5s budget.
@@ -351,8 +371,16 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
 
         var failed = Assert.IsType<PeerProbeResult.Failed>(result);
         Assert.Contains("timed out", failed.Reason, StringComparison.OrdinalIgnoreCase);
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5),
-            $"Expected probe to return within a few seconds after timing out; took {sw.Elapsed}.");
+        // The probe is configured with a 300ms timeout; the outer budget here
+        // is a sanity bound against a probe that ignores its configured
+        // timeout entirely (the bug class this test catches). Windows CI under
+        // saturated CPU / slow disk has been observed to take ~5s just for the
+        // fake-peer cmd.exe spawn + kill round-trip, so the budget needs to be
+        // well above 5s to avoid noise without losing the bound. The important
+        // invariant is that the probe returns through its timeout path well
+        // before the fake peer could exit on its own.
+        Assert.True(sw.Elapsed < fakeSleep / 2,
+            $"Expected probe to return before the fake peer could exit on its own; took {sw.Elapsed}.");
     }
 
     [Fact]
@@ -389,7 +417,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
         // Windows shells out to powershell.exe to emit raw stderr bytes — can
         // take several seconds just to start. These tests are about how the
         // probe formats a Failed result from real peer stderr/exit semantics,
-        // not about the timeout behavior (see ProbeAsync_PeerHangs_TimesOutAndKills
+        // not about the timeout behavior (see ProbeAsync_PeerHangs_TimesOutAndReturnsFailed
         // for that). A wider budget here removes the CI flake without changing
         // what's being tested.
         var probe = new PeerInstallProbe(TimeSpan.FromSeconds(30), ProbeLogger);

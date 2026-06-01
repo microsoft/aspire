@@ -49,8 +49,9 @@ public class AzureCognitiveServicesProjectResource :
                 Description = $"Prepares Microsoft Foundry project {name} for deployment.",
                 Action = context =>
                 {
-                    if (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() &&
-                        DefaultContainerRegistry is not null)
+                    if (DefaultContainerRegistry is not null &&
+                        (this.HasAnnotationOfType<ContainerRegistryReferenceAnnotation>() ||
+                         !this.HasAnnotationOfType<RequiresHostedAgentRegistryAnnotation>()))
                     {
                         context.Model.Resources.Remove(DefaultContainerRegistry);
                         DefaultContainerRegistry = null;
@@ -246,6 +247,13 @@ public class AzureCognitiveServicesProjectResource :
             return false;
         }
     }
+}
+
+/// <summary>
+/// Marks a Foundry project as needing container registry provisioning for hosted agent deployment.
+/// </summary>
+internal sealed class RequiresHostedAgentRegistryAnnotation : IResourceAnnotation
+{
 }
 
 /// <summary>

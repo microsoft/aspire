@@ -107,12 +107,30 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
             infra.Add(tags);
 
-            var identity = new UserAssignedIdentity($"{prefix}_mi")
-            {
-                Tags = tags
-            };
+            UserAssignedIdentity? newIdentity = null;
+            BicepValue<string> managedIdentityIdOutputValue;
+            BicepValue<string> managedIdentityClientIdOutputValue;
 
-            infra.Add(identity);
+            if (resource.TryGetLastAnnotation<AzureAppServiceEnvironmentAcrPullIdentityAnnotation>(out var identityAnnotation))
+            {
+                // The user has supplied an existing identity (commonly via AddAzureUserAssignedIdentity +
+                // .WithRoleAssignments(acr, AcrPull)). Skip creating env_mi + the AcrPull role assignment
+                // here and have the env module read the identity id/client id from parameters wired to the
+                // identity module's outputs.
+                managedIdentityIdOutputValue = identityAnnotation.Identity.Id.AsProvisioningParameter(infra);
+                managedIdentityClientIdOutputValue = identityAnnotation.Identity.ClientId.AsProvisioningParameter(infra);
+            }
+            else
+            {
+                newIdentity = new UserAssignedIdentity($"{prefix}_mi")
+                {
+                    Tags = tags
+                };
+
+                infra.Add(newIdentity);
+                managedIdentityIdOutputValue = newIdentity.Id.ToBicepExpression();
+                managedIdentityClientIdOutputValue = newIdentity.ClientId.ToBicepExpression();
+            }
 
             AzureProvisioningResource? registry = null;
             if (resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var registryReferenceAnnotation) &&
@@ -133,26 +151,40 @@ public static partial class AzureAppServiceEnvironmentExtensions
             var containerRegistry = (ContainerRegistryService)registry.AddAsExistingResource(infra);
             infra.Add(containerRegistry);
 
-            var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, identity);
-
-            // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
-            pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, identity.Id, pullRa.RoleDefinitionId);
-            infra.Add(pullRa);
-
-            var plan = new AppServicePlan($"{prefix}_asplan")
+            if (newIdentity is not null)
             {
-                Sku = new AppServiceSkuDescription
-                {
-                    Name = "P0V3",
-                    Tier = "Premium"
-                },
-                Kind = "Linux",
-                IsReserved = true,
-                // Enable perSiteScaling so each app service can scale independently
-                IsPerSiteScaling = true
-            };
+                var pullRa = containerRegistry.CreateRoleAssignment(ContainerRegistryBuiltInRole.AcrPull, newIdentity);
 
-            infra.Add(plan);
+                // There's a bug in the CDK, see https://github.com/Azure/azure-sdk-for-net/issues/47265
+                pullRa.Name = BicepFunction.CreateGuid(containerRegistry.Id, newIdentity.Id, pullRa.RoleDefinitionId);
+                infra.Add(pullRa);
+            }
+
+            AppServicePlan plan;
+            if (resource.IsExisting())
+            {
+                // The Aspire resource models the App Service Plan. When users mark it existing,
+                // keep provisioning the supporting app resources but reference the supplied plan
+                // instead of declaring a new Microsoft.Web/serverfarms resource.
+                plan = (AppServicePlan)resource.AddAsExistingResource(infra);
+            }
+            else
+            {
+                plan = new AppServicePlan($"{prefix}_asplan")
+                {
+                    Sku = new AppServiceSkuDescription
+                    {
+                        Name = "P0V3",
+                        Tier = "Premium"
+                    },
+                    Kind = "Linux",
+                    IsReserved = true,
+                    // Enable perSiteScaling so each app service can scale independently
+                    IsPerSiteScaling = true
+                };
+
+                infra.Add(plan);
+            }
 
             infra.Add(new ProvisioningOutput("name", typeof(string))
             {
@@ -182,18 +214,18 @@ public static partial class AzureAppServiceEnvironmentExtensions
 
             infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_ID", typeof(string))
             {
-                Value = identity.Id.ToBicepExpression()
+                Value = managedIdentityIdOutputValue
             });
 
             infra.Add(new ProvisioningOutput("AZURE_CONTAINER_REGISTRY_MANAGED_IDENTITY_CLIENT_ID", typeof(string))
             {
-                Value = identity.ClientId.ToBicepExpression()
+                Value = managedIdentityClientIdOutputValue
             });
 
             if (resource.EnableDashboard)
             {
                 // Add aspire dashboard website
-                var website = AzureAppServiceEnvironmentUtility.AddDashboard(infra, identity, plan.Id);
+                var website = AzureAppServiceEnvironmentUtility.AddDashboard(infra, managedIdentityClientIdOutputValue, plan.Id);
 
                 infra.Add(new ProvisioningOutput("AZURE_APP_SERVICE_DASHBOARD_URI", typeof(string))
                 {
@@ -434,6 +466,76 @@ public static partial class AzureAppServiceEnvironmentExtensions
         ArgumentException.ThrowIfNullOrWhiteSpace(deploymentSlot);
 
         builder.Resource.DeploymentSlot = deploymentSlot;
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures the Azure App Service environment to use the supplied <see cref="AzureUserAssignedIdentityResource"/>
+    /// as the managed identity that App Service apps use to pull images from the configured container registry
+    /// (the <c>AcrPull</c> identity), instead of having Aspire create a new identity and a new <c>AcrPull</c>
+    /// role assignment.
+    /// </summary>
+    /// <param name="builder">The Azure App Service environment to configure.</param>
+    /// <param name="identityBuilder">
+    /// The resource builder for the user-assigned identity that should be used for image pulls. The supplied
+    /// identity must already have the <c>AcrPull</c> role on the configured container registry.
+    /// </param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// When this is set, Aspire will not create a new identity or an <c>AcrPull</c> role assignment for the
+    /// container registry. The caller is responsible for ensuring the supplied identity already has the required
+    /// <c>AcrPull</c> role assignment on the registry, for example by chaining
+    /// <c>.WithRoleAssignments(acr, ContainerRegistryBuiltInRole.AcrPull)</c> when adding the identity.
+    /// </para>
+    /// <para>
+    /// Unlike the equivalent method on Azure Container Apps, App Service reuses this single identity for more than
+    /// just image pulls. The same identity is also attached to every generated App Service web app as a user-assigned
+    /// managed identity, and is used by the Aspire OTLP sidecar to authenticate telemetry to the Aspire dashboard
+    /// (it is added to the dashboard's <c>ALLOWED_MANAGED_IDENTITIES</c> and exposed to each app via the OTEL
+    /// client-id app setting). If you supply an existing identity here, it will take on all of these roles.
+    /// </para>
+    /// <para>
+    /// This is commonly combined with <c>AsExisting</c> on the App Service environment (App Service Plan) and on
+    /// the container registry to deploy websites into a pre-provisioned set of Azure resources without Aspire
+    /// emitting any new ACR-pull identity or ACR-pull role-assignment resources. See
+    /// <see href="https://github.com/microsoft/aspire/issues/14382"/> for the scenario this addresses.
+    /// </para>
+    /// <para>
+    /// Only the combination of an existing App Service Plan, an existing container registry, and this method
+    /// avoids emitting any new identity or role-assignment resources in the env module. Other combinations still
+    /// work but will emit additional resources:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><description>
+    ///   If the App Service Plan is marked <c>AsExisting</c> but no identity is supplied here, Aspire still emits
+    ///   a new <c>UserAssignedIdentity</c> and an <c>AcrPull</c> role assignment on the configured registry.
+    ///   </description></item>
+    ///   <item><description>
+    ///   If this method is used but the container registry is not existing (either the Aspire-generated default
+    ///   registry or a user-added registry without <c>AsExisting</c>), the registry itself is still provisioned.
+    ///   To wire the supplied identity to that newly-created registry, chain
+    ///   <c>.WithRoleAssignments(acr, ContainerRegistryBuiltInRole.AcrPull)</c> on the identity.
+    ///   </description></item>
+    /// </list>
+    /// <para>
+    /// If the Aspire dashboard is enabled, Aspire still provisions the dashboard website and its contributor
+    /// identity. Use <see cref="WithDashboard(IResourceBuilder{AzureAppServiceEnvironmentResource}, bool)"/> with
+    /// <see langword="false"/> when targeting a fully pre-provisioned App Service Plan that should not receive a
+    /// dashboard.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="identityBuilder"/> is <see langword="null"/>.</exception>
+    [AspireExport]
+    public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAcrPullIdentity(
+        this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
+        IResourceBuilder<AzureUserAssignedIdentityResource> identityBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(identityBuilder);
+
+        builder.WithAnnotation(new AzureAppServiceEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource));
+
         return builder;
     }
 

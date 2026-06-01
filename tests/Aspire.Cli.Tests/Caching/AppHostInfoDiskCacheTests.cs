@@ -44,6 +44,11 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
         AspireHostingVersion = "9.5.0",
         IsUsingCliBundle = false,
         UserSecretsId = "12345",
+        RunCommand = "/repo/bin/AppHost",
+        TargetPath = "/repo/bin/AppHost.dll",
+        RunWorkingDirectory = "/repo/src/AppHost",
+        RunArguments = "--from-msbuild",
+        TargetFramework = "net10.0",
     };
 
     [Fact]
@@ -65,6 +70,25 @@ public class AppHostInfoDiskCacheTests(ITestOutputHelper outputHelper)
         Assert.True(hit!.IsAspireHost);
         Assert.Equal("9.5.0", hit.AspireHostingVersion);
         Assert.Equal("12345", hit.UserSecretsId);
+        Assert.Equal("/repo/bin/AppHost", hit.RunCommand);
+        Assert.Equal("/repo/bin/AppHost.dll", hit.TargetPath);
+        Assert.Equal("/repo/src/AppHost", hit.RunWorkingDirectory);
+        Assert.Equal("--from-msbuild", hit.RunArguments);
+        Assert.Equal("net10.0", hit.TargetFramework);
+    }
+
+    [Fact]
+    public async Task CacheEntryMissingRunCommandIsTreatedAsMiss()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var cache = CreateCache(workspace);
+        var projectFile = CreateProjectFile(workspace);
+
+        await cache.SetAsync(projectFile, cache.GetCacheKey(projectFile), SampleEntry() with { RunCommand = null }, CancellationToken.None).DefaultTimeout();
+
+        var hit = await cache.TryGetAsync(new FileInfo(projectFile.FullName), CancellationToken.None).DefaultTimeout();
+
+        Assert.Null(hit);
     }
 
     [Fact]

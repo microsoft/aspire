@@ -103,7 +103,13 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
                 IsAspireHost: diskEntry.IsAspireHost,
                 AspireHostingVersion: diskEntry.AspireHostingVersion,
                 IsUsingCliBundle: diskEntry.IsUsingCliBundle,
-                UserSecretsId: diskEntry.UserSecretsId);
+                UserSecretsId: diskEntry.UserSecretsId,
+                RunCommand: diskEntry.RunCommand,
+                TargetPath: diskEntry.TargetPath,
+                RunWorkingDirectory: diskEntry.RunWorkingDirectory,
+                RunArguments: diskEntry.RunArguments,
+                TargetFramework: diskEntry.TargetFramework,
+                TargetFrameworks: diskEntry.TargetFrameworks);
         }
 
         // Capture the input fingerprint before evaluating MSBuild. If any tracked input changes
@@ -111,13 +117,28 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         var expectedCacheKey = diskCache.GetCacheKey(projectFile);
 
         // Mirror the property/item shape used by DotNetCliRunner.GetAppHostInformationAsync and
-        // additionally request AspireUseCliBundle and UserSecretsId so the CLI bundle handoff
-        // and --isolated user-secrets clone do not require their own MSBuild evaluations.
+        // additionally request AspireUseCliBundle, UserSecretsId, and run metadata so the CLI
+        // bundle handoff, --isolated user-secrets clone, and post-build AppHost launch path do
+        // not require their own MSBuild evaluations.
         // Adding extra -getProperty names is an evaluation-only cost.
+        //
+        // The Run* properties (RunCommand, RunArguments, RunWorkingDirectory) are only
+        // populated for the direct-launch contract after ComputeRunArguments has run, so
+        // request that target here. This matches the property values `dotnet run` would
+        // resolve before launching the AppHost. TargetFrameworks is also cached so
+        // DotNetAppHostProject can detect multi-targeted AppHosts and fall back to
+        // `dotnet run`, which already handles target framework selection.
+        //
+        // In the .NET SDK, ComputeRunArguments is intentionally a placeholder target with no
+        // DependsOnTargets; it exists so projects can override RunCommand/RunArguments after
+        // evaluation. Requesting it preserves that extension point without causing the default
+        // probe to build the AppHost. See:
+        // https://github.com/dotnet/sdk/blob/main/src/Tasks/Microsoft.NET.Build.Tasks/targets/Microsoft.NET.Sdk.targets
         var (exitCode, jsonDocument) = await runner.GetProjectItemsAndPropertiesAsync(
             projectFile,
             items: ["PackageReference", "AspireProjectOrPackageReference", "PackageVersion"],
-            properties: ["IsAspireHost", "AspireHostingSDKVersion", "AspireUseCliBundle", "UserSecretsId"],
+            properties: ["IsAspireHost", "AspireHostingSDKVersion", "AspireUseCliBundle", "UserSecretsId", "RunCommand", "TargetPath", "RunWorkingDirectory", "RunArguments", "TargetFramework", "TargetFrameworks"],
+            targets: ["ComputeRunArguments"],
             new ProcessInvocationOptions(),
             cancellationToken).ConfigureAwait(false);
 
@@ -129,7 +150,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
             // null here; keep the non-zero exit code so callers can surface the normal
             // "not buildable AppHost" project-resolution behavior instead of treating this as a
             // negative cache entry.
-            return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: false, AspireHostingVersion: null, IsUsingCliBundle: false, UserSecretsId: null);
+            return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: false, AspireHostingVersion: null, IsUsingCliBundle: false, UserSecretsId: null, RunCommand: null, TargetPath: null, RunWorkingDirectory: null, RunArguments: null, TargetFramework: null, TargetFrameworks: null);
         }
 
         AppHostProjectInfo info;
@@ -152,6 +173,12 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
             AspireHostingVersion = info.AspireHostingVersion,
             IsUsingCliBundle = info.IsUsingCliBundle,
             UserSecretsId = info.UserSecretsId,
+            RunCommand = info.RunCommand,
+            TargetPath = info.TargetPath,
+            RunWorkingDirectory = info.RunWorkingDirectory,
+            RunArguments = info.RunArguments,
+            TargetFramework = info.TargetFramework,
+            TargetFrameworks = info.TargetFrameworks,
         }, cancellationToken).ConfigureAwait(false);
 
         return info;
@@ -162,18 +189,24 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
         var properties = msbuildOutput?.Properties;
         if (properties is null)
         {
-            return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: false, AspireHostingVersion: null, IsUsingCliBundle: false, UserSecretsId: null);
+            return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: false, AspireHostingVersion: null, IsUsingCliBundle: false, UserSecretsId: null, RunCommand: null, TargetPath: null, RunWorkingDirectory: null, RunArguments: null, TargetFramework: null, TargetFrameworks: null);
         }
 
         var isUsingCliBundle = string.Equals(properties.AspireUseCliBundle, "true", StringComparison.OrdinalIgnoreCase);
 
         var userSecretsId = string.IsNullOrWhiteSpace(properties.UserSecretsId) ? null : properties.UserSecretsId;
+        var runCommand = string.IsNullOrWhiteSpace(properties.RunCommand) ? null : properties.RunCommand;
+        var targetPath = string.IsNullOrWhiteSpace(properties.TargetPath) ? null : properties.TargetPath;
+        var runWorkingDirectory = string.IsNullOrWhiteSpace(properties.RunWorkingDirectory) ? null : properties.RunWorkingDirectory;
+        var runArguments = string.IsNullOrWhiteSpace(properties.RunArguments) ? null : properties.RunArguments;
+        var targetFramework = string.IsNullOrWhiteSpace(properties.TargetFramework) ? null : properties.TargetFramework;
+        var targetFrameworks = string.IsNullOrWhiteSpace(properties.TargetFrameworks) ? null : properties.TargetFrameworks;
 
         var isAspireHost = string.Equals(properties.IsAspireHost, "true", StringComparison.Ordinal);
 
         if (!isAspireHost)
         {
-            return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: false, AspireHostingVersion: null, IsUsingCliBundle: isUsingCliBundle, UserSecretsId: userSecretsId);
+            return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: false, AspireHostingVersion: null, IsUsingCliBundle: isUsingCliBundle, UserSecretsId: userSecretsId, RunCommand: runCommand, TargetPath: targetPath, RunWorkingDirectory: runWorkingDirectory, RunArguments: runArguments, TargetFramework: targetFramework, TargetFrameworks: targetFrameworks);
         }
 
         // Try to get Aspire.Hosting version from PackageReference items first, then fall back
@@ -196,7 +229,7 @@ internal sealed class AppHostInfoResolver(IDotNetCliRunner runner, IAppHostInfoD
 
         aspireHostingVersion ??= properties.AspireHostingSDKVersion;
 
-        return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: true, AspireHostingVersion: aspireHostingVersion, IsUsingCliBundle: isUsingCliBundle, UserSecretsId: userSecretsId);
+        return new AppHostProjectInfo(ExitCode: exitCode, IsAspireHost: true, AspireHostingVersion: aspireHostingVersion, IsUsingCliBundle: isUsingCliBundle, UserSecretsId: userSecretsId, RunCommand: runCommand, TargetPath: targetPath, RunWorkingDirectory: runWorkingDirectory, RunArguments: runArguments, TargetFramework: targetFramework, TargetFrameworks: targetFrameworks);
     }
 
     private static string? GetPackageVersionFromItems(IReadOnlyList<AppHostProjectInspectionItem>? items, string packageId)
@@ -223,7 +256,13 @@ internal sealed record AppHostProjectInfo(
     bool IsAspireHost,
     string? AspireHostingVersion,
     bool IsUsingCliBundle,
-    string? UserSecretsId);
+    string? UserSecretsId,
+    string? RunCommand,
+    string? TargetPath,
+    string? RunWorkingDirectory,
+    string? RunArguments,
+    string? TargetFramework,
+    string? TargetFrameworks);
 
 internal sealed record AppHostProjectInspectionOutput
 {
@@ -247,6 +286,24 @@ internal sealed record AppHostProjectInspectionProperties
 
     [JsonPropertyName("UserSecretsId")]
     public string? UserSecretsId { get; init; }
+
+    [JsonPropertyName("RunCommand")]
+    public string? RunCommand { get; init; }
+
+    [JsonPropertyName("TargetPath")]
+    public string? TargetPath { get; init; }
+
+    [JsonPropertyName("RunWorkingDirectory")]
+    public string? RunWorkingDirectory { get; init; }
+
+    [JsonPropertyName("RunArguments")]
+    public string? RunArguments { get; init; }
+
+    [JsonPropertyName("TargetFramework")]
+    public string? TargetFramework { get; init; }
+
+    [JsonPropertyName("TargetFrameworks")]
+    public string? TargetFrameworks { get; init; }
 }
 
 internal sealed record AppHostProjectInspectionItems

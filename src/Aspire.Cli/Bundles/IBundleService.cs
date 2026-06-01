@@ -54,9 +54,8 @@ internal interface IBundleService
     /// <item><description>Packager-managed sources (<c>source=winget</c> /
     /// <c>source=brew</c> / <c>source=dotnet-tool</c>): the directory containing the
     /// binary (symlinks resolved first).</description></item>
-    /// <item><description>No sidecar / unmanaged installs: the parent of the binary's
-    /// directory, preserving the historical <c>~/.aspire/bin/aspire → ~/.aspire/</c>
-    /// heuristic.</description></item>
+    /// <item><description>No sidecar / unmanaged installs: the default Aspire home
+    /// directory (<c>ASPIRE_HOME</c> when set, otherwise <c>~/.aspire</c>).</description></item>
     /// </list>
     /// </summary>
     /// <param name="processPath">An absolute path to the CLI binary.</param>

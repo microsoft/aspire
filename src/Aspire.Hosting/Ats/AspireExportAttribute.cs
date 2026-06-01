@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
-
 namespace Aspire.Hosting;
 
 /// <summary>
@@ -86,7 +84,6 @@ namespace Aspire.Hosting;
     AttributeTargets.Method | AttributeTargets.Class | AttributeTargets.Interface | AttributeTargets.Assembly | AttributeTargets.Property,
     Inherited = false,
     AllowMultiple = true)]
-[Experimental("ASPIREATS001")]
 public sealed class AspireExportAttribute : Attribute
 {
     /// <summary>
@@ -219,18 +216,19 @@ public sealed class AspireExportAttribute : Attribute
     public bool ExposeMethods { get; set; }
 
     /// <summary>
-    /// Gets or sets whether synchronous exported methods should be invoked on a background thread by the ATS dispatcher.
+    /// Gets or sets whether the exported method invocation should run on a background thread by the ATS dispatcher.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Set this to <see langword="true"/> for synchronous exports that may invoke synchronous callback delegates which in turn
+    /// Set this to <see langword="true"/> for exports that may invoke synchronous callback delegates which in turn
     /// re-enter the remote host through ATS. Running the export on a background thread allows the JSON-RPC request loop to
-    /// continue processing nested callback and capability invocations while the synchronous method waits for the callback to
+    /// continue processing nested callback and capability invocations while the method waits for the callback to
     /// complete.
     /// </para>
     /// <para>
-    /// This setting only affects synchronous exported methods. Async exports that already return <see cref="Task"/> or
-    /// <see cref="Task{TResult}"/> are awaited normally and do not use this option.
+    /// For async exports, this applies to the synchronous invocation path that returns the <see cref="Task"/>,
+    /// <see cref="Task{TResult}"/>, <see cref="ValueTask"/>, or <see cref="ValueTask{TResult}"/>. This is important
+    /// when the async method performs startup work or invokes callbacks before its first asynchronous yield.
     /// </para>
     /// <para>
     /// When applied to a type, this setting also applies to exported members discovered from that type unless an individual

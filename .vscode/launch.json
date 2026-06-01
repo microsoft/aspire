@@ -16,6 +16,20 @@
 			"cwd": "${workspaceFolder}/extension"
 		},
 		{
+			"name": "Run Extension (Go debugging playground)",
+			"type": "extensionHost",
+			"request": "launch",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/extension",
+				"${workspaceFolder}/playground/GoDebugging"
+			],
+			"outFiles": [
+				"${workspaceFolder}/extension/dist/**/*.js"
+			],
+			"preLaunchTask": "tasks: watch extension",
+			"cwd": "${workspaceFolder}/extension"
+		},
+		{
 			"name": "Run Extension (cli stop on entry)",
 			"type": "extensionHost",
 			"request": "launch",

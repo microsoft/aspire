@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost
 // For more information, see: https://aspire.dev
 
-import { AzureOpenAIRole, createBuilder } from './.modules/aspire.mjs';
+import { AzureOpenAIRole, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 

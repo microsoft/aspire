@@ -10,8 +10,8 @@ namespace Aspire.Shared.Model.Serialization;
 /// Represents a resource in JSON format.
 /// This is a shared representation used by both the Dashboard and CLI.
 /// </summary>
-// CLI commands such as `aspire describe --format json` and `aspire ps --format json --resources`
-// use this shape and the nested resource shapes below; keep docs/specs/cli-output-formats.md in sync when changing them.
+// `aspire describe --format json` uses this shape and the nested resource shapes below;
+// keep docs/specs/cli-output-formats.md in sync when changing them.
 internal sealed class ResourceJson
 {
     /// <summary>
@@ -313,4 +313,30 @@ internal sealed class ResourceCommandArgumentJson
     /// The maximum length for text inputs.
     /// </summary>
     public int? MaxLength { get; set; }
+
+    /// <summary>
+    /// Dynamic input loading metadata.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceCommandArgumentDynamicLoadingJson? DynamicLoading { get; set; }
+}
+
+/// <summary>
+/// Represents dynamic loading metadata for a command invocation argument input in JSON format.
+/// Keep this contract in sync with the VS Code extension's ResourceCommandArgumentDynamicLoadingJson
+/// in extension/src/views/AppHostDataRepository.ts.
+/// </summary>
+internal sealed class ResourceCommandArgumentDynamicLoadingJson
+{
+    /// <summary>
+    /// Whether the input should always load when prompting starts.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AlwaysLoadOnStart { get; set; }
+
+    /// <summary>
+    /// Input names that trigger reloading when their values change.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string[]? DependsOnInputs { get; set; }
 }

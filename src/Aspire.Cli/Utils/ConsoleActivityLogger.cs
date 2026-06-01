@@ -118,7 +118,10 @@ internal sealed class ConsoleActivityLogger
         _spinning = true;
         _spinnerTask = Task.Run(async () =>
         {
-            _console.Cursor.Hide();
+            lock (_lock)
+            {
+                SafeSetCursorVisible(visible: false);
+            }
 
             try
             {
@@ -126,9 +129,19 @@ internal sealed class ConsoleActivityLogger
                 {
                     var spinChar = _spinnerChars[_spinnerIndex % _spinnerChars.Length];
 
-                    // Write then move back so nothing can write between these events (hopefully)
-                    _console.Write(spinChar.ToString());
-                    _console.Cursor.MoveLeft();
+                    // Take the same lock used by WriteLine so the spinner write and the
+                    // corresponding MoveLeft are atomic relative to other console output.
+                    // Without this, a concurrent WriteLine could land between the Write
+                    // and the MoveLeft, leaving the cursor at column 0; Spectre's legacy
+                    // cursor backend (used whenever ANSI is disabled) then evaluates
+                    // `Console.CursorLeft -= 1`, which throws
+                    // "value must be greater than or equal to zero and less than the
+                    // console's buffer size in that dimension. (Parameter 'left')".
+                    lock (_lock)
+                    {
+                        _console.Write(spinChar.ToString());
+                        SafeMoveCursorLeft();
+                    }
 
                     _spinnerIndex++;
                     await Task.Delay(120).ConfigureAwait(false);
@@ -136,12 +149,64 @@ internal sealed class ConsoleActivityLogger
             }
             finally
             {
-                // Clear spinner character
-                _console.Write(" ");
-                _console.Cursor.MoveLeft();
-                _console.Cursor.Show();
+                lock (_lock)
+                {
+                    // Clear spinner character
+                    _console.Write(" ");
+                    SafeMoveCursorLeft();
+                    SafeSetCursorVisible(visible: true);
+                }
             }
         });
+    }
+
+    private void SafeMoveCursorLeft()
+    {
+        try
+        {
+            _console.Cursor.MoveLeft();
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            // Spectre's legacy cursor backend does not clamp negative coordinates, so
+            // moving left from column 0 (e.g. when the just-written spinner char wrapped
+            // to a new line, or the cursor was already at column 0) throws. Swallow it;
+            // the only consequence is a stray spinner glyph, never a crash.
+        }
+        catch (IOException)
+        {
+            // Cursor manipulation can fail on redirected/non-tty outputs. Spinner output
+            // is purely cosmetic, so there is nothing meaningful to do here.
+        }
+    }
+
+    private void SafeSetCursorVisible(bool visible)
+    {
+        try
+        {
+            if (visible)
+            {
+                _console.Cursor.Show();
+            }
+            else
+            {
+                _console.Cursor.Hide();
+            }
+        }
+        catch (IOException)
+        {
+            // Spectre's legacy cursor backend implements Show/Hide as
+            // `System.Console.CursorVisible = X`, which throws IOException when stdout
+            // is redirected or attached to a non-tty. The spinner is purely cosmetic,
+            // so a missing show/hide is not worth crashing the command (especially in
+            // the `finally` block, where an exception would also fault the spinner task
+            // and surface from StopSpinnerAsync).
+        }
+        catch (PlatformNotSupportedException)
+        {
+            // Some platforms (notably non-Windows for the setter) do not support
+            // Console.CursorVisible. Same rationale as above: cosmetic, ignore.
+        }
     }
 
     public async Task StopSpinnerAsync()

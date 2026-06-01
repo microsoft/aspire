@@ -11,7 +11,7 @@ import {
     ExecuteCommandContext,
     InputsDialogValidationContext,
     InputType
-} from './.modules/aspire.mjs';
+} from './.aspire/modules/aspire.mjs';
 
 console.log("Aspire TypeScript AppHost starting...\n");
 

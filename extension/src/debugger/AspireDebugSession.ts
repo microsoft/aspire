@@ -19,6 +19,8 @@ import { ICliRpcClient } from "../server/rpcClient";
 import path from "path";
 import os from "os";
 import { EnvironmentVariables } from "../utils/environment";
+import { sendTelemetryEvent } from "../utils/telemetry";
+import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
 
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 
@@ -39,6 +41,16 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   private _dashboardDebugSession: vscode.DebugSession | null = null;
   private readonly _disposables: vscode.Disposable[] = [];
   private _disposed = false;
+  // Timestamp for the `debug/appHost/end` duration measurement. Captured the first
+  // time we observe a `launch` request so it covers the actual user-visible session
+  // lifetime, not the moment the AspireDebugSession object was constructed.
+  private _appHostStartTimeMs: number | undefined = undefined;
+  // Tracks the AppHost-language classification of the launched program so it can
+  // be repeated on the matching end event without re-deriving from `configuration`.
+  private _appHostLanguageAtLaunch: 'csharp' | 'typescript' | 'unknown' = 'unknown';
+  // Mode the AppHost was launched with (`run` | `debug`) — captured for the
+  // matching end event.
+  private _appHostModeAtLaunch: 'run' | 'debug' = 'run';
 
   public readonly onDidSendMessage = this._onDidSendMessage.event;
   public readonly debugSessionId: string;
@@ -89,6 +101,30 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       const appHostPath = this._session.configuration.program as string;
       const appHostIsDirectory = isDirectory(appHostPath);
       const extensionArgs: string[] = [];
+
+      // Telemetry: emit `debug/appHost/start` once per AppHost launch. We do it
+      // here (rather than in the constructor) because the constructor runs
+      // before VS Code's debug-launch UX completes; this branch is the single
+      // entry point that triggers an actual CLI spawn. The matching end event
+      // is emitted from dispose().
+      this._appHostStartTimeMs = Date.now();
+      this._appHostLanguageAtLaunch = appHostIsDirectory
+        ? classifyAppHostDirectory(appHostPath)
+        : classifyAppHostPath(appHostPath);
+      this._appHostModeAtLaunch = noDebug ? 'run' : 'debug';
+      // `command` originates in the user's launch.json and is typed in the
+      // contributing extension surface as AspireCommandType ('run'|'deploy'|
+      // 'publish'|'do'), but launch.json is freeform JSON — a typo or custom
+      // value would otherwise leak verbatim into telemetry. Clamp to the known
+      // set so the dimension stays bounded.
+      const knownCommands: ReadonlySet<string> = new Set(['run', 'deploy', 'publish', 'do']);
+      const commandForTelemetry = knownCommands.has(command) ? command : 'other';
+      sendTelemetryEvent('debug/appHost/start', {
+        mode: this._appHostModeAtLaunch,
+        apphost_language: this._appHostLanguageAtLaunch,
+        apphost_is_directory: appHostIsDirectory ? 'true' : 'false',
+        command: commandForTelemetry,
+      });
 
       // For 'do' with an explicit step (old CLI fallback), pass it as a positional argument
       const step = this.configuration.step;
@@ -219,6 +255,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
           vscode.window.showErrorMessage(processExceptionOccurred(error.message, commandLabel));
         },
         exitCallback: (code) => {
+          this._dcpServer.recordAppHostProcessExit(this.debugSessionId, code);
           // Flush any partial line left in either buffer so trailing output isn't lost.
           if (stdoutBuffer.length > 0) {
             flushBuffer(stdoutBuffer, 'stdout');
@@ -510,9 +547,50 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     }
     this._disposed = true;
     extensionLogOutputChannel.info('Stopping the Aspire debug session');
-    vscode.debug.stopDebugging(this._session);
+
+    // Snapshot start-event metadata before we run disposables so the deferred
+    // `debug/appHost/end` callback has a stable view even if instance state
+    // mutates further (or the instance is reaped by VS Code before the timer
+    // fires).
+    const startMs = this._appHostStartTimeMs;
+    const mode = this._appHostModeAtLaunch;
+    const language = this._appHostLanguageAtLaunch;
+    const debugSessionId = this.debugSessionId;
+    const dcpServer = this._dcpServer;
+
+    // Stop child debug sessions first so their `sessionTerminated`
+    // notifications can flow back through `AspireDcpServer.sendNotification`
+    // and update the aggregate stats BEFORE we snapshot them for
+    // `debug/appHost/end`. Without this ordering, late nonzero exits (notably
+    // Windows' SIGTERM → 143 exit code which is not normalized to 0) would
+    // be missed and the summary would under-report failures.
     this._disposables.forEach(disposable => disposable.dispose());
     this._trackedDebugAdapters = [];
+    vscode.debug.stopDebugging(this._session);
+
+    // Telemetry: emit `debug/appHost/end` after a short grace window so any
+    // pending `sessionTerminated` notifications kicked off by the child-stop
+    // disposables above have time to flow through the adapterTracker → DCP
+    // notification pipeline and update `anyNonZeroExit`. 500ms is enough for
+    // the common case under normal load while keeping the bound short enough
+    // to survive most extension teardown scenarios. We only fire the event if
+    // `launch` ever ran — otherwise we'd be reporting a phantom session for
+    // AppHosts that aborted before reaching the CLI spawn.
+    if (startMs !== undefined) {
+      setTimeout(() => {
+        const aggregate = dcpServer.takeDebugSessionAggregateStats(debugSessionId);
+        sendTelemetryEvent('debug/appHost/end', {
+          mode,
+          apphost_language: language,
+          ended_with_error: aggregate?.anyNonZeroExit ? 'true' : 'false',
+          distinct_resource_types: aggregate ? aggregate.distinctResourceTypes.join(',') : '',
+        }, {
+          duration_ms: Date.now() - startMs,
+          total_child_sessions: aggregate?.totalChildSessions ?? 0,
+          distinct_resource_type_count: aggregate?.distinctResourceTypes.length ?? 0,
+        });
+      }, 500);
+    }
   }
 
   /**

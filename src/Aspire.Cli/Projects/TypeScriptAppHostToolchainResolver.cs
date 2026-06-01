@@ -241,7 +241,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     "--watch", ".",
                     "--ext", "ts,mts",
                     "--ignore", "node_modules/",
-                    "--ignore", ".modules/",
+                    "--ignore", ".aspire/modules/",
                     "--exec", $"bun run tsc --noEmit -p {tsConfigFileName} && bun run \"{{appHostFile}}\""
                 ]
             },
@@ -256,7 +256,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     "--watch", ".",
                     "--ext", "ts,mts",
                     "--ignore", "node_modules/",
-                    "--ignore", ".modules/",
+                    "--ignore", ".aspire/modules/",
                     "--exec", $"yarn run tsc --noEmit -p {tsConfigFileName} && yarn run tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
@@ -271,7 +271,7 @@ internal static class TypeScriptAppHostToolchainResolver
                     "--watch", ".",
                     "--ext", "ts,mts",
                     "--ignore", "node_modules/",
-                    "--ignore", ".modules/",
+                    "--ignore", ".aspire/modules/",
                     "--exec", $"pnpm exec tsc --noEmit -p {tsConfigFileName} && pnpm exec tsx --tsconfig {tsConfigFileName} \"{{appHostFile}}\""
                 ]
             },

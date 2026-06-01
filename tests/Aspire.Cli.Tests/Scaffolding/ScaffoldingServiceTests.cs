@@ -113,6 +113,73 @@ public class ScaffoldingServiceTests
     }
 
     [Fact]
+    public void AddRootTypeScriptAppHostDelegateScripts_AddsMissingScriptsWithSelectedToolchain()
+    {
+        var scripts = JsonNode.Parse("""{ "test": "vitest" }""")!.AsObject();
+
+        var preservedScriptNames = ScaffoldingService.AddRootTypeScriptAppHostDelegateScripts(
+            scripts,
+            TypeScriptAppHostToolchain.Pnpm,
+            "apps/web/aspire-apphost");
+
+        Assert.Empty(preservedScriptNames);
+        Assert.Equal("vitest", scripts["test"]?.GetValue<string>());
+        Assert.Equal("pnpm --dir apps/web/aspire-apphost run aspire:start", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("pnpm --dir apps/web/aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("pnpm --dir apps/web/aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void AddRootTypeScriptAppHostDelegateScripts_UsesAppHostToolchain()
+    {
+        var rootDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var appHostDirectory = Directory.CreateDirectory(Path.Combine(rootDirectory.FullName, ScaffoldingService.BrownfieldTypeScriptAppHostDirectoryName));
+            File.WriteAllText(Path.Combine(rootDirectory.FullName, "package.json"), "{ \"packageManager\": \"npm@10.0.0\" }");
+            File.WriteAllText(Path.Combine(appHostDirectory.FullName, "package.json"), "{ \"packageManager\": \"pnpm@10.0.0\" }");
+            var scripts = new JsonObject();
+
+            var preservedScriptNames = ScaffoldingService.AddRootTypeScriptAppHostDelegateScripts(
+                scripts,
+                appHostDirectory,
+                ScaffoldingService.BrownfieldTypeScriptAppHostDirectoryName,
+                logger: null);
+
+            Assert.Empty(preservedScriptNames);
+            Assert.Equal("pnpm --dir aspire-apphost run aspire:start", scripts["aspire:start"]?.GetValue<string>());
+            Assert.Equal("pnpm --dir aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
+            Assert.Equal("pnpm --dir aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+        }
+        finally
+        {
+            rootDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AddRootTypeScriptAppHostDelegateScripts_PreservesExistingAspireScripts()
+    {
+        var scripts = JsonNode.Parse("""
+            {
+              "aspire:start": "custom-start",
+              "aspire:build": "npm --prefix aspire-apphost run aspire:build"
+            }
+            """)!.AsObject();
+
+        var preservedScriptNames = ScaffoldingService.AddRootTypeScriptAppHostDelegateScripts(
+            scripts,
+            TypeScriptAppHostToolchain.Npm,
+            "aspire-apphost");
+
+        Assert.Equal(["aspire:start"], preservedScriptNames);
+        Assert.Equal("custom-start", scripts["aspire:start"]?.GetValue<string>());
+        Assert.Equal("npm --prefix aspire-apphost run aspire:build", scripts["aspire:build"]?.GetValue<string>());
+        Assert.Equal("npm --prefix aspire-apphost run aspire:dev", scripts["aspire:dev"]?.GetValue<string>());
+    }
+
+    [Fact]
     public void GetScaffoldedAppHostRelativePath_UsesActualScaffoldedFile_WhenDefaultFileNameDiffers()
     {
         var rootDirectory = Directory.CreateTempSubdirectory();
@@ -183,13 +250,13 @@ public class ScaffoldingServiceTests
     public void MergeGitIgnoreContent_AppendsMissingEntriesWithoutOverwritingExistingContent()
     {
         var existingContent = "node_modules/\ncustom/\n";
-        var scaffoldContent = "node_modules/\n.modules/\ndist/\n.aspire/\n";
+        var scaffoldContent = "node_modules/\ndist/\n.aspire/\n";
 
         var mergedContent = ScaffoldingService.MergeGitIgnoreContent(existingContent, scaffoldContent);
         var lines = mergedContent.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         Assert.Equal(
-            ["node_modules/", "custom/", ".modules/", "dist/", ".aspire/"],
+            ["node_modules/", "custom/", "dist/", ".aspire/"],
             lines);
     }
 

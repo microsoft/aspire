@@ -30,7 +30,7 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
     /// without adjusting from .aspire/-relative to project-root-relative.
     /// </para>
     /// <para>
-    /// The test keeps the TS project intact (apphost.mts at root with .modules/) so that
+    /// The test keeps the TS project intact (apphost.mts at root with .aspire/modules/) so that
     /// aspire run can actually start successfully. The re-basing logic "../apphost.mts" →
     /// "apphost.mts" exercises the same code path as "../src/apphost.mts" → "src/apphost.mts".
     /// </para>
@@ -47,17 +47,15 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
             variant: CliE2ETestHelpers.DockerfileVariant.Polyglot,
             mountDockerSocket: true,
             workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
 
         // Step 1: Create a valid TypeScript AppHost using aspire init.
-        // This produces apphost.mts, .modules/, aspire.config.json, etc.
+        // This produces apphost.mts, .aspire/modules/, aspire.config.json, etc.
         await auto.TypeAsync("aspire init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
@@ -107,11 +105,6 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
         var content = File.ReadAllText(configPath);
         Assert.DoesNotContain("\"../apphost.mts\"", content);
         Assert.Contains("\"apphost.mts\"", content);
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 
     [CaptureWorkspaceOnFailure]
@@ -127,11 +120,9 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
             variant: CliE2ETestHelpers.DockerfileVariant.Polyglot,
             mountDockerSocket: true,
             workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
         await auto.InstallAspireCliAsync(strategy, counter);
@@ -170,10 +161,5 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop --apphost apphost.mts");
         await auto.EnterAsync();
         await auto.WaitForAnyPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
-
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

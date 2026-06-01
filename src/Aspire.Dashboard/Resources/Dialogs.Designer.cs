@@ -61,6 +61,63 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+        ///
+        ///- 📦 Resource state, health checks, and relationships
+        ///- 🖥️ Console logs
+        ///- 📊 Distributed traces
+        ///- 🪵 Structured logs
+        ///
+        ///AI agents access dashboard telemetry through the Aspire CLI. If you haven’t installed it yet, [install the Aspire CLI]({1}).
+        ///
+        ///Initialize AI agent support in your project with:
+        ///
+        ///```bash
+        ///aspire agent init
+        ///```
+        ///
+        ///This command configures skill files for your AI agent. The ski [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string AIAgentsDialogAppHostDescription {
+            get {
+                return ResourceManager.GetString("AIAgentsDialogAppHostDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+        ///
+        ///- 📊 Distributed traces
+        ///- 🔗 Trace spans
+        ///- 🪵 Structured logs
+        ///- 🗂️ Zip file export
+        ///
+        ///AI agents access dashboard telemetry using the Aspire CLI. [Install the Aspire CLI]({2}) if you haven&apos;t already.
+        ///
+        ///Use Aspire CLI commands to retrieve telemetry data directly in your terminal:
+        ///
+        ///```bash
+        ///aspire otel logs --dashboard-url {0}
+        ///```
+        ///
+        ///This is one example of how AI agents can access t [rest of string was truncated]&quot;;.
+        /// </summary>
+        public static string AIAgentsDialogStandaloneDescription {
+            get {
+                return ResourceManager.GetString("AIAgentsDialogStandaloneDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to AI agents.
+        /// </summary>
+        public static string AIAgentsDialogTitle {
+            get {
+                return ResourceManager.GetString("AIAgentsDialogTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
         public static string DialogCloseButtonText {
@@ -246,15 +303,6 @@ namespace Aspire.Dashboard.Resources {
         public static string GenAIDisplayErrorMessageText {
             get {
                 return ResourceManager.GetString("GenAIDisplayErrorMessageText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Unexpected or truncated message content..
-        /// </summary>
-        public static string GenAIUnexpectedOrTruncatedContent {
-            get {
-                return ResourceManager.GetString("GenAIUnexpectedOrTruncatedContent", resourceCulture);
             }
         }
         
@@ -592,6 +640,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Unexpected or truncated message content..
+        /// </summary>
+        public static string GenAIUnexpectedOrTruncatedContent {
+            get {
+                return ResourceManager.GetString("GenAIUnexpectedOrTruncatedContent", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Site-wide navigation.
         /// </summary>
         public static string HelpDialogCategoryNavigation {
@@ -898,6 +955,33 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Dismiss all.
+        /// </summary>
+        public static string NotificationCenterDismissAll {
+            get {
+                return ResourceManager.GetString("NotificationCenterDismissAll", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to No notifications.
+        /// </summary>
+        public static string NotificationCenterEmpty {
+            get {
+                return ResourceManager.GetString("NotificationCenterEmpty", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Dismiss notification.
+        /// </summary>
+        public static string NotificationEntryDismiss {
+            get {
+                return ResourceManager.GetString("NotificationEntryDismiss", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Open in text visualizer.
         /// </summary>
         public static string OpenInTextVisualizer {
@@ -1024,6 +1108,42 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Time format.
+        /// </summary>
+        public static string SettingsDialogTimeFormat {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to System.
+        /// </summary>
+        public static string SettingsDialogTimeFormatSystem {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatSystem", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 12-hour.
+        /// </summary>
+        public static string SettingsDialogTimeFormatTwelveHour {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatTwelveHour", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to 24-hour.
+        /// </summary>
+        public static string SettingsDialogTimeFormatTwentyFourHour {
+            get {
+                return ResourceManager.GetString("SettingsDialogTimeFormatTwentyFourHour", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Version: {0}.
         /// </summary>
         public static string SettingsDialogVersion {
@@ -1128,96 +1248,6 @@ namespace Aspire.Dashboard.Resources {
         public static string TextVisualizerSelectFormatType {
             get {
                 return ResourceManager.GetString("TextVisualizerSelectFormatType", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Time format.
-        /// </summary>
-        public static string SettingsDialogTimeFormat {
-            get {
-                return ResourceManager.GetString("SettingsDialogTimeFormat", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to System.
-        /// </summary>
-        public static string SettingsDialogTimeFormatSystem {
-            get {
-                return ResourceManager.GetString("SettingsDialogTimeFormatSystem", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to 12-hour.
-        /// </summary>
-        public static string SettingsDialogTimeFormatTwelveHour {
-            get {
-                return ResourceManager.GetString("SettingsDialogTimeFormatTwelveHour", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to 24-hour.
-        /// </summary>
-        public static string SettingsDialogTimeFormatTwentyFourHour {
-            get {
-                return ResourceManager.GetString("SettingsDialogTimeFormatTwentyFourHour", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Dismiss all.
-        /// </summary>
-        public static string NotificationCenterDismissAll {
-            get {
-                return ResourceManager.GetString("NotificationCenterDismissAll", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to No notifications.
-        /// </summary>
-        public static string NotificationCenterEmpty {
-            get {
-                return ResourceManager.GetString("NotificationCenterEmpty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Dismiss notification.
-        /// </summary>
-        public static string NotificationEntryDismiss {
-            get {
-                return ResourceManager.GetString("NotificationEntryDismiss", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to AI Agents.
-        /// </summary>
-        public static string AIAgentsDialogTitle {
-            get {
-                return ResourceManager.GetString("AIAgentsDialogTitle", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Build, debug, and profile apps using AI agents and Aspire....
-        /// </summary>
-        public static string AIAgentsDialogStandaloneDescription {
-            get {
-                return ResourceManager.GetString("AIAgentsDialogStandaloneDescription", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Build, debug, and profile apps using AI agents and Aspire....
-        /// </summary>
-        public static string AIAgentsDialogAppHostDescription {
-            get {
-                return ResourceManager.GetString("AIAgentsDialogAppHostDescription", resourceCulture);
             }
         }
     }

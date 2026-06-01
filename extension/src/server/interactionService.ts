@@ -14,6 +14,7 @@ import { isDirectory } from '../utils/io';
 
 export interface IInteractionService {
     showStatus: (statusText: string | null) => void;
+    clearProgressNotification: () => void;
     promptForString: (promptText: string, defaultValue: string | null, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForSecretString: (promptText: string, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForFilePath: (promptText: string, defaultValue: string | null, directory: boolean) => Promise<string | null>;
@@ -338,7 +339,7 @@ export class InteractionService implements IInteractionService {
         }
 
         // Refresh the Aspire panel so it picks up dashboard URLs for the running app host
-        vscode.commands.executeCommand('aspire-vscode.refreshRunningAppHosts');
+        vscode.commands.executeCommand('aspire-vscode.refreshAppHosts');
 
         //  If aspire.enableAspireDashboardAutoLaunch is 'launch', the dashboard will be launched automatically.
         //  If 'notification', a notification is shown with a link. If 'off', do nothing.

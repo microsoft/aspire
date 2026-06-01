@@ -379,7 +379,7 @@ public sealed class AspireExportData
     public bool ExposeMethods { get; init; }
 
     /// <summary>
-    /// Gets whether synchronous exported methods should be invoked on a background thread by the ATS dispatcher.
+    /// Gets whether exported method invocations should run on a background thread by the ATS dispatcher.
     /// </summary>
     public bool RunSyncOnBackgroundThread { get; init; }
 }

@@ -48,8 +48,8 @@
         <note />
       </trans-unit>
       <trans-unit id="SearchOptionDescription">
-        <source>Full-text search to filter log content</source>
-        <target state="new">Full-text search to filter log content</target>
+        <source>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</source>
+        <target state="new">Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

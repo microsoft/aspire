@@ -16,6 +16,7 @@ namespace Aspire.Hosting;
 /// lifecycle state (Running, Stopped, etc.) to this child resource automatically.
 /// </summary>
 [Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public class BlazorWasmAppResource(string name, string projectPath) : Resource(name), IResourceWithEnvironment, IResourceWithParent
 {
     /// <summary>Fully-qualified path to the .csproj file.</summary>

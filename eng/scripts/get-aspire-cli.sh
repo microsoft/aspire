@@ -317,8 +317,31 @@ validate_content_type() {
     # Get headers via HEAD request
     local headers
     if headers=$(secure_curl "$url" /dev/null 60 "$USER_AGENT" 3 "HEAD" 2>&1); then
+        # curl --location --head returns a header block for each redirect, for example:
+        #   HTTP/2 302
+        #   content-type: text/html; charset=utf-8
+        #
+        #   HTTP/2 200
+        #   content-type: application/octet-stream
+        # GitHub documents release asset downloads as either 200 OK or 302 Found.
+        # The 302 is an HTML redirect page, but the final 200 response is the
+        # archive/checksum, so validate only that block.
+        # See: https://docs.github.com/rest/releases/assets#get-a-release-asset
+        local final_headers
+        final_headers=$(printf "%s\n" "$headers" | awk '
+            /^HTTP(\/| )[0-9]/ {
+                block = $0 "\n"
+                next
+            }
+            {
+                block = block $0 "\n"
+            }
+            END {
+                printf "%s", block
+            }')
+
         # Check if response suggests HTML content (error page)
-        if echo "$headers" | grep -qi "content-type:.*text/html"; then
+        if echo "$final_headers" | grep -qi "content-type:.*text/html"; then
             say_error "Server returned HTML content instead of expected file. Make sure the URL is correct: $url"
             return 1
         fi
@@ -734,6 +757,18 @@ construct_aspire_extension_url() {
     fi
 }
 
+is_stable_version() {
+    local version="$1"
+
+    [[ "$version" =~ ^[vV]?[0-9]+\.[0-9]+\.[0-9]+$ ]]
+}
+
+normalize_stable_version() {
+    local version="$1"
+
+    printf "%s" "${version#[vV]}"
+}
+
 # Function to construct the base URL for the Aspire CLI download
 construct_aspire_cli_url() {
     local version="$1"
@@ -769,13 +804,19 @@ construct_aspire_cli_url() {
 
         printf "${base_url}/aspire-cli-${rid}.${extension}"
     else
-        # When version is set, use ci.dot.net URL
+        if is_stable_version "$version"; then
+            local normalized_version
+            normalized_version=$(normalize_stable_version "$version")
+            base_url="https://github.com/microsoft/aspire/releases/download/v${normalized_version}"
+            printf "${base_url}/aspire-cli-${rid}-${normalized_version}.${extension}"
+            return 0
+        fi
 
         if [[ "$checksum" == "true" ]]; then
             # For checksum URLs, use the public-checksums URL
             base_url="https://ci.dot.net/public-checksums/aspire"
         else
-            base_url="https://ci.dot.net/public/aspire/"
+            base_url="https://ci.dot.net/public/aspire"
         fi
 
         printf "${base_url}/${version}/aspire-cli-${rid}-${version}.${extension}"

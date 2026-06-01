@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost — Milvus integration validation
 // Exercises every exported member of Aspire.Hosting.Milvus
 
-import { createBuilder } from './.modules/aspire.mjs';
+import { createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 

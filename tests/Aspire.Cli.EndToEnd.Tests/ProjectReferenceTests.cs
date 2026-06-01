@@ -1,4 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
+// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
@@ -27,11 +27,9 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
-
-        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
-
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
@@ -61,7 +59,6 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
                 <Project Sdk="Microsoft.NET.Sdk">
                   <PropertyGroup>
                     <TargetFramework>net10.0</TargetFramework>
-                    <NoWarn>$(NoWarn);ASPIREATS001</NoWarn>
                   </PropertyGroup>
                   <ItemGroup>
                     <PackageReference Include="Aspire.Hosting" Version="{{sdkVersion}}" />
@@ -126,8 +123,8 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
             var updatedJson = config.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(configPath, updatedJson);
 
-            // Delete the generated .modules folder to force re-codegen with the new integration
-            var modulesDir = Path.Combine(workDir, ".modules");
+            // Delete the generated .aspire/modules folder to force re-codegen with the new integration
+            var modulesDir = Path.Combine(workDir, ".aspire", "modules");
             if (Directory.Exists(modulesDir))
             {
                 Directory.Delete(modulesDir, recursive: true);
@@ -135,7 +132,7 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
 
             // Update apphost.mts to use the custom integration
             File.WriteAllText(Path.Combine(workDir, "apphost.mts"), """
-                import { createBuilder } from './.modules/aspire.mjs';
+                import { createBuilder } from './.aspire/modules/aspire.mjs';
 
                 const builder = await createBuilder();
                 await builder.addMyService("my-svc");
@@ -163,7 +160,7 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
         // Step 4: Verify the custom integration was code-generated
-        await auto.TypeAsync("grep addMyService .modules/aspire.mts");
+        await auto.TypeAsync("grep addMyService .aspire/modules/aspire.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("addMyService", timeout: TimeSpan.FromSeconds(5));
         await auto.WaitForSuccessPromptAsync(counter);
@@ -186,9 +183,5 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         await auto.TypeAsync("aspire stop");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
-        await auto.TypeAsync("exit");
-        await auto.EnterAsync();
-
-        await pendingRun;
     }
 }

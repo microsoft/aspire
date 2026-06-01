@@ -75,10 +75,13 @@ public class FieldTelemetryFilter : TelemetryFilter
         {
             FilterCondition.Equals => (a, b) => string.Equals(a, b, StringComparisons.OtlpFieldValue),
             FilterCondition.Contains => (a, b) => a != null && a.Contains(b, StringComparisons.OtlpFieldValue),
-            // Condition.GreaterThan => (a, b) => a > b,
-            // Condition.LessThan => (a, b) => a < b,
-            // Condition.GreaterThanOrEqual => (a, b) => a >= b,
-            // Condition.LessThanOrEqual => (a, b) => a <= b,
+            // Comparison operators are only meaningful for numeric fields. For string fields,
+            // never match — following the same approach as GitHub search, which only allows
+            // comparison operators on known numeric qualifiers.
+            FilterCondition.GreaterThan => static (a, b) => false,
+            FilterCondition.LessThan => static (a, b) => false,
+            FilterCondition.GreaterThanOrEqual => static (a, b) => false,
+            FilterCondition.LessThanOrEqual => static (a, b) => false,
             FilterCondition.NotEqual => (a, b) => !string.Equals(a, b, StringComparisons.OtlpFieldValue),
             FilterCondition.NotContains => (a, b) => a != null && !a.Contains(b, StringComparisons.OtlpFieldValue),
             _ => throw new ArgumentOutOfRangeException(nameof(c), c, null)
@@ -129,6 +132,24 @@ public class FieldTelemetryFilter : TelemetryFilter
 
         var func = ConditionToFuncNumber(condition);
         return func(fieldNumber, filterNumber);
+    }
+
+    public bool HasNumericMatch(double fieldValue)
+    {
+        if (!double.TryParse(Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var filterNumber) ||
+            !double.IsFinite(filterNumber) ||
+            !double.IsFinite(fieldValue))
+        {
+            return false;
+        }
+
+        if (Condition is not (FilterCondition.Equals or FilterCondition.GreaterThan or FilterCondition.LessThan or FilterCondition.GreaterThanOrEqual or FilterCondition.LessThanOrEqual or FilterCondition.NotEqual))
+        {
+            return false;
+        }
+
+        var func = ConditionToFuncNumber(Condition);
+        return func(fieldValue, filterNumber);
     }
 
     public override IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input)

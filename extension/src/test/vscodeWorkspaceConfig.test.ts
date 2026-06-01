@@ -61,8 +61,8 @@ suite('VS Code extension workspace configuration', () => {
             assert.ok(watchTask, 'Expected a compound watch task for extension launches.');
             assert.strictEqual(watchTask.dependsOrder, 'sequence');
             assert.deepStrictEqual(watchTask.dependsOn, [
-                'yarn: install extension',
-                'npm: watch extension',
+                'extension: prepare',
+                'yarn: watch extension',
             ]);
         });
     }

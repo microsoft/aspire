@@ -79,7 +79,7 @@ foreach (var appConfig in appConfigs.Values)
 {
     if (!string.IsNullOrEmpty(appConfig.ConfigEndpointPath) && !string.IsNullOrEmpty(appConfig.ConfigResponse))
     {
-        app.MapGet(appConfig.ConfigEndpointPath, () => Results.Content(appConfig.ConfigResponse, "application/json"))
+        app.MapGet(appConfig.ConfigEndpointPath, () => Results.Content(appConfig.ConfigResponse!, "application/json"))
             .WithMetadata(new ContentEncodingMetadata("identity", 1.0));
     }
 
@@ -150,9 +150,12 @@ static class ServiceDefaultsExtensions
                 tracing.AddSource(builder.Environment.ApplicationName)
                     .AddAspNetCoreInstrumentation(options =>
                         options.Filter = context =>
-                            !context.Request.Path.StartsWithSegments("/health")
-                            && !context.Request.Path.StartsWithSegments("/alive")
-                            && !IsStaticAssetOrOtlpRequest(context.Request.Path)
+                        {
+                            var path = context.Request.Path.Value;
+                            return !context.Request.Path.StartsWithSegments("/health")
+                                && !context.Request.Path.StartsWithSegments("/alive")
+                                && (path is null || !path.Contains("/_otlp/", StringComparison.Ordinal));
+                        }
                     )
                     .AddHttpClientInstrumentation(options =>
                         // Filter out the gateway's own OTLP export calls to the dashboard
@@ -170,15 +173,6 @@ static class ServiceDefaultsExtensions
         }
 
         return builder;
-    }
-
-    private static bool IsStaticAssetOrOtlpRequest(PathString path)
-    {
-        var pathValue = path.Value;
-        return pathValue is not null
-            && (pathValue.Contains("/_framework/", StringComparison.Ordinal)
-                || pathValue.Contains("/_content/", StringComparison.Ordinal)
-                || pathValue.Contains("/_otlp/", StringComparison.Ordinal));
     }
 
     public static TBuilder AddDefaultHealthChecks<TBuilder>(this TBuilder builder) where TBuilder : IHostApplicationBuilder

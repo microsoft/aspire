@@ -29,6 +29,7 @@ internal static class KnownFeatures
     public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
     public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
     public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
+    public static string AspireSkillsRemoteFetchEnabled => "aspireSkillsRemoteFetchEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
@@ -80,7 +81,12 @@ internal static class KnownFeatures
         [NuGetSignatureVerificationEnabled] = new(
             NuGetSignatureVerificationEnabled,
             "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
-            DefaultValue: true)
+            DefaultValue: true),
+
+        [AspireSkillsRemoteFetchEnabled] = new(
+            AspireSkillsRemoteFetchEnabled,
+            "(Preview) Allow the Aspire CLI to download the aspire-skills bundle from GitHub. When disabled (the 13.4 default), the CLI only uses the cached bundle and the embedded snapshot baked into the CLI; toggle on to opt in to the remote fetch path.",
+            DefaultValue: false)
     };
 
     /// <summary>

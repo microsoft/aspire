@@ -1,5 +1,5 @@
-import { createBuilder, AzureWebPubSubRole } from './.modules/aspire.mjs';
-import { refExpr } from './.modules/base.mjs';
+import { createBuilder, AzureWebPubSubRole } from './.aspire/modules/aspire.mjs';
+import { refExpr } from './.aspire/modules/base.mjs';
 
 const builder = await createBuilder();
 

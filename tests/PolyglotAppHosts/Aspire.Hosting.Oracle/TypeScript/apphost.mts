@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost - Oracle Integration Validation
 // Validates all [AspireExport] methods for Aspire.Hosting.Oracle
 
-import { createBuilder } from './.modules/aspire.mjs';
+import { createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 

@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, FoundryModels, FoundryRole, type FoundryModel, createBuilder } from './.modules/aspire.mjs';
+import { AzureContainerRegistryRole, FoundryModels, FoundryRole, type FoundryModel, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -66,7 +66,7 @@ const azFunc = await project.addAzureFunctionTool('az-func-tool', 'myFunction', 
 const funcTool = await project.addFunctionTool('func-tool', 'myFunc', '{}');
 
 // Prompt Agent
-const _promptAgent = await project.addPromptAgent(chat, 'prompt-agent');
+const _promptAgent = await project.addPromptAgent('prompt-agent', chat);
 await _promptAgent.withTool(codeInterpreter);
 await _promptAgent.withTool(fileSearch);
 await _promptAgent.withTool(webSearch);
@@ -110,17 +110,12 @@ server.listen(port, '127.0.0.1');
 `
     ]);
 
-await hostedAgent.publishAsHostedAgent({
-    project,
-    configure: async (configuration) => {
-        await configuration.description.set('Validation hosted agent');
-        await configuration.cpu.set(1);
-        await configuration.memory.set(2);
-        const metadata = await configuration.metadata();
-        await metadata.set('scenario', 'validation');
-        const environmentVariables = await configuration.environmentVariables();
-        await environmentVariables.set('VALIDATION_MODE', 'true');
-    }
+await hostedAgent.asHostedAgent(project, {
+    description: 'Validation hosted agent',
+    cpu: 1,
+    memory: 2,
+    metadata: { scenario: 'validation' },
+    environmentVariables: { VALIDATION_MODE: 'true' }
 });
 
 const api = await builder.addContainer('api', 'nginx');

@@ -110,6 +110,11 @@ internal sealed class UpdateCommand : BaseCommand
         return DotNetToolDetection.GetDotNetToolUpdateCommand();
     }
 
+    private static string? GetNpmUpdateCommand()
+    {
+        return NpmInstallDetection.GetNpmUpdateCommand();
+    }
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var isSelfUpdate = parseResult.GetValue(s_selfOption);
@@ -124,6 +129,17 @@ internal sealed class UpdateCommand : BaseCommand
                 InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
                 InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
                 return CommandResult.FromExitCode(0);
+            }
+
+            // When running from a global npm install, defer to npm rather than overwriting
+            // npm-owned files with the GitHub-binary downloader. Detected via env vars the
+            // npm launcher (eng/clipack/npm/aspire.js) sets when spawning the native binary.
+            var npmUpdateCommand = GetNpmUpdateCommand();
+            if (npmUpdateCommand is not null)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NpmSelfUpdateMessage);
+                InteractionService.DisplayPlainText($"  {npmUpdateCommand}");
+                return CommandResult.Success();
             }
 
             if (_cliDownloader is null)
@@ -340,6 +356,14 @@ internal sealed class UpdateCommand : BaseCommand
                         return CommandResult.Success();
                     }
 
+                    var npmUpdateCommand = GetNpmUpdateCommand();
+                    if (npmUpdateCommand is not null)
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NpmSelfUpdateMessage);
+                        InteractionService.DisplayPlainText($"  {npmUpdateCommand}");
+                        return CommandResult.Success();
+                    }
+
                     // Use the same channel that was selected for the project update
                     return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
                 }
@@ -362,8 +386,11 @@ internal sealed class UpdateCommand : BaseCommand
             // Check if this is a "no project found" error and prompt for self-update
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
-                // Only prompt for self-update if not running as dotnet tool and downloader is available
-                if (GetDotNetToolUpdateCommand() is null && _cliDownloader is not null)
+                // Only prompt for self-update when we can actually perform it: not as a
+                // dotnet tool, not from an npm install, and the GitHub-binary downloader
+                // is wired up. Otherwise the downloader would overwrite package-manager-owned
+                // files instead of letting the package manager handle the update.
+                if (GetDotNetToolUpdateCommand() is null && GetNpmUpdateCommand() is null && _cliDownloader is not null)
                 {
                     var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                         UpdateCommandStrings.NoAppHostFoundUpdateCliPrompt,
@@ -426,6 +453,15 @@ internal sealed class UpdateCommand : BaseCommand
         {
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
             InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+            return CommandResult.Success();
+        }
+
+        var npmUpdateCommand = GetNpmUpdateCommand();
+        if (npmUpdateCommand is not null)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NpmSelfUpdateMessage);
+            InteractionService.DisplayPlainText($"  {npmUpdateCommand}");
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
             return CommandResult.Success();
         }

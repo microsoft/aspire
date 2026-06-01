@@ -51,11 +51,11 @@ builder.AddViteApp("vite-static", "../AspireJavaScript.Vite")
 // builder.AddViteApp("sveltekit", "../SvelteKitApp")
 //     .PublishAsNodeServer(entryPoint: "build/index.js", outputPath: "build");
 
-// PublishAsNpmScript: for frameworks that need node_modules at runtime.
+// PublishAsPackageScript: for frameworks that need node_modules at runtime.
 // Example: Remix needs react-router-serve (an npm dependency), Nuxt needs the full Nitro environment.
 // Uncomment the following if you add a Remix or Nuxt app to this playground:
 // builder.AddViteApp("remix", "../RemixApp")
-//     .PublishAsNpmScript(startScriptName: "start", runScriptArguments: "-- --port $PORT");
+//     .PublishAsPackageScript(scriptName: "start", runScriptArguments: "-- --port $PORT");
 
 builder.AddNodeApp("node", "../AspireJavaScript.NodeApp", "app.js")
     .WithRunScript("dev") // Use 'npm run dev' for development

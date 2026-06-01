@@ -3,7 +3,9 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,14 +14,12 @@ namespace Aspire.Hosting.Foundry.Tests;
 public class HostedAgentExtensionTests
 {
     [Fact]
-    public void PublishAsHostedAgent_InRunMode_AddsHttpEndpoint()
+    public void AsHostedAgent_InRunMode_AddsHttpEndpoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent();
 
         builder.Build();
 
@@ -29,15 +29,13 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InRunMode_PreservesExistingHttpEndpointTargetPort()
+    public void AsHostedAgent_InRunMode_PreservesExistingHttpEndpointTargetPort()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
             .WithHttpEndpoint(targetPort: 5000)
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent();
 
         builder.Build();
 
@@ -49,14 +47,12 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InRunMode_DoesNotHardCodePort()
+    public void AsHostedAgent_InRunMode_DoesNotHardCodePort()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent();
 
         builder.Build();
 
@@ -66,25 +62,25 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InRunMode_ConfiguresHealthCheck()
+    public void AsHostedAgent_InRunMode_ConfiguresSendMessageCommand()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        var project = builder.AddFoundry("account")
-            .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent();
 
         builder.Build();
 
-        // The resource should have a health check annotation from WithHttpHealthCheck
         var resource = builder.Resources.Single(r => r.Name == "agent");
-        var healthAnnotation = resource.Annotations.OfType<HealthCheckAnnotation>().FirstOrDefault();
-        Assert.NotNull(healthAnnotation);
+        var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.Equal("Send Message", command.DisplayName);
+        Assert.Equal("ChatSparkle", command.IconName);
+        Assert.Equal(IconVariant.Regular, command.IconVariant);
+        Assert.True(command.IsHighlighted);
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InPublishMode_DoesNotValidateRegion()
+    public void AsHostedAgent_InPublishMode_DoesNotValidateRegion()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish);
@@ -95,13 +91,13 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent(project);
 
         Assert.NotNull(app);
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InPublishMode_AcceptsValidRegion()
+    public void AsHostedAgent_InPublishMode_AcceptsValidRegion()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish);
@@ -112,33 +108,33 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent(project);
 
         Assert.NotNull(app);
     }
 
     [Fact]
-    public void PublishAsHostedAgent_NoRegionConfig_DoesNotThrow()
+    public void AsHostedAgent_NoRegionConfig_DoesNotThrow()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent(project);
 
         Assert.NotNull(app);
     }
 
     [Fact]
-    public void PublishAsHostedAgent_InPublishMode_CreatesHostedAgentResource()
+    public void AsHostedAgent_InPublishMode_CreatesHostedAgentResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent(project);
+            .AsHostedAgent(project);
 
         builder.Build();
 
@@ -148,18 +144,154 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void PublishAsHostedAgent_WithoutProject_CreatesDefaultProject()
+    public async Task AsHostedAgent_InPublishMode_AddsProjectReferenceToDeploymentTarget()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddProject<Project>("agent", launchProfileName: null)
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+
+        Assert.True(hostedAgent.Target.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships));
+        Assert.Contains(relationships, r =>
+            r.Type == "Reference" &&
+            ReferenceEquals(r.Resource, project.Resource));
+
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            hostedAgent.Target, DistributedApplicationOperation.Publish, TestServiceProvider.Instance);
+
+        Assert.Contains(envVars, kvp =>
+            kvp.Key == "ConnectionStrings__my-project" &&
+            kvp.Value == "{my-project.connectionString}");
+        Assert.Contains(envVars, kvp =>
+            kvp.Key == "MY_PROJECT_CONNECTIONSTRING" &&
+            kvp.Value == "Endpoint={my-project.outputs.endpoint}");
+        Assert.DoesNotContain(hostedAgent.Annotations.OfType<ResourceRelationshipAnnotation>(), r =>
+            r.Type == "Reference" &&
+            ReferenceEquals(r.Resource, project.Resource));
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithOptions_AppliesAllPropertiesToConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var options = new HostedAgentOptions
+        {
+            Description = "test description",
+            Cpu = 1m,
+            Memory = 2m,
+            Metadata = { ["scenario"] = "unit-test" },
+            EnvironmentVariables = { ["MY_VAR"] = "my-value" }
+        };
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgentForExport(project, options);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        Assert.Equal("test description", configuration.Description);
+        Assert.Equal(1m, configuration.Cpu);
+        Assert.Equal(2m, configuration.Memory);
+        Assert.Equal("unit-test", configuration.Metadata["scenario"]);
+        Assert.Equal("my-value", configuration.EnvironmentVariables["MY_VAR"]);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithNullOptions_DoesNotSetConfigureCallback()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgentForExport(project, options: null);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        Assert.Null(hostedAgent.Configure);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithNullProject_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var app = builder.AddPythonApp("agent", "./app.py", "main:app");
+
+        Assert.Throws<ArgumentNullException>(() => app.AsHostedAgentForExport(project: null!));
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithoutProject_CreatesDefaultProject()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .PublishAsHostedAgent();
+            .AsHostedAgent();
 
         builder.Build();
 
-        // A project should be auto-created
         var project = builder.Resources.OfType<AzureCognitiveServicesProjectResource>().SingleOrDefault();
         Assert.NotNull(project);
+    }
+
+    [Fact]
+    public void AsHostedAgent_InRunMode_WithProject_AddsProjectDependency()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var app = builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        Assert.Contains(app.Resource.Annotations.OfType<WaitAnnotation>(), w => ReferenceEquals(w.Resource, project.Resource));
+    }
+
+    [Fact]
+    public void AsHostedAgent_InRunMode_WithProject_DoesNotCreateDefaultContainerRegistryResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        Assert.Null(project.Resource.DefaultContainerRegistry);
+        Assert.DoesNotContain(builder.Resources, r => r.Name == "my-project-acr");
+    }
+
+    [Fact]
+    public async Task AsHostedAgent_InRunMode_WithProject_ExecutesBeforeStartHooksWithoutContainerRegistry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
     }
 
     [Fact]
@@ -180,5 +312,13 @@ public class HostedAgentExtensionTests
         var registryTargets = container.Resource.Annotations.OfType<RegistryTargetAnnotation>().ToList();
         var registryTarget = Assert.Single(registryTargets);
         Assert.Same(registry.Resource, registryTarget.Registry);
+    }
+
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    private sealed class Project : IProjectMetadata
+    {
+        public string ProjectPath => "project";
     }
 }

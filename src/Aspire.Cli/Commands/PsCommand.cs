@@ -4,15 +4,14 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using Aspire.Shared.Model.Serialization;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -27,34 +26,28 @@ internal sealed class AppHostDisplayInfo
 {
     public required string AppHostPath { get; init; }
     public required int AppHostPid { get; init; }
+    public string Status { get; init; } = AppHostDisplayStatus.Running;
     public string? SdkVersion { get; init; }
     public int? CliPid { get; init; }
     public string? DashboardUrl { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? LogFilePath { get; init; }
+}
 
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
-    public List<ResourceJson>? Resources { get; set; }
+internal static class AppHostDisplayStatus
+{
+    public const string Running = "running";
+    public const string Stopped = "stopped";
 }
 
 [JsonSerializable(typeof(List<AppHostDisplayInfo>))]
-[JsonSerializable(typeof(ResourceJson))]
-[JsonSerializable(typeof(ResourceUrlJson))]
-[JsonSerializable(typeof(ResourceVolumeJson))]
-[JsonSerializable(typeof(ResourceRelationshipJson))]
-[JsonSerializable(typeof(ResourceHealthReportJson))]
-[JsonSerializable(typeof(ResourceCommandJson))]
-[JsonSerializable(typeof(ResourceCommandArgumentJson[]))]
-[JsonSerializable(typeof(JsonNode))]
-[JsonSerializable(typeof(Dictionary<string, JsonNode?>))]
-[JsonSerializable(typeof(Dictionary<string, string?>))]
-[JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
-[JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]
+[JsonSerializable(typeof(AppHostDisplayInfo))]
 [JsonSourceGenerationOptions(WriteIndented = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class PsCommandJsonContext : JsonSerializerContext
 {
     private static PsCommandJsonContext? s_relaxedEscaping;
+    private static PsCommandJsonContext? s_compactRelaxedEscaping;
 
     /// <summary>
     /// Gets a context with relaxed JSON escaping for non-ASCII character support.
@@ -65,12 +58,21 @@ internal sealed partial class PsCommandJsonContext : JsonSerializerContext
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     });
+
+    /// <summary>
+    /// Gets a compact context with relaxed JSON escaping for newline-delimited streaming output.
+    /// </summary>
+    public static PsCommandJsonContext CompactRelaxedEscaping => s_compactRelaxedEscaping ??= new(new JsonSerializerOptions
+    {
+        WriteIndented = false,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    });
 }
 
-internal sealed class PsCommand : BaseCommand
+internal sealed partial class PsCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
-
     private readonly IInteractionService _interactionService;
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
     private readonly ILogger<PsCommand> _logger;
@@ -79,9 +81,9 @@ internal sealed class PsCommand : BaseCommand
         Description = PsCommandStrings.JsonOptionDescription
     };
 
-    private static readonly Option<bool> s_resourcesOption = new("--resources")
+    private static readonly Option<bool> s_followOption = new("--follow", "-f")
     {
-        Description = PsCommandStrings.ResourcesOptionDescription
+        Description = PsCommandStrings.FollowOptionDescription
     };
 
     public PsCommand(
@@ -99,7 +101,7 @@ internal sealed class PsCommand : BaseCommand
         _logger = logger;
 
         Options.Add(s_formatOption);
-        Options.Add(s_resourcesOption);
+        Options.Add(s_followOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -107,17 +109,19 @@ internal sealed class PsCommand : BaseCommand
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
         var format = parseResult.GetValue(s_formatOption);
-        var includeResources = parseResult.GetValue(s_resourcesOption);
 
-        // Scan for running AppHosts (same as ListAppHostsTool)
-        // Skip status display for JSON output to avoid contaminating stdout
-        var connections = await _interactionService.ShowStatusAsync(
-            SharedCommandStrings.ScanningForRunningAppHosts,
-            async () =>
-            {
-                await _backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
-                return _backchannelMonitor.Connections.ToList();
-            });
+        if (parseResult.GetValue(s_followOption))
+        {
+            return await ExecuteFollowAsync(format, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Scan for running AppHosts (same as ListAppHostsTool). JSON output must not go
+        // through status rendering because non-interactive status text shares stdout.
+        var connections = format == OutputFormat.Json
+            ? await ScanForConnectionsAsync(cancellationToken).ConfigureAwait(false)
+            : await _interactionService.ShowStatusAsync(
+                SharedCommandStrings.ScanningForRunningAppHosts,
+                async () => await ScanForConnectionsAsync(cancellationToken).ConfigureAwait(false));
 
         if (connections.Count == 0)
         {
@@ -139,7 +143,7 @@ internal sealed class PsCommand : BaseCommand
             .ToList();
 
         // Gather info for each AppHost
-        var appHostInfos = await GatherAppHostInfosAsync(orderedConnections, includeResources && format == OutputFormat.Json, cancellationToken).ConfigureAwait(false);
+        var appHostInfos = await GatherAppHostInfosAsync(orderedConnections, cancellationToken).ConfigureAwait(false);
 
         if (format == OutputFormat.Json)
         {
@@ -155,7 +159,167 @@ internal sealed class PsCommand : BaseCommand
         return CommandResult.Success();
     }
 
-    private async Task<List<AppHostDisplayInfo>> GatherAppHostInfosAsync(List<IAppHostAuxiliaryBackchannel> connections, bool includeResources, CancellationToken cancellationToken)
+    private async Task<List<IAppHostAuxiliaryBackchannel>> ScanForConnectionsAsync(CancellationToken cancellationToken)
+    {
+        await _backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+
+        return _backchannelMonitor.Connections.ToList();
+    }
+
+    private abstract record PsFollowUpdate;
+
+    private sealed record ConnectionsUpdate(IReadOnlyList<IAppHostAuxiliaryBackchannel> Connections) : PsFollowUpdate;
+
+    private async Task<CommandResult> ExecuteFollowAsync(OutputFormat format, CancellationToken cancellationToken)
+    {
+        if (format != OutputFormat.Json)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, PsCommandStrings.FollowRequiresJson);
+        }
+        using var followCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var followCancellationToken = followCancellationTokenSource.Token;
+        var updates = Channel.CreateUnbounded<PsFollowUpdate>(new UnboundedChannelOptions
+        {
+            SingleReader = true
+        });
+        var appHostKeyComparer = GetAppHostKeyComparer();
+        var activeAppHosts = new Dictionary<string, AppHostDisplayInfo>(appHostKeyComparer);
+        var lastJsonByAppHost = new Dictionary<string, string>(appHostKeyComparer);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await foreach (var connections in _backchannelMonitor.WatchConnectionsAsync(followCancellationToken).WithCancellation(followCancellationToken).ConfigureAwait(false))
+                {
+                    await updates.Writer.WriteAsync(new ConnectionsUpdate(connections), followCancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (OperationCanceledException) when (followCancellationToken.IsCancellationRequested)
+            {
+                // Expected when the caller stops following.
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed while watching AppHost connections for ps --follow.");
+            }
+            finally
+            {
+                updates.Writer.TryComplete();
+            }
+        }, CancellationToken.None);
+
+        try
+        {
+            await foreach (var update in updates.Reader.ReadAllAsync(followCancellationToken).ConfigureAwait(false))
+            {
+                if (update is ConnectionsUpdate connectionsUpdate)
+                {
+                    var currentConnections = OrderConnections(connectionsUpdate.Connections);
+                    var currentAppHosts = await GatherAppHostInfosAsync(currentConnections, followCancellationToken).ConfigureAwait(false);
+                    var nextActiveAppHosts = new Dictionary<string, AppHostDisplayInfo>(appHostKeyComparer);
+
+                    foreach (var appHost in currentAppHosts)
+                    {
+                        nextActiveAppHosts[GetAppHostKey(appHost)] = appHost;
+                        if (!await TryWriteAppHostInfoAsync(appHost).ConfigureAwait(false))
+                        {
+                            return CommandResult.Success();
+                        }
+                    }
+
+                    foreach (var (key, appHost) in activeAppHosts)
+                    {
+                        if (!nextActiveAppHosts.ContainsKey(key) &&
+                            !await TryWriteAppHostInfoAsync(CopyWithStatus(appHost, AppHostDisplayStatus.Stopped)).ConfigureAwait(false))
+                        {
+                            return CommandResult.Success();
+                        }
+                    }
+
+                    activeAppHosts = nextActiveAppHosts;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (followCancellationToken.IsCancellationRequested)
+        {
+            return CommandResult.Success();
+        }
+        catch (IOException ex)
+        {
+            _logger.LogDebug(ex, "Stopping ps --follow because the output stream is no longer writable.");
+            return CommandResult.Success();
+        }
+        finally
+        {
+            await followCancellationTokenSource.CancelAsync().ConfigureAwait(false);
+        }
+
+        return CommandResult.Success();
+
+        async Task<bool> TryWriteAppHostInfoAsync(AppHostDisplayInfo appHost)
+        {
+            var key = GetAppHostKey(appHost);
+            var json = JsonSerializer.Serialize(appHost, PsCommandJsonContext.CompactRelaxedEscaping.AppHostDisplayInfo);
+            if (lastJsonByAppHost.TryGetValue(key, out var lastJson) &&
+                string.Equals(json, lastJson, StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            lastJsonByAppHost[key] = json;
+
+            try
+            {
+                _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException or ObjectDisposedException)
+            {
+                _logger.LogDebug(ex, "Stopping ps --follow because the output stream is no longer writable.");
+                await followCancellationTokenSource.CancelAsync().ConfigureAwait(false);
+                return false;
+            }
+        }
+    }
+}
+
+internal sealed partial class PsCommand
+{
+    private static string GetAppHostKey(AppHostDisplayInfo appHost)
+    {
+        return string.Concat(appHost.AppHostPath, "\0", appHost.AppHostPid.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static StringComparer GetAppHostKeyComparer()
+    {
+        return OperatingSystem.IsWindows()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+    }
+
+    private static AppHostDisplayInfo CopyWithStatus(AppHostDisplayInfo appHost, string status)
+    {
+        return new AppHostDisplayInfo
+        {
+            AppHostPath = appHost.AppHostPath,
+            AppHostPid = appHost.AppHostPid,
+            Status = status,
+            SdkVersion = appHost.SdkVersion,
+            CliPid = appHost.CliPid,
+            DashboardUrl = appHost.DashboardUrl,
+            LogFilePath = appHost.LogFilePath
+        };
+    }
+
+    private static List<IAppHostAuxiliaryBackchannel> OrderConnections(IEnumerable<IAppHostAuxiliaryBackchannel> connections)
+    {
+        return connections
+            .OrderByDescending(c => c.IsInScope)
+            .ToList();
+    }
+
+    private async Task<List<AppHostDisplayInfo>> GatherAppHostInfosAsync(List<IAppHostAuxiliaryBackchannel> connections, CancellationToken cancellationToken)
     {
         var appHostInfos = new List<AppHostDisplayInfo>();
 
@@ -209,29 +373,15 @@ internal sealed class PsCommand : BaseCommand
                 _logger.LogDebug(ex, "Failed to get dashboard URL for {AppHostPath}", info.AppHostPath);
             }
 
-            List<ResourceJson>? resources = null;
-            if (includeResources)
-            {
-                try
-                {
-                    var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
-                    resources = ResourceSnapshotMapper.MapToResourceJsonList(snapshots, dashboardUrl, includeEnvironmentVariableValues: false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogDebug(ex, "Failed to get resource snapshots for {AppHostPath}", info.AppHostPath);
-                }
-            }
-
             appHostInfos.Add(new AppHostDisplayInfo
             {
                 AppHostPath = appHostPath ?? PsCommandStrings.UnknownPath,
                 AppHostPid = appHostPid,
+                Status = AppHostDisplayStatus.Running,
                 SdkVersion = sdkVersion,
                 CliPid = cliPid,
                 DashboardUrl = dashboardUrl,
-                LogFilePath = cliLogFilePath,
-                Resources = resources
+                LogFilePath = cliLogFilePath
             });
         }
 
@@ -258,20 +408,12 @@ internal sealed class PsCommand : BaseCommand
 
         var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList());
 
-        // Only show the CLI Log column when at least one app host has a log file path.
-        var includeCliLog = appHosts.Any(a => !string.IsNullOrEmpty(a.LogFilePath));
-
         var table = new Table();
         table.AddBoldColumn(PsCommandStrings.HeaderPath);
+        table.AddBoldColumn(SharedCommandStrings.HeaderStatus);
         table.AddBoldColumn(PsCommandStrings.HeaderSdk);
         table.AddBoldColumn(PsCommandStrings.HeaderPid);
         table.AddBoldColumn(PsCommandStrings.HeaderCliPid);
-
-        if (includeCliLog)
-        {
-            table.AddBoldColumn(PsCommandStrings.HeaderCliLog);
-        }
-
         table.AddBoldColumn(PsCommandStrings.HeaderDashboard);
 
         foreach (var appHost in appHosts)
@@ -294,21 +436,11 @@ internal sealed class PsCommand : BaseCommand
             var columns = new List<string>
             {
                 Markup.Escape(shortPath),
+                Markup.Escape(appHost.Status),
                 Markup.Escape(appHost.SdkVersion ?? "-"),
                 appHost.AppHostPid.ToString(CultureInfo.InvariantCulture),
                 cliPid,
             };
-
-            if (includeCliLog)
-            {
-                var logDisplay = "-";
-                if (!string.IsNullOrEmpty(appHost.LogFilePath))
-                {
-                    logDisplay = MarkupHelpers.SafeFileLink(_interactionService, appHost.LogFilePath, Path.GetFileName(appHost.LogFilePath));
-                }
-
-                columns.Add(logDisplay);
-            }
 
             columns.Add(dashboard);
 

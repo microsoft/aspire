@@ -46,45 +46,36 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
-    public void SkillDefinition_All_ContainsExpectedSkills()
+    public void SkillDefinition_CliDefined_ContainsExpectedSkills()
     {
-        Assert.Equal(5, SkillDefinition.All.Count);
-        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspire);
-        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.AspireDeployment);
-        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspireify);
-        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.PlaywrightCli);
-        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.DotnetInspect);
+        Assert.Equal(2, SkillDefinition.CliDefined.Count);
+        Assert.Contains(SkillDefinition.CliDefined, s => s == SkillDefinition.PlaywrightCli);
+        Assert.Contains(SkillDefinition.CliDefined, s => s == SkillDefinition.DotnetInspect);
     }
 
     [Fact]
-    public void SkillDefinition_DefaultSkills()
+    public void SkillDefinition_CliDefinedSkills_AreNotDefault()
     {
-        Assert.True(SkillDefinition.Aspire.IsDefault);
-        Assert.True(SkillDefinition.AspireDeployment.IsDefault);
-        Assert.True(SkillDefinition.Aspireify.IsDefault);
-        Assert.False(SkillDefinition.PlaywrightCli.IsDefault);
-        Assert.False(SkillDefinition.DotnetInspect.IsDefault);
+        Assert.All(SkillDefinition.CliDefined, static skill => Assert.False(skill.IsDefault));
     }
 
     [Fact]
     public void SkillDefinition_DotnetInspect_IsRestrictedToCSharp()
     {
         Assert.Equal([KnownLanguageId.CSharp], SkillDefinition.DotnetInspect.ApplicableLanguages);
-        Assert.Empty(SkillDefinition.Aspire.ApplicableLanguages);
-        Assert.Empty(SkillDefinition.AspireDeployment.ApplicableLanguages);
-        Assert.Empty(SkillDefinition.Aspireify.ApplicableLanguages);
         Assert.Empty(SkillDefinition.PlaywrightCli.ApplicableLanguages);
     }
 
     [Fact]
     public void SkillDefinition_IsApplicableToLanguage_EmptyApplicableLanguages_AlwaysTrue()
     {
-        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(null));
-        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
-        Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
-        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(null));
-        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
-        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
+        var bundleSkill = SkillDefinition.CreateAspireSkillsBundle(
+            "aspire-monitoring",
+            "Observe Aspire apps with logs, traces, metrics, and resource state");
+
+        Assert.True(bundleSkill.IsApplicableToLanguage(null));
+        Assert.True(bundleSkill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
+        Assert.True(bundleSkill.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
     }
 
     [Fact]
@@ -101,54 +92,32 @@ public class CommonAgentApplicatorsTests
     public void SkillDefinition_PlaywrightCli_HasNoSkillContent()
     {
         Assert.Null(SkillDefinition.PlaywrightCli.SkillContent);
-        Assert.Null(SkillDefinition.PlaywrightCli.EmbeddedResourceRoot);
+        Assert.Equal(SkillSourceKind.ExternalInstaller, SkillDefinition.PlaywrightCli.SourceKind);
+        Assert.False(SkillDefinition.PlaywrightCli.HasInstallableFiles);
     }
 
     [Fact]
-    public async Task SkillDefinition_Aspire_HasEmbeddedSkillAssets()
+    public void SkillDefinition_BundleSkills_AreExternallySourced()
     {
-        Assert.Null(SkillDefinition.Aspire.SkillContent);
-        Assert.Equal(CommonAgentApplicators.AspireSkillResourceRoot, SkillDefinition.Aspire.EmbeddedResourceRoot);
-
-        var skillFiles = await EmbeddedSkillResourceLoader.LoadTextFilesAsync(SkillDefinition.Aspire.EmbeddedResourceRoot!, CancellationToken.None);
-
-        Assert.Contains(skillFiles, file => file.RelativePath == "SKILL.md");
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("evals", "evals.json"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "agent-workflows.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "app-commands.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "resource-management.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "monitoring.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "deployment.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "tools-and-configuration.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "typescript-apphosts.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "playwright-handoff.md"));
+        Assert.All(
+            [
+                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireSkillName, "Aspire CLI commands and workflows for distributed apps"),
+                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireifySkillName, "One-time setup: wire up AppHost with discovered projects"),
+                SkillDefinition.CreateAspireSkillsBundle(CommonAgentApplicators.AspireDeploymentSkillName, "Aspire deployment target selection, preflight, publish, and deploy workflows")
+            ],
+            skill =>
+            {
+                Assert.Null(skill.SkillContent);
+                Assert.Equal(SkillSourceKind.AspireSkillsBundle, skill.SourceKind);
+                Assert.True(skill.HasInstallableFiles);
+            });
     }
 
     [Fact]
-    public async Task SkillDefinition_AspireDeployment_HasEmbeddedSkillAssets()
+    public async Task SkillDefinition_StaticInstallableSkillDescriptionsFitAgentHostLimits()
     {
-        Assert.Null(SkillDefinition.AspireDeployment.SkillContent);
-        Assert.Equal(CommonAgentApplicators.AspireDeploymentSkillResourceRoot, SkillDefinition.AspireDeployment.EmbeddedResourceRoot);
-
-        var skillFiles = await EmbeddedSkillResourceLoader.LoadTextFilesAsync(SkillDefinition.AspireDeployment.EmbeddedResourceRoot!, CancellationToken.None);
-
-        Assert.Contains(skillFiles, file => file.RelativePath == "SKILL.md");
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "preflight.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "docker-compose.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "kubernetes.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "azure.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "aws.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "javascript.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "cicd.md"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "github-actions-azure-csharp.yml"));
-        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "github-actions-azure-typescript.yml"));
-    }
-
-    [Fact]
-    public async Task SkillDefinition_InstallableSkillDescriptionsFitAgentHostLimits()
-    {
-        var installableSkills = SkillDefinition.All
-            .Where(static skill => skill.SkillContent is not null || skill.EmbeddedResourceRoot is not null);
+        var installableSkills = SkillDefinition.CliDefined
+            .Where(static skill => skill.SkillContent is not null);
 
         foreach (var skill in installableSkills)
         {
@@ -165,18 +134,24 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
-    public void SkillDefinition_Aspire_ExcludesEvalsFromInstall()
+    public void SkillDefinition_BundleSkill_ExcludesManifestPathsFromInstall()
     {
-        Assert.Contains(SkillDefinition.Aspire.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));
-        Assert.False(SkillDefinition.Aspire.ShouldInstallFile(Path.Combine("evals", "evals.json")));
-        Assert.True(SkillDefinition.Aspire.ShouldInstallFile("SKILL.md"));
+        var bundleSkill = SkillDefinition.CreateAspireSkillsBundle(
+            CommonAgentApplicators.AspireSkillName,
+            "Aspire CLI commands and workflows for distributed apps",
+            installExcludedRelativePaths: [Path.Combine("evals")]);
+
+        Assert.Contains(bundleSkill.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));
+        Assert.False(bundleSkill.ShouldInstallFile(Path.Combine("evals", "evals.json")));
+        Assert.True(bundleSkill.ShouldInstallFile("SKILL.md"));
     }
 
     [Fact]
     public void SkillDefinition_DotnetInspect_HasSkillContent()
     {
         Assert.NotNull(SkillDefinition.DotnetInspect.SkillContent);
-        Assert.Null(SkillDefinition.DotnetInspect.EmbeddedResourceRoot);
+        Assert.Equal(SkillSourceKind.Static, SkillDefinition.DotnetInspect.SourceKind);
+        Assert.True(SkillDefinition.DotnetInspect.HasInstallableFiles);
         Assert.Contains("# dotnet-inspect", SkillDefinition.DotnetInspect.SkillContent);
     }
 
@@ -185,11 +160,6 @@ public class CommonAgentApplicatorsTests
         if (skill.SkillContent is not null)
         {
             return [new SkillAssetFile("SKILL.md", skill.SkillContent)];
-        }
-
-        if (skill.EmbeddedResourceRoot is not null)
-        {
-            return await EmbeddedSkillResourceLoader.LoadTextFilesAsync(skill.EmbeddedResourceRoot, skill.ShouldInstallFile, CancellationToken.None);
         }
 
         throw new InvalidOperationException($"Skill '{skill.Name}' does not define installable files.");

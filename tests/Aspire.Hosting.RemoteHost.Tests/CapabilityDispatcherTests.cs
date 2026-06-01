@@ -734,7 +734,32 @@ public class CapabilityDispatcherTests
     }
 
     [Fact]
-    public void Invoke_ValueTaskCapabilityWithBackgroundThreadOptIn_RunsInline()
+    public void Invoke_TaskCapabilityWithBackgroundThreadOptIn_RunsOnBackgroundThread()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/taskBackgroundThreadProbe", null);
+
+        Assert.NotNull(result);
+        Assert.NotEqual(callerThreadId, result.GetValue<int>());
+    }
+
+    [Fact]
+    public void Invoke_NonGenericTaskCapabilityWithBackgroundThreadOptIn_RunsOnBackgroundThread()
+    {
+        var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        TestCapabilitiesWithBackgroundThreadDispatch.ResetLastObservedThreadId();
+
+        dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/nonGenericTaskBackgroundThreadProbe", null);
+
+        Assert.NotEqual(callerThreadId, TestCapabilitiesWithBackgroundThreadDispatch.LastObservedThreadId);
+    }
+
+    [Fact]
+    public void Invoke_ValueTaskCapabilityWithBackgroundThreadOptIn_RunsOnBackgroundThread()
     {
         var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly);
         var callerThreadId = Environment.CurrentManagedThreadId;
@@ -742,11 +767,11 @@ public class CapabilityDispatcherTests
         var result = dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/valueTaskBackgroundThreadProbe", null);
 
         Assert.NotNull(result);
-        Assert.Equal(callerThreadId, result.GetValue<int>());
+        Assert.NotEqual(callerThreadId, result.GetValue<int>());
     }
 
     [Fact]
-    public void Invoke_NonGenericValueTaskCapabilityWithBackgroundThreadOptIn_RunsInline()
+    public void Invoke_NonGenericValueTaskCapabilityWithBackgroundThreadOptIn_RunsOnBackgroundThread()
     {
         var dispatcher = CreateDispatcher(typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly);
         var callerThreadId = Environment.CurrentManagedThreadId;
@@ -755,7 +780,56 @@ public class CapabilityDispatcherTests
 
         dispatcher.Invoke("Aspire.Hosting.RemoteHost.Tests/nonGenericValueTaskBackgroundThreadProbe", null);
 
-        Assert.Equal(callerThreadId, TestCapabilitiesWithBackgroundThreadDispatch.LastObservedThreadId);
+        Assert.NotEqual(callerThreadId, TestCapabilitiesWithBackgroundThreadDispatch.LastObservedThreadId);
+    }
+
+    [Fact]
+    public void Invoke_AsyncReturningCapabilityWithBackgroundThreadOptIn_InvokesSyncCallbackOnBackgroundThread()
+    {
+        var handles = new HandleRegistry();
+        var invoker = new TestCallbackInvoker();
+        var (marshaller, callbackFactory) = CreateTestMarshallerWithCallbacks(handles, invoker);
+        using var _ = callbackFactory;
+        var dispatcher = new CapabilityDispatcher(handles, marshaller, [typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly]);
+        var callerThreadId = Environment.CurrentManagedThreadId;
+
+        TestCapabilitiesWithBackgroundThreadDispatch.ResetLastObservedThreadId();
+
+        dispatcher.Invoke(
+            "Aspire.Hosting.RemoteHost.Tests/invokeSyncCallbackFromAsyncBackgroundThreadProbe",
+            new JsonObject { ["callback"] = "background-callback" });
+
+        Assert.NotEqual(callerThreadId, TestCapabilitiesWithBackgroundThreadDispatch.LastObservedThreadId);
+        Assert.Single(invoker.Invocations);
+        Assert.Equal("background-callback", invoker.Invocations[0].CallbackId);
+    }
+
+    [Fact]
+    public void Invoke_AsyncReturningCapabilityWithBackgroundThreadOptIn_DoesNotRunSyncCallbackOnCallerSynchronizationContext()
+    {
+        var handles = new HandleRegistry();
+        var invoker = new TestSynchronizationContextCallbackInvoker();
+        var (marshaller, callbackFactory) = CreateTestMarshallerWithCallbacks(handles, invoker);
+        using var _ = callbackFactory;
+        var dispatcher = new CapabilityDispatcher(handles, marshaller, [typeof(TestCapabilitiesWithBackgroundThreadDispatch).Assembly]);
+        var callerSynchronizationContext = new SynchronizationContext();
+        var originalSynchronizationContext = SynchronizationContext.Current;
+
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(callerSynchronizationContext);
+
+            dispatcher.Invoke(
+                "Aspire.Hosting.RemoteHost.Tests/invokeSyncCallbackFromAsyncBackgroundThreadProbe",
+                new JsonObject { ["callback"] = "background-callback" });
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(originalSynchronizationContext);
+        }
+
+        Assert.Single(invoker.Invocations);
+        Assert.NotSame(callerSynchronizationContext, invoker.LastObservedSynchronizationContext);
     }
 
     [Fact]
@@ -1962,6 +2036,32 @@ public class CapabilityDispatcherTests
 }
 
 /// <summary>
+/// Captures the synchronization context observed by callback invocation.
+/// </summary>
+internal sealed class TestSynchronizationContextCallbackInvoker : ICallbackInvoker
+{
+    public List<(string CallbackId, JsonNode? Args)> Invocations { get; } = [];
+    public SynchronizationContext? LastObservedSynchronizationContext { get; private set; }
+    public bool IsConnected => true;
+
+    public Task<TResult> InvokeAsync<TResult>(string callbackId, JsonNode? args, CancellationToken cancellationToken = default)
+    {
+        LastObservedSynchronizationContext = SynchronizationContext.Current;
+        Invocations.Add((callbackId, args));
+
+        return Task.FromResult(default(TResult)!);
+    }
+
+    public Task InvokeAsync(string callbackId, JsonNode? args, CancellationToken cancellationToken = default)
+    {
+        LastObservedSynchronizationContext = SynchronizationContext.Current;
+        Invocations.Add((callbackId, args));
+
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>
 /// Test capabilities for scanning.
 /// </summary>
 internal static class TestCapabilities
@@ -2224,6 +2324,21 @@ internal static class TestCapabilitiesWithBackgroundThreadDispatch
         return Environment.CurrentManagedThreadId;
     }
 
+    /// <ats-summary>Captures the current thread for Task&lt;T&gt; invocation</ats-summary>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static Task<int> TaskBackgroundThreadProbe()
+    {
+        return Task.FromResult(Environment.CurrentManagedThreadId);
+    }
+
+    /// <ats-summary>Captures the current thread for Task invocation</ats-summary>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static Task NonGenericTaskBackgroundThreadProbe()
+    {
+        LastObservedThreadId = Environment.CurrentManagedThreadId;
+        return Task.CompletedTask;
+    }
+
     /// <ats-summary>Captures the current thread for ValueTask&lt;T&gt; invocation</ats-summary>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static ValueTask<int> ValueTaskBackgroundThreadProbe()
@@ -2237,6 +2352,16 @@ internal static class TestCapabilitiesWithBackgroundThreadDispatch
     {
         LastObservedThreadId = Environment.CurrentManagedThreadId;
         return ValueTask.CompletedTask;
+    }
+
+    /// <ats-summary>Synchronously invokes a callback from a Task-returning capability</ats-summary>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static Task InvokeSyncCallbackFromAsyncBackgroundThreadProbe(Func<Task> callback)
+    {
+        LastObservedThreadId = Environment.CurrentManagedThreadId;
+        callback().GetAwaiter().GetResult();
+
+        return Task.CompletedTask;
     }
 }
 

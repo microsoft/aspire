@@ -617,24 +617,17 @@ internal sealed class CapabilityDispatcher
         return InvokeAsync(capabilityId, args).GetAwaiter().GetResult();
     }
 
-    private static async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runSyncOnBackgroundThread)
+    private static async Task<object?> InvokeMethodAsync(MethodInfo method, object? target, object?[] methodArgs, bool runInvocationOnBackgroundThread)
     {
-        if (runSyncOnBackgroundThread && !IsAsyncReturnType(method.ReturnType))
+        if (runInvocationOnBackgroundThread)
         {
+            // Async-returning exports can execute substantial synchronous setup before returning
+            // their Task or ValueTask. Run that invocation path off the JSON-RPC synchronization context so
+            // sync-over-async callback proxies can still receive nested RPC responses.
             return await Task.Run(() => InvokeMethodCore(method, target, methodArgs)).ConfigureAwait(false);
         }
 
         return InvokeMethodCore(method, target, methodArgs);
-    }
-
-    private static bool IsAsyncReturnType(Type returnType)
-    {
-        if (typeof(Task).IsAssignableFrom(returnType) || returnType == typeof(ValueTask))
-        {
-            return true;
-        }
-
-        return returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(ValueTask<>);
     }
 
     private static async Task<object?> UnwrapAsyncResultAsync(object? result, Type returnType)

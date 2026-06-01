@@ -13,8 +13,8 @@ import {
     ProbeType,
     ResourceCommandState,
     refExpr,
-} from './.modules/aspire.mjs';
-import type { DockerfileBuilderCallbackContext } from './.modules/aspire.mjs';
+} from './.aspire/modules/aspire.mjs';
+import type { DockerfileBuilderCallbackContext, DockerfileFactoryContext } from './.aspire/modules/aspire.mjs';
 import { fileURLToPath } from 'node:url';
 
 const builder = await createBuilder();
@@ -34,6 +34,14 @@ const taggedContainer = await builder.addContainer("mytaggedcontainer", {
 
 // addDockerfile
 const dockerContainer = await builder.addDockerfile("dockerapp", "./app");
+const dockerFactoryContainer = await builder.addDockerfileFactory("dockerfactoryapp", "./app", async (factoryContext: DockerfileFactoryContext) => {
+    const _factoryResource = await factoryContext.resource();
+    return `
+FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+WORKDIR /app
+ENTRYPOINT ["dotnet", "App.dll"]
+`;
+}, { stage: "runtime" });
 
 const configureDockerfileBuilder = async (dockerfileContext: DockerfileBuilderCallbackContext) => {
     const _dockerfileResource = await dockerfileContext.resource();
@@ -67,6 +75,14 @@ const configureDockerfileBuilder = async (dockerfileContext: DockerfileBuilderCa
 
 const dockerBuilderContainer = await builder.addDockerfileBuilder("dockerbuilderapp", "./app", configureDockerfileBuilder, { stage: "runtime" });
 await dockerContainer.withDockerfileBuilder("./app", configureDockerfileBuilder, { stage: "runtime" });
+await dockerFactoryContainer.withDockerfileFactory("./app", async (factoryContext: DockerfileFactoryContext) => {
+    const _factoryResource = await factoryContext.resource();
+    return `
+FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+WORKDIR /app
+ENTRYPOINT ["dotnet", "App.dll"]
+`;
+}, { stage: "runtime" });
 
 // addExecutable (pre-existing)
 const exe = await builder.addExecutable("myexe", "echo", ".", ["hello"]);
@@ -144,8 +160,8 @@ await dockerContainer.withHttpEndpointCallback(async (updateContext) => {
 }, { name: "http", createIfNotExists: false });
 const endpoint = await dockerContainer.getEndpoint("http");
 const expr = refExpr`Host=${endpoint}`;
-const endpointHost = await endpoint.property(EndpointProperty.Host);
-const endpointPort = await endpoint.property(EndpointProperty.Port);
+const endpointHost = await dockerContainer.getEndpoint("http").property(EndpointProperty.Host);
+const endpointPort = await dockerContainer.getEndpoint("http").property(EndpointProperty.Port);
 const endpointUrl = refExpr`http://${endpointHost}:${endpointPort}`;
 
 const builtConnectionString = await builder.addConnectionString("customcs", { environmentVariableNameOrExpression: expr });
@@ -154,6 +170,7 @@ await builtConnectionString.withConnectionProperty("Host", expr);
 await builtConnectionString.withConnectionProperty("Mode", "Development");
 await container.withReference(endpoint);
 await container.withReference("https://example.com/", { name: "external-uri" });
+const externalService = await builder.addExternalService("external-service", "https://example.com");
 
 const envConnectionString = await builder.addConnectionString("envcs");
 const expressionConnectionString = await builder.addConnectionString("exprcs", { environmentVariableNameOrExpression: expr });
@@ -209,13 +226,15 @@ await container.withEnvironment("MY_GENERATED_PARAM", generatedParam);
 await container.withEnvironment("MY_CONN", envConnectionString);
 await container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
 
+// withEnvironment — with external service resource
+await container.withEnvironment("MY_EXTERNAL_SERVICE", externalService);
+
 // callback editors/facades
 await container.withEnvironmentCallback(async (context) => {
     const environment = await context.environment();
     const environmentLog = await context.log();
     const _environmentResource = await context.resource();
-    const environmentExecutionContext = await context.executionContext();
-    const _environmentIsRunMode: boolean = await environmentExecutionContext.isRunMode();
+    const _environmentIsRunMode: boolean = await context.executionContext().isRunMode();
     await environmentLog.warning("Environment callback logger");
     await environment.set("MY_CALLBACK_ENDPOINT", endpoint);
 });
@@ -224,8 +243,7 @@ await container.withArgsCallback(async (context) => {
     const args = await context.args();
     const argsLog = await context.log();
     const _argsResource = await context.resource();
-    const argsExecutionContext = await context.executionContext();
-    const _argsIsRunMode: boolean = await argsExecutionContext.isRunMode();
+    const _argsIsRunMode: boolean = await context.executionContext().isRunMode();
     await argsLog.error("Args callback logger");
     await args.add("--validation-callback");
     await args.add(expr);
@@ -234,12 +252,13 @@ await container.withArgsCallback(async (context) => {
 await container.withUrls(async (context) => {
     const _urlsResource = await context.resource();
     const urlsLog = await context.log();
-    const urlsExecutionContext = await context.executionContext();
-    const _urlsIsRunMode: boolean = await urlsExecutionContext.isRunMode();
+    const _urlsIsRunMode: boolean = await context.executionContext().isRunMode();
     const callbackEndpoint = await context.getEndpoint("http");
+    const callbackEndpointHost = await context.getEndpoint("http").property(EndpointProperty.Host);
     const urls = await context.urls();
     await urlsLog.debug("URLs callback logger");
     await urls.add(refExpr`https://${callbackEndpoint}`);
+    await urls.add(refExpr`https://${callbackEndpointHost}`);
     await urls.addForEndpoint(callbackEndpoint, "/details", { displayText: "Details" });
 });
 
@@ -346,8 +365,7 @@ await container.withPipelineStepFactory("custom-build-step", async (stepContext)
     await pipelineSummary.add("PipelineContext", "Validated");
     await pipelineSummary.addMarkdown("PipelineMarkdown", "**Validated**");
 
-    const executionContext = await stepContext.executionContext();
-    const _isPublishMode: boolean = await executionContext.isPublishMode();
+    const _isPublishMode: boolean = await stepContext.executionContext().isPublishMode();
     const stepServices = await stepContext.services();
     const stepLogger = await stepContext.logger();
     await stepLogger.logInformation("Pipeline step context logger");
@@ -411,11 +429,10 @@ await container.withPipelineConfiguration(async (configContext) => {
 // ===================================================================
 
 const _appHostDirectory: string = await builder.appHostDirectory();
-const hostEnvironment = await builder.environment();
-const _isDevelopment: boolean = await hostEnvironment.isDevelopment();
-const _isProduction: boolean = await hostEnvironment.isProduction();
-const _isStaging: boolean = await hostEnvironment.isStaging();
-const _isSpecificEnvironment: boolean = await hostEnvironment.isEnvironment("Development");
+const _isDevelopment: boolean = await builder.environment().isDevelopment();
+const _isProduction: boolean = await builder.environment().isProduction();
+const _isStaging: boolean = await builder.environment().isStaging();
+const _isSpecificEnvironment: boolean = await builder.environment().isEnvironment("Development");
 
 const builderConfiguration = await builder.getConfiguration();
 const _configValue: string = await builderConfiguration.getConfigValue("MyConfig:Key");
@@ -424,14 +441,13 @@ const _configSection = await builderConfiguration.getSection("MyConfig");
 const _configChildren = await builderConfiguration.getChildren();
 const _configExists: boolean = await builderConfiguration.exists("MyConfig:Key");
 
-const builderExecutionContext = await builder.executionContext();
+const builderExecutionContext = builder.executionContext();
 const executionContextServiceProvider = await builderExecutionContext.serviceProvider();
 const _distributedApplicationModelFromExecutionContext = await executionContextServiceProvider.getDistributedApplicationModel();
 const resourceCommandService = await executionContextServiceProvider.getResourceCommandService();
 
 await builder.addEventingSubscriber(async (registrationContext) => {
-    const subscriberExecutionContext = await registrationContext.executionContext();
-    const _subscriberIsRunMode: boolean = await subscriberExecutionContext.isRunMode();
+    const _subscriberIsRunMode: boolean = await registrationContext.executionContext().isRunMode();
     const _subscriberCancellationToken = await registrationContext.cancellationToken();
 
     await registrationContext.onBeforeStart(async (beforeStartEvent) => {
@@ -704,7 +720,8 @@ await container.withCommand("noop", "Noop", async () => {
     },
 });
 await container.withCommand("echo", "Echo", async (ctx) => {
-    const commandArguments = await (await ctx.arguments()).toArray();
+    const commandInputs = await ctx.arguments();
+    const commandArguments = await commandInputs.toArray();
 
     return { success: commandArguments[0]?.value === "hello" };
 }, {

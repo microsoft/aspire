@@ -82,7 +82,7 @@ func main() {
 	_ = project.AddFabricTool("fabric-tool", []string{"workspace-id"})
 	_ = project.AddAzureFunctionTool("az-func-tool", "myFunction", "Does something", "{}", "https://queue.core.windows.net", "input-q", "https://queue.core.windows.net", "output-q")
 	_ = project.AddFunctionTool("func-tool", "myFunc", "{}")
-	_ = project.AddPromptAgent(chat, "prompt-agent")
+	_ = project.AddPromptAgent("prompt-agent", chat)
 
 	builderProjectFoundry := builder.AddFoundry("builder-project-foundry")
 	builderProject := builderProjectFoundry.AddProject("builder-project")
@@ -119,14 +119,17 @@ server.listen(port, '127.0.0.1');
 `,
 		})
 
-	hostedAgent.PublishAsHostedAgent(&aspire.PublishAsHostedAgentOptions{
-		Project: &project,
-		Configure: func(cfg aspire.HostedAgentConfiguration) {
-			cfg.SetDescription("Validation hosted agent")
-			cfg.SetCpu(1)
-			cfg.SetMemory(2)
-			_ = cfg.Metadata().Set("scenario", "validation")
-			_ = cfg.EnvironmentVariables().Set("VALIDATION_MODE", "true")
+	hostedAgent.AsHostedAgent(project, &aspire.AsHostedAgentOptions{
+		Options: &aspire.HostedAgentOptions{
+			Description: "Validation hosted agent",
+			Cpu:         aspire.Float64Ptr(1),
+			Memory:      aspire.Float64Ptr(2),
+			Metadata: map[string]string{
+				"scenario": "validation",
+			},
+			EnvironmentVariables: map[string]string{
+				"VALIDATION_MODE": "true",
+			},
 		},
 	})
 

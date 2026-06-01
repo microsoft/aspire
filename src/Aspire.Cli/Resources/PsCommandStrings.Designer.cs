@@ -87,21 +87,21 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string HeaderCliLog {
-            get {
-                return ResourceManager.GetString("HeaderCliLog", resourceCulture);
-            }
-        }
-
         public static string UnknownPath {
             get {
                 return ResourceManager.GetString("UnknownPath", resourceCulture);
             }
         }
 
-        public static string ResourcesOptionDescription {
+        public static string FollowOptionDescription {
             get {
-                return ResourceManager.GetString("ResourcesOptionDescription", resourceCulture);
+                return ResourceManager.GetString("FollowOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string FollowRequiresJson {
+            get {
+                return ResourceManager.GetString("FollowRequiresJson", resourceCulture);
             }
         }
     }

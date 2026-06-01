@@ -17,8 +17,6 @@ public static class KnownTraceFields
     public const string ParentIdField = "trace.parentid";
     public const string DestinationField = "trace.destination";
 
-    // Duration filtering is currently exposed by Trace Detail only. Do not include it
-    // here unless the Traces list also gets explicit trace-level duration semantics.
     public static readonly List<string> AllFields = [
         NameField,
         KindField,
@@ -26,6 +24,7 @@ public static class KnownTraceFields
         KnownResourceFields.ServiceNameField,
         TraceIdField,
         SpanIdField,
-        KnownSourceFields.NameField
+        KnownSourceFields.NameField,
+        DurationField
     ];
 }

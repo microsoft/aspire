@@ -10,6 +10,9 @@
     <trans-unit id="extension.debug.args">
       <source xml:lang="en">Additional arguments to pass to the Aspire CLI command</source>
     </trans-unit>
+    <trans-unit id="views.appHosts.name">
+      <source xml:lang="en">AppHosts</source>
+    </trans-unit>
     <trans-unit id="mcpServerDefinitionProviders.aspire.label">
       <source xml:lang="en">Aspire</source>
     </trans-unit>
@@ -112,14 +115,17 @@
     <trans-unit id="command.copyAppHostPath">
       <source xml:lang="en">Copy AppHost path</source>
     </trans-unit>
-    <trans-unit id="command.copyPid">
-      <source xml:lang="en">Copy ID</source>
+    <trans-unit id="command.copyLogFilePath">
+      <source xml:lang="en">Copy Path</source>
     </trans-unit>
     <trans-unit id="command.copyEndpointUrl">
       <source xml:lang="en">Copy URL</source>
     </trans-unit>
     <trans-unit id="command.copyResourceName">
       <source xml:lang="en">Copy resource name</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.logFilePathInvalid">
+      <source xml:lang="en">Could not determine the AppHost log file to open.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceNotFound">
       <source xml:lang="en">Could not determine the AppHost source file to open.</source>
@@ -137,7 +143,7 @@
       <source xml:lang="en">Dashboard</source>
     </trans-unit>
     <trans-unit id="command.debugAppHost">
-      <source xml:lang="en">Debug Aspire AppHost</source>
+      <source xml:lang="en">Debug AppHost</source>
     </trans-unit>
     <trans-unit id="command.codeLensDebugPipelineStep">
       <source xml:lang="en">Debug Aspire pipeline step</source>
@@ -238,6 +244,12 @@
     <trans-unit id="aspire-vscode.strings.failedToInspectRuntimeConfig">
       <source xml:lang="en">Failed to inspect runtimeconfig for {0}: {1}</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsFailed">
+      <source xml:lang="en">Failed to load dynamic command inputs. Run this command from the Aspire Dashboard or Aspire CLI instead.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.logFileOpenFailed">
+      <source xml:lang="en">Failed to open AppHost log file {0}: {1}</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceOpenFailed">
       <source xml:lang="en">Failed to open AppHost source file: {0}</source>
     </trans-unit>
@@ -258,6 +270,12 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.title">
       <source xml:lang="en">Get started with Aspire</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.goLabel">
+      <source xml:lang="en">Go</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.goDisplayName">
+      <source xml:lang="en">Go: {0}</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.enableDebugConfigEnvironmentLogging">
       <source xml:lang="en">Include environment variables when logging debug session configurations. This can help diagnose environment-related issues but may expose sensitive information in logs.</source>
@@ -328,17 +346,17 @@
     <trans-unit id="aspire-vscode.strings.noCsprojFound">
       <source xml:lang="en">No AppHost found in the current workspace.</source>
     </trans-unit>
+    <trans-unit id="views.appHosts.welcome">
+      <source xml:lang="en">No Aspire AppHosts detected in this workspace.&#10;[Refresh](command:aspire-vscode.refreshAppHosts)</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.noCsharpBuildTask">
       <source xml:lang="en">No C# Dev Kit build task found, defaulting to dotnet CLI. Maybe the workspace hasn&apos;t finished loading?</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.noOutputFromMsbuild">
       <source xml:lang="en">No output from msbuild.</source>
     </trans-unit>
-    <trans-unit id="views.runningAppHosts.welcome">
-      <source xml:lang="en">No running Aspire AppHost detected in this workspace.&#10;[Refresh](command:aspire-vscode.refreshRunningAppHosts)</source>
-    </trans-unit>
-    <trans-unit id="views.runningAppHosts.globalWelcome">
-      <source xml:lang="en">No running Aspire AppHosts detected on this machine.&#10;[Refresh](command:aspire-vscode.refreshRunningAppHosts)</source>
+    <trans-unit id="views.appHosts.globalWelcome">
+      <source xml:lang="en">No running Aspire AppHosts detected on this machine.&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.noWatchTask">
       <source xml:lang="en">No watch task found. Please ensure a watch task is defined in your workspace.</source>
@@ -349,8 +367,14 @@
     <trans-unit id="aspire-vscode.strings.noWorkspaceOpen">
       <source xml:lang="en">No workspace is open. Please open a folder or workspace before running this command.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostDescribeMayNotBeSupported">
+      <source xml:lang="en">No workspace resources were returned. Workspace resources require the AppHost to reference Aspire.Hosting {0} or newer.</source>
+    </trans-unit>
     <trans-unit id="extension.description">
       <source xml:lang="en">Official Aspire extension for Visual Studio Code</source>
+    </trans-unit>
+    <trans-unit id="command.viewAppHostLogFile">
+      <source xml:lang="en">Open AppHost logs file</source>
     </trans-unit>
     <trans-unit id="command.openAppHostSource">
       <source xml:lang="en">Open AppHost source</source>
@@ -406,7 +430,10 @@
     <trans-unit id="aspire-vscode.strings.rpcServerNotInitialized">
       <source xml:lang="en">RPC server is not initialized.</source>
     </trans-unit>
-    <trans-unit id="command.refreshRunningAppHosts">
+    <trans-unit id="command.refreshAppHosts">
+      <source xml:lang="en">Refresh AppHosts</source>
+    </trans-unit>
+    <trans-unit id="command.globalRefreshAppHosts">
       <source xml:lang="en">Refresh running AppHosts</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.requiredCapability">
@@ -422,7 +449,7 @@
       <source xml:lang="en">Reveal resource in Aspire panel</source>
     </trans-unit>
     <trans-unit id="command.runAppHost">
-      <source xml:lang="en">Run Aspire AppHost</source>
+      <source xml:lang="en">Run AppHost</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.runApp.title">
       <source xml:lang="en">Run your app</source>
@@ -433,9 +460,6 @@
     <trans-unit id="aspire-vscode.strings.runProject">
       <source xml:lang="en">Run {0}</source>
     </trans-unit>
-    <trans-unit id="views.runningAppHosts.name">
-      <source xml:lang="en">Running AppHosts</source>
-    </trans-unit>
     <trans-unit id="aspire-vscode.strings.runningAspireRestoreProgress">
       <source xml:lang="en">Running aspire restore ({0}/{1} projects) ...</source>
     </trans-unit>
@@ -445,8 +469,8 @@
     <trans-unit id="walkthrough.getStarted.createProject.description">
       <source xml:lang="en">Scaffold a new Aspire project from a starter template. The template includes an AppHost orchestrator, a sample API, and a web frontend.&#10;&#10;[Create new project](command:aspire-vscode.new)</source>
     </trans-unit>
-    <trans-unit id="views.runningAppHosts.loading">
-      <source xml:lang="en">Searching for running AppHosts...</source>
+    <trans-unit id="views.appHosts.loading">
+      <source xml:lang="en">Searching for AppHosts...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.openCliInstallInstructions">
       <source xml:lang="en">See CLI installation instructions</source>
@@ -476,13 +500,13 @@
       <source xml:lang="en">Show colored status dots in the editor gutter next to resource declarations in AppHost files.</source>
     </trans-unit>
     <trans-unit id="command.switchToWorkspaceView">
-      <source xml:lang="en">Show workspace AppHost</source>
+      <source xml:lang="en">Show workspace AppHosts</source>
     </trans-unit>
     <trans-unit id="command.startResource">
       <source xml:lang="en">Start</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.runApp.description">
-      <source xml:lang="en">Start your Aspire app to launch all services and open the real-time dashboard.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHost)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHost)</source>
+      <source xml:lang="en">Start your Aspire app to launch all services and open the real-time dashboard.&#10;&#10;[Run AppHost](command:aspire-vscode.runAppHostCommand)&#10;&#10;[Debug AppHost](command:aspire-vscode.debugAppHostCommand)</source>
     </trans-unit>
     <trans-unit id="command.stopResource">
       <source xml:lang="en">Stop</source>
@@ -502,11 +526,11 @@
     <trans-unit id="walkthrough.getStarted.installCli.description">
       <source xml:lang="en">The Aspire CLI creates, runs, and manages your applications. Install it using the commands in the panel, then verify your installation.&#10;&#10;[Verify installation](command:aspire-vscode.verifyCliInstalled)</source>
     </trans-unit>
-    <trans-unit id="views.runningAppHosts.errorWelcome">
-      <source xml:lang="en">The Aspire CLI is not installed or does not support this feature. Install or update the Aspire CLI and restart VS Code to get started.&#10;[Update Aspire CLI](command:aspire-vscode.updateSelf)&#10;[Refresh](command:aspire-vscode.refreshRunningAppHosts)</source>
-    </trans-unit>
     <trans-unit id="walkthrough.getStarted.dashboard.description">
       <source xml:lang="en">The Aspire Dashboard shows your resources, endpoints, logs, traces, and metrics — all in one place.&#10;&#10;[Open dashboard](command:aspire-vscode.openDashboard)</source>
+    </trans-unit>
+    <trans-unit id="views.appHosts.errorWelcome">
+      <source xml:lang="en">The Aspire panel workspace view requires Aspire CLI 13.2.0 or newer and an AppHost that references Aspire.Hosting 13.2.0 or newer. Install or update the Aspire CLI and update your AppHost package to get started.&#10;[Update Aspire CLI](command:aspire-vscode.updateSelf)&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser">
       <source xml:lang="en">The browser to use when auto-launching the Aspire Dashboard.</source>
@@ -517,17 +541,29 @@
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsUnsupported">
+      <source xml:lang="en">This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandSecretWarning">
       <source xml:lang="en">This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.fieldRequired">
       <source xml:lang="en">This field is required.</source>
     </trans-unit>
+    <trans-unit id="configuration.aspire.appHostDiscoveryTimeoutMs">
+      <source xml:lang="en">Timeout in milliseconds for Aspire CLI commands that discover AppHost projects. Minimum: 1000.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.unableToAddFolderToWorkspace">
+      <source xml:lang="en">Unable to add folder to workspace: {0}</source>
+    </trans-unit>
     <trans-unit id="command.updateSelf">
       <source xml:lang="en">Update Aspire CLI</source>
     </trans-unit>
     <trans-unit id="command.update">
       <source xml:lang="en">Update integrations</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandLoadingDynamicInputs">
+      <source xml:lang="en">Updating command inputs...</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandCustomChoice">
       <source xml:lang="en">Use &quot;{0}&quot;</source>
@@ -550,6 +586,9 @@
     <trans-unit id="command.viewResourceLogs">
       <source xml:lang="en">View logs</source>
     </trans-unit>
+    <trans-unit id="command.viewAppHostSource">
+      <source xml:lang="en">View source</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.watchProject">
       <source xml:lang="en">Watch {0} ({1})</source>
     </trans-unit>
@@ -558,6 +597,9 @@
     </trans-unit>
     <trans-unit id="configuration.aspire.registerMcpServerInWorkspace">
       <source xml:lang="en">Whether to register the Aspire MCP server when a workspace is open.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireCliDescribeNotSupported">
+      <source xml:lang="en">Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.yesLabel">
       <source xml:lang="en">Yes</source>

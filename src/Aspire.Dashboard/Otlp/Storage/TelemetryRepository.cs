@@ -467,6 +467,11 @@ public sealed partial class TelemetryRepository : IDisposable
                 results = filter.Apply(results);
             }
 
+            if (context.TextFragments is { Length: > 0 } textFragments)
+            {
+                results = results.Where(l => MatchesLogTextFragments(l, textFragments));
+            }
+
             return OtlpHelpers.GetItems(results, context.StartIndex, context.Count, _logs.IsFull);
         }
         finally
@@ -633,7 +638,8 @@ public sealed partial class TelemetryRepository : IDisposable
             var optimizedFilters = CreateOptimizedTraceFilters(filters);
             var resourceFilter = resources is { Count: > 0 } ? resources : null;
             var hasTelemetryFilters = filters.Count > 0;
-            var hasFilterText = !string.IsNullOrWhiteSpace(context.FilterText);
+            var hasFilterText = !string.IsNullOrWhiteSpace(context.TraceNameFilterText);
+            var hasTextFragments = context.TextFragments is { Length: > 0 };
             var startIndex = Math.Max(context.StartIndex, 0);
             var count = Math.Max(context.Count, 0);
             List<OtlpTrace>? items = null;
@@ -647,12 +653,17 @@ public sealed partial class TelemetryRepository : IDisposable
                     continue;
                 }
 
-                if (hasFilterText && !trace.FullName.Contains(context.FilterText, StringComparison.OrdinalIgnoreCase))
+                if (hasFilterText && !trace.FullName.Contains(context.TraceNameFilterText!, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
                 if (hasTelemetryFilters && !MatchesFilters(trace, filters, optimizedFilters))
+                {
+                    continue;
+                }
+
+                if (hasTextFragments && !MatchesTraceTextFragments(trace, context.TextFragments!))
                 {
                     continue;
                 }
@@ -694,6 +705,232 @@ public sealed partial class TelemetryRepository : IDisposable
         }
     }
 
+    public GetSpansResponse GetSpans(GetSpansRequest context)
+    {
+        List<OtlpResource>? resources = null;
+        if (context.ResourceKey is { } key)
+        {
+            resources = GetResources(key, includeUninstrumentedPeers: true);
+
+            if (resources.Count == 0)
+            {
+                return new GetSpansResponse
+                {
+                    PagedResult = PagedResult<OtlpSpan>.Empty
+                };
+            }
+        }
+
+        _tracesLock.EnterReadLock();
+
+        try
+        {
+            var filters = context.Filters.GetEnabledFilters().ToList();
+            var resourceFilter = resources is { Count: > 0 } ? resources : null;
+            var hasTraceIdFilter = !string.IsNullOrEmpty(context.TraceId);
+            var startIndex = Math.Max(context.StartIndex, 0);
+            var count = Math.Max(context.Count, 0);
+            List<OtlpSpan>? items = null;
+            var totalItemCount = 0;
+
+            foreach (var trace in _traces)
+            {
+                if (resourceFilter is not null && !MatchResources(trace, resourceFilter))
+                {
+                    continue;
+                }
+
+                if (hasTraceIdFilter && !OtlpHelpers.MatchTelemetryId(context.TraceId!, trace.TraceId))
+                {
+                    continue;
+                }
+
+                foreach (var span in trace.Spans)
+                {
+                    if (!MatchesSpanCriteria(span, context.TraceId, context.HasError, filters, context.TextFragments))
+                    {
+                        continue;
+                    }
+
+                    totalItemCount++;
+
+                    if (totalItemCount > startIndex && (items?.Count ?? 0) < count)
+                    {
+                        items ??= new List<OtlpSpan>(Math.Min(count, 64));
+                        items.Add(span);
+                    }
+                }
+            }
+
+            var pagedResults = new PagedResult<OtlpSpan>
+            {
+                Items = items ?? new List<OtlpSpan>(),
+                TotalItemCount = totalItemCount,
+                IsFull = _traces.IsFull
+            };
+
+            return new GetSpansResponse
+            {
+                PagedResult = pagedResults
+            };
+        }
+        finally
+        {
+            _tracesLock.ExitReadLock();
+        }
+    }
+
+    /// <summary>
+    /// Applies traceId, hasError, telemetry filters, and text fragment matching to a span.
+    /// Shared between GetSpans (initial query) and PushSpansToWatchers (push path).
+    /// </summary>
+    private static bool MatchesSpanCriteria(OtlpSpan span, string? traceId, bool? hasError, List<TelemetryFilter> filters, string[]? textFragments)
+    {
+        if (!string.IsNullOrEmpty(traceId) && !OtlpHelpers.MatchTelemetryId(traceId, span.TraceId))
+        {
+            return false;
+        }
+
+        if (hasError.HasValue && (span.Status == OtlpSpanStatusCode.Error) != hasError.Value)
+        {
+            return false;
+        }
+
+        if (filters.Count > 0 && !MatchesSpanFilters(span, filters))
+        {
+            return false;
+        }
+
+        if (textFragments is { Length: > 0 } fragments && !MatchesSpanTextFragments(span, fragments))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true when the span matches all enabled filters applied directly to the span.
+    /// </summary>
+    private static bool MatchesSpanFilters(OtlpSpan span, List<TelemetryFilter> filters)
+    {
+        foreach (var filter in filters)
+        {
+            if (!filter.Enabled)
+            {
+                continue;
+            }
+            if (!filter.Apply(span))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Returns true when the span's searchable fields match all text fragments.
+    /// </summary>
+    private static bool MatchesSpanTextFragments(OtlpSpan span, string[] fragments)
+    {
+        return SearchTextParser.MatchesAllFragments(fragments, span, static (span, fragment) =>
+        {
+            if (span.Name.Contains(fragment, StringComparisons.FullTextSearch) ||
+                span.SpanId.Contains(fragment, StringComparisons.FullTextSearch) ||
+                span.TraceId.Contains(fragment, StringComparisons.FullTextSearch) ||
+                span.Scope.Name.Contains(fragment, StringComparisons.FullTextSearch) ||
+                span.Source.Resource.ResourceName.Contains(fragment, StringComparisons.FullTextSearch) ||
+                span.Status.ToString().Contains(fragment, StringComparisons.FullTextSearch) ||
+                span.Kind.ToString().Contains(fragment, StringComparisons.FullTextSearch))
+            {
+                return true;
+            }
+
+            if (span.StatusMessage is not null && span.StatusMessage.Contains(fragment, StringComparisons.FullTextSearch))
+            {
+                return true;
+            }
+
+            foreach (var attribute in span.Attributes)
+            {
+                if (attribute.Key.Contains(fragment, StringComparisons.FullTextSearch) ||
+                    attribute.Value.Contains(fragment, StringComparisons.FullTextSearch))
+                {
+                    return true;
+                }
+            }
+
+            foreach (var evt in span.Events)
+            {
+                if (evt.Name.Contains(fragment, StringComparisons.FullTextSearch))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
+    /// <summary>
+    /// Returns true when the trace matches all text fragments. A trace matches if its full name
+    /// matches all fragments or any of its spans matches all fragments.
+    /// </summary>
+    private static bool MatchesTraceTextFragments(OtlpTrace trace, string[] fragments)
+    {
+        if (SearchTextParser.MatchesAllFragments(fragments, trace.FullName, static (fullName, fragment) =>
+            fullName.Contains(fragment, StringComparisons.FullTextSearch)))
+        {
+            return true;
+        }
+
+        foreach (var span in trace.Spans)
+        {
+            if (MatchesSpanTextFragments(span, fragments))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Returns true when the log entry's searchable fields match all text fragments.
+    /// </summary>
+    private static bool MatchesLogTextFragments(OtlpLogEntry log, string[] fragments)
+    {
+        return SearchTextParser.MatchesAllFragments(fragments, log, static (log, fragment) =>
+        {
+            if (log.Message.Contains(fragment, StringComparisons.FullTextSearch) ||
+                log.Scope.Name.Contains(fragment, StringComparisons.FullTextSearch) ||
+                log.TraceId.Contains(fragment, StringComparisons.FullTextSearch) ||
+                log.SpanId.Contains(fragment, StringComparisons.FullTextSearch) ||
+                log.Severity.ToString().Contains(fragment, StringComparisons.FullTextSearch) ||
+                log.ResourceView.Resource.ResourceName.Contains(fragment, StringComparisons.FullTextSearch))
+            {
+                return true;
+            }
+
+            if (log.EventName is not null && log.EventName.Contains(fragment, StringComparisons.FullTextSearch))
+            {
+                return true;
+            }
+
+            foreach (var attribute in log.Attributes)
+            {
+                if (attribute.Key.Contains(fragment, StringComparisons.FullTextSearch) ||
+                    attribute.Value.Contains(fragment, StringComparisons.FullTextSearch))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        });
+    }
+
     private static List<TraceFilter>? CreateOptimizedTraceFilters(List<TelemetryFilter> filters)
     {
         List<TraceFilter>? result = null;
@@ -723,12 +960,26 @@ public sealed partial class TelemetryRepository : IDisposable
             return MatchesFilters(trace, optimizedFilters);
         }
 
-        // A trace matches when one of its spans matches all filters.
+        // Duration filters apply to the trace's overall duration, not individual spans.
+        foreach (var filter in filters)
+        {
+            if (filter.IsTraceDurationFilter() && !filter.HasNumericMatch(trace.Duration.TotalMilliseconds))
+            {
+                return false;
+            }
+        }
+
+        // A trace matches when one of its spans matches all non-duration filters.
         foreach (var span in trace.Spans)
         {
             var match = true;
             foreach (var filter in filters)
             {
+                if (filter.IsTraceDurationFilter())
+                {
+                    continue;
+                }
+
                 if (!filter.Apply(span))
                 {
                     match = false;
@@ -747,12 +998,26 @@ public sealed partial class TelemetryRepository : IDisposable
 
     private static bool MatchesFilters(OtlpTrace trace, List<TraceFilter> optimizedFilters)
     {
-        // A trace matches when one of its spans matches all filters.
+        // Duration filters apply to the trace's overall duration, not individual spans.
+        foreach (var filter in optimizedFilters)
+        {
+            if (filter.IsDurationFilter && !filter.ApplyDuration(trace.Duration.TotalMilliseconds))
+            {
+                return false;
+            }
+        }
+
+        // A trace matches when one of its spans matches all non-duration filters.
         foreach (var span in trace.Spans)
         {
             var match = true;
             foreach (var filter in optimizedFilters)
             {
+                if (filter.IsDurationFilter)
+                {
+                    continue;
+                }
+
                 if (!filter.Apply(span))
                 {
                     match = false;
@@ -773,6 +1038,8 @@ public sealed partial class TelemetryRepository : IDisposable
     {
         public bool IsOptimized => OptimizedDurationFilter is not null || OptimizedStringFilter is not null;
 
+        public bool IsDurationFilter => OptimizedDurationFilter is not null || Filter.IsTraceDurationFilter();
+
         public static TraceFilter Create(TelemetryFilter filter)
         {
             if (DurationFilter.TryCreate(filter, out var durationFilter))
@@ -790,17 +1057,22 @@ public sealed partial class TelemetryRepository : IDisposable
 
         public bool Apply(OtlpSpan span)
         {
-            if (OptimizedDurationFilter is { } durationFilter)
-            {
-                return durationFilter.Apply(span.Duration.TotalMilliseconds);
-            }
-
             if (OptimizedStringFilter is { } stringFilter)
             {
                 return stringFilter.Apply(span);
             }
 
             return Filter.Apply(span);
+        }
+
+        public bool ApplyDuration(double traceDurationMs)
+        {
+            if (OptimizedDurationFilter is { } durationFilter)
+            {
+                return durationFilter.Apply(traceDurationMs);
+            }
+
+            return Filter.HasNumericMatch(traceDurationMs);
         }
     }
 

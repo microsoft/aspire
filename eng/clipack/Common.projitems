@@ -165,7 +165,7 @@
   -->
 
   <Target Name="PackDotnetTool"
-          DependsOnTargets="_InitializeDotnetToolPackProperties;_ExtractNativeBinaryFromArchive;_PackRidSpecificDotnetTool;_PackPointerDotnetTool" />
+          DependsOnTargets="_InitializeDotnetToolPackProperties;_ExtractNativeBinaryFromArchive;_PackRidSpecificDotnetTool;_PackPointerDotnetTool;PackNpmPackage" />
 
   <Target Name="_InitializeDotnetToolPackProperties">
     <Error Condition="'$(CliRuntime)' == ''"
@@ -183,6 +183,10 @@
       <_CliToolPublishBaseDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'tool-publish'))</_CliToolPublishBaseDir>
       <_CliToolPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), '$(CliRuntime)'))</_CliToolPublishDir>
       <_CliToolPointerPublishDir>$([MSBuild]::NormalizeDirectory($(_CliToolPublishBaseDir), 'pointer'))</_CliToolPointerPublishDir>
+      <_CliNpmPackageStagingDir>$([MSBuild]::NormalizeDirectory($(IntermediateOutputPath), 'npm-packages', '$(CliRuntime)'))</_CliNpmPackageStagingDir>
+      <_CliNpmPackageStagingDirArg>$(_CliNpmPackageStagingDir.TrimEnd('\').TrimEnd('/'))</_CliNpmPackageStagingDirArg>
+      <_PackageOutputPathArg>$(PackageOutputPath.TrimEnd('\').TrimEnd('/'))</_PackageOutputPathArg>
+      <NpmCliPackageName Condition="'$(NpmCliPackageName)' == ''">@microsoft/aspire-cli</NpmCliPackageName>
     </PropertyGroup>
 
     <ItemGroup>
@@ -256,6 +260,21 @@
              Targets="Pack"
              Properties="@(_PackPointerProperties)"
              RemoveProperties="OutputPath;TargetFramework" />
+  </Target>
+
+  <Target Name="PackNpmPackage"
+          DependsOnTargets="_InitializeDotnetToolPackProperties;_ExtractNativeBinaryFromArchive">
+    <Message Importance="High"
+             Text="Packing CLI npm packages for $(CliRuntime) from '$(_ExtractedNativeBinaryPath)' extracted from '$(_CliArchivePath)'." />
+
+    <PropertyGroup>
+      <!-- Build the script path with MSBuild path helpers so it uses the correct separator
+           on every platform. The native CLI archives are built on Windows, Linux, and macOS,
+           and pwsh on non-Windows does not silently normalize mixed-separator paths. -->
+      <_PackCliNpmPackageScript>$([MSBuild]::NormalizePath($(RepoRoot), 'eng', 'scripts', 'pack-cli-npm-package.ps1'))</_PackCliNpmPackageScript>
+    </PropertyGroup>
+
+    <Exec Command="pwsh -NoProfile -NonInteractive -File &quot;$(_PackCliNpmPackageScript)&quot; -Rid &quot;$(CliRuntime)&quot; -Version &quot;$(Version)&quot; -NativeBinaryPath &quot;$(_ExtractedNativeBinaryPath)&quot; -OutputPath &quot;$(_PackageOutputPathArg)&quot; -StagingRoot &quot;$(_CliNpmPackageStagingDirArg)&quot; -PackageName &quot;$(NpmCliPackageName)&quot;" />
   </Target>
 
 </Project>

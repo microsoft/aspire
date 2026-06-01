@@ -100,14 +100,15 @@ public class PackageJsonMergerTests
     }
 
     [Fact]
-    public void PrefixedScripts_AlwaysAdded()
+    public void PrefixedScripts_PreserveExistingValues()
     {
         var existing = """
             {
               "name": "my-app",
               "scripts": {
                 "dev": "vite",
-                "build": "vite build"
+                "build": "vite build",
+                "aspire:start": "custom start"
               }
             }
             """;
@@ -130,8 +131,8 @@ public class PackageJsonMergerTests
         Assert.Equal("vite", scripts["dev"]?.GetValue<string>());
         Assert.Equal("vite build", scripts["build"]?.GetValue<string>());
 
-        // All aspire: scripts added
-        Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
+        // Existing aspire: scripts are preserved; missing ones are added
+        Assert.Equal("custom start", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
         Assert.Equal("eslint apphost.ts", scripts["aspire:lint"]?.GetValue<string>());

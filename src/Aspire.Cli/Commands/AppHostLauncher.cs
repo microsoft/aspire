@@ -83,6 +83,7 @@ internal sealed class AppHostLauncher(
     /// <param name="isolated">Whether to run in isolated mode.</param>
     /// <param name="isExtensionHost">Whether running inside VS Code extension.</param>
     /// <param name="waitForDebugger">Whether the AppHost is waiting for a debugger to attach.</param>
+    /// <param name="timeoutSeconds">The maximum number of seconds to wait for AppHost startup.</param>
     /// <param name="globalArgs">Global CLI args to forward to child process.</param>
     /// <param name="additionalArgs">Additional unmatched args to forward.</param>
     /// <param name="stopAfterLaunchDelay">Optional delay after launch before stopping the AppHost.</param>
@@ -94,6 +95,7 @@ internal sealed class AppHostLauncher(
         bool isolated,
         bool isExtensionHost,
         bool waitForDebugger,
+        int timeoutSeconds,
         IEnumerable<string> globalArgs,
         IEnumerable<string> additionalArgs,
         TimeSpan? stopAfterLaunchDelay,
@@ -163,9 +165,9 @@ internal sealed class AppHostLauncher(
         LaunchResult launchResult;
         try
         {
-            launchResult = await interactionService.ShowStatusAsync(
+            launchResult = await interactionService.ShowDynamicStatusAsync(
                 RunCommandStrings.StartingAppHostInBackground,
-                () => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHashes, cancellationToken));
+                updateStatus => LaunchAndWaitForBackchannelAsync(executablePath, childArgs, expectedHash, legacyHashes, TimeSpan.FromSeconds(timeoutSeconds), updateStatus, cancellationToken));
         }
         catch (OperationCanceledException)
         {
@@ -175,7 +177,7 @@ internal sealed class AppHostLauncher(
         // Handle failure cases
         if (launchResult.Backchannel is null || launchResult.ChildProcess is null)
         {
-            return HandleLaunchFailure(launchResult, childLogFile);
+            return HandleLaunchFailure(launchResult, childLogFile, timeoutSeconds);
         }
 
         // Display results
@@ -323,6 +325,8 @@ internal sealed class AppHostLauncher(
         List<string> childArgs,
         string expectedHash,
         IReadOnlyList<string> legacyHashes,
+        TimeSpan timeout,
+        Action<string> updateStatus,
         CancellationToken cancellationToken)
     {
         Process childProcess;
@@ -351,7 +355,6 @@ internal sealed class AppHostLauncher(
         logger.LogDebug("Child CLI process started with PID: {PID}", childProcess.Id);
 
         var startTime = timeProvider.GetUtcNow();
-        var timeout = TimeSpan.FromSeconds(120);
         using var waitForBackchannelActivity = profilingTelemetry.StartDetachedWaitForBackchannel(childProcess.Id, expectedHash, legacyHashes.Count > 0);
         var scanCount = 0;
         IAppHostAuxiliaryBackchannel? connection = null;
@@ -425,7 +428,9 @@ internal sealed class AppHostLauncher(
                                 return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
                             }
 
-                            break;
+                            updateStatus(RunCommandStrings.AppHostConnectionLostWaitingForExit);
+                            await childProcess.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                            return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
                         }
 
                         if (appHostReady is null)
@@ -626,7 +631,7 @@ internal sealed class AppHostLauncher(
             TaskScheduler.Default);
     }
 
-    private CommandResult HandleLaunchFailure(LaunchResult result, string childLogFile)
+    private CommandResult HandleLaunchFailure(LaunchResult result, string childLogFile, int timeoutSeconds)
     {
         if (result.ChildProcess is null)
         {
@@ -646,7 +651,7 @@ internal sealed class AppHostLauncher(
         }
         else
         {
-            failureMessage = RunCommandStrings.TimeoutWaitingForAppHost;
+            failureMessage = string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, timeoutSeconds, CliConfigNames.AppHostStartupTimeout);
         }
 
         interactionService.DisplayError(RunCommandStrings.FailedToStartAppHost);

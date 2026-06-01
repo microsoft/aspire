@@ -1,6 +1,6 @@
 // Aspire TypeScript AppHost — Azure Key Vault validation
 // Exercises every exported member of Aspire.Hosting.Azure.KeyVault
-import { AzureKeyVaultRole, createBuilder, refExpr } from './.modules/aspire.mjs';
+import { AzureKeyVaultRole, createBuilder, refExpr } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 

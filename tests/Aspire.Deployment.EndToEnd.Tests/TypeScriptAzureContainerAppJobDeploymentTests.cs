@@ -64,19 +64,19 @@ public sealed class TypeScriptAzureContainerAppJobDeploymentTests(ITestOutputHel
             await auto.PrepareEnvironmentAsync(workspace, counter);
             await auto.InstallCurrentBuildAspireBundleAsync(counter, output);
 
-            await auto.RunCommandFailFastAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
             await AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.AppContainers");
 
             WriteContainerAppJobsAppHost(workspace);
 
-            await auto.RunCommandFailFastAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}", counter);
+            await auto.RunCommandAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}", counter);
 
             await auto.TypeAsync("aspire deploy --clear-cache");
             await auto.EnterAsync();
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(25));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            await auto.RunCommandFailFastAsync(BuildJobVerificationCommand(resourceGroupName), counter, TimeSpan.FromMinutes(5));
+            await auto.RunCommandAsync(BuildJobVerificationCommand(resourceGroupName), counter, TimeSpan.FromMinutes(5));
 
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
@@ -119,8 +119,13 @@ public sealed class TypeScriptAzureContainerAppJobDeploymentTests(ITestOutputHel
 
     private static void WriteContainerAppJobsAppHost(TemporaryWorkspace workspace)
     {
-        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"), """
-            import { createBuilder } from './.modules/aspire.js';
+        // `aspire init --language typescript` creates apphost.mts (since PR #16984), not
+        // apphost.ts. Overwrite that file with the test's custom AppHost; otherwise
+        // `aspire deploy` runs against the empty default apphost.mts and no Azure
+        // resources get provisioned. The mts variant imports the generated SDK as
+        // `aspire.mjs` (not `aspire.js`, which is the legacy apphost.ts shape).
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts"), """
+            import { createBuilder } from './.aspire/modules/aspire.mjs';
 
             const builder = await createBuilder();
 

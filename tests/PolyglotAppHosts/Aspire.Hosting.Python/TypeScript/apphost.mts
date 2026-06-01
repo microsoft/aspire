@@ -1,4 +1,4 @@
-import { EntrypointType, createBuilder } from './.modules/aspire.mjs';
+import { EntrypointType, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 await builder.addPythonApp('python-script', '.', 'main.py');

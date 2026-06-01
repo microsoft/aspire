@@ -135,6 +135,10 @@ internal sealed class BuildContext
     // Optional labels to apply to the built image
     [JsonPropertyName("labels")]
     public List<ContainerLabel>? Labels { get; set; }
+
+    // Optional target platform for the build (e.g. "linux/amd64")
+    [JsonPropertyName("platform")]
+    public string? Platform { get; set; }
 }
 
 internal sealed class BuildContextSecret
@@ -227,6 +231,19 @@ internal static class ContainerRestartPolicy
 
     // Always try to restart the container
     public const string Always = "always";
+}
+
+internal static class ContainerPlatform
+{
+    // Linux platforms
+    public const string LinuxAmd64 = "linux/amd64";
+    public const string LinuxArm64 = "linux/arm64";
+    public const string LinuxArm = "linux/arm";
+    public const string Linux386 = "linux/386";
+
+    // Windows platforms
+    public const string WindowsAmd64 = "windows/amd64";
+    public const string WindowsArm64 = "windows/arm64";
 }
 
 internal static class ContainerPullPolicy

@@ -157,6 +157,64 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void ParsesOutputDirectoryOptionWithoutErrors()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("sdk dump --format ci --output-directory ./ats Aspire.Hosting.Redis@13.2.0");
+
+        Assert.Empty(result.Errors);
+    }
+
+    [Fact]
+    public async Task SdkDumpWithOutputAndOutputDirectoryReturnsInvalidCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("sdk dump --format ci --output ./all.ats.txt --output-directory ./ats Aspire.Hosting.Redis@13.2.0");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+    }
+
+    [Fact]
+    public async Task SdkDumpWithOutputDirectoryWithoutCiFormatReturnsInvalidCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("sdk dump --output-directory ./ats Aspire.Hosting.Redis@13.2.0");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+    }
+
+    [Fact]
+    public async Task SdkDumpWithOutputDirectoryWithoutIntegrationsReturnsInvalidCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("sdk dump --format ci --output-directory ./ats");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+    }
+
+    [Fact]
     public void ParsesPreReleaseVersionWithoutErrors()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

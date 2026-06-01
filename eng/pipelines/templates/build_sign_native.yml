@@ -169,6 +169,11 @@ jobs:
                 chmod +x $(Build.SourcesDirectory)/artifacts/bin/Aspire.Managed/Release/net10.0/${{ targetRid }}/publish/aspire-managed
               displayName: 🟣Restore execute permission on aspire-managed
 
+          - task: NodeTool@0
+            displayName: 🟣Install node.js
+            inputs:
+              versionSpec: '22.x'
+
           - script: >-
               $(Build.SourcesDirectory)/$(dotnetScript)
               msbuild
@@ -212,6 +217,21 @@ jobs:
               $verifyParams.ArchivePath = $archive[0].FullName
               & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-tool-nupkg.ps1" @verifyParams
             displayName: 🟣Verify CLI tool nupkg (${{ targetRid }})
+
+          - pwsh: |
+              $ErrorActionPreference = 'Stop'
+              $verifyParams = @{
+                PackagesDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)"
+                Rid = "${{ targetRid }}"
+              }
+              $archiveFilter = if ("${{ targetRid }}".StartsWith('win-')) { "aspire-cli-${{ targetRid }}-*.zip" } else { "aspire-cli-${{ targetRid }}-*.tar.gz" }
+              $archive = @(Get-ChildItem -Path $verifyParams.PackagesDir -Filter $archiveFilter -Recurse -File -ErrorAction SilentlyContinue)
+              if ($archive.Count -ne 1) {
+                throw "Expected exactly one CLI archive for ${{ targetRid }}, but found $($archive.Count): $($archive.FullName -join ', ')"
+              }
+              $verifyParams.ArchivePath = $archive[0].FullName
+              & "$(Build.SourcesDirectory)/eng/scripts/verify-cli-npm-package.ps1" @verifyParams
+            displayName: 🟣Verify CLI npm package (${{ targetRid }})
 
           # Verify the signed CLI archive can execute and create a project.
           # Only runs when the target RID architecture matches the build agent

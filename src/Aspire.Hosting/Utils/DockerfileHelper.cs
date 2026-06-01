@@ -32,7 +32,7 @@ internal static class DockerfileHelper
                 CancellationToken = cancellationToken
             };
 
-            await annotation.MaterializeDockerfileAsync(context, cancellationToken).ConfigureAwait(false);
+            await annotation.EmitDockerfileArtifactsAsync(context).ConfigureAwait(false);
 
             var executionContext = serviceProvider.GetRequiredService<DistributedApplicationExecutionContext>();
 

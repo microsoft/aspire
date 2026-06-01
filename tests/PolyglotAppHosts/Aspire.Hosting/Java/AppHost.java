@@ -7,6 +7,15 @@ void main() throws Exception {
         var container = builder.addContainer("mycontainer", "nginx");
         container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
+        var dockerfileFactory = (AspireFunc1<DockerfileFactoryContext, String>) (factoryContext) -> {
+            var _factoryResource = factoryContext.resource();
+            return """
+                FROM mcr.microsoft.com/dotnet/runtime:8.0 AS runtime
+                WORKDIR /app
+                ENTRYPOINT ["dotnet", "App.dll"]
+                """;
+        };
+        var dockerFactoryContainer = builder.addDockerfileFactory("dockerfactoryapp", "./app", dockerfileFactory, "runtime");
         var configureDockerfileBuilder = (AspireAction1<DockerfileBuilderCallbackContext>) (dockerfileContext) -> {
             var _dockerfileResource = dockerfileContext.resource();
             var dockerfileServices = dockerfileContext.services();
@@ -35,6 +44,7 @@ void main() throws Exception {
         };
         var dockerBuilderContainer = builder.addDockerfileBuilder("dockerbuilderapp", "./app", configureDockerfileBuilder, "runtime");
         dockerContainer.withDockerfileBuilder("./app", configureDockerfileBuilder, "runtime");
+        dockerFactoryContainer.withDockerfileFactory("./app", dockerfileFactory, "runtime");
         var exe = builder.addExecutable("myexe", "echo", ".", new String[] { "hello" });
         var project = builder.addProject("myproject", "./src/MyProject", "https");
         var csharpApp = builder.addCSharpApp("csharpapp", "./src/CSharpApp");
@@ -65,6 +75,7 @@ void main() throws Exception {
         cache.withConnectionProperty("Mode", "Development");
         container.withReference(endpoint);
         container.withReference("https://example.com/", new WithReferenceOptions().name("external-uri"));
+        var externalService = builder.addExternalService("external-service", "https://example.com");
         var vnet = builder.addAzureVirtualNetwork("vnet", "10.0.0.0/16");
         var subnet = vnet.addSubnet("web", "10.0.1.0/24", null);
         subnet.allowInbound(new AllowInboundOptions().port("443").from(AzureServiceTags.AzureLoadBalancer));
@@ -80,6 +91,7 @@ void main() throws Exception {
         container.withEnvironment("MY_BUILT_CONN", builtConnectionString);
         container.withEnvironment("MY_CONN", envConnectionString);
         container.withEnvironment("MY_EXPR_CONN", expressionConnectionString);
+        container.withEnvironment("MY_EXTERNAL_SERVICE", externalService);
         container.withEnvironmentCallback((environmentContext) -> { var environment = environmentContext.environment(); var environmentLog = environmentContext.log(); var _environmentResource = environmentContext.resource(); var environmentExecutionContext = environmentContext.executionContext(); var _environmentIsRunMode = environmentExecutionContext.isRunMode(); environmentLog.warning("Environment callback logger"); environment.set("MY_CALLBACK_ENDPOINT", endpoint); });
         container.withArgsCallback((argsContext) -> { var argsEditor = argsContext.args(); var argsLog = argsContext.log(); var _argsResource = argsContext.resource(); var argsExecutionContext = argsContext.executionContext(); var _argsIsRunMode = argsExecutionContext.isRunMode(); argsLog.error("Args callback logger"); argsEditor.add("--validation-callback"); argsEditor.add(expr); });
         container.withUrls((urlsContext) -> { var _urlsResource = urlsContext.resource(); var urlsLog = urlsContext.log(); var urlsExecutionContext = urlsContext.executionContext(); var _urlsIsRunMode = urlsExecutionContext.isRunMode(); var callbackEndpoint = urlsContext.getEndpoint("http"); var urlsEditor = urlsContext.urls(); urlsLog.debug("URLs callback logger"); urlsEditor.add(ReferenceExpression.refExpr("https://%s", callbackEndpoint), null); urlsEditor.addForEndpoint(callbackEndpoint, "/details", "Details"); });

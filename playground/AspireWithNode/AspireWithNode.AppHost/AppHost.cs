@@ -23,7 +23,7 @@ var frontend = builder.AddJavaScriptApp("frontend", "../NodeFrontend", "watch")
     .WaitFor(cache)
     .WithHttpEndpoint(env: "PORT")
     .WithExternalHttpEndpoints()
-    .PublishAsNpmScript("start");
+    .PublishAsPackageScript("start");
 #pragma warning restore ASPIREJAVASCRIPT001
 
 var launchProfile = builder.Configuration["DOTNET_LAUNCH_PROFILE"];

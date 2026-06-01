@@ -699,15 +699,21 @@ public static class ContainerResourceBuilderExtensions
             {
                 context.LocalImageName = dockerfileAnnotation.ImageName ?? context.Resource.Name;
                 context.LocalImageTag = dockerfileAnnotation.ImageTag ?? "latest";
-                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             }
             else
             {
                 context.LocalImageName = context.Resource.Name;
                 context.LocalImageTag = "latest";
+            }
+
+            // Default to linux/amd64 for publish, where outputs must be portable across host
+            // architectures. In run mode, leave the platform unset so docker/podman uses the host
+            // architecture by default and avoids slow/buggy emulation. Users can override either
+            // default via WithContainerBuildOptions(...).
+            if (context.ExecutionContext.IsPublishMode)
+            {
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             }
-            context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
         });
 
         // If there's already a ContainerImageAnnotation, don't overwrite it.
@@ -766,8 +772,7 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithDockerfile{T}"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
     public static IResourceBuilder<T> WithDockerfileFactory<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileFactoryContext, string> dockerfileFactory, string? stage = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -814,8 +819,8 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="WithDockerfile{T}"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithDockerfileFactory<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileFactoryContext, Task<string>> dockerfileFactory, string? stage = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -847,15 +852,18 @@ public static class ContainerResourceBuilderExtensions
             {
                 context.LocalImageName = dockerfileAnnotation.ImageName ?? context.Resource.Name;
                 context.LocalImageTag = dockerfileAnnotation.ImageTag ?? "latest";
-                context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             }
             else
             {
                 context.LocalImageName = context.Resource.Name;
                 context.LocalImageTag = "latest";
+            }
+
+            // Publish/run split: see AddDockerfile.
+            if (context.ExecutionContext.IsPublishMode)
+            {
                 context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
             }
-            context.TargetPlatform = ContainerTargetPlatform.LinuxAmd64;
         });
 
         // If there's already a ContainerImageAnnotation, don't overwrite it.
@@ -939,8 +947,7 @@ public static class ContainerResourceBuilderExtensions
     /// The output is trusted and not validated.
     /// </para>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddDockerfile"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the async callback overload.")]
     public static IResourceBuilder<ContainerResource> AddDockerfileFactory(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileFactoryContext, string> dockerfileFactory, string? stage = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -970,8 +977,8 @@ public static class ContainerResourceBuilderExtensions
     /// The output is trusted and not validated.
     /// </para>
     /// </remarks>
-    /// <remarks>This method is not available in polyglot app hosts. Use <see cref="AddDockerfile"/> instead.</remarks>
-    [AspireExportIgnore(Reason = "DockerfileFactoryContext exposes IServiceProvider and IResource — .NET runtime types not usable from polyglot hosts.")]
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ContainerResource> AddDockerfileFactory(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileFactoryContext, Task<string>> dockerfileFactory, string? stage = null)
     {
         ArgumentNullException.ThrowIfNull(builder);

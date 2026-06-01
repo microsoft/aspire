@@ -9,6 +9,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.AspNetCore.Certificates.Generation;
 
 namespace Aspire.Cli.Commands;
 
@@ -33,7 +34,15 @@ internal sealed class CertificatesTrustCommand : BaseCommand
 
         if (result.Success)
         {
-            InteractionService.DisplaySuccess(CertificatesCommandStrings.TrustSuccess);
+            if (result.ResultCode == EnsureCertificateResult.PartiallyFailedToTrustTheCertificate)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.TrustPartialSuccess);
+            }
+            else
+            {
+                InteractionService.DisplaySuccess(CertificatesCommandStrings.TrustSuccess);
+            }
+
             return CommandResult.Success();
         }
 

@@ -58,6 +58,68 @@ public sealed class TypeScriptApiCompatTests
     }
 
     [Fact]
+    public void ParserIgnoresSymbolsOwnedByOtherPackages()
+    {
+        var surface = AtsSurfaceParser.Parse("Pkg", """
+            # Handle Types
+            Pkg/Thing
+            Other/Thing
+
+            # DTO Types
+            Pkg/Options
+              name: string
+            Other/Options
+              ignored: string
+
+            # Enum Types
+            enum:Pkg.Mode = One
+            enum:Other.Mode = One
+
+            # Exported Values
+            Pkg.Configs.Default: string = "dev"
+            Other.Configs.Default: string = "dev"
+
+            # Capabilities
+            Pkg/addThing(name: Other/Thing) -> Pkg/Thing
+            Other/addThing() -> Other/Thing
+            """);
+
+        Assert.Equal(["Pkg/Thing"], surface.HandleTypes.Keys);
+        var dto = Assert.Single(surface.DtoTypes.Values);
+        Assert.Equal("Pkg/Options", dto.TypeId);
+        Assert.Equal(["Pkg.Mode"], surface.EnumTypes.Keys.Select(k => k["enum:".Length..]));
+        Assert.Equal(["Other.Configs.Default", "Pkg.Configs.Default"], surface.ExportedValues.Keys.Order(StringComparer.Ordinal));
+        var capability = Assert.Single(surface.Capabilities.Values);
+        Assert.Equal("Pkg/addThing", capability.CapabilityId);
+        Assert.Equal("Other/Thing", capability.Parameters[0].TypeId);
+    }
+
+    [Fact]
+    public void ParserUsesMostSpecificKnownPackageForDottedSymbols()
+    {
+        var surface = AtsSurfaceParser.Parse("Aspire.Hosting", """
+            # Handle Types
+            Aspire.Hosting.CoreResource
+            Aspire.Hosting.Redis.RedisResource
+
+            # DTO Types
+            Aspire.Hosting.Options
+              name: string
+            Aspire.Hosting.Redis.Options
+              name: string
+
+            # Enum Types
+            enum:Aspire.Hosting.Mode = One
+            enum:Aspire.Hosting.Redis.Mode = One
+            """,
+            ["Aspire.Hosting", "Aspire.Hosting.Redis"]);
+
+        Assert.Equal(["Aspire.Hosting.CoreResource"], surface.HandleTypes.Keys);
+        Assert.Equal(["Aspire.Hosting.Options"], surface.DtoTypes.Keys);
+        Assert.Equal(["Aspire.Hosting.Mode"], surface.EnumTypes.Keys.Select(k => k["enum:".Length..]));
+    }
+
+    [Fact]
     public void ComparerClassifiesBreakingAndAdditiveChanges()
     {
         using var tempDirectory = new TestTempDirectory();
@@ -81,6 +143,7 @@ public sealed class TypeScriptApiCompatTests
 
             # Capabilities
             Pkg/addThing(name: string, port?: number) -> Pkg/Thing
+            Pkg/addInputType(name: string | Pkg/Thing) -> void
             Pkg/addInsertedOptionalBeforeExisting(name: string, suffix?: string) -> void
             Pkg/removeMe() -> void
             """);
@@ -105,6 +168,7 @@ public sealed class TypeScriptApiCompatTests
 
             # Capabilities
             Pkg/addThing(name: number, port: number, requiredName: string, optionalName?: string) -> void
+            Pkg/addInputType(name: string | Pkg/Thing | Pkg/NewThing) -> void
             Pkg/addInsertedOptionalBeforeExisting(name: string, inserted?: string, suffix?: string) -> void
             Pkg/newCapability() -> void
             """);
@@ -123,7 +187,7 @@ public sealed class TypeScriptApiCompatTests
         Assert.Contains(diagnostics, d => d.Kind == "capability-parameter-required" && d.Symbol == "Pkg/addThing(port)");
         Assert.Contains(diagnostics, d => d.Kind == "capability-parameter-added-required" && d.Symbol == "Pkg/addThing(requiredName)");
         Assert.Contains(diagnostics, d => d.Kind == "capability-parameter-order-changed" && d.Symbol == "Pkg/addInsertedOptionalBeforeExisting");
-        Assert.DoesNotContain(diagnostics, d => d.Symbol is "Pkg/NewThing" or "Pkg/newCapability" or "Pkg/addThing(optionalName)" or "Pkg/Options.newOptional");
+        Assert.DoesNotContain(diagnostics, d => d.Symbol is "Pkg/NewThing" or "Pkg/newCapability" or "Pkg/addThing(optionalName)" or "Pkg/Options.newOptional" or "Pkg/addInputType(name)");
     }
 
     [Fact]

@@ -798,6 +798,47 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task CreateCommandArguments_DynamicDisabledNamedArgumentValues_DoesNotReturnError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "item",
+                            InputType = InputType.Choice,
+                            Disabled = true,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                DependsOnInputs = ["category"],
+                                LoadCallback = context =>
+                                {
+                                    context.Input.Disabled = false;
+                                    return Task.CompletedTask;
+                                }
+                            }
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var argumentValues = new Dictionary<string, string?> { ["item"] = "banana" };
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Null(errorMessage);
+        Assert.Equal("banana", arguments.GetString("item"));
+    }
+
+    [Fact]
     public async Task CreateCommandArguments_DisabledOrderedArgumentValues_ReturnsError()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
@@ -968,6 +1009,168 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var invalidArgument = Assert.Single(result.InvalidArguments, argument => argument.ValidationErrors.Count > 0);
         Assert.Equal("location", invalidArgument.Name);
         Assert.Equal("Value must be one of the provided options.", Assert.Single(invalidArgument.ValidationErrors));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_SubmittedDynamicArgumentStillDisabledAfterLoading_ReturnsDisabledValidationError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "category",
+                            InputType = InputType.Choice,
+                            Required = true,
+                            Options = [KeyValuePair.Create("fruit", "Fruit")]
+                        },
+                        new InteractionInput
+                        {
+                            Name = "item",
+                            InputType = InputType.Choice,
+                            Required = true,
+                            Disabled = true,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                DependsOnInputs = ["category"],
+                                LoadCallback = context =>
+                                {
+                                    context.Input.Disabled = false;
+                                    context.Input.Options = [KeyValuePair.Create("banana", "Banana")];
+
+                                    return Task.CompletedTask;
+                                }
+                            }
+                        },
+                        new InteractionInput
+                        {
+                            Name = "priority",
+                            InputType = InputType.Choice,
+                            Disabled = true,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                DependsOnInputs = ["item"],
+                                LoadCallback = context =>
+                                {
+                                    context.Input.Disabled = false;
+                                    context.Input.Options = [KeyValuePair.Create("express", "Express")];
+
+                                    return Task.CompletedTask;
+                                }
+                            }
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions
+            {
+                ArgumentValues = new Dictionary<string, string?>
+                {
+                    ["category"] = "fruit",
+                    ["priority"] = "express"
+                },
+                ArgumentsProvided = true,
+                NonInteractive = true
+            },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(executed);
+        Assert.NotNull(result.InvalidArguments);
+
+        var itemArgument = Assert.Single(result.InvalidArguments, argument => argument.Name == "item");
+        Assert.Equal("Value is required.", Assert.Single(itemArgument.ValidationErrors));
+
+        var priorityArgument = Assert.Single(result.InvalidArguments, argument => argument.Name == "priority");
+        Assert.Equal("Argument is disabled.", Assert.Single(priorityArgument.ValidationErrors));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_LoadedDynamicArgumentStillDisabledWithDefaultValue_DoesNotReturnDisabledValidationError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: context =>
+                {
+                    capturedArguments = context.Arguments;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "mode",
+                            InputType = InputType.Choice,
+                            Required = true,
+                            Options = [KeyValuePair.Create("isolated", "Isolated")]
+                        },
+                        new InteractionInput
+                        {
+                            Name = "profile",
+                            InputType = InputType.Choice,
+                            Disabled = true,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                DependsOnInputs = ["mode"],
+                                LoadCallback = context =>
+                                {
+                                    context.Input.Disabled = true;
+                                    context.Input.Value = "default";
+                                    context.Input.Options = [KeyValuePair.Create("default", "Default")];
+
+                                    return Task.CompletedTask;
+                                }
+                            }
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions
+            {
+                ArgumentValues = new Dictionary<string, string?>
+                {
+                    ["mode"] = "isolated",
+                    ["profile"] = "default"
+                },
+                ArgumentsProvided = true,
+                NonInteractive = true
+            },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("default", capturedArguments.GetString("profile"));
+        Assert.Empty(capturedArguments["profile"].ValidationErrors);
     }
 
     [Fact]

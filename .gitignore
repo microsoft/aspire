@@ -131,9 +131,6 @@ config.ps1
 # Node.js modules
 node_modules/
 
-# Generated Aspire polyglot modules
-.modules/
-
 # Maven build outputs
 target/
 dependency-reduced-pom.xml
@@ -189,6 +186,7 @@ tests/PolyglotAppHosts/**/Go/apphost.exe
 
 #Aspire CLI
 .aspire/
+.modules/
 
 # Release notes automation output
 tools/ReleaseNotes/analysis-output/
@@ -199,6 +197,7 @@ extension/dist/
 extension/.localization/
 extension/out/
 extension/node_modules/
+extension/.corepack-cache/
 **/.vscode-test/
 extension/.version
 

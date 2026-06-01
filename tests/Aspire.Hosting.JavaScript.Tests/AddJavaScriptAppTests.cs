@@ -79,7 +79,7 @@ public class AddJavaScriptAppTests
     }
 
     [Fact]
-    public async Task VerifyDockerfileWhenPublishedAsNpmScript()
+    public async Task VerifyDockerfileWhenPublishedAsPackageScript()
     {
         using var tempDir = new TestTempDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
@@ -90,7 +90,7 @@ public class AddJavaScriptAppTests
         var yarnApp = builder.AddJavaScriptApp("js", appDir)
             .WithYarn(installArgs: ["--immutable"])
             .WithBuildScript("do", ["--build"])
-            .PublishAsNpmScript("start", "-- --port $PORT");
+            .PublishAsPackageScript("start", "-- --port $PORT");
 
         await ManifestUtils.GetManifest(yarnApp.Resource, tempDir.Path);
 
@@ -130,7 +130,7 @@ public class AddJavaScriptAppTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task VerifyPnpmDockerfileWhenPublishedAsNpmScript(bool hasLockFile)
+    public async Task VerifyPnpmDockerfileWhenPublishedAsPackageScript(bool hasLockFile)
     {
         using var tempDir = new TestTempDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
@@ -146,7 +146,7 @@ public class AddJavaScriptAppTests
         var pnpmApp = builder.AddJavaScriptApp("js", appDir)
             .WithPnpm(installArgs: ["--prefer-frozen-lockfile"])
             .WithBuildScript("mybuild")
-            .PublishAsNpmScript("start");
+            .PublishAsPackageScript("start");
 
         await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
 
@@ -432,8 +432,8 @@ public class AddJavaScriptAppTests
 
     [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
-    [OuterloopTest("Builds and runs a Docker image to verify the generated pnpm PublishAsNpmScript Dockerfile works")]
-    public async Task VerifyPnpmDockerfileWhenPublishedAsNpmScriptRunsWithoutNetwork()
+    [OuterloopTest("Builds and runs a Docker image to verify the generated pnpm PublishAsPackageScript Dockerfile works")]
+    public async Task VerifyPnpmDockerfileWhenPublishedAsPackageScriptRunsWithoutNetwork()
     {
         using var tempDir = new TestTempDirectory();
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
@@ -456,7 +456,7 @@ public class AddJavaScriptAppTests
         var pnpmApp = builder.AddJavaScriptApp("pnpm-app", appDir)
             .WithPnpm()
             .WithBuildScript("build")
-            .PublishAsNpmScript("start");
+            .PublishAsPackageScript("start");
 
         await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
 

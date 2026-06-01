@@ -46,14 +46,18 @@ internal sealed class ProcessShutdownService(
             return requestRpcStopAsync is not null && await TryRequestRpcStopAsync(requestRpcStopAsync, cancellationToken).ConfigureAwait(false);
         }
 
-        var processesToMonitor = new List<ProcessTarget> { new(appHostInfo.ProcessId, appHostInfo.StartedAt) };
+        var appHostProcess = new ProcessTarget(appHostInfo.ProcessId, appHostInfo.StartedAt);
+        var processesToForceKill = new List<ProcessTarget> { appHostProcess };
         if (appHostInfo.CliProcessId is int cliPid)
         {
-            processesToMonitor.Add(new ProcessTarget(cliPid, appHostInfo.CliStartedAt));
+            // The CLI process is a shutdown handle, not the success condition. On Unix it can remain
+            // observable until its parent reaps it after the AppHost has already stopped.
+            processesToForceKill.Add(new ProcessTarget(cliPid, appHostInfo.CliStartedAt));
         }
 
         return await StopProcessesAsync(
-            processesToMonitor,
+            processesToMonitor: [appHostProcess],
+            processesToForceKill,
             token => RequestAppHostGracefulShutdownAsync(appHostInfo, requestRpcStopAsync, token),
             cancellationToken).ConfigureAwait(false);
     }
@@ -63,19 +67,54 @@ internal sealed class ProcessShutdownService(
         Func<CancellationToken, Task<bool>> requestGracefulShutdownAsync,
         CancellationToken cancellationToken)
     {
+        return await StopProcessesAsync(
+            processesToMonitorAndKill,
+            processesToMonitorAndKill,
+            requestGracefulShutdownAsync,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> StopProcessesAsync(
+        IReadOnlyCollection<ProcessTarget> processesToMonitor,
+        IReadOnlyCollection<ProcessTarget> processesToForceKill,
+        Func<CancellationToken, Task<bool>> requestGracefulShutdownAsync,
+        CancellationToken cancellationToken)
+    {
         var gracefulShutdownRequested = await TryRequestGracefulShutdownAsync(requestGracefulShutdownAsync, cancellationToken).ConfigureAwait(false);
-        if (gracefulShutdownRequested && await MonitorProcessesForTerminationAsync(processesToMonitorAndKill, cancellationToken).ConfigureAwait(false))
+        if (gracefulShutdownRequested && await MonitorProcessesForTerminationAsync(processesToMonitor, cancellationToken).ConfigureAwait(false))
         {
+            ForceKillRemainingProcesses(processesToForceKill.Except(processesToMonitor), afterTimeout: false);
             return true;
         }
 
-        foreach (var process in processesToMonitorAndKill.Distinct())
-        {
-            logger.LogWarning("Process {Pid} did not stop gracefully within timeout. Forcing process to terminate.", process.Pid);
-            ProcessSignaler.ForceKill(process.Pid, process.StartTime, logger);
-        }
+        ForceKillRemainingProcesses(processesToForceKill, afterTimeout: true);
 
-        return await MonitorProcessesForTerminationAsync(processesToMonitorAndKill, cancellationToken).ConfigureAwait(false);
+        return await MonitorProcessesForTerminationAsync(processesToMonitor, cancellationToken).ConfigureAwait(false);
+    }
+
+    private void ForceKillRemainingProcesses(IEnumerable<ProcessTarget> processes, bool afterTimeout)
+    {
+        // On Unix the AppHost's process tree does not include DCP (it is launched in its own
+        // session/process group), so a tree kill of the AppHost is safe: DCP will detect the
+        // AppHost exiting and gracefully tear down its own children. The same applies to the
+        // launcher CLI handle - any leftover `dotnet run` / AppHost descendants get cleaned up.
+        // On Windows DCP is an in-tree descendant of the AppHost, so we must single-process-kill
+        // here and rely on the graceful DCP `stop-process-tree` path for orderly resource cleanup.
+        var killEntireProcessTree = !OperatingSystem.IsWindows();
+
+        foreach (var process in processes.Distinct())
+        {
+            if (afterTimeout)
+            {
+                logger.LogWarning("Process {Pid} did not stop gracefully within timeout. Forcing process to terminate.", process.Pid);
+            }
+            else
+            {
+                logger.LogDebug("Forcing remaining shutdown handle process {Pid} to terminate.", process.Pid);
+            }
+
+            ProcessSignaler.ForceKill(process.Pid, process.StartTime, logger, killEntireProcessTree);
+        }
     }
 
     private async Task<bool> RequestAppHostGracefulShutdownAsync(
@@ -83,6 +122,28 @@ internal sealed class ProcessShutdownService(
         Func<CancellationToken, Task<bool>>? requestRpcStopAsync,
         CancellationToken cancellationToken)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            // Signal the AppHost directly with SIGTERM. The AppHost catches SIGTERM via
+            // Microsoft.Extensions.Hosting and invokes IHostApplicationLifetime.StopApplication,
+            // which gives DCP and all in-process resources the orderly shutdown they expect.
+            //
+            // Routing the graceful signal through the launcher CLI (CliProcessId) cascades via
+            // `dotnet run`'s child kill. That walk depends on the AppHost being visible in /proc
+            // as a descendant of the `dotnet` process at the moment of the walk, and on the
+            // AppHost being reaped by its parent rather than orphaned. When either of those races
+            // misfires the AppHost is left running (or lingering as a zombie reparented to PID 1)
+            // and the StopCommand monitor then times out reporting "Failed to stop apphost".
+            // Targeting the AppHost PID directly avoids the cascade entirely.
+            logger.LogDebug("Sending graceful shutdown to AppHost PID {Pid}", appHostInfo.ProcessId);
+            return await RequestProcessTreeGracefulShutdownAsync(appHostInfo.ProcessId, appHostInfo.StartedAt, includeStartTimeForDcp: false, cancellationToken).ConfigureAwait(false);
+        }
+
+        // On Windows DCP is an in-tree descendant of the AppHost, so we cannot tree-kill the
+        // AppHost without also taking DCP down. Instead, run the graceful shutdown against the
+        // launcher CLI's process tree (DCP performs `stop-process-tree --skip-descendants`),
+        // which signals the AppHost via DCP without disrupting the descendant cleanup DCP is
+        // responsible for.
         if (appHostInfo.CliProcessId is int cliPid)
         {
             logger.LogDebug("Requesting AppHost process tree shutdown via root CLI PID {Pid}", cliPid);

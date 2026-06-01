@@ -1,4 +1,4 @@
-// aspire.mts - Capability-based Aspire SDK
+﻿// aspire.mts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -154,6 +154,9 @@ type DockerfileStageHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationMo
 
 /** Provides context information for Dockerfile build callbacks. */
 type DockerfileBuilderCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext'>;
+
+/** Provides context for Dockerfile factory functions. */
+type DockerfileFactoryContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext'>;
 
 /** Handle to DotnetToolResource */
 type DotnetToolResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.DotnetToolResource'>;
@@ -1135,6 +1138,11 @@ export interface AddDockerfileBuilderOptions {
     stage?: string;
 }
 
+export interface AddDockerfileFactoryOptions {
+    /** The stage representing the image to be published in a multi-stage Dockerfile. */
+    stage?: string;
+}
+
 export interface AddDockerfileOptions {
     /** Path to the Dockerfile relative to the `contextPath`. Defaults to "Dockerfile" if not specified. */
     dockerfilePath?: string;
@@ -1355,6 +1363,11 @@ export interface WithDockerfileBuilderOptions {
     stage?: string;
 }
 
+export interface WithDockerfileFactoryOptions {
+    /** The stage representing the image to be published in a multi-stage Dockerfile. */
+    stage?: string;
+}
+
 export interface WithDockerfileOptions {
     /** Path to the Dockerfile relative to the `contextPath`. Defaults to "Dockerfile" if not specified. */
     dockerfilePath?: string;
@@ -1542,6 +1555,13 @@ export interface AfterPublishEvent {
     model(): DistributedApplicationModelPromise;
 }
 
+export interface AfterPublishEventPromise extends PromiseLike<AfterPublishEvent> {
+    /** The `IServiceProvider` for the app host. */
+    services(): ServiceProviderPromise;
+    /** The `DistributedApplicationModel` instance. */
+    model(): DistributedApplicationModelPromise;
+}
+
 // ============================================================================
 // AfterPublishEventImpl
 // ============================================================================
@@ -1577,6 +1597,31 @@ class AfterPublishEventImpl implements AfterPublishEvent {
 
 }
 
+/**
+ * Thenable wrapper for AfterPublishEvent that enables fluent chaining.
+ */
+class AfterPublishEventPromiseImpl implements AfterPublishEventPromise {
+    constructor(private _promise: Promise<AfterPublishEvent>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = AfterPublishEvent, TResult2 = never>(
+        onfulfilled?: ((value: AfterPublishEvent) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    model(): DistributedApplicationModelPromise {
+        return new DistributedApplicationModelPromiseImpl(this._promise.then(obj => obj.model()), this._client, false);
+    }
+
+}
+
 // ============================================================================
 // AfterResourcesCreatedEvent
 // ============================================================================
@@ -1591,6 +1636,13 @@ class AfterPublishEventImpl implements AfterPublishEvent {
  */
 export interface AfterResourcesCreatedEvent {
     toJSON(): MarshalledHandle;
+    /** The `IServiceProvider` instance. */
+    services(): ServiceProviderPromise;
+    /** The `DistributedApplicationModel` instance. */
+    model(): DistributedApplicationModelPromise;
+}
+
+export interface AfterResourcesCreatedEventPromise extends PromiseLike<AfterResourcesCreatedEvent> {
     /** The `IServiceProvider` instance. */
     services(): ServiceProviderPromise;
     /** The `DistributedApplicationModel` instance. */
@@ -1639,6 +1691,31 @@ class AfterResourcesCreatedEventImpl implements AfterResourcesCreatedEvent {
 
 }
 
+/**
+ * Thenable wrapper for AfterResourcesCreatedEvent that enables fluent chaining.
+ */
+class AfterResourcesCreatedEventPromiseImpl implements AfterResourcesCreatedEventPromise {
+    constructor(private _promise: Promise<AfterResourcesCreatedEvent>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = AfterResourcesCreatedEvent, TResult2 = never>(
+        onfulfilled?: ((value: AfterResourcesCreatedEvent) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    model(): DistributedApplicationModelPromise {
+        return new DistributedApplicationModelPromiseImpl(this._promise.then(obj => obj.model()), this._client, false);
+    }
+
+}
+
 // ============================================================================
 // BeforePublishEvent
 // ============================================================================
@@ -1646,6 +1723,13 @@ class AfterResourcesCreatedEventImpl implements AfterResourcesCreatedEvent {
 /** This event is published before the distributed application is published. */
 export interface BeforePublishEvent {
     toJSON(): MarshalledHandle;
+    /** The `IServiceProvider` for the app host. */
+    services(): ServiceProviderPromise;
+    /** The `DistributedApplicationModel` instance. */
+    model(): DistributedApplicationModelPromise;
+}
+
+export interface BeforePublishEventPromise extends PromiseLike<BeforePublishEvent> {
     /** The `IServiceProvider` for the app host. */
     services(): ServiceProviderPromise;
     /** The `DistributedApplicationModel` instance. */
@@ -1687,6 +1771,31 @@ class BeforePublishEventImpl implements BeforePublishEvent {
 
 }
 
+/**
+ * Thenable wrapper for BeforePublishEvent that enables fluent chaining.
+ */
+class BeforePublishEventPromiseImpl implements BeforePublishEventPromise {
+    constructor(private _promise: Promise<BeforePublishEvent>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = BeforePublishEvent, TResult2 = never>(
+        onfulfilled?: ((value: BeforePublishEvent) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    model(): DistributedApplicationModelPromise {
+        return new DistributedApplicationModelPromiseImpl(this._promise.then(obj => obj.model()), this._client, false);
+    }
+
+}
+
 // ============================================================================
 // BeforeResourceStartedEvent
 // ============================================================================
@@ -1698,6 +1807,13 @@ class BeforePublishEventImpl implements BeforePublishEvent {
  */
 export interface BeforeResourceStartedEvent {
     toJSON(): MarshalledHandle;
+    /** Gets the Resource property */
+    resource(): ResourcePromise;
+    /** Gets the Services property */
+    services(): ServiceProviderPromise;
+}
+
+export interface BeforeResourceStartedEventPromise extends PromiseLike<BeforeResourceStartedEvent> {
     /** Gets the Resource property */
     resource(): ResourcePromise;
     /** Gets the Services property */
@@ -1743,6 +1859,31 @@ class BeforeResourceStartedEventImpl implements BeforeResourceStartedEvent {
 
 }
 
+/**
+ * Thenable wrapper for BeforeResourceStartedEvent that enables fluent chaining.
+ */
+class BeforeResourceStartedEventPromiseImpl implements BeforeResourceStartedEventPromise {
+    constructor(private _promise: Promise<BeforeResourceStartedEvent>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = BeforeResourceStartedEvent, TResult2 = never>(
+        onfulfilled?: ((value: BeforeResourceStartedEvent) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+}
+
 // ============================================================================
 // BeforeStartEvent
 // ============================================================================
@@ -1757,6 +1898,13 @@ class BeforeResourceStartedEventImpl implements BeforeResourceStartedEvent {
  */
 export interface BeforeStartEvent {
     toJSON(): MarshalledHandle;
+    /** The `IServiceProvider` instance. */
+    services(): ServiceProviderPromise;
+    /** The `DistributedApplicationModel` instance. */
+    model(): DistributedApplicationModelPromise;
+}
+
+export interface BeforeStartEventPromise extends PromiseLike<BeforeStartEvent> {
     /** The `IServiceProvider` instance. */
     services(): ServiceProviderPromise;
     /** The `DistributedApplicationModel` instance. */
@@ -1805,6 +1953,31 @@ class BeforeStartEventImpl implements BeforeStartEvent {
 
 }
 
+/**
+ * Thenable wrapper for BeforeStartEvent that enables fluent chaining.
+ */
+class BeforeStartEventPromiseImpl implements BeforeStartEventPromise {
+    constructor(private _promise: Promise<BeforeStartEvent>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = BeforeStartEvent, TResult2 = never>(
+        onfulfilled?: ((value: BeforeStartEvent) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    model(): DistributedApplicationModelPromise {
+        return new DistributedApplicationModelPromiseImpl(this._promise.then(obj => obj.model()), this._client, false);
+    }
+
+}
+
 // ============================================================================
 // CommandLineArgsCallbackContext
 // ============================================================================
@@ -1823,7 +1996,22 @@ export interface CommandLineArgsCallbackContext {
      */
     resource(): ResourcePromise;
     /** Gets the execution context associated with this callback. */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
+}
+
+export interface CommandLineArgsCallbackContextPromise extends PromiseLike<CommandLineArgsCallbackContext> {
+    /** Gets the editor used to manipulate command-line arguments in polyglot callbacks. */
+    args(): CommandLineArgsEditorPromise;
+    /** Gets the logger facade used by polyglot callbacks. */
+    log(): LogFacadePromise;
+    /**
+     * The resource associated with this callback context.
+     *
+     * This will be set to the resource in all cases where Aspire invokes the callback.
+     */
+    resource(): ResourcePromise;
+    /** Gets the execution context associated with this callback. */
+    executionContext(): DistributedApplicationExecutionContextPromise;
 }
 
 // ============================================================================
@@ -1870,12 +2058,48 @@ class CommandLineArgsCallbackContextImpl implements CommandLineArgsCallbackConte
         return new ResourcePromiseImpl(promise, this._client, false);
     }
 
-    async executionContext(): Promise<DistributedApplicationExecutionContext> {
-        const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
-            'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.executionContext',
-            { context: this._handle }
-        );
-        return new DistributedApplicationExecutionContextImpl(handle, this._client);
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        })();
+        return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for CommandLineArgsCallbackContext that enables fluent chaining.
+ */
+class CommandLineArgsCallbackContextPromiseImpl implements CommandLineArgsCallbackContextPromise {
+    constructor(private _promise: Promise<CommandLineArgsCallbackContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = CommandLineArgsCallbackContext, TResult2 = never>(
+        onfulfilled?: ((value: CommandLineArgsCallbackContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    args(): CommandLineArgsEditorPromise {
+        return new CommandLineArgsEditorPromiseImpl(this._promise.then(obj => obj.args()), this._client, false);
+    }
+
+    log(): LogFacadePromise {
+        return new LogFacadePromiseImpl(this._promise.then(obj => obj.log()), this._client, false);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
     }
 
 }
@@ -1968,6 +2192,13 @@ export interface ConnectionStringAvailableEvent {
     services(): ServiceProviderPromise;
 }
 
+export interface ConnectionStringAvailableEventPromise extends PromiseLike<ConnectionStringAvailableEvent> {
+    /** Gets the Resource property */
+    resource(): ResourcePromise;
+    /** Gets the Services property */
+    services(): ServiceProviderPromise;
+}
+
 // ============================================================================
 // ConnectionStringAvailableEventImpl
 // ============================================================================
@@ -1999,6 +2230,31 @@ class ConnectionStringAvailableEventImpl implements ConnectionStringAvailableEve
             return new ServiceProviderImpl(handle, this._client);
         })();
         return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for ConnectionStringAvailableEvent that enables fluent chaining.
+ */
+class ConnectionStringAvailableEventPromiseImpl implements ConnectionStringAvailableEventPromise {
+    constructor(private _promise: Promise<ConnectionStringAvailableEvent>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ConnectionStringAvailableEvent, TResult2 = never>(
+        onfulfilled?: ((value: ConnectionStringAvailableEvent) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
 }
@@ -2094,6 +2350,15 @@ export interface ContainerImagePushOptionsCallbackContext {
     options(): Promise<ContainerImagePushOptions>;
 }
 
+export interface ContainerImagePushOptionsCallbackContextPromise extends PromiseLike<ContainerImagePushOptionsCallbackContext> {
+    /** Gets the resource being configured for container image push operations. */
+    resource(): ResourcePromise;
+    /** Gets the cancellation token to observe while configuring image push options. */
+    cancellationToken(): Promise<CancellationToken>;
+    /** Gets the container image push options that can be modified by the callback. */
+    options(): Promise<ContainerImagePushOptions>;
+}
+
 // ============================================================================
 // ContainerImagePushOptionsCallbackContextImpl
 // ============================================================================
@@ -2134,6 +2399,35 @@ class ContainerImagePushOptionsCallbackContextImpl implements ContainerImagePush
 
 }
 
+/**
+ * Thenable wrapper for ContainerImagePushOptionsCallbackContext that enables fluent chaining.
+ */
+class ContainerImagePushOptionsCallbackContextPromiseImpl implements ContainerImagePushOptionsCallbackContextPromise {
+    constructor(private _promise: Promise<ContainerImagePushOptionsCallbackContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ContainerImagePushOptionsCallbackContext, TResult2 = never>(
+        onfulfilled?: ((value: ContainerImagePushOptionsCallbackContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+    options(): Promise<ContainerImagePushOptions> {
+        return this._promise.then(obj => obj.options());
+    }
+
+}
+
 // ============================================================================
 // ContainerImageReference
 // ============================================================================
@@ -2141,6 +2435,13 @@ class ContainerImagePushOptionsCallbackContextImpl implements ContainerImagePush
 /** Represents the fully‑qualified container image reference that should be deployed. */
 export interface ContainerImageReference {
     toJSON(): MarshalledHandle;
+    /** Gets the resource that this container image is associated with. */
+    resource(): ResourcePromise;
+    /** Gets the ValueExpression property */
+    valueExpression(): Promise<string>;
+}
+
+export interface ContainerImageReferencePromise extends PromiseLike<ContainerImageReference> {
     /** Gets the resource that this container image is associated with. */
     resource(): ResourcePromise;
     /** Gets the ValueExpression property */
@@ -2178,6 +2479,31 @@ class ContainerImageReferenceImpl implements ContainerImageReference {
 
 }
 
+/**
+ * Thenable wrapper for ContainerImageReference that enables fluent chaining.
+ */
+class ContainerImageReferencePromiseImpl implements ContainerImageReferencePromise {
+    constructor(private _promise: Promise<ContainerImageReference>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ContainerImageReference, TResult2 = never>(
+        onfulfilled?: ((value: ContainerImageReference) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    valueExpression(): Promise<string> {
+        return this._promise.then(obj => obj.valueExpression());
+    }
+
+}
+
 // ============================================================================
 // ContainerMountAnnotation
 // ============================================================================
@@ -2185,6 +2511,17 @@ class ContainerImageReferenceImpl implements ContainerImageReference {
 /** Represents a mount annotation for a container resource. */
 export interface ContainerMountAnnotation {
     toJSON(): MarshalledHandle;
+    /** Gets the source of the bind mount or name if a volume. Can be `null` if the mount is an anonymous volume. */
+    source(): Promise<string | null>;
+    /** Gets the target of the mount. */
+    target(): Promise<string>;
+    /** Gets the type of the mount. */
+    type(): Promise<ContainerMountType>;
+    /** Gets a value indicating whether the volume mount is read-only. */
+    isReadOnly(): Promise<boolean>;
+}
+
+export interface ContainerMountAnnotationPromise extends PromiseLike<ContainerMountAnnotation> {
     /** Gets the source of the bind mount or name if a volume. Can be `null` if the mount is an anonymous volume. */
     source(): Promise<string | null>;
     /** Gets the target of the mount. */
@@ -2236,6 +2573,39 @@ class ContainerMountAnnotationImpl implements ContainerMountAnnotation {
 
 }
 
+/**
+ * Thenable wrapper for ContainerMountAnnotation that enables fluent chaining.
+ */
+class ContainerMountAnnotationPromiseImpl implements ContainerMountAnnotationPromise {
+    constructor(private _promise: Promise<ContainerMountAnnotation>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ContainerMountAnnotation, TResult2 = never>(
+        onfulfilled?: ((value: ContainerMountAnnotation) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    source(): Promise<string | null> {
+        return this._promise.then(obj => obj.source());
+    }
+
+    target(): Promise<string> {
+        return this._promise.then(obj => obj.target());
+    }
+
+    type(): Promise<ContainerMountType> {
+        return this._promise.then(obj => obj.type());
+    }
+
+    isReadOnly(): Promise<boolean> {
+        return this._promise.then(obj => obj.isReadOnly());
+    }
+
+}
+
 // ============================================================================
 // ContainerPortReference
 // ============================================================================
@@ -2243,6 +2613,13 @@ class ContainerMountAnnotationImpl implements ContainerMountAnnotation {
 /** Represents a TCP/UDP port that a container can expose. */
 export interface ContainerPortReference {
     toJSON(): MarshalledHandle;
+    /** Gets the resource that this container port is associated with. */
+    resource(): ResourcePromise;
+    /** Gets the ValueExpression property */
+    valueExpression(): Promise<string>;
+}
+
+export interface ContainerPortReferencePromise extends PromiseLike<ContainerPortReference> {
     /** Gets the resource that this container port is associated with. */
     resource(): ResourcePromise;
     /** Gets the ValueExpression property */
@@ -2276,6 +2653,31 @@ class ContainerPortReferenceImpl implements ContainerPortReference {
             'Aspire.Hosting.ApplicationModel/ContainerPortReference.valueExpression',
             { context: this._handle }
         );
+    }
+
+}
+
+/**
+ * Thenable wrapper for ContainerPortReference that enables fluent chaining.
+ */
+class ContainerPortReferencePromiseImpl implements ContainerPortReferencePromise {
+    constructor(private _promise: Promise<ContainerPortReference>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ContainerPortReference, TResult2 = never>(
+        onfulfilled?: ((value: ContainerPortReference) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    valueExpression(): Promise<string> {
+        return this._promise.then(obj => obj.valueExpression());
     }
 
 }
@@ -2405,6 +2807,17 @@ export interface DistributedApplicationExecutionContext {
     isRunMode(): Promise<boolean>;
 }
 
+export interface DistributedApplicationExecutionContextPromise extends PromiseLike<DistributedApplicationExecutionContext> {
+    /** The operation currently being performed by the AppHost. */
+    operation(): Promise<DistributedApplicationOperation>;
+    /** The `IServiceProvider` for the AppHost. */
+    serviceProvider(): ServiceProviderPromise;
+    /** Returns true if the current operation is publishing. */
+    isPublishMode(): Promise<boolean>;
+    /** Returns true if the current operation is running. */
+    isRunMode(): Promise<boolean>;
+}
+
 // ============================================================================
 // DistributedApplicationExecutionContextImpl
 // ============================================================================
@@ -2461,6 +2874,39 @@ class DistributedApplicationExecutionContextImpl implements DistributedApplicati
             'Aspire.Hosting/DistributedApplicationExecutionContext.isRunMode',
             { context: this._handle }
         );
+    }
+
+}
+
+/**
+ * Thenable wrapper for DistributedApplicationExecutionContext that enables fluent chaining.
+ */
+class DistributedApplicationExecutionContextPromiseImpl implements DistributedApplicationExecutionContextPromise {
+    constructor(private _promise: Promise<DistributedApplicationExecutionContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = DistributedApplicationExecutionContext, TResult2 = never>(
+        onfulfilled?: ((value: DistributedApplicationExecutionContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    operation(): Promise<DistributedApplicationOperation> {
+        return this._promise.then(obj => obj.operation());
+    }
+
+    serviceProvider(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.serviceProvider()), this._client, false);
+    }
+
+    isPublishMode(): Promise<boolean> {
+        return this._promise.then(obj => obj.isPublishMode());
+    }
+
+    isRunMode(): Promise<boolean> {
+        return this._promise.then(obj => obj.isRunMode());
     }
 
 }
@@ -2731,6 +3177,17 @@ export interface DockerfileBuilderCallbackContext {
     cancellationToken(): Promise<CancellationToken>;
 }
 
+export interface DockerfileBuilderCallbackContextPromise extends PromiseLike<DockerfileBuilderCallbackContext> {
+    /** Gets the resource being built. */
+    resource(): ResourcePromise;
+    /** Gets the Dockerfile builder instance. */
+    builder(): DockerfileBuilderPromise;
+    /** Gets the service provider for dependency injection. */
+    services(): ServiceProviderPromise;
+    /** Gets the cancellation token to observe while waiting for the task to complete. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
 // ============================================================================
 // DockerfileBuilderCallbackContextImpl
 // ============================================================================
@@ -2781,6 +3238,100 @@ class DockerfileBuilderCallbackContextImpl implements DockerfileBuilderCallbackC
             { context: this._handle }
         );
         return CancellationToken.fromValue(result);
+    }
+
+}
+
+/**
+ * Thenable wrapper for DockerfileBuilderCallbackContext that enables fluent chaining.
+ */
+class DockerfileBuilderCallbackContextPromiseImpl implements DockerfileBuilderCallbackContextPromise {
+    constructor(private _promise: Promise<DockerfileBuilderCallbackContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = DockerfileBuilderCallbackContext, TResult2 = never>(
+        onfulfilled?: ((value: DockerfileBuilderCallbackContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    builder(): DockerfileBuilderPromise {
+        return new DockerfileBuilderPromiseImpl(this._promise.then(obj => obj.builder()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+}
+
+// ============================================================================
+// DockerfileFactoryContext
+// ============================================================================
+
+/** Provides context for Dockerfile factory functions. */
+export interface DockerfileFactoryContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the resource for which the Dockerfile is being generated. This allows factory functions to query resource annotations and properties to customize the generated Dockerfile. ``` var containerAnnotation = context.Resource.Annotations.OfType<ContainerImageAnnotation>().FirstOrDefault(); var baseImage = containerAnnotation?.Image ?? "alpine:latest"; ``` */
+    resource(): ResourcePromise;
+}
+
+export interface DockerfileFactoryContextPromise extends PromiseLike<DockerfileFactoryContext> {
+    /** Gets the resource for which the Dockerfile is being generated. This allows factory functions to query resource annotations and properties to customize the generated Dockerfile. ``` var containerAnnotation = context.Resource.Annotations.OfType<ContainerImageAnnotation>().FirstOrDefault(); var baseImage = containerAnnotation?.Image ?? "alpine:latest"; ``` */
+    resource(): ResourcePromise;
+}
+
+// ============================================================================
+// DockerfileFactoryContextImpl
+// ============================================================================
+
+/** Provides context for Dockerfile factory functions. */
+class DockerfileFactoryContextImpl implements DockerfileFactoryContext {
+    constructor(private _handle: DockerfileFactoryContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    resource(): ResourcePromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting.ApplicationModel/DockerfileFactoryContext.resource',
+                { context: this._handle }
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for DockerfileFactoryContext that enables fluent chaining.
+ */
+class DockerfileFactoryContextPromiseImpl implements DockerfileFactoryContextPromise {
+    constructor(private _promise: Promise<DockerfileFactoryContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = DockerfileFactoryContext, TResult2 = never>(
+        onfulfilled?: ((value: DockerfileFactoryContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
     }
 
 }
@@ -3253,7 +3804,7 @@ export interface EndpointReference {
      * @param property The `EndpointProperty` enum value to use in the reference.
      * @returns An `EndpointReferenceExpression` representing the specified `EndpointProperty`.
      */
-    property(property: EndpointProperty): Promise<EndpointReferenceExpression>;
+    property(property: EndpointProperty): EndpointReferenceExpressionPromise;
     /**
      * Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.
      *
@@ -3320,7 +3871,7 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
      * @param property The `EndpointProperty` enum value to use in the reference.
      * @returns An `EndpointReferenceExpression` representing the specified `EndpointProperty`.
      */
-    property(property: EndpointProperty): Promise<EndpointReferenceExpression>;
+    property(property: EndpointProperty): EndpointReferenceExpressionPromise;
     /**
      * Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.
      *
@@ -3470,17 +4021,23 @@ class EndpointReferenceImpl implements EndpointReference {
         );
     }
 
+    /** @internal */
+    async _propertyInternal(property: EndpointProperty): Promise<EndpointReferenceExpression> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle, property };
+        const result = await this._client.invokeCapability<EndpointReferenceExpressionHandle>(
+            'Aspire.Hosting.ApplicationModel/EndpointReference.property',
+            rpcArgs
+        );
+        return new EndpointReferenceExpressionImpl(result, this._client);
+    }
+
     /**
      * Gets the specified property expression of the endpoint.
      * @param property The `EndpointProperty` enum value to use in the reference.
      * @returns An `EndpointReferenceExpression` representing the specified `EndpointProperty`.
      */
-    async property(property: EndpointProperty): Promise<EndpointReferenceExpression> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle, property };
-        return await this._client.invokeCapability<EndpointReferenceExpression>(
-            'Aspire.Hosting.ApplicationModel/EndpointReference.property',
-            rpcArgs
-        );
+    property(property: EndpointProperty): EndpointReferenceExpressionPromise {
+        return new EndpointReferenceExpressionPromiseImpl(this._propertyInternal(property), this._client);
     }
 
     /**
@@ -3583,8 +4140,8 @@ class EndpointReferencePromiseImpl implements EndpointReferencePromise {
         return this._promise.then(obj => obj.getValueAsync(options));
     }
 
-    property(property: EndpointProperty): Promise<EndpointReferenceExpression> {
-        return this._promise.then(obj => obj.property(property));
+    property(property: EndpointProperty): EndpointReferenceExpressionPromise {
+        return new EndpointReferenceExpressionPromiseImpl(this._promise.then(obj => obj.property(property)), this._client);
     }
 
     getTlsValue(enabledValue: ReferenceExpression, disabledValue: ReferenceExpression): Promise<ReferenceExpression> {
@@ -3600,6 +4157,15 @@ class EndpointReferencePromiseImpl implements EndpointReferencePromise {
 /** Represents a property expression for an endpoint reference. */
 export interface EndpointReferenceExpression {
     toJSON(): MarshalledHandle;
+    /** Gets the `EndpointReference`. */
+    endpoint(): EndpointReferencePromise;
+    /** Gets the `EndpointProperty` for the property expression. */
+    property(): Promise<EndpointProperty>;
+    /** Gets the expression of the property of the endpoint. */
+    valueExpression(): Promise<string>;
+}
+
+export interface EndpointReferenceExpressionPromise extends PromiseLike<EndpointReferenceExpression> {
     /** Gets the `EndpointReference`. */
     endpoint(): EndpointReferencePromise;
     /** Gets the `EndpointProperty` for the property expression. */
@@ -3642,6 +4208,35 @@ class EndpointReferenceExpressionImpl implements EndpointReferenceExpression {
             'Aspire.Hosting.ApplicationModel/EndpointReferenceExpression.valueExpression',
             { context: this._handle }
         );
+    }
+
+}
+
+/**
+ * Thenable wrapper for EndpointReferenceExpression that enables fluent chaining.
+ */
+class EndpointReferenceExpressionPromiseImpl implements EndpointReferenceExpressionPromise {
+    constructor(private _promise: Promise<EndpointReferenceExpression>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = EndpointReferenceExpression, TResult2 = never>(
+        onfulfilled?: ((value: EndpointReferenceExpression) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    endpoint(): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.endpoint()), this._client, false);
+    }
+
+    property(): Promise<EndpointProperty> {
+        return this._promise.then(obj => obj.property());
+    }
+
+    valueExpression(): Promise<string> {
+        return this._promise.then(obj => obj.valueExpression());
     }
 
 }
@@ -3705,6 +4300,11 @@ export interface EndpointUpdateContext {
         get: () => Promise<boolean>;
         set: (value: boolean) => Promise<void>;
     };
+}
+
+export interface EndpointUpdateContextPromise extends PromiseLike<EndpointUpdateContext> {
+    /** Gets the endpoint name. */
+    name(): Promise<string>;
 }
 
 // ============================================================================
@@ -3877,6 +4477,27 @@ class EndpointUpdateContextImpl implements EndpointUpdateContext {
 
 }
 
+/**
+ * Thenable wrapper for EndpointUpdateContext that enables fluent chaining.
+ */
+class EndpointUpdateContextPromiseImpl implements EndpointUpdateContextPromise {
+    constructor(private _promise: Promise<EndpointUpdateContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = EndpointUpdateContext, TResult2 = never>(
+        onfulfilled?: ((value: EndpointUpdateContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    name(): Promise<string> {
+        return this._promise.then(obj => obj.name());
+    }
+
+}
+
 // ============================================================================
 // EnvironmentCallbackContext
 // ============================================================================
@@ -3895,7 +4516,22 @@ export interface EnvironmentCallbackContext {
      */
     resource(): ResourcePromise;
     /** Gets the execution context associated with this invocation of the AppHost. */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
+}
+
+export interface EnvironmentCallbackContextPromise extends PromiseLike<EnvironmentCallbackContext> {
+    /** Gets the editor used to set environment variables in polyglot callbacks. */
+    environment(): EnvironmentEditorPromise;
+    /** Gets the logger facade used by polyglot callbacks. */
+    log(): LogFacadePromise;
+    /**
+     * The resource associated with this callback context.
+     *
+     * This will be set to the resource in all cases where Aspire invokes the callback.
+     */
+    resource(): ResourcePromise;
+    /** Gets the execution context associated with this invocation of the AppHost. */
+    executionContext(): DistributedApplicationExecutionContextPromise;
 }
 
 // ============================================================================
@@ -3942,12 +4578,48 @@ class EnvironmentCallbackContextImpl implements EnvironmentCallbackContext {
         return new ResourcePromiseImpl(promise, this._client, false);
     }
 
-    async executionContext(): Promise<DistributedApplicationExecutionContext> {
-        const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
-            'Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.executionContext',
-            { context: this._handle }
-        );
-        return new DistributedApplicationExecutionContextImpl(handle, this._client);
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        })();
+        return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for EnvironmentCallbackContext that enables fluent chaining.
+ */
+class EnvironmentCallbackContextPromiseImpl implements EnvironmentCallbackContextPromise {
+    constructor(private _promise: Promise<EnvironmentCallbackContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = EnvironmentCallbackContext, TResult2 = never>(
+        onfulfilled?: ((value: EnvironmentCallbackContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    environment(): EnvironmentEditorPromise {
+        return new EnvironmentEditorPromiseImpl(this._promise.then(obj => obj.environment()), this._client, false);
+    }
+
+    log(): LogFacadePromise {
+        return new LogFacadePromiseImpl(this._promise.then(obj => obj.log()), this._client, false);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
     }
 
 }
@@ -4038,7 +4710,7 @@ class EnvironmentEditorPromiseImpl implements EnvironmentEditorPromise {
 export interface EventingSubscriberRegistrationContext {
     toJSON(): MarshalledHandle;
     /** The execution context for the AppHost invocation. */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
     /** The cancellation token associated with the subscriber registration. */
     cancellationToken(): Promise<CancellationToken>;
     /**
@@ -4069,7 +4741,7 @@ export interface EventingSubscriberRegistrationContext {
 
 export interface EventingSubscriberRegistrationContextPromise extends PromiseLike<EventingSubscriberRegistrationContext> {
     /** The execution context for the AppHost invocation. */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
     /** The cancellation token associated with the subscriber registration. */
     cancellationToken(): Promise<CancellationToken>;
     /**
@@ -4109,12 +4781,15 @@ class EventingSubscriberRegistrationContextImpl implements EventingSubscriberReg
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    async executionContext(): Promise<DistributedApplicationExecutionContext> {
-        const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
-            'Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext',
-            { context: this._handle }
-        );
-        return new DistributedApplicationExecutionContextImpl(handle, this._client);
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        })();
+        return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
     }
 
     async cancellationToken(): Promise<CancellationToken> {
@@ -4214,8 +4889,8 @@ class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscr
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    executionContext(): Promise<DistributedApplicationExecutionContext> {
-        return this._promise.then(obj => obj.executionContext());
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
     }
 
     cancellationToken(): Promise<CancellationToken> {
@@ -4247,6 +4922,23 @@ class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscr
 /** Context for {@link ResourceCommandAnnotation.ExecuteCommand}. */
 export interface ExecuteCommandContext {
     toJSON(): MarshalledHandle;
+    /** The resource name. */
+    resourceName(): Promise<string>;
+    /** The cancellation token. */
+    cancellationToken(): Promise<CancellationToken>;
+    /** The logger for the resource. */
+    logger(): LoggerPromise;
+    /**
+     * Gets the invocation arguments supplied by the client when the command is executed.
+     *
+     * The collection contains the arguments described by `Arguments` with their
+     * submitted values populated. CLI positional arguments are mapped by declaration order. Dashboard, MCP, and other
+     * named-payload clients are mapped by `Name`.
+     */
+    arguments(): Promise<InteractionInputCollection>;
+}
+
+export interface ExecuteCommandContextPromise extends PromiseLike<ExecuteCommandContext> {
     /** The resource name. */
     resourceName(): Promise<string>;
     /** The cancellation token. */
@@ -4309,6 +5001,39 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
 
 }
 
+/**
+ * Thenable wrapper for ExecuteCommandContext that enables fluent chaining.
+ */
+class ExecuteCommandContextPromiseImpl implements ExecuteCommandContextPromise {
+    constructor(private _promise: Promise<ExecuteCommandContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ExecuteCommandContext, TResult2 = never>(
+        onfulfilled?: ((value: ExecuteCommandContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resourceName(): Promise<string> {
+        return this._promise.then(obj => obj.resourceName());
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+    logger(): LoggerPromise {
+        return new LoggerPromiseImpl(this._promise.then(obj => obj.logger()), this._client, false);
+    }
+
+    arguments(): Promise<InteractionInputCollection> {
+        return this._promise.then(obj => obj.arguments());
+    }
+
+}
+
 // ============================================================================
 // InitializeResourceEvent
 // ============================================================================
@@ -4321,6 +5046,19 @@ class ExecuteCommandContextImpl implements ExecuteCommandContext {
  */
 export interface InitializeResourceEvent {
     toJSON(): MarshalledHandle;
+    /** Gets the Resource property */
+    resource(): ResourcePromise;
+    /** The `IDistributedApplicationEventing` service for the app host. */
+    eventing(): DistributedApplicationEventingPromise;
+    /** An instance of `ILogger` that can be used to log messages for the resource. */
+    logger(): LoggerPromise;
+    /** The `ResourceNotificationService` for the app host. */
+    notifications(): ResourceNotificationServicePromise;
+    /** The `IServiceProvider` for the app host. */
+    services(): ServiceProviderPromise;
+}
+
+export interface InitializeResourceEventPromise extends PromiseLike<InitializeResourceEvent> {
     /** Gets the Resource property */
     resource(): ResourcePromise;
     /** The `IDistributedApplicationEventing` service for the app host. */
@@ -4402,6 +5140,43 @@ class InitializeResourceEventImpl implements InitializeResourceEvent {
             return new ServiceProviderImpl(handle, this._client);
         })();
         return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for InitializeResourceEvent that enables fluent chaining.
+ */
+class InitializeResourceEventPromiseImpl implements InitializeResourceEventPromise {
+    constructor(private _promise: Promise<InitializeResourceEvent>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = InitializeResourceEvent, TResult2 = never>(
+        onfulfilled?: ((value: InitializeResourceEvent) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    eventing(): DistributedApplicationEventingPromise {
+        return new DistributedApplicationEventingPromiseImpl(this._promise.then(obj => obj.eventing()), this._client, false);
+    }
+
+    logger(): LoggerPromise {
+        return new LoggerPromiseImpl(this._promise.then(obj => obj.logger()), this._client, false);
+    }
+
+    notifications(): ResourceNotificationServicePromise {
+        return new ResourceNotificationServicePromiseImpl(this._promise.then(obj => obj.notifications()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
 }
@@ -4803,7 +5578,7 @@ export interface PipelineContext {
     /** Gets the distributed application model to be deployed. */
     model(): DistributedApplicationModelPromise;
     /** Gets the execution context for the distributed application. */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
     /** Gets the service provider for dependency resolution. */
     services(): ServiceProviderPromise;
     /** Gets the logger for pipeline operations. */
@@ -4813,6 +5588,24 @@ export interface PipelineContext {
         get: () => Promise<CancellationToken>;
         set: (value: AbortSignal | CancellationToken) => Promise<void>;
     };
+    /**
+     * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
+     *
+     * Pipeline steps can add key-value pairs to the summary to provide useful information
+     * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
+     */
+    summary(): PipelineSummaryPromise;
+}
+
+export interface PipelineContextPromise extends PromiseLike<PipelineContext> {
+    /** Gets the distributed application model to be deployed. */
+    model(): DistributedApplicationModelPromise;
+    /** Gets the execution context for the distributed application. */
+    executionContext(): DistributedApplicationExecutionContextPromise;
+    /** Gets the service provider for dependency resolution. */
+    services(): ServiceProviderPromise;
+    /** Gets the logger for pipeline operations. */
+    logger(): LoggerPromise;
     /**
      * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
      *
@@ -4844,12 +5637,15 @@ class PipelineContextImpl implements PipelineContext {
         return new DistributedApplicationModelPromiseImpl(promise, this._client, false);
     }
 
-    async executionContext(): Promise<DistributedApplicationExecutionContext> {
-        const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
-            'Aspire.Hosting.Pipelines/PipelineContext.executionContext',
-            { context: this._handle }
-        );
-        return new DistributedApplicationExecutionContextImpl(handle, this._client);
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting.Pipelines/PipelineContext.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        })();
+        return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
     }
 
     services(): ServiceProviderPromise {
@@ -4899,6 +5695,43 @@ class PipelineContextImpl implements PipelineContext {
             return new PipelineSummaryImpl(handle, this._client);
         })();
         return new PipelineSummaryPromiseImpl(promise, this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for PipelineContext that enables fluent chaining.
+ */
+class PipelineContextPromiseImpl implements PipelineContextPromise {
+    constructor(private _promise: Promise<PipelineContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = PipelineContext, TResult2 = never>(
+        onfulfilled?: ((value: PipelineContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    model(): DistributedApplicationModelPromise {
+        return new DistributedApplicationModelPromiseImpl(this._promise.then(obj => obj.model()), this._client, false);
+    }
+
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    logger(): LoggerPromise {
+        return new LoggerPromiseImpl(this._promise.then(obj => obj.logger()), this._client, false);
+    }
+
+    summary(): PipelineSummaryPromise {
+        return new PipelineSummaryPromiseImpl(this._promise.then(obj => obj.summary()), this._client, false);
     }
 
 }
@@ -5254,13 +6087,37 @@ class PipelineStepPromiseImpl implements PipelineStepPromise {
 export interface PipelineStepContext {
     toJSON(): MarshalledHandle;
     /** Gets the pipeline context shared across all steps. */
-    pipelineContext(): Promise<PipelineContext>;
+    pipelineContext(): PipelineContextPromise;
     /** Gets the publishing step associated with this specific step execution. */
     reportingStep(): ReportingStepPromise;
     /** Gets the distributed application model to be deployed. */
     model(): DistributedApplicationModelPromise;
     /** Gets the execution context for the distributed application. */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
+    /** Gets the service provider for dependency resolution. */
+    services(): ServiceProviderPromise;
+    /** Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger. */
+    logger(): LoggerPromise;
+    /** Gets the cancellation token for the pipeline operation. */
+    cancellationToken(): Promise<CancellationToken>;
+    /**
+     * Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
+     *
+     * Pipeline steps can add key-value pairs to the summary to provide useful information
+     * about the pipeline execution, such as deployment targets, resource names, URLs, etc.
+     */
+    summary(): PipelineSummaryPromise;
+}
+
+export interface PipelineStepContextPromise extends PromiseLike<PipelineStepContext> {
+    /** Gets the pipeline context shared across all steps. */
+    pipelineContext(): PipelineContextPromise;
+    /** Gets the publishing step associated with this specific step execution. */
+    reportingStep(): ReportingStepPromise;
+    /** Gets the distributed application model to be deployed. */
+    model(): DistributedApplicationModelPromise;
+    /** Gets the execution context for the distributed application. */
+    executionContext(): DistributedApplicationExecutionContextPromise;
     /** Gets the service provider for dependency resolution. */
     services(): ServiceProviderPromise;
     /** Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger. */
@@ -5292,12 +6149,15 @@ class PipelineStepContextImpl implements PipelineStepContext {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    async pipelineContext(): Promise<PipelineContext> {
-        const handle = await this._client.invokeCapability<PipelineContextHandle>(
-            'Aspire.Hosting.Pipelines/PipelineStepContext.pipelineContext',
-            { context: this._handle }
-        );
-        return new PipelineContextImpl(handle, this._client);
+    pipelineContext(): PipelineContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<PipelineContextHandle>(
+                'Aspire.Hosting.Pipelines/PipelineStepContext.pipelineContext',
+                { context: this._handle }
+            );
+            return new PipelineContextImpl(handle, this._client);
+        })();
+        return new PipelineContextPromiseImpl(promise, this._client, false);
     }
 
     reportingStep(): ReportingStepPromise {
@@ -5322,12 +6182,15 @@ class PipelineStepContextImpl implements PipelineStepContext {
         return new DistributedApplicationModelPromiseImpl(promise, this._client, false);
     }
 
-    async executionContext(): Promise<DistributedApplicationExecutionContext> {
-        const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
-            'Aspire.Hosting.Pipelines/PipelineStepContext.executionContext',
-            { context: this._handle }
-        );
-        return new DistributedApplicationExecutionContextImpl(handle, this._client);
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting.Pipelines/PipelineStepContext.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        })();
+        return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
     }
 
     services(): ServiceProviderPromise {
@@ -5373,6 +6236,55 @@ class PipelineStepContextImpl implements PipelineStepContext {
 
 }
 
+/**
+ * Thenable wrapper for PipelineStepContext that enables fluent chaining.
+ */
+class PipelineStepContextPromiseImpl implements PipelineStepContextPromise {
+    constructor(private _promise: Promise<PipelineStepContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = PipelineStepContext, TResult2 = never>(
+        onfulfilled?: ((value: PipelineStepContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    pipelineContext(): PipelineContextPromise {
+        return new PipelineContextPromiseImpl(this._promise.then(obj => obj.pipelineContext()), this._client, false);
+    }
+
+    reportingStep(): ReportingStepPromise {
+        return new ReportingStepPromiseImpl(this._promise.then(obj => obj.reportingStep()), this._client, false);
+    }
+
+    model(): DistributedApplicationModelPromise {
+        return new DistributedApplicationModelPromiseImpl(this._promise.then(obj => obj.model()), this._client, false);
+    }
+
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+    logger(): LoggerPromise {
+        return new LoggerPromiseImpl(this._promise.then(obj => obj.logger()), this._client, false);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
+    }
+
+    summary(): PipelineSummaryPromise {
+        return new PipelineSummaryPromiseImpl(this._promise.then(obj => obj.summary()), this._client, false);
+    }
+
+}
+
 // ============================================================================
 // PipelineStepFactoryContext
 // ============================================================================
@@ -5381,7 +6293,14 @@ class PipelineStepContextImpl implements PipelineStepContext {
 export interface PipelineStepFactoryContext {
     toJSON(): MarshalledHandle;
     /** Gets the pipeline context that has the model and other properties. */
-    pipelineContext(): Promise<PipelineContext>;
+    pipelineContext(): PipelineContextPromise;
+    /** Gets the resource that this factory is associated with. */
+    resource(): ResourcePromise;
+}
+
+export interface PipelineStepFactoryContextPromise extends PromiseLike<PipelineStepFactoryContext> {
+    /** Gets the pipeline context that has the model and other properties. */
+    pipelineContext(): PipelineContextPromise;
     /** Gets the resource that this factory is associated with. */
     resource(): ResourcePromise;
 }
@@ -5397,12 +6316,15 @@ class PipelineStepFactoryContextImpl implements PipelineStepFactoryContext {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    async pipelineContext(): Promise<PipelineContext> {
-        const handle = await this._client.invokeCapability<PipelineContextHandle>(
-            'Aspire.Hosting.Pipelines/PipelineStepFactoryContext.pipelineContext',
-            { context: this._handle }
-        );
-        return new PipelineContextImpl(handle, this._client);
+    pipelineContext(): PipelineContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<PipelineContextHandle>(
+                'Aspire.Hosting.Pipelines/PipelineStepFactoryContext.pipelineContext',
+                { context: this._handle }
+            );
+            return new PipelineContextImpl(handle, this._client);
+        })();
+        return new PipelineContextPromiseImpl(promise, this._client, false);
     }
 
     resource(): ResourcePromise {
@@ -5414,6 +6336,31 @@ class PipelineStepFactoryContextImpl implements PipelineStepFactoryContext {
             return new ResourceImpl(handle, this._client);
         })();
         return new ResourcePromiseImpl(promise, this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for PipelineStepFactoryContext that enables fluent chaining.
+ */
+class PipelineStepFactoryContextPromiseImpl implements PipelineStepFactoryContextPromise {
+    constructor(private _promise: Promise<PipelineStepFactoryContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = PipelineStepFactoryContext, TResult2 = never>(
+        onfulfilled?: ((value: PipelineStepFactoryContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    pipelineContext(): PipelineContextPromise {
+        return new PipelineContextPromiseImpl(this._promise.then(obj => obj.pipelineContext()), this._client, false);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
     }
 
 }
@@ -5913,6 +6860,13 @@ export interface ResourceEndpointsAllocatedEvent {
     services(): ServiceProviderPromise;
 }
 
+export interface ResourceEndpointsAllocatedEventPromise extends PromiseLike<ResourceEndpointsAllocatedEvent> {
+    /** Gets the Resource property */
+    resource(): ResourcePromise;
+    /** Gets the Services property */
+    services(): ServiceProviderPromise;
+}
+
 // ============================================================================
 // ResourceEndpointsAllocatedEventImpl
 // ============================================================================
@@ -5948,6 +6902,31 @@ class ResourceEndpointsAllocatedEventImpl implements ResourceEndpointsAllocatedE
             return new ServiceProviderImpl(handle, this._client);
         })();
         return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
+}
+
+/**
+ * Thenable wrapper for ResourceEndpointsAllocatedEvent that enables fluent chaining.
+ */
+class ResourceEndpointsAllocatedEventPromiseImpl implements ResourceEndpointsAllocatedEventPromise {
+    constructor(private _promise: Promise<ResourceEndpointsAllocatedEvent>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ResourceEndpointsAllocatedEvent, TResult2 = never>(
+        onfulfilled?: ((value: ResourceEndpointsAllocatedEvent) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
     }
 
 }
@@ -6246,6 +7225,13 @@ export interface ResourceReadyEvent {
     services(): ServiceProviderPromise;
 }
 
+export interface ResourceReadyEventPromise extends PromiseLike<ResourceReadyEvent> {
+    /** The resource that is in a healthy state. */
+    resource(): ResourcePromise;
+    /** Gets the Services property */
+    services(): ServiceProviderPromise;
+}
+
 // ============================================================================
 // ResourceReadyEventImpl
 // ============================================================================
@@ -6285,6 +7271,31 @@ class ResourceReadyEventImpl implements ResourceReadyEvent {
 
 }
 
+/**
+ * Thenable wrapper for ResourceReadyEvent that enables fluent chaining.
+ */
+class ResourceReadyEventPromiseImpl implements ResourceReadyEventPromise {
+    constructor(private _promise: Promise<ResourceReadyEvent>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ResourceReadyEvent, TResult2 = never>(
+        onfulfilled?: ((value: ResourceReadyEvent) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+}
+
 // ============================================================================
 // ResourceStoppedEvent
 // ============================================================================
@@ -6296,6 +7307,13 @@ class ResourceReadyEventImpl implements ResourceReadyEvent {
  */
 export interface ResourceStoppedEvent {
     toJSON(): MarshalledHandle;
+    /** Gets the Resource property */
+    resource(): ResourcePromise;
+    /** Gets the Services property */
+    services(): ServiceProviderPromise;
+}
+
+export interface ResourceStoppedEventPromise extends PromiseLike<ResourceStoppedEvent> {
     /** Gets the Resource property */
     resource(): ResourcePromise;
     /** Gets the Services property */
@@ -6341,6 +7359,31 @@ class ResourceStoppedEventImpl implements ResourceStoppedEvent {
 
 }
 
+/**
+ * Thenable wrapper for ResourceStoppedEvent that enables fluent chaining.
+ */
+class ResourceStoppedEventPromiseImpl implements ResourceStoppedEventPromise {
+    constructor(private _promise: Promise<ResourceStoppedEvent>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ResourceStoppedEvent, TResult2 = never>(
+        onfulfilled?: ((value: ResourceStoppedEvent) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resource(): ResourcePromise {
+        return new ResourcePromiseImpl(this._promise.then(obj => obj.resource()), this._client, false);
+    }
+
+    services(): ServiceProviderPromise {
+        return new ServiceProviderPromiseImpl(this._promise.then(obj => obj.services()), this._client, false);
+    }
+
+}
+
 // ============================================================================
 // ResourceUrlsCallbackContext
 // ============================================================================
@@ -6355,7 +7398,7 @@ export interface ResourceUrlsCallbackContext {
     /** Gets the logger facade used by polyglot callbacks. */
     log(): LogFacadePromise;
     /** Gets the execution context associated with this invocation of the AppHost. */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
     /**
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
@@ -6371,7 +7414,7 @@ export interface ResourceUrlsCallbackContextPromise extends PromiseLike<Resource
     /** Gets the logger facade used by polyglot callbacks. */
     log(): LogFacadePromise;
     /** Gets the execution context associated with this invocation of the AppHost. */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
     /**
      * Gets an endpoint reference from the associated resource
      * @param name The name of the endpoint.
@@ -6423,12 +7466,15 @@ class ResourceUrlsCallbackContextImpl implements ResourceUrlsCallbackContext {
         return new LogFacadePromiseImpl(promise, this._client, false);
     }
 
-    async executionContext(): Promise<DistributedApplicationExecutionContext> {
-        const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
-            'Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.executionContext',
-            { context: this._handle }
-        );
-        return new DistributedApplicationExecutionContextImpl(handle, this._client);
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        })();
+        return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
     }
 
     /** @internal */
@@ -6478,8 +7524,8 @@ class ResourceUrlsCallbackContextPromiseImpl implements ResourceUrlsCallbackCont
         return new LogFacadePromiseImpl(this._promise.then(obj => obj.log()), this._client, false);
     }
 
-    executionContext(): Promise<DistributedApplicationExecutionContext> {
-        return this._promise.then(obj => obj.executionContext());
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
     }
 
     getEndpoint(name: string): EndpointReferencePromise {
@@ -6496,7 +7542,7 @@ class ResourceUrlsCallbackContextPromiseImpl implements ResourceUrlsCallbackCont
 export interface ResourceUrlsEditor {
     toJSON(): MarshalledHandle;
     /** Gets the execution context associated with this editor. */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
     /**
      * Adds a displayed URL.
      * @param url The URL to add, specified as a string or reference expression.
@@ -6514,7 +7560,7 @@ export interface ResourceUrlsEditor {
 
 export interface ResourceUrlsEditorPromise extends PromiseLike<ResourceUrlsEditor> {
     /** Gets the execution context associated with this editor. */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
     /**
      * Adds a displayed URL.
      * @param url The URL to add, specified as a string or reference expression.
@@ -6541,12 +7587,15 @@ class ResourceUrlsEditorImpl implements ResourceUrlsEditor {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    async executionContext(): Promise<DistributedApplicationExecutionContext> {
-        const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
-            'Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.executionContext',
-            { context: this._handle }
-        );
-        return new DistributedApplicationExecutionContextImpl(handle, this._client);
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting.ApplicationModel/ResourceUrlsEditor.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        })();
+        return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
     }
 
     /** @internal */
@@ -6610,8 +7659,8 @@ class ResourceUrlsEditorPromiseImpl implements ResourceUrlsEditorPromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    executionContext(): Promise<DistributedApplicationExecutionContext> {
-        return this._promise.then(obj => obj.executionContext());
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
     }
 
     add(url: string | ReferenceExpression, options?: AddOptions): ResourceUrlsEditorPromise {
@@ -6720,6 +7769,13 @@ export interface TestCollectionContext {
     metadata(): Promise<AspireDict<string, string>>;
 }
 
+export interface TestCollectionContextPromise extends PromiseLike<TestCollectionContext> {
+    /** List property - should generate AspireList getter like Dictionary properties. */
+    items(): Promise<AspireList<string>>;
+    /** Dictionary property - already works with AspireDict getter. */
+    metadata(): Promise<AspireDict<string, string>>;
+}
+
 // ============================================================================
 // TestCollectionContextImpl
 // ============================================================================
@@ -6755,6 +7811,31 @@ class TestCollectionContextImpl implements TestCollectionContext {
             );
         }
         return this._metadata;
+    }
+
+}
+
+/**
+ * Thenable wrapper for TestCollectionContext that enables fluent chaining.
+ */
+class TestCollectionContextPromiseImpl implements TestCollectionContextPromise {
+    constructor(private _promise: Promise<TestCollectionContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = TestCollectionContext, TResult2 = never>(
+        onfulfilled?: ((value: TestCollectionContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    items(): Promise<AspireList<string>> {
+        return this._promise.then(obj => obj.items());
+    }
+
+    metadata(): Promise<AspireDict<string, string>> {
+        return this._promise.then(obj => obj.metadata());
     }
 
 }
@@ -7042,6 +8123,11 @@ export interface UpdateCommandStateContext {
     resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot>;
 }
 
+export interface UpdateCommandStateContextPromise extends PromiseLike<UpdateCommandStateContext> {
+    /** Gets the resource snapshot data available to polyglot command state callbacks. */
+    resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot>;
+}
+
 // ============================================================================
 // UpdateCommandStateContextImpl
 // ============================================================================
@@ -7058,6 +8144,27 @@ class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
             'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot',
             { context: this._handle }
         );
+    }
+
+}
+
+/**
+ * Thenable wrapper for UpdateCommandStateContext that enables fluent chaining.
+ */
+class UpdateCommandStateContextPromiseImpl implements UpdateCommandStateContextPromise {
+    constructor(private _promise: Promise<UpdateCommandStateContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = UpdateCommandStateContext, TResult2 = never>(
+        onfulfilled?: ((value: UpdateCommandStateContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot> {
+        return this._promise.then(obj => obj.resourceSnapshot());
     }
 
 }
@@ -7186,7 +8293,7 @@ export interface Configuration {
      * @param key The configuration key.
      * @returns The configuration section handle.
      */
-    getSection(key: string): Promise<ConfigurationSection>;
+    getSection(key: string): ConfigurationSectionPromise;
     /**
      * Gets the child sections of a configuration handle.
      * @returns The child sections.
@@ -7218,7 +8325,7 @@ export interface ConfigurationPromise extends PromiseLike<Configuration> {
      * @param key The configuration key.
      * @returns The configuration section handle.
      */
-    getSection(key: string): Promise<ConfigurationSection>;
+    getSection(key: string): ConfigurationSectionPromise;
     /**
      * Gets the child sections of a configuration handle.
      * @returns The child sections.
@@ -7269,17 +8376,23 @@ class ConfigurationImpl implements Configuration {
         );
     }
 
+    /** @internal */
+    async _getSectionInternal(key: string): Promise<ConfigurationSection> {
+        const rpcArgs: Record<string, unknown> = { configuration: this._handle, key };
+        const result = await this._client.invokeCapability<IConfigurationSectionHandle>(
+            'Aspire.Hosting/getSection',
+            rpcArgs
+        );
+        return new ConfigurationSectionImpl(result, this._client);
+    }
+
     /**
      * Gets a configuration section by key.
      * @param key The configuration key.
      * @returns The configuration section handle.
      */
-    async getSection(key: string): Promise<ConfigurationSection> {
-        const rpcArgs: Record<string, unknown> = { configuration: this._handle, key };
-        return await this._client.invokeCapability<ConfigurationSection>(
-            'Aspire.Hosting/getSection',
-            rpcArgs
-        );
+    getSection(key: string): ConfigurationSectionPromise {
+        return new ConfigurationSectionPromiseImpl(this._getSectionInternal(key), this._client);
     }
 
     /**
@@ -7332,8 +8445,8 @@ class ConfigurationPromiseImpl implements ConfigurationPromise {
         return this._promise.then(obj => obj.getConnectionString(name));
     }
 
-    getSection(key: string): Promise<ConfigurationSection> {
-        return this._promise.then(obj => obj.getSection(key));
+    getSection(key: string): ConfigurationSectionPromise {
+        return new ConfigurationSectionPromiseImpl(this._promise.then(obj => obj.getSection(key)), this._client);
     }
 
     getChildren(): Promise<ConfigurationSection[]> {
@@ -7361,6 +8474,13 @@ export interface ConfigurationSection {
         get: () => Promise<string | null>;
         set: (value: string | null) => Promise<void>;
     };
+}
+
+export interface ConfigurationSectionPromise extends PromiseLike<ConfigurationSection> {
+    /** Gets the Key property */
+    key(): Promise<string>;
+    /** Gets the Path property */
+    path(): Promise<string>;
 }
 
 // ============================================================================
@@ -7405,6 +8525,31 @@ class ConfigurationSectionImpl implements ConfigurationSection {
 
 }
 
+/**
+ * Thenable wrapper for ConfigurationSection that enables fluent chaining.
+ */
+class ConfigurationSectionPromiseImpl implements ConfigurationSectionPromise {
+    constructor(private _promise: Promise<ConfigurationSection>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ConfigurationSection, TResult2 = never>(
+        onfulfilled?: ((value: ConfigurationSection) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    key(): Promise<string> {
+        return this._promise.then(obj => obj.key());
+    }
+
+    path(): Promise<string> {
+        return this._promise.then(obj => obj.path());
+    }
+
+}
+
 // ============================================================================
 // DistributedApplicationBuilder
 // ============================================================================
@@ -7424,7 +8569,7 @@ export interface DistributedApplicationBuilder {
      * Use this property to determine whether the app host is running locally or publishing
      * deployment artifacts, and adjust the application model accordingly.
      */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
     /**
      * Gets the deployment pipeline for this distributed application.
      *
@@ -7470,6 +8615,19 @@ export interface DistributedApplicationBuilder {
      * @returns The resource builder.
      */
     addDockerfile(name: string, contextPath: string, options?: AddDockerfileOptions): ContainerResourcePromise;
+    /**
+     * Adds a Dockerfile to the application model that can be treated like a container resource, with the Dockerfile content generated by an asynchronous factory function.
+     *
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * @param name The name of the resource.
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    addDockerfileFactory(name: string, contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: AddDockerfileFactoryOptions): ContainerResourcePromise;
     /**
      * Adds a container resource built from a programmatically generated Dockerfile
      *
@@ -7626,7 +8784,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      * Use this property to determine whether the app host is running locally or publishing
      * deployment artifacts, and adjust the application model accordingly.
      */
-    executionContext(): Promise<DistributedApplicationExecutionContext>;
+    executionContext(): DistributedApplicationExecutionContextPromise;
     /**
      * Gets the deployment pipeline for this distributed application.
      *
@@ -7672,6 +8830,19 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      * @returns The resource builder.
      */
     addDockerfile(name: string, contextPath: string, options?: AddDockerfileOptions): ContainerResourcePromise;
+    /**
+     * Adds a Dockerfile to the application model that can be treated like a container resource, with the Dockerfile content generated by an asynchronous factory function.
+     *
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * @param name The name of the resource.
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    addDockerfileFactory(name: string, contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: AddDockerfileFactoryOptions): ContainerResourcePromise;
     /**
      * Adds a container resource built from a programmatically generated Dockerfile
      *
@@ -7855,12 +9026,15 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         return new DistributedApplicationEventingPromiseImpl(promise, this._client, false);
     }
 
-    async executionContext(): Promise<DistributedApplicationExecutionContext> {
-        const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
-            'Aspire.Hosting/IDistributedApplicationBuilder.executionContext',
-            { context: this._handle }
-        );
-        return new DistributedApplicationExecutionContextImpl(handle, this._client);
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationExecutionContextHandle>(
+                'Aspire.Hosting/IDistributedApplicationBuilder.executionContext',
+                { context: this._handle }
+            );
+            return new DistributedApplicationExecutionContextImpl(handle, this._client);
+        })();
+        return new DistributedApplicationExecutionContextPromiseImpl(promise, this._client, false);
     }
 
     pipeline(): DistributedApplicationPipelinePromise {
@@ -7975,6 +9149,39 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new ContainerResourcePromiseImpl(this._addDockerfileInternal(name, contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** @internal */
+    async _addDockerfileFactoryInternal(name: string, contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, stage?: string): Promise<ContainerResource> {
+        const dockerfileFactoryId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileFactoryContextHandle;
+            const arg = new DockerfileFactoryContextImpl(argHandle, this._client);
+            return await dockerfileFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, contextPath, dockerfileFactory: dockerfileFactoryId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/addDockerfileFactory',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Adds a Dockerfile to the application model that can be treated like a container resource, with the Dockerfile content generated by an asynchronous factory function.
+     *
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * @param name The name of the resource.
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    addDockerfileFactory(name: string, contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: AddDockerfileFactoryOptions): ContainerResourcePromise {
+        const stage = options?.stage;
+        return new ContainerResourcePromiseImpl(this._addDockerfileFactoryInternal(name, contextPath, dockerfileFactory, stage), this._client);
     }
 
     /** @internal */
@@ -8430,8 +9637,8 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
         return new DistributedApplicationEventingPromiseImpl(this._promise.then(obj => obj.eventing()), this._client, false);
     }
 
-    executionContext(): Promise<DistributedApplicationExecutionContext> {
-        return this._promise.then(obj => obj.executionContext());
+    executionContext(): DistributedApplicationExecutionContextPromise {
+        return new DistributedApplicationExecutionContextPromiseImpl(this._promise.then(obj => obj.executionContext()), this._client, false);
     }
 
     pipeline(): DistributedApplicationPipelinePromise {
@@ -8456,6 +9663,10 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
 
     addDockerfile(name: string, contextPath: string, options?: AddDockerfileOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.addDockerfile(name, contextPath, options)), this._client);
+    }
+
+    addDockerfileFactory(name: string, contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: AddDockerfileFactoryOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.addDockerfileFactory(name, contextPath, dockerfileFactory, options)), this._client);
     }
 
     addDockerfileBuilder(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, options?: AddDockerfileBuilderOptions): ContainerResourcePromise {
@@ -10699,7 +11910,7 @@ export interface ContainerRegistryResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -10977,7 +12188,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -11726,12 +12937,16 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -12246,8 +13461,8 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ContainerRegistryResourcePromise {
@@ -12436,6 +13651,32 @@ export interface ContainerResource {
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): ContainerResourcePromise;
     /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): ContainerResourcePromise;
+    /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
      * Combining this with `Persistent` will allow Aspire to re-use an existing container that was not
@@ -12578,7 +13819,7 @@ export interface ContainerResource {
      */
     withParentProcessLifetime(parentProcessId: number): ContainerResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -12668,7 +13909,7 @@ export interface ContainerResource {
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -12984,7 +14225,7 @@ export interface ContainerResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -13137,6 +14378,32 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): ContainerResourcePromise;
     /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): ContainerResourcePromise;
+    /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
      * Combining this with `Persistent` will allow Aspire to re-use an existing container that was not
@@ -13279,7 +14546,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withParentProcessLifetime(parentProcessId: number): ContainerResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -13369,7 +14636,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -13685,7 +14952,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -14009,6 +15276,52 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new ContainerResourcePromiseImpl(this._withDockerfileInternal(contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileFactoryInternal(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, stage?: string): Promise<ContainerResource> {
+        const dockerfileFactoryId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileFactoryContextHandle;
+            const arg = new DockerfileFactoryContextImpl(argHandle, this._client);
+            return await dockerfileFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, dockerfileFactory: dockerfileFactoryId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withDockerfileFactory',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): ContainerResourcePromise {
+        const stage = options?.stage;
+        return new ContainerResourcePromiseImpl(this._withDockerfileFactoryInternal(contextPath, dockerfileFactory, stage), this._client);
     }
 
     /** @internal */
@@ -14377,7 +15690,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ContainerResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ContainerResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -14388,7 +15701,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -14728,12 +16041,16 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    async getEndpoint(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        return await this._client.invokeCapability<EndpointReference>(
-            'Aspire.Hosting/getEndpoint',
-            rpcArgs
-        );
+    getEndpoint(name: string): EndpointReferencePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting/getEndpoint',
+                rpcArgs
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -15684,12 +17001,16 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -16167,6 +17488,10 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withDockerfile(contextPath, options)), this._client);
     }
 
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileFactory(contextPath, dockerfileFactory, options)), this._client);
+    }
+
     withContainerName(name: string): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerName(name)), this._client);
     }
@@ -16227,7 +17552,7 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -16283,8 +17608,8 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withExternalHttpEndpoints()), this._client);
     }
 
-    getEndpoint(name: string): Promise<EndpointReference> {
-        return this._promise.then(obj => obj.getEndpoint(name));
+    getEndpoint(name: string): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.getEndpoint(name)), this._client);
     }
 
     asHttp2Service(): ContainerResourcePromise {
@@ -16447,8 +17772,8 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ContainerResourcePromise {
@@ -16655,7 +17980,7 @@ export interface CSharpAppResource {
      */
     withParentProcessLifetime(parentProcessId: number): CSharpAppResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -16745,7 +18070,7 @@ export interface CSharpAppResource {
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -17053,7 +18378,7 @@ export interface CSharpAppResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -17217,7 +18542,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withParentProcessLifetime(parentProcessId: number): CSharpAppResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -17307,7 +18632,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -17615,7 +18940,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -17964,7 +19289,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<CSharpAppResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<CSharpAppResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -17975,7 +19300,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -18315,12 +19640,16 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    async getEndpoint(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        return await this._client.invokeCapability<EndpointReference>(
-            'Aspire.Hosting/getEndpoint',
-            rpcArgs
-        );
+    getEndpoint(name: string): EndpointReferencePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting/getEndpoint',
+                rpcArgs
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -19260,12 +20589,16 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -19743,7 +21076,7 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -19799,8 +21132,8 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withExternalHttpEndpoints()), this._client);
     }
 
-    getEndpoint(name: string): Promise<EndpointReference> {
-        return this._promise.then(obj => obj.getEndpoint(name));
+    getEndpoint(name: string): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.getEndpoint(name)), this._client);
     }
 
     asHttp2Service(): CSharpAppResourcePromise {
@@ -19963,8 +21296,8 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): CSharpAppResourcePromise {
@@ -20205,7 +21538,7 @@ export interface DotnetToolResource {
      */
     withParentProcessLifetime(parentProcessId: number): DotnetToolResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -20295,7 +21628,7 @@ export interface DotnetToolResource {
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -20597,7 +21930,7 @@ export interface DotnetToolResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -20795,7 +22128,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withParentProcessLifetime(parentProcessId: number): DotnetToolResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -20885,7 +22218,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -21187,7 +22520,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -21646,7 +22979,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<DotnetToolResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<DotnetToolResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -21657,7 +22990,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -21997,12 +23330,16 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    async getEndpoint(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        return await this._client.invokeCapability<EndpointReference>(
-            'Aspire.Hosting/getEndpoint',
-            rpcArgs
-        );
+    getEndpoint(name: string): EndpointReferencePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting/getEndpoint',
+                rpcArgs
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -22922,12 +24259,16 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -23429,7 +24770,7 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -23485,8 +24826,8 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withExternalHttpEndpoints()), this._client);
     }
 
-    getEndpoint(name: string): Promise<EndpointReference> {
-        return this._promise.then(obj => obj.getEndpoint(name));
+    getEndpoint(name: string): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.getEndpoint(name)), this._client);
     }
 
     asHttp2Service(): DotnetToolResourcePromise {
@@ -23645,8 +24986,8 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): DotnetToolResourcePromise {
@@ -23861,7 +25202,7 @@ export interface ExecutableResource {
      */
     withParentProcessLifetime(parentProcessId: number): ExecutableResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -23951,7 +25292,7 @@ export interface ExecutableResource {
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -24253,7 +25594,7 @@ export interface ExecutableResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -24418,7 +25759,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withParentProcessLifetime(parentProcessId: number): ExecutableResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -24508,7 +25849,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -24810,7 +26151,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -25165,7 +26506,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ExecutableResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ExecutableResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -25176,7 +26517,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -25516,12 +26857,16 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    async getEndpoint(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        return await this._client.invokeCapability<EndpointReference>(
-            'Aspire.Hosting/getEndpoint',
-            rpcArgs
-        );
+    getEndpoint(name: string): EndpointReferencePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting/getEndpoint',
+                rpcArgs
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -26441,12 +27786,16 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -26924,7 +28273,7 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -26980,8 +28329,8 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withExternalHttpEndpoints()), this._client);
     }
 
-    getEndpoint(name: string): Promise<EndpointReference> {
-        return this._promise.then(obj => obj.getEndpoint(name));
+    getEndpoint(name: string): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.getEndpoint(name)), this._client);
     }
 
     asHttp2Service(): ExecutableResourcePromise {
@@ -27140,8 +28489,8 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ExecutableResourcePromise {
@@ -27471,7 +28820,7 @@ export interface ExternalServiceResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -27754,7 +29103,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -28527,12 +29876,16 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -29051,8 +30404,8 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ExternalServiceResourcePromise {
@@ -29383,7 +30736,7 @@ export interface ParameterResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -29674,7 +31027,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -30465,12 +31818,16 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -30993,8 +32350,8 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ParameterResourcePromise {
@@ -31194,7 +32551,7 @@ export interface ProjectResource {
      */
     withParentProcessLifetime(parentProcessId: number): ProjectResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -31284,7 +32641,7 @@ export interface ProjectResource {
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -31592,7 +32949,7 @@ export interface ProjectResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -31756,7 +33113,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withParentProcessLifetime(parentProcessId: number): ProjectResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -31846,7 +33203,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -32154,7 +33511,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -32504,7 +33861,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ProjectResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ProjectResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -32515,7 +33872,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -32855,12 +34212,16 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    async getEndpoint(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        return await this._client.invokeCapability<EndpointReference>(
-            'Aspire.Hosting/getEndpoint',
-            rpcArgs
-        );
+    getEndpoint(name: string): EndpointReferencePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting/getEndpoint',
+                rpcArgs
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -33800,12 +35161,16 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -34283,7 +35648,7 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -34339,8 +35704,8 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withExternalHttpEndpoints()), this._client);
     }
 
-    getEndpoint(name: string): Promise<EndpointReference> {
-        return this._promise.then(obj => obj.getEndpoint(name));
+    getEndpoint(name: string): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.getEndpoint(name)), this._client);
     }
 
     asHttp2Service(): ProjectResourcePromise {
@@ -34503,8 +35868,8 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ProjectResourcePromise {
@@ -34700,6 +36065,32 @@ export interface TestDatabaseResource {
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestDatabaseResourcePromise;
     /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestDatabaseResourcePromise;
+    /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
      * Combining this with `Persistent` will allow Aspire to re-use an existing container that was not
@@ -34842,7 +36233,7 @@ export interface TestDatabaseResource {
      */
     withParentProcessLifetime(parentProcessId: number): TestDatabaseResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -34932,7 +36323,7 @@ export interface TestDatabaseResource {
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -35248,7 +36639,7 @@ export interface TestDatabaseResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -35401,6 +36792,32 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestDatabaseResourcePromise;
     /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestDatabaseResourcePromise;
+    /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
      * Combining this with `Persistent` will allow Aspire to re-use an existing container that was not
@@ -35543,7 +36960,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withParentProcessLifetime(parentProcessId: number): TestDatabaseResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -35633,7 +37050,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -35949,7 +37366,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -36272,6 +37689,52 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new TestDatabaseResourcePromiseImpl(this._withDockerfileInternal(contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileFactoryInternal(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, stage?: string): Promise<TestDatabaseResource> {
+        const dockerfileFactoryId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileFactoryContextHandle;
+            const arg = new DockerfileFactoryContextImpl(argHandle, this._client);
+            return await dockerfileFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, dockerfileFactory: dockerfileFactoryId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withDockerfileFactory',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestDatabaseResourcePromise {
+        const stage = options?.stage;
+        return new TestDatabaseResourcePromiseImpl(this._withDockerfileFactoryInternal(contextPath, dockerfileFactory, stage), this._client);
     }
 
     /** @internal */
@@ -36640,7 +38103,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestDatabaseResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestDatabaseResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -36651,7 +38114,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -36991,12 +38454,16 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    async getEndpoint(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        return await this._client.invokeCapability<EndpointReference>(
-            'Aspire.Hosting/getEndpoint',
-            rpcArgs
-        );
+    getEndpoint(name: string): EndpointReferencePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting/getEndpoint',
+                rpcArgs
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -37947,12 +39414,16 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -38430,6 +39901,10 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDockerfile(contextPath, options)), this._client);
     }
 
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileFactory(contextPath, dockerfileFactory, options)), this._client);
+    }
+
     withContainerName(name: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerName(name)), this._client);
     }
@@ -38490,7 +39965,7 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -38546,8 +40021,8 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withExternalHttpEndpoints()), this._client);
     }
 
-    getEndpoint(name: string): Promise<EndpointReference> {
-        return this._promise.then(obj => obj.getEndpoint(name));
+    getEndpoint(name: string): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.getEndpoint(name)), this._client);
     }
 
     asHttp2Service(): TestDatabaseResourcePromise {
@@ -38710,8 +40185,8 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
@@ -38907,6 +40382,32 @@ export interface TestRedisResource {
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestRedisResourcePromise;
     /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestRedisResourcePromise;
+    /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
      * Combining this with `Persistent` will allow Aspire to re-use an existing container that was not
@@ -39049,7 +40550,7 @@ export interface TestRedisResource {
      */
     withParentProcessLifetime(parentProcessId: number): TestRedisResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -39155,7 +40656,7 @@ export interface TestRedisResource {
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -39477,7 +40978,7 @@ export interface TestRedisResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds a child database to a test Redis resource
      *
@@ -39672,6 +41173,32 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestRedisResourcePromise;
     /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestRedisResourcePromise;
+    /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
      * Combining this with `Persistent` will allow Aspire to re-use an existing container that was not
@@ -39814,7 +41341,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withParentProcessLifetime(parentProcessId: number): TestRedisResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -39920,7 +41447,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -40242,7 +41769,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds a child database to a test Redis resource
      *
@@ -40607,6 +42134,52 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new TestRedisResourcePromiseImpl(this._withDockerfileInternal(contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileFactoryInternal(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, stage?: string): Promise<TestRedisResource> {
+        const dockerfileFactoryId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileFactoryContextHandle;
+            const arg = new DockerfileFactoryContextImpl(argHandle, this._client);
+            return await dockerfileFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, dockerfileFactory: dockerfileFactoryId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withDockerfileFactory',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestRedisResourcePromise {
+        const stage = options?.stage;
+        return new TestRedisResourcePromiseImpl(this._withDockerfileFactoryInternal(contextPath, dockerfileFactory, stage), this._client);
     }
 
     /** @internal */
@@ -40975,7 +42548,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestRedisResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestRedisResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -40986,7 +42559,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -41362,12 +42935,16 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    async getEndpoint(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        return await this._client.invokeCapability<EndpointReference>(
-            'Aspire.Hosting/getEndpoint',
-            rpcArgs
-        );
+    getEndpoint(name: string): EndpointReferencePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting/getEndpoint',
+                rpcArgs
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -42342,12 +43919,16 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -43012,6 +44593,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDockerfile(contextPath, options)), this._client);
     }
 
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileFactory(contextPath, dockerfileFactory, options)), this._client);
+    }
+
     withContainerName(name: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerName(name)), this._client);
     }
@@ -43072,7 +44657,7 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -43136,8 +44721,8 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withExternalHttpEndpoints()), this._client);
     }
 
-    getEndpoint(name: string): Promise<EndpointReference> {
-        return this._promise.then(obj => obj.getEndpoint(name));
+    getEndpoint(name: string): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.getEndpoint(name)), this._client);
     }
 
     asHttp2Service(): TestRedisResourcePromise {
@@ -43304,8 +44889,8 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise {
@@ -43549,6 +45134,32 @@ export interface TestVaultResource {
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestVaultResourcePromise;
     /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestVaultResourcePromise;
+    /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
      * Combining this with `Persistent` will allow Aspire to re-use an existing container that was not
@@ -43691,7 +45302,7 @@ export interface TestVaultResource {
      */
     withParentProcessLifetime(parentProcessId: number): TestVaultResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -43781,7 +45392,7 @@ export interface TestVaultResource {
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -44097,7 +45708,7 @@ export interface TestVaultResource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -44252,6 +45863,32 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withDockerfile(contextPath: string, options?: WithDockerfileOptions): TestVaultResourcePromise;
     /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestVaultResourcePromise;
+    /**
      * Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
      *
      * Combining this with `Persistent` will allow Aspire to re-use an existing container that was not
@@ -44394,7 +46031,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withParentProcessLifetime(parentProcessId: number): TestVaultResourcePromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -44484,7 +46121,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -44800,7 +46437,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -45125,6 +46762,52 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         const dockerfilePath = options?.dockerfilePath;
         const stage = options?.stage;
         return new TestVaultResourcePromiseImpl(this._withDockerfileInternal(contextPath, dockerfilePath, stage), this._client);
+    }
+
+    /** @internal */
+    private async _withDockerfileFactoryInternal(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, stage?: string): Promise<TestVaultResource> {
+        const dockerfileFactoryId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as DockerfileFactoryContextHandle;
+            const arg = new DockerfileFactoryContextImpl(argHandle, this._client);
+            return await dockerfileFactory(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath, dockerfileFactory: dockerfileFactoryId };
+        if (stage !== undefined) rpcArgs.stage = stage;
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withDockerfileFactory',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Builds the specified container image from a Dockerfile generated by an asynchronous factory function.
+     *
+     * When this method is called, an annotation is added to the `ContainerResource` that specifies the context path
+     * and a factory function that generates Dockerfile content. The factory is invoked at build time to produce the Dockerfile,
+     * which is then written to a temporary file and used by the orchestrator to build the container image.
+     * The `contextPath` is relative to the AppHost directory unless it is fully qualified.
+     * The factory function is invoked once during the build process to generate the Dockerfile content.
+     * The output is trusted and not validated.
+     * Creates a container called `mycontainer` with a dynamically generated Dockerfile.
+     * ```
+     * var builder = DistributedApplication.CreateBuilder(args);
+     * builder.AddContainer("mycontainer", "myimage")
+     * .WithDockerfileFactory("path/to/context", async context =>
+     * {
+     * var template = await File.ReadAllTextAsync("template.dockerfile", context.CancellationToken);
+     * return template.Replace("{{VERSION}}", "1.0");
+     * });
+     * builder.Build().Run();
+     * ```
+     * @param contextPath Path to be used as the context for the container image build.
+     * @param dockerfileFactory An asynchronous function that returns the Dockerfile content as a string.
+     * @param options Additional options.
+     * @returns The resource builder.
+     */
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestVaultResourcePromise {
+        const stage = options?.stage;
+        return new TestVaultResourcePromiseImpl(this._withDockerfileFactoryInternal(contextPath, dockerfileFactory, stage), this._client);
     }
 
     /** @internal */
@@ -45493,7 +47176,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestVaultResource> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<TestVaultResource> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -45504,7 +47187,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -45844,12 +47527,16 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    async getEndpoint(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        return await this._client.invokeCapability<EndpointReference>(
-            'Aspire.Hosting/getEndpoint',
-            rpcArgs
-        );
+    getEndpoint(name: string): EndpointReferencePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting/getEndpoint',
+                rpcArgs
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -46800,12 +48487,16 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -47298,6 +48989,10 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDockerfile(contextPath, options)), this._client);
     }
 
+    withDockerfileFactory(contextPath: string, dockerfileFactory: (arg: DockerfileFactoryContext) => Promise<string>, options?: WithDockerfileFactoryOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileFactory(contextPath, dockerfileFactory, options)), this._client);
+    }
+
     withContainerName(name: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerName(name)), this._client);
     }
@@ -47358,7 +49053,7 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withParentProcessLifetime(parentProcessId)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -47414,8 +49109,8 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withExternalHttpEndpoints()), this._client);
     }
 
-    getEndpoint(name: string): Promise<EndpointReference> {
-        return this._promise.then(obj => obj.getEndpoint(name));
+    getEndpoint(name: string): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.getEndpoint(name)), this._client);
     }
 
     asHttp2Service(): TestVaultResourcePromise {
@@ -47578,8 +49273,8 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
@@ -48228,7 +49923,7 @@ export interface Resource {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -48506,7 +50201,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder>;
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise;
     /**
      * Adds an optional string parameter
      * @param options Additional options.
@@ -49256,12 +50951,16 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
      * Creates an execution configuration builder for the specified resource.
      * @returns The execution configuration builder.
      */
-    async createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        const rpcArgs: Record<string, unknown> = { resource: this._handle };
-        return await this._client.invokeCapability<ExecutionConfigurationBuilder>(
-            'Aspire.Hosting/createExecutionConfiguration',
-            rpcArgs
-        );
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { resource: this._handle };
+            const handle = await this._client.invokeCapability<IExecutionConfigurationBuilderHandle>(
+                'Aspire.Hosting/createExecutionConfiguration',
+                rpcArgs
+            );
+            return new ExecutionConfigurationBuilderImpl(handle, this._client);
+        })();
+        return new ExecutionConfigurationBuilderPromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -49776,8 +51475,8 @@ class ResourcePromiseImpl implements ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.onResourceReady(callback)), this._client);
     }
 
-    createExecutionConfiguration(): Promise<ExecutionConfigurationBuilder> {
-        return this._promise.then(obj => obj.createExecutionConfiguration());
+    createExecutionConfiguration(): ExecutionConfigurationBuilderPromise {
+        return new ExecutionConfigurationBuilderPromiseImpl(this._promise.then(obj => obj.createExecutionConfiguration()), this._client);
     }
 
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise {
@@ -50377,7 +52076,7 @@ export interface ResourceWithEndpoints {
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -50477,7 +52176,7 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    getEndpoint(name: string): Promise<EndpointReference>;
+    getEndpoint(name: string): EndpointReferencePromise;
     /**
      * Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
      * @returns The resource builder.
@@ -50768,12 +52467,16 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
      * @param name The name of the endpoint.
      * @returns An `EndpointReference` that can be used to resolve the address of the endpoint after resource allocation has occurred.
      */
-    async getEndpoint(name: string): Promise<EndpointReference> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
-        return await this._client.invokeCapability<EndpointReference>(
-            'Aspire.Hosting/getEndpoint',
-            rpcArgs
-        );
+    getEndpoint(name: string): EndpointReferencePromise {
+        const promise = (async () => {
+            const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
+            const handle = await this._client.invokeCapability<EndpointReferenceHandle>(
+                'Aspire.Hosting/getEndpoint',
+                rpcArgs
+            );
+            return new EndpointReferenceImpl(handle, this._client);
+        })();
+        return new EndpointReferencePromiseImpl(promise, this._client);
     }
 
     /** @internal */
@@ -50949,8 +52652,8 @@ class ResourceWithEndpointsPromiseImpl implements ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.withExternalHttpEndpoints()), this._client);
     }
 
-    getEndpoint(name: string): Promise<EndpointReference> {
-        return this._promise.then(obj => obj.getEndpoint(name));
+    getEndpoint(name: string): EndpointReferencePromise {
+        return new EndpointReferencePromiseImpl(this._promise.then(obj => obj.getEndpoint(name)), this._client);
     }
 
     asHttp2Service(): ResourceWithEndpointsPromise {
@@ -50988,7 +52691,7 @@ export interface ResourceWithEnvironment {
      */
     withOtlpExporter(options?: WithOtlpExporterOptions): ResourceWithEnvironmentPromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -51086,7 +52789,7 @@ export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWith
      */
     withOtlpExporter(options?: WithOtlpExporterOptions): ResourceWithEnvironmentPromise;
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise;
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise;
     /**
      * Allows for the population of environment variables on a resource.
      * @param callback A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.
@@ -51208,7 +52911,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
     }
 
     /** @internal */
-    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ResourceWithEnvironment> {
+    private async _withEnvironmentInternal(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): Promise<ResourceWithEnvironment> {
         value = isPromiseLike(value) ? await value : value;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, value };
         const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
@@ -51219,7 +52922,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
     }
 
     /** Sets an environment variable */
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._withEnvironmentInternal(name, value), this._client);
     }
 
@@ -51471,7 +53174,7 @@ class ResourceWithEnvironmentPromiseImpl implements ResourceWithEnvironmentPromi
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withOtlpExporter(options)), this._client);
     }
 
-    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise {
+    withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression | Awaitable<EndpointReference | ParameterResource | ExternalServiceResource | ResourceWithConnectionString | TestRedisResource | EndpointReferenceExpression>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironment(name, value)), this._client);
     }
 
@@ -51814,6 +53517,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecu
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel', (handle, client) => new DistributedApplicationModelImpl(handle as DistributedApplicationModelHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileBuilder', (handle, client) => new DockerfileBuilderImpl(handle as DockerfileBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileBuilderCallbackContext', (handle, client) => new DockerfileBuilderCallbackContextImpl(handle as DockerfileBuilderCallbackContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DockerfileFactoryContext', (handle, client) => new DockerfileFactoryContextImpl(handle as DockerfileFactoryContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.Docker.DockerfileStage', (handle, client) => new DockerfileStageImpl(handle as DockerfileStageHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference', (handle, client) => new EndpointReferenceImpl(handle as EndpointReferenceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReferenceExpression', (handle, client) => new EndpointReferenceExpressionImpl(handle as EndpointReferenceExpressionHandle, client));
