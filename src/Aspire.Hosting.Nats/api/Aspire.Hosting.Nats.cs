@@ -16,16 +16,16 @@ namespace Aspire.Hosting
         [AspireExportIgnore(Reason = "Use the dedicated polyglot overload instead.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> AddNats(this IDistributedApplicationBuilder builder, string name, int? port) { throw null; }
 
-        [AspireExport(Description = "Mounts a host directory as the NATS data directory.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport(Description = "Adds a persistent data volume to the NATS resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
         [System.Obsolete("This method is obsolete and will be removed in a future version. Use the overload without the srcMountPath parameter and WithDataBindMount extension instead if you want to keep data locally.")]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithJetStream(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder, string? srcMountPath = null) { throw null; }
 
-        [AspireExport(Description = "Configures the NATS resource to enable JetStream.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> WithJetStream(this ApplicationModel.IResourceBuilder<ApplicationModel.NatsServerResource> builder) { throw null; }
     }
 }
