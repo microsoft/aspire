@@ -261,7 +261,7 @@ internal sealed class InitCommand : BaseCommand
         // invisible and SDK resolution fails. `NuGetConfigMerger` underneath creates a
         // new file or merges missing sources into an existing one.
         var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
-            channelName: _executionContext.IdentityChannel,
+            channelName: GetEffectiveFeedRoutingChannel(),
             outputPath: workingDirectory.FullName,
             cancellationToken).ConfigureAwait(false);
         if (createdNuGetConfig)
@@ -358,7 +358,7 @@ internal sealed class InitCommand : BaseCommand
         // for templates. Mirrors what DropCSharpSingleFileSkeletonAsync already does for
         // the apphost.cs path on every channel.
         var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
-            channelName: _executionContext.IdentityChannel,
+            channelName: GetEffectiveFeedRoutingChannel(),
             outputPath: solutionDir.FullName,
             cancellationToken).ConfigureAwait(false);
         if (createdNuGetConfig)
@@ -382,7 +382,7 @@ internal sealed class InitCommand : BaseCommand
         try
         {
             var query = new TemplatePackageQuery(
-                RequestedChannel: _executionContext.IdentityChannel,
+                RequestedChannel: GetEffectiveFeedRoutingChannel(),
                 VersionOverride: null,
                 SourceOverride: null,
                 IncludePrHives: false);
@@ -664,9 +664,32 @@ internal sealed class InitCommand : BaseCommand
     /// Mirrors the resolution logic in <c>NewCommand.cs:316-402</c> and the warning in
     /// <c>ScaffoldingService.cs:84-92</c> against falling back to <c>IdentityChannel</c> blindly.
     /// </summary>
+    /// <summary>
+    /// Returns the channel name init should drive feed-routing decisions off of. Normally
+    /// this is the running CLI binary's baked identity (<see cref="CliExecutionContext.IdentityChannel"/>).
+    /// When <see cref="IPackagingService.GetEffectiveIdentityChannel"/> reports a different
+    /// effective channel (the diagnostic override used by
+    /// <c>eng/scripts/debug-staging.sh</c> / <c>debug-stable.sh</c> to validate staging
+    /// feed routing from a locally built CLI), defer to the override so init's
+    /// <c>NuGet.config</c> drops, template feed query, and persisted
+    /// <c>aspire.config.json#channel</c> stay consistent with what
+    /// <see cref="IPackagingService"/> will subsequently use for <c>aspire add</c>,
+    /// <c>integration list</c>, etc. Falls back to the baked identity when the packaging
+    /// service has no opinion (the empty-string contract on the override).
+    ///
+    /// Physical-binary-identity decisions (hive lookups, PR install discovery on disk) must
+    /// keep reading <c>_executionContext.IdentityChannel</c> directly — they are properties
+    /// of where the CLI binary lives, not of which feed packages should be routed against.
+    /// </summary>
+    private string GetEffectiveFeedRoutingChannel()
+    {
+        var effective = _packagingService.GetEffectiveIdentityChannel();
+        return string.IsNullOrWhiteSpace(effective) ? _executionContext.IdentityChannel : effective;
+    }
+
     private async Task<string?> ResolvePersistableChannelNameAsync(CancellationToken cancellationToken)
     {
-        var identityChannel = _executionContext.IdentityChannel;
+        var identityChannel = GetEffectiveFeedRoutingChannel();
         if (string.IsNullOrWhiteSpace(identityChannel))
         {
             return null;

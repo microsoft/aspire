@@ -1245,6 +1245,211 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     /// <summary>
+    /// Diagnostic-override contract for <c>aspire init</c>'s C# single-file path. When the
+    /// running CLI's baked identity is <c>local</c> (a developer build or a CI emulation rig
+    /// like <c>eng/scripts/debug-staging.sh</c>) and <see cref="IPackagingService.GetEffectiveIdentityChannel"/>
+    /// reports a different effective channel (here <c>staging</c>), the workspace
+    /// <c>nuget.config</c> dropped by init MUST match what <see cref="IPackagingService"/>
+    /// will subsequently use for feed routing — i.e. the override — NOT the baked identity.
+    /// <para>
+    /// Without this contract, a staging-emulation run scaffolds an <c>apphost.cs</c> with
+    /// <c>#:sdk Aspire.AppHost.Sdk@13.4.0-preview…</c> but drops a <c>local</c>-shaped (or
+    /// stable-shaped) <c>nuget.config</c> that lists only <c>nuget.org</c>, so the
+    /// SDK-directive restore fails to find the staging-feed-only SDK version. The user
+    /// then sees the wrong package versions surfaced by <c>aspire add</c>'s subsequent
+    /// (correctly-routed) calls — the exact symptom that motivated this test.
+    /// </para>
+    /// <para>
+    /// This is the test-coverage gap for the <c>aspire init</c> + C# single-file +
+    /// staging-emulation cell of the full identity/template/command matrix. The polyglot
+    /// and project-mode counterparts are exercised by sibling tests in this class.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_SingleFileMode_OverrideCliIdentityChannel_WiresNuGetConfigToOverrideChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Bake identity=local (the typical developer/locally-built CLI shape), but report
+        // an effective identity of `staging` from the packaging service so `aspire init`'s
+        // NuGet.config drop routes through the override, mirroring what `aspire add` would
+        // do for the same invocation.
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "local");
+            options.PackagingServiceFactory = _ =>
+            {
+                var packagingService = CreateMultiChannelPackagingService("local", "staging");
+                packagingService.GetEffectiveIdentityChannelCallback = () => "staging";
+                return packagingService;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath), "nuget.config should be created in workspace under the override channel.");
+
+        // Must carry the override channel's feed, NOT the baked identity's feed.
+        AssertNuGetConfigHasChannelShape(nugetConfigPath, "staging");
+    }
+
+    /// <summary>
+    /// Project-mode counterpart of
+    /// <see cref="InitCommand_SingleFileMode_OverrideCliIdentityChannel_WiresNuGetConfigToOverrideChannel"/>.
+    /// The solution-directory <c>nuget.config</c> dropped before <c>dotnet new aspire-apphost</c>
+    /// must match the override channel so the template's <c>restore</c> post-action can
+    /// resolve <c>Aspire.AppHost.Sdk/&lt;staging-version&gt;</c>.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_ProjectMode_OverrideCliIdentityChannel_WiresNuGetConfigInSolutionDirToOverrideChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "local");
+            options.PackagingServiceFactory = _ =>
+            {
+                var packagingService = CreateMultiChannelPackagingService("local", "staging");
+                packagingService.GetEffectiveIdentityChannelCallback = () => "staging";
+                return packagingService;
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) => (0, version);
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath), "nuget.config should be created in solution dir under the override channel.");
+        AssertNuGetConfigHasChannelShape(nugetConfigPath, "staging");
+    }
+
+    /// <summary>
+    /// Sibling-site coverage: the <c>aspire.config.json#channel</c> pin written by
+    /// <c>aspire init</c> (single-file C#) must reflect the override so subsequent
+    /// <c>aspire add</c> calls — which DO consult the override via
+    /// <c>PackagingService.GetEffectiveIdentityChannel</c> — keep resolving against the
+    /// same channel that init scaffolded. A divergence here leaves the project's persisted
+    /// channel referring to a feed that <c>aspire add</c> would never select on a normal
+    /// (non-emulation) machine.
+    /// </summary>
+    [Fact(Skip = "Out of scope for the first-pass staging-emulation fix; tracked for a follow-up. The two in-scope tests are the C# (single-file + project) NuGet.config drops and the polyglot scaffolder hand-off.")]
+    public async Task InitCommand_SingleFileMode_OverrideCliIdentityChannel_WritesOverrideChannelIntoAspireConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "local");
+            options.PackagingServiceFactory = _ =>
+            {
+                var packagingService = CreateMultiChannelPackagingService("local", "staging");
+                packagingService.GetEffectiveIdentityChannelCallback = () => "staging";
+                return packagingService;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        Assert.True(File.Exists(configPath));
+
+        var config = JsonNode.Parse(File.ReadAllText(configPath))!.AsObject();
+        Assert.Equal("staging", config["channel"]!.GetValue<string>());
+    }
+
+    /// <summary>
+    /// Polyglot equivalent of
+    /// <see cref="InitCommand_SingleFileMode_OverrideCliIdentityChannel_WritesOverrideChannelIntoAspireConfig"/>.
+    /// The polyglot init path goes through <c>ResolvePersistableChannelNameAsync</c> and
+    /// passes the result into <c>ScaffoldContext.Channel</c>, which the scaffolder writes
+    /// into the polyglot <c>aspire.config.json#channel</c>. Under staging emulation the
+    /// effective channel (<c>staging</c>) must reach the scaffolder — not the baked
+    /// <c>local</c> identity, which would resolve to an Explicit channel name a normal CLI
+    /// would never produce.
+    /// </summary>
+    [Fact]
+    public async Task InitCommand_PolyglotMode_OverrideCliIdentityChannel_PassesOverrideChannelToScaffolder()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        ScaffoldContext? capturedContext = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContextForChannel(workspace.WorkspaceRoot, "local");
+            options.PackagingServiceFactory = _ =>
+            {
+                var packagingService = CreateMultiChannelPackagingService("local", "staging");
+                packagingService.GetEffectiveIdentityChannelCallback = () => "staging";
+                return packagingService;
+            };
+            options.LanguageServiceFactory = sp =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => new TestScaffoldingService
+            {
+                ScaffoldAsyncCallback = (ctx, _) =>
+                {
+                    capturedContext = ctx;
+                    return Task.FromResult(true);
+                }
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedContext);
+        Assert.Equal("staging", capturedContext!.Channel);
+    }
+
+    /// <summary>
     /// Polyglot pre-existing-channel preservation. <c>ScaffoldingService.cs:93-95</c> writes
     /// <c>config.Channel = context.Channel</c> unconditionally when non-empty, so if init
     /// passed the resolved identity channel into <see cref="ScaffoldContext.Channel"/> without
