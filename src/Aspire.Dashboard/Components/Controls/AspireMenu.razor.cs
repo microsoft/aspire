@@ -5,6 +5,7 @@ using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Utilities;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
@@ -32,6 +33,19 @@ public partial class AspireMenu : FluentComponentBase
 
     [Parameter]
     public required IReadOnlyList<MenuButtonItem> Items { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether focus should return to <see cref="Anchor"/> after a menu item is clicked.
+    /// </summary>
+    /// <remarks>
+    /// Use this only for button-anchored menus where <see cref="Anchor"/> identifies the element that opened the menu.
+    /// Do not enable it for cursor-positioned or context menus where <see cref="Anchor"/> is only used for positioning.
+    /// </remarks>
+    [Parameter]
+    public bool RestoreFocusOnItemClick { get; set; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
 
     // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
     private const int EstimatedItemHeight = 32;
@@ -105,8 +119,12 @@ public partial class AspireMenu : FluentComponentBase
         {
             await onClick();
         }
-
         await OnOpenChanged(false);
+
+        if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
+        {
+            await JS.InvokeVoidAsync("focusElement", Anchor);
+        }
     }
 
     private Task OnOpenChanged(bool open)
