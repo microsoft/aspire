@@ -62,6 +62,15 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void TransportHandle_ImplementsTransportValueForCapabilityArguments()
+    {
+        var transport = EmbeddedResources.Read("transport.mts");
+
+        Assert.Contains("toTransportValue(): MarshalledHandle", transport);
+        Assert.Contains("return this.toJSON();", transport);
+    }
+
+    [Fact]
     public async Task GenerateDistributedApplication_WithTestTypes_GeneratesCorrectOutput()
     {
         // Arrange
