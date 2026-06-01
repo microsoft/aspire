@@ -8,11 +8,8 @@ import { StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node';
 import { getAndActivateExtension } from '../common';
 import { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AcquiredTestRunSession, TestRunSessionAcquireOptions } from '../../dcp/TestRunSessionManager';
+import { AspireExtensionApi } from '../../api';
 
-interface TestRunSessionApi {
-	acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession;
-	releaseTestRunSession(id: string): Promise<void>;
-}
 
 suite('End-to-end RPC server auth tests', () => {
 	vscode.window.showInformationMessage('Starting end-to-end rpc server tests.');
@@ -46,7 +43,7 @@ suite('End-to-end RPC server auth tests', () => {
 			assert.strictEqual('dcpServerInfo' in extension.exports, false);
 		}, 2000, 50);
 
-		const api = extension.exports as TestRunSessionApi;
+		const api = extension.exports as AspireExtensionApi;
 		const lease = api.acquireTestRunSession({ debug: true });
 
 		assert.ok(lease.id);

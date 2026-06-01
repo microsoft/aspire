@@ -3,11 +3,7 @@ import { AppHostDataRepository, ResourceJson } from './views/AppHostDataReposito
 import { AspireTerminalProvider } from './utils/AspireTerminalProvider';
 import { spawnCliProcess } from './debugger/languages/cli';
 import { AcquiredTestRunSession, TestRunSessionAcquireOptions } from './dcp/TestRunSessionManager';
-
-export interface AspireTestRunSessionApi {
-	acquireTestRunSession(options: TestRunSessionAcquireOptions): AcquiredTestRunSession
-	releaseTestRunSession(id: string): Promise<void>
-}
+import AspireDcpServer from './dcp/AspireDcpServer';
 
 /**
  * Public API exported by the Aspire extension for consumption by other extensions (e.g. C# Dev Kit).
@@ -73,7 +69,7 @@ export interface ResourceInfo {
 /**
  * Creates the public API object backed by the given data repository.
  */
-export function createAspireExtensionApi(dataRepository: AppHostDataRepository, terminalProvider: AspireTerminalProvider, testRunSessions: AspireTestRunSessionApi): AspireExtensionApi {
+export function createAspireExtensionApi(dataRepository: AppHostDataRepository, terminalProvider: AspireTerminalProvider, dcpServer: AspireDcpServer): AspireExtensionApi {
 	return {
 		async getRunningAppHosts(): Promise<AppHostInfo[]> {
 			const appHosts = await dataRepository.fetchAppHostsOnce();
@@ -93,8 +89,8 @@ export function createAspireExtensionApi(dataRepository: AppHostDataRepository, 
 			return executeResourceCommand(terminalProvider, resourceName, appHostPath, 'start');
 		},
 
-		acquireTestRunSession: testRunSessions.acquireTestRunSession,
-		releaseTestRunSession: testRunSessions.releaseTestRunSession,
+		acquireTestRunSession: dcpServer.acquireTestRunSession,
+		releaseTestRunSession: dcpServer.releaseTestRunSession,
 	};
 }
 

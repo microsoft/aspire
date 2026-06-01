@@ -52,7 +52,6 @@ type RunTelemetryEntry = {
 };
 
 export default class AspireDcpServer {
-    private readonly app: express.Express;
     private server: https.Server;
     private wss: WebSocketServer;
     private wsBySession: Map<string, WebSocket> = new Map();
