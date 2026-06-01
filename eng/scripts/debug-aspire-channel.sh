@@ -256,6 +256,25 @@ ENV
     if [[ -n "$pr" ]]; then
         say ">> Installing PR #${pr} build via get-aspire-cli-pr.sh ..."
         "${SCRIPT_DIR}/get-aspire-cli-pr.sh" "$pr"
+
+        # `get-aspire-cli-pr.sh` installs to `$INSTALL_PREFIX/dogfood/pr-<N>/bin/aspire`
+        # (see `compute_cli_install_dir` in that script), NOT `$INSTALL_PREFIX/bin`. If we
+        # let the auto-discovery below run, `command -v aspire` would pick whatever is
+        # already first on PATH (usually a pre-existing stable install at
+        # `~/.aspire/bin/aspire`) and the PR build we just installed would be silently
+        # ignored — making the `--pr` flag a no-op in the common case. Pin to the PR
+        # install path so `--pr` actually does what it says. Only set when `--cli` was
+        # not also supplied, so an explicit `--cli` still wins.
+        if [[ -z "$cli_path" ]]; then
+            local install_prefix="${ASPIRE_CLI_INSTALL_PATH:-$HOME/.aspire}"
+            local pr_install_path="$install_prefix/dogfood/pr-${pr}/bin/aspire"
+            if [[ -x "$pr_install_path" ]]; then
+                cli_path="$pr_install_path"
+            else
+                say_err "PR install path not found at expected location: $pr_install_path"
+                say_err "get-aspire-cli-pr.sh appears to have changed its install layout; falling back to PATH discovery."
+            fi
+        fi
     fi
 
     if [[ -z "$cli_path" ]]; then

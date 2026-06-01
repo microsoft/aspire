@@ -99,6 +99,27 @@ function Invoke-DebugChannel {
     if (-not [string]::IsNullOrEmpty($Pr)) {
         Write-Host ">> Installing PR #$Pr build via get-aspire-cli-pr.ps1 ..."
         & (Join-Path $scriptDir 'get-aspire-cli-pr.ps1') $Pr
+
+        # `get-aspire-cli-pr.ps1` installs to `$InstallPath/dogfood/pr-<N>/bin/aspire`
+        # (see `Get-CliInstallDir` in that script), NOT `$InstallPath/bin`. If we let
+        # the auto-discovery below run, `Get-Command aspire` would pick whatever is
+        # already first on PATH (usually a pre-existing stable install at
+        # `~/.aspire/bin/aspire`) and the PR build we just installed would be silently
+        # ignored — making the `-Pr` flag a no-op in the common case. Pin to the PR
+        # install path so `-Pr` actually does what it says. Only set when `-Cli` was
+        # not also supplied, so an explicit `-Cli` still wins.
+        if ([string]::IsNullOrEmpty($Cli)) {
+            $installPrefix = if ($env:ASPIRE_CLI_INSTALL_PATH) { $env:ASPIRE_CLI_INSTALL_PATH } else { Join-Path $HOME '.aspire' }
+            $exeName = if ($IsWindows -or [System.Environment]::OSVersion.Platform -eq 'Win32NT') { 'aspire.exe' } else { 'aspire' }
+            $prInstallPath = Join-Path $installPrefix "dogfood/pr-$Pr/bin/$exeName"
+            if (Test-Path $prInstallPath) {
+                $Cli = $prInstallPath
+            }
+            else {
+                Write-Warning "PR install path not found at expected location: $prInstallPath"
+                Write-Warning "get-aspire-cli-pr.ps1 appears to have changed its install layout; falling back to PATH discovery."
+            }
+        }
     }
 
     if ([string]::IsNullOrEmpty($Cli)) {
