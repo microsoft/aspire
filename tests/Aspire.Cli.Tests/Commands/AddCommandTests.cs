@@ -356,26 +356,26 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AddCommandWithTypeScriptAppHostPinnedToStagingAutoSelectsImplicitVersionWithoutPromptingForVersion()
     {
-        // Regression for the polyglot/C# divergence in `aspire add` interactive flow.
+        // Regression for the polyglot/C# divergence in `aspire add` interactive flow that
+        // surfaced in #17743: a TS apphost stamped with `"channel": "staging"` would see a
+        // version-picker prompt (Implicit / Stable / Staging / Daily rows) for `aspire add
+        // foundry`, while the C# equivalent auto-selected the staging version immediately.
         //
-        // Before this fix, a TypeScript apphost stamped with `"channel": "staging"` would still
-        // see a version-picker prompt (Implicit / Staging / Daily rows) when running
-        // `aspire add foundry`, while a C# apphost would auto-select the staging-version
-        // immediately. The divergence was caused by two issues working together:
+        // Root cause: IntegrationPackageSearchService always queried the Implicit channel for
+        // polyglot apphosts, in addition to whatever channel the apphost had pinned. Implicit's
+        // `dotnet package search` runs against the user's ambient NuGet config (typically
+        // nuget.org because polyglot apphosts deliberately don't ship a persistent NuGet.config —
+        // see PrebuiltAppHostServer.CreatePackageSourceOverrideNuGetConfigAsync), so it returned
+        // a stale/wrong-feed version on top of the correct one from the pinned channel. The
+        // resulting multi-row prompt is the symptom the user reported.
         //
-        //   1. IntegrationPackageSearchService included EVERY explicit channel (stable + daily +
-        //      staging + ...) whenever any channel was pinned for non-C# apphosts. That added a
-        //      bogus "daily" row (with a stale version) to the version prompter.
-        //   2. The version prompter grouped by channel without deduplicating by (Id, Version),
-        //      so a package surfaced by BOTH Implicit (via the project-local NuGet.config that
-        //      polyglot starters now write) AND the matching pinned Explicit channel showed up
-        //      twice — preventing the single-implicit auto-select path from firing.
-        //
-        // Fix: IPSS narrows explicit channels to the apphost-pinned channel only; AddCommand
-        // dedupes by (Id, Version) preferring the Implicit-channel entry. Net effect for a
-        // staging-pinned TS apphost: only the Implicit Foundry entry remains, which triggers
-        // PromptForChannelPackagesAsync's `explicitGroups.Length == 0 && implicitGroup is not
-        // null` auto-select.
+        // Fix: IPSS now searches ONLY the pinned channel when a polyglot apphost carries a pin.
+        // The pinned channel builds its own TemporaryNuGetConfig from its PSM mappings, so it's
+        // correctly scoped. This matches C# end-to-end: C#'s GetConfiguredChannel returns null,
+        // so IPSS runs Implicit against the C# template's project-local NuGet.config (which IS
+        // correctly scoped because the C# template writes one). Net effect for a staging-pinned
+        // TS apphost: only the staging channel runs, returns one Foundry entry, AddCommand's
+        // version-prompt path auto-selects without rendering a menu.
         var promptedForVersion = false;
         var testInteractionService = new TestInteractionService
         {
@@ -484,29 +484,21 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task IntegrationSearchCommandFormatJsonWithTypeScriptAppHostPinnedToChannelAlsoSearchesImplicitChannel()
+    public async Task IntegrationSearchCommandFormatJsonWithTypeScriptAppHostPinnedToChannelSearchesOnlyPinnedChannel()
     {
-        // Regression for https://github.com/microsoft/aspire/issues/17724 + https://github.com/microsoft/aspire/issues/17725.
+        // Polyglot apphost with `aspire.config.json#channel` set pins the search to that channel only.
+        // The Implicit channel is excluded — its `dotnet package search` would otherwise hit the user's
+        // ambient (typically nuget.org) and surface stale/wrong-feed versions alongside the pinned-channel
+        // result. C# apphosts avoid this by writing a project-local NuGet.config that scopes Implicit's
+        // ambient to the pinned feed; polyglot apphosts deliberately don't carry a persistent NuGet.config
+        // (it's a .NET-ism — see PrebuiltAppHostServer.CreatePackageSourceOverrideNuGetConfigAsync for the
+        // on-the-fly approach used at restore time). To match C#'s end-to-end behavior, we narrow `aspire
+        // add`'s search to only the pinned channel — whose own GetIntegrationPackagesAsync builds a
+        // TemporaryNuGetConfig from the channel's PSM mappings (PackageChannel.cs line ~120).
         //
-        // Layer 1 (latent bug, born 2026-01-13 in PR #13705): IntegrationPackageSearchService used to
-        //   narrow the channel set to whatever `configuredChannel` resolved to whenever the apphost was
-        //   non-C#. This dropped the implicit channel and any other channels from discovery.
-        // Layer 2 (PR #17452, 2026-05-26): `aspire init` started writing `"channel": "<identity>"` into
-        //   the scaffolded aspire.config.json for polyglot apphosts. This activated the Layer 1 bug for
-        //   every newly-initialized TS apphost in 13.4.
-        //
-        // Fix: IntegrationPackageSearchService no longer narrows. The full channel set (implicit +
-        //   pinned channel + any hives) is searched.
-        //
-        // This test pins the TS apphost to the "daily" channel via aspire.config.json. Pre-fix only the
-        // daily channel was searched and Redis 2.0.0 (daily) was the only result. Post-fix the implicit
-        // channel is ALSO searched, and SelectPreferredIntegrationPackage prefers the implicit channel
-        // when versions collide on Id, so Redis 1.0.0 (implicit) wins the dedupe.
-        //
-        // The structural guarantee asserted below — both `implicitHits` AND `dailyHits` being > 0 — is
-        // what defends against a regression that drops either channel from the search. Asserting only
-        // on the resulting Redis version is insufficient because implicit-only and daily-only searches
-        // both happen to produce a single result.
+        // This test pins to "daily". Pre-fix the Implicit channel was searched too, so Redis 1.0.0
+        // (implicit) won the dedupe over Redis 2.0.0 (daily). Post-fix only daily is searched, so
+        // Redis 2.0.0 wins.
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -522,8 +514,6 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             }
             """);
 
-        // Track per-channel invocation. IntegrationPackageSearchService walks channels via
-        // Parallel.ForEachAsync, so callbacks may run concurrently; Interlocked guards that.
         var implicitHits = 0;
         var dailyHits = 0;
         var implicitCache = new FakeNuGetPackageCache
@@ -564,22 +554,23 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Structural regression signal: BOTH channels must have been searched.
-        Assert.True(implicitHits > 0, "Implicit channel was not queried — discovery is dropping it.");
-        Assert.True(dailyHits > 0, "Daily channel was not queried — pinned channel is being dropped from discovery.");
+        // Structural regression signal: ONLY the pinned channel is searched.
+        Assert.Equal(0, implicitHits);
+        Assert.True(dailyHits > 0, "Pinned (daily) channel must be searched.");
 
-        // Implicit channel result wins the dedupe (SelectPreferredIntegrationPackage prefers implicit).
+        // Pinned-channel result wins because Implicit is excluded.
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
-        Assert.Equal("1.0.0", integration.Version);
+        Assert.Equal("2.0.0", integration.Version);
     }
 
     [Fact]
-    public async Task IntegrationSearchCommandFormatJsonWithTypeScriptAppHostPinnedToStagingChannelAlsoSearchesImplicitChannel()
+    public async Task IntegrationSearchCommandFormatJsonWithTypeScriptAppHostPinnedToStagingChannelSearchesOnlyPinnedChannel()
     {
-        // See companion test above for the full Layer 1 / Layer 2 regression story.
-        // This variant covers the staging-channel pin: a stable-shaped CLI dogfooder whose apphost
-        // was init'd by PR #17452 and now has `"channel": "staging"` written into aspire.config.json.
+        // Staging-pin variant of the polyglot pinned-channel narrowing contract. See companion test
+        // for the rationale (TS apphost doesn't carry a persistent NuGet.config, so we cannot lean
+        // on Implicit's ambient to scope the search; instead we limit the search to the pinned
+        // channel which materializes its own TemporaryNuGetConfig).
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -636,31 +627,34 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        Assert.True(implicitHits > 0, "Implicit channel was not queried — discovery is dropping it.");
-        Assert.True(stagingHits > 0, "Staging channel was not queried — pinned channel is being dropped from discovery.");
+        Assert.Equal(0, implicitHits);
+        Assert.True(stagingHits > 0, "Pinned (staging) channel must be searched.");
 
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
-        Assert.Equal("1.0.0", integration.Version);
+        Assert.Equal("2.0.0", integration.Version);
     }
 
     [Fact]
-    public async Task IntegrationSearchCommandFormatJsonWithTypeScriptAppHostPinnedToStableChannelStillSurfacesPrereleaseOnlyPackages()
+    public async Task IntegrationSearchCommandFormatJsonWithTypeScriptAppHostPinnedToStableChannelHidesPrereleaseOnlyPackagesMatchingCSharpBehavior()
     {
-        // Regression for https://github.com/microsoft/aspire/issues/17725 specifically.
+        // Trade-off documentation, not a happy-path test.
         //
-        // Aspire.Hosting.Foundry has never shipped a stable version — it only exists as prerelease.
-        // Pre-fix, a TS apphost with `"channel": "stable"` in aspire.config.json got narrowed to the
-        // stable channel only. That channel is Quality.Stable, so only `prerelease: false` queries
-        // were issued, and Foundry never appeared in the result set. Users dogfooding the staging CLI
-        // (which writes `"channel": "stable"` for a stable-shaped build) could not discover Foundry.
+        // A polyglot TS apphost pinned to the "stable" channel (Quality.Stable) sees ONLY stable
+        // packages. Prerelease-only integrations (e.g. Aspire.Hosting.Foundry) are NOT discoverable.
         //
-        // Post-fix the implicit channel (Quality.Both) is also searched, which DOES issue
-        // `prerelease: true` queries, and Foundry surfaces.
+        // This matches the C# behavior: a C# apphost pinned to stable writes a project-local
+        // NuGet.config that points Implicit's `dotnet package search` at the stable feed, which
+        // doesn't surface prereleases either. The previous "always include Implicit for polyglot"
+        // workaround (PR for #17725) made polyglot inconsistent with C# in this case, and as a
+        // side-effect produced spurious version prompts on staging/daily pins because Implicit's
+        // unscoped search returned a different (typically nuget.org-resolved) version alongside
+        // the pinned-channel result. The fix in IntegrationPackageSearchService restores C# parity
+        // by narrowing polyglot-with-pin to the pinned channel only. The cost is this test's
+        // assertion: a stable-pinned polyglot apphost cannot reach prerelease-only packages.
         //
-        // The fake here respects the `prerelease` arg passed to GetIntegrationPackagesAsync so the
-        // stable channel sees Redis only, while the implicit channel sees Redis + Foundry. The
-        // existence of Foundry in the result is the regression signal.
+        // Users in a real "I'm on staging CLI but my apphost says channel=stable" situation should
+        // either update the pin (recommended) or pass `--source` for the one-off install.
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -676,7 +670,6 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             }
             """);
 
-        // Implicit channel: Quality.Both. Returns Redis when prerelease=false, Redis+Foundry when prerelease=true.
         var implicitHits = 0;
         var implicitCache = new FakeNuGetPackageCache
         {
@@ -689,8 +682,6 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                         : [CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
             }
         };
-        // Stable channel: Quality.Stable. PackageChannel only issues prerelease=false queries against it,
-        // so Foundry (prerelease-only) never appears regardless of what the cache could return.
         var stableHits = 0;
         var stableCache = new FakeNuGetPackageCache
         {
@@ -723,39 +714,35 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // Both channels must be queried. The implicit channel is what surfaces Foundry (via
-        // prerelease=true), but the stable channel must also be searched so users who pinned to
-        // it don't lose stable-only packages.
-        Assert.True(implicitHits > 0, "Implicit channel was not queried — Foundry would not be discoverable.");
-        Assert.True(stableHits > 0, "Stable channel was not queried — pinned channel is being dropped from discovery.");
+        // The pin is the only channel searched. Implicit is excluded.
+        Assert.Equal(0, implicitHits);
+        Assert.True(stableHits > 0, "Pinned (stable) channel must be searched.");
 
-        var integration = Assert.Single(ReadIntegrationResults(rawJson));
-        Assert.Equal("Aspire.Hosting.Foundry", integration.Package);
-        Assert.Equal("1.0.0-preview.1", integration.Version);
+        // Foundry is prerelease-only and the stable channel is Quality.Stable, so it is not
+        // discoverable. The result set is empty — matching what a stable-pinned C# apphost would
+        // see in the same configuration.
+        Assert.Empty(ReadIntegrationResults(rawJson));
     }
 
     [Theory]
     [InlineData(null, false)]          // No persisted channel — only implicit is searched, the explicit channel is excluded.
-    [InlineData("\"daily\"", true)]    // Persisted daily channel matches the registered 'daily' explicit channel — both searched.
-    [InlineData("\"staging\"", false)] // Persisted staging channel does NOT match the registered 'daily' explicit channel — only implicit is searched.
-                                       // The gate IS channel-name-aware (as of the Layer-2 fix that aligns polyglot with C# by
-                                       // narrowing explicit channels to the apphost-pinned one). See
-                                       // IntegrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync.
-    public async Task IntegrationSearchCommandTypeScriptAppHostPersistedChannelExpandsDiscoveryWithoutChangingPreferredResult(string? configFileChannelJson, bool expectExplicitChannelHit)
+    [InlineData("\"daily\"", true)]    // Persisted daily channel matches the registered 'daily' explicit channel — ONLY daily searched (Implicit excluded).
+    [InlineData("\"staging\"", false)] // Persisted staging channel does NOT match the registered 'daily' explicit channel — neither searched (no matching channel).
+    public async Task IntegrationSearchCommandTypeScriptAppHostPersistedChannelGatesDiscovery(string? configFileChannelJson, bool expectExplicitChannelHit)
     {
-        // Durable regression guard against re-introducing the original Layer-1 narrowing bug
-        // (https://github.com/microsoft/aspire/issues/17724) AND the Layer-2 over-broad
-        // explicit-channel inclusion bug (polyglot was searching unrelated channels and
-        // surfacing stale versions in `aspire add`).
+        // Polyglot apphost search contract (post-fix for the staging-pin auto-select regression):
         //
-        // Post-fix properties:
-        //   (a) The preferred user-visible result is the implicit channel's package (1.0.0) —
-        //       the apphost pin doesn't override what the user sees as top-ranked.
-        //   (b) The explicit channel registered in the fake PackagingService is searched ONLY
-        //       when the apphost pin's channel name MATCHES the explicit channel's name. An
-        //       apphost pinned to 'staging' will not query the 'daily' channel, even though
-        //       both are explicit. This matches the C# code path (which never queries any
-        //       explicit channel because GetConfiguredChannel returns null for C#).
+        //   (a) No pin   -> Implicit ONLY. (Matches C#, where GetConfiguredChannel returns null and
+        //       Implicit's ambient NuGet.config — written by the C# template — scopes the search.)
+        //   (b) Pin set  -> Pinned channel ONLY (matched by name). Implicit is excluded; other
+        //       explicit channels are also excluded. This matches C# end-to-end: polyglot apphosts
+        //       don't carry a persistent NuGet.config (it's a .NET-ism), so we cannot rely on
+        //       Implicit's ambient to be scoped to the pinned feed. Instead, we restrict the
+        //       search to the pinned channel, which materializes its own TemporaryNuGetConfig.
+        //
+        // Pre-fix behavior was the opposite: Implicit was ALWAYS searched, even with a pin, which
+        // surfaced stale/wrong-feed versions in `aspire add` (the spurious "select version" prompt
+        // on staging-pinned TS apphosts).
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -814,25 +801,39 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // (a) User-visible result is identical across arms: implicit Redis 1.0.0 wins.
-        var integration = Assert.Single(ReadIntegrationResults(rawJson));
-        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
-        Assert.Equal("1.0.0", integration.Version);
+        var hasPin = configFileChannelJson is not null;
+        if (hasPin)
+        {
+            // (b) With a pin: Implicit is NOT searched.
+            Assert.Equal(0, implicitHits);
+        }
+        else
+        {
+            // (a) No pin: Implicit IS searched.
+            Assert.True(implicitHits > 0, "Implicit channel must be searched when no pin is set.");
+        }
 
-        // (b) Per-channel search invocation differs based on whether a channel was pinned.
-        Assert.True(implicitHits > 0, "Implicit channel must always be searched.");
         if (expectExplicitChannelHit)
         {
-            // The explicit (daily) channel registered in the fake PackagingService gets searched
-            // regardless of what channel NAME the apphost pinned (the gate is channel-name-opaque —
-            // it only checks `!string.IsNullOrEmpty(configuredChannel)`). That's how a real CLI
-            // built with `AspireCliChannel=staging` (writing `"channel": "staging"` into apphosts
-            // via `aspire new`) will exercise the same gate path as a CLI that pinned `"daily"`.
-            Assert.True(dailyHits > 0, $"With-channel arm: explicit channel must also be searched when apphost pin is non-empty (configured: {configFileChannelJson}).");
+            Assert.True(dailyHits > 0, $"Pinned channel name matched the registered 'daily' channel — must be searched (configured: {configFileChannelJson}).");
+            var integration = Assert.Single(ReadIntegrationResults(rawJson));
+            Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+            Assert.Equal("2.0.0", integration.Version);
         }
         else
         {
             Assert.Equal(0, dailyHits);
+            // No-pin arm: implicit Redis 1.0.0. Pin-doesn't-match arm: no channel ran, empty result.
+            if (hasPin)
+            {
+                Assert.Empty(ReadIntegrationResults(rawJson));
+            }
+            else
+            {
+                var integration = Assert.Single(ReadIntegrationResults(rawJson));
+                Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+                Assert.Equal("1.0.0", integration.Version);
+            }
         }
     }
 
@@ -931,32 +932,28 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task IntegrationSearchCommandStagingStampedCliWithPinnedStagingApphostQueriesBothImplicitAndStagingChannelsAndSurfacesPrereleaseOnlyPackages()
+    public async Task IntegrationSearchCommandWithPolyglotApphostPinnedToStagingQueriesOnlyStagingAndSurfacesPrereleaseOnlyPackages()
     {
-        // High-confidence shipping-shape regression guard for #17724 and #17725.
+        // Shipping-shape regression guard for the polyglot scenario from #17743:
         //
-        // This test simulates EXACTLY what a real CLI built and shipped as staging will do when
-        // the user runs `aspire add <name>` against a polyglot apphost that `aspire new` created:
-        //
-        //   * The CLI binary is stamped `AspireCliChannel=staging` -> `IdentityChannel == "staging"`.
-        //     This triggers the real PackagingService.GetChannelsAsync to synthesize a real staging
-        //     channel alongside implicit + stable (no fake TestPackagingService is used here).
-        //   * `aspire new` writes `"channel": "staging"` into aspire.config.json (see
-        //     CliTemplateFactory.TypeScriptStarterTemplate). We mirror that here.
-        //   * There are NO PR hives. This is a real shipped install, not a dogfood/PR build.
-        //
-        // Pre-fix (the regression introduced before 13.4): the gate narrowed the search to ONLY the
-        // pinned staging channel. Implicit was excluded. Prerelease-only integrations (e.g.,
-        // Aspire.Hosting.Foundry) were invisible because the only feed queried was the staging
-        // feed, which doesn't surface them. The `aspire add kubernetes` regression had the same
-        // root cause: kubernetes was reachable via implicit (nuget.org) but invisible under the
-        // narrowed staging-only search.
+        //   * `aspire new` (polyglot starter, staging-stamped CLI) writes
+        //     `"channel": "staging"` into aspire.config.json for the apphost.
+        //   * `aspire add foundry` must surface the prerelease-only Foundry package from the
+        //     pinned staging feed — NOT a stale stable version from the user's ambient nuget.org.
         //
         // Post-fix invariants verified here:
-        //   (i)  BOTH implicit AND the synthesized staging channel are queried (cache call count
-        //        is >= 2). Pre-fix this would have been exactly 1.
-        //   (ii) A prerelease-only package returned by the cache only when prerelease=true (which
-        //        is what Quality.Both channels request) is reachable to the user.
+        //   (i)  ONLY the pinned (staging) channel is queried. Implicit is excluded for
+        //        pinned-polyglot — see IntegrationPackageSearchService for the rationale
+        //        (polyglot apphosts don't carry a persistent NuGet.config to scope Implicit's
+        //        ambient `dotnet package search`). The other explicit channels (stable, daily,
+        //        etc.) are also excluded — they are not the user's expressed intent.
+        //   (ii) A prerelease-only package returned only on prerelease=true (which Quality.Both
+        //        channels request) is reachable to the user.
+        //
+        // This test uses TestPackagingService (a hand-stamped channel set) rather than the real
+        // PackagingService to avoid the staging-channel synthesis path's dependency on a
+        // commit-hash-bearing CLI version. The IPSS gate logic — what this PR fixes — is
+        // identical regardless of whether the staging channel came from synthesis or test stub.
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -972,16 +969,50 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             }
             """);
 
-        var totalCacheCalls = 0;
-        var prereleaseRequested = 0;
-        var cache = new FakeNuGetPackageCache
+        var implicitHits = 0;
+        var stableHits = 0;
+        var dailyHits = 0;
+        var stagingTotalCalls = 0;
+        var stagingPrereleaseCalls = 0;
+
+        // Implicit returns a stale stable version. Under the pre-fix behavior (Implicit always
+        // searched), this is what produced the spurious "select version" prompt with the stale
+        // Foundry version. Post-fix this entry must never appear in the result.
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref implicitHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Foundry", "13.3.5")]);
+            }
+        };
+        var stableCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref stableHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([]);
+            }
+        };
+        var dailyCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref dailyHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([]);
+            }
+        };
+        // Staging is Quality.Both, so PackageChannel.GetIntegrationPackagesAsync issues both a
+        // prerelease=false and a prerelease=true search. Only the prerelease search returns
+        // the Foundry package, modeling prerelease-only packages on the staging feed.
+        var stagingCache = new FakeNuGetPackageCache
         {
             GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
             {
-                Interlocked.Increment(ref totalCacheCalls);
+                Interlocked.Increment(ref stagingTotalCalls);
                 if (prerelease)
                 {
-                    Interlocked.Increment(ref prereleaseRequested);
+                    Interlocked.Increment(ref stagingPrereleaseCalls);
                     return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Foundry", "13.4.0-rc.1")]);
                 }
                 return Task.FromResult<IEnumerable<NuGetPackage>>([]);
@@ -990,13 +1021,16 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
-            // Stamp the running CLI as the staging release identity. The real PackagingService
-            // (left un-overridden here) reads this from CliExecutionContext.IdentityChannel and
-            // synthesizes the staging channel automatically (see PackagingService.GetChannelsAsync
-            // -> stagingIdentityChannel branch).
-            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace, PackageChannelNames.Staging);
             options.InteractionServiceFactory = _ => testInteractionService;
-            options.NuGetPackageCacheFactory = _ => cache;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("stable", PackageChannelQuality.Stable, [new PackageMapping("Aspire*", "stable")], stableCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "staging")], stagingCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures())
+                ])
+            };
         });
         services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
         using var provider = services.BuildServiceProvider();
@@ -1008,20 +1042,18 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
-        // (ii) The prerelease-only package is reachable to the user.
+        // (ii) The prerelease-only package from the pinned staging feed is reachable.
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Foundry", integration.Package);
         Assert.Equal("13.4.0-rc.1", integration.Version);
 
-        // (i) Both implicit AND staging were queried. Pre-fix narrowing would have produced exactly 1 call.
-        // Real PackagingService.GetChannelsAsync under IdentityChannel=Staging returns at least
-        // [implicit, stable, staging]; the IPSS gate now lets all of them through (hasHives=false,
-        // configuredChannel="staging" -> not empty -> gate evaluates true). At minimum the implicit
-        // and staging channels must have run, so we require >= 2 calls. Using `>= 2` rather than
-        // `== N` keeps the test robust to PackagingService adding additional explicit channels
-        // (e.g., stable) without weakening the regression guard.
-        Assert.True(totalCacheCalls >= 2, $"Expected >= 2 cache calls (both implicit and staging channels), got {totalCacheCalls}. Pre-fix narrowing would have produced 1 call.");
-        Assert.True(prereleaseRequested >= 1, $"Expected at least one channel to request prerelease=true (Quality.Both channels do); got {prereleaseRequested}.");
+        // (i) Only the staging channel ran. No Implicit (key invariant — pre-fix this was > 0
+        // and surfaced the stale 13.3.5 version), no Stable, no Daily.
+        Assert.Equal(0, implicitHits);
+        Assert.Equal(0, stableHits);
+        Assert.Equal(0, dailyHits);
+        Assert.Equal(2, stagingTotalCalls); // Quality.Both => prerelease=false + prerelease=true
+        Assert.Equal(1, stagingPrereleaseCalls);
     }
 
     [Fact]

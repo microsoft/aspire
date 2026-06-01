@@ -30,37 +30,51 @@ internal sealed class IntegrationPackageSearchService(
         var allChannels = await packagingService.GetChannelsAsync(cancellationToken, configuredChannel);
 
         // Channels included in the search:
-        //   * Implicit channel: always.
-        //   * PR hives: always when present.
-        //   * Apphost-pinned explicit channel: only the channel whose name matches
-        //     `configuredChannel` (no other explicit channels).
+        //   * Apphost-pinned explicit channel (polyglot `aspire.config.json#channel`):
+        //     when `configuredChannel` is non-null, ONLY this channel is searched.
+        //     Nothing else (no Implicit, no other explicit channels, no PR hives) — the
+        //     pin is the user's expressed intent for which feed `aspire add` should query.
+        //   * Otherwise (`configuredChannel` is null): Implicit always, plus all PR hives
+        //     when present. Preserves the #17724/#17725 guarantee that prerelease-only
+        //     packages remain reachable on Stable-pinned CLIs without a project-level pin.
         //
-        // Why the explicit channel set is scoped to the pinned channel only — NOT the full
-        // explicit set — when an apphost pins a channel:
-        //   - The full set produces duplicate matches in `aspire add` (e.g. a staging-pinned
-        //     polyglot apphost would see Aspire.Hosting.Foundry surfaced by both the synthesized
-        //     'staging' channel AND the unrelated 'daily' channel, with the daily entry
-        //     pointing at a stale version like 13.3.5 that's not aligned with the project's
-        //     pinned feed). C# apphosts never had this problem: GetConfiguredChannel returns
-        //     null for C# (line ~99) and `configuredChannel` stays empty, so only Implicit is
-        //     queried and the project-local NuGet.config scopes the search to the right feed.
-        //   - Implicit MUST stay in the set so prerelease-only packages remain reachable when
-        //     the project pin is Stable-quality. This is the #17724 / #17725 guarantee:
-        //     pre-fix, the search was narrowed to *only* the pinned channel, and a Stable pin
-        //     made prerelease packages (Aspire.Hosting.Foundry) invisible because Quality.Stable
-        //     channels only issue prerelease=false queries. Keeping Implicit (Quality.Both)
-        //     preserves prerelease visibility.
-        //   - As of #17768, all polyglot starters write a project-local NuGet.config that pins
-        //     Aspire.* to the resolved channel's feed via PSM, so Implicit's `dotnet package
-        //     search` from the apphost cwd returns packages from the same feed the pinned
-        //     explicit channel would return — matching the C# behavior end-to-end.
+        // Why polyglot-with-pin drops Implicit (the subtle case):
+        //   - C# apphosts write a project-local NuGet.config at template-creation time that
+        //     pins Aspire.* to the resolved channel's feed via PSM. For C#, `GetConfiguredChannel`
+        //     returns null (line ~117), so this method searches only the Implicit channel,
+        //     whose `dotnet package search` reads that ambient NuGet.config and effectively
+        //     queries the pinned feed.
+        //   - Polyglot apphosts (TS/Python/Go) deliberately do NOT carry a persistent
+        //     NuGet.config — that file is a .NET-ism. Instead, restore is done via on-the-fly
+        //     `TemporaryNuGetConfig`s built from `aspire.config.json#channel` (see
+        //     PrebuiltAppHostServer.CreatePackageSourceOverrideNuGetConfigAsync). To match
+        //     C#'s end-to-end behavior in `aspire add`, when a polyglot apphost has pinned a
+        //     channel we search ONLY that pinned channel — its `GetIntegrationPackagesAsync`
+        //     already materializes a TemporaryNuGetConfig from the channel's PSM mappings
+        //     (PackageChannel.cs line ~120), giving the same scoped feed view that C#'s
+        //     persistent NuGet.config provides for its Implicit search.
+        //   - Including Implicit here would defeat the pin: Implicit's `dotnet package search`
+        //     runs against the ambient (user/global) NuGet.config which typically resolves to
+        //     nuget.org, surfacing stable-channel versions (e.g. 13.3.5) alongside the pinned
+        //     channel's versions (e.g. 13.4.0-preview from the darc feed). That produced the
+        //     spurious "select version" prompt for stable packages on a TS apphost pinned to
+        //     staging. C# never had this because, for C#, only Implicit is searched and its
+        //     ambient IS the pinned feed.
         var hasHives = executionContext.GetHiveCount() > 0;
-        var channels = hasHives
-            ? allChannels
-            : allChannels.Where(c =>
-                c.Type is PackageChannelType.Implicit ||
-                (!string.IsNullOrEmpty(configuredChannel) &&
-                 string.Equals(c.Name, configuredChannel, StringComparisons.ChannelName)));
+        IEnumerable<PackageChannel> channels;
+        if (!string.IsNullOrEmpty(configuredChannel))
+        {
+            channels = allChannels.Where(c =>
+                string.Equals(c.Name, configuredChannel, StringComparisons.ChannelName));
+        }
+        else if (hasHives)
+        {
+            channels = allChannels;
+        }
+        else
+        {
+            channels = allChannels.Where(c => c.Type is PackageChannelType.Implicit);
+        }
 
         var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
         var packagesLock = new object();
