@@ -43,6 +43,26 @@ jobs:
         displayName: 'Checkout repo (for dispatch script)'
         fetchDepth: 1
 
+      # Fail fast if the macro-resolved version/quality is empty. AzDO will
+      # happily forward an unresolved `$(ReleaseVersionEffective)` as an empty
+      # string to the GitHub dispatch, which validate-published-build.yml
+      # also rejects — but failing here gives a clearer error tied to the
+      # missing pipeline output variable.
+      - pwsh: |
+          if ([string]::IsNullOrWhiteSpace($env:VALIDATE_VERSION)) {
+            Write-Error "validate-published-build dispatch requires a non-empty 'version'. Resolved to '<empty>'. Check that ReleaseVersionEffective (or the caller's `version` argument) is set."
+            exit 1
+          }
+          if ([string]::IsNullOrWhiteSpace($env:VALIDATE_QUALITY)) {
+            Write-Error "validate-published-build dispatch requires a non-empty 'quality'. Resolved to '<empty>'."
+            exit 1
+          }
+          Write-Host "Dispatching validate-published-build for quality=$env:VALIDATE_QUALITY version=$env:VALIDATE_VERSION"
+        displayName: 'Validate dispatch inputs (non-empty version/quality)'
+        env:
+          VALIDATE_VERSION: ${{ parameters.version }}
+          VALIDATE_QUALITY: ${{ parameters.quality }}
+
       - template: /eng/pipelines/templates/dispatch-github-workflow-steps.yml@self
         parameters:
           workflowFile: validate-published-build.yml

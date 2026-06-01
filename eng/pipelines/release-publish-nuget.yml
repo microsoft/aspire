@@ -2623,11 +2623,18 @@ extends:
         # succeeded). PrepareArtifacts must actually have succeeded — its
         # output variables feed the dispatch, and an upstream-cascaded skip
         # would leave them unset.
+        # DryRun=true skips the stage entirely. validate-published-build.yml
+        # has no dry_run input — it always installs from the live channel and
+        # asserts the channel pointer matches ReleaseVersionEffective — so
+        # running it under a dry run would dispatch a real validation against
+        # a version that was never published, fail, and auto-open a spurious
+        # tracking issue.
         condition: |
           and(
             in(dependencies.PrepareArtifacts.result, 'Succeeded', 'SucceededWithIssues'),
             in(dependencies.Release.result, 'Succeeded', 'SucceededWithIssues', 'Skipped'),
-            eq('${{ parameters.SkipValidatePublishedBuild }}', 'false')
+            eq('${{ parameters.SkipValidatePublishedBuild }}', 'false'),
+            eq('${{ parameters.DryRun }}', 'false')
           )
         variables:
           - name: ReleaseVersionEffective

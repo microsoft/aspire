@@ -82,6 +82,25 @@ jobs:
       matrix: ${{ fromJson(needs.setup_cli_e2e_tests.outputs.cli_e2e_matrix) }}
 
     steps:
+      # Fail fast on an empty `version` instead of running the whole matrix
+      # green-but-blind. CliInstallStrategy.Detect deliberately treats an
+      # empty ASPIRE_E2E_EXPECTED_VERSION as "no assertion requested", so an
+      # empty value here would silently bypass the channel-pointer check that
+      # is the whole point of this workflow.
+      - name: Validate workflow inputs
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_QUALITY: ${{ inputs.quality }}
+        run: |
+          if [ -z "${INPUT_VERSION// /}" ]; then
+            echo "::error::'version' input is empty. Dispatch must supply the exact version to assert post-install (e.g. 9.4.1)."
+            exit 1
+          fi
+          if [ -z "${INPUT_QUALITY// /}" ]; then
+            echo "::error::'quality' input is empty. Dispatch must supply dev | staging | release."
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
@@ -142,17 +161,25 @@ jobs:
           TEST_CLASS: ${{ matrix.classname }}
           TRX_FILE_NAME: ${{ matrix.shortname }}.trx
         run: |
+          # MTP diagnostic flags below mirror eng/Testing.props $(_MtpDiagnosticFlags)
+          # + the default TestHangTimeout (10m) / TestSessionTimeout (20m).
+          # eng/Testing.props is the canonical source for the build/test-host code
+          # path; this dispatch workflow runs the test project directly against an
+          # installed CLI (no runsheet metadata pipeline) so the values are
+          # duplicated here. Keep them in sync if eng/Testing.props changes.
           dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
             --no-build \
             -- \
             --ignore-exit-code 8 \
+            --crashdump \
+            --hangdump --hangdump-type none --hangdump-timeout 10m \
+            --timeout 20m \
             --report-trx \
             --report-trx-filename "$TRX_FILE_NAME" \
             --results-directory ${{ github.workspace }}/testresults \
             --filter-class "$TEST_CLASS" \
             --filter-not-trait "quarantined=true" \
-            --filter-not-trait "outerloop=true" \
-            --hangdump --hangdump-type none --hangdump-timeout 15m
+            --filter-not-trait "outerloop=true"
 
       - name: Upload logs and test results
         id: upload-logs
@@ -218,12 +245,27 @@ jobs:
     name: Create Issue on Failure
     needs: [validate-published-build]
     runs-on: ubuntu-latest
-    # cancelled() catches per-leg timeouts (timeout-minutes: 60) and GHA
-    # infra cancellations.
+    # cancelled() is required to catch the per-leg timeout: a job that hits
+    # its `timeout-minutes` concludes as `cancelled`, not `failure`
+    # (https://docs.github.com/actions/learn-github-actions/expressions#cancelled).
+    # It also fires on manual cancels and concurrency-group auto-cancels,
+    # which would open a tracking issue too — that's mild noise we accept
+    # because losing timeout coverage would defeat the failure-visibility
+    # goal of this job.
     if: ${{ failure() || cancelled() }}
     permissions:
       issues: write
     steps:
+      # `script:` below loads create-failure-tracking-issue.js from
+      # $GITHUB_WORKSPACE — the working directory is set, but it is empty
+      # until actions/checkout populates it, so this checkout step is
+      # required for the require() call to resolve. Matches the pattern in
+      # create-failing-test-issue.yml and apply-test-attributes.yml.
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
       - name: Create or comment on tracking issue
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:

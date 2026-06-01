@@ -49,6 +49,14 @@ async function createOrCommentOnFailureIssue({
     try {
         const q = buildDedupQuery(owner, repo, title);
         const search = await github.rest.search.issuesAndPullRequests({ q, per_page: 10 });
+        // The search index is eventually consistent. When incomplete_results
+        // is true GitHub didn't scan every match (timeout or rate cap), so a
+        // real existing tracking issue may not be in `items` and we could
+        // create a duplicate. Warn so an operator can dedup manually rather
+        // than silently fall through.
+        if (search.data.incomplete_results) {
+            core?.warning?.(`Issue-dedup search returned incomplete_results=true; an existing tracking issue may have been missed and a duplicate could be opened.`);
+        }
         existing = (search.data.items ?? []).find(item => item.title === title) ?? null;
     }
     catch (error) {
