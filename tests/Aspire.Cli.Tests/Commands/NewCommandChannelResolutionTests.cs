@@ -103,7 +103,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var newCommand = serviceProvider.GetRequiredService<NewCommand>();
 
-        var parseResult = newCommand.Parse("new aspire-starter --name TestApp --output ./output --use-redis-cache --test-framework None");
+        var parseResult = newCommand.Parse("new aspire-ts-cs-starter --name TestApp --output ./output --use-redis-cache");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);

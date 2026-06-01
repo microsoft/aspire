@@ -313,6 +313,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Failed to create project files: {0}.
+        /// </summary>
+        public static string FailedToCreateProjectFiles {
+            get {
+                return ResourceManager.GetString("FailedToCreateProjectFiles", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The 'aspire-starter' template no longer generates a test project, so the requested test framework '{0}' is not supported. Re-run without --test-framework (or use --test-framework None)..
+        /// </summary>
+        public static string TestFrameworkNotSupportedByStarter {
+            get {
+                return ResourceManager.GetString("TestFrameworkNotSupportedByStarter", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Project creation failed with exit code {0}.
         /// </summary>
         public static string ProjectCreationFailed {

@@ -219,6 +219,14 @@
     <value>Project created successfully in {0}.</value>
     <comment>{0} is a path</comment>
   </data>
+  <data name="FailedToCreateProjectFiles" xml:space="preserve">
+    <value>Failed to create project files: {0}</value>
+    <comment>{0} is an exception message</comment>
+  </data>
+  <data name="TestFrameworkNotSupportedByStarter" xml:space="preserve">
+    <value>The 'aspire-starter' template no longer generates a test project, so the requested test framework '{0}' is not supported. Re-run without --test-framework (or use --test-framework None).</value>
+    <comment>{0} is a test framework name such as xUnit.net</comment>
+  </data>
   <data name="CertificateTrustError" xml:space="preserve">
     <value>An error occurred while trusting the certificates: {0}</value>
     <comment>{0} is an exception message</comment>

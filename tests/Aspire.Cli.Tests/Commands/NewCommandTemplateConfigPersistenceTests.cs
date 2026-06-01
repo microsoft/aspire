@@ -82,7 +82,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.RustEmptyAppHost, ["--localhost-tld", "false"]),
         PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.PythonStarter, ["--localhost-tld", "false", "--use-redis-cache", "false"]),
         PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.GoStarter, ["--localhost-tld", "false"]),
-        PrDogfoodNewTemplateCase.DotNet("aspire-starter", ["--localhost-tld", "false", "--use-redis-cache", "false"]),
+        PrDogfoodNewTemplateCase.EmbeddedDotNet("aspire-starter", ["--localhost-tld", "false", "--use-redis-cache", "false"]),
         PrDogfoodNewTemplateCase.DotNet("aspire-ts-cs-starter", ["--localhost-tld", "false", "--use-redis-cache", "false"]),
         PrDogfoodNewTemplateCase.DotNet(KnownTemplateId.DotNetEmptyAppHost, ["--localhost-tld", "false"]),
         PrDogfoodNewTemplateCase.DotNet("aspire-apphost", ["--localhost-tld", "false"]),
@@ -328,6 +328,23 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), dotNetNuGetConfig);
                 break;
 
+            case PrDogfoodNewTemplateContract.EmbeddedCSharpStarter:
+                // The aspire-starter template is rendered from content embedded in the CLI, so no
+                // Aspire.ProjectTemplates package is installed. The channel/version is still resolved
+                // (to stamp the matching Aspire version into the project and pin the channel), so the
+                // Explicit PR channel must be persisted and a NuGet.config pointing at the PR source
+                // must be written — same post-render behavior as the DotNetTemplate contract minus the install.
+                Assert.Equal((int)CliExitCodes.Success, exitCode);
+                Assert.Empty(dotNetTemplateInstalls);
+
+                var embeddedConfig = AspireConfigFile.Load(outputDirectory);
+                Assert.NotNull(embeddedConfig);
+                Assert.Equal(PrChannelName, embeddedConfig.Channel);
+
+                var embeddedNuGetConfig = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "nuget.config"));
+                Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), embeddedNuGetConfig);
+                break;
+
             default:
                 throw new InvalidOperationException($"Unknown template contract: {testCase.Contract}");
         }
@@ -550,6 +567,11 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             return new(templateId, LanguageId: null, PrDogfoodNewTemplateContract.DotNetTemplate, extraArguments ?? []);
         }
 
+        public static PrDogfoodNewTemplateCase EmbeddedDotNet(string templateId, string[]? extraArguments = null)
+        {
+            return new(templateId, LanguageId: null, PrDogfoodNewTemplateContract.EmbeddedCSharpStarter, extraArguments ?? []);
+        }
+
         public override string ToString()
         {
             return CoverageKey;
@@ -564,6 +586,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     {
         CSharpEmptyAppHost,
         AspireConfig,
-        DotNetTemplate
+        DotNetTemplate,
+        EmbeddedCSharpStarter
     }
 }

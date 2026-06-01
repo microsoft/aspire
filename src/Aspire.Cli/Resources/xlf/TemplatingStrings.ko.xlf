@@ -87,6 +87,11 @@
         <target state="translated">사용할 xUnit.net 버전을 입력하세요.</target>
         <note />
       </trans-unit>
+      <trans-unit id="FailedToCreateProjectFiles">
+        <source>Failed to create project files: {0}</source>
+        <target state="new">Failed to create project files: {0}</target>
+        <note>{0} is an exception message</note>
+      </trans-unit>
       <trans-unit id="GettingTemplates">
         <source>Getting templates...</source>
         <target state="translated">템플릿을 가져오는 중...</target>
@@ -176,6 +181,11 @@
         <source>The template installation failed with exit code {0}.</source>
         <target state="new">The template installation failed with exit code {0}.</target>
         <note>{0} is a number</note>
+      </trans-unit>
+      <trans-unit id="TestFrameworkNotSupportedByStarter">
+        <source>The 'aspire-starter' template no longer generates a test project, so the requested test framework '{0}' is not supported. Re-run without --test-framework (or use --test-framework None).</source>
+        <target state="new">The 'aspire-starter' template no longer generates a test project, so the requested test framework '{0}' is not supported. Re-run without --test-framework (or use --test-framework None).</target>
+        <note>{0} is a test framework name such as xUnit.net</note>
       </trans-unit>
       <trans-unit id="Unknown">
         <source>Unknown</source>

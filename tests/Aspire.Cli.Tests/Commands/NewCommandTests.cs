@@ -422,7 +422,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --channel stable --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-ts-cs-starter --channel stable --use-redis-cache");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         
@@ -499,7 +499,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --channel pr-12345 --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-ts-cs-starter --channel pr-12345 --use-redis-cache");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -678,7 +678,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-ts-cs-starter --use-redis-cache");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.FailedToCreateNewProject, exitCode);
@@ -2134,15 +2134,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         var command = provider.GetRequiredService<NewCommand>();
         // Neither --name nor --output is provided, so both use their defaults
-        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-ts-cs-starter --use-redis-cache");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         // The default project name is derived from the template name
-        Assert.Equal("aspire-starter", capturedProjectName);
+        Assert.Equal("aspire-ts-cs-starter", capturedProjectName);
         // The default output path is derived from the template name
-        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-starter"), capturedOutputPath);
+        Assert.Equal(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-ts-cs-starter"), capturedOutputPath);
     }
 
     [Fact]
@@ -2177,7 +2177,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-starter --name MyProject --output {Path.Combine(workspace.WorkspaceRoot.FullName, "my-project")} --use-redis-cache --test-framework None");
+        var result = command.Parse($"new aspire-ts-cs-starter --name MyProject --output {Path.Combine(workspace.WorkspaceRoot.FullName, "my-project")} --use-redis-cache");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2232,6 +2232,68 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandAspireStarterWithTestFrameworkIsRejected()
+    {
+        TestInteractionService? testInteractionService = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        // The embedded aspire-starter no longer generates a test project, so an explicit test
+        // framework must be rejected rather than silently ignored.
+        var result = command.Parse("new aspire-starter --name MyApp --output ./output --test-framework xUnit.net");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var expectedMessage = string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TestFrameworkNotSupportedByStarter, "xUnit.net");
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.NotNull(testInteractionService);
+        Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task NewCommandAspireStarterWithXUnitVersionIsRejected()
+    {
+        TestInteractionService? testInteractionService = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                testInteractionService = new TestInteractionService();
+                return testInteractionService;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+        // --xunit-version only makes sense alongside an xUnit test project, which the embedded
+        // starter does not generate, so it is rejected the same way an explicit framework is.
+        var result = command.Parse("new aspire-starter --name MyApp --output ./output --xunit-version v3");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var expectedMessage = string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TestFrameworkNotSupportedByStarter, "xUnit.net");
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.NotNull(testInteractionService);
+        Assert.Contains(expectedMessage, testInteractionService.DisplayedErrors);
+    }
+
+    [Fact]
     public async Task NewCommand_WhenCSharpTemplateApplyFails_DisplaysCreationErrorMessage()
     {
         TestInteractionService? testInteractionService = null;
@@ -2267,7 +2329,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-ts-cs-starter --use-redis-cache");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2361,7 +2423,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-ts-cs-starter --use-redis-cache");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2420,7 +2482,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-ts-cs-starter --use-redis-cache");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2477,7 +2539,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-ts-cs-starter --use-redis-cache");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -2539,7 +2601,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             using var provider = services.BuildServiceProvider();
 
             var command = provider.GetRequiredService<RootCommand>();
-            var result = command.Parse("new aspire-starter --use-redis-cache --test-framework None");
+            var result = command.Parse("new aspire-ts-cs-starter --use-redis-cache");
 
             var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -3100,7 +3162,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse("new aspire-starter --name TestApp --output . --use-redis-cache --test-framework None");
+        var result = command.Parse("new aspire-ts-cs-starter --name TestApp --output . --use-redis-cache");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);

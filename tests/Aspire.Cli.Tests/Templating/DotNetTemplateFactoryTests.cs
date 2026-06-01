@@ -362,7 +362,6 @@ public class DotNetTemplateFactoryTests
             sdkInstaller,
             features,
             telemetry,
-            hostEnvironment,
             templateNuGetConfigService);
     }
 
