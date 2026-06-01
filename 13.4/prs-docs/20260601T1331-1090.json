@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Helm v4.2.0+ prerequisite for Kubernetes deployment (aspire#17491, same feature as 17542)",
+  "mergedAt": "2026-06-01T13:31:19Z",
+  "number": 1090,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "included",
+  "title": "[docs] Document Helm v4.2.0+ prerequisite for Kubernetes deployment"
+}

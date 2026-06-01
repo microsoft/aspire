@@ -1,6 +1,6 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": true,
   "breaking": false,
   "changeType": "Bug fixes",
@@ -8,9 +8,11 @@
     "@adamint"
   ],
   "description": "Fixed five bugs in aspire ls: read commands no longer silently create aspire.config.json next to an existing .aspire/settings.json, migration warnings now reference the user-authored file, --stream output is arrival-ordered, invalid path characters in appHost.path produce a clear localized error, and on macOS symlinked paths are deduplicated so the same AppHost is not listed twice.",
-  "docsPrs": [],
+  "docsPrs": [
+    1134
+  ],
   "docsRequired": false,
-  "emoji": "🐛",
+  "emoji": "\ud83d\udc1b",
   "firstMergedAt": "2026-05-30T03:48:06Z",
   "lastMergedAt": "2026-05-30T03:48:06Z",
   "name": "Fix five aspire ls bugs",

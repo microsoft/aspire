@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found for aspire#17262 (TypeScript AppHost codegen diagnostics not yet processed)",
+  "mergedAt": "2026-06-01T16:17:19Z",
+  "number": 1101,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "excluded",
+  "title": "[docs] TypeScript AppHost codegen diagnostics and CLI/SDK version mismatch"
+}

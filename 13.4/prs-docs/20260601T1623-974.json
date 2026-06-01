@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents resource command arguments, visibility, and immediate results (aspire#17021)",
+  "mergedAt": "2026-06-01T16:23:28Z",
+  "number": 974,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "included",
+  "title": "[docs] Document argument-based built-in resource commands (set-parameter/delete-parameter)"
+}

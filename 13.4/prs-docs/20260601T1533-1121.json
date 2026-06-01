@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Documents CLI search and filter telemetry feature (aspire#17482)",
+  "mergedAt": "2026-06-01T15:33:11Z",
+  "number": 1121,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "included",
+  "title": "Add search and filter telemetry sub-section to CLI overview"
+}

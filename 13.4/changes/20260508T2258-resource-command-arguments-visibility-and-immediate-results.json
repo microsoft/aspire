@@ -1,6 +1,6 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
@@ -8,10 +8,11 @@
   "description": "Resource commands now support typed input arguments with metadata (descriptions, default values, allowed values) and per-command visibility controls. Built-in commands such as parameter-set, ef-migrations-add, and browser configuration now declare structured arguments, enabling consistent value supply from the dashboard, CLI, and MCP. Command results can be flagged to display immediately in the dashboard, and visibility can be set per-command to control where they appear.",
   "docsPrs": [
     892,
-    897
+    897,
+    974
   ],
   "docsRequired": true,
-  "emoji": "🎛️",
+  "emoji": "\ud83c\udf9b\ufe0f",
   "firstMergedAt": "2026-05-08T22:58:17Z",
   "lastMergedAt": "2026-05-15T13:16:18Z",
   "name": "Resource command arguments, visibility, and immediate result display",

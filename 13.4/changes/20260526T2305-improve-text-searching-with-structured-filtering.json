@@ -1,16 +1,17 @@
 {
   "area": "Dashboard",
-  "areaEmoji": "📊",
+  "areaEmoji": "\ud83d\udcca",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
-  "description": "Text search across traces, logs, and spans now supports structured field qualifiers (e.g., status:error, severity:warning, duration:>100), attribute filters (@attr:value), negation, and numeric comparisons — all terms are ANDed together for precise filtering.",
+  "description": "Text search across traces, logs, and spans now supports structured field qualifiers (e.g., status:error, severity:warning, duration:>100), attribute filters (@attr:value), negation, and numeric comparisons \u2014 all terms are ANDed together for precise filtering.",
   "docsPrs": [
-    1081
+    1081,
+    1121
   ],
   "docsRequired": true,
-  "emoji": "🔍",
+  "emoji": "\ud83d\udd0d",
   "firstMergedAt": "2026-05-26T23:05:30Z",
   "lastMergedAt": "2026-05-26T23:05:30Z",
   "name": "Structured text search for traces and logs",

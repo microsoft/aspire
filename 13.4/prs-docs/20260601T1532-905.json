@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents AddHelmChart for external Helm charts (aspire#16589)",
+  "mergedAt": "2026-06-01T15:32:45Z",
+  "number": 905,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "included",
+  "title": "[docs] Add external Helm charts documentation (AddHelmChart)"
+}

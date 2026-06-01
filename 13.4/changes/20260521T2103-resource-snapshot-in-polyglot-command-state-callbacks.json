@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Polyglot AppHost command updateState callbacks can now access the resource's current health and lifecycle snapshot via resourceSnapshot(). This enables health-gated command enable/disable logic in TypeScript, Python, Go, and Java AppHosts, closing the gap with C# AppHosts that already had access to resource state in command callbacks.",
-  "docsPrs": [],
+  "docsPrs": [
+    1042
+  ],
   "docsRequired": true,
-  "emoji": "📸",
+  "emoji": "\ud83d\udcf8",
   "firstMergedAt": "2026-05-21T21:03:57Z",
   "lastMergedAt": "2026-05-21T21:03:57Z",
   "name": "Resource snapshot access in polyglot command state callbacks",

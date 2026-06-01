@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents channel persistence in aspire.config.json for init and update (aspire#17452)",
+  "mergedAt": "2026-06-01T16:38:59Z",
+  "number": 1068,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "included",
+  "title": "[docs] cli: document channel persistence in aspire.config.json for init and update"
+}

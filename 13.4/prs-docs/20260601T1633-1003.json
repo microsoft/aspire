@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents RabbitMQ 4.3 container image bump and non-exclusive queue deprecation (aspire#17148)",
+  "mergedAt": "2026-06-01T16:33:26Z",
+  "number": 1003,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "included",
+  "title": "[docs] Document RabbitMQ 4.3 transient non-exclusive queue deprecation"
+}

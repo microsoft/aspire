@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry found for aspire#17594 (tmp security update, no product PR tracked)",
+  "mergedAt": "2026-06-01T15:58:18Z",
+  "number": 1123,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "excluded",
+  "title": "[docs] Note tmp security update (GHSA-ph9p-34f9-6g65) in Aspire 13.4 release notes"
+}

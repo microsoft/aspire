@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": true,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "When the Aspire CLI and SDK versions are incompatible, TypeScript AppHost operations now show a clear, actionable error message with remediation steps instead of an opaque TypeLoadException followed by a 60-second timeout. A pre-flight version-skew warning is also shown, and stale backchannel sockets are automatically cleaned up.",
-  "docsPrs": [],
+  "docsPrs": [
+    1103
+  ],
   "docsRequired": false,
-  "emoji": "🔬",
+  "emoji": "\ud83d\udd2c",
   "firstMergedAt": "2026-05-27T20:52:30Z",
   "lastMergedAt": "2026-05-27T20:52:30Z",
   "name": "Actionable diagnostics for TypeScript AppHost version mismatches",

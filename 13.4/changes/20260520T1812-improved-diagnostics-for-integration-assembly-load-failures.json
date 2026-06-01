@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
-  "description": "When `aspire new` fails to find a code generator or language support, it now surfaces clear diagnostic warnings—listing available languages and describing likely causes such as version mismatches between the bundled AppHost server and integration assemblies.",
-  "docsPrs": [],
+  "description": "When `aspire new` fails to find a code generator or language support, it now surfaces clear diagnostic warnings\u2014listing available languages and describing likely causes such as version mismatches between the bundled AppHost server and integration assemblies.",
+  "docsPrs": [
+    1024
+  ],
   "docsRequired": false,
-  "emoji": "🔬",
+  "emoji": "\ud83d\udd2c",
   "firstMergedAt": "2026-05-20T18:12:24Z",
   "lastMergedAt": "2026-05-20T18:12:24Z",
   "name": "Improved diagnostics for integration assembly load failures",

@@ -1,14 +1,16 @@
 {
   "area": "Integrations",
-  "areaEmoji": "🔌",
+  "areaEmoji": "\ud83d\udd0c",
   "backport": false,
   "breaking": false,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The default RabbitMQ container image used by `AddRabbitMQ` has been updated from `4.2` to `4.3`. Note that RabbitMQ 4.3 rejects transient (non-durable) non-exclusive queue declarations by default; applications relying on such queues will need to update their queue declarations.",
-  "docsPrs": [],
+  "docsPrs": [
+    1003
+  ],
   "docsRequired": true,
-  "emoji": "🐰",
+  "emoji": "\ud83d\udc30",
   "firstMergedAt": "2026-05-19T00:09:57Z",
   "lastMergedAt": "2026-05-19T00:09:57Z",
   "name": "Bump RabbitMQ default container image to 4.3",

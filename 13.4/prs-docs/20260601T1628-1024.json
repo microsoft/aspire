@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents improved diagnostics for integration assembly load failures (aspire#17311)",
+  "mergedAt": "2026-06-01T16:28:27Z",
+  "number": 1024,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "included",
+  "title": "[docs] Add troubleshooting section for language support load failures in aspire new"
+}

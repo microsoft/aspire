@@ -1,14 +1,16 @@
 {
   "area": "AppHost",
-  "areaEmoji": "🏠",
+  "areaEmoji": "\ud83c\udfe0",
   "backport": false,
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
   "description": "Added AddHelmChart infrastructure for installing external Helm charts into a Kubernetes environment as aspire deploy pipeline steps. This enables deploying third-party Helm charts (such as ingress controllers or monitoring stacks) alongside your Aspire application.",
-  "docsPrs": [],
+  "docsPrs": [
+    905
+  ],
   "docsRequired": true,
-  "emoji": "⛵",
+  "emoji": "\u26f5",
   "firstMergedAt": "2026-05-11T03:40:00Z",
   "lastMergedAt": "2026-05-11T03:40:00Z",
   "name": "AddHelmChart for external Helm charts",

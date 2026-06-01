@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents TypeScript AppHost CLI/SDK version mismatch troubleshooting (aspire#17556)",
+  "mergedAt": "2026-06-01T13:35:22Z",
+  "number": 1103,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "included",
+  "title": "[docs] Add TypeScript AppHost CLI/SDK version mismatch troubleshooting"
+}

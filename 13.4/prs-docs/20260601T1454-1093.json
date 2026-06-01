@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Repo infrastructure change (moving skills to .agents), not a product changelog entry",
+  "mergedAt": "2026-06-01T14:54:48Z",
+  "number": 1093,
+  "runDate": "2026-06-01T18:04:28Z",
+  "status": "excluded",
+  "title": "Move repository skills to .agents"
+}

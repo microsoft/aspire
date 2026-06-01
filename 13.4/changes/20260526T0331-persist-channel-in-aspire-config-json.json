@@ -1,14 +1,16 @@
 {
   "area": "CLI",
-  "areaEmoji": "💻",
+  "areaEmoji": "\ud83d\udcbb",
   "backport": false,
   "breaking": false,
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Fixes a bug where aspire init on non-stable CLI builds (daily, staging, pr-N) did not write the channel key to aspire.config.json, causing subsequent commands like aspire add to fall back to the stable nuget.org channel instead of the intended channel. Also fixes aspire update --channel not persisting the new channel to aspire.config.json.",
-  "docsPrs": [],
+  "docsPrs": [
+    1068
+  ],
   "docsRequired": false,
-  "emoji": "📌",
+  "emoji": "\ud83d\udccc",
   "firstMergedAt": "2026-05-26T03:31:24Z",
   "lastMergedAt": "2026-05-26T03:31:24Z",
   "name": "Persist channel in aspire.config.json on init and update",
