@@ -6,7 +6,7 @@
     var additionalButtonAttributes = new Dictionary<string, object>(AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
     {
         { "aria-haspopup", "true" },
-        { "aria-expanded", _visible },
+        { "aria-expanded", _visible ? "true" : "false" },
         { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) }
     };
 }
