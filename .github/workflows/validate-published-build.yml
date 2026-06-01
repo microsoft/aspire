@@ -26,6 +26,19 @@ on:
         required: true
         type: string
 
+  # DO NOT MERGE: temporary push trigger to fire a one-off run from this branch
+  # against the stable release channel. `validate-published-build.yml` is not
+  # on `main` yet, so `gh workflow run` cannot dispatch it; pushing the branch
+  # is the only way to fire it before merge. Restricted to this branch + this
+  # workflow file so it won't accidentally fire on unrelated pushes. Hardcoded
+  # fallbacks below (`inputs.quality || 'release'`, `inputs.version || '13.4.0'`)
+  # provide the values the dispatch path would supply. Revert before merging.
+  push:
+    branches:
+      - ankj/staging-cli-smoke-workflow
+    paths:
+      - '.github/workflows/validate-published-build.yml'
+
 permissions:
   contents: read
 
@@ -89,8 +102,8 @@ jobs:
       # is the whole point of this workflow.
       - name: Validate workflow inputs
         env:
-          INPUT_VERSION: ${{ inputs.version }}
-          INPUT_QUALITY: ${{ inputs.quality }}
+          INPUT_VERSION: ${{ inputs.version || '13.4.0' }}
+          INPUT_QUALITY: ${{ inputs.quality || 'release' }}
         run: |
           if [ -z "${INPUT_VERSION// /}" ]; then
             echo "::error::'version' input is empty. Dispatch must supply the exact version to assert post-install (e.g. 9.4.1)."
@@ -131,8 +144,8 @@ jobs:
         # ASPIRE_E2E_EXPECTED_VERSION drives the post-install `aspire --version`
         # assertion that catches stale channel pointers.
         env:
-          ASPIRE_E2E_QUALITY: ${{ inputs.quality }}
-          ASPIRE_E2E_EXPECTED_VERSION: ${{ inputs.version }}
+          ASPIRE_E2E_QUALITY: ${{ inputs.quality || 'release' }}
+          ASPIRE_E2E_EXPECTED_VERSION: ${{ inputs.version || '13.4.0' }}
           ASPIRE_E2E_CLI_VERSION_OUTPUT_DIR: ${{ github.workspace }}/testresults/cli-versions
           TEST_CLASS: ${{ matrix.classname }}
           TRX_FILE_NAME: ${{ matrix.shortname }}.trx
@@ -228,7 +241,7 @@ jobs:
     # which would open a tracking issue too — that's mild noise we accept
     # because losing timeout coverage would defeat the failure-visibility
     # goal of this job.
-    if: ${{ failure() || cancelled() }}
+    if: ${{ (failure() || cancelled()) && github.event_name == 'workflow_dispatch' }}
     permissions:
       issues: write
     steps:
@@ -245,8 +258,8 @@ jobs:
       - name: Create or comment on tracking issue
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
         env:
-          QUALITY: ${{ inputs.quality }}
-          VERSION: ${{ inputs.version }}
+          QUALITY: ${{ inputs.quality || 'release' }}
+          VERSION: ${{ inputs.version || '13.4.0' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
