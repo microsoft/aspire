@@ -105,29 +105,5 @@ export async function tryStartWasmDebugging(
     // proxy DevTools protocol messages.
     (debugConfiguration as any).port = portBrowserDebug;
 
-    // The WASM runtime checks for a debugger connection at startup. Since the browser
-    // launches before the debugger attaches, the runtime initializes with debugging
-    // disabled. We must reload the page after the browser debug session connects so
-    // the runtime re-initializes and calls mono_wasm_enable_debugging().
-    const browserSessionName = debugConfiguration.name;
-    const disposable = vscode.debug.onDidStartDebugSession(async (session) => {
-        if (session.name === browserSessionName && session.type === debugConfiguration.type) {
-            disposable.dispose();
-            extensionLogOutputChannel.info(`[WASM] Browser session started — reloading page to activate WASM debugging`);
-            // Give the browser a moment to fully connect before reloading
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            try {
-                // Use the DAP custom request to reload the page via CDP
-                await session.customRequest('evaluate', {
-                    expression: 'location.reload()',
-                    context: 'repl',
-                });
-                extensionLogOutputChannel.info(`[WASM] Page reload triggered`);
-            } catch (e) {
-                extensionLogOutputChannel.warn(`[WASM] Failed to reload page: ${e}`);
-            }
-        }
-    });
-
     return true;
 }
