@@ -43,7 +43,7 @@
     <!-- Project name validation runs once in the outer build -->
     <ProjectToBuild Include="$(RepoRoot)eng\OuterPreBuild.proj" />
 
-    <ProjectToBuild Include="$(RepoRoot)src\**\*.csproj" Exclude="$(RepoRoot)src\Aspire.ProjectTemplates\templates\**\*.csproj" />
+    <ProjectToBuild Include="$(RepoRoot)src\**\*.csproj" Exclude="$(RepoRoot)src\Aspire.ProjectTemplates\templates\**\*.csproj;$(RepoRoot)src\Aspire.Cli\Templating\Templates\**\*.csproj" />
     <!-- Aspire.Cli.Tool.csproj packages prebuilt NativeAOT binaries via eng/clipack, not the managed project build. -->
     <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.Tool.csproj" />
     <ProjectToBuild Remove="$(RepoRoot)src\Aspire.Cli\Aspire.Cli.csproj" Condition="'$(SkipBundleDeps)' == 'true'" />
