@@ -190,7 +190,13 @@ jobs:
           # path; this dispatch workflow runs the test project directly against an
           # installed CLI (no runsheet metadata pipeline) so the values are
           # duplicated here. Keep them in sync if eng/Testing.props changes.
-          dotnet test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
+          #
+          # Use ./dotnet.sh (the Arcade wrapper) instead of bare `dotnet` so the
+          # MSBuildSDKsPath and other env vars set up by eng/common/tools.sh during
+          # the build step above are in scope. Bare `dotnet test` fails the
+          # "Get projects properties with MSBuild" pre-check that detects the test
+          # runner type, then bails because global.json mandates MTP.
+          ./dotnet.sh test --project tests/Aspire.Cli.EndToEnd.Tests/Aspire.Cli.EndToEnd.Tests.csproj \
             --no-restore \
             --no-build \
             -- \
