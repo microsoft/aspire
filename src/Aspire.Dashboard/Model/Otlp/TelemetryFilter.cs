@@ -65,7 +65,7 @@ public class FieldTelemetryFilter : TelemetryFilter
     /// </summary>
     public static bool IsDateField(string name) => name is KnownTraceFields.TimestampField or KnownStructuredLogFields.TimestampField;
 
-    public static FieldType GetFieldType(string name)
+    internal static FieldType GetFieldType(string name)
     {
         if (IsNumericField(name))
         {
@@ -312,7 +312,7 @@ public class FieldTelemetryFilter : TelemetryFilter
     }
 }
 
-public enum FieldType
+internal enum FieldType
 {
     String,
     Numeric,
