@@ -74,27 +74,16 @@ internal static class DcpModelUtilities
             spAnn.Port = ea.TargetPort;
             appResource.DcpResource.AnnotateAsObjectList(CustomResource.ServiceProducerAnnotation, spAnn);
             appResource.ServicesProduced.Add(sp);
-
-            if (IsDynamicProxylessContainerEndpoint(appResource, sp))
-            {
-                // These endpoints normally get their host port during container creation. If a
-                // reference needs the allocated endpoint while building the container configuration,
-                // commit the fallback port before waiting would deadlock resource creation.
-                GetOrAddOnDemandEndpointAllocationAnnotation(appResource.ModelResource)
-                    .Register(ea, networkId => TryAllocateDynamicProxylessContainerEndpoint(appResource, sp, networkId, logger));
-            }
         }
 
-        static OnDemandEndpointAllocationAnnotation GetOrAddOnDemandEndpointAllocationAnnotation(IResource resource)
+        if (appResource.ServicesProduced.Any(sp => IsDynamicProxylessContainerEndpoint(appResource, sp)) &&
+            !modelResource.Annotations.OfType<OnDemandEndpointAllocationAnnotation>().Any())
         {
-            var annotation = resource.Annotations.OfType<OnDemandEndpointAllocationAnnotation>().SingleOrDefault();
-            if (annotation is null)
-            {
-                annotation = new();
-                resource.Annotations.Add(annotation);
-            }
-
-            return annotation;
+            // These endpoints normally get their host port during container creation. If a
+            // reference needs the allocated endpoint while building the container configuration,
+            // commit the fallback port before waiting would deadlock resource creation.
+            modelResource.Annotations.Add(new OnDemandEndpointAllocationAnnotation(
+                (endpoint, networkId) => TryAllocateDynamicProxylessContainerEndpoint(appResource, endpoint, networkId, logger)));
         }
 
         static bool HasMultipleReplicas(CustomResource resource)
@@ -291,12 +280,18 @@ internal static class DcpModelUtilities
 
     private static AllocatedEndpoint? TryAllocateDynamicProxylessContainerEndpoint<TDcpResource>(
         RenderedModelResource<TDcpResource> resource,
-        ServiceWithModelResource sp,
+        EndpointAnnotation endpoint,
         NetworkIdentifier networkId,
         ILogger? logger)
         where TDcpResource : CustomResource, IKubernetesStaticMetadata
     {
-        var endpoint = sp.EndpointAnnotation;
+        var sp = resource.ServicesProduced.SingleOrDefault(sp =>
+            ReferenceEquals(sp.EndpointAnnotation, endpoint) &&
+            IsDynamicProxylessContainerEndpoint(resource, sp));
+        if (sp is null)
+        {
+            return null;
+        }
 
         Debug.Assert(endpoint.TargetPort is not null);
 

@@ -4,46 +4,21 @@
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
-/// Stores resource-owned endpoint allocation callbacks that can run before normal allocation completes.
+/// Stores a resource-owned endpoint allocator that can run before normal allocation completes.
 /// </summary>
-internal sealed class OnDemandEndpointAllocationAnnotation : IResourceAnnotation
+internal sealed class OnDemandEndpointAllocationAnnotation(Func<EndpointAnnotation, NetworkIdentifier, AllocatedEndpoint?> allocator) : IResourceAnnotation
 {
-    private readonly Dictionary<EndpointAnnotation, OnDemandEndpointAllocation> _allocations = [];
-
-    public void Register(EndpointAnnotation endpoint, Func<NetworkIdentifier, AllocatedEndpoint?> provider)
-    {
-        _allocations[endpoint] = new(provider);
-    }
+    private Func<EndpointAnnotation, NetworkIdentifier, AllocatedEndpoint?>? _allocator = allocator;
 
     public AllocatedEndpoint? TryAllocate(EndpointAnnotation endpoint, NetworkIdentifier networkId)
     {
-        return _allocations.TryGetValue(endpoint, out var allocation)
-            ? allocation.TryAllocate(networkId)
-            : null;
+        var allocator = _allocator;
+
+        return allocator?.Invoke(endpoint, networkId);
     }
 
-    public void StopAllocating(EndpointAnnotation endpoint)
+    public void StopAllocating()
     {
-        if (_allocations.TryGetValue(endpoint, out var allocation))
-        {
-            allocation.StopAllocating();
-        }
-    }
-
-    private sealed class OnDemandEndpointAllocation(Func<NetworkIdentifier, AllocatedEndpoint?> provider)
-    {
-        private Func<NetworkIdentifier, AllocatedEndpoint?>? _provider = provider;
-
-        public AllocatedEndpoint? TryAllocate(NetworkIdentifier networkId)
-        {
-            var provider = _provider;
-
-            return provider?.Invoke(networkId);
-        }
-
-        public void StopAllocating()
-        {
-            Interlocked.Exchange(ref _provider, null);
-        }
+        Interlocked.Exchange(ref _allocator, null);
     }
 }
