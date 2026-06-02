@@ -92,8 +92,8 @@ export function createAspireExtensionApi(dataRepository: AppHostDataRepository, 
 			return executeResourceCommand(terminalProvider, resourceName, appHostPath, 'start');
 		},
 
-		acquireTestRunSession: dcpServer.acquireTestRunSession,
-		releaseTestRunSession: dcpServer.releaseTestRunSession,
+		acquireTestRunSession: (options) => dcpServer.acquireTestRunSession(options),
+		releaseTestRunSession: (id) => dcpServer.releaseTestRunSession(id),
 	};
 }
 
