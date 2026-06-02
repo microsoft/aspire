@@ -297,7 +297,7 @@ public class EndpointReferenceTests
             annotation, "localhost", 8080,
             EndpointBindingMode.SingleAddress,
             targetPortExpression: null,
-            networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
+            networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork);
 
         var ex = Assert.Throws<InvalidOperationException>(() => annotation.AllocatedEndpoint = mismatchedEndpoint);
     }

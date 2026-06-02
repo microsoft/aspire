@@ -1411,7 +1411,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandWithCSharpEmptyTemplateAndPlainLocalhostEmitsAppHostRunJsonMatchingAspireConfigJson()
+    public async Task NewCommandWithCSharpEmptyTemplateEmitsAppHostRunJsonAndAspireConfigJsonWithoutDuplicateProfiles()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -1434,10 +1434,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var aspireConfig = await File.ReadAllTextAsync(aspireConfigPath);
         var appHostRunJson = await File.ReadAllTextAsync(appHostRunJsonPath);
 
+        // Launch profile shape (applicationUrl / commandName / environmentVariables) must live in
+        // apphost.run.json so that `dotnet run apphost.cs` and the C# Dev Kit can pick it up.
         Assert.Contains("://localhost:", appHostRunJson);
         Assert.Contains("\"commandName\": \"Project\"", appHostRunJson);
 
-        AssertHttpsApplicationUrlMatches(aspireConfig, appHostRunJson);
+        // aspire.config.json must NOT carry a duplicated `profiles` block — that content belongs to
+        // apphost.run.json only. See https://github.com/microsoft/aspire/issues/17660.
+        AssertAspireConfigHasNoProfiles(aspireConfig);
     }
 
     [Fact]
@@ -1467,26 +1471,23 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("testapp.dev.localhost", appHostRunJson);
         Assert.DoesNotContain("://localhost", appHostRunJson);
 
-        AssertHttpsApplicationUrlMatches(aspireConfig, appHostRunJson);
+        // aspire.config.json must NOT carry a duplicated `profiles` block — that content belongs to
+        // apphost.run.json only. See https://github.com/microsoft/aspire/issues/17660.
+        AssertAspireConfigHasNoProfiles(aspireConfig);
     }
 
-    private static void AssertHttpsApplicationUrlMatches(string aspireConfigJson, string appHostRunJson)
+    private static void AssertAspireConfigHasNoProfiles(string aspireConfigJson)
     {
         using var aspireDoc = System.Text.Json.JsonDocument.Parse(aspireConfigJson);
-        using var runDoc = System.Text.Json.JsonDocument.Parse(appHostRunJson);
+        Assert.False(
+            aspireDoc.RootElement.TryGetProperty("profiles", out _),
+            "aspire.config.json must not contain a 'profiles' block for the empty C# template; profiles live in apphost.run.json.");
 
-        var aspireHttpsUrl = aspireDoc.RootElement
-            .GetProperty("profiles")
-            .GetProperty("https")
-            .GetProperty("applicationUrl")
-            .GetString();
-        var runHttpsUrl = runDoc.RootElement
-            .GetProperty("profiles")
-            .GetProperty("https")
-            .GetProperty("applicationUrl")
-            .GetString();
-
-        Assert.Equal(aspireHttpsUrl, runHttpsUrl);
+        // Pin the expected minimal shape: aspire.config.json for the C# Empty template should only
+        // identify the AppHost file. See https://github.com/microsoft/aspire/issues/17660.
+        Assert.True(aspireDoc.RootElement.TryGetProperty("appHost", out var appHost), "aspire.config.json is missing the required 'appHost' object.");
+        Assert.True(appHost.TryGetProperty("path", out var path), "aspire.config.json#appHost is missing the 'path' property.");
+        Assert.Equal("apphost.cs", path.GetString());
     }
 
     [Fact]
@@ -1532,11 +1533,20 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(localhostPrompted);
 
-        var runProfilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "output", "aspire.config.json");
-        Assert.True(File.Exists(runProfilePath));
-        var runProfile = await File.ReadAllTextAsync(runProfilePath);
-        Assert.Contains("testapp.dev.localhost", runProfile);
-        Assert.DoesNotContain("://localhost", runProfile);
+        var outputRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "output");
+
+        var aspireConfigPath = Path.Combine(outputRoot, "aspire.config.json");
+        Assert.True(File.Exists(aspireConfigPath));
+        var aspireConfig = await File.ReadAllTextAsync(aspireConfigPath);
+        // aspire.config.json must NOT contain the localhost-TLD URLs — those belong in
+        // apphost.run.json. See https://github.com/microsoft/aspire/issues/17660.
+        Assert.DoesNotContain("testapp.dev.localhost", aspireConfig);
+
+        var appHostRunJsonPath = Path.Combine(outputRoot, "apphost.run.json");
+        Assert.True(File.Exists(appHostRunJsonPath));
+        var appHostRunJson = await File.ReadAllTextAsync(appHostRunJsonPath);
+        Assert.Contains("testapp.dev.localhost", appHostRunJson);
+        Assert.DoesNotContain("://localhost", appHostRunJson);
     }
 
     [Fact]
@@ -1811,7 +1821,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(buildAndGenerateCalled);
         Assert.Equal("daily", channelSeenByProject);
-        Assert.Equal("9.2.0", sdkVersionSeenByProject);
+        Assert.Equal(VersionHelper.GetDefaultSdkVersion(), sdkVersionSeenByProject);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", LanguageInfo.GeneratedFolderName, "aspire.mts")));
     }
 

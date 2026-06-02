@@ -1136,7 +1136,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         });
 
         if (!selected) {
-            return;
+            throw new vscode.CancellationError();
         }
 
         const commandArguments = await collectResourceCommandArguments(selected.label, selected.command, {
@@ -1144,7 +1144,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             loadDynamicArguments: values => this._loadResourceCommandArguments(element, selected.label, values),
         });
         if (commandArguments === undefined) {
-            return;
+            throw new vscode.CancellationError();
         }
 
         this._runResourceCommand(element, `"${selected.label}"`, commandArguments.args, commandArguments.containsSecret);

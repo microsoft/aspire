@@ -73,6 +73,9 @@
     <trans-unit id="aspire-vscode.strings.authorizationAndDcpHeadersRequired">
       <source xml:lang="en">Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.authorizationHeaderRequired">
+      <source xml:lang="en">Authorization header is required.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.authorizationHeaderMustStartWithBearer">
       <source xml:lang="en">Authorization header must start with &apos;Bearer &apos;.</source>
     </trans-unit>

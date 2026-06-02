@@ -195,7 +195,7 @@ public class AddPostgresTests
             .WithEndpoint("tcp", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 2000);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "postgres.dev.internal", 2000, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "postgres.dev.internal", 2000, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             });
         var database = postgres.AddDatabase("db");
         var consumer = appBuilder.AddContainer("consumer", "fake");

@@ -403,6 +403,7 @@ public sealed class DebugSessionOptions
 
     public int? Port { get; set; }
     public string? Token { get; set; }
+    public string? DcpInstanceId { get; set; }
     public string? ServerCertificate { get; set; }
     public bool? TelemetryOptOut { get; set; }
 

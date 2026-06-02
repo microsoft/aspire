@@ -118,6 +118,7 @@
   "aspire-vscode.strings.invalidTokenLength": "Invalid token length in Authorization header.",
   "aspire-vscode.strings.authorizationHeaderMustStartWithBearer": "Authorization header must start with 'Bearer '.",
   "aspire-vscode.strings.authorizationAndDcpHeadersRequired": "Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.",
+  "aspire-vscode.strings.authorizationHeaderRequired": "Authorization header is required.",
   "aspire-vscode.strings.buildFailedForProjectWithError": "Build failed for project {0} with error: {1}.",
   "aspire-vscode.strings.failedToInspectRuntimeConfig": "Failed to inspect runtimeconfig for {0}: {1}",
   "aspire-vscode.strings.dotNetRunFallbackDisablesDebugger": "Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.",

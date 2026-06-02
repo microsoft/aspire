@@ -278,17 +278,17 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
         redis1.WithEndpoint("tcp", e =>
         {
             e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5001);
-            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis1.dev.internal", 5001, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis1.dev.internal", 5001, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
         });
         redis2.WithEndpoint("tcp", e =>
         {
             e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5002);
-            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis2.dev.internal", 5002, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis2.dev.internal", 5002, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
         });
         redis3.WithEndpoint("tcp", e =>
         {
             e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5003);
-            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis3.dev.internal", 5003, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+            e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "myredis3.dev.internal", 5003, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
         });
 
         var redisInsight = Assert.Single(builder.Resources.OfType<RedisInsightResource>());
@@ -706,7 +706,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
             .WithEndpoint("tcp", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 6379);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "redis.dev.internal", 6379, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "redis.dev.internal", 6379, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             })
             .WithRedisInsight();
 

@@ -7,7 +7,7 @@ import { enterPipelineStep } from '../loc/strings';
 export async function doCommand(terminalProvider: AspireTerminalProvider, editorCommandProvider: AspireEditorCommandProvider) {
     const step = await resolveStep(terminalProvider);
     if (step === undefined) {
-        return;
+        throw new vscode.CancellationError();
     }
     await editorCommandProvider.tryExecuteDoAppHost(false, step ?? undefined);
 }

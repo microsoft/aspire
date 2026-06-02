@@ -70,6 +70,53 @@ public sealed class StageNativeCliToolPackagesTests : IDisposable
 
     [Fact]
     [RequiresTools(["pwsh"])]
+    public async Task StagesNpmPackagesWhenPresent()
+    {
+        var downloadRoot = CreateDownloadRoot();
+        var shippingDir = CreateShippingDir();
+
+        CreateNativeArchivePackages(downloadRoot, "win-x64");
+        CreateNativeArchivePackage(downloadRoot, "linux-x64", $"Aspire.Cli.linux-x64.{PackageVersion}.nupkg");
+        CreateNativeArchiveNpmPackages(downloadRoot, "win-x64");
+        CreateNativeArchiveNpmPackages(downloadRoot, "linux-x64");
+
+        var result = await RunScript(downloadRoot, shippingDir, "-RequireNpmPackages");
+
+        result.EnsureSuccessful();
+
+        var stagedPackageNames = GetStagedPackageNames(shippingDir);
+        Assert.Equal(
+            [
+                $"Aspire.Cli.{PackageVersion}.nupkg",
+                $"Aspire.Cli.linux-x64.{PackageVersion}.nupkg",
+                $"Aspire.Cli.win-x64.{PackageVersion}.nupkg",
+                $"microsoft-aspire-cli-{PackageVersion}.tgz",
+                $"microsoft-aspire-cli-linux-x64-{PackageVersion}.tgz",
+                $"microsoft-aspire-cli-win-x64-{PackageVersion}.tgz"
+            ],
+            stagedPackageNames);
+        Assert.Contains("Skipping non-canonical Aspire CLI npm pointer package", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task FailsWhenRequiredNpmPackagesAreMissing()
+    {
+        var downloadRoot = CreateDownloadRoot();
+        var shippingDir = CreateShippingDir();
+
+        CreateNativeArchivePackages(downloadRoot, "win-x64");
+        CreateNativeArchivePackage(downloadRoot, "linux-x64", $"Aspire.Cli.linux-x64.{PackageVersion}.nupkg");
+
+        var result = await RunScript(downloadRoot, shippingDir, "-RequireNpmPackages");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("No Aspire CLI npm packages were found", result.Output);
+        Assert.Contains("native_archives_<rid>", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
     public async Task FailsWhenCanonicalPointerPackageIsMissing()
     {
         var downloadRoot = CreateDownloadRoot();
@@ -268,6 +315,12 @@ public sealed class StageNativeCliToolPackagesTests : IDisposable
         CreateNativeArchivePackage(downloadRoot, rid, $"Aspire.Cli.{rid}.{PackageVersion}.nupkg");
     }
 
+    private static void CreateNativeArchiveNpmPackages(string downloadRoot, string rid)
+    {
+        CreateNativeArchivePackage(downloadRoot, rid, $"microsoft-aspire-cli-{PackageVersion}.tgz");
+        CreateNativeArchivePackage(downloadRoot, rid, $"microsoft-aspire-cli-{rid}-{PackageVersion}.tgz");
+    }
+
     private static void CreateNativeArchivePackage(string downloadRoot, string rid, string packageName)
     {
         CreatePackage(downloadRoot, $"native_archives_{rid.Replace('-', '_')}", "Release", "Shipping", packageName);
@@ -282,7 +335,7 @@ public sealed class StageNativeCliToolPackagesTests : IDisposable
 
     private static string[] GetStagedPackageNames(string shippingDir)
     {
-        return Directory.GetFiles(shippingDir, "Aspire.Cli*.nupkg")
+        return Directory.GetFiles(shippingDir)
             .Select(Path.GetFileName)
             .Order(StringComparer.Ordinal)
             .ToArray()!;

@@ -14,6 +14,16 @@ variables:
   # .npmrc, so pass this registry explicitly.
   - name: NPM_REGISTRY
     value: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
+  - name: NPM_VALIDATION_SUMMARY_WIN_X64_ARTIFACT
+    value: npm-validation-summary-win-x64
+  - name: NPM_VALIDATION_SUMMARY_LINUX_X64_ARTIFACT
+    value: npm-validation-summary-linux-x64
+  - name: NPM_VALIDATION_SUMMARY_OSX_ARTIFACT
+    value: npm-validation-summary-osx
+  - name: NPM_PUBLISH_REQUIRED_OWNERS
+    value: joperezr,ankj
+  - name: NPM_PUBLISH_REQUIRED_APPROVERS
+    value: adamratzman
   # Disable the interactive "Do you want to download yarn@x.y.z?" prompt so
   # pipeline steps don't hang waiting for stdin.
   - name: COREPACK_ENABLE_DOWNLOAD_PROMPT

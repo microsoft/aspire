@@ -10,14 +10,14 @@ namespace Aspire.Hosting
 {
     public static partial class AzureFunctionsProjectResourceExtensions
     {
-        [AspireExport(Description = "Adds an Azure Functions project to the distributed application")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> AddAzureFunctionsProject(this IDistributedApplicationBuilder builder, string name, string projectPath) { throw null; }
 
         [AspireExportIgnore(Reason = "TProject : IProjectMetadata is a .NET-specific generic constraint not compatible with ATS. Use the project path overload instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> AddAzureFunctionsProject<TProject>(this IDistributedApplicationBuilder builder, string name)
             where TProject : IProjectMetadata, new() { throw null; }
 
-        [AspireExport(Description = "Configures the Azure Functions project to use specified Azure Storage as host storage")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> WithHostStorage(this ApplicationModel.IResourceBuilder<Azure.AzureFunctionsProjectResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> storage) { throw null; }
 
         [AspireExportIgnore(Reason = "IResourceWithAzureFunctionsConfig is an internal interface constraint not compatible with ATS.")]
@@ -27,15 +27,15 @@ namespace Aspire.Hosting
 
     public static partial class DurableTaskResourceExtensions
     {
-        [AspireExport(Description = "Adds a Durable Task scheduler resource to the distributed application.")]
+        [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> AddDurableTaskScheduler(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds a Durable Task hub resource associated with the scheduler.")]
+        [AspireExport]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskHubResource> AddTaskHub(this ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> builder, string name) { throw null; }
 
-        [AspireExport(Description = "Configures the Durable Task scheduler to run using the local emulator.", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.DurableTask.DurableTaskSchedulerEmulatorResource>>? configureContainer = null) { throw null; }
 

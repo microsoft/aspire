@@ -120,6 +120,7 @@ export const invalidOrMissingToken = vscode.l10n.t('Invalid or missing token in 
 export const invalidTokenLength = vscode.l10n.t('Invalid token length in Authorization header.');
 export const authorizationHeaderMustStartWithBearer = vscode.l10n.t('Authorization header must start with \'Bearer \'.');
 export const authorizationAndDcpHeadersRequired = vscode.l10n.t('Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.');
+export const authorizationHeaderRequired = vscode.l10n.t('Authorization header is required.');
 export const buildFailedForProjectWithError = (project: string, error: string) => vscode.l10n.t('Build failed for project {0} with error: {1}.', project, error);
 export const failedToInspectRuntimeConfig = (outputPath: string, error: string) => vscode.l10n.t('Failed to inspect runtimeconfig for {0}: {1}', outputPath, error);
 export const dotNetRunFallbackDisablesDebugger = (outputPath: string, projectPath: string) => vscode.l10n.t('Project output {0} is not directly runnable; launching {1} with dotnet run without debugger attach. Breakpoints will not be hit for this resource.', outputPath, projectPath);

@@ -178,9 +178,17 @@ internal sealed class AddCommand : BaseCommand
                 ? ProfilingTelemetry.Values.AddPackageMatchKindExact
                 : ProfilingTelemetry.Values.AddPackageMatchKindNone;
 
-            if (filteredPackagesWithShortName.Count == 0 && integrationName is not null && version is not null && !_hostEnvironment.SupportsInteractiveInput)
+            // Non-interactive mode never falls back to fuzzy search: in interactive mode the user picks
+            // from the fuzzy candidates, but a script/CI invocation would otherwise silently auto-select
+            // distinctPackages.First() in GetPackageByInteractiveFlow and install the wrong package
+            // (https://github.com/microsoft/aspire/issues/17724). Refusing with an actionable error
+            // forces the caller to supply an exact package id or friendly name.
+            if (filteredPackagesWithShortName.Count == 0 && integrationName is not null && !_hostEnvironment.SupportsInteractiveInput)
             {
-                throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionRequiresExactPackageMatch, integrationName));
+                var message = version is not null
+                    ? string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionRequiresExactPackageMatch, integrationName)
+                    : string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NonInteractiveRequiresExactPackageMatch, integrationName);
+                throw new EmptyChoicesException(message);
             }
 
             if (filteredPackagesWithShortName.Count == 0 && integrationName is not null)
@@ -197,16 +205,33 @@ internal sealed class AddCommand : BaseCommand
                     : ProfilingTelemetry.Values.AddPackageMatchKindNone;
             }
 
-            // If we didn't match any, show a complete list. If we matched one, and its
+            // If the user supplied a partial/fuzzy search term, keep the package prompt even when
+            // the fallback only found one candidate; otherwise `aspire add kube` can silently add
+            // the lone fuzzy match without asking the interactive user to confirm it.
+            var promptForSingleFuzzyPackage = packageMatchKind == ProfilingTelemetry.Values.AddPackageMatchKindFuzzy;
+
+            // If we didn't match any, show a complete list. If we matched one, and it's
             // an exact match, then we still prompt, but it will only prompt for
             // the version. If there is more than one match then we prompt.
             (string FriendlyName, NuGetPackage Package, PackageChannel Channel) selectedNuGetPackage;
             selectedNuGetPackage = filteredPackagesWithShortName.Count switch
             {
-                0 => await GetPackageByInteractiveFlowWithNoMatchesMessage(effectiveAppHostProjectFile.Directory!, packagesWithShortName, integrationName, version, cancellationToken),
-                1 when filteredPackagesWithShortName[0].Package.Version == version
+                0 => await GetPackageByInteractiveFlowWithNoMatchesMessage(
+                    effectiveAppHostProjectFile.Directory!,
+                    packagesWithShortName,
+                    integrationName,
+                    version,
+                    cancellationToken,
+                    promptForSinglePackage: integrationName is not null),
+                1 when packageMatchKind == ProfilingTelemetry.Values.AddPackageMatchKindExact
+                    && filteredPackagesWithShortName[0].Package.Version == version
                     => filteredPackagesWithShortName[0],
-                _ => await GetPackageByInteractiveFlow(effectiveAppHostProjectFile.Directory!, filteredPackagesWithShortName, version, cancellationToken)
+                _ => await GetPackageByInteractiveFlow(
+                    effectiveAppHostProjectFile.Directory!,
+                    filteredPackagesWithShortName,
+                    version,
+                    cancellationToken,
+                    promptForSingleFuzzyPackage)
             };
             using (var selectPackageActivity = _profilingTelemetry.StartAddSelectPackage(integrationName, version))
             {
@@ -357,14 +382,21 @@ internal sealed class AddCommand : BaseCommand
         return versions;
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? preferredVersion, CancellationToken cancellationToken)
+    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlow(
+        DirectoryInfo workingDirectory,
+        IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages,
+        string? preferredVersion,
+        CancellationToken cancellationToken,
+        bool promptForSinglePackage = false)
     {
         var distinctPackages = possiblePackages.DistinctBy(p => p.Package.Id).ToArray();
 
-        // If there is only one package, we can skip the prompt and just use it.
+        // Exact matches can skip the package prompt when one package remains. Fuzzy/no-match
+        // fallbacks opt into prompting so interactive users confirm the candidate first.
         // In non-interactive mode, auto-select the first package.
         var selectedPackage = distinctPackages.Length switch
         {
+            1 when promptForSinglePackage && _hostEnvironment.SupportsInteractiveInput => await PromptForIntegrationAsync(distinctPackages, cancellationToken),
             1 => distinctPackages.First(),
             > 1 when !_hostEnvironment.SupportsInteractiveInput => distinctPackages.First(),
             > 1 => await PromptForIntegrationAsync(distinctPackages, cancellationToken),
@@ -440,14 +472,20 @@ internal sealed class AddCommand : BaseCommand
         return await _prompter.PromptForIntegrationVersionAsync(packages, cancellationToken);
     }
 
-    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlowWithNoMatchesMessage(DirectoryInfo workingDirectory, IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages, string? searchTerm, string? preferredVersion, CancellationToken cancellationToken)
+    private async Task<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> GetPackageByInteractiveFlowWithNoMatchesMessage(
+        DirectoryInfo workingDirectory,
+        IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> possiblePackages,
+        string? searchTerm,
+        string? preferredVersion,
+        CancellationToken cancellationToken,
+        bool promptForSinglePackage = false)
     {
         if (searchTerm is not null)
         {
             InteractionService.DisplaySubtleMessage(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoPackagesMatchedSearchTerm, searchTerm));
         }
 
-        return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, cancellationToken);
+        return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, cancellationToken, promptForSinglePackage);
     }
 
 }

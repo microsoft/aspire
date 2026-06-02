@@ -123,6 +123,18 @@
   <data name="FilterDialogTextValuePlaceholder" xml:space="preserve">
     <value>Value</value>
   </data>
+  <data name="FilterDialogDateValueLabel" xml:space="preserve">
+    <value>Date and time</value>
+  </data>
+  <data name="FilterDialogDatePlaceholder" xml:space="preserve">
+    <value>e.g. 2024-01-15T09:30:00</value>
+  </data>
+  <data name="FilterDialogPickDateButtonTitle" xml:space="preserve">
+    <value>Pick date and time</value>
+  </data>
+  <data name="FilterDialogInvalidDate" xml:space="preserve">
+    <value>Invalid date format</value>
+  </data>
   <data name="FilterDialogCancelButtonText" xml:space="preserve">
     <value>Cancel</value>
   </data>

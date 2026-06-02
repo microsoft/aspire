@@ -50,6 +50,70 @@ steps:
               /p:PackageVSCodeExtensionAsPreRelease=${{ lower(eq(parameters.packageVSCodeExtensionAsPreRelease, true)) }}
       displayName: 🟣Build
 
+    - pwsh: |
+        $ErrorActionPreference = 'Stop'
+        $shippingPackagesDir = '${{ parameters.repoArtifactsPath }}/packages/${{ parameters.buildConfig }}/Shipping'
+
+        if (!(Test-Path $shippingPackagesDir)) {
+          Write-Error "Shipping packages directory not found: $shippingPackagesDir"
+          exit 1
+        }
+
+        $npmPackages = @(Get-ChildItem -Path $shippingPackagesDir -Filter "microsoft-aspire-cli*.tgz" -Recurse -File)
+        if ($npmPackages.Count -eq 0) {
+          Write-Error "No Aspire CLI npm packages were found under '$shippingPackagesDir'."
+          exit 1
+        }
+
+        $missingSignatures = @()
+        $invalidSignatures = @()
+        foreach ($package in $npmPackages) {
+          $signaturePath = "$($package.FullName).sig"
+          if (!(Test-Path $signaturePath)) {
+            $missingSignatures += $signaturePath
+            continue
+          }
+
+          # Content sanity check: catch the most likely silent failure mode
+          # where Arcade/ESRP signing emits the sidecar file but the content
+          # is empty or garbage. A real PGP signature is hundreds of bytes
+          # and starts with either the ASCII-armored header
+          # `-----BEGIN PGP SIGNATURE-----` (RFC 9580 §6) or an OpenPGP
+          # binary signature packet (tag 2: old-format 0x88..0x8B or
+          # new-format 0xC2, RFC 9580 §4.3 / §5.2).
+          $signatureFile = Get-Item -LiteralPath $signaturePath
+          if ($signatureFile.Length -lt 64) {
+            $invalidSignatures += "$signaturePath (only $($signatureFile.Length) bytes)"
+            continue
+          }
+          $bytes = [System.IO.File]::ReadAllBytes($signaturePath)[0..63]
+          $asciiPreview = [System.Text.Encoding]::ASCII.GetString($bytes)
+          $looksArmored = $asciiPreview.Contains('-----BEGIN PGP SIGNATURE-----')
+          $firstByte = $bytes[0]
+          $looksBinarySignaturePacket = ($firstByte -ge 0x88 -and $firstByte -le 0x8B) -or $firstByte -eq 0xC2
+          if (-not $looksArmored -and -not $looksBinarySignaturePacket) {
+            $hexPrefix = ($bytes[0..15] | ForEach-Object { '{0:x2}' -f $_ }) -join ' '
+            $invalidSignatures += "$signaturePath (no PGP signature marker; first 16 bytes: $hexPrefix)"
+            continue
+          }
+
+          Write-Host "Found npm package signature sidecar: $([System.IO.Path]::GetFileName($signaturePath))"
+        }
+
+        if ($missingSignatures.Count -gt 0) {
+          Write-Error "Missing detached signature sidecar(s) for npm package(s): $($missingSignatures -join ', ')"
+          exit 1
+        }
+
+        if ($invalidSignatures.Count -gt 0) {
+          Write-Error "Detached signature sidecar(s) failed content sanity check: $($invalidSignatures -join '; ')"
+          exit 1
+        }
+
+        Write-Host "Validated $($npmPackages.Count) Aspire CLI npm package signature sidecar(s)."
+      displayName: 🟣Validate npm package signatures
+      condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
     # Log MicroBuild environment for debugging
     # MicroBuildOutputFolderOverride is set by the MicroBuildSigningPlugin task in eng/common/templates-official/job/onelocbuild.yml
     # which is installed via the Arcade SDK's install-microbuild.yml template that runs before our build steps.

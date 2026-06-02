@@ -5,9 +5,12 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Azure.AI.Projects.Agents;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Foundry.Tests;
 
@@ -74,9 +77,60 @@ public class HostedAgentExtensionTests
         var resource = builder.Resources.Single(r => r.Name == "agent");
         var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
         Assert.Equal("Send Message", command.DisplayName);
+        Assert.EndsWith("-/responses", command.Name);
         Assert.Equal("ChatSparkle", command.IconName);
         Assert.Equal(IconVariant.Regular, command.IconVariant);
         Assert.True(command.IsHighlighted);
+    }
+
+    [Fact]
+    public async Task AsHostedAgent_InRunMode_WithInvocationsProtocol_ConfiguresEndpointAndCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, configuration =>
+            {
+                configuration.ContainerProtocolVersions.Clear();
+                configuration.ContainerProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"));
+            });
+
+        using var app = builder.Build();
+
+        var resource = builder.Resources.Single(r => r.Name == "agent");
+        var command = Assert.Single(resource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.EndsWith("-/invocations", command.Name);
+
+        var urlsCallback = Assert.Single(resource.Annotations.OfType<ResourceUrlsCallbackAnnotation>());
+        var url = new ResourceUrlAnnotation
+        {
+            Url = "http://localhost:1234",
+            Endpoint = ((IResourceWithEndpoints)resource).GetEndpoint("http")
+        };
+        var urls = new List<ResourceUrlAnnotation> { url };
+        var context = new ResourceUrlsCallbackContext(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            resource,
+            urls);
+
+        await urlsCallback.Callback(context);
+
+        Assert.Equal("Invocations Endpoint", url.DisplayText);
+        Assert.Equal("http://localhost:1234/invocations", url.Url);
+    }
+
+    [Fact]
+    public void AsHostedAgent_InRunMode_WrapsConfigurationCallbackFailures()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            builder.AddPythonApp("agent", "./app.py", "main:app")
+                .AsHostedAgent(configuration => configuration.Cpu = 4.0m));
+
+        Assert.Contains("run mode", ex.Message);
+        Assert.IsType<ArgumentException>(ex.InnerException);
     }
 
     [Fact]
@@ -189,7 +243,15 @@ public class HostedAgentExtensionTests
             Cpu = 1m,
             Memory = 2m,
             Metadata = { ["scenario"] = "unit-test" },
-            EnvironmentVariables = { ["MY_VAR"] = "my-value" }
+            EnvironmentVariables = { ["MY_VAR"] = "my-value" },
+            Protocols =
+            {
+                new HostedAgentProtocolVersion
+                {
+                    Protocol = "invocations",
+                    Version = "1.0.0"
+                }
+            }
         };
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
@@ -207,6 +269,75 @@ public class HostedAgentExtensionTests
         Assert.Equal(2m, configuration.Memory);
         Assert.Equal("unit-test", configuration.Metadata["scenario"]);
         Assert.Equal("my-value", configuration.EnvironmentVariables["MY_VAR"]);
+        var protocol = Assert.Single(configuration.ContainerProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
+        Assert.Equal("1.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public async Task GetResolvedEnvironmentVariables_DoesNotForwardFoundryReservedTargetEnvironmentVariables()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var agent = builder.AddExecutable("agent", "python", ".")
+            .WithEnvironment("PORT", "8000")
+            .WithEnvironment("AGENT_NAME", "agent")
+            .WithEnvironment("FOUNDRY_MODE", "hosted")
+            .WithEnvironment("MY_VAR", "my-value");
+
+        using var app = builder.Build();
+        var hostedAgent = new AzureHostedAgentResource("agent-ha", agent.Resource);
+
+        var envVars = await AzureHostedAgentResource.GetResolvedEnvironmentVariablesAsync(
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            hostedAgent,
+            agent.Resource,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.DoesNotContain("PORT", envVars.Keys);
+        Assert.DoesNotContain("AGENT_NAME", envVars.Keys);
+        Assert.DoesNotContain("FOUNDRY_MODE", envVars.Keys);
+        Assert.Equal("my-value", envVars["MY_VAR"]);
+    }
+
+    [Theory]
+    [InlineData("", "1.0.0", nameof(HostedAgentProtocolVersion.Protocol))]
+    [InlineData("invocations", "", nameof(HostedAgentProtocolVersion.Version))]
+    public void AsHostedAgent_WithInvalidProtocolOptions_ThrowsWithPropertyName(string protocol, string version, string expectedParamName)
+    {
+        var options = new HostedAgentOptions
+        {
+            Protocols =
+            {
+                new HostedAgentProtocolVersion
+                {
+                    Protocol = protocol,
+                    Version = version
+                }
+            }
+        };
+
+        var ex = Assert.Throws<ArgumentException>(() => options.ApplyTo(new HostedAgentConfiguration("test-image")));
+        Assert.Equal(expectedParamName, ex.ParamName);
+    }
+
+    [Fact]
+    public void GetAgentEndpointProtocols_MapsContainerProtocolsToEndpointProtocols()
+    {
+        var endpointProtocols = AzureHostedAgentResource.GetAgentEndpointProtocols(
+            [
+                new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"),
+                new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "1.0.0"),
+                new ProtocolVersionRecord(ProjectsAgentProtocol.ActivityProtocol, "1.0.0"),
+                new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.1.0")
+            ]);
+
+        Assert.Collection(
+            endpointProtocols,
+            protocol => Assert.Equal(AgentEndpointProtocol.Invocations, protocol),
+            protocol => Assert.Equal(AgentEndpointProtocol.Responses, protocol),
+            protocol => Assert.Equal(AgentEndpointProtocol.Activity, protocol));
     }
 
     [Fact]
@@ -316,6 +447,88 @@ public class HostedAgentExtensionTests
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    [Fact]
+    public void AsHostedAgent_StampsReferenceRoleAssignmentAnnotationOnTarget_WithAzureAIUserRole()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var account = Assert.Single(builder.Resources.OfType<FoundryResource>());
+
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
+        Assert.Same(account, annotation.Target);
+        Assert.Contains(annotation.Roles, role =>
+            string.Equals(role.Id, AzureHostedAgentResource.AzureAIUserRoleDefinitionId, StringComparison.OrdinalIgnoreCase));
+#pragma warning restore ASPIREAZURE003
+    }
+
+    [Fact]
+    public void AsHostedAgent_ReferenceRoleAssignmentAnnotation_GrantsOnlyAzureAIUserRole()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var account = Assert.Single(builder.Resources.OfType<FoundryResource>());
+        Assert.True(account.TryGetLastAnnotation<DefaultRoleAssignmentsAnnotation>(out var defaults));
+
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        var annotation = Assert.Single(hostedAgent.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>());
+
+        // The implied grant is least-privilege: only "Azure AI User" is required to invoke the agent.
+        var role = Assert.Single(annotation.Roles);
+        Assert.Equal(AzureHostedAgentResource.AzureAIUserRoleDefinitionId, role.Id, ignoreCase: true);
+
+        // The account's default data-plane roles must NOT be folded in here. A consumer that references
+        // the account directly still receives them via the preparer's normal walk, and a consumer that
+        // explicitly suppresses them must keep them suppressed.
+        foreach (var defaultRole in defaults.Roles)
+        {
+            Assert.DoesNotContain(annotation.Roles, r => string.Equals(r.Id, defaultRole.Id, StringComparison.OrdinalIgnoreCase));
+        }
+#pragma warning restore ASPIREAZURE003
+    }
+
+    [Fact]
+    public void AsHostedAgent_MultipleHostedAgents_EachTargetCarriesItsOwnReferenceRoleAssignment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var otherProject = builder.AddFoundry("account2")
+            .AddProject("other-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+        builder.AddPythonApp("agent2", "./app.py", "main:app")
+            .AsHostedAgent(otherProject);
+
+        var hostedAgents = builder.Resources.OfType<AzureHostedAgentResource>().ToList();
+        Assert.Equal(2, hostedAgents.Count);
+
+        var account = Assert.Single(builder.Resources.OfType<FoundryResource>(), r => r.Name == "account");
+        var account2 = Assert.Single(builder.Resources.OfType<FoundryResource>(), r => r.Name == "account2");
+
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
+        var targets = hostedAgents
+            .Select(a => Assert.Single(a.Target.Annotations.OfType<ReferenceRoleAssignmentAnnotation>()).Target)
+            .ToList();
+
+        Assert.Contains(account, targets);
+        Assert.Contains(account2, targets);
+#pragma warning restore ASPIREAZURE003
+    }
 
     private sealed class Project : IProjectMetadata
     {

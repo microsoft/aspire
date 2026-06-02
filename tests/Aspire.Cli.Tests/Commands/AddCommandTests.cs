@@ -354,8 +354,29 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task IntegrationSearchCommandFormatJsonWithAppHostUsesConfiguredChannel()
+    public async Task IntegrationSearchCommandFormatJsonWithTypeScriptAppHostPinnedToChannelAlsoSearchesImplicitChannel()
     {
+        // Regression for https://github.com/microsoft/aspire/issues/17724 + https://github.com/microsoft/aspire/issues/17725.
+        //
+        // Layer 1 (latent bug, born 2026-01-13 in PR #13705): IntegrationPackageSearchService used to
+        //   narrow the channel set to whatever `configuredChannel` resolved to whenever the apphost was
+        //   non-C#. This dropped the implicit channel and any other channels from discovery.
+        // Layer 2 (PR #17452, 2026-05-26): `aspire init` started writing `"channel": "<identity>"` into
+        //   the scaffolded aspire.config.json for polyglot apphosts. This activated the Layer 1 bug for
+        //   every newly-initialized TS apphost in 13.4.
+        //
+        // Fix: IntegrationPackageSearchService no longer narrows. The full channel set (implicit +
+        //   pinned channel + any hives) is searched.
+        //
+        // This test pins the TS apphost to the "daily" channel via aspire.config.json. Pre-fix only the
+        // daily channel was searched and Redis 2.0.0 (daily) was the only result. Post-fix the implicit
+        // channel is ALSO searched, and SelectPreferredIntegrationPackage prefers the implicit channel
+        // when versions collide on Id, so Redis 1.0.0 (implicit) wins the dedupe.
+        //
+        // The structural guarantee asserted below — both `implicitHits` AND `dailyHits` being > 0 — is
+        // what defends against a regression that drops either channel from the search. Asserting only
+        // on the resulting Redis version is insufficient because implicit-only and daily-only searches
+        // both happen to produce a single result.
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -371,13 +392,25 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             }
             """);
 
+        // Track per-channel invocation. IntegrationPackageSearchService walks channels via
+        // Parallel.ForEachAsync, so callbacks may run concurrently; Interlocked guards that.
+        var implicitHits = 0;
+        var dailyHits = 0;
         var implicitCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref implicitHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
         };
         var dailyCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref dailyHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")]);
+            }
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -401,14 +434,22 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
+        // Structural regression signal: BOTH channels must have been searched.
+        Assert.True(implicitHits > 0, "Implicit channel was not queried — discovery is dropping it.");
+        Assert.True(dailyHits > 0, "Daily channel was not queried — pinned channel is being dropped from discovery.");
+
+        // Implicit channel result wins the dedupe (SelectPreferredIntegrationPackage prefers implicit).
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
-        Assert.Equal("2.0.0", integration.Version);
+        Assert.Equal("1.0.0", integration.Version);
     }
 
     [Fact]
-    public async Task IntegrationSearchCommandFormatJsonWithAppHostUsesConfiguredStagingChannelUnderStableCli()
+    public async Task IntegrationSearchCommandFormatJsonWithTypeScriptAppHostPinnedToStagingChannelAlsoSearchesImplicitChannel()
     {
+        // See companion test above for the full Layer 1 / Layer 2 regression story.
+        // This variant covers the staging-channel pin: a stable-shaped CLI dogfooder whose apphost
+        // was init'd by PR #17452 and now has `"channel": "staging"` written into aspire.config.json.
         var rawJson = string.Empty;
         var testInteractionService = new TestInteractionService
         {
@@ -424,13 +465,23 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             }
             """);
 
+        var implicitHits = 0;
+        var stagingHits = 0;
         var implicitCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref implicitHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
         };
         var stagingCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref stagingHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")]);
+            }
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -455,9 +506,208 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
 
+        Assert.True(implicitHits > 0, "Implicit channel was not queried — discovery is dropping it.");
+        Assert.True(stagingHits > 0, "Staging channel was not queried — pinned channel is being dropped from discovery.");
+
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
-        Assert.Equal("2.0.0", integration.Version);
+        Assert.Equal("1.0.0", integration.Version);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandFormatJsonWithTypeScriptAppHostPinnedToStableChannelStillSurfacesPrereleaseOnlyPackages()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/17725 specifically.
+        //
+        // Aspire.Hosting.Foundry has never shipped a stable version — it only exists as prerelease.
+        // Pre-fix, a TS apphost with `"channel": "stable"` in aspire.config.json got narrowed to the
+        // stable channel only. That channel is Quality.Stable, so only `prerelease: false` queries
+        // were issued, and Foundry never appeared in the result set. Users dogfooding the staging CLI
+        // (which writes `"channel": "stable"` for a stable-shaped build) could not discover Foundry.
+        //
+        // Post-fix the implicit channel (Quality.Both) is also searched, which DOES issue
+        // `prerelease: true` queries, and Foundry surfaces.
+        //
+        // The fake here respects the `prerelease` arg passed to GetIntegrationPackagesAsync so the
+        // stable channel sees Redis only, while the implicit channel sees Redis + Foundry. The
+        // existence of Foundry in the result is the regression signal.
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "stable"
+            }
+            """);
+
+        // Implicit channel: Quality.Both. Returns Redis when prerelease=false, Redis+Foundry when prerelease=true.
+        var implicitHits = 0;
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+            {
+                Interlocked.Increment(ref implicitHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>(
+                    prerelease
+                        ? [CreatePackage("Aspire.Hosting.Redis", "1.0.0"), CreatePackage("Aspire.Hosting.Foundry", "1.0.0-preview.1")]
+                        : [CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
+        };
+        // Stable channel: Quality.Stable. PackageChannel only issues prerelease=false queries against it,
+        // so Foundry (prerelease-only) never appears regardless of what the cache could return.
+        var stableHits = 0;
+        var stableCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref stableHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace, PackageChannelNames.Stable);
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, [new PackageMapping("Aspire*", "stable")], stableCache, new TestFeatures())
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search foundry --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // Both channels must be queried. The implicit channel is what surfaces Foundry (via
+        // prerelease=true), but the stable channel must also be searched so users who pinned to
+        // it don't lose stable-only packages.
+        Assert.True(implicitHits > 0, "Implicit channel was not queried — Foundry would not be discoverable.");
+        Assert.True(stableHits > 0, "Stable channel was not queried — pinned channel is being dropped from discovery.");
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Foundry", integration.Package);
+        Assert.Equal("1.0.0-preview.1", integration.Version);
+    }
+
+    [Theory]
+    [InlineData(null, false)]          // No persisted channel — only implicit is searched, the explicit channel is excluded.
+    [InlineData("\"daily\"", true)]    // Persisted daily channel — implicit AND daily are searched.
+    [InlineData("\"staging\"", true)]  // Persisted staging channel — implicit AND staging are searched. Proves the gate is channel-name-opaque,
+                                       // so the post-fix behavior verified for "daily" applies equally to a staging-stamped release where
+                                       // `aspire new` would write `"channel": "staging"` into the polyglot apphost's aspire.config.json.
+                                       // (See IntegrationPackageSearchService.GetIntegrationPackagesWithChannelsAsync: the gate is
+                                       //  `hasHives || !string.IsNullOrEmpty(configuredChannel)` — it never inspects the channel name.)
+    public async Task IntegrationSearchCommandTypeScriptAppHostPersistedChannelExpandsDiscoveryWithoutChangingPreferredResult(string? configFileChannelJson, bool expectExplicitChannelHit)
+    {
+        // Durable regression guard against re-introducing the Layer-1 narrowing bug.
+        //
+        // Pre-fix: aspire.config.json with `"channel"` set caused IntegrationPackageSearchService to
+        //   narrow the channel set to that single channel, so the with-channel arm would have returned
+        //   ONLY the daily channel's Redis (2.0.0) while the without-channel arm returned Redis 1.0.0.
+        // Post-fix two things hold simultaneously:
+        //   (a) Both arms yield the SAME preferred Redis to the user (1.0.0, the implicit channel
+        //       wins via SelectPreferredIntegrationPackage) — because the pin no longer overrides
+        //       what the user sees as the top-ranked result.
+        //   (b) The with-channel arm ALSO queries the pinned (daily) channel; the without-channel arm
+        //       does not — because the explicit channel set is gated on `hasHives || !empty(configuredChannel)`.
+        //
+        // Both halves matter. (a) alone would pass for an implementation that incorrectly narrowed
+        // to implicit-only when a channel was pinned (a different regression than the original bug
+        // but still wrong — it would mean users who pin to `daily` lose access to packages that only
+        // exist on the daily feed). (b) is the new structural guarantee on top of (a).
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        if (configFileChannelJson is not null)
+        {
+            File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), $$"""
+                {
+                  "channel": {{configFileChannelJson}}
+                }
+                """);
+        }
+
+        var implicitHits = 0;
+        var dailyHits = 0;
+        var implicitCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref implicitHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")]);
+            }
+        };
+        var dailyCache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) =>
+            {
+                Interlocked.Increment(ref dailyHits);
+                return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")]);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([
+                    PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures()),
+                    PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [new PackageMapping("Aspire*", "daily")], dailyCache, new TestFeatures())
+                ])
+            };
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search redis --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // (a) User-visible result is identical across arms: implicit Redis 1.0.0 wins.
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+        Assert.Equal("1.0.0", integration.Version);
+
+        // (b) Per-channel search invocation differs based on whether a channel was pinned.
+        Assert.True(implicitHits > 0, "Implicit channel must always be searched.");
+        if (expectExplicitChannelHit)
+        {
+            // The explicit (daily) channel registered in the fake PackagingService gets searched
+            // regardless of what channel NAME the apphost pinned (the gate is channel-name-opaque —
+            // it only checks `!string.IsNullOrEmpty(configuredChannel)`). That's how a real CLI
+            // built with `AspireCliChannel=staging` (writing `"channel": "staging"` into apphosts
+            // via `aspire new`) will exercise the same gate path as a CLI that pinned `"daily"`.
+            Assert.True(dailyHits > 0, $"With-channel arm: explicit channel must also be searched when apphost pin is non-empty (configured: {configFileChannelJson}).");
+        }
+        else
+        {
+            Assert.Equal(0, dailyHits);
+        }
     }
 
     [Fact]
@@ -552,6 +802,100 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
         Assert.Equal("1.0.0", integration.Version);
+    }
+
+    [Fact]
+    public async Task IntegrationSearchCommandStagingStampedCliWithPinnedStagingApphostQueriesBothImplicitAndStagingChannelsAndSurfacesPrereleaseOnlyPackages()
+    {
+        // High-confidence shipping-shape regression guard for #17724 and #17725.
+        //
+        // This test simulates EXACTLY what a real CLI built and shipped as staging will do when
+        // the user runs `aspire add <name>` against a polyglot apphost that `aspire new` created:
+        //
+        //   * The CLI binary is stamped `AspireCliChannel=staging` -> `IdentityChannel == "staging"`.
+        //     This triggers the real PackagingService.GetChannelsAsync to synthesize a real staging
+        //     channel alongside implicit + stable (no fake TestPackagingService is used here).
+        //   * `aspire new` writes `"channel": "staging"` into aspire.config.json (see
+        //     CliTemplateFactory.TypeScriptStarterTemplate). We mirror that here.
+        //   * There are NO PR hives. This is a real shipped install, not a dogfood/PR build.
+        //
+        // Pre-fix (the regression introduced before 13.4): the gate narrowed the search to ONLY the
+        // pinned staging channel. Implicit was excluded. Prerelease-only integrations (e.g.,
+        // Aspire.Hosting.Foundry) were invisible because the only feed queried was the staging
+        // feed, which doesn't surface them. The `aspire add kubernetes` regression had the same
+        // root cause: kubernetes was reachable via implicit (nuget.org) but invisible under the
+        // narrowed staging-only search.
+        //
+        // Post-fix invariants verified here:
+        //   (i)  BOTH implicit AND the synthesized staging channel are queried (cache call count
+        //        is >= 2). Pre-fix this would have been exactly 1.
+        //   (ii) A prerelease-only package returned by the cache only when prerelease=true (which
+        //        is what Quality.Both channels request) is reachable to the user.
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "staging"
+            }
+            """);
+
+        var totalCacheCalls = 0;
+        var prereleaseRequested = 0;
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, prerelease, _, _) =>
+            {
+                Interlocked.Increment(ref totalCacheCalls);
+                if (prerelease)
+                {
+                    Interlocked.Increment(ref prereleaseRequested);
+                    return Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Foundry", "13.4.0-rc.1")]);
+                }
+                return Task.FromResult<IEnumerable<NuGetPackage>>([]);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            // Stamp the running CLI as the staging release identity. The real PackagingService
+            // (left un-overridden here) reads this from CliExecutionContext.IdentityChannel and
+            // synthesizes the staging channel automatically (see PackagingService.GetChannelsAsync
+            // -> stagingIdentityChannel branch).
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace, PackageChannelNames.Staging);
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.NuGetPackageCacheFactory = _ => cache;
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search foundry --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        // (ii) The prerelease-only package is reachable to the user.
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Foundry", integration.Package);
+        Assert.Equal("13.4.0-rc.1", integration.Version);
+
+        // (i) Both implicit AND staging were queried. Pre-fix narrowing would have produced exactly 1 call.
+        // Real PackagingService.GetChannelsAsync under IdentityChannel=Staging returns at least
+        // [implicit, stable, staging]; the IPSS gate now lets all of them through (hasHives=false,
+        // configuredChannel="staging" -> not empty -> gate evaluates true). At minimum the implicit
+        // and staging channels must have run, so we require >= 2 calls. Using `>= 2` rather than
+        // `== N` keeps the test robust to PackagingService adding additional explicit channels
+        // (e.g., stable) without weakening the regression guard.
+        Assert.True(totalCacheCalls >= 2, $"Expected >= 2 cache calls (both implicit and staging channels), got {totalCacheCalls}. Pre-fix narrowing would have produced 1 call.");
+        Assert.True(prereleaseRequested >= 1, $"Expected at least one channel to request prerelease=true (Quality.Both channels do); got {prereleaseRequested}.");
     }
 
     [Fact]
@@ -1121,6 +1465,76 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("13.2.0", selectedPackageVersion);
         Assert.Equal(2, exactMatchQueries.Count);
         Assert.All(exactMatchQueries, query => Assert.Equal("Aspire.Hosting.Redis", query));
+    }
+
+    [Theory]
+    [InlineData("redis")]
+    [InlineData("Aspire.Hosting.Redis")]
+    public async Task AddCommandInteractiveDoesNotPromptForIntegrationWhenExactMatchIsFound(string integrationName)
+    {
+        var promptedForIntegration = false;
+        var promptedForVersion = false;
+        var selectedPackageName = string.Empty;
+        var selectedPackageVersion = string.Empty;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationCallback = (packages) =>
+                {
+                    promptedForIntegration = true;
+                    throw new InvalidOperationException("Should not have been prompted for integration selection.");
+                };
+                prompter.PromptForIntegrationVersionCallback = (packages) =>
+                {
+                    promptedForVersion = true;
+                    return packages.Single(package => package.Package.Version == "13.2.0");
+                };
+
+                return prompter;
+            };
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, invocationOptions, cancellationToken) =>
+                {
+                    return (0, [
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "nuget", Version = "13.3.0" },
+                        new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "nuget", Version = "13.2.0" }
+                    ]);
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, invocationOptions, cancellationToken) =>
+                {
+                    selectedPackageName = packageName;
+                    selectedPackageVersion = packageVersion;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add {integrationName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.False(promptedForIntegration);
+        Assert.True(promptedForVersion);
+        Assert.Equal("Aspire.Hosting.Redis", selectedPackageName);
+        Assert.Equal("13.2.0", selectedPackageVersion);
     }
 
     [Fact]
@@ -2286,6 +2700,12 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
                 return prompter;
             };
 
+            // Fuzzy fallback only fires in interactive mode after the Layer-3 fix for #17724.
+            // The default test host environment is non-interactive (mirroring CI), so opt this
+            // fixture into the interactive path explicitly: the test asserts that an interactive
+            // user can still discover PostgreSQL by typing "postgre".
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
 
             options.DotNetCliRunnerFactory = (sp) =>
@@ -2339,6 +2759,251 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, exitCode);
         // Verify that PostgreSQL package was added through fuzzy matching
         Assert.Equal("Aspire.Hosting.PostgreSQL", addedPackage);
+    }
+
+    [Fact]
+    public async Task AddCommand_NonInteractive_NoExactMatchWithoutVersion_FailsInsteadOfFuzzyAutoPick_Regression17724()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/17724.
+        //
+        // Pre-fix: `aspire add kube --non-interactive` had no exact match for "kube" (none of the
+        //   packages are literally named "kube"), so AddCommand fell back to fuzzy search. The fuzzy
+        //   candidate list was then passed to GetPackageByInteractiveFlow, which in non-interactive
+        //   mode auto-selected `distinctPackages.First()` (AddCommand.cs:368-369) and silently added
+        //   the wrong package. In the user's report this was Aspire.Hosting.Azure because the
+        //   companion Layer-1 bug (#17725 / IntegrationPackageSearchService narrowing) had filtered
+        //   prerelease packages out, leaving Azure as the only fuzzy candidate.
+        //
+        // Fix: AddCommand now refuses to fall back to fuzzy search whenever the host is non-interactive
+        //   and no exact match was found, regardless of whether --version was supplied. The error
+        //   surfaces the new NonInteractiveRequiresExactPackageMatch resource so the user/script
+        //   knows to supply the full package id or friendly name.
+        //
+        // This test uses the simpler C# project flow (TestDotNetCliRunner stub) because the bug is
+        // in AddCommand's non-interactive handling, not in package discovery — the discovery path is
+        // covered by the cross-language parity test above. The Aspire.Hosting.Azure and
+        // Aspire.Hosting.Kubernetes packages both fuzzy-match "kube"; pre-fix the first one
+        // (Aspire.Hosting.Azure, alphabetical) would have been silently picked.
+        var addPackageWasCalled = false;
+        var testInteractionService = new TestInteractionService();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    return (
+                        0,
+                        new NuGetPackage[]
+                        {
+                            new() { Id = "Aspire.Hosting.Azure", Source = "nuget", Version = "9.2.0" },
+                            new() { Id = "Aspire.Hosting.Kubernetes", Source = "nuget", Version = "9.2.0" }
+                        });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
+                {
+                    addPackageWasCalled = true;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add kube");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
+        Assert.False(addPackageWasCalled, "AddPackageAsync must not be called when there is no exact match in non-interactive mode.");
+        Assert.Contains(string.Format(AddCommandStrings.NonInteractiveRequiresExactPackageMatch, "kube"), testInteractionService.DisplayedErrors);
+    }
+
+    [Fact]
+    public async Task AddCommand_NonInteractive_ExactMatchWithoutVersion_StillSucceeds()
+    {
+        // Companion regression guard for #17724: ensures the new non-interactive guard ONLY fires
+        // when there is no exact match. An exact match by package id (or friendly name) must still
+        // install successfully — this is the documented happy path for CI/scripted usage.
+        var addedPackage = string.Empty;
+        var testInteractionService = new TestInteractionService();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    return (
+                        0,
+                        new NuGetPackage[]
+                        {
+                            new() { Id = "Aspire.Hosting.Azure", Source = "nuget", Version = "9.2.0" },
+                            new() { Id = "Aspire.Hosting.Kubernetes", Source = "nuget", Version = "9.2.0" }
+                        });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
+                {
+                    addedPackage = packageName;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        // "kubernetes" is the friendly name (Aspire.Hosting.Kubernetes → friendlyName "kubernetes"),
+        // so this is an exact match and must succeed.
+        var result = command.Parse("add kubernetes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.Equal("Aspire.Hosting.Kubernetes", addedPackage);
+    }
+
+    [Fact]
+    public async Task AddCommand_Interactive_SingleFuzzyMatchPromptsBeforeAdding_Regression17724()
+    {
+        var promptedPackages = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
+        var addedPackage = string.Empty;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationCallback = (packages) =>
+                {
+                    promptedPackages.AddRange(packages);
+                    return packages.Single();
+                };
+
+                return prompter;
+            };
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    return (
+                        0,
+                        new NuGetPackage[]
+                        {
+                            new() { Id = "Aspire.Hosting.Azure", Source = "nuget", Version = "9.2.0" }
+                        });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
+                {
+                    addedPackage = packageName;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add kube");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var promptedPackage = Assert.Single(promptedPackages);
+        Assert.Equal(0, exitCode);
+        Assert.Equal("Aspire.Hosting.Azure", promptedPackage.Package.Id);
+        Assert.Equal("Aspire.Hosting.Azure", addedPackage);
+    }
+
+    [Fact]
+    public async Task AddCommand_Interactive_NoFuzzyMatchSinglePackagePromptsBeforeAdding()
+    {
+        var promptedPackages = new List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>();
+        var displayedSubtleMessage = string.Empty;
+        var addedPackage = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplaySubtleMessageCallback = message => displayedSubtleMessage = message
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.AddCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                var prompter = new TestAddCommandPrompter(interactionService);
+                prompter.PromptForIntegrationCallback = (packages) =>
+                {
+                    promptedPackages.AddRange(packages);
+                    return packages.Single();
+                };
+
+                return prompter;
+            };
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, options, cancellationToken) =>
+                {
+                    return (
+                        0,
+                        new NuGetPackage[]
+                        {
+                            new() { Id = "Aspire.Hosting.Redis", Source = "nuget", Version = "9.2.0" }
+                        });
+                };
+
+                runner.AddPackageAsyncCallback = (projectFilePath, packageName, packageVersion, nugetSource, noRestore, options, cancellationToken) =>
+                {
+                    addedPackage = packageName;
+                    return 0;
+                };
+
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse("add zzzzzzzzzz");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        var promptedPackage = Assert.Single(promptedPackages);
+        Assert.Equal(0, exitCode);
+        Assert.Equal(string.Format(AddCommandStrings.NoPackagesMatchedSearchTerm, "zzzzzzzzzz"), displayedSubtleMessage);
+        Assert.Equal("Aspire.Hosting.Redis", promptedPackage.Package.Id);
+        Assert.Equal("Aspire.Hosting.Redis", addedPackage);
     }
 
     [Fact]
@@ -2886,6 +3551,10 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
                 var interactionService = sp.GetRequiredService<IInteractionService>();
                 return new TestAddCommandPrompter(interactionService);
             };
+
+            // Fuzzy fallback only fires in interactive mode after the Layer-3 fix for #17724;
+            // see companion comment on AddCommand_WithStartsWith_FindsMatchUsingFuzzySearch.
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
 
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
 

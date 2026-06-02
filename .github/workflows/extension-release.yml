@@ -397,7 +397,10 @@ jobs:
                 echo ""
                 echo "$ENTRY"
                 echo ""
-                tail -n +2 "$CHANGELOG"
+                # The changelog starts with a title followed by a blank line. The
+                # new entry already ends with its own separator, so strip only the
+                # leading blank lines from the old body before appending it.
+                tail -n +2 "$CHANGELOG" | sed '/[^[:space:]]/,$!d'
               } > "${CHANGELOG}.tmp"
             else
               echo "⚠️ CHANGELOG.md does not start with a Markdown header. Prepending entry at the top."
@@ -533,25 +536,31 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           NEW_VERSION: ${{ inputs.release_version }}
           REPOSITORY: ${{ github.repository }}
+          SERVER_URL: ${{ github.server_url }}
         run: |
           set -eo pipefail
 
           WORK_DIR="${RUNNER_TEMP}/extension-release/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           BRANCH_NAME="extension-release/v${NEW_VERSION}"
 
-          # Configure git author metadata. The GitHub App token is supplied only to
-          # the commands that need it so it is not persisted in .git/config.
+          # GitHub's Git HTTPS endpoint expects token credentials in the URL/credential
+          # flow (the same pattern used by pr-docs-check.md and
+          # release-update-support-mdx.md). Supplying a bearer extraHeader is not enough
+          # for `git push`, which otherwise falls back to prompting for a username.
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          export GIT_TERMINAL_PROMPT=0
+          SERVER_URL_STRIPPED="${SERVER_URL#https://}"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@${SERVER_URL_STRIPPED}/${REPOSITORY}.git"
 
           # Create branch and commit
           git checkout -B "$BRANCH_NAME"
           git add extension/package.json extension/CHANGELOG.md
           git commit -m "Prepare VS Code extension release v${NEW_VERSION}"
-          if git -c http.extraHeader="AUTHORIZATION: bearer ${GH_TOKEN}" ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
-            git -c http.extraHeader="AUTHORIZATION: bearer ${GH_TOKEN}" fetch origin "$BRANCH_NAME:refs/remotes/origin/$BRANCH_NAME"
+          if git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
+            git fetch origin "$BRANCH_NAME:refs/remotes/origin/$BRANCH_NAME"
           fi
-          git -c http.extraHeader="AUTHORIZATION: bearer ${GH_TOKEN}" push --force-with-lease origin "$BRANCH_NAME"
+          git push --force-with-lease origin "$BRANCH_NAME"
 
           # Create or update draft PR. Capture the PR number directly from each
           # path (the update path already resolved it; `gh pr create` prints the

@@ -74,6 +74,18 @@ network:
 safe-outputs:
   push-to-pull-request-branch:
     max: 1
+    # Skip gh-aw's branch-protection pre-flight check. By default this safe output
+    # reads branch protection before pushing, which makes gh-aw request
+    # `administration: read` on the minted aspire-repo-bot app token. That scope is
+    # NOT granted to the App installation, so the `Generate GitHub App token` step
+    # fails with a 422 ("The permissions requested are not granted to this
+    # installation") and the changelog is never pushed. The PR head we push to is a
+    # short-lived release branch created moments earlier by extension-release.yml and
+    # is never protected, so the pre-flight check has no value here. Disabling it
+    # drops `administration: read` from the token request, leaving only the already
+    # granted `contents: write` + `pull-requests: write`.
+    # See https://github.com/github/gh-aw push_to_pull_request_branch.go (check-branch-protection).
+    check-branch-protection: false
     # Fail (don't just warn) if the agent emits a push with no diff. Every
     # legitimate run that gets this far edits extension/CHANGELOG.md (even the
     # "no user-facing changes" case rewrites the placeholder), and the benign
@@ -244,6 +256,11 @@ style template. Match:
   `### Fixes`).
 - Bullet style and level of detail (one concise line per change).
 - Whether bullets reference PRs by number (e.g. `(#NNNN)`) and/or credit authors.
+- When a change has both a tracking issue and an implementation pull request, keep
+  the references distinct and use the correct GitHub URL type for each
+  (`/issues/` for issues, `/pull/` for pull requests). Do not replace a
+  user-facing issue reference with only the implementation PR number if the PR
+  title or body makes the issue the canonical tracking item.
 
 **Do not invent a new format.** Match what is already there. Keep bullets
 concise, factual, and user-facing — describe what changed for someone using the
@@ -259,6 +276,9 @@ Edit `extension/CHANGELOG.md` in the workspace so that:
   is removed and replaced with your generated notes. The marker MUST NOT survive
   in the final file; if it did, a later run (e.g. from the label being
   re-applied) would have no reliable way to tell the work was already done.
+- The final Markdown contains no multiple consecutive blank lines (`\n\n\n`),
+  which would fail the repository's Markdownlint `MD012/no-multiple-blanks`
+  required check.
 - All other existing entries below are left untouched.
 
 If, after excluding noise in Step 4, there are **no** user-facing changes,

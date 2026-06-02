@@ -126,7 +126,7 @@ public sealed class AssistantChatDataContext
         // If support is added for ordering logs by timestamp then improve this.
         var logs = TelemetryRepository.GetLogs(new GetLogsContext
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = resourceKey is { } rk ? [rk] : [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -170,7 +170,7 @@ public sealed class AssistantChatDataContext
 
         var traces = TelemetryRepository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = resourceKey is { } rk ? [rk] : [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []
@@ -207,7 +207,7 @@ public sealed class AssistantChatDataContext
 
         var logs = TelemetryRepository.GetLogs(new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             Count = int.MaxValue,
             StartIndex = 0,
             Filters = [traceIdFilter]
