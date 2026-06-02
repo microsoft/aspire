@@ -61,7 +61,10 @@ export interface JavaScriptRuntimeLaunchConfiguration extends ExecutableLaunchCo
     script_path?: string;
     runtime_executable?: string;
     working_directory?: string;
-    launch_method?: string;
+    // Optional on purpose: an older AppHost (version skew vs the extension) won't emit this field at
+    // all, leaving it undefined. Undefined is the legitimate legacy signal that tells the extension to
+    // fall back to positional/runtime inference. Do not make it required.
+    launch_method?: "direct" | "package-manager";
 }
 
 export function isJavaScriptRuntimeLaunchConfiguration(obj: any): obj is JavaScriptRuntimeLaunchConfiguration {

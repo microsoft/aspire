@@ -43,7 +43,19 @@ export const bunDebuggerExtension: ResourceDebuggerExtension = {
             debugConfiguration.args = subcommand.slice(1);
         }
         else {
-            debugConfiguration.args = subcommand.slice(1);
+            // direct mode args examples:
+            //   ["index.ts", "--flag"]  -> program "index.ts" is args[0]; drop it -> args ["--flag"]
+            //   ["--flag", "value"]     -> args[0] is NOT the script path; keep all args
+            // DCP often repeats the resolved script path as args[0]; only drop it when it actually
+            // matches the script path / program so a genuine first user argument is not lost.
+            const scriptPath = getJavaScriptRuntimeTargetPath(config);
+            const firstArg = subcommand[0];
+            if (firstArg !== undefined && (firstArg === scriptPath || firstArg === debugConfiguration.program)) {
+                debugConfiguration.args = subcommand.slice(1);
+            }
+            else {
+                debugConfiguration.args = subcommand;
+            }
 
             // "program" is normally already set upstream (scaffold default or user override); only fall
             // back when neither supplied one.

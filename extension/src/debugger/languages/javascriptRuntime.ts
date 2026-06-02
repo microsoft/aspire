@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
+import { extensionLogOutputChannel } from "../../utils/logging";
 
 export const jsRuntimeBaseFileTypes = ['.js', '.ts', '.mjs', '.mts', '.cjs', '.cts'];
 
@@ -20,7 +21,23 @@ export function getJavaScriptRuntimeTargetPath(launchConfig: JavaScriptRuntimeLa
 export function resolveJavaScriptLaunchMethod(
     config: JavaScriptRuntimeLaunchConfiguration,
     inferLegacy: () => string): string {
-    return config.launch_method || inferLegacy();
+    const launchMethod = config.launch_method;
+
+    // Undefined/empty launch_method is the expected legacy signal: an older AppHost (version skew vs
+    // the extension) does not emit the field, so we silently fall back to positional/runtime inference.
+    if (!launchMethod) {
+        return inferLegacy();
+    }
+
+    if (launchMethod === launchMethodDirect || launchMethod === launchMethodPackageManager) {
+        return launchMethod;
+    }
+
+    // A non-empty but unrecognized value indicates contract drift between the hosting side and the
+    // extension. We must NOT silently treat it as "direct" (that could launch the wrong command), so we
+    // log a warning and fall back to inference instead.
+    extensionLogOutputChannel.warn(`Unrecognized launch_method '${launchMethod}'; falling back to inference.`);
+    return inferLegacy();
 }
 
 export function getJavaScriptRuntimeDisplayName(

@@ -96,7 +96,7 @@ suite('Bun Debugger Tests', () => {
         assert.deepStrictEqual(debugConfig.args, []);
     });
 
-    test('honors an explicit "direct" launch_method over positional inference', async () => {
+    test('honors an explicit "direct" launch_method and preserves args when args[0] is not the script path', async () => {
         const launchConfig: BunLaunchConfiguration = {
             type: 'bun',
             runtime_executable: 'bun',
@@ -106,11 +106,12 @@ suite('Bun Debugger Tests', () => {
         };
         const debugConfig = createDebugConfig('/workspace/app/index.ts');
 
-        // args[0] === "run" would infer package-manager mode; launch_method must force direct mode.
+        // args[0] === "run" would infer package-manager mode; launch_method forces direct mode. In
+        // direct mode args[0] ("run") is NOT the script path, so the guarded slice keeps every arg.
         await configure(launchConfig, ['run', 'start'], debugConfig);
 
         assert.strictEqual(debugConfig.program, '/workspace/app/index.ts');
-        assert.deepStrictEqual(debugConfig.args, ['start']);
+        assert.deepStrictEqual(debugConfig.args, ['run', 'start']);
     });
 });
 
