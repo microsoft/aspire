@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Globalization;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
