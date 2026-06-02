@@ -142,9 +142,11 @@ internal sealed class TestKubernetesService : IKubernetesService
                 continue;
             }
 
+            var hostPort = container.Spec.Ports?.FirstOrDefault(port => port.ContainerPort == serviceProduced.Port)?.HostPort;
+
             service.Status ??= new ServiceStatus();
             service.Status.EffectiveAddress = service.Spec.Address ?? "localhost";
-            service.Status.EffectivePort = Interlocked.Increment(ref _nextPort);
+            service.Status.EffectivePort = hostPort ?? Interlocked.Increment(ref _nextPort);
             modifiedResources.Add(service);
         }
 
