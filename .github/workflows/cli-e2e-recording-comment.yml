@@ -451,7 +451,7 @@ jobs:
                   fi
                 fi
 
-                # Build the detail cell with links separated by <br />
+                # Build the detail cell with links separated by ·
                 DETAIL_PARTS=""
                 if [ -n "$ASCIINEMA_URL" ]; then
                   DETAIL_PARTS="[Recording](${ASCIINEMA_URL})"
@@ -463,10 +463,10 @@ jobs:
                   FAIL_COUNT=$((FAIL_COUNT + 1))
                 fi
                 if [ -n "$JOB_URL" ]; then
-                  DETAIL_PARTS="${DETAIL_PARTS} <br /> [Job](${JOB_URL})"
+                  DETAIL_PARTS="${DETAIL_PARTS} · [Job](${JOB_URL})"
                 fi
                 if [ -n "$ARTIFACTS_URL" ]; then
-                  DETAIL_PARTS="${DETAIL_PARTS} <br /> [CLI logs](${ARTIFACTS_URL})"
+                  DETAIL_PARTS="${DETAIL_PARTS} · [CLI logs](${ARTIFACTS_URL})"
                 fi
 
                 # Build the table row once; append to both tables as needed.
