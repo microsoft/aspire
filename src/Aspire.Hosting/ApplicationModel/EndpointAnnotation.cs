@@ -386,7 +386,18 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// </summary>
     public NetworkEndpointSnapshotList AllAllocatedEndpoints { get; } = new();
 
-    internal Func<NetworkIdentifier, AllocatedEndpoint?>? OnDemandAllocatedEndpointProvider { get; set; }
+    private Func<NetworkIdentifier, AllocatedEndpoint?>? _onDemandAllocatedEndpointProvider;
+
+    internal Func<NetworkIdentifier, AllocatedEndpoint?>? OnDemandAllocatedEndpointProvider
+    {
+        get => Interlocked.CompareExchange(ref _onDemandAllocatedEndpointProvider, null, null);
+        set => Interlocked.Exchange(ref _onDemandAllocatedEndpointProvider, value);
+    }
+
+    internal void ClearOnDemandAllocatedEndpointProvider()
+    {
+        Interlocked.Exchange(ref _onDemandAllocatedEndpointProvider, null);
+    }
 
     internal Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkId, CancellationToken cancellationToken = default)
     {
@@ -395,20 +406,12 @@ public sealed class EndpointAnnotation : IResourceAnnotation
             return Task.FromResult(endpoint);
         }
 
-        lock (this)
+        if (OnDemandAllocatedEndpointProvider is { } allocatedEndpointProvider)
         {
-            if (AllAllocatedEndpoints.TryGetAllocatedEndpoint(networkId, out endpoint))
+            endpoint = allocatedEndpointProvider(networkId);
+            if (endpoint is not null)
             {
                 return Task.FromResult(endpoint);
-            }
-
-            if (OnDemandAllocatedEndpointProvider is { } allocatedEndpointProvider)
-            {
-                endpoint = allocatedEndpointProvider(networkId);
-                if (endpoint is not null)
-                {
-                    return Task.FromResult(endpoint);
-                }
             }
         }
 

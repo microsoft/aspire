@@ -987,15 +987,12 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 ContainerPort = ea.TargetPort,
             };
 
-            lock (ea)
-            {
-                if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
-                {
-                    sp.Service.Spec.Port ??= hostPort;
-                    portSpec.HostPort = hostPort;
-                }
+            ea.ClearOnDemandAllocatedEndpointProvider();
 
-                ea.OnDemandAllocatedEndpointProvider = null;
+            if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
+            {
+                sp.Service.Spec.Port ??= hostPort;
+                portSpec.HostPort = hostPort;
             }
 
             switch (ea.Protocol)
