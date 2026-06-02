@@ -77,7 +77,6 @@ export default class AspireDcpServer {
 
     private constructor(
         info: DcpServerConnectionInfo,
-        app: express.Express,
         server: https.Server,
         wss: WebSocketServer,
         runsBySession: Map<string, AspireResourceDebugSession[]>,
@@ -90,7 +89,6 @@ export default class AspireDcpServer {
         debugSessionStats: Map<string, DebugSessionAggregateStats>,
         testRunSessionManager: TestRunSessionManager) {
         this.connectionInfo = info;
-        this.app = app;
         this.server = server;
         this.wss = wss;
         this.runsBySession = runsBySession;
@@ -660,7 +658,7 @@ export default class AspireDcpServer {
                         certificate: certBase64
                     };
                     testRunSessionManager = new TestRunSessionManager(info);
-                    dcpServerInstance = new AspireDcpServer(info, app, server, wss, runsBySession, testRunSessionLeaseIdByRunId, testRunSessionStartByRunId, wsBySession, pendingNotificationQueueByDcpId, dashboardTelemetry, runTelemetryById, debugSessionStats, testRunSessionManager);
+                    dcpServerInstance = new AspireDcpServer(info, server, wss, runsBySession, testRunSessionLeaseIdByRunId, testRunSessionStartByRunId, wsBySession, pendingNotificationQueueByDcpId, dashboardTelemetry, runTelemetryById, debugSessionStats, testRunSessionManager);
                     resolve(dcpServerInstance);
                 } else {
                     reject(new Error('Failed to get server address'));

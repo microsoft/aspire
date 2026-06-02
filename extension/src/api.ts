@@ -69,7 +69,10 @@ export interface ResourceInfo {
 /**
  * Creates the public API object backed by the given data repository.
  */
-export function createAspireExtensionApi(dataRepository: AppHostDataRepository, terminalProvider: AspireTerminalProvider, dcpServer: AspireDcpServer): AspireExtensionApi {
+export function createAspireExtensionApi(dataRepository: AppHostDataRepository, terminalProvider: AspireTerminalProvider, dcpServer: {
+	acquireTestRunSession: (options: TestRunSessionAcquireOptions) => AcquiredTestRunSession,
+	releaseTestRunSession: (id: string) => Promise<void>
+}): AspireExtensionApi {
 	return {
 		async getRunningAppHosts(): Promise<AppHostInfo[]> {
 			const appHosts = await dataRepository.fetchAppHostsOnce();

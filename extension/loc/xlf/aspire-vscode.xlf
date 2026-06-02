@@ -19,6 +19,9 @@
     <trans-unit id="viewsContainers.aspirePanel.title">
       <source xml:lang="en">Aspire</source>
     </trans-unit>
+    <trans-unit id="extension.title">
+      <source xml:lang="en">Aspire</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireCliVersion">
       <source xml:lang="en">Aspire CLI Version: {0}.</source>
     </trans-unit>
@@ -33,9 +36,6 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireHostingSdkVersion">
       <source xml:lang="en">Aspire Hosting SDK Version: {0}.</source>
-    </trans-unit>
-    <trans-unit id="extension.title">
-      <source xml:lang="en">Aspire</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.welcome.description">
       <source xml:lang="en">Aspire helps you build observable, production-ready distributed apps — orchestrating front ends, APIs, containers, and databases from code.&#10;&#10;It works with **any language**: C#, Python, JavaScript, Go, Java, and more.</source>
@@ -66,6 +66,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.authorizationAndDcpHeadersRequired">
       <source xml:lang="en">Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.authorizationHeaderRequired">
+      <source xml:lang="en">Authorization header is required.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.authorizationHeaderMustStartWithBearer">
       <source xml:lang="en">Authorization header must start with &apos;Bearer &apos;.</source>
