@@ -51,6 +51,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private FluentDataGrid<OtlpLogEntry>? _dataGrid;
     private GridColumnManager _manager = null!;
     private IList<GridColumn> _gridColumns = null!;
+    private CancellationTokenSource? _filterDebounceCts;
 
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
@@ -214,11 +215,30 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             new SelectViewModel<LogLevel?> { Id = LogLevel.Critical, Name = "Critical" },
         };
 
+        // Populate the per-column log level filter with all known severities, all checked by default.
+        ViewModel.LogLevelFilterValues.TryAdd("Trace", true);
+        ViewModel.LogLevelFilterValues.TryAdd("Debug", true);
+        ViewModel.LogLevelFilterValues.TryAdd("Information", true);
+        ViewModel.LogLevelFilterValues.TryAdd("Warning", true);
+        ViewModel.LogLevelFilterValues.TryAdd("Error", true);
+        ViewModel.LogLevelFilterValues.TryAdd("Critical", true);
+        // OTLP records without a recognized severity map to LogLevel.None (see OtlpLogEntry.MapSeverity).
+        // Seed it so those entries are both visible by default and controllable from the column menu.
+        ViewModel.LogLevelFilterValues.TryAdd("None", true);
+
         PageViewModel = new StructuredLogsPageViewModel
         {
             SelectedLogLevel = _logLevels[0],
             SelectedResource = _allResource
         };
+
+        // Register column-level filters that use the per-column checkbox state.
+        ViewModel.AddColumnFilter(new ColumnValueFilter(
+            ViewModel.LogLevelFilterValues,
+            logValueExtractor: entry => entry.Severity.ToString()));
+        ViewModel.AddColumnFilter(new ColumnValueFilter(
+            ViewModel.ResourceFilterValues,
+            logValueExtractor: entry => entry.ResourceView.Resource.ResourceName));
 
         UpdateResources();
         _resourcesSubscription = TelemetryRepository.OnNewResources(() => InvokeAsync(() =>
@@ -279,6 +299,12 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _resources = TelemetryRepository.GetResources();
         _resourceViewModels = ResourcesSelectHelpers.CreateResources(_resources);
         _resourceViewModels.Insert(0, _allResource);
+
+        // Keep the per-column resource filter in sync with discovered resources.
+        foreach (var resource in _resources)
+        {
+            ViewModel.ResourceFilterValues.TryAdd(resource.ResourceName, true);
+        }
     }
 
     private Task HandleSelectedResourceChangedAsync()
@@ -406,6 +432,29 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         await ClearSelectedLogEntryAsync();
     }
 
+    private async Task OnColumnFilterChangedAsync()
+    {
+        // Debounce rapid checkbox toggles to avoid N separate data refreshes.
+        // Dispose the superseded source after cancelling so rapid toggles don't leak
+        // CancellationTokenSource instances (each holds a timer registration).
+        _filterDebounceCts?.Cancel();
+        _filterDebounceCts?.Dispose();
+        var cts = _filterDebounceCts = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(150), cts.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        ViewModel.RecalculateColumnFilterCaches();
+        ViewModel.ClearData();
+        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
     private string GetResourceName(OtlpResourceView app) => OtlpHelpers.GetResourceName(app.Resource, _resources);
 
     private string GetRowClass(OtlpLogEntry entry)
@@ -471,6 +520,8 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public void Dispose()
     {
         _cts.Cancel();
+        _filterDebounceCts?.Cancel();
+        _filterDebounceCts?.Dispose();
         _aiContext?.Dispose();
         _resourcesSubscription?.Dispose();
         _logsSubscription?.Dispose();

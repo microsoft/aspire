@@ -46,7 +46,7 @@
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                          title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageFilter)]"
+                          title="@ControlsStringsLoc[nameof(ControlsStrings.FilterAllColumnsTitle)]"
                           slot="end" />
 
             <DesktopToolbarDivider />
@@ -133,12 +133,22 @@
                                                 Class="main-grid enable-row-click">
                                     <ChildContent>
                                         <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsResourceColumnHeader)]" Tooltip="true" TooltipText="@(e => GetResourceName(e.ResourceView))">
-                                            <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(context.ResourceView)));">
-                                                @GetResourceName(context.ResourceView)
-                                            </span>
+                                            <ColumnOptions>
+                                                <ColumnFilterMenu Values="@ViewModel.ResourceFilterValues" OnFilterChanged="@OnColumnFilterChangedAsync" />
+                                            </ColumnOptions>
+                                            <ChildContent>
+                                                <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(context.ResourceView)));">
+                                                    @GetResourceName(context.ResourceView)
+                                                </span>
+                                            </ChildContent>
                                         </AspireTemplateColumn>
                                         <AspireTemplateColumn ColumnId="@LogLevelColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]">
-                                            <LogLevelColumnDisplay LogEntry="@context" />
+                                            <ColumnOptions>
+                                                <ColumnFilterMenu Values="@ViewModel.LogLevelFilterValues" OnFilterChanged="@OnColumnFilterChangedAsync" />
+                                            </ColumnOptions>
+                                            <ChildContent>
+                                                <LogLevelColumnDisplay LogEntry="@context" />
+                                            </ChildContent>
                                         </AspireTemplateColumn>
                                         <AspireTemplateColumn ColumnId="@TimestampColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, context.TimeStamp, MillisecondsDisplay.Full, CultureInfo.CurrentCulture))" Tooltip="true">
                                             @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, context.TimeStamp, MillisecondsDisplay.Truncated)

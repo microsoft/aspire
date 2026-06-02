@@ -47,6 +47,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private AspirePageContentLayout? _contentLayout;
     private FluentDataGrid<OtlpTrace> _dataGrid = null!;
     private GridColumnManager _manager = null!;
+    private CancellationTokenSource? _filterDebounceCts;
 
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
@@ -187,6 +188,12 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         _spanTypes = SpanType.CreateKnownSpanTypes(ControlsStringsLoc);
         PageViewModel = new TracesPageViewModel { SelectedResource = _allResource, SelectedSpanType = _spanTypes[0] };
 
+        // Register a column-level filter that uses the per-column resource checkbox state.
+        TracesViewModel.AddColumnFilter(new ColumnValueFilter(
+            TracesViewModel.ResourceFilterValues,
+            logValueExtractor: _ => string.Empty,
+            spanValueExtractor: span => span.Source.Resource.ResourceName));
+
         UpdateResources();
         _resourcesSubscription = TelemetryRepository.OnNewResources(callback: () => InvokeAsync(workItem: () =>
         {
@@ -213,6 +220,12 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         _resources = TelemetryRepository.GetResources(includeUninstrumentedPeers: true);
         _resourceViewModels = ResourcesSelectHelpers.CreateResources(_resources);
         _resourceViewModels.Insert(0, _allResource);
+
+        // Keep the per-column resource filter in sync with discovered resources.
+        foreach (var resource in _resources)
+        {
+            TracesViewModel.ResourceFilterValues.TryAdd(resource.ResourceName, true);
+        }
 
         UpdateSubscription();
     }
@@ -249,6 +262,31 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private async Task HandleAfterFilterBindAsync()
     {
         TracesViewModel.FilterText = _filter;
+        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
+    private async Task OnColumnFilterChangedAsync()
+    {
+        // Debounce rapid checkbox toggles to avoid N separate data refreshes.
+        // Each invocation cancels the previous pending refresh and waits briefly
+        // before committing the query, so only the final state is applied.
+        // Dispose the superseded source after cancelling so rapid toggles don't leak
+        // CancellationTokenSource instances (each holds a timer registration).
+        _filterDebounceCts?.Cancel();
+        _filterDebounceCts?.Dispose();
+        var cts = _filterDebounceCts = new CancellationTokenSource();
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(150), cts.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        TracesViewModel.RecalculateColumnFilterCaches();
+        TracesViewModel.ClearData();
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
 
@@ -304,6 +342,8 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     public void Dispose()
     {
+        _filterDebounceCts?.Cancel();
+        _filterDebounceCts?.Dispose();
         _aiContext?.Dispose();
         _resourcesSubscription?.Dispose();
         _tracesSubscription?.Dispose();
