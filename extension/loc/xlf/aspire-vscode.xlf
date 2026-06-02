@@ -67,6 +67,9 @@
     <trans-unit id="aspire-vscode.strings.authorizationAndDcpHeadersRequired">
       <source xml:lang="en">Authorization and Microsoft-Developer-DCP-Instance-ID headers are required.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.authorizationHeaderRequired">
+      <source xml:lang="en">Authorization header is required.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.authorizationHeaderMustStartWithBearer">
       <source xml:lang="en">Authorization header must start with &apos;Bearer &apos;.</source>
     </trans-unit>
@@ -81,6 +84,12 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.buildFailedWithExitCode">
       <source xml:lang="en">Build failed with exit code {0}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.bunLabel">
+      <source xml:lang="en">Bun</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.bunDisplayName">
+      <source xml:lang="en">Bun: {0}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.lookingForDevkitBuildTask">
       <source xml:lang="en">C# Dev Kit is installed, looking for C# Dev Kit build task...</source>
@@ -369,6 +378,12 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostDescribeMayNotBeSupported">
       <source xml:lang="en">No workspace resources were returned. Workspace resources require the AppHost to reference Aspire.Hosting {0} or newer.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.nodeLabel">
+      <source xml:lang="en">Node.js</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.nodeDisplayName">
+      <source xml:lang="en">Node.js: {0}</source>
     </trans-unit>
     <trans-unit id="extension.description">
       <source xml:lang="en">Official Aspire extension for Visual Studio Code</source>
