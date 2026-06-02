@@ -167,15 +167,6 @@ internal class DotNetTemplateFactory(
                 ApplyEmbeddedAppHostTemplateAsync,
                 languageId: KnownLanguageId.CSharp
                 );
-
-            yield return new CallbackTemplate(
-                "aspire-servicedefaults",
-                TemplatingStrings.AspireServiceDefaults_Description,
-                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
-                _ => { },
-                ApplyTemplateWithNoExtraArgsAsync,
-                languageId: KnownLanguageId.CSharp
-                );
         }
 
         // Folded into the last yieled template.

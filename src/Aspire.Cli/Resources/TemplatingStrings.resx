@@ -138,9 +138,6 @@
   <data name="AspireAppHost_Description" xml:space="preserve">
     <value>AppHost</value>
   </data>
-  <data name="AspireServiceDefaults_Description" xml:space="preserve">
-    <value>Service defaults</value>
-  </data>
   <data name="AspireAppHostSingleFile_Description" xml:space="preserve">
     <value>Empty AppHost</value>
   </data>

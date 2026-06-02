@@ -267,7 +267,6 @@ public class DotNetTemplateFactoryTests
         Assert.Contains("aspire-starter", templateNames);
         Assert.Contains("aspire", templateNames);
         Assert.Contains("aspire-apphost", templateNames);
-        Assert.Contains("aspire-servicedefaults", templateNames);
         Assert.Contains("aspire-test", templateNames);
     }
 
@@ -286,7 +285,6 @@ public class DotNetTemplateFactoryTests
         Assert.Contains("aspire-starter", templateNames);
         Assert.DoesNotContain(KnownTemplateId.DotNetEmptyAppHost, templateNames);
         Assert.DoesNotContain("aspire-apphost", templateNames);
-        Assert.DoesNotContain("aspire-servicedefaults", templateNames);
         Assert.DoesNotContain("aspire-test", templateNames);
     }
 

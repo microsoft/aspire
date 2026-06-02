@@ -37,11 +37,6 @@
         <target state="translated">NUnit</target>
         <note />
       </trans-unit>
-      <trans-unit id="AspireServiceDefaults_Description">
-        <source>Service defaults</source>
-        <target state="translated">Výchozí hodnoty služby</target>
-        <note />
-      </trans-unit>
       <trans-unit id="AspireAppHostSingleFile_Description">
         <source>Empty AppHost</source>
         <target state="translated">Prázdný AppHost</target>

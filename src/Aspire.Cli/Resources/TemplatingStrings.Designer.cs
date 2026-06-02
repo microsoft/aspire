@@ -115,15 +115,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Service defaults.
-        /// </summary>
-        public static string AspireServiceDefaults_Description {
-            get {
-                return ResourceManager.GetString("AspireServiceDefaults_Description", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Blazor &amp; Minimal API starter.
         /// </summary>
         public static string AspireStarter_Description {
