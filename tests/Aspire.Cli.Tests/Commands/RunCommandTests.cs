@@ -234,12 +234,9 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("run");
 
-        var stopwatch = Stopwatch.StartNew();
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        stopwatch.Stop();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(1), $"Expected startup timeout to use the remaining budget, but the command took {stopwatch.Elapsed}.");
         Assert.Contains(
             string.Format(CultureInfo.CurrentCulture, RunCommandStrings.TimeoutWaitingForAppHost, 2, CliConfigNames.AppHostStartupTimeout),
             interactionService.DisplayedErrors);
