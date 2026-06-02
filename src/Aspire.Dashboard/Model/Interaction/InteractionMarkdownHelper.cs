@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Model.Markdown;
 using Aspire.Dashboard.Resources;
+using Markdig;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
 
@@ -10,10 +11,10 @@ namespace Aspire.Dashboard.Model.Interaction;
 
 public static class InteractionMarkdownHelper
 {
-    public static MarkdownProcessor CreateProcessor(IStringLocalizer<ControlsStrings> loc)
+    public static MarkdownProcessor CreateProcessor(IStringLocalizer<ControlsStrings> loc, List<IMarkdownExtension>? extensions = null, bool enableHtml = false)
     {
         // Interaction Markdown comes from the app host so there aren't restrictions on URL schemes.
-        return new MarkdownProcessor(loc, safeUrlSchemes: null, extensions: []);
+        return new MarkdownProcessor(loc, safeUrlSchemes: null, extensions: extensions ?? [], disableHtml: !enableHtml);
     }
 
     public static MarkupString ToMarkupString(MarkdownProcessor markdownProcessor, string markdown)

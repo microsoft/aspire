@@ -1,4 +1,6 @@
 ﻿@using Aspire.Dashboard.Resources
+@using Aspire.Dashboard.Model.Interaction
+@using Microsoft.FluentUI.AspNetCore.Components
 @inject IStringLocalizer<Layout> Loc
 @inject IDashboardClient DashboardClient
 
@@ -29,4 +31,14 @@
         IconRest="MetricsIcon()"
         IconActive="MetricsIcon(active: true)"
         Text="@Loc[nameof(Layout.NavMenuMetricsTab)]" />
+    @foreach (var button in _customMenuButtons)
+    {
+        var iconRest = IconResolver.ResolveIconName(button.IconName, IconSize.Size24, IconVariant.Regular) ?? s_fallbackIconRest;
+        var iconActive = IconResolver.ResolveIconName(button.IconName, IconSize.Size24, IconVariant.Filled) ?? s_fallbackIconActive;
+        <FluentAppBarItem
+            Href="@button.Url"
+            IconRest="@iconRest"
+            IconActive="@iconActive"
+            Text="@button.Text" />
+    }
 </FluentAppBar>

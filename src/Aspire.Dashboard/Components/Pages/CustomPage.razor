@@ -1,0 +1,39 @@
+@page "/pages/{*Route}"
+@using Aspire.Dashboard.Components.Controls
+@using Aspire.Dashboard.Model.Interaction
+@using Aspire.Dashboard.Model.Markdown
+@using Aspire.Dashboard.Resources
+@using DashboardResources = Aspire.Dashboard.Resources.Resources
+@using Aspire.DashboardService.Proto.V1
+@implements IAsyncDisposable
+
+<PageTitle>@_pageTitle</PageTitle>
+
+<div id="@CustomPageContainerId">
+    @if (_pageNotFound)
+    {
+        <div class="custom-page-unavailable">
+            <h3>@ResourcesLoc[nameof(DashboardResources.CustomPageUnavailableTitle)]</h3>
+            <p>@ResourcesLoc[nameof(DashboardResources.CustomPageUnavailableMessage)]</p>
+        </div>
+    }
+    else if (_content is not null)
+    {
+        @if (_iframeUrl is not null)
+        {
+            @* Iframe is rendered by IframeContainer in the layout. *@
+        }
+        else
+        {
+            <div class="custom-page-content">
+                <MarkdownRenderer Markdown="@_content" MarkdownProcessor="@_markdownProcessor" SuppressParagraphOnNewLines="false" />
+            </div>
+        }
+    }
+    else
+    {
+        <div class="custom-page-loading">
+            <FluentProgressRing />
+        </div>
+    }
+</div>

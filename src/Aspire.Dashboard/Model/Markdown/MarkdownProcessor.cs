@@ -14,7 +14,7 @@ public sealed class MarkdownProcessor
     private readonly MarkdownPipeline _markdownPipeline;
     private readonly HashSet<string>? _safeUrlSchemes;
 
-    public MarkdownProcessor(IStringLocalizer<ControlsStrings> loc, HashSet<string>? safeUrlSchemes, List<IMarkdownExtension> extensions)
+    public MarkdownProcessor(IStringLocalizer<ControlsStrings> loc, HashSet<string>? safeUrlSchemes, List<IMarkdownExtension> extensions, bool disableHtml = true)
     {
         var autoLinkOptions = new AutoLinkOptions
         {
@@ -25,7 +25,10 @@ public sealed class MarkdownProcessor
 
         var pipelineBuilder = new MarkdownPipelineBuilder();
         pipelineBuilder.ConfigureNewLine(Environment.NewLine);
-        pipelineBuilder.DisableHtml();
+        if (disableHtml)
+        {
+            pipelineBuilder.DisableHtml();
+        }
         pipelineBuilder.UseAutoLinks(autoLinkOptions);
         pipelineBuilder.UseGridTables();
         pipelineBuilder.UsePipeTables();

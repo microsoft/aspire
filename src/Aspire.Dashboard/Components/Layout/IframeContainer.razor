@@ -1,0 +1,10 @@
+@using Aspire.Dashboard.Model.Interaction
+
+<div>
+@foreach (var iframe in _iframes)
+{
+    <div class="iframe-wrapper @(iframe.IsActive ? "iframe-visible" : "iframe-hidden")">
+        <iframe class="iframe-content" src="@iframe.IframeUrl" title="@iframe.Route"></iframe>
+    </div>
+}
+</div>

@@ -2,6 +2,26 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="cs" original="../Resources.resx">
     <body>
+      <trans-unit id="CustomPageIframeError">
+        <source>The embedded page failed to load. It may be unavailable or refusing to connect.</source>
+        <target state="new">The embedded page failed to load. It may be unavailable or refusing to connect.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CustomPageIframeLoading">
+        <source>Loading page content...</source>
+        <target state="new">Loading page content...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CustomPageUnavailableMessage">
+        <source>The page at this route has been removed by the application host.</source>
+        <target state="new">The page at this route has been removed by the application host.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CustomPageUnavailableTitle">
+        <source>This page is no longer available.</source>
+        <target state="new">This page is no longer available.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HealthCheckStatusJustNowFormat">
         <source>{0} (just now)</source>
         <target state="translated">{0} (právě teď)</target>

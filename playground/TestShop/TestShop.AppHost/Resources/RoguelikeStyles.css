@@ -1,0 +1,189 @@
+.roguelike {
+    font-family: monospace;
+    user-select: none;
+}
+
+.roguelike-layout {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    gap: 1em;
+    align-items: start;
+}
+
+.roguelike-map {
+    line-height: 1.3;
+    font-size: 2em;
+    border: 2px solid var(--neutral-stroke-strong-rest, #444);
+    border-radius: 6px;
+    padding: 0.4em;
+    background: var(--neutral-fill-subtle-rest, #1a1a2e);
+}
+
+@keyframes roguelike-map-death-fade {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: var(--roguelike-map-death-opacity, 0.8);
+    }
+}
+
+@keyframes roguelike-map-shake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+
+    20% {
+        transform: translateX(-4px);
+    }
+
+    40% {
+        transform: translateX(4px);
+    }
+
+    60% {
+        transform: translateX(-3px);
+    }
+
+    80% {
+        transform: translateX(3px);
+    }
+}
+
+.roguelike-map-frame {
+    position: relative;
+    display: inline-block;
+}
+
+.roguelike-map-shake {
+    animation: roguelike-map-shake 180ms ease-in-out;
+}
+
+.roguelike-map .row {
+    white-space: nowrap;
+}
+
+.roguelike-death-message {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.roguelike-death-message > div {
+    padding: 0.8em 1.2em;
+    border: 2px solid var(--neutral-stroke-strong-rest, #444);
+    border-radius: 6px;
+    background: var(--neutral-layer-floating, #1f1f1f);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.roguelike-sidebar {
+    min-width: 200px;
+    font-size: 0.95em;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4em;
+}
+
+.roguelike-sidebar .label {
+    font-weight: bold;
+    color: var(--accent-fill-rest, #6eb4ff);
+}
+
+.roguelike-sidebar .hearts {
+    font-size: 1.2em;
+}
+
+.roguelike-sidebar .legend {
+    font-size: 0.85em;
+    opacity: 0.8;
+    margin-top: 0.3em;
+}
+
+.roguelike-sidebar hr {
+    border: none;
+    border-top: 1px solid var(--neutral-stroke-rest, #555);
+    margin: 0.3em 0;
+}
+
+.resource-badge {
+    display: inline-block;
+    padding: 0.1em 0.4em;
+    border-radius: 3px;
+    font-size: 0.9em;
+    color: #000;
+}
+
+.roguelike-log {
+    font-size: 0.85em;
+    max-height: 140px;
+    overflow-y: auto;
+}
+
+.roguelike-log .entry {
+    padding: 0.1em 0;
+    opacity: 0.9;
+}
+
+.roguelike-controls {
+    display: grid;
+    grid-template-columns: repeat(3, 2.5em);
+    grid-template-rows: repeat(2, 2.5em);
+    gap: 0.2em;
+    justify-items: center;
+    align-items: center;
+}
+
+.roguelike-newgame {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+}
+
+.roguelike-controls a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.2em;
+    height: 2.2em;
+    border-radius: 4px;
+    background: var(--neutral-fill-rest, #333);
+    border: 1px solid var(--neutral-stroke-rest, #555);
+    text-decoration: none;
+    font-size: 1.2em;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.roguelike-controls a:hover {
+    background: var(--neutral-fill-hover, #444);
+}
+
+.roguelike-controls .empty {
+    visibility: hidden;
+}
+
+.newgame-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3em;
+    padding: 0.4em 1em;
+    border-radius: 4px;
+    background: var(--neutral-fill-rest, #333);
+    border: 1px solid var(--neutral-stroke-rest, #555);
+    text-decoration: none;
+    font-size: 0.95em;
+    cursor: pointer;
+    transition: background 0.1s;
+}
+
+.newgame-btn:hover {
+    background: var(--neutral-fill-hover, #444);
+}

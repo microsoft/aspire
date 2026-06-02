@@ -1,0 +1,9 @@
+.custom-page-content {
+    padding: calc(var(--design-unit) * 4px);
+    padding-top: calc(var(--design-unit) * 4px);
+}
+
+#custom-page-container {
+    width: 100%;
+    height: 100%;
+}

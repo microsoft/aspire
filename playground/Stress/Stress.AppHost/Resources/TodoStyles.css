@@ -1,0 +1,12 @@
+/* Custom styles for the Todo interaction page */
+.custom-page-content table {
+    width: 100%;
+    max-width: 600px;
+    border-collapse: collapse;
+}
+
+.custom-page-content table th:last-child,
+.custom-page-content table td:last-child {
+    width: 40px;
+    text-align: center;
+}

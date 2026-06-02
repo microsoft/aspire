@@ -31,12 +31,15 @@ internal sealed class BrowserSecurityHeadersMiddleware
         // https://learn.microsoft.com/aspnet/core/blazor/security/content-security-policy#server-side-blazor-apps
         // Changes:
         // - style-src adds inline styles as they're used extensively by Blazor FluentUI.
-        // - frame-src none added to prevent nesting in iframe.
+        // - frame-src allows https/http sources because custom pages registered via IFramePageOptions
+        //   need to embed external content in iframes. Since Blazor is an SPA, the CSP is set once on
+        //   the initial document load and can't be changed per-route during client-side navigation.
+        //   Preventing the dashboard itself from being embedded is handled by frame-ancestors, not frame-src.
         var content = "base-uri 'self'; " +
             "object-src 'none'; " +
             "script-src 'self'; " +
             "style-src 'self' 'unsafe-inline'; " +
-            "frame-src 'none';";
+            "frame-src https: http:;";
 
         if (isHttps)
         {

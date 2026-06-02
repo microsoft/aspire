@@ -524,5 +524,6 @@ public partial class InteractionsProviderTests : DashboardTestContext
         Services.AddSingleton<ComponentTelemetryContextProvider>();
         Services.AddSingleton<DimensionManager>();
         Services.AddScoped<DashboardDialogService>();
+        Services.AddSingleton<CustomInteractionState>();
     }
 }

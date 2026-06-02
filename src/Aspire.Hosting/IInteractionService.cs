@@ -5,6 +5,7 @@ using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -96,6 +97,55 @@ public interface IInteractionService
     /// An <see cref="InteractionResult{T}"/> containing <c>true</c> if the user accepted, <c>false</c> otherwise.
     /// </returns>
     Task<InteractionResult<bool>> PromptNotificationAsync(string title, string message, NotificationInteractionOptions? options = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Registers a dynamic page in the dashboard that renders content.
+    /// </summary>
+    /// <remarks>
+    /// Each visitor to a content page triggers the <see cref="ContentPageOptions.OnVisit"/> callback independently,
+    /// allowing per-visitor rendering via <see cref="PageVisitContext.RenderAsync"/>.
+    /// Dispose the returned <see cref="IDisposable"/> to remove the page from the dashboard.
+    /// </remarks>
+    /// <param name="route">The route path for the page (e.g., "my-page"). The page will be accessible at <c>/pages/{route}</c> in the dashboard.</param>
+    /// <param name="options">The page options.</param>
+    /// <returns>An <see cref="IDisposable"/> that, when disposed, removes the page from the dashboard.</returns>
+    IDisposable RegisterPage(string route, PageOptions options);
+
+    /// <summary>
+    /// Registers a navigation menu button in the dashboard sidebar.
+    /// </summary>
+    /// <remarks>
+    /// Dispose the returned <see cref="IDisposable"/> to remove the menu button from the dashboard.
+    /// </remarks>
+    /// <param name="options">Configuration for the menu button including icon, text, tooltip, and navigation URL.</param>
+    /// <returns>An <see cref="IDisposable"/> that, when disposed, removes the menu button from the dashboard.</returns>
+    IDisposable RegisterMenuButton(MenuButtonOptions options);
+
+    /// <summary>
+    /// Registers a global asset that can be served by the dashboard at <c>/assets/{route}</c>.
+    /// </summary>
+    /// <remarks>
+    /// Use this overload when asset content should be generated or streamed on demand.
+    /// Dispose the returned <see cref="IDisposable"/> to unregister the asset.
+    /// </remarks>
+    /// <param name="route">The route path for the asset (for example, <c>scripts/app.js</c>).</param>
+    /// <param name="contentType">The MIME content type returned for this asset.</param>
+    /// <param name="context">The asset context containing the callback that writes response content.</param>
+    /// <returns>An <see cref="IDisposable"/> that unregisters the asset when disposed.</returns>
+    IDisposable RegisterAsset(string route, string contentType, AssetContext context);
+
+    /// <summary>
+    /// Registers a global asset backed by in-memory content.
+    /// </summary>
+    /// <remarks>
+    /// This overload is a convenience wrapper over <see cref="RegisterAsset(string, string, AssetContext)"/>.
+    /// Dispose the returned <see cref="IDisposable"/> to unregister the asset.
+    /// </remarks>
+    /// <param name="route">The route path for the asset (for example, <c>styles/site.css</c>).</param>
+    /// <param name="contentType">The MIME content type returned for this asset.</param>
+    /// <param name="content">The in-memory asset bytes to serve.</param>
+    /// <returns>An <see cref="IDisposable"/> that unregisters the asset when disposed.</returns>
+    IDisposable RegisterAsset(string route, string contentType, ReadOnlyMemory<byte> content);
 }
 
 internal record QueueLoadOptions(
@@ -796,3 +846,207 @@ public class InteractionResult<T>
         Canceled = canceled;
     }
 }
+
+/// <summary>
+/// Provides options for a dynamic page registered via <see cref="IInteractionService.RegisterPage"/>.
+/// </summary>
+[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public abstract class PageOptions
+{
+    /// <summary>
+    /// Gets or sets the title of the page, displayed in the browser tab.
+    /// </summary>
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Gets or sets the named actions that can be invoked from this page.
+    /// Page actions are typically triggered by dashboard buttons rendered by the page content or iframe.
+    /// </summary>
+    public IReadOnlyDictionary<string, Func<ActionContext, Task>>? Actions { get; set; }
+}
+
+/// <summary>
+/// Provides options for a dynamic content page registered via <see cref="IInteractionService.RegisterPage"/>.
+/// </summary>
+[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class ContentPageOptions : PageOptions
+{
+    /// <summary>
+    /// Gets or sets the callback invoked when a visitor navigates to the page. Each visitor session
+    /// invokes this callback independently, allowing per-visitor content streaming.
+    /// </summary>
+    public Func<PageVisitContext, Task>? OnVisit { get; set; }
+
+    /// <summary>
+    /// Gets or sets the stylesheet asset routes to include when the page is displayed.
+    /// Routes are relative to the assets endpoint (e.g. <c>my-styles.css</c> resolves to <c>/assets/my-styles.css</c>).
+    /// </summary>
+    public IReadOnlyList<string>? StyleIncludes { get; set; }
+
+    /// <summary>
+    /// Gets or sets the JavaScript module asset routes to include when the page is displayed.
+    /// Routes are relative to the assets endpoint (e.g. <c>my-script.js</c> resolves to <c>/assets/my-script.js</c>).
+    /// </summary>
+    public IReadOnlyList<string>? ScriptIncludes { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether HTML rendering is enabled for this page.
+    /// When <see langword="true"/>, the content sent via <see cref="PageVisitContext.RenderAsync"/> is treated
+    /// as raw HTML and rendered directly without Markdown processing.
+    /// </summary>
+    public bool EnableHtml { get; set; }
+}
+
+/// <summary>
+/// Provides options for a dynamic iframe page registered via <see cref="IInteractionService.RegisterPage"/>.
+/// </summary>
+[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class IFramePageOptions : PageOptions
+{
+    /// <summary>
+    /// Gets or sets the URL to render as a full-page iframe instead of content.
+    /// </summary>
+    /// <remarks>
+    /// Set either <see cref="IFrameUrl"/> or <see cref="IFrameEndpoint"/>, but not both.
+    /// </remarks>
+    public string? IFrameUrl { get; set; }
+
+    /// <summary>
+    /// Gets or sets the resource endpoint to resolve and render as a full-page iframe instead of content.
+    /// </summary>
+    /// <remarks>
+    /// Set either <see cref="IFrameUrl"/> or <see cref="IFrameEndpoint"/>, but not both.
+    /// </remarks>
+    public EndpointReference? IFrameEndpoint { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the iframe should persist across page navigations.
+    /// When <see langword="true"/>, the iframe DOM element is kept alive and hidden when the user navigates away,
+    /// preserving its state. Defaults to <see langword="true"/>.
+    /// </summary>
+    public bool Persistent { get; set; } = true;
+}
+
+/// <summary>
+/// Provides context for a page visit, including the ability to render content for the visitor.
+/// </summary>
+[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class PageVisitContext
+{
+    /// <summary>
+    /// Gets the unique session identifier for this visitor. Each browser tab visiting the page
+    /// receives a distinct session ID.
+    /// </summary>
+    public required string SessionId { get; init; }
+
+    /// <summary>
+    /// Gets the application's service provider. Use this to resolve services such as loggers.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
+
+    /// <summary>
+    /// Gets the query string parameters from the page URL. Keys are parameter names and values
+    /// are the corresponding values. Empty if no query string was present.
+    /// </summary>
+    public required IReadOnlyDictionary<string, string> QueryParameters { get; init; }
+
+    /// <summary>
+    /// Gets a cancellation token that is triggered when the visitor leaves the page.
+    /// Use this to stop background work associated with the visitor session.
+    /// </summary>
+    public required CancellationToken CancellationToken { get; init; }
+
+    /// <summary>
+    /// Renders content on the visitor's page. Can be called multiple times to update
+    /// the rendered content. Each call replaces the previously displayed content.
+    /// The first argument is the content, the second is a cancellation token.
+    /// </summary>
+    /// <returns>A task that completes when the content has been sent to the dashboard.</returns>
+    public required Func<string, CancellationToken, Task> RenderAsync { get; init; }
+}
+
+/// <summary>
+/// Provides context for an action invoked from a dynamic page registered via <see cref="IInteractionService.RegisterPage"/>.
+/// </summary>
+[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class ActionContext
+{
+    /// <summary>
+    /// Gets the unique session identifier for the visitor that invoked the action.
+    /// </summary>
+    public required string SessionId { get; init; }
+
+    /// <summary>
+    /// Gets the arguments supplied by the page action button.
+    /// </summary>
+    public required IReadOnlyDictionary<string, string> Arguments { get; init; }
+
+    /// <summary>
+    /// Gets a cancellation token that is triggered when the visitor leaves the page or the action request is canceled.
+    /// </summary>
+    public required CancellationToken CancellationToken { get; init; }
+}
+
+/// <summary>
+/// Options for configuring a menu button added to the dashboard sidebar via <see cref="IInteractionService.RegisterMenuButton"/>.
+/// </summary>
+[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class MenuButtonOptions
+{
+    /// <summary>
+    /// Gets or sets the icon name for the menu button. Uses Fluent UI icon names (e.g., "Document", "Home", "Settings").
+    /// </summary>
+    public required string IconName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the display text for the menu button.
+    /// </summary>
+    public required string Text { get; set; }
+
+    /// <summary>
+    /// Gets or sets the URL to navigate to when the menu button is clicked.
+    /// </summary>
+    public required string Url { get; set; }
+}
+
+/// <summary>
+/// Provides context for a global asset registered via <see cref="IInteractionService.RegisterAsset(string, string, AssetContext)"/>.
+/// </summary>
+[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class AssetContext
+{
+    /// <summary>
+    /// Gets or sets the callback invoked when the dashboard requests this asset.
+    /// Write asset bytes using <see cref="AssetGetContext.WriteAsync"/>.
+    /// </summary>
+    public required Func<AssetGetContext, Task> OnGet { get; set; }
+}
+
+/// <summary>
+/// Provides context for an asset request callback.
+/// </summary>
+[Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+public sealed class AssetGetContext
+{
+    /// <summary>
+    /// Gets the request route for the asset.
+    /// </summary>
+    public required string Route { get; init; }
+
+    /// <summary>
+    /// Gets the callback to write asset content. Call this with chunks of bytes to deliver
+    /// the asset to the requester. May be called multiple times for streamed content.
+    /// </summary>
+    public required Func<ReadOnlyMemory<byte>, Task> WriteAsync { get; init; }
+
+    /// <summary>
+    /// Gets the application's service provider.
+    /// </summary>
+    public required IServiceProvider Services { get; init; }
+
+    /// <summary>
+    /// Gets the cancellation token for the asset request.
+    /// </summary>
+    public required CancellationToken CancellationToken { get; init; }
+}
+

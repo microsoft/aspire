@@ -15,6 +15,8 @@ using static Aspire.Hosting.Interaction;
 
 namespace Aspire.Hosting.Dashboard;
 
+#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 /// <summary>
 /// Implements a gRPC service that a dashboard can consume.
 /// </summary>
@@ -56,6 +58,90 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                 Match { Success: true } match => match.Groups["name"].Value,
                 _ => applicationName
             };
+        }
+    }
+
+    public override async Task GetInteractionAsset(
+        GetInteractionAssetRequest request,
+        IServerStreamWriter<GetInteractionAssetResponse> responseStream,
+        ServerCallContext context)
+    {
+        await ExecuteAsync(
+            GetInteractionAssetInternal,
+            context).ConfigureAwait(false);
+
+        async Task GetInteractionAssetInternal(CancellationToken cancellationToken)
+        {
+            if (!serviceData.TryGetAsset(request.Route, out var asset))
+            {
+                throw new RpcException(new Status(StatusCode.NotFound, $"Asset route '{request.Route}' was not found."));
+            }
+
+            await responseStream.WriteAsync(new GetInteractionAssetResponse
+            {
+                ContentType = asset.ContentType
+            }, cancellationToken).ConfigureAwait(false);
+
+            const int chunkSize = 64 * 1024;
+
+            try
+            {
+                if (!await serviceData.WriteAssetAsync(
+                    request.Route,
+                    async chunk =>
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        // Split the incoming buffer into gRPC-friendly chunks.
+                        var offset = 0;
+                        while (offset < chunk.Length)
+                        {
+                            var take = Math.Min(chunk.Length - offset, chunkSize);
+                            await responseStream.WriteAsync(new GetInteractionAssetResponse
+                            {
+                                Content = Google.Protobuf.ByteString.CopyFrom(chunk.Slice(offset, take).Span)
+                            }, cancellationToken).ConfigureAwait(false);
+                            offset += take;
+                        }
+                    },
+                    cancellationToken).ConfigureAwait(false))
+                {
+                    throw new RpcException(new Status(StatusCode.NotFound, $"Asset route '{request.Route}' was not found."));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error streaming interaction asset for route '{Route}'.", request.Route);
+                throw new RpcException(new Status(StatusCode.Internal, "An error occurred while streaming the interaction asset."));
+            }
+        }
+    }
+
+    public override async Task<StartPageInteractionResponse> StartPageInteraction(StartPageInteractionRequest request, ServerCallContext context)
+    {
+        StartPageInteractionResponse? response = null;
+
+        await ExecuteAsync(
+            StartPageInteractionInternal,
+            context).ConfigureAwait(false);
+
+        return response!;
+
+        Task StartPageInteractionInternal(CancellationToken cancellationToken)
+        {
+            var startedInteraction = serviceData.StartPageInteraction(request.Route, request.SessionId, request.QueryParameters, cancellationToken)
+                ?? throw new RpcException(new Status(StatusCode.NotFound, $"Page route '{request.Route}' was not found."));
+
+            response = new StartPageInteractionResponse
+            {
+                InteractionId = startedInteraction.InteractionId
+            };
+
+            return Task.CompletedTask;
         }
     }
 
@@ -130,6 +216,57 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
                             var inputInstances = inputs.Inputs.Select(input => CreateInteractionInputDto(input, updateStateOnChangeInputs)).ToList();
                             change.InputsDialog.InputItems.AddRange(inputInstances);
+                        }
+                        else if (interaction.InteractionInfo is PageInteractionInfo pageInfo)
+                        {
+                            string? markdown;
+                            string? iframeUrl;
+                            bool iframePersistent;
+                            bool isWaitingForEndpoint;
+                            lock (pageInfo.Lock)
+                            {
+                                markdown = pageInfo.Content;
+                                iframeUrl = pageInfo.IframeUrl;
+                                iframePersistent = pageInfo.IframePersistent;
+                                isWaitingForEndpoint = pageInfo.IsWaitingForEndpoint;
+                            }
+
+                            // Allow updates through when waiting for an endpoint even if content
+                            // and iframe URL are both null, so the dashboard can show loading state.
+                            if (!isWaitingForEndpoint && markdown is null && iframeUrl is null)
+                            {
+                                continue;
+                            }
+
+                            change.Page = new InteractionPage
+                            {
+                                Route = pageInfo.Route,
+                                SessionId = pageInfo.SessionId,
+                                Content = markdown ?? string.Empty,
+                                Title = pageInfo.PageOptions.Title ?? pageInfo.Route,
+                                EnableHtml = pageInfo.PageOptions is ContentPageOptions { EnableHtml: true },
+                                IframeUrl = iframeUrl ?? string.Empty,
+                                IframePersistent = iframePersistent
+                            };
+
+                            if (pageInfo.PageOptions is ContentPageOptions { StyleIncludes: { } styleIncludes })
+                            {
+                                change.Page.CssRoutes.AddRange(styleIncludes);
+                            }
+
+                            if (pageInfo.PageOptions is ContentPageOptions { ScriptIncludes: { } scriptIncludes })
+                            {
+                                change.Page.ScriptRoutes.AddRange(scriptIncludes);
+                            }
+                        }
+                        else if (interaction.InteractionInfo is MenuButtonInteractionInfo menuButtonInfo)
+                        {
+                            change.MenuButton = new InteractionMenuButton
+                            {
+                                IconName = menuButtonInfo.Options.IconName ?? "",
+                                Text = menuButtonInfo.Options.Text ?? "",
+                                Url = menuButtonInfo.Options.Url ?? ""
+                            };
                         }
 
                         await responseStream.WriteAsync(change, cts.Token).ConfigureAwait(false);
@@ -462,3 +599,5 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         }
     }
 }
+
+#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
