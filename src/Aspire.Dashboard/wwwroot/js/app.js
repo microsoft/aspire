@@ -340,12 +340,13 @@ window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, do
     window.disposeAspirePopupKeyboardNavigation(anchorId, popupId);
 
     const anchorElement = document.getElementById(anchorId);
-    const popupElement = document.getElementById(popupId);
-    if (!anchorElement || !popupElement) {
+    if (!anchorElement) {
         return;
     }
 
+    const key = getAspirePopupKeyboardNavigationKey(anchorId, popupId);
     const tabExitsAlways = options?.tabExitsAlways ?? options?.TabExitsAlways ?? false;
+    const resolvePopupElement = () => document.getElementById(popupId);
 
     const popupKeydownListener = function (ev) {
         const isEscape = ev.key === "Escape" || ev.keyCode === 27;
@@ -361,6 +362,7 @@ window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, do
         }
 
         if (tabExitsAlways) {
+            const popupElement = resolvePopupElement();
             stopPopupKeyboardEvent(ev);
             if (ev.shiftKey) {
                 anchorElement.focus();
@@ -368,6 +370,11 @@ window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, do
                 focusNextElementAfterAnchor(anchorElement, popupElement);
             }
             dotNetHelper.invokeMethodAsync("CloseAsync");
+            return;
+        }
+
+        const popupElement = resolvePopupElement();
+        if (!popupElement) {
             return;
         }
 
@@ -395,6 +402,11 @@ window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, do
             return;
         }
 
+        const popupElement = resolvePopupElement();
+        if (!popupElement) {
+            return;
+        }
+
         const firstFocusable = getAspireFocusableElements(popupElement)[0];
         if (firstFocusable) {
             stopPopupKeyboardEvent(ev);
@@ -406,18 +418,34 @@ window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, do
         }
     };
 
-    // Fluent UI's popup keyboard helper currently calculates the next page element from
-    // the inner shadow DOM button for fluent-button anchors. That inner element is not in
-    // document order, so Tab can wrap to the first focusable control on the page. Capture
-    // Tab for Aspire-owned popups before Fluent UI's listener and calculate from the host.
-    popupElement.addEventListener("keydown", popupKeydownListener, true);
-    anchorElement.addEventListener("keydown", anchorKeydownListener, true);
+    const documentKeydownListener = function (ev) {
+        const isEscape = ev.key === "Escape" || ev.keyCode === 27;
+        if (ev.key !== "Tab" && !isEscape) {
+            return;
+        }
 
-    aspirePopupKeyboardNavigationState.set(getAspirePopupKeyboardNavigationKey(anchorId, popupId), {
+        const eventPath = typeof ev.composedPath === "function" ? ev.composedPath() : [];
+        const popupElement = resolvePopupElement();
+        const isFromAnchor = eventPath.includes(anchorElement) || anchorElement.contains(ev.target);
+        const isFromPopup = popupElement && (eventPath.includes(popupElement) || popupElement.contains(ev.target));
+
+        if (isFromAnchor) {
+            anchorKeydownListener(ev);
+        } else if (isFromPopup) {
+            popupKeydownListener(ev);
+        }
+    };
+
+    // Fluent UI's popup keyboard helper currently calculates the next page element from
+    // the inner shadow DOM target for fluent-button anchors and menu items. Those inner
+    // elements are not in document order, so Tab can wrap to the first focusable control
+    // on the page. Capture Tab at the document before Fluent UI's listener and calculate
+    // from the stable host elements instead.
+    document.addEventListener("keydown", documentKeydownListener, true);
+
+    aspirePopupKeyboardNavigationState.set(key, {
         anchorElement,
-        anchorKeydownListener,
-        popupElement,
-        popupKeydownListener
+        documentKeydownListener
     });
 };
 
@@ -428,8 +456,7 @@ window.disposeAspirePopupKeyboardNavigation = function (anchorId, popupId) {
         return;
     }
 
-    state.popupElement.removeEventListener("keydown", state.popupKeydownListener, true);
-    state.anchorElement.removeEventListener("keydown", state.anchorKeydownListener, true);
+    document.removeEventListener("keydown", state.documentKeydownListener, true);
     aspirePopupKeyboardNavigationState.delete(key);
 };
 
