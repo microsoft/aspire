@@ -274,9 +274,9 @@ builder.Services.AddPooledDbContextFactory<AppDbContext>((sp, options) =>
     if (EF.IsDesignTime)
     {
         // At design time (e.g. when generating a migration bundle) no real
-        // connection string is available. Use the parameterless overload so
-        // EF Core can build the model without parsing a connection string.
-        options.UseNpgsql();
+        // connection string is available. Use the overload that doesn't take a
+        // connection string so EF Core can build the model without parsing one.
+        options.UseNpgsql(o => { });
     }
     else
     {
