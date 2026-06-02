@@ -286,7 +286,7 @@ public sealed class TelemetryExportServiceTests
         var resource = resources[0];
         var traces = repository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resource.ResourceKey,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []

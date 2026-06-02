@@ -170,7 +170,7 @@ public sealed class AssistantChatDataContext
 
         var traces = TelemetryRepository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resourceKey,
+            ResourceKeys = resourceKey is { } rk ? [rk] : [],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = []

@@ -526,7 +526,7 @@ public class OtlpHttpJsonTests
 
         var traces = telemetryRepository.GetTraces(new GetTracesRequest
         {
-            ResourceKey = resource.ResourceKey,
+            ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
             Count = 10,
             Filters = []

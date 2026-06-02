@@ -620,9 +620,13 @@ public sealed partial class TelemetryRepository : IDisposable
     public GetTracesResponse GetTraces(GetTracesRequest context)
     {
         List<OtlpResource>? resources = null;
-        if (context.ResourceKey is { } key)
+        if (context.ResourceKeys is { Count: > 0 } keys)
         {
-            resources = GetResources(key, includeUninstrumentedPeers: true);
+            resources = [];
+            foreach (var key in keys)
+            {
+                resources.AddRange(GetResources(key, includeUninstrumentedPeers: true));
+            }
 
             if (resources.Count == 0)
             {
@@ -712,9 +716,13 @@ public sealed partial class TelemetryRepository : IDisposable
     public GetSpansResponse GetSpans(GetSpansRequest context)
     {
         List<OtlpResource>? resources = null;
-        if (context.ResourceKey is { } key)
+        if (context.ResourceKeys is { Count: > 0 } keys)
         {
-            resources = GetResources(key, includeUninstrumentedPeers: true);
+            resources = [];
+            foreach (var key in keys)
+            {
+                resources.AddRange(GetResources(key, includeUninstrumentedPeers: true));
+            }
 
             if (resources.Count == 0)
             {

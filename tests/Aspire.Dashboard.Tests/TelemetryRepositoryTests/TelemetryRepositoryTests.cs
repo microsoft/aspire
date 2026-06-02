@@ -40,7 +40,7 @@ public class TelemetryRepositoryTests
         var resourceKey = new ResourceKey("resource", "resource");
         Assert.Empty(repository.GetLogs(new GetLogsContext { ResourceKeys = [resourceKey], Count = 100, Filters = [], StartIndex = 0 }).Items);
         Assert.Null(repository.GetResource(resourceKey));
-        Assert.Empty(repository.GetTraces(new GetTracesRequest { ResourceKey = resourceKey, Count = 100, Filters = [], StartIndex = 0 }).PagedResult.Items);
+        Assert.Empty(repository.GetTraces(new GetTracesRequest { ResourceKeys = [resourceKey], Count = 100, Filters = [], StartIndex = 0 }).PagedResult.Items);
 
         pauseManager.SetStructuredLogsPaused(false);
         pauseManager.SetMetricsPaused(false);
@@ -53,7 +53,7 @@ public class TelemetryRepositoryTests
         var resource = repository.GetResource(resourceKey);
         Assert.NotNull(resource);
         Assert.NotEmpty(resource.GetInstrumentsSummary());
-        Assert.Single(repository.GetTraces(new GetTracesRequest { ResourceKey = resourceKey, Count = 100, Filters = [], StartIndex = 0 }).PagedResult.Items);
+        Assert.Single(repository.GetTraces(new GetTracesRequest { ResourceKeys = [resourceKey], Count = 100, Filters = [], StartIndex = 0 }).PagedResult.Items);
 
         void AddLog()
         {
@@ -234,7 +234,7 @@ public class TelemetryRepositoryTests
         Assert.Single(logs.Items);
         Assert.Equal("log-resource2-456", logs.Items[0].Message);
 
-        var traces = repository.GetTraces(new GetTracesRequest { ResourceKey = null, StartIndex = 0, Count = 10, Filters = [] });
+        var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Equal(2, traces.PagedResult.TotalItemCount);
 
         var resource1Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource1", "123"));
@@ -246,7 +246,7 @@ public class TelemetryRepositoryTests
         Assert.Single(resource2Logs.Items);
         Assert.Equal("log-resource2-456", resource2Logs.Items[0].Message);
 
-        var resource2Traces = repository.GetTraces(new GetTracesRequest { ResourceKey = resource2Key, StartIndex = 0, Count = 10, Filters = [] });
+        var resource2Traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [resource2Key], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Single(resource2Traces.PagedResult.Items);
 
         var resource2Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource2", "456"));
@@ -277,7 +277,7 @@ public class TelemetryRepositoryTests
         Assert.Contains(logs.Items, l => l.Message == "log-resource3-333");
         Assert.DoesNotContain(logs.Items, l => l.Message == "log-resource2-222");
 
-        var traces = repository.GetTraces(new GetTracesRequest { ResourceKey = null, StartIndex = 0, Count = 10, Filters = [] });
+        var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Equal(2, traces.PagedResult.TotalItemCount);
 
         var resource1Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource1", "111"));
@@ -318,7 +318,7 @@ public class TelemetryRepositoryTests
         var logs = repository.GetLogs(new GetLogsContext { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Empty(logs.Items);
 
-        var traces = repository.GetTraces(new GetTracesRequest { ResourceKey = null, StartIndex = 0, Count = 10, Filters = [] });
+        var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Empty(traces.PagedResult.Items);
 
         // Assert - Resources list is empty
@@ -349,7 +349,7 @@ public class TelemetryRepositoryTests
         var logs = repository.GetLogs(new GetLogsContext { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Empty(logs.Items);
 
-        var traces = repository.GetTraces(new GetTracesRequest { ResourceKey = null, StartIndex = 0, Count = 10, Filters = [] });
+        var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Empty(traces.PagedResult.Items);
 
         var metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource1", "123"));
@@ -391,7 +391,7 @@ public class TelemetryRepositoryTests
         // Act
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKey = null, Filters = [] }, cts.Token))
+            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKeys = [], Filters = [] }, cts.Token))
             {
                 receivedSpans.Add(span);
                 if (receivedSpans.Count == 1)
@@ -453,7 +453,7 @@ public class TelemetryRepositoryTests
             watchStarted.TrySetResult();
             try
             {
-                await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKey = null, Filters = [] }, cts.Token))
+                await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKeys = [], Filters = [] }, cts.Token))
                 {
                     count++;
                 }
@@ -509,7 +509,7 @@ public class TelemetryRepositoryTests
         // Act
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKey = null, Filters = [] }, cts.Token))
+            await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKeys = [], Filters = [] }, cts.Token))
             {
                 receivedLogs.Add(log);
                 if (receivedLogs.Count == 1)
@@ -570,7 +570,7 @@ public class TelemetryRepositoryTests
             watchStarted.TrySetResult();
             try
             {
-                await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKey = null, Filters = [] }, cts.Token))
+                await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKeys = [], Filters = [] }, cts.Token))
                 {
                     count++;
                 }
@@ -662,7 +662,7 @@ public class TelemetryRepositoryTests
         // Act
         try
         {
-            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKey = null, Filters = [] }, linkedCts.Token))
+            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKeys = [], Filters = [] }, linkedCts.Token))
             {
                 receivedSpans.Add(span);
                 if (receivedSpans.Count == expectedSpans)
@@ -740,7 +740,7 @@ public class TelemetryRepositoryTests
         // Act
         try
         {
-            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKey = null, Filters = [] }, linkedCts.Token))
+            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKeys = [], Filters = [] }, linkedCts.Token))
             {
                 receivedSpans.Add(span);
                 if (receivedSpans.Count == expectedSpans)
@@ -809,7 +809,7 @@ public class TelemetryRepositoryTests
         // Act - Watch only service1
         try
         {
-            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKey = new ResourceKey("service1", "inst1"), Filters = [] }, cts.Token))
+            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKeys = [new ResourceKey("service1", "inst1")], Filters = [] }, cts.Token))
             {
                 receivedSpans.Add(span);
             }
@@ -868,7 +868,7 @@ public class TelemetryRepositoryTests
         // Start watching with filter
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKey = null, Filters = filters }, cts.Token))
+            await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKeys = [], Filters = filters }, cts.Token))
             {
                 receivedLogs.Add(log);
                 if (receivedLogs.Count == 1)
@@ -959,7 +959,7 @@ public class TelemetryRepositoryTests
         // Start watching with severity filter
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKey = null, Filters = filters }, cts.Token))
+            await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKeys = [], Filters = filters }, cts.Token))
             {
                 receivedLogs.Add(log);
                 if (receivedLogs.Count == 1)
@@ -1044,7 +1044,7 @@ public class TelemetryRepositoryTests
         {
             await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest
             {
-                ResourceKey = null,
+                ResourceKeys = [],
                 Filters = [],
                 TextFragments = ["timeout", "error"]
             }, cts.Token))
@@ -1144,7 +1144,7 @@ public class TelemetryRepositoryTests
 
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKey = null, Filters = filters }, cts.Token))
+            await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKeys = [], Filters = filters }, cts.Token))
             {
                 receivedLogs.Add(log);
                 if (receivedLogs.Count == 1)
@@ -1241,7 +1241,7 @@ public class TelemetryRepositoryTests
 
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKey = null, Filters = filters }, cts.Token))
+            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKeys = [], Filters = filters }, cts.Token))
             {
                 receivedSpans.Add(span);
                 if (receivedSpans.Count == 1)
