@@ -1,0 +1,21 @@
+<Project Sdk="Aspire.AppHost.Sdk/{{aspireVersion}}">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UserSecretsId>{{userSecretsId}}</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Aspire-StarterApplication.1.Server\Aspire-StarterApplication.1.Server.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.JavaScript" Version="{{aspireVersion}}" />
+{{#useRedisCache}}
+    <PackageReference Include="Aspire.Hosting.Redis" Version="{{aspireVersion}}" />
+{{/useRedisCache}}
+  </ItemGroup>
+</Project>

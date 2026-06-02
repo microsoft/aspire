@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+{{#useRedisCache}}
+    <PackageReference Include="Aspire.StackExchange.Redis.OutputCaching" Version="{{aspireVersion}}" />
+{{/useRedisCache}}
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="{{aspNetCoreOpenApi10Version}}" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="{{microsoftExtensionsHttpResilienceVersion}}" />
+    <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="{{microsoftExtensionsServiceDiscoveryVersion}}" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="{{openTelemetryExporterVersion}}" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="{{openTelemetryHostingVersion}}" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="{{openTelemetryInstrumentationAspNetCoreVersion}}" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="{{openTelemetryInstrumentationHttpVersion}}" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="{{openTelemetryInstrumentationRuntimeVersion}}" />
+  </ItemGroup>
+</Project>

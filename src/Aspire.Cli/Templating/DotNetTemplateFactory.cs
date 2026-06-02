@@ -15,6 +15,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Templating;
 
@@ -27,7 +28,6 @@ internal class DotNetTemplateFactory(
     IDotNetSdkInstaller sdkInstaller,
     IFeatures features,
     AspireCliTelemetry telemetry,
-    ICliHostEnvironment hostEnvironment,
     TemplateNuGetConfigService templateNuGetConfigService)
     : ITemplateFactory
 {
@@ -134,7 +134,7 @@ internal class DotNetTemplateFactory(
             TemplatingStrings.AspireStarter_Description,
             (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyExtraAspireStarterOptions,
-            (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireStarterOptionsAsync, ct),
+            ApplyEmbeddedStarterTemplateAsync,
             languageId: KnownLanguageId.CSharp
             );
 
@@ -143,7 +143,7 @@ internal class DotNetTemplateFactory(
             TemplatingStrings.AspireJsFrontendStarter_Description,
             (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
             ApplyExtraAspireJsFrontendStarterOptions,
-            (template, inputs, parseResult, ct) => ApplyTemplateAsync(template, inputs, parseResult, PromptForExtraAspireJsFrontendStarterOptionsAsync, ct),
+            ApplyEmbeddedTsCsStarterTemplateAsync,
             languageId: KnownLanguageId.CSharp
             );
 
@@ -164,16 +164,7 @@ internal class DotNetTemplateFactory(
                 TemplatingStrings.AspireAppHost_Description,
                 (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
                 ApplyDevLocalhostTldOption,
-                ApplyTemplateWithNoExtraArgsAsync,
-                languageId: KnownLanguageId.CSharp
-                );
-
-            yield return new CallbackTemplate(
-                "aspire-servicedefaults",
-                TemplatingStrings.AspireServiceDefaults_Description,
-                (ctx, projectName) => OutputPathHelper.GetUniqueDefaultOutputPath(projectName, ctx.WorkingDirectory.FullName),
-                _ => { },
-                ApplyTemplateWithNoExtraArgsAsync,
+                ApplyEmbeddedAppHostTemplateAsync,
                 languageId: KnownLanguageId.CSharp
                 );
         }
@@ -244,32 +235,11 @@ internal class DotNetTemplateFactory(
             );
     }
 
-    private async Task<string[]> PromptForExtraAspireStarterOptionsAsync(ParseResult result, CancellationToken cancellationToken)
-    {
-        var extraArgs = new List<string>();
-
-        await PromptForDevLocalhostTldOptionAsync(result, extraArgs, cancellationToken);
-        await PromptForRedisCacheOptionAsync(result, extraArgs, cancellationToken);
-        await PromptForTestFrameworkOptionsAsync(result, extraArgs, cancellationToken);
-
-        return extraArgs.ToArray();
-    }
-
     private async Task<string[]> PromptForExtraAspireSingleFileOptionsAsync(ParseResult result, CancellationToken cancellationToken)
     {
         var extraArgs = new List<string>();
 
         await PromptForDevLocalhostTldOptionAsync(result, extraArgs, cancellationToken);
-
-        return extraArgs.ToArray();
-    }
-
-    private async Task<string[]> PromptForExtraAspireJsFrontendStarterOptionsAsync(ParseResult result, CancellationToken cancellationToken)
-    {
-        var extraArgs = new List<string>();
-
-        await PromptForDevLocalhostTldOptionAsync(result, extraArgs, cancellationToken);
-        await PromptForRedisCacheOptionAsync(result, extraArgs, cancellationToken);
 
         return extraArgs.ToArray();
     }
@@ -312,50 +282,6 @@ internal class DotNetTemplateFactory(
         {
             interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, TemplatingStrings.UseRedisCache_UsingRedisCache);
             extraArgs.Add("--use-redis-cache");
-        }
-    }
-
-    private async Task PromptForTestFrameworkOptionsAsync(ParseResult result, List<string> extraArgs, CancellationToken cancellationToken)
-    {
-        var binding = PromptBinding.Create(result, _testFrameworkOption);
-        var (wasProvided, _) = binding.Resolve();
-
-        if (!wasProvided)
-        {
-            if (!hostEnvironment.SupportsInteractiveInput)
-            {
-                return;
-            }
-
-            var createTestProject = await interactionService.PromptConfirmAsync(
-                TemplatingStrings.PromptForTFMOptions_Prompt,
-                binding: PromptBinding.CreateDefault(false),
-                cancellationToken: cancellationToken);
-
-            if (!createTestProject)
-            {
-                return;
-            }
-        }
-
-        var testFramework = await interactionService.PromptForSelectionAsync(
-            TemplatingStrings.PromptForTFM_Prompt,
-            ["MSTest", "NUnit", "xUnit.net", TemplatingStrings.None],
-            choice => choice,
-            binding: binding,
-            cancellationToken: cancellationToken);
-
-        if (!string.Equals(testFramework, TemplatingStrings.None, StringComparisons.CliInputOrOutput))
-        {
-            if (string.Equals(testFramework, "xUnit.net", StringComparison.OrdinalIgnoreCase))
-            {
-                await PromptForXUnitVersionOptionsAsync(result, extraArgs, cancellationToken);
-            }
-
-            interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.PromptForTFM_UsingForTesting, testFramework));
-
-            extraArgs.Add("--test-framework");
-            extraArgs.Add(testFramework);
         }
     }
 
@@ -581,6 +507,387 @@ internal class DotNetTemplateFactory(
             // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
             // restores parity with the prior init failure mode for these scenarios.
             interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+    }
+
+    /// <summary>
+    /// Applies the <c>aspire-starter</c> template by rendering the multi-project C# starter
+    /// that is embedded in the CLI (see <see cref="EmbeddedCSharpStarterTemplate"/>), instead
+    /// of resolving and installing the <c>Aspire.ProjectTemplates</c> NuGet package and invoking
+    /// <c>dotnet new aspire-starter</c>. The channel/version is still resolved so the generated
+    /// projects reference a matching Aspire version, and the channel pin + NuGet.config behavior
+    /// is preserved for parity with the previous flow and the other CLI-rendered starters.
+    /// </summary>
+    private async Task<TemplateResult> ApplyEmbeddedStarterTemplateAsync(CallbackTemplate template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken: cancellationToken))
+        {
+            return new TemplateResult(CliExitCodes.SdkNotInstalled);
+        }
+
+        // The embedded starter intentionally does not produce a test project (no Tests project,
+        // no .sln). The --test-framework / --xunit-version options remain registered so existing
+        // invocations and scripts keep parsing, but a request for an actual framework is rejected
+        // rather than silently ignored — otherwise users could believe tests were scaffolded.
+        if (TryGetRequestedTestFramework(parseResult, out var requestedFramework))
+        {
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TestFrameworkNotSupportedByStarter, requestedFramework));
+            return new TemplateResult(CliExitCodes.InvalidCommand);
+        }
+
+        var name = await GetProjectNameAsync(inputs, template.Name, parseResult, cancellationToken);
+        var outputPath = await GetOutputPathAsync(inputs, template.PathDeriver, name, parseResult, cancellationToken);
+
+        if (outputPath is null)
+        {
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+
+        try
+        {
+            // Resolve (but do NOT install) the template package so the generated project
+            // references a version that matches the requested channel. Only the resolved
+            // version and channel influence the output now; the template content itself is
+            // embedded in the CLI rather than coming from the NuGet package.
+            var query = new TemplatePackageQuery(
+                RequestedChannel: inputs.Channel,
+                VersionOverride: inputs.Version,
+                SourceOverride: inputs.Source,
+                IncludePrHives: true);
+
+            var selection = await templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+
+            // Reuse the existing localized prompts (and their displayed confirmations) by
+            // capturing whether each flag ends up in the extra-args list the prompts populate.
+            var promptedArgs = new List<string>();
+            await PromptForDevLocalhostTldOptionAsync(parseResult, promptedArgs, cancellationToken);
+            await PromptForRedisCacheOptionAsync(parseResult, promptedArgs, cancellationToken);
+            var useLocalhostTld = promptedArgs.Contains("--localhost-tld");
+            var useRedisCache = promptedArgs.Contains("--use-redis-cache");
+
+            await interactionService.ShowStatusAsync(
+                TemplatingStrings.CreatingNewProject,
+                async () =>
+                {
+                    await EmbeddedCSharpStarterTemplate.RenderAsync(
+                        outputPath: outputPath,
+                        projectName: name,
+                        useRedisCache: useRedisCache,
+                        useLocalhostTld: useLocalhostTld,
+                        templateVersion: selection.Package.Version,
+                        logger: NullLogger.Instance,
+                        cancellationToken: cancellationToken);
+                    return 0;
+                }, emoji: KnownEmojis.Rocket);
+
+            // Trust certificates (result not used since we're not launching an AppHost).
+            _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+
+            // Persist an Explicit channel (pr-<N>, daily, staging, local) into the new project's
+            // aspire.config.json so `aspire update`/`aspire add` stay on the same channel. Implicit
+            // (stable/nuget.org) selections are left unwritten — matching the previous flow and the
+            // TypeScript starter.
+            if (selection.Channel.Type is PackageChannelType.Explicit)
+            {
+                var config = AspireConfigFile.LoadOrCreate(outputPath);
+                config.Channel = selection.Channel.Name;
+                config.Save(outputPath);
+            }
+
+            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selection.Channel, outputPath, cancellationToken))
+            {
+                await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selection.Channel, outputPath, cancellationToken);
+            }
+
+            interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
+
+            return new TemplateResult(CliExitCodes.Success, outputPath);
+        }
+        catch (OperationCanceledException)
+        {
+            return new TemplateResult(CliExitCodes.Cancelled);
+        }
+        catch (CertificateServiceException ex)
+        {
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message));
+            return new TemplateResult(CliExitCodes.FailedToTrustCertificates);
+        }
+        catch (Exceptions.ChannelNotFoundException ex)
+        {
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (EmptyChoicesException ex)
+        {
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (NuGetPackageCacheException ex)
+        {
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.FailedToCreateProjectFiles, ex.Message));
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+    }
+
+    /// <summary>
+    /// Applies the <c>aspire-ts-cs-starter</c> template (ASP.NET Core / React with a C# AppHost)
+    /// by rendering the multi-project content embedded in the CLI (see
+    /// <see cref="EmbeddedTsCsStarterTemplate"/>), instead of resolving and installing the
+    /// <c>Aspire.ProjectTemplates</c> NuGet package and invoking <c>dotnet new aspire-ts-cs-starter</c>.
+    /// The channel/version is still resolved so the generated projects reference a matching Aspire
+    /// version, and the channel pin + NuGet.config behavior is preserved for parity with the prior
+    /// flow and the other CLI-rendered templates. Unlike the prior flow, no <c>.sln</c> is emitted.
+    /// </summary>
+    private async Task<TemplateResult> ApplyEmbeddedTsCsStarterTemplateAsync(CallbackTemplate template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken: cancellationToken))
+        {
+            return new TemplateResult(CliExitCodes.SdkNotInstalled);
+        }
+
+        var name = await GetProjectNameAsync(inputs, template.Name, parseResult, cancellationToken);
+        var outputPath = await GetOutputPathAsync(inputs, template.PathDeriver, name, parseResult, cancellationToken);
+
+        if (outputPath is null)
+        {
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+
+        try
+        {
+            // Resolve (but do NOT install) the template package so the generated projects
+            // reference a version that matches the requested channel. Only the resolved
+            // version and channel influence the output now; the template content itself is
+            // embedded in the CLI rather than coming from the NuGet package.
+            var query = new TemplatePackageQuery(
+                RequestedChannel: inputs.Channel,
+                VersionOverride: inputs.Version,
+                SourceOverride: inputs.Source,
+                IncludePrHives: true);
+
+            var selection = await templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+
+            // Reuse the existing localized prompts (and their displayed confirmations) by
+            // capturing whether each flag ends up in the extra-args list the prompts populate.
+            var promptedArgs = new List<string>();
+            await PromptForDevLocalhostTldOptionAsync(parseResult, promptedArgs, cancellationToken);
+            await PromptForRedisCacheOptionAsync(parseResult, promptedArgs, cancellationToken);
+            var useLocalhostTld = promptedArgs.Contains("--localhost-tld");
+            var useRedisCache = promptedArgs.Contains("--use-redis-cache");
+
+            await interactionService.ShowStatusAsync(
+                TemplatingStrings.CreatingNewProject,
+                async () =>
+                {
+                    await EmbeddedTsCsStarterTemplate.RenderAsync(
+                        outputPath: outputPath,
+                        projectName: name,
+                        useRedisCache: useRedisCache,
+                        useLocalhostTld: useLocalhostTld,
+                        templateVersion: selection.Package.Version,
+                        logger: NullLogger.Instance,
+                        cancellationToken: cancellationToken);
+                    return 0;
+                }, emoji: KnownEmojis.Rocket);
+
+            // Trust certificates (result not used since we're not launching an AppHost).
+            _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+
+            // Persist an Explicit channel (pr-<N>, daily, staging, local) into the new project's
+            // aspire.config.json so `aspire update`/`aspire add` stay on the same channel. Implicit
+            // (stable/nuget.org) selections are left unwritten — matching the previous flow and the
+            // other CLI-rendered templates.
+            if (selection.Channel.Type is PackageChannelType.Explicit)
+            {
+                var config = AspireConfigFile.LoadOrCreate(outputPath);
+                config.Channel = selection.Channel.Name;
+                config.Save(outputPath);
+            }
+
+            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selection.Channel, outputPath, cancellationToken))
+            {
+                await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selection.Channel, outputPath, cancellationToken);
+            }
+
+            interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
+
+            return new TemplateResult(CliExitCodes.Success, outputPath);
+        }
+        catch (OperationCanceledException)
+        {
+            return new TemplateResult(CliExitCodes.Cancelled);
+        }
+        catch (CertificateServiceException ex)
+        {
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message));
+            return new TemplateResult(CliExitCodes.FailedToTrustCertificates);
+        }
+        catch (Exceptions.ChannelNotFoundException ex)
+        {
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (EmptyChoicesException ex)
+        {
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (NuGetPackageCacheException ex)
+        {
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.FailedToCreateProjectFiles, ex.Message));
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+    }
+
+    // Returns true (and the requested framework name) when the caller asked for an actual test
+    // framework via --test-framework <fx> or --xunit-version. A missing value, or an explicit
+    // "None", is treated as "no test project requested" and returns false.
+    private bool TryGetRequestedTestFramework(ParseResult parseResult, out string framework)
+    {
+        framework = string.Empty;
+
+        var (frameworkProvided, frameworkValue) = PromptBinding.Create(parseResult, _testFrameworkOption).Resolve();
+        if (frameworkProvided
+            && !string.IsNullOrWhiteSpace(frameworkValue)
+            && !string.Equals(frameworkValue, TemplatingStrings.None, StringComparisons.CliInputOrOutput)
+            && !string.Equals(frameworkValue, "None", StringComparison.OrdinalIgnoreCase))
+        {
+            framework = frameworkValue;
+            return true;
+        }
+
+        // --xunit-version only makes sense alongside an xUnit test project, so treat it as a
+        // request for one even if --test-framework was omitted.
+        var (xunitProvided, xunitValue) = PromptBinding.Create(parseResult, _xunitVersionOption).Resolve();
+        if (xunitProvided && !string.IsNullOrWhiteSpace(xunitValue))
+        {
+            framework = "xUnit.net";
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Applies the <c>aspire-apphost</c> template by rendering the single-project C# AppHost
+    /// that is embedded in the CLI (see <see cref="EmbeddedCSharpAppHostTemplate"/>), instead of
+    /// resolving and installing the <c>Aspire.ProjectTemplates</c> NuGet package and invoking
+    /// <c>dotnet new aspire-apphost</c>. This is the same embedded template that <c>aspire init</c>
+    /// renders, so <c>aspire new aspire-apphost</c> and <c>aspire init</c> now produce identical
+    /// AppHost projects. The channel/version is still resolved so the generated project references
+    /// a matching Aspire version, and the channel pin + NuGet.config behavior is preserved for
+    /// parity with the previous flow and the other CLI-rendered templates.
+    /// </summary>
+    private async Task<TemplateResult> ApplyEmbeddedAppHostTemplateAsync(CallbackTemplate template, TemplateInputs inputs, ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken: cancellationToken))
+        {
+            return new TemplateResult(CliExitCodes.SdkNotInstalled);
+        }
+
+        var name = await GetProjectNameAsync(inputs, template.Name, parseResult, cancellationToken);
+        var outputPath = await GetOutputPathAsync(inputs, template.PathDeriver, name, parseResult, cancellationToken);
+
+        if (outputPath is null)
+        {
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+
+        try
+        {
+            // Resolve (but do NOT install) the template package so the generated project
+            // references a version that matches the requested channel. Only the resolved
+            // version and channel influence the output now; the template content itself is
+            // embedded in the CLI rather than coming from the NuGet package.
+            var query = new TemplatePackageQuery(
+                RequestedChannel: inputs.Channel,
+                VersionOverride: inputs.Version,
+                SourceOverride: inputs.Source,
+                IncludePrHives: true);
+
+            var selection = await templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+
+            // Reuse the existing localized prompt (and its displayed confirmation) by capturing
+            // whether the flag ends up in the extra-args list the prompt populates.
+            var promptedArgs = new List<string>();
+            await PromptForDevLocalhostTldOptionAsync(parseResult, promptedArgs, cancellationToken);
+            var useLocalhostTld = promptedArgs.Contains("--localhost-tld");
+
+            await interactionService.ShowStatusAsync(
+                TemplatingStrings.CreatingNewProject,
+                async () =>
+                {
+                    await EmbeddedCSharpAppHostTemplate.RenderAsync(
+                        outputPath: outputPath,
+                        projectName: name,
+                        useLocalhostTld: useLocalhostTld,
+                        templateVersion: selection.Package.Version,
+                        logger: NullLogger.Instance,
+                        cancellationToken: cancellationToken);
+                    return 0;
+                }, emoji: KnownEmojis.Rocket);
+
+            // Trust certificates (result not used since we're not launching an AppHost).
+            _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+
+            // Persist an Explicit channel (pr-<N>, daily, staging, local) into the new project's
+            // aspire.config.json so `aspire update`/`aspire add` stay on the same channel. Implicit
+            // (stable/nuget.org) selections are left unwritten — matching the previous flow and the
+            // other CLI-rendered templates.
+            if (selection.Channel.Type is PackageChannelType.Explicit)
+            {
+                var config = AspireConfigFile.LoadOrCreate(outputPath);
+                config.Channel = selection.Channel.Name;
+                config.Save(outputPath);
+            }
+
+            if (!await TemplateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, selection.Channel, outputPath, cancellationToken))
+            {
+                await templateNuGetConfigService.PromptToCreateOrUpdateNuGetConfigAsync(selection.Channel, outputPath, cancellationToken);
+            }
+
+            interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
+
+            return new TemplateResult(CliExitCodes.Success, outputPath);
+        }
+        catch (OperationCanceledException)
+        {
+            return new TemplateResult(CliExitCodes.Cancelled);
+        }
+        catch (CertificateServiceException ex)
+        {
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message));
+            return new TemplateResult(CliExitCodes.FailedToTrustCertificates);
+        }
+        catch (Exceptions.ChannelNotFoundException ex)
+        {
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (EmptyChoicesException ex)
+        {
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (NuGetPackageCacheException ex)
+        {
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.FailedToCreateProjectFiles, ex.Message));
             return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
     }

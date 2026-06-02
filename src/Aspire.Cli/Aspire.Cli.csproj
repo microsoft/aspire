@@ -271,7 +271,19 @@
 
   <ItemGroup>
     <Compile Remove="Templating\Templates\empty-apphost\**\*.cs" />
+    <Compile Remove="Templating\Templates\csharp-apphost\**\*.cs" />
+    <Compile Remove="Templating\Templates\csharp-starter\**\*.cs" />
+    <Compile Remove="Templating\Templates\ts-cs-starter\**\*.cs" />
     <EmbeddedResource Include="Templating\Templates\empty-apphost\**\*" LogicalName="empty-apphost.%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Templating\Templates\csharp-apphost\**\*" LogicalName="csharp-apphost.%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Templating\Templates\csharp-starter\**\*" LogicalName="csharp-starter.%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Templating\Templates\ts-cs-starter\**\*" LogicalName="ts-cs-starter.%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="Templating\Templates\ts-starter\**\*" LogicalName="ts-starter.%(RecursiveDir)%(Filename)%(Extension)">
@@ -283,6 +295,23 @@
     <EmbeddedResource Include="Templating\Templates\go-starter\**\*" LogicalName="go-starter.%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- Bake package versions from eng/Versions.props into AssemblyMetadata attributes so
+       the embedded templates (e.g. csharp-starter) can stamp the same version numbers
+       Aspire.ProjectTemplates uses when packing. Keep this list in sync with the
+       <Replacements> list in src/Aspire.ProjectTemplates/Aspire.ProjectTemplates.csproj
+       and with the property reads in
+       src/Aspire.Cli/Templating/EmbeddedTemplatePackageVersions.cs. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="MicrosoftExtensionsHttpResilienceVersion" Value="$(MicrosoftExtensionsHttpResilienceVersion)" />
+    <AssemblyMetadata Include="MicrosoftExtensionsServiceDiscoveryVersion" Value="$(MicrosoftExtensionsServiceDiscoveryVersion)" />
+    <AssemblyMetadata Include="OpenTelemetryExporterOpenTelemetryProtocolVersion" Value="$(OpenTelemetryExporterOpenTelemetryProtocolVersion)" />
+    <AssemblyMetadata Include="OpenTelemetryInstrumentationExtensionsHostingVersion" Value="$(OpenTelemetryInstrumentationExtensionsHostingVersion)" />
+    <AssemblyMetadata Include="OpenTelemetryInstrumentationAspNetCoreVersion" Value="$(OpenTelemetryInstrumentationAspNetCoreVersion)" />
+    <AssemblyMetadata Include="OpenTelemetryInstrumentationHttpVersion" Value="$(OpenTelemetryInstrumentationHttpVersion)" />
+    <AssemblyMetadata Include="OpenTelemetryInstrumentationRuntimeVersion" Value="$(OpenTelemetryInstrumentationRuntimeVersion)" />
+    <AssemblyMetadata Include="MicrosoftAspNetCoreOpenApiPreviewVersion" Value="$(MicrosoftAspNetCoreOpenApiPreviewVersion)" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">

@@ -1,0 +1,20 @@
+{
+  "replacements": [
+    { "from": "Aspire.AppHost1", "to": "projectName", "target": "both" },
+    { "from": "{{aspireVersion}}", "to": "aspireVersion" },
+    { "from": "{{userSecretsId}}", "to": "userSecretsId" },
+    { "from": "{{hostName}}", "to": "hostName" },
+    { "from": "{{httpPort}}", "to": "httpPort" },
+    { "from": "{{httpsPort}}", "to": "httpsPort" },
+    { "from": "{{otlpHttpPort}}", "to": "otlpHttpPort" },
+    { "from": "{{otlpHttpsPort}}", "to": "otlpHttpsPort" },
+    { "from": "{{resourceHttpPort}}", "to": "resourceHttpPort" },
+    { "from": "{{resourceHttpsPort}}", "to": "resourceHttpsPort" }
+  ],
+  "fileRenames": [
+    { "fromSuffix": "._csproj", "toSuffix": ".csproj" }
+  ],
+  "conditions": [
+    "localhostTld"
+  ]
+}

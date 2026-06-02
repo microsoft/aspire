@@ -454,4 +454,88 @@ public class ConditionalBlockProcessorTests
         Assert.Contains("cluster content", result);
         Assert.Contains("{{#redis-cluster}}", result);
     }
+
+    // ──────────────────────────────────────────────────────────────────────
+    // Inverted sections — {{^name}}...{{/name}}, kept when condition is FALSE.
+    // Modeled on Mustache's inverted section. Required for translating the
+    // standalone dotnet-new templates' `#if (X) ... #else ... #endif` shape into
+    // adjacent positive + inverted blocks for the same condition.
+    // ──────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Inverted_KeepsContent_WhenConditionFalse()
+    {
+        var input = """
+            before
+            // {{^feature}}
+            shown when feature is off
+            // {{/feature}}
+            after
+            """;
+
+        var conditions = new Dictionary<string, bool>(StringComparer.Ordinal) { ["feature"] = false };
+        var result = ConditionalBlockProcessor.Process(input, conditions);
+
+        Assert.Contains("shown when feature is off", result);
+        Assert.DoesNotContain("{{^feature}}", result);
+        Assert.DoesNotContain("{{/feature}}", result);
+    }
+
+    [Fact]
+    public void Inverted_RemovesContent_WhenConditionTrue()
+    {
+        var input = """
+            before
+            // {{^feature}}
+            shown when feature is off
+            // {{/feature}}
+            after
+            """;
+
+        var conditions = new Dictionary<string, bool>(StringComparer.Ordinal) { ["feature"] = true };
+        var result = ConditionalBlockProcessor.Process(input, conditions);
+
+        Assert.DoesNotContain("shown when feature is off", result);
+        Assert.DoesNotContain("{{^feature}}", result);
+        Assert.DoesNotContain("{{/feature}}", result);
+        Assert.Contains("before", result);
+        Assert.Contains("after", result);
+    }
+
+    [Fact]
+    public void PositiveAndInverted_Adjacent_BehaveAsIfElse()
+    {
+        // The canonical use case: render one of two branches based on a single
+        // condition, exactly like a dotnet-new template's `#if/#else/#endif`.
+        var input = """
+            url:
+            // {{#useTld}}
+            https://app.dev.localhost
+            // {{/useTld}}
+            // {{^useTld}}
+            https://localhost
+            // {{/useTld}}
+            """;
+
+        var trueResult = ConditionalBlockProcessor.Process(
+            input,
+            new Dictionary<string, bool>(StringComparer.Ordinal) { ["useTld"] = true });
+        var falseResult = ConditionalBlockProcessor.Process(
+            input,
+            new Dictionary<string, bool>(StringComparer.Ordinal) { ["useTld"] = false });
+
+        Assert.Contains("https://app.dev.localhost", trueResult);
+        Assert.DoesNotContain("https://localhost\n", trueResult);
+
+        Assert.Contains("https://localhost", falseResult);
+        Assert.DoesNotContain("https://app.dev.localhost", falseResult);
+
+        // Marker lines must always be stripped, regardless of which branch wins.
+        Assert.DoesNotContain("{{#useTld}}", trueResult);
+        Assert.DoesNotContain("{{/useTld}}", trueResult);
+        Assert.DoesNotContain("{{^useTld}}", trueResult);
+        Assert.DoesNotContain("{{#useTld}}", falseResult);
+        Assert.DoesNotContain("{{/useTld}}", falseResult);
+        Assert.DoesNotContain("{{^useTld}}", falseResult);
+    }
 }

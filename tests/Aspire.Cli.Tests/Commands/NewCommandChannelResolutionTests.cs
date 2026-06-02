@@ -64,6 +64,9 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            // The "aspire" template (DotNetEmptyAppHost) stays on the NuGet/dotnet-new path (gated behind ShowAllTemplates),
+            // so the install-time version capture below still fires; the embedded-render C# templates do not install.
+            options.FeatureFlagsFactory = _ => new TestFeatures().SetFeature(KnownFeatures.ShowAllTemplates, true);
             options.ConfigurationServiceFactory = _ => tripwireConfigService;
 
             // Pin a single Implicit channel so the template resolver has a definite fall-through
@@ -104,7 +107,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         using var serviceProvider = services.BuildServiceProvider();
         var newCommand = serviceProvider.GetRequiredService<NewCommand>();
 
-        var parseResult = newCommand.Parse("new aspire-starter --name TestApp --output ./output --use-redis-cache --test-framework None");
+        var parseResult = newCommand.Parse("new aspire --name TestApp --output ./output");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);

@@ -1,0 +1,32 @@
+{
+  "replacements": [
+    { "from": "Aspire-StarterApplication.1", "to": "projectName", "target": "both" },
+    { "from": "Aspire_StarterApplication._1", "to": "generatedClassNamePrefix" },
+    { "from": "{{aspireVersion}}", "to": "aspireVersion" },
+    { "from": "{{userSecretsId}}", "to": "userSecretsId" },
+    { "from": "{{hostName}}", "to": "hostName" },
+    { "from": "{{appHostHttpPort}}", "to": "appHostHttpPort" },
+    { "from": "{{appHostHttpsPort}}", "to": "appHostHttpsPort" },
+    { "from": "{{appHostOtlpHttpPort}}", "to": "appHostOtlpHttpPort" },
+    { "from": "{{appHostOtlpHttpsPort}}", "to": "appHostOtlpHttpsPort" },
+    { "from": "{{appHostResourceHttpPort}}", "to": "appHostResourceHttpPort" },
+    { "from": "{{appHostResourceHttpsPort}}", "to": "appHostResourceHttpsPort" },
+    { "from": "{{serverHttpPort}}", "to": "serverHttpPort" },
+    { "from": "{{serverHttpsPort}}", "to": "serverHttpsPort" },
+    { "from": "{{microsoftExtensionsHttpResilienceVersion}}", "to": "microsoftExtensionsHttpResilienceVersion" },
+    { "from": "{{microsoftExtensionsServiceDiscoveryVersion}}", "to": "microsoftExtensionsServiceDiscoveryVersion" },
+    { "from": "{{openTelemetryExporterVersion}}", "to": "openTelemetryExporterVersion" },
+    { "from": "{{openTelemetryHostingVersion}}", "to": "openTelemetryHostingVersion" },
+    { "from": "{{openTelemetryInstrumentationAspNetCoreVersion}}", "to": "openTelemetryInstrumentationAspNetCoreVersion" },
+    { "from": "{{openTelemetryInstrumentationHttpVersion}}", "to": "openTelemetryInstrumentationHttpVersion" },
+    { "from": "{{openTelemetryInstrumentationRuntimeVersion}}", "to": "openTelemetryInstrumentationRuntimeVersion" },
+    { "from": "{{aspNetCoreOpenApi10Version}}", "to": "aspNetCoreOpenApi10Version" }
+  ],
+  "fileRenames": [
+    { "fromSuffix": "._csproj", "toSuffix": ".csproj" }
+  ],
+  "conditions": [
+    "useRedisCache",
+    "localhostTld"
+  ]
+}

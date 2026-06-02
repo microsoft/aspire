@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+{{#localhostTld}}
+      "applicationUrl": "https://{{hostName}}.dev.localhost:{{appHostHttpsPort}};http://{{hostName}}.dev.localhost:{{appHostHttpPort}}",
+{{/localhostTld}}
+{{^localhostTld}}
+      "applicationUrl": "https://localhost:{{appHostHttpsPort}};http://localhost:{{appHostHttpPort}}",
+{{/localhostTld}}
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:{{appHostOtlpHttpsPort}}",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:{{appHostResourceHttpsPort}}"
+      }
+    },
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+{{#localhostTld}}
+      "applicationUrl": "http://{{hostName}}.dev.localhost:{{appHostHttpPort}}",
+{{/localhostTld}}
+{{^localhostTld}}
+      "applicationUrl": "http://localhost:{{appHostHttpPort}}",
+{{/localhostTld}}
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:{{appHostOtlpHttpPort}}",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:{{appHostResourceHttpPort}}"
+      }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+@ApiService_HostAddress = http://localhost:{{apiServiceHttpPort}}
+
+GET {{ApiService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

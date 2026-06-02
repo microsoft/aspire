@@ -9,9 +9,7 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
-using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -342,15 +340,9 @@ internal sealed class InitCommand : BaseCommand
         // Drop the solution-directory NuGet.config BEFORE the AppHost-dir-already-exists
         // early return so re-running `aspire init` against a workspace produced by a
         // previous broken CLI (which left a `<sln>.AppHost/` without a workspace
-        // NuGet.config) recovers cleanly. Writing here is also required BEFORE
-        // `_runner.NewProjectAsync` so the aspire-apphost template's built-in `restore`
-        // post-action (template.json post-action id "restore", conditioned on
-        // !skipRestore which defaults to false) can resolve the
-        // `Aspire.AppHost.Sdk/<version>` reference from the channel-matched hive. The
-        // post-action currently runs with continueOnError=true so a missing nuget.config
-        // wouldn't fail init, but its restore would still emit confusing errors and waste
-        // work — and a future template change that drops continueOnError would break init
-        // outright.
+        // NuGet.config) recovers cleanly. The generated `<projectName>.csproj` references
+        // `Aspire.AppHost.Sdk/<version>` which must resolve from the identity-channel hive
+        // when `aspire run` / `aspire restore` first warm the package graph.
         //
         // Source: CliExecutionContext.IdentityChannel (stable / staging / daily / pr-<N> /
         // local). NuGetConfigMerger underneath creates a new file or merges missing
@@ -372,95 +364,34 @@ internal sealed class InitCommand : BaseCommand
             return CliExitCodes.Success;
         }
 
-        // Resolve the channel-aware template package version + feed mapping. The running
-        // CLI binary's identity channel (CliExecutionContext.IdentityChannel — stable, staging,
-        // daily, pr-<N>, or local) drives the selection so a developer scaffolding with a
-        // pr-<N> CLI gets a project wired to the matching pr-<N> hive. PR hives are
-        // intentionally excluded — init should produce the same template on every machine
-        // for a given CLI build.
-        TemplatePackageSelection selection;
+        // Render the embedded C# AppHost project template into <sln>.AppHost/. This
+        // replaces the previous flow that resolved the channel-aware Aspire.ProjectTemplates
+        // package, installed it via `dotnet new install`, and then invoked
+        // `dotnet new aspire-apphost`. The embedded template is byte-equivalent (modulo the
+        // explicit symbol translations documented on EmbeddedCSharpAppHostTemplate) to the
+        // tree that ships in Aspire.ProjectTemplates/templates/aspire-apphost/ for
+        // IDE / `dotnet new` consumers — the two surfaces are kept in sync by code review,
+        // not by build-time sharing, because the CLI is `<PublishAot>true</PublishAot>` and
+        // can't host the .NET Templating engine.
         try
         {
-            var query = new TemplatePackageQuery(
-                RequestedChannel: _executionContext.IdentityChannel,
-                VersionOverride: null,
-                SourceOverride: null,
-                IncludePrHives: false);
-
-            selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+            await InteractionService.ShowStatusAsync(
+                InitCommandStrings.CreatingAppHostFromTemplate,
+                async () =>
+                {
+                    await EmbeddedCSharpAppHostTemplate.RenderAsync(
+                        outputPath: appHostDirPath,
+                        projectName: appHostDirName,
+                        useLocalhostTld: false,
+                        templateVersion: null,
+                        logger: Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+                        cancellationToken: cancellationToken);
+                    return 0;
+                });
         }
-        catch (ChannelNotFoundException) when
-            (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Locally-built CLI (identity=local) on a machine where ~/.aspire/hives/local
-            // isn't installed. The PackagingService produces no "local" channel in that
-            // case, but init's contract is that identity-as-request is implicit — so fall
-            // back to the implicit channel (ambient NuGet) instead of failing. This branch
-            // lives here, NOT in the resolver, so that an explicit `aspire new --channel local`
-            // without the hive correctly errors instead of silently switching feeds.
-            var fallbackQuery = new TemplatePackageQuery(
-                RequestedChannel: null,
-                VersionOverride: null,
-                SourceOverride: null,
-                IncludePrHives: false);
-
-            selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(fallbackQuery, cancellationToken);
-        }
-        catch (ChannelNotFoundException ex)
-        {
-            InteractionService.DisplayError(ex.Message);
-            return CliExitCodes.FailedToInstallTemplates;
-        }
-        catch (EmptyChoicesException ex)
-        {
-            InteractionService.DisplayError(ex.Message);
-            return CliExitCodes.FailedToInstallTemplates;
-        }
-        catch (NuGetPackageCacheException ex)
-        {
-            // Surface NuGet feed search failures (offline, inaccessible feed, etc.) with a friendly error
-            // instead of letting them bubble up to the top-level "unexpected error" handler. The pre-extraction
-            // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
-            // restores parity with the prior init failure mode for these scenarios.
-            InteractionService.DisplayError(ex.Message);
-            return CliExitCodes.FailedToInstallTemplates;
-        }
-
-        // The aspire-apphost template ships in the Aspire.ProjectTemplates package.
-        // `dotnet new` does not install templates implicitly, so on a fresh machine
-        // (or after a CLI update) the template will be missing. Install first.
-        var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
-            selection,
-            _runner,
-            InitCommandStrings.InstallingAspireProjectTemplates,
-            statusEmoji: null,
-            cancellationToken);
-
-        if (installOutcome.ExitCode != 0)
-        {
-            InteractionService.DisplayLines(installOutcome.OutputLines);
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
-            return CliExitCodes.FailedToInstallTemplates;
-        }
-
-        // Use the aspire-apphost template to generate a correct AppHost project
-        // with proper launchSettings.json, .csproj, and Program.cs.
-        var result = await InteractionService.ShowStatusAsync(
-            InitCommandStrings.CreatingAppHostFromTemplate,
-            async () =>
-            {
-                return await _runner.NewProjectAsync(
-                    "aspire-apphost",
-                    appHostDirName,
-                    appHostDirPath,
-                    extraArgs: [],
-                    options: new ProcessInvocationOptions(),
-                    cancellationToken: cancellationToken);
-            });
-
-        if (result != 0)
-        {
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToCreateAppHostFromTemplate, result));
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToCreateAppHostFromTemplate, ex.Message));
             return CliExitCodes.FailedToCreateNewProject;
         }
 

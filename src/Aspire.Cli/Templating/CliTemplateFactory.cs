@@ -3,7 +3,6 @@
 
 using System.CommandLine;
 using System.Globalization;
-using System.Text;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
@@ -25,22 +24,6 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         KnownLanguageId.Go,
         KnownLanguageId.Java,
         KnownLanguageId.Rust
-    ];
-
-    private static readonly HashSet<string> s_binaryTemplateExtensions =
-    [
-        ".png",
-        ".jpg",
-        ".jpeg",
-        ".gif",
-        ".ico",
-        ".bmp",
-        ".webp",
-        ".svg",
-        ".woff",
-        ".woff2",
-        ".ttf",
-        ".otf"
     ];
 
     private readonly Option<bool?> _localhostTldOption = new("--localhost-tld")
@@ -280,54 +263,14 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
     private async Task CopyTemplateTreeToDiskAsync(string templateRoot, string outputPath, Func<string, string> tokenReplacer, CancellationToken cancellationToken)
     {
-        var assembly = typeof(CliTemplateFactory).Assembly;
-        _logger.LogDebug("Copying embedded template tree '{TemplateRoot}' to '{OutputPath}'.", templateRoot, outputPath);
-
-        var allResourceNames = assembly.GetManifestResourceNames();
-        var resourcePrefix = $"{templateRoot}.";
-        var resourceNames = allResourceNames
-            .Where(name => name.StartsWith(resourcePrefix, StringComparison.Ordinal))
-            .OrderBy(static name => name, StringComparer.Ordinal)
-            .ToArray();
-
-        if (resourceNames.Length == 0)
-        {
-            _logger.LogDebug("No embedded resources found for template root '{TemplateRoot}'. Available manifest resources: {ManifestResources}", templateRoot, string.Join(", ", allResourceNames));
-            throw new InvalidOperationException($"No embedded template resources found for '{templateRoot}'.");
-        }
-
-        _logger.LogDebug("Found {ResourceCount} embedded resources for template root '{TemplateRoot}': {TemplateResources}", resourceNames.Length, templateRoot, string.Join(", ", resourceNames));
-
-        foreach (var resourceName in resourceNames)
-        {
-            var relativePath = resourceName[resourcePrefix.Length..].Replace('/', Path.DirectorySeparatorChar);
-            var filePath = Path.Combine(outputPath, relativePath);
-            var fileDirectory = Path.GetDirectoryName(filePath);
-            if (!string.IsNullOrEmpty(fileDirectory))
-            {
-                Directory.CreateDirectory(fileDirectory);
-            }
-
-            using var stream = assembly.GetManifestResourceStream(resourceName)
-                ?? throw new InvalidOperationException($"Embedded template resource not found: {resourceName}");
-
-            _logger.LogDebug("Writing embedded template resource '{ResourceName}' to '{FilePath}'.", resourceName, filePath);
-            if (s_binaryTemplateExtensions.Contains(Path.GetExtension(filePath)))
-            {
-                await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                await stream.CopyToAsync(fileStream, cancellationToken);
-            }
-            else
-            {
-                using var reader = new StreamReader(stream);
-                var content = await reader.ReadToEndAsync(cancellationToken);
-                var transformedContent = tokenReplacer(content);
-                await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
-                await using var writer = new StreamWriter(fileStream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-                await writer.WriteAsync(transformedContent.AsMemory(), cancellationToken);
-                await writer.FlushAsync(cancellationToken);
-            }
-        }
+        // Both the embedded-resource source and the renderer log their own progress.
+        // Keep this method as a thin adapter so existing call sites stay untouched;
+        // Stage 7 of the templating overhaul will introduce additional ITemplateSource
+        // implementations (folder, git checkout) that flow through the same renderer
+        // without needing to change any per-template apply method.
+        var source = new EmbeddedResourceTemplateSource(typeof(CliTemplateFactory).Assembly, templateRoot);
+        var renderer = new TemplateRenderer(_logger);
+        await renderer.RenderAsync(source, outputPath, tokenReplacer, cancellationToken);
     }
 
     private void DisplayPostCreationInstructions(string outputPath)
