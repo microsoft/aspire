@@ -323,14 +323,8 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             throw new FailedToApplyEnvironmentException($"Failed to apply configuration to container {cr.ModelResource.Name}", configuration.Exception);
         }
 
-        // Environment callbacks can resolve proxyless endpoint ports and commit a fallback host port.
-        // Stop allowing on-demand allocation before building ports so the container spec consumes
-        // the finalized endpoint state.
-        foreach (var sp in cr.ServicesProduced)
-        {
-            Interlocked.Exchange(ref sp.EndpointAnnotation._onDemandAllocatedEndpointProvider, null);
-        }
-
+        // Environment callbacks can resolve proxyless endpoint ports and commit a fallback host port,
+        // so build ports afterward.
         if (cr.ServicesProduced.Count > 0)
         {
             spec.Ports = BuildContainerPorts(cr);
@@ -994,6 +988,8 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             {
                 ContainerPort = ea.TargetPort,
             };
+
+            Interlocked.Exchange(ref ea._onDemandAllocatedEndpointProvider, null);
 
             if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
             {
