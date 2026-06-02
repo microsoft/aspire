@@ -5,7 +5,6 @@
 import { createServer } from "node:http";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import path from "node:path";
 import { joinSession, createCanvas } from "@github/copilot-sdk/extension";
 
 const execFileP = promisify(execFile);
@@ -19,6 +18,23 @@ async function git(cwd, args) {
         maxBuffer: 64 * 1024 * 1024,
     });
     return stdout;
+}
+
+// Reject anything that could be parsed by git as an option, contain a path
+// traversal into another revision range, or smuggle shell-like control chars.
+// git's own rules already forbid most of these in real ref names
+// (https://git-scm.com/docs/git-check-ref-format), so this is conservative.
+// We allow `A...B` / `A..B` range syntax because callers may pass those.
+function assertSafeRef(value, label) {
+    if (typeof value !== "string" || value.length === 0) {
+        throw new Error(`${label} must be a non-empty string`);
+    }
+    if (value.startsWith("-")) {
+        throw new Error(`${label} must not start with '-' (looks like a git option): ${value}`);
+    }
+    if (!/^[A-Za-z0-9._/@^~+\-]+(\.{2,3}[A-Za-z0-9._/@^~+\-]+)?$/.test(value)) {
+        throw new Error(`${label} contains characters not allowed in a git ref: ${value}`);
+    }
 }
 
 async function detectRepoRoot(cwd) {
@@ -174,6 +190,8 @@ function characterize(files, addRatio, total) {
 
 async function buildReport(opts) {
     const cwd = await detectRepoRoot(opts.cwd);
+    if (opts.base !== undefined) assertSafeRef(opts.base, "base");
+    if (opts.head !== undefined) assertSafeRef(opts.head, "head");
     const base = opts.base || (await detectBase(cwd));
     const head = opts.head || "HEAD";
     const branch = (await git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])).trim();
