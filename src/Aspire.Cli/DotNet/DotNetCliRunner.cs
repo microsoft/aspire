@@ -729,10 +729,9 @@ internal sealed class DotNetCliRunner(
         string[] cliArgs = isSingleFile switch
         {
             false => [watchOrRunCommand, nonInteractiveSwitch, verboseSwitch, noBuildSwitch, noRestoreSwitch, noProfileSwitch, "--project", projectFile.FullName, "--", .. args],
-            // File-based dotnet run currently does not account for /p: properties when
-            // reusing the cached run command for --no-build. Omit --no-build for single-file
-            // AppHosts so suppression is observed and a CLI-launched AppHost cannot recursively
-            // enter the run hook.
+            // File-based dotnet run only recomputes RunCommand during build. Omit --no-build
+            // for single-file AppHosts so the suppression property is applied before launch
+            // and a CLI-launched AppHost cannot recursively enter the run hook.
             true => ["run", noRestoreSwitch, noProfileSwitch, suppressCliRunHookProperty, "--file", projectFile.FullName, "--", .. args]
         };
 
