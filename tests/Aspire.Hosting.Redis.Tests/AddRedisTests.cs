@@ -850,7 +850,7 @@ public class AddRedisTests(ITestOutputHelper testOutputHelper)
 
         await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, appModel));
 
-        var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource, app.Services);
+        var args = await ArgumentEvaluator.GetArgumentListAsync(redis.Resource, app.Services).AsTask().WaitAsync(TimeSpan.FromSeconds(60));
 
         Assert.Equal("6379", args[args.IndexOf("--tls-port") + 1]);
         Assert.Equal("6380", args[args.IndexOf("--port") + 1]);
