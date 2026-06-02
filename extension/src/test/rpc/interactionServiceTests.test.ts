@@ -334,108 +334,130 @@ suite('InteractionService endpoints', () => {
 	});
 
 	test("displayDashboardUrls writes URLs to output channel and shows info message when autoLaunch is notification", async () => {
-		const stub = sinon.stub(extensionLogOutputChannel, 'info');
-		const showInformationMessageStub = sinon.stub(vscode.window, 'showInformationMessage').resolves();
-		const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
-			get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'notification' : defaultValue
-		} as any);
-		const testInfo = await createTestRpcServer();
+		const sandbox = sinon.createSandbox();
 
-		const baseUrl = 'http://localhost';
-		const codespacesUrl = 'http://codespaces';
+		try {
+			const stub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+				get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'notification' : defaultValue
+			} as any);
+			const testInfo = await createTestRpcServer();
 
-		await testInfo.interactionService.displayDashboardUrls({
-			BaseUrlWithLoginToken: baseUrl,
-			CodespacesUrlWithLoginToken: codespacesUrl
-		});
+			const baseUrl = 'http://localhost/login?t=base-secret';
+			const codespacesUrl = 'http://codespaces/login?t=codespaces-secret';
 
-		const outputLines = stub.getCalls().map(call => call.args[0]);
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: baseUrl,
+				CodespacesUrlWithLoginToken: codespacesUrl
+			});
 
-		// wait 2 seconds to ensure we waited for displayDashboardUrls to complete
-		await new Promise(resolve => setTimeout(resolve, 2000));
+			const outputLines = stub.getCalls().map(call => call.args[0]);
 
-		assert.ok(outputLines.some(line => line.includes(baseUrl)), 'Output should contain base URL');
-		assert.ok(outputLines.some(line => line.includes(codespacesUrl)), 'Output should contain codespaces URL');
-		assert.equal(showInformationMessageStub.callCount, 1, 'Should show info message when autoLaunch is notification');
-		stub.restore();
-		showInformationMessageStub.restore();
-		getConfigurationStub.restore();
+			await new Promise(resolve => setTimeout(resolve, 2000));
+
+			assert.ok(outputLines.some(line => line.includes('http://localhost')), 'Output should contain sanitized base URL origin');
+			assert.ok(outputLines.some(line => line.includes('http://codespaces')), 'Output should contain sanitized codespaces URL origin');
+			assert.ok(outputLines.every(line => !line.includes('base-secret')), 'Output should not contain base URL login token');
+			assert.ok(outputLines.every(line => !line.includes('codespaces-secret')), 'Output should not contain codespaces URL login token');
+			assert.equal(showInformationMessageStub.callCount, 1, 'Should show info message when autoLaunch is notification');
+		}
+		finally {
+			sandbox.restore();
+		}
 	});
 
 	test("displayDashboardUrls writes URLs but does not show info message when autoLaunch is launch", async () => {
-		const stub = sinon.stub(extensionLogOutputChannel, 'info');
-		const showInformationMessageStub = sinon.stub(vscode.window, 'showInformationMessage').resolves();
-		const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration').returns({
-			get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'launch' : defaultValue
-		} as any);
-		const testInfo = await createTestRpcServer();
+		const sandbox = sinon.createSandbox();
 
-		const baseUrl = 'http://localhost';
-		const codespacesUrl = 'http://codespaces';
+		try {
+			const stub = sandbox.stub(extensionLogOutputChannel, 'info');
+			const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves();
+			sandbox.stub(vscode.workspace, 'getConfiguration').returns({
+				get: (key: string, defaultValue?: any) => key === 'enableAspireDashboardAutoLaunch' ? 'launch' : defaultValue
+			} as any);
+			const testInfo = await createTestRpcServer();
 
-		await testInfo.interactionService.displayDashboardUrls({
-			BaseUrlWithLoginToken: baseUrl,
-			CodespacesUrlWithLoginToken: codespacesUrl
-		});
+			const baseUrl = 'http://localhost/login?t=base-secret';
+			const codespacesUrl = 'http://codespaces/login?t=codespaces-secret';
 
-		const outputLines = stub.getCalls().map(call => call.args[0]);
+			await testInfo.interactionService.displayDashboardUrls({
+				BaseUrlWithLoginToken: baseUrl,
+				CodespacesUrlWithLoginToken: codespacesUrl
+			});
 
-		// No need to wait since no setTimeout should be called when autoLaunch is enabled
-		assert.ok(outputLines.some(line => line.includes(baseUrl)), 'Output should contain base URL');
-		assert.ok(outputLines.some(line => line.includes(codespacesUrl)), 'Output should contain codespaces URL');
-		assert.equal(showInformationMessageStub.callCount, 0, 'Should not show info message when autoLaunch is launch');
-		stub.restore();
-		showInformationMessageStub.restore();
-		getConfigurationStub.restore();
+			const outputLines = stub.getCalls().map(call => call.args[0]);
+
+			assert.ok(outputLines.some(line => line.includes('http://localhost')), 'Output should contain sanitized base URL origin');
+			assert.ok(outputLines.some(line => line.includes('http://codespaces')), 'Output should contain sanitized codespaces URL origin');
+			assert.ok(outputLines.every(line => !line.includes('base-secret')), 'Output should not contain base URL login token');
+			assert.ok(outputLines.every(line => !line.includes('codespaces-secret')), 'Output should not contain codespaces URL login token');
+			assert.equal(showInformationMessageStub.callCount, 0, 'Should not show info message when autoLaunch is launch');
+		}
+		finally {
+			sandbox.restore();
+		}
 	});
 
 	test("displayLines endpoint", async () => {
-		const stub = sinon.stub(extensionLogOutputChannel, 'info');
-		const sentMessages: { message: string; category: string }[] = [];
-		const mockDebugSession = {
-			sendMessage: (message: string, addNewLine: boolean, category: 'stdout' | 'stderr') => {
-				sentMessages.push({ message, category });
-			}
-		} as unknown as AspireDebugSession;
-		const testInfo = await createTestRpcServer(null, () => mockDebugSession);
+		const sandbox = sinon.createSandbox();
 
-		testInfo.interactionService.displayLines([
-			{ Stream: 'stdout', Line: 'line1' },
-			{ Stream: 'stderr', Line: 'line2' }
-		]);
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const sentMessages: { message: string; category: string }[] = [];
+			const mockDebugSession = {
+				sendMessage: (message: string, addNewLine: boolean, category: 'stdout' | 'stderr') => {
+					sentMessages.push({ message, category });
+				}
+			} as unknown as AspireDebugSession;
+			const testInfo = await createTestRpcServer(null, () => mockDebugSession);
 
-		assert.strictEqual(sentMessages.length, 2, 'Should send two messages to debug session');
-		assert.strictEqual(sentMessages[0].message, 'line1');
-		assert.strictEqual(sentMessages[0].category, 'stdout');
-		assert.strictEqual(sentMessages[1].message, 'line2');
-		assert.strictEqual(sentMessages[1].category, 'stderr');
-		stub.restore();
+			testInfo.interactionService.displayLines([
+				{ Stream: 'stdout', Line: 'line1' },
+				{ Stream: 'stderr', Line: 'line2' }
+			]);
+
+			assert.strictEqual(sentMessages.length, 2, 'Should send two messages to debug session');
+			assert.strictEqual(sentMessages[0].message, 'line1');
+			assert.strictEqual(sentMessages[0].category, 'stdout');
+			assert.strictEqual(sentMessages[1].message, 'line2');
+			assert.strictEqual(sentMessages[1].category, 'stderr');
+		}
+		finally {
+			sandbox.restore();
+		}
 	});
 
 	test("displayLines without debug session falls back to Aspire terminal", async () => {
-		const stub = sinon.stub(extensionLogOutputChannel, 'info');
-		const sentTexts: string[] = [];
-		const mockTerminal = {
-			terminal: {
-				sendText: (text: string, addNewLine: boolean) => {
-					sentTexts.push(text);
-				}
-			},
-			dispose: () => {}
-		};
-		const testInfo = await createTestRpcServer(null, () => null);
-		// Inject a mock terminal provider via the InteractionService constructor
-		(testInfo.interactionService as any)._getAspireTerminal = () => mockTerminal;
+		const sandbox = sinon.createSandbox();
 
-		testInfo.interactionService.displayLines([
-			{ Stream: 'stdout', Line: 'line1' },
-			{ Stream: 'stderr', Line: 'line2' }
-		]);
+		try {
+			sandbox.stub(extensionLogOutputChannel, 'info');
+			const sentTexts: string[] = [];
+			const mockTerminal = {
+				terminal: {
+					sendText: (text: string, addNewLine: boolean) => {
+						sentTexts.push(text);
+					}
+				},
+				dispose: () => {}
+			};
+			const testInfo = await createTestRpcServer(null, () => null);
+			// Inject a mock terminal provider via the InteractionService constructor
+			(testInfo.interactionService as any)._getAspireTerminal = () => mockTerminal;
 
-		assert.strictEqual(sentTexts.length, 2, 'Should send two lines to Aspire terminal');
-		assert.strictEqual(sentTexts[0], 'line1');
-		assert.strictEqual(sentTexts[1], 'line2');
-		stub.restore();
+			testInfo.interactionService.displayLines([
+				{ Stream: 'stdout', Line: 'line1' },
+				{ Stream: 'stderr', Line: 'line2' }
+			]);
+
+			assert.strictEqual(sentTexts.length, 2, 'Should send two lines to Aspire terminal');
+			assert.strictEqual(sentTexts[0], 'line1');
+			assert.strictEqual(sentTexts[1], 'line2');
+		}
+		finally {
+			sandbox.restore();
+		}
 	});
 });
 

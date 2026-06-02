@@ -256,6 +256,37 @@ suite('AspireTerminalProvider tests', () => {
         });
     });
 
+    suite('createEnvironment', () => {
+        setup(() => {
+            terminalProvider.rpcServerConnectionInfo = {
+                address: 'http://localhost:1234',
+                token: 'rpc-token',
+                cert: 'rpc-cert',
+            };
+            terminalProvider.dcpServerConnectionInfo = {
+                address: 'http://localhost:5678',
+                token: 'dcp-token',
+                certificate: 'dcp-cert',
+            };
+        });
+
+        test('marks extension-managed debug sessions as non-interactive without disabling extension prompts', () => {
+            const env = terminalProvider.createEnvironment('debug-session-id', false);
+
+            assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, 'debug-session-id');
+            assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
+            assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, 'true');
+        });
+
+        test('does not mark user terminal commands as non-interactive', () => {
+            const env = terminalProvider.createEnvironment();
+
+            assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, undefined);
+            assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
+            assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, undefined);
+        });
+    });
+
     // The Windows quoting form targets PowerShell (powershell.exe / pwsh.exe),
     // which is VS Code's default integrated terminal on Windows. The Unix
     // form uses POSIX single-quote quoting, which is interpreted identically

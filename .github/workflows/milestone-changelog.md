@@ -838,15 +838,25 @@ rather than creating a new one:
 
 ### 5f. Filtering rules
 
+Apply a strict user-facing filter before creating or updating a changelog entry.
+A change is user-facing only when someone using Aspire can observe it in product
+behavior, supported APIs, CLI commands, dashboard/extension UX, templates,
+integrations, documented configuration, security posture, or meaningful
+compatibility/performance behavior. Do not create entries for issues or PRs that
+only affect repository operation or the engineering process.
+
 - **Include**: new features, notable bug fixes, breaking changes, performance
-  improvements, new integrations, new resource types, and notable engineering or
-  workflow changes that have clear developer or release impact.
+  improvements, new integrations, new resource types, and security or
+  compatibility changes that have clear user or application-developer impact.
 - **Exclude**:
   - Internal refactoring, test-only changes, trivial fixes.
   - Dependency version bumps, documentation-only changes.
   - Routine CI/build maintenance with no meaningful user or developer impact.
-- When in doubt about whether a change is notable, include it — it can always be
-  removed via a comment later.
+  - Agentic workflow, automation, release-engineering, changelog-generation, and
+    repository maintenance changes unless the change has a direct user-visible
+    effect in a released Aspire product.
+- When in doubt about whether a change is user-facing, exclude it and record the
+  reason in the PR tracker. It can be restored via editorial feedback later.
 
 ### 5g. Match documentation PRs
 

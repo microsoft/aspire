@@ -16,6 +16,7 @@ namespace Aspire.Cli.Commands;
 internal abstract class BaseCommand : Command
 {
     private static readonly int[] s_suppressErrorLogsMessageExitCodes = [CliExitCodes.Cancelled, CliExitCodes.MissingRequiredArgument];
+    private static readonly TimeSpan s_extensionInteractionFlushTimeout = TimeSpan.FromSeconds(10);
 
     protected virtual bool UpdateNotificationsEnabled { get; }
 
@@ -83,6 +84,8 @@ internal abstract class BaseCommand : Command
             if (result.ShouldDisplayHelp)
             {
                 new HelpAction().Invoke(parseResult);
+                await FlushExtensionInteractionServiceAsync(interactionService).ConfigureAwait(false);
+
                 return result.ExitCode;
             }
 
@@ -126,6 +129,8 @@ internal abstract class BaseCommand : Command
                 }
             }
 
+            await FlushExtensionInteractionServiceAsync(interactionService).ConfigureAwait(false);
+
             return result.ExitCode;
         }));
     }
@@ -146,6 +151,28 @@ internal abstract class BaseCommand : Command
         }
 
         return false;
+    }
+
+    private static async Task FlushExtensionInteractionServiceAsync(IInteractionService interactionService)
+    {
+        if (interactionService is not IExtensionInteractionService extensionInteractionService)
+        {
+            return;
+        }
+
+        // Command cancellation has already been translated into CommandResult; using a canceled
+        // token here would skip the final debug-console drain or throw after the command selected
+        // its exit code. Bound the drain separately so a broken extension cannot hang CLI exit.
+        using var flushCancellationTokenSource = new CancellationTokenSource(s_extensionInteractionFlushTimeout);
+        try
+        {
+            await extensionInteractionService.FlushAsync(flushCancellationTokenSource.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (flushCancellationTokenSource.IsCancellationRequested)
+        {
+            // Prefer returning the command's chosen exit code over hanging indefinitely when
+            // VS Code has already gone away or stopped responding to backchannel requests.
+        }
     }
 
     internal static CommandResult HandleProjectLocatorException(ProjectLocatorException ex, IInteractionService interactionService, AspireCliTelemetry telemetry)

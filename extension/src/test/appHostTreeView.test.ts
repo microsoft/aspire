@@ -83,6 +83,22 @@ function getResourceCommandItems(provider: AspireAppHostTreeProvider): readonly 
     return provider.getChildren(commandsGroup);
 }
 
+function makeTreeProviderWithLaunchService(appHosts: readonly AppHostDisplayInfo[], launchService: AppHostLaunchService): AspireAppHostTreeProvider {
+    const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+    const repository = {
+        viewMode: 'global',
+        appHosts,
+        workspaceResources: [],
+        workspaceAppHostPath: undefined,
+        workspaceAppHostCandidatePaths: [],
+        workspaceAppHostName: undefined,
+        workspaceAppHostDescription: undefined,
+        onDidChangeData,
+    } as unknown as AppHostDataRepository;
+
+    return new AspireAppHostTreeProvider(repository, makeTerminalProvider(), launchService);
+}
+
 function makeWorkspaceTreeProvider(workspaceAppHostDescription: string): AspireAppHostTreeProvider {
     const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
     const repository = {
@@ -285,6 +301,24 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(item.tooltip, 'Global view selected because aspire ls found 2 buildable AppHosts.\n/workspace/AppHost.csproj');
     });
 
+    test('runAppHost rethrows launch failures after showing the error', async () => {
+        const launchError = new Error('launch failed');
+        const launchService = {
+            launch: sandbox.stub().rejects(launchError),
+            isLaunching: () => false,
+            launchingPaths: [],
+            onDidChangeLaunchingState: () => ({ dispose: () => { } }),
+        } as unknown as AppHostLaunchService;
+        const showErrorStub = sandbox.stub(vscode.window, 'showErrorMessage').resolves(undefined);
+        const provider = makeTreeProviderWithLaunchService([
+            makeAppHost({ appHostPath: '/workspace/AppHost/AppHost.csproj', appHostPid: 1 }),
+        ], launchService);
+
+        await assert.rejects(provider.runAppHost({ appHostPath: '/workspace/AppHost/AppHost.csproj' } as any, true), /launch failed/);
+
+        assert.strictEqual(showErrorStub.callCount, 1);
+    });
+
     test('dashboard quick pick labels add enough parent folders to disambiguate duplicate filenames', async () => {
         const appHosts = [
             makeAppHost({
@@ -299,7 +333,7 @@ suite('AspireAppHostTreeProvider', () => {
             }),
         ];
         const provider = makeTreeProvider(appHosts);
-        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick').callsFake(async items => (items as readonly vscode.QuickPickItem[])[0]);
 
         await provider.openDashboard();
 
@@ -308,6 +342,33 @@ suite('AspireAppHostTreeProvider', () => {
             'apps/Store/AppHost.csproj',
             'samples/Store/AppHost.csproj',
         ]);
+    });
+
+    test('non-http endpoints remain visible but are not clickable', () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        urls: [
+                            { name: 'http', displayName: 'HTTP', url: 'http://localhost:5000', isInternal: false },
+                            { name: 'tcp', displayName: 'TCP', url: 'tcp://localhost:1433', isInternal: false },
+                            { name: 'internal', displayName: 'Internal', url: 'http://127.0.0.1:1', isInternal: true },
+                        ],
+                    }),
+                ],
+            }),
+        ]);
+
+        const [appHost] = provider.getChildren();
+        const [resourcesGroup] = provider.getChildren(appHost);
+        const [resource] = provider.getChildren(resourcesGroup);
+        const endpoints = provider.getChildren(resource) as readonly vscode.TreeItem[];
+
+        assert.strictEqual(endpoints.length, 2);
+        assert.strictEqual(endpoints[0].contextValue, 'endpointUrl');
+        assert.strictEqual(endpoints[0].command?.command, 'vscode.open');
+        assert.strictEqual(endpoints[1].contextValue, 'endpointUrlNonHttp');
+        assert.strictEqual(endpoints[1].command, undefined);
     });
 
     test('enabled command tree item uses context menu execution only', () => {
@@ -370,7 +431,7 @@ suite('AspireAppHostTreeProvider', () => {
         assert.ok(resourcesGroup);
         const [resourceItem] = provider.getChildren(resourcesGroup);
 
-        await provider.executeResourceCommand(resourceItem as any);
+        await assert.rejects(provider.executeResourceCommand(resourceItem as any), /Canceled/);
 
         const items = showQuickPickStub.getCall(0).args[0] as readonly vscode.QuickPickItem[];
         assert.deepStrictEqual(items.map(item => item.label), ['restart']);
@@ -486,6 +547,26 @@ suite('AspireAppHostTreeProvider', () => {
                         commands: {
                             run: { displayName: 'Run', description: 'Run headless operation', state: 'Enabled', visibility: 'Api' },
                         },
+                    }),
+                ],
+            }),
+        ]);
+
+        const [appHostItem] = provider.getChildren();
+        const resourcesGroup = provider.getChildren(appHostItem).find(item => item.contextValue === 'resourcesGroup');
+        assert.ok(resourcesGroup);
+        const [resourceItem] = provider.getChildren(resourcesGroup);
+
+        assert.strictEqual(resourceItem.collapsibleState, vscode.TreeItemCollapsibleState.None);
+        assert.strictEqual(provider.getChildren(resourceItem).length, 0);
+    });
+
+    test('empty command map does not show commands group', () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                resources: [
+                    makeResource({
+                        commands: {},
                     }),
                 ],
             }),
@@ -1193,7 +1274,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
         const [groupItem] = provider.getChildren();
         const [item] = provider.getChildren(groupItem);
-        await provider.runAppHost(item as any, false);
+        await assert.rejects(provider.runAppHost(item as any, false), /startDebugging blew up/);
 
         assert.ok(launchStub.calledOnce, 'Expected launch to be called');
         assert.ok(errorStub.calledOnce, 'Expected showErrorMessage to be called when launch rejects');
@@ -1402,7 +1483,7 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
             makeAppHost({ appHostPath: hostB, appHostPid: 222 }),
         ]);
 
-        const resultA = provider.findAppHostElement('/repo/A/A.cs');
+        const resultA = provider.findAppHostElement('/repo/A/AppHost.cs');
         const resultB = provider.findAppHostElement(hostB);
 
         assert.ok(resultA);

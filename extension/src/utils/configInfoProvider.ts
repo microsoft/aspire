@@ -2,8 +2,41 @@ import * as vscode from 'vscode';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { extensionLogOutputChannel } from './logging';
-import { ConfigInfo } from '../types/configInfo';
+import { ConfigInfo, FeatureInfo, PropertyInfo, SettingsSchema } from '../types/configInfo';
 import * as strings from '../loc/strings';
+
+type RawFeatureInfo = Partial<FeatureInfo> & {
+    Name?: unknown;
+    Description?: unknown;
+    DefaultValue?: unknown;
+};
+
+type RawPropertyInfo = Partial<PropertyInfo> & {
+    Name?: unknown;
+    Type?: unknown;
+    Description?: unknown;
+    Required?: unknown;
+    SubProperties?: unknown;
+    AdditionalPropertiesType?: unknown;
+};
+
+type RawSettingsSchema = Partial<SettingsSchema> & {
+    Properties?: unknown;
+};
+
+type RawConfigInfo = Partial<ConfigInfo> & {
+    LocalSettingsPath?: unknown;
+    GlobalSettingsPath?: unknown;
+    AvailableFeatures?: unknown;
+    LocalSettingsSchema?: unknown;
+    GlobalSettingsSchema?: unknown;
+    ConfigFileSchema?: unknown;
+    Capabilities?: unknown;
+};
+
+export async function getConfigInfo(terminalProvider: AspireTerminalProvider): Promise<ConfigInfo | null> {
+    return new ConfigInfoProvider(terminalProvider).getConfigInfo();
+}
 
 /**
  * Wraps `aspire config info --json` and exposes the parsed {@link ConfigInfo} plus capability
@@ -66,6 +99,7 @@ export class ConfigInfoProvider {
             // Resolve the cli path here (not in the constructor) so a missing CLI is handled by the
             // same error path as a failed spawn rather than throwing during construction.
             this._terminalProvider.getAspireCliExecutablePath().then(cliPath => {
+                const workingDirectory = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
                 const args = ['config', 'info', '--json'];
                 let output = '';
 
@@ -87,7 +121,7 @@ export class ConfigInfoProvider {
                         }
 
                         try {
-                            const configInfo = JSON.parse(output.trim()) as ConfigInfo;
+                            const configInfo = parseConfigInfoOutput(output);
                             extensionLogOutputChannel.info(`Got config info: ${configInfo.availableFeatures.length} features available`);
                             resolve(configInfo);
                         } catch (error) {
@@ -105,6 +139,7 @@ export class ConfigInfoProvider {
                         }
                         resolve(null);
                     },
+                    workingDirectory,
                     noExtensionVariables: true
                 });
             }, error => {
@@ -116,4 +151,99 @@ export class ConfigInfoProvider {
             });
         });
     }
+}
+
+export function parseConfigInfoOutput(output: string): ConfigInfo {
+    const configInfo = JSON.parse(output.trim()) as RawConfigInfo;
+
+    return {
+        localSettingsPath: readString(configInfo.localSettingsPath ?? configInfo.LocalSettingsPath, 'localSettingsPath'),
+        globalSettingsPath: readString(configInfo.globalSettingsPath ?? configInfo.GlobalSettingsPath, 'globalSettingsPath'),
+        availableFeatures: readArray(configInfo.availableFeatures ?? configInfo.AvailableFeatures, 'availableFeatures').map(normalizeFeatureInfo),
+        localSettingsSchema: normalizeSettingsSchema(configInfo.localSettingsSchema ?? configInfo.LocalSettingsSchema, 'localSettingsSchema'),
+        globalSettingsSchema: normalizeSettingsSchema(configInfo.globalSettingsSchema ?? configInfo.GlobalSettingsSchema, 'globalSettingsSchema'),
+        configFileSchema: normalizeOptionalSettingsSchema(configInfo.configFileSchema ?? configInfo.ConfigFileSchema, 'configFileSchema'),
+        capabilities: normalizeOptionalStringArray(configInfo.capabilities ?? configInfo.Capabilities, 'capabilities'),
+    };
+}
+
+function normalizeFeatureInfo(value: unknown): FeatureInfo {
+    const feature = readObject<RawFeatureInfo>(value, 'availableFeatures[]');
+
+    return {
+        name: readString(feature.name ?? feature.Name, 'availableFeatures[].name'),
+        description: readString(feature.description ?? feature.Description, 'availableFeatures[].description'),
+        defaultValue: readBoolean(feature.defaultValue ?? feature.DefaultValue, 'availableFeatures[].defaultValue'),
+    };
+}
+
+function normalizeSettingsSchema(value: unknown, propertyName: string): SettingsSchema {
+    const schema = readObject<RawSettingsSchema>(value, propertyName);
+
+    return {
+        properties: readArray(schema.properties ?? schema.Properties, `${propertyName}.properties`).map(normalizePropertyInfo),
+    };
+}
+
+function normalizeOptionalSettingsSchema(value: unknown, propertyName: string): SettingsSchema | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    return normalizeSettingsSchema(value, propertyName);
+}
+
+function normalizePropertyInfo(value: unknown): PropertyInfo {
+    const property = readObject<RawPropertyInfo>(value, 'properties[]');
+    const subProperties = property.subProperties ?? property.SubProperties;
+    const additionalPropertiesType = property.additionalPropertiesType ?? property.AdditionalPropertiesType;
+
+    return {
+        name: readString(property.name ?? property.Name, 'properties[].name'),
+        type: readString(property.type ?? property.Type, 'properties[].type'),
+        description: readString(property.description ?? property.Description, 'properties[].description'),
+        required: readBoolean(property.required ?? property.Required, 'properties[].required'),
+        subProperties: subProperties === undefined ? undefined : readArray(subProperties, 'properties[].subProperties').map(normalizePropertyInfo),
+        additionalPropertiesType: additionalPropertiesType === undefined ? undefined : readString(additionalPropertiesType, 'properties[].additionalPropertiesType'),
+    };
+}
+
+function readObject<T extends object>(value: unknown, propertyName: string): T {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+        throw new Error(`Expected ${propertyName} to be an object.`);
+    }
+
+    return value as T;
+}
+
+function readArray(value: unknown, propertyName: string): unknown[] {
+    if (!Array.isArray(value)) {
+        throw new Error(`Expected ${propertyName} to be an array.`);
+    }
+
+    return value;
+}
+
+function readString(value: unknown, propertyName: string): string {
+    if (typeof value !== 'string') {
+        throw new Error(`Expected ${propertyName} to be a string.`);
+    }
+
+    return value;
+}
+
+function readBoolean(value: unknown, propertyName: string): boolean {
+    if (typeof value !== 'boolean') {
+        throw new Error(`Expected ${propertyName} to be a boolean.`);
+    }
+
+    return value;
+}
+
+function normalizeOptionalStringArray(value: unknown, propertyName: string): string[] | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    return readArray(value, propertyName).map((item, index) => readString(item, `${propertyName}[${index}]`));
 }

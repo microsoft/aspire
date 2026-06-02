@@ -61,6 +61,14 @@ function sortResources(resources: ResourceJson[]): ResourceJson[] {
     });
 }
 
+function getVisibleResourceUrls(resource: ResourceJson) {
+    return resource.urls?.filter(u => !u.isInternal && typeof u.url === 'string') ?? [];
+}
+
+function getLinkableResourceUrls(resource: ResourceJson) {
+    return getVisibleResourceUrls(resource).filter(u => isLinkableUrl(u.url));
+}
+
 function isSamePath(left: string, right: string): boolean {
     const resolvedLeft = path.resolve(left);
     const resolvedRight = path.resolve(right);
@@ -362,7 +370,7 @@ function getParentResourceName(resource: ResourceJson): string | null {
 class ResourceItem extends vscode.TreeItem {
     constructor(public readonly resource: ResourceJson, public readonly appHostPid: number | null, hasChildren: boolean, public readonly allResources?: readonly ResourceJson[]) {
         const label = resource.displayName ?? resource.name;
-        const hasUrls = resource.urls && resource.urls.filter(u => !u.isInternal).length > 0;
+        const hasUrls = getVisibleResourceUrls(resource).length > 0;
         const hasHealthReports = resource.healthReports && Object.keys(resource.healthReports).length > 0;
         const hasCommands = resource.commands && getVisibleCommands(resource.commands).length > 0;
         const hasExpandableContent = hasChildren || hasUrls || hasHealthReports || hasCommands;
@@ -515,7 +523,7 @@ function buildResourceTooltip(resource: ResourceJson): vscode.MarkdownString {
             }
         }
     }
-    const urls = resource.urls?.filter(u => !u.isInternal && typeof u.url === 'string' && isLinkableUrl(u.url)) ?? [];
+    const urls = getLinkableResourceUrls(resource);
     if (urls.length > 0) {
         md.appendMarkdown(`**${tooltipEndpoints}**\n\n`);
         for (const url of urls) {
@@ -615,7 +623,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     // When a launching AppHost appears in the running list, clear it from the launch service.
     private _clearLaunchingPathsForRunningAppHosts(): void {
         for (const appHost of this._repository.appHosts) {
-            this._launchService.clearLaunching(appHost.appHostPath);
+            this._launchService.clearMatchingLaunching(appHost.appHostPath);
         }
     }
 
@@ -629,19 +637,56 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         return this._findResourceInTree(allChildren, resourceName);
     }
 
+    findEndpointElement(options?: { appHostPath?: string; resourceName?: string; url?: string }): TreeElement | undefined {
+        const rootElements = options?.appHostPath
+            ? this._getElementsForAppHostPath(options.appHostPath)
+            : this.getChildren();
+
+        return this._findEndpointInTree(rootElements, options?.resourceName, options?.url);
+    }
+
+    findResourceCommandElement(options: { appHostPath?: string; resourceName: string; commandName: string }): TreeElement | undefined {
+        const rootElements = options.appHostPath
+            ? this._getElementsForAppHostPath(options.appHostPath)
+            : this.getChildren();
+
+        const resource = this._findResourceInTree(rootElements, options.resourceName);
+        if (!(resource instanceof ResourceItem)) {
+            return undefined;
+        }
+
+        const commandsGroup = this.getChildren(resource).find(child => child instanceof CommandsGroupItem);
+        return commandsGroup
+            ? this.getChildren(commandsGroup).find(child => child instanceof ResourceCommandItem && child.commandName === options.commandName)
+            : undefined;
+    }
+
+    findLogFileElement(appHostPath?: string): TreeElement | undefined {
+        const rootElements = appHostPath
+            ? this._getElementsForAppHostPath(appHostPath)
+            : this.getChildren();
+
+        return this._findLogFileInTree(rootElements);
+    }
+
+    private _getElementsForAppHostPath(appHostPath: string): TreeElement[] {
+        const appHostElement = this.findAppHostElement(appHostPath);
+        return appHostElement ? [appHostElement] : [];
+    }
+
     /**
      * Finds the {@link AppHostItem} (global mode) or {@link WorkspaceResourcesItem}
      * (workspace mode) that corresponds to the given AppHost path.
      *
-     * Matching prefers an exact path match, then falls back to same-directory match,
-     * which is needed because C# AppHost paths point at the `.csproj` file while a
-     * code lens lives in the sibling `.cs` source.
+     * Matching prefers an exact path match, then falls back to an unambiguous
+     * same-directory project/source match, which is needed because C# AppHost
+     * paths can point at either the `.csproj` file or the sibling source file.
      */
     findAppHostElement(appHostPath: string): TreeElement | undefined {
         if (!appHostPath) {
             return undefined;
         }
-        const targetDir = path.dirname(appHostPath);
+
         // Workspace mode wraps running/idle items in group elements, so flatten one level
         // of group children before matching. Group items themselves never match a path.
         const topLevel = this.getChildren();
@@ -653,48 +698,101 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 elements.push(element);
             }
         }
+
+        const candidateElements: { element: TreeElement; appHostPath: string }[] = [];
         for (const element of elements) {
             if (element instanceof AppHostItem) {
                 const hostPath = element.appHost.appHostPath;
                 if (!hostPath) {
                     continue;
                 }
-                if (isSamePath(hostPath, appHostPath) || isSamePath(path.dirname(hostPath), targetDir)) {
-                    return element;
-                }
+                candidateElements.push({ element, appHostPath: hostPath });
             } else if (element instanceof WorkspaceResourcesItem) {
                 const hostPath = element.appHostPath;
                 if (!hostPath) {
                     continue;
                 }
-                if (isSamePath(hostPath, appHostPath) || isSamePath(path.dirname(hostPath), targetDir)) {
+                candidateElements.push({ element, appHostPath: hostPath });
+            } else if (element instanceof WorkspaceAppHostItem) {
+                candidateElements.push({ element, appHostPath: element.appHostPath });
+            }
+        }
+
+        const exactMatch = candidateElements.find(candidate => isSamePath(candidate.appHostPath, appHostPath));
+        if (exactMatch) {
+            return exactMatch.element;
+        }
+
+        const fallbackMatches = candidateElements.filter(candidate => isProjectFileToSourceFileMatch(candidate.appHostPath, appHostPath));
+        return fallbackMatches.length === 1 ? fallbackMatches[0].element : undefined;
+    }
+
+    private _findResourceInTree(elements: TreeElement[], resourceName: string): TreeElement | undefined {
+        return this._findResourceInTreeCore(elements, resourceName, false)
+            ?? this._findResourceInTreeCore(elements, resourceName, true);
+    }
+
+    private _findResourceInTreeCore(elements: TreeElement[], resourceName: string, includeDisplayName: boolean): TreeElement | undefined {
+        for (const element of elements) {
+            if (element instanceof ResourceItem) {
+                if (resourceMatchesName(element.resource, resourceName, includeDisplayName)) {
                     return element;
                 }
-            } else if (element instanceof WorkspaceAppHostItem) {
-                if (isSamePath(element.appHostPath, appHostPath) || isSamePath(path.dirname(element.appHostPath), targetDir)) {
-                    return element;
+            }
+            const children = this.getChildren(element);
+            if (children.length > 0) {
+                const found = this._findResourceInTreeCore(children, resourceName, includeDisplayName);
+                if (found) {
+                    return found;
                 }
             }
         }
         return undefined;
     }
 
-    private _findResourceInTree(elements: TreeElement[], resourceName: string): TreeElement | undefined {
-        for (const element of elements) {
-            if (element instanceof ResourceItem) {
-                const name = element.resource.displayName ?? element.resource.name;
-                if (name === resourceName) {
-                    return element;
-                }
+    private _findEndpointInTree(elements: TreeElement[], resourceName?: string, url?: string): TreeElement | undefined {
+        if (resourceName) {
+            const resource = this._findResourceInTree(elements, resourceName);
+            if (resource instanceof ResourceItem) {
+                return this.getChildren(resource).find(child => child instanceof EndpointUrlItem && (!url || child.url === url));
             }
-            const children = this.getChildren(element);
-            if (children.length > 0) {
-                const found = this._findResourceInTree(children, resourceName);
-                if (found) {
-                    return found;
+
+            return undefined;
+        }
+
+        for (const element of elements) {
+            if (element instanceof EndpointUrlItem && (!url || element.url === url)) {
+                return element;
+            }
+
+            if (element instanceof ResourceItem) {
+                const endpoint = this._findEndpointInTree(this.getChildren(element), undefined, url);
+                if (endpoint) {
+                    return endpoint;
+                }
+            } else {
+                const endpoint = this._findEndpointInTree(this.getChildren(element), undefined, url);
+                if (endpoint) {
+                    return endpoint;
                 }
             }
         }
+
+        return undefined;
+    }
+
+    private _findLogFileInTree(elements: TreeElement[]): TreeElement | undefined {
+        for (const element of elements) {
+            if (element instanceof LogFileItem) {
+                return element;
+            }
+
+            const logFile = this._findLogFileInTree(this.getChildren(element));
+            if (logFile) {
+                return logFile;
+            }
+        }
+
         return undefined;
     }
 
@@ -917,9 +1015,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         if (element instanceof ResourceItem) {
-            const allResources = this._repository.viewMode === 'workspace'
+            const allResources = element.allResources ?? (this._repository.viewMode === 'workspace'
                 ? [...this._repository.workspaceResources]
-                : this._repository.appHosts.find(a => a.appHostPid === element.appHostPid)?.resources ?? [];
+                : this._repository.appHosts.find(a => a.appHostPid === element.appHostPid)?.resources ?? []);
             return this._getResourceChildren(element, allResources);
         }
         if (element instanceof HealthChecksGroupItem) {
@@ -941,7 +1039,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             items.push(new ResourceItem(child, element.appHostPid, hasChildren, allResources));
         }
 
-        const urls = element.resource.urls?.filter(u => !u.isInternal) ?? [];
+        const urls = getVisibleResourceUrls(element.resource);
         items.push(...urls.map(url => new EndpointUrlItem(url.url, url.displayName ?? url.url)));
 
         const reports = element.resource.healthReports;
@@ -1045,6 +1143,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             await this._launchService.launch(appHostPath, 'run', noDebug);
         } catch (err) {
             vscode.window.showErrorMessage(errorMessage(err));
+            throw err;
         }
     }
 
@@ -1119,7 +1218,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         const items = Object.entries(commands)
-            .filter(([, cmd]) => isEnabledCommand(cmd))
+            .filter(([, cmd]) => isCommandVisibleToUi(cmd) && isEnabledCommand(cmd))
             .map(([name, cmd]) => ({
                 label: name,
                 description: cmd.description ?? undefined,
@@ -1253,7 +1352,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private async _loadResourceCommandArguments(element: ResourceItem, commandName: string, values: readonly ResourceCommandArgumentValue[]): Promise<ResourceCommandArgumentInputJson[] | undefined> {
         const appHostPath = this._repository.viewMode === 'workspace'
-            ? this._repository.workspaceAppHostPath
+            ? this._getAppHostPathForResource(element)
             : this._findAppHostForResource(element)?.appHostPath;
 
         const loader = createResourceCommandArgumentLoader({
@@ -1288,6 +1387,27 @@ function getBaseDashboardUrl(resourceDashboardUrl: string | null): string | null
     }
     const idx = resourceDashboardUrl.indexOf('/?resource=');
     return idx >= 0 ? resourceDashboardUrl.substring(0, idx) : resourceDashboardUrl;
+}
+
+function isProjectFileToSourceFileMatch(left: string, right: string): boolean {
+    const normalizedLeft = path.normalize(left);
+    const normalizedRight = path.normalize(right);
+    return isSamePath(path.dirname(normalizedLeft), path.dirname(normalizedRight)) &&
+        ((isProjectFile(normalizedLeft) && isAppHostSourceFile(normalizedRight)) ||
+            (isAppHostSourceFile(normalizedLeft) && isProjectFile(normalizedRight)));
+}
+
+function isProjectFile(value: string): boolean {
+    return path.extname(value).toLowerCase() === '.csproj';
+}
+
+function isAppHostSourceFile(value: string): boolean {
+    const fileName = path.basename(value).toLowerCase();
+    return fileName === 'apphost.cs' || fileName === 'program.cs';
+}
+
+function resourceMatchesName(resource: ResourceJson, resourceName: string, includeDisplayName: boolean): boolean {
+    return resource.name === resourceName || (includeDisplayName && resource.displayName === resourceName);
 }
 
 function getErrorMessage(error: unknown): string {

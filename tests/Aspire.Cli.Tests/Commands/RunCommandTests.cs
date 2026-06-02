@@ -1935,6 +1935,80 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WhenExtensionBuildFails_WaitsForBuildOutputToFlush()
+    {
+        var displayLinesStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowDisplayLinesToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        DisplayLineState[] displayedLines = [];
+        var buildError = "error CS0103: The name 'MissingSymbol' does not exist in the current context";
+
+        var extensionBackchannel = new TestExtensionBackchannel();
+        extensionBackchannel.HasCapabilityAsyncCallback = (capability, ct) => Task.FromResult(capability == KnownCapabilities.BuildDotnetUsingCli);
+        extensionBackchannel.DisplayLinesAsyncCallback = async lines =>
+        {
+            displayedLines = lines.ToArray();
+            displayLinesStarted.TrySetResult();
+            await allowDisplayLinesToComplete.Task;
+        };
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) =>
+            {
+                options.StandardErrorCallback?.Invoke(buildError);
+                return 1;
+            };
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            return runner;
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.ExtensionBackchannelFactory = _ => extensionBackchannel;
+            options.InteractionServiceFactory = sp =>
+            {
+                var consoleEnvironment = sp.GetRequiredService<ConsoleEnvironment>();
+                var executionContext = sp.GetRequiredService<CliExecutionContext>();
+                var hostEnvironment = sp.GetRequiredService<ICliHostEnvironment>();
+                var loggerFactory = sp.GetRequiredService<ILoggerFactory>();
+                var logBufferContext = sp.GetRequiredService<ConsoleLogBufferContext>();
+                var consoleInteractionService = new ConsoleInteractionService(consoleEnvironment, executionContext, hostEnvironment, loggerFactory, logBufferContext);
+
+                return new ExtensionInteractionService(consoleInteractionService, extensionBackchannel, extensionPromptEnabled: false);
+            };
+            options.ConfigurationCallback += config =>
+            {
+                config["ASPIRE_EXTENSION_DEBUG_SESSION_ID"] = "test-session-id";
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        var pendingRun = result.InvokeAsync();
+
+        try
+        {
+            await displayLinesStarted.Task.DefaultTimeout();
+            Assert.False(pendingRun.IsCompleted, "The command should not exit before queued extension debug console output is flushed.");
+        }
+        finally
+        {
+            allowDisplayLinesToComplete.TrySetResult();
+        }
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.Contains(displayedLines, line => line.Stream == "stderr" && line.Line == buildError);
+    }
+
+    [Fact]
     public async Task RunCommand_WhenSingleFileAppHostAndDefaultWatchEnabled_DoesNotUseWatchMode()
     {
         var watchModeUsed = false;

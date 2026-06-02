@@ -238,12 +238,20 @@ enrich when helpful (for example `is:pr is:merged repo:microsoft/aspire` queries
 to confirm PR titles and labels). You may also read the changed file list /
 diff under `extension/` to understand what actually changed.
 
+Exclude anything that is not user-facing. A change is user-facing only when
+someone using the VS Code extension can observe it in commands, settings,
+debugging, tree views, walkthroughs, diagnostics, packaging/installation,
+security, compatibility, or performance. Do not mention issues or PRs that only
+affect repository operation or the engineering process.
+
 Exclude noise that a user-facing changelog should not mention:
 
 - Dependency-bump / Dependabot PRs unless they fix a user-visible security issue.
 - Build, CI, and test-only changes with no user-facing effect.
 - Internal refactors with no behavior change.
 - Version-bump and release-prep commits (including this PR's own commit).
+- Agentic workflow, automation, changelog-generation, and repository maintenance
+  changes unless they directly change the released extension experience.
 
 ## Step 5: Learn the existing changelog format
 

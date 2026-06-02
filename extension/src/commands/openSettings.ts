@@ -16,7 +16,7 @@ import { ConfigInfoProvider } from '../utils/configInfoProvider';
 export async function openLocalSettingsCommand(terminalProvider: AspireTerminalProvider): Promise<void> {
     const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo();
     if (!configInfo) {
-        return;
+        throw new vscode.CancellationError();
     }
 
     const settingsPath = configInfo.localSettingsPath;
@@ -34,7 +34,7 @@ export async function openLocalSettingsCommand(terminalProvider: AspireTerminalP
 export async function openGlobalSettingsCommand(terminalProvider: AspireTerminalProvider): Promise<void> {
     const configInfo = await new ConfigInfoProvider(terminalProvider).getConfigInfo();
     if (!configInfo) {
-        return;
+        throw new vscode.CancellationError();
     }
 
     const settingsPath = configInfo.globalSettingsPath;
