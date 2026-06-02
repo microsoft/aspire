@@ -661,7 +661,7 @@ public sealed partial class TelemetryRepository : IDisposable
                     continue;
                 }
 
-                if (hasFilterText && !trace.FullName.Contains(context.TraceNameFilterText!, StringComparison.OrdinalIgnoreCase))
+                if (hasFilterText && !MatchesTraceFilterText(trace, context.TraceNameFilterText!))
                 {
                     continue;
                 }
@@ -883,6 +883,18 @@ public sealed partial class TelemetryRepository : IDisposable
 
             return false;
         });
+    }
+
+    /// <summary>
+    /// Returns true when the filter text matches any user-visible trace column:
+    /// trace name, trace ID, or the root/first span's resource name.
+    /// Uses the root span resource to avoid expensive iteration over all spans.
+    /// </summary>
+    private static bool MatchesTraceFilterText(OtlpTrace trace, string filterText)
+    {
+        return trace.FullName.Contains(filterText, StringComparison.OrdinalIgnoreCase) ||
+               trace.TraceId.Contains(filterText, StringComparison.OrdinalIgnoreCase) ||
+               trace.RootOrFirstSpan.Source.Resource.ResourceName.Contains(filterText, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
