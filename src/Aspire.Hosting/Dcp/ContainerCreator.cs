@@ -980,6 +980,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         var onDemandEndpointAllocationAnnotation = cr.ModelResource.Annotations
             .OfType<OnDemandEndpointAllocationAnnotation>()
             .SingleOrDefault();
+        onDemandEndpointAllocationAnnotation?.StopAllocating();
 
         foreach (var sp in cr.ServicesProduced)
         {
@@ -989,8 +990,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             {
                 ContainerPort = ea.TargetPort,
             };
-
-            onDemandEndpointAllocationAnnotation?.StopAllocating(ea);
 
             if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
             {
