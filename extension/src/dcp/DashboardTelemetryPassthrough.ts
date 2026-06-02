@@ -270,7 +270,7 @@ export class DashboardTelemetryPassthrough {
         });
 
         app.post('/telemetry/userTask', requireHeaders, (req: Request, res: Response) => {
-            this._handlePostResultEvent(req, res, 'dashboard/userTask', 'UserTask');
+            this._handlePostResultEvent(req, res, 'dashboard/usertask', 'UserTask');
         });
 
         app.post('/telemetry/fault', requireHeaders, (req: Request, res: Response) => {
@@ -314,11 +314,11 @@ export class DashboardTelemetryPassthrough {
 
         app.post('/telemetry/commandLineFlags', requireHeaders, (req: Request, res: Response) => {
             const payload = req.body as PostCommandLineFlagsRequest;
-            const properties: EventProperties<'dashboard/commandLineFlags'> = {
+            const properties: EventProperties<'dashboard/commandlineflags'> = {
                 flag_prefixes: formatFlagPrefixes(payload.flagPrefixes),
             };
             applyBundleFields(properties, payload.additionalProperties);
-            sendTelemetryEvent('dashboard/commandLineFlags', properties);
+            sendTelemetryEvent('dashboard/commandlineflags', properties);
             res.status(200).end();
         });
     }
@@ -471,11 +471,11 @@ export class DashboardTelemetryPassthrough {
     private _handlePostResultEvent(
         req: Request,
         res: Response,
-        eventName: 'dashboard/operation' | 'dashboard/userTask',
+        eventName: 'dashboard/operation' | 'dashboard/usertask',
         correlationType: 'Operation' | 'UserTask',
     ): void {
         const payload = req.body as PostOperationRequest;
-        const properties: EventProperties<'dashboard/operation' | 'dashboard/userTask'> = {
+        const properties: EventProperties<'dashboard/operation' | 'dashboard/usertask'> = {
             dashboard_event_name: clampDashboardKey(payload.eventName),
             result: telemetryResultLabel(payload.result),
         };
@@ -1005,7 +1005,7 @@ function formatAssetEventVersion(value: unknown): string {
 
 /**
  * Formats the dashboard-supplied `flagPrefixes` array into the comma-joined
- * string we put on `dashboard/commandLineFlags`. Validates the input shape and
+ * string we put on `dashboard/commandlineflags`. Validates the input shape and
  * caps both count ({@link MAX_FLAG_PREFIXES}) and per-element length
  * ({@link clampDashboardKey}) so a malformed or malicious payload cannot
  * crash the request handler or produce a huge property value.

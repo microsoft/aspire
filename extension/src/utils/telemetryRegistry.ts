@@ -57,23 +57,23 @@ export interface TelemetryEventSchema {
         properties: 'trigger' | 'has_csharp_devkit';
         measurements: 'workspace_folders';
     };
-    'runningAppHostsView/shown': {
+    'runningapphostsview/shown': {
         properties: 'view_mode' | 'initial_visibility';
         measurements: 'running_apphosts' | 'total_resources';
     };
-    'debug/appHost/start': {
+    'debug/apphost/start': {
         properties: 'mode' | 'apphost_language' | 'apphost_is_directory' | 'command';
         measurements: never;
     };
-    'debug/appHost/end': {
+    'debug/apphost/end': {
         properties: 'mode' | 'apphost_language' | 'ended_with_error' | 'distinct_resource_types';
         measurements: 'duration_ms' | 'total_child_sessions' | 'distinct_resource_type_count';
     };
-    'debug/runSession/start': {
+    'debug/runsession/start': {
         properties: 'resource_type' | 'debugger_extension_matched' | 'mode';
         measurements: never;
     };
-    'debug/runSession/end': {
+    'debug/runsession/end': {
         properties: 'resource_type' | 'mode' | 'exit_code_bucket' | 'end_reason' | 'error_kind';
         measurements: 'duration_ms' | 'exit_code';
     };
@@ -99,7 +99,7 @@ export interface TelemetryEventSchema {
             | 'result';
         measurements: never;
     };
-    'dashboard/userTask': {
+    'dashboard/usertask': {
         properties:
             | 'dashboard_event_name'
             | 'dashboard_properties'
@@ -165,7 +165,7 @@ export interface TelemetryEventSchema {
         properties: 'property_name' | 'dashboard_properties' | 'dashboard_measurements';
         measurements: never;
     };
-    'dashboard/commandLineFlags': {
+    'dashboard/commandlineflags': {
         properties: 'flag_prefixes' | 'dashboard_properties' | 'dashboard_measurements';
         measurements: never;
     };

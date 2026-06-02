@@ -1,5 +1,5 @@
 {
-	"extension.title": "Aspire VSCode",
+	"extension.title": "Aspire",
 	"extension.description": "Official Aspire extension for Visual Studio Code",
   "extension.debug.program": "Path to the AppHost to run",
   "extension.debug.debuggers": "Configuration to apply when launching resources of specific types",

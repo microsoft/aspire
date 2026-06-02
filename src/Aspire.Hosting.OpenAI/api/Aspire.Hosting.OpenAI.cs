@@ -10,19 +10,19 @@ namespace Aspire.Hosting
 {
     public static partial class OpenAIExtensions
     {
-        [AspireExport(Description = "Adds an OpenAI model resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIModelResource> AddModel(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> builder, string name, string model) { throw null; }
 
-        [AspireExport(Description = "Adds an OpenAI resource to the distributed application model.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> AddOpenAI(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
-        [AspireExport(Description = "Configures the API key for the OpenAI resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> WithApiKey(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> builder, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource> apiKey) { throw null; }
 
-        [AspireExport(Description = "Configures the endpoint URI for the OpenAI resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> WithEndpoint(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIResource> builder, string endpoint) { throw null; }
 
-        [AspireExport(Description = "Adds a health check for the OpenAI model resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<OpenAI.OpenAIModelResource> WithHealthCheck(this ApplicationModel.IResourceBuilder<OpenAI.OpenAIModelResource> builder) { throw null; }
     }
 }

@@ -8,6 +8,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Xml.Linq;
 
@@ -65,7 +66,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
                 [PackagingService.OverrideStagingFeedConfigKey] = "https://example.com/nuget/v3/index.json"
             })
             .Build();
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance, isStableShapedCliVersion: () => false);
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
 
@@ -80,6 +81,508 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
         Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingOnStableShapedCli_DefaultsToStableQuality()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/17527: during release
+        // stabilization the staging CLI ships with a stable-shaped version (e.g. "13.4.0"). The
+        // shared dotnet9 daily feed only carries prerelease-tagged 13.4.0-preview.* packages,
+        // so a stabilizing staging CLI must route Aspire.* to the SHA-derived darc-pub-aspire-<hash>
+        // feed instead — which requires defaulting the synthesized staging channel quality to
+        // Stable (so useSharedFeed in CreateStagingChannel resolves false). No overrideStagingFeed
+        // is set: the injected informational version makes the darc derivation deterministic so the
+        // test exercises (and asserts) the real SHA-feed routing rather than an override crutch.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            isStableShapedCliVersion: () => true,
+            cliInformationalVersionProvider: () => "13.4.0+abcdef1234567890abcdef1234567890abcdef12");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
+
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
+            aspireMapping.Source);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingPrereleaseShaped_RoutesAspirePackagesToDarcFeed()
+    {
+        // Reproduces the C# vs polyglot divergence: a staging-identity CLI with a prerelease-shaped
+        // version (e.g. "13.4.0-preview.1.26280.6") is still an officially published release-branch
+        // build, so Aspire.* must resolve from its own SHA-specific darc-pub-microsoft-aspire-<commit>
+        // feed — NOT the shared dnceng/dotnet9 daily feed (which only carries main-branch daily
+        // packages). Before the fix, useSharedFeed was derived from the version shape (Both quality ->
+        // shared daily feed), which is what broke `aspire add` for TypeScript apphosts while C#
+        // apphosts (with the darc feed baked into nuget.config) resolved correctly.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        // No overrideStagingFeed configured, so the real darc-vs-shared-daily routing is exercised.
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            isStableShapedCliVersion: () => false,
+            cliInformationalVersionProvider: () => "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
+            aspireMapping.Source);
+        Assert.DoesNotContain("dotnet9", aspireMapping.Source);
+
+        // The darc feed needs an isolated global packages folder, and it carries exactly the build's
+        // matching packages, so no CLI-version pin is applied.
+        Assert.True(stagingChannel.ConfigureGlobalPackagesFolder);
+        Assert.Null(stagingChannel.PinnedVersion);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingStableShaped_RoutesAspirePackagesToDarcFeed()
+    {
+        // Regression guard for https://github.com/microsoft/aspire/issues/17527: a stable-shaped
+        // staging CLI ("13.4.0") must resolve Aspire.* from its SHA-specific darc feed with Stable
+        // quality (version filtering). The fix keeps this behavior while also covering the
+        // prerelease-shaped case above.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            isStableShapedCliVersion: () => true,
+            cliInformationalVersionProvider: () => "13.4.0+abcdef1234567890abcdef1234567890abcdef12");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
+
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
+            aspireMapping.Source);
+
+        // Same darc-feed invariants as the prerelease-shaped case: isolated global packages folder
+        // and no CLI-version pin (the SHA feed already carries exactly the build's packages).
+        Assert.True(stagingChannel.ConfigureGlobalPackagesFolder);
+        Assert.Null(stagingChannel.PinnedVersion);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingWithOverrideFeed_UsesOverrideFeed()
+    {
+        // An explicit overrideStagingFeed always wins over identity-based darc derivation.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideStagingFeedConfigKey] = "https://example.com/nuget/v3/index.json"
+            })
+            .Build();
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            configuration,
+            NullLogger<PackagingService>.Instance,
+            isStableShapedCliVersion: () => false,
+            cliInformationalVersionProvider: () => "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal("https://example.com/nuget/v3/index.json", aspireMapping.Source);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenStagingIdentityCannotDeriveFeedUrl_OmitsChannelAndWarns()
+    {
+        // A staging-identity CLI whose informational version carries no '+<commit>' build metadata
+        // (e.g. an unstamped local/dev build) cannot derive its SHA-specific darc feed, and there is
+        // no override feed. Synthesis was permitted by the identity gate, so the only safe outcome is
+        // to omit the staging channel and surface a warning — silently routing to the shared daily
+        // feed would resolve the wrong (main-branch) packages, which is the bug this PR fixes.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var logger = new CapturingLogger<PackagingService>();
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            logger,
+            isStableShapedCliVersion: () => false,
+            cliInformationalVersionProvider: () => "13.4.0-preview.1.26280.6"); // no '+<commit>' build metadata
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(PackageChannelNames.Staging, channels.Select(c => c.Name));
+        // Synthesis was allowed, so the unavailable-reason API has nothing to report — the warning
+        // is the only diagnostic for this edge case.
+        Assert.Null(packagingService.GetStagingChannelUnavailableReason());
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("staging feed URL"));
+    }
+
+    public enum ExpectedStagingFeed
+    {
+        Absent,
+        Darc,
+        Shared,
+        Override,
+    }
+
+    // Locks the full ShouldUseSharedStagingFeed decision table in one place: feed PROVENANCE is
+    // identity-driven (staging identity and the Stable-quality feature-flag path -> SHA-specific
+    // darc feed), while a non-staging identity that opts into staging with Both quality keeps the
+    // shared dotnet9 daily feed, an explicit override always wins, and an identity with no staging
+    // opt-in synthesizes no channel at all.
+    [Theory]
+    [InlineData(PackageChannelNames.Staging, false, false, false, null, ExpectedStagingFeed.Darc)]        // staging identity, prerelease-shaped
+    [InlineData(PackageChannelNames.Staging, true, false, false, null, ExpectedStagingFeed.Darc)]         // staging identity, stable-shaped
+    [InlineData(PackageChannelNames.Staging, false, false, false, "https://example.com/o/v3/index.json", ExpectedStagingFeed.Override)] // override always wins
+    [InlineData(PackageChannelNames.Stable, false, false, true, null, ExpectedStagingFeed.Shared)]        // stable identity + config channel=staging => Both => shared
+    [InlineData(PackageChannelNames.Stable, false, true, false, null, ExpectedStagingFeed.Darc)]          // stable identity + feature flag only => Stable => darc
+    [InlineData(PackageChannelNames.Daily, false, true, false, null, ExpectedStagingFeed.Darc)]           // daily identity + feature flag only => Stable => darc
+    [InlineData(PackageChannelNames.Local, false, false, false, null, ExpectedStagingFeed.Absent)]        // local identity, no opt-in => no channel
+    public async Task GetChannelsAsync_StagingFeedRoutingDecisionTable(
+        string identityChannel,
+        bool isStableShaped,
+        bool featureEnabled,
+        bool configChannelStaging,
+        string? overrideFeed,
+        ExpectedStagingFeed expected)
+    {
+        const string DarcUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json";
+        const string SharedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: identityChannel);
+
+        var settings = new Dictionary<string, string?>();
+        if (configChannelStaging)
+        {
+            settings["channel"] = PackageChannelNames.Staging;
+        }
+        if (overrideFeed is not null)
+        {
+            settings[PackagingService.OverrideStagingFeedConfigKey] = overrideFeed;
+        }
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+
+        var features = new TestFeatures();
+        if (featureEnabled)
+        {
+            features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
+        }
+
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            features,
+            configuration,
+            NullLogger<PackagingService>.Instance,
+            isStableShapedCliVersion: () => isStableShaped,
+            cliInformationalVersionProvider: () => "13.4.0+abcdef1234567890abcdef1234567890abcdef12");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+        var stagingChannel = channels.SingleOrDefault(c => c.Name == PackageChannelNames.Staging);
+
+        if (expected == ExpectedStagingFeed.Absent)
+        {
+            Assert.Null(stagingChannel);
+            return;
+        }
+
+        Assert.NotNull(stagingChannel);
+        var aspireSource = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*").Source;
+        var expectedSource = expected switch
+        {
+            ExpectedStagingFeed.Darc => DarcUrl,
+            ExpectedStagingFeed.Shared => SharedUrl,
+            ExpectedStagingFeed.Override => overrideFeed,
+            _ => throw new InvalidOperationException($"Unexpected expectation: {expected}"),
+        };
+        Assert.Equal(expectedSource, aspireSource);
+    }
+
+    // The following tests exercise the diagnostic override mechanism (overrideCliIdentityChannel +
+    // overrideCliInformationalVersion) end-to-end through the REAL config-reading default providers
+    // (the seams are intentionally NOT injected), which is exactly the local-validation recipe in
+    // docs/cli-staging-validation.md. A locally built CLI bakes a 'local' identity, so without the
+    // overrides these scenarios would never synthesize a staging channel at all.
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityOverrideAndVersionOverrideSet_RoutesAspirePackagesToDarcFeed()
+    {
+        // Full local-validation recipe: a 'local' identity CLI is told (via config overrides) to behave
+        // like a prerelease-shaped staging build. Both overrides are required — the identity override
+        // makes ShouldUseSharedStagingFeed pick the darc feed, and the version override supplies the
+        // '+<commit>' the darc URL is derived from.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Local);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideCliIdentityChannelConfigKey] = PackageChannelNames.Staging,
+                [PackagingService.OverrideCliInformationalVersionConfigKey] = "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12",
+            })
+            .Build();
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
+            aspireMapping.Source);
+        Assert.DoesNotContain("dotnet9", aspireMapping.Source);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenVersionOverrideIsStableShaped_DefaultsToStableQuality()
+    {
+        // A stable-shaped (no semver prerelease tag) version override drives the quality predicate to
+        // Stable, mirroring how an official stable-shaped staging build is filtered.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Local);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideCliIdentityChannelConfigKey] = PackageChannelNames.Staging,
+                [PackagingService.OverrideCliInformationalVersionConfigKey] = "13.4.0+abcdef1234567890abcdef1234567890abcdef12",
+            })
+            .Build();
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
+            Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*").Source);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityOverrideIsInvalid_FallsBackToRealIdentity()
+    {
+        // An unrecognized identity override (rejected by IdentityChannelReader.IsValidChannel) is
+        // ignored and the real 'local' identity is used, so no staging channel is synthesized despite
+        // the version override being present.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Local);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideCliIdentityChannelConfigKey] = "not-a-real-channel",
+                [PackagingService.OverrideCliInformationalVersionConfigKey] = "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12",
+            })
+            .Build();
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(PackageChannelNames.Staging, channels.Select(c => c.Name));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenOverrideStagingFeedSet_WinsOverVersionOverrideDerivation()
+    {
+        // overrideStagingFeed is the most powerful escape hatch and must win over the SHA-derived darc
+        // URL even when the diagnostic version override is also present.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Local);
+
+        const string OverrideFeed = "https://example.com/override/v3/index.json";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideCliIdentityChannelConfigKey] = PackageChannelNames.Staging,
+                [PackagingService.OverrideCliInformationalVersionConfigKey] = "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12",
+                [PackagingService.OverrideStagingFeedConfigKey] = OverrideFeed,
+            })
+            .Build();
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(OverrideFeed, Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*").Source);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenStagingDiagnosticOverridesActive_EmitsWarning()
+    {
+        // Any normal CLI invocation that has the diagnostic overrides set must leave a trace in the
+        // logs so an overridden identity/feed can't silently resolve Aspire.* packages.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Local);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideCliIdentityChannelConfigKey] = PackageChannelNames.Staging,
+                [PackagingService.OverrideCliInformationalVersionConfigKey] = "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12",
+            })
+            .Build();
+
+        var logger = new CapturingLogger<PackagingService>();
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, logger);
+
+        await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("diagnostic overrides are active"));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenOnlyVersionOverrideSet_WarnsButSynthesizesNoStagingChannel()
+    {
+        // Only the version override is set, so the identity stays 'local' and no staging channel is
+        // synthesized. The warning must still fire — the override is active even though it had no
+        // routing effect, and a silent no-op would hide a misconfiguration.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Local);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideCliInformationalVersionConfigKey] = "13.4.0-preview.1.26280.6+abcdef1234567890abcdef1234567890abcdef12",
+            })
+            .Build();
+
+        var logger = new CapturingLogger<PackagingService>();
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, logger);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(PackageChannelNames.Staging, channels.Select(c => c.Name));
+        Assert.Contains(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("diagnostic overrides are active"));
+    }
+
+    [Theory]
+    [InlineData("13.4.0+abcd-ef1234567890", true)]               // hyphen only in build metadata => stable-shaped
+    [InlineData("13.4.0-preview.1.26280.6+abcd-ef1234567890", false)] // semver prerelease tag => prerelease-shaped
+    public async Task GetChannelsAsync_VersionOverrideStableShapeIgnoresBuildMetadataHyphens(string overrideVersion, bool expectStableQuality)
+    {
+        // StripBuildMetadata removes the '+<commit>' before the prerelease-tag check, so a commit hash
+        // containing '-' must not be misread as a semver prerelease tag.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Local);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideCliIdentityChannelConfigKey] = PackageChannelNames.Staging,
+                [PackagingService.OverrideCliInformationalVersionConfigKey] = overrideVersion,
+            })
+            .Build();
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(expectStableQuality ? PackageChannelQuality.Stable : PackageChannelQuality.Both, stagingChannel.Quality);
+    }
+
+    [Fact]
+    public void GetStagingChannelUnavailableReason_WhenIdentityOverrideIsStaging_ReturnsNull()
+    {
+        // The unavailable-reason check (cached via Lazy) must also honor the identity override, so a
+        // local CLI with overrideCliIdentityChannel=staging reports staging as available.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Local);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideCliIdentityChannelConfigKey] = PackageChannelNames.Staging,
+            })
+            .Build();
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+
+        Assert.Null(packagingService.GetStagingChannelUnavailableReason());
     }
 
     [Fact]
@@ -244,9 +747,11 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     public async Task GetChannelsAsync_WhenChannelStagingRequestedOnDailyCliWithFeatureFlag_IncludesStagingChannel()
     {
         // Back-compat: the StagingChannelEnabled feature flag is an explicit developer/test opt-in
-        // and continues to bypass the identity gating. Without an override feed the SHA-specific
-        // path needs an AssemblyInformationalVersion to resolve, which is not guaranteed in test
-        // hosts, so we also supply overrideStagingFeed to make the test deterministic.
+        // and continues to bypass the identity gating. The feature-flag-only path defaults the
+        // synthesized channel quality to Stable, so a non-staging identity routes Aspire.* to the
+        // SHA-specific darc feed (not the shared daily feed). The informational version is injected
+        // so the darc derivation is deterministic — no overrideStagingFeed crutch is needed, which
+        // lets the assertions below isolate the feature-flag gate AND the real feed routing.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
@@ -256,30 +761,26 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
 
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                [PackagingService.OverrideStagingFeedConfigKey] = "https://example.com/staging/v3/index.json"
-            })
-            .Build();
-
-        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            features,
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            cliInformationalVersionProvider: () => "13.4.0+abcdef1234567890abcdef1234567890abcdef12");
 
         var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
 
-        Assert.Contains(PackageChannelNames.Staging, channels.Select(c => c.Name));
+        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
         Assert.Null(packagingService.GetStagingChannelUnavailableReason());
 
-        // Isolate the feature-flag gate itself: IsStagingChannelSynthesisAllowed short-circuits on
-        // overrideStagingFeed before the feature flag is ever checked, so the assertions above
-        // would still pass if the feature-flag branch were removed. Build a second service whose
-        // only opt-in is the StagingChannelEnabled feature flag (no overrideStagingFeed) and
-        // assert that the gate alone reports the channel as available. We deliberately do not
-        // call GetChannelsAsync() here because the full channel-creation path requires an
-        // AssemblyInformationalVersion that is not guaranteed in test hosts.
-        var featureFlagOnlyConfig = new ConfigurationBuilder().Build();
-        var featureFlagOnlyService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, featureFlagOnlyConfig, NullLogger<PackagingService>.Instance);
-        Assert.Null(featureFlagOnlyService.GetStagingChannelUnavailableReason());
+        // Feature-flag-only opt-in => Stable quality => darc feed (the gate alone, with no
+        // overrideStagingFeed, must both permit synthesis and route to the SHA feed).
+        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcdef12/nuget/v3/index.json",
+            aspireMapping.Source);
     }
 
     /// <summary>

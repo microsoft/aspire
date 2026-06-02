@@ -564,7 +564,7 @@ public class AddNodeAppTests
             .WithEndpoint("http", e =>
             {
                 e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 5031);
-                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "nodeapp.dev.internal", 5031, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkID: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
+                e.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(KnownNetworkIdentifiers.DefaultAspireContainerNetwork, new AllocatedEndpoint(e, "nodeapp.dev.internal", 5031, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
             });
         var consumer = builder.AddContainer("consumer", "fake");
 

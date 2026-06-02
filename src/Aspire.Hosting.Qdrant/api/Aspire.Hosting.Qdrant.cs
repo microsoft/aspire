@@ -10,13 +10,13 @@ namespace Aspire.Hosting
 {
     public static partial class QdrantBuilderExtensions
     {
-        [AspireExport(Description = "Adds a Qdrant resource to the application. A container is used for local development.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> AddQdrant(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? apiKey = null, int? grpcPort = null, int? httpPort = null) { throw null; }
 
-        [AspireExport(Description = "Adds a bind mount for the data folder to a Qdrant container resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport(Description = "Adds a named volume for the data folder to a Qdrant container resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<ApplicationModel.QdrantServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
         [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference export.")]

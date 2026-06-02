@@ -6,6 +6,19 @@ parameters:
   extraBuildArgs: ''
   codeSign: false
   teamName: ''
+  # Optional override for AspireCliChannel. Accepted values: 'auto' (default;
+  # let computeCliChannel below pick stable/staging/daily/pr-<N> from Build.Reason
+  # and Build.SourceBranch), 'stable', 'staging', 'daily'. Set this to 'stable'
+  # when running the official ship pipeline so the GA CLI binary is baked with
+  # AspireCliChannel=stable (and aspire init then writes a nuget.org-only
+  # nuget.config, which is correct because the packages have been promoted to
+  # nuget.org). For routine stabilizing builds from a release/* branch — which
+  # also set DotNetFinalVersionKind=release — leave this on 'auto' so the
+  # channel falls through to 'staging' and aspire init writes a nuget.config
+  # that maps Aspire.* to the staging feed. See
+  # https://github.com/microsoft/aspire/issues/17527 for the bug that made this
+  # override necessary.
+  aspireCliChannelOverride: 'auto'
 
 jobs:
 
@@ -84,15 +97,32 @@ jobs:
               $reason = '$(Build.Reason)'
               $sourceBranch = '$(Build.SourceBranch)'
               $prNumber = '$(System.PullRequest.PullRequestNumber)'
+              # Template-time substitution: the value is the resolved
+              # aspireCliChannelOverride parameter literal, never a runtime
+              # variable. Quoting protects an empty/default value.
+              $override = '${{ parameters.aspireCliChannelOverride }}'
               Write-Host "Build.Reason: '$reason'"
               Write-Host "Build.SourceBranch: '$sourceBranch'"
               Write-Host "System.PullRequest.PullRequestNumber: '$prNumber'"
+              Write-Host "aspireCliChannelOverride: '$override'"
 
               $versionKind = & "$(Build.SourcesDirectory)/$(dotnetScript)" msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
               $versionKind = $versionKind.Trim()
               Write-Host "DotNetFinalVersionKind: '$versionKind'"
 
-              if ($reason -eq 'PullRequest') {
+              if ($override -and $override -ne 'auto') {
+                # Operator override path. Validate against the same accepted set
+                # that IdentityChannelReader.IsValidChannel enforces at CLI startup
+                # so a typo here fails the pipeline step rather than producing a
+                # binary that refuses to boot. pr-<N> is intentionally excluded
+                # from the override set — PR builds always come from the
+                # PullRequest reason arm below.
+                if ($override -notin @('stable', 'staging', 'daily')) {
+                  throw "aspireCliChannelOverride='$override' is not one of: auto, stable, staging, daily."
+                }
+                $channel = $override.ToLowerInvariant()
+              }
+              elseif ($reason -eq 'PullRequest') {
                 # Defense in depth: validate digit-only PR number rather than just
                 # non-emptiness. If the agent ever returns the literal macro string
                 # (e.g. '$(System.PullRequest.PullRequestNumber)' unresolved) this
@@ -105,10 +135,21 @@ jobs:
                 # Bake the resolved hive label directly into AspireCliChannel. The CLI
                 # consumes this verbatim and avoids the legacy "pr" + parsed-PrNumber join.
                 $channel = "pr-$prNumber"
+              } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
+                # Release/internal-release branches always produce staging artifacts —
+                # they are published to the staging feed for dogfooding and only later
+                # promoted to nuget.org. This must be checked BEFORE the
+                # `versionKind == release` arm, because a release-branch build also sets
+                # StabilizePackageVersion=true (→ DotNetFinalVersionKind=release) once
+                # we are stabilizing for ship. Without this ordering, the stabilized
+                # staging build would bake AspireCliChannel=stable and `aspire init`
+                # would drop a nuget.config with no staging feed mapping, causing
+                # `aspire add` to resolve Aspire.* packages from nuget.org (older
+                # versions) or fail to resolve the +sha-pinned Aspire.AppHost.Sdk.
+                # See https://github.com/microsoft/aspire/issues/17527.
+                $channel = 'staging'
               } elseif ($versionKind -eq 'release') {
                 $channel = 'stable'
-              } elseif ($sourceBranch -match '^refs/heads/(release|internal/release)/') {
-                $channel = 'staging'
               } else {
                 # main and any other branch fall through to daily
                 $channel = 'daily'

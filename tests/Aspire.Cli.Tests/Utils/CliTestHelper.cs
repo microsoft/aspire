@@ -576,7 +576,14 @@ internal sealed class CliServiceCollectionTestOptions
         var nuGetPackageCache = serviceProvider.GetRequiredService<INuGetPackageCache>();
         var features = serviceProvider.GetRequiredService<IFeatures>();
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
-        return new PackagingService(executionContext, nuGetPackageCache, features, configuration, NullLogger<PackagingService>.Instance);
+        // Force prerelease-shaped CLI version semantics in tests so PackagingService's
+        // identity-staging quality default does not depend on whether the test-host assembly
+        // was produced under StabilizePackageVersion=true. Without this, tests that rely on
+        // the shared-daily routing for `staging` identity (quality=Both → useSharedFeed=true)
+        // would fail under the stabilization-check job which builds with a stable-shaped
+        // version (no '-' suffix) baked in. Tests that specifically exercise the stable-shape
+        // branch construct PackagingService directly with isStableShapedCliVersion: () => true.
+        return new PackagingService(executionContext, nuGetPackageCache, features, configuration, NullLogger<PackagingService>.Instance, isStableShapedCliVersion: () => false);
     };
 
     public Func<IServiceProvider, IDiskCache> DiskCacheFactory { get; set; } = (IServiceProvider serviceProvider) => new NullDiskCache();

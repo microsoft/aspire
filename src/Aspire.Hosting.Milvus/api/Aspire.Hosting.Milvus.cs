@@ -10,26 +10,26 @@ namespace Aspire.Hosting
 {
     public static partial class MilvusBuilderExtensions
     {
-        [AspireExport(Description = "Adds a Milvus database resource to a Milvus server resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.MilvusDatabaseResource> AddDatabase(this ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> builder, string name, string? databaseName = null) { throw null; }
 
-        [AspireExport(Description = "Adds a Milvus server resource to the distributed application model.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> AddMilvus(this IDistributedApplicationBuilder builder, string name, ApplicationModel.IResourceBuilder<ApplicationModel.ParameterResource>? apiKey = null, int? grpcPort = null) { throw null; }
 
-        [AspireExport(Description = "Adds the Attu administration tool for Milvus.", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<T> WithAttu<T>(this ApplicationModel.IResourceBuilder<T> builder, System.Action<ApplicationModel.IResourceBuilder<Milvus.AttuResource>>? configureContainer = null, string? containerName = null)
             where T : Milvus.MilvusServerResource { throw null; }
 
         [System.Obsolete("Use WithConfigurationFile instead.")]
         public static ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> WithConfigurationBindMount(this ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> builder, string configurationFilePath) { throw null; }
 
-        [AspireExport(Description = "Copies a Milvus configuration file into the container.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> WithConfigurationFile(this ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> builder, string configurationFilePath) { throw null; }
 
-        [AspireExport(Description = "Mounts a host directory as the Milvus data directory.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> builder, string source, bool isReadOnly = false) { throw null; }
 
-        [AspireExport(Description = "Adds a persistent data volume to the Milvus server resource.")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> WithDataVolume(this ApplicationModel.IResourceBuilder<Milvus.MilvusServerResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
     }
 }

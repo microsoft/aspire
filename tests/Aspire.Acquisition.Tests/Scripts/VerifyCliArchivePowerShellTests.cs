@@ -32,7 +32,6 @@ public class VerifyCliArchivePowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("aspire mock v1.0", result.Output);
-        Assert.Contains("'aspire new aspire-starter' created project successfully", result.Output);
         Assert.Contains("linux-* archive correctly omits the install-route sidecar", result.Output);
         Assert.Contains("All verification checks passed", result.Output);
     }

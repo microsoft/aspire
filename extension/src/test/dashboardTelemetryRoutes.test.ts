@@ -125,7 +125,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         assert.strictEqual(event.isError, undefined);
     });
 
-    test('POST /telemetry/userTask emits dashboard/userTask, not the raw dashboard name', async () => {
+    test('POST /telemetry/userTask emits dashboard/usertask, not the raw dashboard name', async () => {
         const { status } = await postJson(h.baseUrl, '/telemetry/userTask', {
             eventName: 'aspire/dashboard/mcp/toolcall',
             properties: {},
@@ -133,7 +133,7 @@ suite('DashboardTelemetryPassthrough route-level normalization', () => {
         });
         assert.strictEqual(status, 200);
         assert.strictEqual(h.fake.events.length, 1);
-        assert.strictEqual(h.fake.events[0].name, 'dashboard/userTask');
+        assert.strictEqual(h.fake.events[0].name, 'dashboard/usertask');
         assert.strictEqual(h.fake.events[0].properties?.dashboard_event_name, 'aspire/dashboard/mcp/toolcall');
     });
 

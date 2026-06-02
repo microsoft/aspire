@@ -223,6 +223,10 @@
     <value>When --version is specified in non-interactive mode, the integration name must exactly match a package or friendly name. No exact match was found for '{0}'.</value>
     <comment>{0} is the integration name provided by the user.</comment>
   </data>
+  <data name="NonInteractiveRequiresExactPackageMatch" xml:space="preserve">
+    <value>No exact match was found for '{0}'. In non-interactive mode the integration name must exactly match a package id or friendly name; fuzzy fallback is disabled to prevent silently selecting the wrong package.</value>
+    <comment>{0} is the integration name provided by the user.</comment>
+  </data>
   <data name="UsePrereleasePackages" xml:space="preserve">
     <value>Use pre-release packages</value>
   </data>

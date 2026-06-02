@@ -13,6 +13,7 @@ public static class KnownStructuredLogFields
     public const string LevelField = "log.level";
     public const string OriginalFormatField = "log.originalformat";
     public const string EventNameField = "log.eventname";
+    public const string TimestampField = "log.timestamp";
 
     public static readonly List<string> AllFields = [
         MessageField,
@@ -21,6 +22,7 @@ public static class KnownStructuredLogFields
         TraceIdField,
         SpanIdField,
         OriginalFormatField,
-        EventNameField
+        EventNameField,
+        TimestampField
     ];
 }

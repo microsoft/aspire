@@ -442,9 +442,13 @@ public sealed partial class TelemetryRepository : IDisposable
     public PagedResult<OtlpLogEntry> GetLogs(GetLogsContext context)
     {
         List<OtlpResource>? resources = null;
-        if (context.ResourceKey is { } key)
+        if (context.ResourceKeys is { Count: > 0 } keys)
         {
-            resources = GetResources(key);
+            resources = [];
+            foreach (var key in keys)
+            {
+                resources.AddRange(GetResources(key));
+            }
 
             if (resources.Count == 0)
             {
@@ -512,7 +516,7 @@ public sealed partial class TelemetryRepository : IDisposable
     {
         var logsContext = new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             Count = int.MaxValue,
             StartIndex = 0,
             Filters =
@@ -543,7 +547,7 @@ public sealed partial class TelemetryRepository : IDisposable
     {
         var logsContext = new GetLogsContext
         {
-            ResourceKey = null,
+            ResourceKeys = [],
             Count = int.MaxValue,
             StartIndex = 0,
             Filters =
@@ -616,9 +620,13 @@ public sealed partial class TelemetryRepository : IDisposable
     public GetTracesResponse GetTraces(GetTracesRequest context)
     {
         List<OtlpResource>? resources = null;
-        if (context.ResourceKey is { } key)
+        if (context.ResourceKeys is { Count: > 0 } keys)
         {
-            resources = GetResources(key, includeUninstrumentedPeers: true);
+            resources = [];
+            foreach (var key in keys)
+            {
+                resources.AddRange(GetResources(key, includeUninstrumentedPeers: true));
+            }
 
             if (resources.Count == 0)
             {
@@ -708,9 +716,13 @@ public sealed partial class TelemetryRepository : IDisposable
     public GetSpansResponse GetSpans(GetSpansRequest context)
     {
         List<OtlpResource>? resources = null;
-        if (context.ResourceKey is { } key)
+        if (context.ResourceKeys is { Count: > 0 } keys)
         {
-            resources = GetResources(key, includeUninstrumentedPeers: true);
+            resources = [];
+            foreach (var key in keys)
+            {
+                resources.AddRange(GetResources(key, includeUninstrumentedPeers: true));
+            }
 
             if (resources.Count == 0)
             {
@@ -1132,6 +1144,7 @@ public sealed partial class TelemetryRepository : IDisposable
         {
             if (filter is FieldTelemetryFilter fieldFilter &&
                 !FieldTelemetryFilter.IsNumericField(fieldFilter.Field) &&
+                !FieldTelemetryFilter.IsDateField(fieldFilter.Field) &&
                 IsSupportedCondition(fieldFilter.Condition))
             {
                 stringFilter = new StringFilter(fieldFilter.Field, fieldFilter.Condition, fieldFilter.Value);

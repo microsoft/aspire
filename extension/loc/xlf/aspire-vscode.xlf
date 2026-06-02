@@ -35,7 +35,7 @@
       <source xml:lang="en">Aspire Hosting SDK Version: {0}.</source>
     </trans-unit>
     <trans-unit id="extension.title">
-      <source xml:lang="en">Aspire VSCode</source>
+      <source xml:lang="en">Aspire</source>
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.welcome.description">
       <source xml:lang="en">Aspire helps you build observable, production-ready distributed apps — orchestrating front ends, APIs, containers, and databases from code.&#10;&#10;It works with **any language**: C#, Python, JavaScript, Go, Java, and more.</source>

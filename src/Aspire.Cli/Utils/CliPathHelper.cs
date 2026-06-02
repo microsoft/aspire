@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.Logging;
@@ -10,6 +12,26 @@ namespace Aspire.Cli.Utils;
 internal static class CliPathHelper
 {
     internal const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
+
+    /// <summary>
+    /// Name of the directory under <c>ASPIRE_HOME</c> that holds NuGet package caches keyed by
+    /// a stable hash of the resolved staging feed URL. Two staging builds of the same release
+    /// branch share the same stable-shaped semver (e.g. <c>13.4.0</c>) but ship from different
+    /// darc feeds; an <c>overrideStagingFeed</c> setting can also point the same CLI at any
+    /// arbitrary feed. Each distinct feed URL therefore gets its own feed-hash subdirectory
+    /// here to avoid <c>(id, version)</c> cache collisions in NuGet. <c>aspire cache clear</c>
+    /// wipes the feed-hash subdirectories so users can recover wedged staging restores without
+    /// manual filesystem surgery.
+    /// </summary>
+    internal const string StagingNuGetPackagesFolderName = ".nugetpackages";
+
+    /// <summary>
+    /// Default number of hex characters used for staging feed cache keys. 8 keeps deep
+    /// integration cache paths well under Windows <c>MAX_PATH</c> while still giving roughly
+    /// 4 billion buckets — orders of magnitude more than the handful of staging feeds any one
+    /// user ever sees, so collisions are negligible in practice.
+    /// </summary>
+    internal const int DefaultStagingFeedCacheKeyLength = 8;
 
     // The maximum age before a leftover CLI socket file in the runtime sockets directory is
     // pruned. 24 hours is comfortably longer than any legitimate Aspire CLI run and short enough
@@ -36,6 +58,53 @@ internal static class CliPathHelper
         return string.IsNullOrWhiteSpace(configuredAspireHome)
             ? Path.Combine(userProfileDirectory, ".aspire")
             : configuredAspireHome;
+    }
+
+    /// <summary>
+    /// Returns the absolute path to the staging NuGet package cache root
+    /// (<c>&lt;ASPIRE_HOME&gt;/.nugetpackages</c>). Producers (the
+    /// <c>PrebuiltAppHostServer</c> temp nuget.config) write feed-hash-keyed
+    /// subdirectories under this root; the <c>aspire cache clear</c> command wipes those
+    /// subdirectories. Centralized here so both call sites agree on the location.
+    /// </summary>
+    internal static string GetStagingNuGetPackagesDirectory(DirectoryInfo aspireHomeDirectory)
+    {
+        ArgumentNullException.ThrowIfNull(aspireHomeDirectory);
+        return Path.Combine(aspireHomeDirectory.FullName, StagingNuGetPackagesFolderName);
+    }
+
+    /// <summary>
+    /// Returns a stable lowercase hex cache key derived from <paramref name="feedUrl"/>,
+    /// truncated to <paramref name="length"/> characters. Returns <see langword="null"/> when
+    /// the URL is null, empty, or whitespace-only.
+    /// </summary>
+    /// <remarks>
+    /// Used by <c>PrebuiltAppHostServer</c> to compute the per-feed
+    /// <c>globalPackagesFolder</c> subdirectory under
+    /// <c>&lt;ASPIRE_HOME&gt;/.nugetpackages</c>. Keying on the feed URL (rather than the CLI
+    /// commit SHA) means that the same CLI talking to two different override staging feeds
+    /// gets two distinct caches, which is important because staging packages from different
+    /// feeds share the same stable-shaped <c>(id, version)</c> tuple and would otherwise
+    /// collide in NuGet's cache.
+    ///
+    /// The URL is trimmed and lower-cased before hashing so harmless variations (trailing
+    /// whitespace from a config file, hostname casing) don't fragment the cache. Hashing the
+    /// URL with <see cref="XxHash3"/> (non-cryptographic but very high quality) keeps any
+    /// embedded credentials out of the on-disk directory name even when the feed URL itself
+    /// contains them.
+    /// </remarks>
+    internal static string? ComputeStagingFeedCacheKey(string? feedUrl, int length = DefaultStagingFeedCacheKeyLength)
+    {
+        if (string.IsNullOrWhiteSpace(feedUrl) || length <= 0)
+        {
+            return null;
+        }
+
+        var normalized = feedUrl.Trim().ToLowerInvariant();
+        var bytes = Encoding.UTF8.GetBytes(normalized);
+        // XxHash3 emits 8 bytes (64 bits) -> 16 hex chars; truncate to the requested length.
+        var hex = Convert.ToHexString(XxHash3.Hash(bytes)).ToLowerInvariant();
+        return length >= hex.Length ? hex : hex[..length];
     }
 
     internal static string? TryGetAspireHomeDirectoryFromInstallRoute(string? processPath, ILogger? logger = null)

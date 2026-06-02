@@ -312,7 +312,7 @@ internal static class DcpModelUtilities
                     throw new InvalidDataException($"The '{endpoint.Name}' on resource '{ts.ResourceName}' should have an associated DCP Service resource already set up");
                 }
 
-                var networkID = new NetworkIdentifier(ts.ContainerNetworkName!);
+                var networkId = new NetworkIdentifier(ts.ContainerNetworkName!);
                 var address = string.IsNullOrEmpty(ts.TunnelInstanceName) ? containerHostName : KnownHostNames.DefaultContainerTunnelHostName;
                 var port = (int)ts.Service!.AllocatedPort!;
 
@@ -322,9 +322,9 @@ internal static class DcpModelUtilities
                     port,
                     EndpointBindingMode.SingleAddress,
                     targetPortExpression: $$$"""{{- portForServing "{{{ts.Service.Metadata.Name}}}" -}}""",
-                    networkID
+                    networkId
                 );
-                endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(networkID, tunnelAllocatedEndpoint);
+                endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(networkId, tunnelAllocatedEndpoint);
             }
         }
     }

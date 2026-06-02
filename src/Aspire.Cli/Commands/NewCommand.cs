@@ -177,6 +177,49 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return selected.LanguageId;
     }
 
+    private static NuGetPackage? TryGetCurrentCliTemplateVersionPackage(PackageChannel selectedChannel, NuGetPackage[] packages, bool hasPrHives)
+    {
+        if (VersionHelper.TryGetCurrentCliVersionMatch(
+            packages,
+            p => p.Version,
+            out var cliVersionPackage,
+            channelName: selectedChannel.Name,
+            hasPrHives: hasPrHives))
+        {
+            return cliVersionPackage;
+        }
+
+        if (packages.Length > 0 &&
+            selectedChannel.Type is PackageChannelType.Explicit &&
+            !string.Equals(selectedChannel.Name, PackageChannelNames.Stable, StringComparisons.ChannelName) &&
+            !VersionHelper.IsLocalBuildChannel(selectedChannel.Name))
+        {
+            // Prerelease channels (daily, staging) filter the shipped stable package out of channel
+            // search even when the channel's feed mappings can still restore it (they fall back to
+            // nuget.org). For those channels, pinning to the running CLI's SDK version keeps the
+            // bundled server and the restored Aspire packages in lock-step. Without this, `aspire new
+            // --channel daily` on a shipped 13.4 CLI floats templates to a 13.5 daily preview, which
+            // then breaks the bundled 13.4 AppHost server with `Aspire.TypeSystem, Version=13.5.0.0`
+            // assembly load errors followed by `No language support found for: typescript/nodejs`.
+            //
+            // The stable channel is excluded here on purpose: it does not apply that filter, so a
+            // "no exact match" outcome means the CLI version is genuinely not published on the stable
+            // feed (the CLI is daily-shape, staging-shape, or PR-shape `13.4.0-pr.X.gY`). Forcing
+            // it through would either contradict the user's explicit `--channel stable` request or
+            // write an unpublishable version into `apphost.cs` that NuGet restore cannot satisfy.
+            // Fall through to the OrderByDescending picker so the user gets the highest shipped
+            // stable package they actually asked for.
+            return new NuGetPackage
+            {
+                Id = TemplateNuGetConfigService.TemplatesPackageName,
+                Version = VersionHelper.GetDefaultSdkVersion(),
+                Source = selectedChannel.SourceDetails
+            };
+        }
+
+        return null;
+    }
+
     private async Task<(bool Success, string? LanguageId)> ResolveSelectedLanguageAsync(ITemplate template, ParseResult parseResult, CancellationToken cancellationToken)
     {
         var explicitLanguageId = ParseExplicitLanguageId(parseResult);
@@ -379,14 +422,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                         .ToArray();
                     var hasPrHives = ExecutionContext.GetHiveCount() > 0;
 
-                    NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
-                        packages,
-                        p => p.Version,
-                        out var cliVersionPackage,
-                        channelName: selectedChannel.Name,
-                        hasPrHives: hasPrHives)
-                        ? cliVersionPackage
-                        : null;
+                    var package = TryGetCurrentCliTemplateVersionPackage(selectedChannel, packages, hasPrHives);
 
                     package ??= packages
                         .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
@@ -439,6 +475,15 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         }
 
         var version = parseResult.GetValue(s_versionOption);
+        // Precedence for the channel written into TemplateInputs.Channel:
+        //   1. Explicit --channel argument (user override always wins).
+        //   2. Channel returned by ResolveCliTemplateVersionAsync (CLI-runtime templates).
+        //   3. The running CLI's IdentityChannel, when it matches a registered Explicit
+        //      channel — needed for TemplateRuntime.DotNet starters (aspire-starter,
+        //      aspire-starter-csharp-typescript) which otherwise resolve
+        //      Aspire.ProjectTemplates from the Implicit (nuget.org) channel regardless
+        //      of CLI identity, and also for CLI-runtime templates invoked with --version
+        //      which short-circuits the resolver below.
         string? resolvedChannelName = null;
         if (ShouldResolveCliTemplateVersion(template) &&
             string.IsNullOrWhiteSpace(version))
@@ -453,13 +498,30 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             resolvedChannelName = resolveResult.ChannelName;
         }
 
+        // Apply the channel precedence as a single coalesce. The identity fallback lives
+        // here, not inside ResolveCliTemplateVersionAsync, because that resolver only runs
+        // on the CLI-runtime / no-explicit-version branch above. The two paths that need
+        // the identity hint are precisely the ones the resolver does NOT visit:
+        //   * TemplateRuntime.DotNet templates (aspire-starter family) — the bug this fix
+        //     addresses; without forwarding, DotNetTemplateFactory searches only the
+        //     Implicit (nuget.org) channel regardless of CLI identity.
+        //   * CLI-runtime templates invoked with --version, which short-circuits the
+        //     resolver and would otherwise leave inputs.Channel null.
+        // Keeping the fallback out of the resolver also keeps the resolver's role narrow:
+        // it performs version negotiation across channels and reports the channel that won;
+        // the identity hint is a different policy ("label the project with the CLI's own
+        // channel") that should not influence version selection.
+        resolvedChannelName = parseResult.GetValue(_channelOption)
+            ?? resolvedChannelName
+            ?? await ResolveIdentityChannelNameAsync(cancellationToken);
+
         var inputs = new TemplateInputs
         {
             Name = parseResult.GetValue(s_nameOption),
             Output = parseResult.GetValue(s_outputOption),
             Source = source,
             Version = version,
-            Channel = parseResult.GetValue(_channelOption) ?? resolvedChannelName,
+            Channel = resolvedChannelName,
             Language = selectedLanguageId
         };
         var templateResult = await template.ApplyTemplateAsync(inputs, parseResult, cancellationToken);
@@ -483,6 +545,33 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         return template.Runtime is TemplateRuntime.Cli;
     }
 
+    /// <summary>
+    /// Resolves <see cref="CliExecutionContext.IdentityChannel"/> to a registered channel name
+    /// from the packaging service. Returns the channel name when an Explicit channel matches the
+    /// identity (e.g. <c>daily</c>, <c>staging</c>, <c>stable</c>, <c>pr-&lt;N&gt;</c>); returns
+    /// <see langword="null"/> when there is no identity, when no Explicit channel matches, or
+    /// when only the Implicit (nuget.org) channel is registered. A <see langword="null"/> result
+    /// intentionally lets the downstream template path consult the Implicit channel and avoids
+    /// writing a per-project channel pin into the new project's NuGet configuration.
+    /// </summary>
+    private async Task<string?> ResolveIdentityChannelNameAsync(CancellationToken cancellationToken)
+    {
+        var identity = ExecutionContext.IdentityChannel;
+        if (string.IsNullOrWhiteSpace(identity))
+        {
+            return null;
+        }
+
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken, identity);
+        var match = channels.FirstOrDefault(c =>
+            string.Equals(c.Name, identity, StringComparisons.ChannelName));
+
+        // Only persist Explicit channel names — Implicit channels (the nuget.org fallback)
+        // are deliberately left unpinned so `aspire add` and later restores use ambient
+        // NuGet configuration. Mirrors the same rule applied at the end of
+        // ResolveCliTemplateVersionAsync.
+        return match is { Type: PackageChannelType.Explicit } ? match.Name : null;
+    }
 }
 
 internal interface INewCommandPrompter

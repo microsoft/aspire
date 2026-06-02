@@ -1,5 +1,7 @@
 import * as assert from 'assert';
-import { __resetCommonPropertiesForTests, __resetTelemetryEventPrefixForTests, __setReporterForTests, __setTelemetryEventPrefixForTests, isCommandCancellation, sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties, withCommandTelemetry } from '../utils/telemetry';
+import type { TelemetryReporter } from '@vscode/extension-telemetry';
+import * as vscode from 'vscode';
+import { __resetCommonPropertiesForTests, __resetTelemetryReporterFactoryForTests, __setReporterForTests, __setTelemetryReporterFactoryForTests, initializeTelemetry, isCommandCancellation, sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties, withCommandTelemetry } from '../utils/telemetry';
 
 interface RecordedEvent {
     name: string;
@@ -44,7 +46,7 @@ suite('telemetry utilities', () => {
     teardown(() => {
         setCommandInvocationListener(undefined);
         restore();
-        __resetTelemetryEventPrefixForTests();
+        __resetTelemetryReporterFactoryForTests();
         __resetCommonPropertiesForTests();
     });
 
@@ -68,16 +70,41 @@ suite('telemetry utilities', () => {
         assert.deepStrictEqual(fake.events[0].properties, { apphost_present: 'keep', command: 'cmd.y' });
     });
 
-    test('sendTelemetryEvent prefixes reporter event names when initialized by VS Code', () => {
-        const restorePrefix = __setTelemetryEventPrefixForTests('microsoft-aspire.aspire-vscode');
+    test('sendTelemetryEvent leaves reporter event names unprefixed because VS Code prefixes extension telemetry', () => {
+        sendTelemetryEvent('command/invoked', { command: 'cmd.prefixed' });
+
+        assert.strictEqual(fake.events[0].name, 'command/invoked');
+    });
+
+    test('initializeTelemetry does not prefix reporter event names with the extension id', () => {
+        restore();
+        let createdWithKey: string | undefined;
+        const restoreFactory = __setTelemetryReporterFactoryForTests((aiKey) => {
+            createdWithKey = aiKey;
+            return fake as unknown as TelemetryReporter;
+        });
+
         try {
-            sendTelemetryEvent('command/invoked', { command: 'cmd.prefixed' });
+            const subscriptions: vscode.Disposable[] = [];
+            initializeTelemetry({
+                extension: {
+                    id: 'microsoft-aspire.aspire-vscode',
+                    packageJSON: {
+                        aiKey: 'test-key'
+                    }
+                },
+                subscriptions
+            } as unknown as vscode.ExtensionContext);
+
+            sendTelemetryEvent('command/invoked', { command: 'cmd.initialized' });
+
+            assert.strictEqual(createdWithKey, 'test-key');
+            assert.strictEqual(subscriptions.length, 1);
+            assert.strictEqual(fake.events[0].name, 'command/invoked');
         }
         finally {
-            restorePrefix();
+            restoreFactory();
         }
-
-        assert.strictEqual(fake.events[0].name, 'microsoft-aspire.aspire-vscode/command/invoked');
     });
 
     test('withCommandTelemetry emits success outcome', async () => {
