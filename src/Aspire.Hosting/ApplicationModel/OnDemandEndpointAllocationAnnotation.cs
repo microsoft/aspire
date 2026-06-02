@@ -10,7 +10,7 @@ internal sealed class OnDemandEndpointAllocationAnnotation : IResourceAnnotation
 {
     private readonly Dictionary<EndpointAnnotation, OnDemandEndpointAllocation> _allocations = [];
 
-    public void Add(EndpointAnnotation endpoint, Func<NetworkIdentifier, AllocatedEndpoint?> provider)
+    public void Register(EndpointAnnotation endpoint, Func<NetworkIdentifier, AllocatedEndpoint?> provider)
     {
         _allocations[endpoint] = new(provider);
     }
@@ -22,11 +22,11 @@ internal sealed class OnDemandEndpointAllocationAnnotation : IResourceAnnotation
             : null;
     }
 
-    public void Clear(EndpointAnnotation endpoint)
+    public void StopAllocating(EndpointAnnotation endpoint)
     {
         if (_allocations.TryGetValue(endpoint, out var allocation))
         {
-            allocation.Clear();
+            allocation.StopAllocating();
         }
     }
 
@@ -41,7 +41,7 @@ internal sealed class OnDemandEndpointAllocationAnnotation : IResourceAnnotation
             return provider?.Invoke(networkId);
         }
 
-        public void Clear()
+        public void StopAllocating()
         {
             Interlocked.Exchange(ref _provider, null);
         }

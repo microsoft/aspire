@@ -81,7 +81,7 @@ internal static class DcpModelUtilities
                 // reference needs the allocated endpoint while building the container configuration,
                 // commit the fallback port before waiting would deadlock resource creation.
                 GetOrAddOnDemandEndpointAllocationAnnotation(appResource.ModelResource)
-                    .Add(ea, networkId => TryAllocateDynamicProxylessContainerEndpoint(appResource, sp, networkId, logger));
+                    .Register(ea, networkId => TryAllocateDynamicProxylessContainerEndpoint(appResource, sp, networkId, logger));
             }
         }
 
