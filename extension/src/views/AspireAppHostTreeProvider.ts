@@ -368,7 +368,13 @@ function getParentResourceName(resource: ResourceJson): string | null {
 }
 
 class ResourceItem extends vscode.TreeItem {
-    constructor(public readonly resource: ResourceJson, public readonly appHostPid: number | null, hasChildren: boolean, public readonly allResources?: readonly ResourceJson[]) {
+    constructor(
+        public readonly resource: ResourceJson,
+        public readonly appHostPid: number | null,
+        hasChildren: boolean,
+        public readonly allResources?: readonly ResourceJson[],
+        public readonly appHostPath?: string
+    ) {
         const label = resource.displayName ?? resource.name;
         const hasUrls = getVisibleResourceUrls(resource).length > 0;
         const hasHealthReports = resource.healthReports && Object.keys(resource.healthReports).length > 0;
@@ -378,7 +384,10 @@ class ResourceItem extends vscode.TreeItem {
             ? vscode.TreeItemCollapsibleState.Expanded
             : hasExpandableContent ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
         super(label, collapsible);
-        this.id = appHostPid !== null ? `resource:${appHostPid}:${resource.name}` : `resource:workspace:${resource.name}`;
+        const ownerId = appHostPid !== null
+            ? appHostPid.toString()
+            : appHostPath ? getComparisonKey(path.resolve(appHostPath)) : 'workspace';
+        this.id = `resource:${ownerId}:${resource.name}`;
         this.iconPath = getResourceIcon(resource);
         this.description = buildResourceDescription(resource);
         this.tooltip = buildResourceTooltip(resource);
@@ -950,7 +959,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             const topLevel = element.resources.filter(r => !getParentResourceName(r));
             for (const resource of sortResources(topLevel)) {
                 const hasChildren = element.resources.some(r => getParentResourceName(r) === resource.name);
-                items.push(new ResourceItem(resource, null, hasChildren, element.resources));
+                items.push(new ResourceItem(resource, null, hasChildren, element.resources, element.appHostPath));
             }
             return items;
         }
@@ -1036,7 +1045,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         const children = allResources.filter(r => getParentResourceName(r) === element.resource.name);
         for (const child of sortResources(children)) {
             const hasChildren = allResources.some(r => getParentResourceName(r) === child.name);
-            items.push(new ResourceItem(child, element.appHostPid, hasChildren, allResources));
+            items.push(new ResourceItem(child, element.appHostPid, hasChildren, allResources, element.appHostPath));
         }
 
         const urls = getVisibleResourceUrls(element.resource);
@@ -1374,7 +1383,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     private _getAppHostPathForResource(element: ResourceItem): string | undefined {
-        return this._findAppHostForResource(element)?.appHostPath ?? this._repository.workspaceAppHostPath;
+        return element.appHostPath ?? this._findAppHostForResource(element)?.appHostPath ?? this._repository.workspaceAppHostPath;
     }
 }
 

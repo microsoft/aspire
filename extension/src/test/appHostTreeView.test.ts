@@ -1388,6 +1388,45 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
+    test('workspace resource commands use the running AppHost path when no workspace AppHost is selected', () => {
+        const commands: string[] = [];
+        const runningHostPath = '/repo/apps/Store/AppHost.csproj';
+        const idleHostPath = '/repo/samples/Store/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [
+                makeAppHost({ appHostPath: runningHostPath, appHostPid: 1234, resources: [makeResource({ name: 'cache', displayName: 'cache' })] }),
+            ],
+            workspaceResources: [],
+            workspaceAppHost: undefined,
+            workspaceAppHostPath: undefined,
+            workspaceAppHostName: undefined,
+            workspaceAppHostCandidatePaths: [runningHostPath, idleHostPath],
+            workspaceAppHostDescription: 'Workspace view selected because aspire ls found 2 buildable AppHosts.',
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: (command: string) => commands.push(command),
+        } as unknown as AspireTerminalProvider;
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+
+        const [runningGroup] = provider.getChildren();
+        const [runningAppHostItem] = provider.getChildren(runningGroup);
+        const resourceItem = provider.getChildren(runningAppHostItem)[0];
+
+        provider.viewResourceLogs(resourceItem as any);
+        provider.restartResource(resourceItem as any);
+
+        assert.deepStrictEqual(commands, [
+            `logs ${quoteShellArg('cache')} --apphost ${quoteShellArg(runningHostPath)}`,
+            `resource ${quoteShellArg('cache')} ${quoteShellArg('restart')} --apphost ${quoteShellArg(runningHostPath)}`,
+        ]);
+        provider.dispose();
+    });
+
     test('workspace mode uses describe resources for selected AppHost when ps has no resources', () => {
         const selectedHostPath = '/repo/apps/Store/AppHost.csproj';
         const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
