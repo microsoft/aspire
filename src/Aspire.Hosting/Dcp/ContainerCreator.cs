@@ -318,6 +318,12 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         spec.RunArgs = runArgs;
 
         var (configuration, pemCertificates, createFiles) = await BuildContainerConfiguration(cr, logger, cToken).ConfigureAwait(false);
+        // Configuration callbacks are the last pre-creation point where on-demand allocation can run.
+        cr.ModelResource.Annotations
+            .OfType<OnDemandEndpointAllocationAnnotation>()
+            .SingleOrDefault()
+            ?.StopAllocating();
+
         if (configuration.Exception is not null)
         {
             throw new FailedToApplyEnvironmentException($"Failed to apply configuration to container {cr.ModelResource.Name}", configuration.Exception);
@@ -979,10 +985,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     private static List<ContainerPortSpec> BuildContainerPorts(RenderedModelResource<Container> cr)
     {
         var ports = new List<ContainerPortSpec>();
-        var onDemandEndpointAllocationAnnotation = cr.ModelResource.Annotations
-            .OfType<OnDemandEndpointAllocationAnnotation>()
-            .SingleOrDefault();
-        onDemandEndpointAllocationAnnotation?.StopAllocating();
 
         foreach (var sp in cr.ServicesProduced)
         {
