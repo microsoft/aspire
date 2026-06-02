@@ -612,6 +612,12 @@ export function addInteractionServiceEndpoints(connection: MessageConnection, in
 }
 
 function delayStatusForE2E(): void {
+    if (process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE !== 'true' ||
+        !process.env.ASPIRE_EXTENSION_E2E_STATE_FILE ||
+        !process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE) {
+        return;
+    }
+
     const rawDelayMs = process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS;
     if (!rawDelayMs) {
         return;

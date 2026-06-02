@@ -1,8 +1,8 @@
 import * as assert from 'assert';
 import { getResources, getTreeAppHostLabel, waitForCommandOutcome, waitForDashboardUrl, waitForNoRunningAppHost, waitForRepositoryIdle, waitForResource, waitForRunningAppHost, waitForWorkspaceAppHost } from './helpers/assertions';
-import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
-import { cancelActiveInput, clickTreeItem, openAspireView, waitForTreeItem } from './helpers/vscode';
+import { cancelActiveInput, clickTreeItem, openAspireView, waitForTreeItem, waitForTreeItemDescription } from './helpers/vscode';
 
 suite('Aspire AppHost tree E2E', function () {
     this.timeout(240000);
@@ -10,6 +10,7 @@ suite('Aspire AppHost tree E2E', function () {
     teardown(async () => {
         await runE2eTeardown([
             () => setCliUnavailableForE2E(false),
+            () => setTerminalCommandExecutionSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
             () => stopPrimaryAppHostIfRunning(),
             () => waitForNoRunningAppHost().catch(() => undefined),
@@ -58,8 +59,18 @@ suite('Aspire AppHost tree E2E', function () {
         await cancelActiveInput();
         await waitForCommandOutcome('aspire-vscode.executeResourceCommand', 'canceled');
 
-        await executeE2eControlCommand({ name: 'stopAppHost', appHostPath: discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath() });
-        await waitForCommandOutcome('aspire-vscode.stopAppHost', 'success');
+        await setTerminalCommandExecutionSuppressedForE2E(true);
+        try {
+            await executeE2eControlCommand({ name: 'stopAppHost', appHostPath: discovered.state.workspaceAppHostPath ?? getPrimaryAppHostProjectPath() });
+            await waitForCommandOutcome('aspire-vscode.stopAppHost', 'success');
+
+            section = await openAspireView();
+            await waitForTreeItemDescription(section, appHostLabel, 'Stopping...');
+        } finally {
+            await setTerminalCommandExecutionSuppressedForE2E(false);
+        }
+
+        await stopPrimaryAppHostIfRunning();
         await waitForNoRunningAppHost();
     });
 });

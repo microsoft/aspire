@@ -619,6 +619,10 @@ driving only as exploratory diagnosis when the E2E scenario is not clear yet; co
 manual reproduction into an E2E test before fixing the bug unless there is a strong, explicit reason
 not to.
 
+When running extension E2E tests against an older published CLI for compatibility validation, set
+`ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS=true` to skip tests that intentionally cover bugs
+fixed only by the current repo-built CLI.
+
 VS Code extension E2E jobs upload shard-specific diagnostics as `extension-e2e-diagnostics-<rid>-<shard>-attempt<N>` artifacts. Linux shards include `.mp4` display recordings from Xvfb by default; Windows shards do not record video and instead rely on screenshots, VS Code logs, state files, and workspace diagnostics.
 
 ```bash

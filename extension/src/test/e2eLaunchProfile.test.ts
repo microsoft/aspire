@@ -166,7 +166,7 @@ suite('E2E launch profile', () => {
         const bashCorepackInstallIndex = workflow.indexOf('npm install --global --force --registry "$NPM_REGISTRY" "corepack@$CorepackVersion"');
         const pwshCorepackInstallIndex = workflow.indexOf('npm install --global --force --registry "$env:NPM_REGISTRY" "corepack@$CorepackVersion"');
         const yarnSeedIndex = workflow.indexOf('node ./scripts/prepareCorepackYarn.mjs');
-        const yarnInstallIndex = workflow.indexOf('run: corepack yarn install');
+        const yarnInstallIndex = workflow.indexOf('corepack yarn install --frozen-lockfile --non-interactive');
         const yarnCompileIndex = workflow.indexOf('corepack yarn compile');
 
         assert.ok(workflow.includes('NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/'));
@@ -225,8 +225,9 @@ suite('E2E launch profile', () => {
         assert.ok(zeroToRunning.includes('this.timeout(2100000);'));
         assert.ok(zeroToRunning.includes('waitForDebugSessionStartup(appHostPath, 300000)'));
         assert.ok(zeroToRunning.includes('waitForDebugDashboardUrl(appHostPath, 180000)'));
-        assert.ok(zeroToRunning.includes("waitForEditorTitle(new URL(dashboardUrl).host, 180000"));
+        assert.ok(zeroToRunning.includes('waitForEditorTitle(dashboardHost, 180000'));
         assert.ok(zeroToRunning.includes("process.platform === 'linux'"));
+        assert.ok(zeroToRunning.includes("waitForWorkbenchTextAfterIntegratedBrowserNavigation(['Resources', dashboardHost], 180000)"));
     });
 
     test('hides AppHost outside the workspace for empty-discovery coverage', () => {

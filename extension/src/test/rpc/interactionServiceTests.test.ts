@@ -193,6 +193,33 @@ suite('InteractionService endpoints', () => {
 		}
 	});
 
+	test("showStatus ignores E2E delay environment unless the E2E bridge is enabled", async () => {
+		const originalEnableBridge = process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE;
+		const originalStateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
+		const originalControlFile = process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE;
+		const originalShowStatusDelayMs = process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS;
+		const testInfo = await createTestRpcServer();
+		const waitStub = sinon.stub(Atomics, 'wait').returns('timed-out');
+
+		try {
+			delete process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE;
+			delete process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
+			delete process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE;
+			process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS = '10000';
+
+			testInfo.interactionService.showStatus('Executing test command...');
+
+			assert.strictEqual(waitStub.called, false);
+		}
+		finally {
+			restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE', originalEnableBridge);
+			restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_STATE_FILE', originalStateFile);
+			restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_CONTROL_FILE', originalControlFile);
+			restoreEnvironmentVariable('ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS', originalShowStatusDelayMs);
+			waitStub.restore();
+		}
+	});
+
 	test("RPC close clears active progress notification", async () => {
 		let closeHandler: (() => void) | undefined;
 		const messageConnection = {
@@ -475,6 +502,15 @@ function normalizePathForComparison(value: string) {
 	const normalized = path.normalize(value);
 
 	return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+}
+
+function restoreEnvironmentVariable(name: string, value: string | undefined): void {
+	if (value === undefined) {
+		delete process.env[name];
+		return;
+	}
+
+	process.env[name] = value;
 }
 
 class TestCliRpcClient implements ICliRpcClient {

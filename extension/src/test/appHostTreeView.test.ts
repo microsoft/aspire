@@ -286,6 +286,101 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(item.label, 'Store/AppHost.cs');
     });
 
+    test('global AppHost shows stopping state immediately after stop command', () => {
+        const commands: string[] = [];
+        const appHostPath = '/workspace/apps/Store/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'global' as ViewMode,
+            appHosts: [makeAppHost({ appHostPath })],
+            workspaceResources: [],
+            workspaceAppHostPath: undefined,
+            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostName: undefined,
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: (command: string) => commands.push(command),
+        } as unknown as AspireTerminalProvider;
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+        const [item] = provider.getChildren();
+
+        provider.stopAppHost(item as any);
+
+        const [stoppingItem] = provider.getChildren();
+        assert.strictEqual(stoppingItem.contextValue, 'appHost:stopping');
+        assert.strictEqual(stoppingItem.description, 'Stopping...');
+        assert.strictEqual((stoppingItem.iconPath as vscode.ThemeIcon).id, 'loading~spin');
+        assert.deepStrictEqual(commands, [`stop --apphost "${appHostPath}"`]);
+        provider.dispose();
+    });
+
+    test('workspace AppHost shows stopping state immediately after stop command', () => {
+        const commands: string[] = [];
+        const appHostPath = '/workspace/apps/Store/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHost: makeAppHost({ appHostPath, resources: [] }),
+            workspaceAppHostPath: appHostPath,
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostName: 'Store',
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const terminalProvider = {
+            getAspireCliExecutablePath: async () => 'aspire',
+            createEnvironment: () => ({}),
+            sendAspireCommandToAspireTerminal: (command: string) => commands.push(command),
+        } as unknown as AspireTerminalProvider;
+        const provider = new AspireAppHostTreeProvider(repository, terminalProvider, makeLaunchService());
+        const [item] = provider.getChildren();
+
+        provider.stopAppHost(item as any);
+
+        const [stoppingItem] = provider.getChildren();
+        assert.strictEqual(stoppingItem.contextValue, 'workspaceResources:stopping');
+        assert.strictEqual(stoppingItem.description, 'Stopping...');
+        assert.strictEqual((stoppingItem.iconPath as vscode.ThemeIcon).id, 'loading~spin');
+        assert.deepStrictEqual(commands, [`stop --apphost "${appHostPath}"`]);
+        provider.dispose();
+    });
+
+    test('stopping state clears when AppHost leaves the running list', () => {
+        const appHostPath = '/workspace/apps/Store/AppHost.csproj';
+        const changeEmitter = new vscode.EventEmitter<void>();
+        let appHosts = [makeAppHost({ appHostPath })];
+        const repository = {
+            viewMode: 'global' as ViewMode,
+            get appHosts() {
+                return appHosts;
+            },
+            workspaceResources: [],
+            workspaceAppHostPath: undefined,
+            workspaceAppHostCandidatePaths: [],
+            workspaceAppHostName: undefined,
+            workspaceAppHostDescription: undefined,
+            onDidChangeData: changeEmitter.event,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+        const [item] = provider.getChildren();
+
+        provider.stopAppHost(item as any);
+        appHosts = [];
+        changeEmitter.fire();
+        appHosts = [makeAppHost({ appHostPath })];
+
+        const [reappearedItem] = provider.getChildren();
+        assert.strictEqual(reappearedItem.contextValue, 'appHost');
+        provider.dispose();
+        changeEmitter.dispose();
+    });
+
     test('workspace AppHost tooltip explains aspire ls selection metadata', () => {
         const provider = makeWorkspaceTreeProvider('Workspace view selected because aspire ls found one buildable C# AppHost.');
 

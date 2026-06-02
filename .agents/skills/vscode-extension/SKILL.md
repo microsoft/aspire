@@ -118,6 +118,9 @@ localization conventions — run it after touching `loc/strings.ts` or `package.
 When adding, changing, or investigating user-visible UI behavior or interactions, strongly prefer
 adding or updating VS Code extension E2E coverage under `extension/src/test-e2e/` so the behavior is
 reproducible and protected from regressions. Skip this only with a strong, explicit justification.
+If you run these tests against an older published CLI for compatibility validation, set
+`ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS=true` to skip tests that intentionally cover bugs
+fixed only by the current repo-built CLI.
 
 ## Debug / run locally
 

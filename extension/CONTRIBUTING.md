@@ -97,6 +97,8 @@ ASPIRE_EXTENSION_E2E_CLI_PATH=/path/to/aspire corepack yarn test:e2e
 
 On Linux, run the E2E command under `xvfb-run -a` when no desktop session is available. On Windows, `ASPIRE_EXTENSION_E2E_CLI_PATH` can point at an `.exe` or `.cmd` wrapper, including paths with spaces. Set `ASPIRE_EXTENSION_E2E_VSIX=/path/to/aspire-extension.vsix` to test an existing package instead of letting the runner create one. The runner defaults to VS Code 1.122.1 and the ExTester version pinned in `package.json` and `yarn.lock`; override with `ASPIRE_EXTENSION_E2E_VSCODE_VERSION` when you need to investigate VS Code-specific behavior. To investigate another ExTester version, update the pinned `vscode-extension-tester` package and regenerate `yarn.lock` from `dotnet-public-npm`. The VS Code user data is forced to English (`locale.json` plus `VSCODE_NLS_CONFIG`) so UI text assertions are deterministic across machines.
 
+Some extension E2E tests intentionally cover bugs fixed by the current repo-built CLI. When running the extension suite against an older published CLI to check backward compatibility, set `ASPIRE_EXTENSION_E2E_SKIP_CURRENT_CLI_REGRESSIONS=true` so those current-CLI-only regressions are skipped instead of failing on the older CLI bug.
+
 The suite can be sharded by running separate VS Code windows/processes, which is how CI keeps the long UI paths parallel instead of relying on Mocha-level parallelism inside one extension host:
 
 ```bash

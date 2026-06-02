@@ -49,7 +49,23 @@ jobs:
 
       - name: Install extension dependencies
         working-directory: extension
-        run: corepack yarn install --frozen-lockfile --non-interactive
+        run: |
+          for attempt in 1 2 3; do
+            if corepack yarn install --frozen-lockfile --non-interactive; then
+              exit 0
+            else
+              exitCode=$?
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "::error::corepack yarn install failed after $attempt attempts."
+              exit "$exitCode"
+            fi
+
+            delay=$((attempt * 30))
+            echo "corepack yarn install failed with exit code $exitCode. Retrying in ${delay}s (attempt $((attempt + 1)) of 3)."
+            sleep "$delay"
+          done
 
       - name: Verify locked ExTester
         working-directory: extension
@@ -298,7 +314,23 @@ jobs:
 
       - name: Install extension dependencies
         working-directory: extension
-        run: corepack yarn install --frozen-lockfile --non-interactive
+        run: |
+          for ($attempt = 1; $attempt -le 3; $attempt++) {
+            corepack yarn install --frozen-lockfile --non-interactive
+            if ($LASTEXITCODE -eq 0) {
+              exit 0
+            }
+
+            $exitCode = $LASTEXITCODE
+            if ($attempt -eq 3) {
+              Write-Error "corepack yarn install failed after $attempt attempts."
+              exit $exitCode
+            }
+
+            $delay = $attempt * 30
+            Write-Host "corepack yarn install failed with exit code $exitCode. Retrying in ${delay}s (attempt $($attempt + 1) of 3)."
+            Start-Sleep -Seconds $delay
+          }
 
       - name: Prepare Aspire CLI and package hive
         id: prepare_cli
@@ -401,6 +433,7 @@ jobs:
       - name: Upload E2E diagnostics
         id: upload_e2e_diagnostics
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: extension-e2e-diagnostics-${{ matrix.rid }}-${{ matrix.shardName }}-attempt${{ github.run_attempt }}
@@ -423,6 +456,7 @@ jobs:
         run: |
           $artifactName = "extension-e2e-diagnostics-${{ matrix.rid }}-${{ matrix.shardName }}-attempt${{ github.run_attempt }}"
           $artifactUrl = "${{ steps.upload_e2e_diagnostics.outputs.artifact-url }}"
+          $uploadOutcome = "${{ steps.upload_e2e_diagnostics.outcome }}"
           if ([string]::IsNullOrWhiteSpace($artifactUrl)) {
             $artifactUrl = "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}#artifacts"
           }
@@ -433,6 +467,10 @@ jobs:
           $screenshots = Get-ChildItem -Path ".test-storage" -Recurse -File -ErrorAction SilentlyContinue | Where-Object { $_.FullName -match "[/\\]screenshots[/\\]" }
 
           Write-Host "Extension E2E diagnostics artifact: $artifactName"
+          Write-Host "Diagnostics upload outcome: $uploadOutcome"
+          if ($uploadOutcome -ne 'success') {
+            Write-Warning "Diagnostics upload did not complete successfully. Keeping the shard result based on the test step."
+          }
           Write-Host "Artifacts page: $artifactUrl"
           if ($hasResults) {
             Write-Host "Mocha/state files are under .test-results inside the artifact."

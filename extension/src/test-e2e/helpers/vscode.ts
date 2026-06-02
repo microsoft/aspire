@@ -76,6 +76,31 @@ export async function waitForChildTreeItem(parent: TreeItem, label: string, time
     }, timeoutMs, `Timed out waiting for child tree item '${label}' on '${await parent.getLabel()}'.`);
 }
 
+export async function waitForTreeItemDescription(section: TreeSection, label: string, expectedDescription: string, timeoutMs = 30000): Promise<TreeItem> {
+    let lastDescription: string | undefined;
+
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            try {
+                const item = await section.findItem(label, 4);
+                if (!item) {
+                    lastDescription = undefined;
+                    return false;
+                }
+
+                lastDescription = await item.getDescription();
+                return lastDescription === expectedDescription ? item : false;
+            }
+            catch {
+                return false;
+            }
+        }, timeoutMs, `Timed out waiting for tree item '${label}' description '${expectedDescription}'.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`Last description for '${label}': ${JSON.stringify(lastDescription)}`]);
+    }
+}
+
 export async function selectContextMenuItem(item: TreeItem, label: string): Promise<void> {
     const menu = await item.openContextMenu();
     try {
@@ -248,37 +273,64 @@ export async function waitForTerminalChannel(expectedText: string, timeoutMs = 3
 
 export async function waitForEditorTitle(expectedText: string, timeoutMs = 60000, options?: { matchCase?: boolean }): Promise<string> {
     const expected = options?.matchCase === false ? expectedText.toLowerCase() : expectedText;
-    return await VSBrowser.instance.driver.wait(async () => {
-        const titles = await new EditorView().getOpenEditorTitles();
-        return titles.find(title => options?.matchCase === false ? title.toLowerCase().includes(expected) : title.includes(expected)) ?? false;
-    }, timeoutMs, `Timed out waiting for editor title containing '${expectedText}'.`);
+    let lastTitles: string[] = [];
+
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            lastTitles = await new EditorView().getOpenEditorTitles();
+            return lastTitles.find(title => options?.matchCase === false ? title.toLowerCase().includes(expected) : title.includes(expected)) ?? false;
+        }, timeoutMs, `Timed out waiting for editor title containing '${expectedText}'.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`Open editor titles: ${formatDiagnosticList(lastTitles)}`]);
+    }
 }
 
 export async function waitForWorkbenchText(expectedText: string, timeoutMs = 30000): Promise<string> {
-    return await VSBrowser.instance.driver.wait(async () => {
-        const text = await getWorkbenchAndWebviewText();
-        return text.includes(expectedText) ? text : false;
-    }, timeoutMs, `Timed out waiting for workbench text containing '${expectedText}'.`);
+    let lastText = '';
+
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            lastText = await getWorkbenchAndWebviewText();
+            return lastText.includes(expectedText) ? lastText : false;
+        }, timeoutMs, `Timed out waiting for workbench text containing '${expectedText}'.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [`Last workbench/webview text (${lastText.length} chars):\n${truncateDiagnosticText(lastText)}`]);
+    }
 }
 
-export async function waitForWorkbenchTextAfterIntegratedBrowserNavigation(expectedText: string, timeoutMs = 120000): Promise<string> {
+export async function waitForWorkbenchTextAfterIntegratedBrowserNavigation(expectedText: string | readonly string[], timeoutMs = 120000): Promise<string> {
+    const expectedTexts = Array.isArray(expectedText) ? expectedText : [expectedText];
+    const expectedTextDescription = expectedTexts.map(text => `'${text}'`).join(' or ');
     let lastReload = 0;
+    let reloadCount = 0;
+    let lastText = '';
 
-    return await VSBrowser.instance.driver.wait(async () => {
-        const text = await getWorkbenchAndWebviewText();
-        if (text.includes(expectedText)) {
-            return text;
-        }
+    try {
+        return await VSBrowser.instance.driver.wait(async () => {
+            lastText = await getWorkbenchAndWebviewText();
+            if (expectedTexts.some(text => lastText.includes(text))) {
+                return lastText;
+            }
 
-        if ((text.includes('Failed to Load Page') || text.includes('ERR_CONNECTION_REFUSED')) && Date.now() - lastReload > 5000) {
-            lastReload = Date.now();
-            // VS Code's integrated browser can navigate as soon as the extension receives
-            // a healthy dashboard URL, before Chromium has a successful connection open.
-            await executeCommandFromPalette('workbench.action.webview.reloadWebview');
-        }
+            if ((lastText.includes('Failed to Load Page') || lastText.includes('ERR_CONNECTION_REFUSED')) && Date.now() - lastReload > 5000) {
+                lastReload = Date.now();
+                reloadCount++;
+                // VS Code's integrated browser can navigate as soon as the extension receives
+                // a healthy dashboard URL, before Chromium has a successful connection open.
+                await executeCommandFromPalette('workbench.action.webview.reloadWebview');
+            }
 
-        return false;
-    }, timeoutMs, `Timed out waiting for integrated browser text containing '${expectedText}'.`);
+            return false;
+        }, timeoutMs, `Timed out waiting for integrated browser text containing ${expectedTextDescription}.`);
+    }
+    catch (error) {
+        throw withWaitDiagnostics(error, [
+            `Integrated browser reload attempts: ${reloadCount}`,
+            `Last workbench/webview text (${lastText.length} chars):\n${truncateDiagnosticText(lastText)}`
+        ]);
+    }
 }
 
 export async function closeAllEditors(): Promise<void> {
@@ -305,6 +357,29 @@ async function getWorkbenchAndWebviewText(): Promise<string> {
         catch {
         }
     }
+}
+
+function withWaitDiagnostics(error: unknown, diagnostics: string[]): Error {
+    const originalMessage = error instanceof Error ? error.message : String(error);
+    const enrichedError = new Error(`${originalMessage}\n\n${diagnostics.join('\n')}`);
+
+    if (error instanceof Error && error.stack) {
+        enrichedError.stack = `${enrichedError.message}\nCaused by: ${error.stack}`;
+    }
+
+    return enrichedError;
+}
+
+function formatDiagnosticList(values: string[]): string {
+    return values.length === 0 ? '(none)' : values.map(value => JSON.stringify(value)).join(', ');
+}
+
+function truncateDiagnosticText(text: string, maxLength = 4000): string {
+    if (text.length <= maxLength) {
+        return text || '(empty)';
+    }
+
+    return `${text.slice(0, maxLength)}\n... truncated ${text.length - maxLength} chars`;
 }
 
 async function dismissActiveInput(): Promise<void> {
