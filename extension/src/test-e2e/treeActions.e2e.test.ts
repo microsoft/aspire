@@ -4,7 +4,6 @@ import { findResource, getCommandInvocationCount, getTerminalCommandCount, isSam
 import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath } from './helpers/paths';
 import { answerActiveInput, chooseActiveQuickPick, getActiveQuickPickLabels, openAspireView, waitForChildTreeItem, waitForEditorTitle, waitForTreeItem } from './helpers/vscode';
-import { quoteShellArg } from '../utils/AspireTerminalProvider';
 
 suite('Aspire tree action command E2E', function () {
     this.timeout(300000);
@@ -146,7 +145,7 @@ suite('Aspire tree action command E2E', function () {
         await waitForCommandOutcome('aspire-vscode.executeResourceCommandItem', 'success', 60000, before);
 
         const commandItemTerminalCommand = await waitForTerminalCommand(
-            event => event.subcommand.includes(`resource ${quoteShellArg(workerResourceName)}`) && event.subcommand.includes(quoteShellArg('echo-arguments')) && event.executionSuppressed,
+            event => event.subcommand.includes(`resource ${quoteExpectedShellArg(workerResourceName)}`) && event.subcommand.includes(quoteExpectedShellArg('echo-arguments')) && event.executionSuppressed,
             'resource command item with prompted arguments',
             60000,
             terminalBefore);
@@ -172,7 +171,7 @@ suite('Aspire tree action command E2E', function () {
         await waitForCommandOutcome('aspire-vscode.executeResourceCommand', 'success', 60000, before);
 
         const resourceCommand = await waitForTerminalCommand(
-            event => event.subcommand.includes('resource ') && event.subcommand.includes(quoteShellArg('echo-arguments')) && event.executionSuppressed,
+            event => event.subcommand.includes('resource ') && event.subcommand.includes(quoteExpectedShellArg('echo-arguments')) && event.executionSuppressed,
             'resource command with prompted arguments',
             60000,
             terminalBefore);
@@ -185,8 +184,16 @@ suite('Aspire tree action command E2E', function () {
 
 async function waitForResourceTerminalCommand(resourceName: string, command: string, afterCommandSequence: number): Promise<void> {
     await waitForTerminalCommand(
-        event => event.subcommand.includes(`resource ${quoteShellArg(resourceName)}`) && event.subcommand.includes(` ${quoteShellArg(command)}`),
+        event => event.subcommand.includes(`resource ${quoteExpectedShellArg(resourceName)}`) && event.subcommand.includes(` ${quoteExpectedShellArg(command)}`),
         `${command} terminal command for ${resourceName}`,
         60000,
         afterCommandSequence);
+}
+
+function quoteExpectedShellArg(arg: string): string {
+    if (process.platform === 'win32') {
+        return `"${arg.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')}"`;
+    }
+
+    return `'${arg.replace(/'/g, "'\"'\"'")}'`;
 }
