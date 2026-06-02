@@ -291,100 +291,15 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             return;
         }
 
-        // Run-path graceful ladder — mirrors AppHostServerSession.ShutdownAsync. Whoever
-        // initiated shutdown (CCM via RequestShutdown/Cancel) already started the central
-        // graceful clock; we only consume the token.
-        var gracefulToken = options.ShutdownService.Token;
-
-        // Phase 1: best-effort graceful signal bounded by the central token. The DCP path on
-        // Windows shells out (layout discovery + DCP process launch + wait) and could consume
-        // the entire graceful window before we ever reach WaitForExitAsync. Sharing the central
-        // token means a 2nd-Ctrl+C Expire() interrupts the slow DCP shell-out exactly the same
-        // way it interrupts the WaitForExitAsync below.
-        try
-        {
-            DateTimeOffset? startTime = TryGetStartTime(process);
-            await options.GracefulShutdownSignaler.RequestProcessTreeGracefulShutdownAsync(
-                process.Id,
-                startTime,
-                includeStartTimeForDcp: false,
-                gracefulToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (gracefulToken.IsCancellationRequested)
-        {
-            // Graceful budget expired before the signal could be issued; fall through to kill.
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to issue graceful shutdown to {Language} guest (pid {Pid}); escalating to kill.", _language, SafePid(process));
-        }
-
-        // Phase 2: wait for exit bounded by the same central token.
-        try
-        {
-            await process.WaitForExitAsync(gracefulToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Graceful budget expired; fall through to kill.
-        }
-
-        if (process.HasExited)
-        {
-            return;
-        }
-
-        // Phase 3: ALWAYS tree-kill on escalation. Even when the graceful signal returned
-        // cleanly, the tree may still be alive — e.g. on Windows, tsx wraps node and swallows
-        // Ctrl+C/Ctrl+Break, leaving the child node and any further descendants running after
-        // the tsx shell exits. Tree-kill is the only guarantee that nothing is orphaned.
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        catch (InvalidOperationException)
-        {
-            // Process exited between HasExited check and Kill — nothing to do.
-            return;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to kill {Language} guest (pid {Pid}).", _language, SafePid(process));
-            return;
-        }
-
-        // Phase 4: brief separately-bounded drain after kill — independent of central token
-        // because by now the central budget has already expired. 1 s is enough for the OS to
-        // reap the process so the subsequent ExitCode read succeeds.
-        try
-        {
-            using var killDrain = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-            await process.WaitForExitAsync(killDrain.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Best-effort; nothing more we can do.
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error draining killed {Language} guest (pid {Pid}).", _language, SafePid(process));
-        }
-    }
-
-    private static DateTimeOffset? TryGetStartTime(Process process)
-    {
-        // Process.StartTime can throw InvalidOperationException on a process whose handle was
-        // closed or that has exited in some states. Treat as unavailable rather than aborting
-        // the graceful path — the Unix branch ignores StartTime entirely, and the Windows DCP
-        // branch only uses it when includeStartTimeForDcp is true (which it isn't here).
-        try
-        {
-            return process.StartTime;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
+        // Run-path graceful ladder shared with AppHostServerSession and ProcessExecution.
+        // Whoever initiated shutdown (CCM via RequestShutdown/Cancel) already started the
+        // central graceful clock; the helper just consumes the token.
+        await ProcessGracefulShutdownLadder.ExecuteAsync(
+            process,
+            options.GracefulShutdownSignaler,
+            options.ShutdownService.Token,
+            _logger,
+            $"{_language} guest").ConfigureAwait(false);
     }
 
     private static int SafePid(Process process)

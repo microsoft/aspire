@@ -463,117 +463,28 @@ internal sealed class AppHostServerSession : IAsyncDisposable
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to shut down {ProcessDescription} (pid {Pid}).", ProcessDescription, SafePid(process));
+                // Process.Id can throw if the handle was disposed mid-shutdown — surface as -1
+                // rather than masking the original failure with a secondary log exception.
+                var pid = TryGetPid(process);
+                _logger.LogWarning(ex, "Failed to shut down {ProcessDescription} (pid {Pid}).", ProcessDescription, pid);
             }
             return;
         }
 
-        var gracefulToken = _shutdownService.Token;
-
-        // Phase 1: best-effort graceful signal bounded by the central token. The DCP path on
-        // Windows shells out (layout discovery + DCP process launch + wait) and could consume the
-        // entire graceful window before we ever reach WaitForExitAsync. Sharing the central token
-        // means a 2nd-Ctrl+C Expire() interrupts the slow DCP shell-out exactly the same way it
-        // interrupts the WaitForExitAsync below.
-        try
-        {
-            DateTimeOffset? startTime = TryGetStartTime(process);
-            await _gracefulShutdownSignaler.RequestProcessTreeGracefulShutdownAsync(
-                process.Id,
-                startTime,
-                includeStartTimeForDcp: false,
-                gracefulToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (gracefulToken.IsCancellationRequested)
-        {
-            // Graceful budget expired before the signal could be issued; fall through to kill.
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to issue graceful shutdown to {ProcessDescription} (pid {Pid}); escalating to kill.", ProcessDescription, SafePid(process));
-        }
-
-        // Phase 2: wait for exit bounded by the same central token. Whoever initiated shutdown
-        // (CCM via RequestShutdown/Cancel) already started the clock; we only consume the token.
-        try
-        {
-            await process.WaitForExitAsync(gracefulToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Graceful budget expired; fall through to kill.
-        }
-
-        if (process.HasExited)
-        {
-            return;
-        }
-
-        // Phase 3: ALWAYS tree-kill on escalation. The previous "Windows uses entireProcessTree:
-        // false because DCP already did the tree work" optimization was wrong: if the graceful
-        // signal was cancelled mid-flight, never reached DCP, failed layout discovery, or DCP
-        // itself was killed during cancellation, descendants are still alive and skipping
-        // tree-kill orphans them.
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        catch (InvalidOperationException)
-        {
-            // Process exited between HasExited check and Kill — nothing to do.
-            return;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to kill {ProcessDescription} (pid {Pid}).", ProcessDescription, SafePid(process));
-            return;
-        }
-
-        // Brief separately-bounded drain after kill — independent of central token because by now
-        // the central budget has already expired. 1 s is enough for the OS to reap the process.
-        try
-        {
-            using var killDrain = new CancellationTokenSource(TimeSpan.FromSeconds(1));
-            await process.WaitForExitAsync(killDrain.Token).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            // Best-effort; nothing more we can do.
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error draining killed {ProcessDescription} (pid {Pid}).", ProcessDescription, SafePid(process));
-        }
-    }
-
-    private static DateTimeOffset? TryGetStartTime(Process process)
-    {
-        // Process.StartTime can throw InvalidOperationException on a process whose handle was
-        // closed or that has exited in some states. Treat as unavailable rather than aborting
-        // the graceful path — the Unix branch ignores StartTime entirely, and the Windows DCP
-        // branch only uses it when includeStartTimeForDcp is true.
-        try
-        {
-            return process.StartTime;
-        }
-        catch (Exception)
-        {
-            return null;
-        }
-    }
-
-    private static int SafePid(Process process)
-    {
-        try
-        {
-            return process.Id;
-        }
-        catch (Exception)
-        {
-            return -1;
-        }
+        await ProcessGracefulShutdownLadder.ExecuteAsync(
+            process,
+            _gracefulShutdownSignaler,
+            _shutdownService.Token,
+            _logger,
+            ProcessDescription).ConfigureAwait(false);
     }
 
     private static InvalidOperationException NotStarted() =>
         new($"{nameof(AppHostServerSession)} has not been started. Call {nameof(StartAsync)} first.");
+
+    private static int TryGetPid(Process process)
+    {
+        try { return process.Id; }
+        catch { return -1; }
+    }
 }

@@ -94,13 +94,35 @@ internal sealed class ProcessExecution : IProcessExecution
         catch (OperationCanceledException)
         {
             _logger.LogDebug("{FileName}({ProcessId}) wait was canceled, stopping it", FileName, _process.Id);
-            await ProcessTerminator.ShutdownAsync(
-                _process,
-                requestGracefulShutdown: !OperatingSystem.IsWindows(),
-                _options.KillEntireProcessTreeOnCancel,
-                _logger,
-                FileName,
-                gracefulShutdownCancellationToken: cancellationToken).ConfigureAwait(false);
+
+            if (_options.GracefulShutdownSignaler is not null && _options.ShutdownService is not null)
+            {
+                // Run-path: drive the shared ladder so a non-isolated direct-launch AppHost
+                // gets the same graceful-then-tree-kill semantics as the isolated path. Useful
+                // mostly for Unix where IsolateConsole is a no-op (process groups + SIGTERM
+                // give us the same teardown shape DCP uses on Windows).
+                await ProcessGracefulShutdownLadder.ExecuteAsync(
+                    _process,
+                    _options.GracefulShutdownSignaler,
+                    _options.ShutdownService.Token,
+                    _logger,
+                    FileName).ConfigureAwait(false);
+            }
+            else
+            {
+                // Today's tactical fallback for the many short-lived non-Run callers (build,
+                // restore, package add, layout, etc.). Pre-existing semantic bug: the
+                // gracefulShutdownCancellationToken passed in is the already-cancelled token,
+                // so on Unix graceful collapses in microseconds. Preserved here for back-compat
+                // because the Run path now opts into the new ladder above.
+                await ProcessTerminator.ShutdownAsync(
+                    _process,
+                    requestGracefulShutdown: !OperatingSystem.IsWindows(),
+                    _options.KillEntireProcessTreeOnCancel,
+                    _logger,
+                    FileName,
+                    gracefulShutdownCancellationToken: cancellationToken).ConfigureAwait(false);
+            }
 
             throw;
         }

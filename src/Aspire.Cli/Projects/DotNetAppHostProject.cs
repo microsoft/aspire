@@ -10,6 +10,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -42,6 +43,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly Program.CliLoggingOptions _loggingOptions;
     private readonly IAppHostInfoResolver _appHostInfoResolver;
     private readonly IConfigurationService _configurationService;
+    private readonly GracefulShutdownService _shutdownService;
+    private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
+    private readonly WindowsConsoleProcessJob? _consoleProcessJob;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
@@ -64,6 +68,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         Program.CliLoggingOptions loggingOptions,
         IAppHostInfoResolver appHostInfoResolver,
         IConfigurationService configurationService,
+        GracefulShutdownService shutdownService,
+        IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
+        WindowsConsoleProcessJob? consoleProcessJob = null,
         TimeProvider? timeProvider = null)
     {
         _runner = runner;
@@ -80,6 +87,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _loggingOptions = loggingOptions;
         _appHostInfoResolver = appHostInfoResolver;
         _configurationService = configurationService;
+        _shutdownService = shutdownService;
+        _gracefulShutdownSignaler = gracefulShutdownSignaler;
+        // WindowsConsoleProcessJob is DI-registered Windows-only; null on non-Windows hosts.
+        // ProcessExecutionFactory enforces the Windows-requires-job invariant at spawn time.
+        _consoleProcessJob = consoleProcessJob;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -321,7 +333,16 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             StandardErrorCallback = runOutputCollector.AppendError,
             StartDebugSession = context.StartDebugSession,
             Debug = context.Debug,
-            KillEntireProcessTreeOnCancel = ShouldKillEntireProcessTreeOnCancel(OperatingSystem.IsWindows())
+            KillEntireProcessTreeOnCancel = ShouldKillEntireProcessTreeOnCancel(OperatingSystem.IsWindows()),
+            // Run path opts into the shared shutdown ladder so pure .NET AppHosts get the
+            // same graceful-then-tree-kill semantics as TypeScript AppHosts (which already
+            // route through AppHostServerSession/ProcessGuestLauncher). Build, restore,
+            // package add, layout, and other short-lived invocations leave these unset so
+            // they continue to use today's ProcessTerminator force-kill behavior.
+            IsolateConsole = true,
+            ConsoleProcessJob = _consoleProcessJob,
+            GracefulShutdownSignaler = _gracefulShutdownSignaler,
+            ShutdownService = _shutdownService,
         };
 
         // The backchannel completion source is the contract with RunCommand
