@@ -191,7 +191,7 @@ suite('E2E launch profile', () => {
 
         assert.ok(aspireCliEnvironmentStart >= 0);
         assert.ok(aspireCliEnvironmentEnd > aspireCliEnvironmentStart);
-        assert.ok(aspireCliEnvironment.includes("ASPIRE_CLI_TELEMETRY_OPTOUT: '1'"));
+        assert.ok(aspireCliEnvironment.includes("ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'"));
         assert.ok(aspireCliEnvironment.includes("DOTNET_CLI_TELEMETRY_OPTOUT: '1'"));
         assert.ok(envConstruction.includes('const extestEnv = getAspireCliEnvironment({'));
         assert.ok(envConstruction.includes("ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE: 'true'"));
