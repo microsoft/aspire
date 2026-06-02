@@ -47,7 +47,7 @@ env:
 
 on:
   schedule:
-    - cron: '0 */2 * * *' # every 2 hours
+    - cron: '0 */6 * * *' # every 6 hours
   workflow_dispatch:
 
 jobs:
