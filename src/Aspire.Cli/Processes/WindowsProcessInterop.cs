@@ -337,19 +337,24 @@ internal static partial class WindowsProcessInterop
         // the child is supposed to inherit and nothing else — this is the entire point of
         // PROC_THREAD_ATTRIBUTE_HANDLE_LIST: deny inheritance of every other inheritable handle
         // open on any parent thread (DCP socket fds, pipe fds, etc.).
+        //
+        // The whitelist MUST NOT contain duplicate handle values. PROC_THREAD_ATTRIBUTE_HANDLE_LIST
+        // is documented to reject duplicates and CreateProcessW returns ERROR_INVALID_PARAMETER
+        // (87) if any handle appears more than once. DetachedProcessLauncher legitimately points
+        // both Stdout and Stderr at the same NUL handle (child writes go nowhere), so we
+        // de-duplicate by handle value before populating the attribute. See:
+        // https://devblogs.microsoft.com/oldnewthing/20111216-00/?p=8873
         var inheritable = new List<nint>(3);
-        if (stdio.Stdin != nint.Zero)
+        void AddIfUnique(nint handle)
         {
-            inheritable.Add(stdio.Stdin);
+            if (handle != nint.Zero && !inheritable.Contains(handle))
+            {
+                inheritable.Add(handle);
+            }
         }
-        if (stdio.Stdout != nint.Zero)
-        {
-            inheritable.Add(stdio.Stdout);
-        }
-        if (stdio.Stderr != nint.Zero)
-        {
-            inheritable.Add(stdio.Stderr);
-        }
+        AddIfUnique(stdio.Stdin);
+        AddIfUnique(stdio.Stdout);
+        AddIfUnique(stdio.Stderr);
 
         var attrListSize = nint.Zero;
         InitializeProcThreadAttributeList(nint.Zero, 1, 0, ref attrListSize);
