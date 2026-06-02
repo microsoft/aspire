@@ -4,6 +4,8 @@ A Copilot CLI canvas extension that shows a breakdown of the lines of code
 changed in the current branch, grouped by project/category, with a heuristic
 characterization of each group (mechanical / detailed / careful review etc).
 
+![Screenshot of the LOC breakdown canvas](screenshot.png)
+
 ## What it does
 
 When opened, the canvas:
