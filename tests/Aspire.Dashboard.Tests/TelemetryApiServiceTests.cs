@@ -652,30 +652,20 @@ public class TelemetryApiServiceTests
         var service = CreateService(repository);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-        var receivedItems = new List<string>();
+        // Start enumerating - MoveNextAsync will block until data arrives.
+        var enumerator = service.FollowSpansAsync(["service1"], null, null, null, cancellationToken: cts.Token).GetAsyncEnumerator(cts.Token);
+        var moveNextTask = enumerator.MoveNextAsync();
 
-        // Start streaming for a resource that doesn't exist yet.
-        var streamTask = Task.Run(async () =>
-        {
-            await foreach (var item in service.FollowSpansAsync(["service1"], null, null, null, cancellationToken: cts.Token))
-            {
-                receivedItems.Add(item);
-                if (receivedItems.Count >= 1)
-                {
-                    break;
-                }
-            }
-        }, cts.Token);
-
-        // Give the streaming task time to start waiting for the resource.
-        await Task.Delay(100, cts.Token);
+        // The task should not complete yet because the resource doesn't exist.
+        Assert.False(moveNextTask.IsCompleted);
 
         // Now add spans for the resource - this should unblock the stream.
         AddSpans(repository, count: 1);
 
-        await streamTask;
+        Assert.True(await moveNextTask);
+        Assert.NotNull(enumerator.Current);
 
-        Assert.Single(receivedItems);
+        await enumerator.DisposeAsync();
     }
 
     [Fact]
@@ -685,30 +675,20 @@ public class TelemetryApiServiceTests
         var service = CreateService(repository);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-        var receivedItems = new List<string>();
+        // Start enumerating - MoveNextAsync will block until data arrives.
+        var enumerator = service.FollowLogsAsync(["service1"], null, null, null, cts.Token).GetAsyncEnumerator(cts.Token);
+        var moveNextTask = enumerator.MoveNextAsync();
 
-        // Start streaming for a resource that doesn't exist yet.
-        var streamTask = Task.Run(async () =>
-        {
-            await foreach (var item in service.FollowLogsAsync(["service1"], null, null, null, cts.Token))
-            {
-                receivedItems.Add(item);
-                if (receivedItems.Count >= 1)
-                {
-                    break;
-                }
-            }
-        }, cts.Token);
-
-        // Give the streaming task time to start waiting for the resource.
-        await Task.Delay(100, cts.Token);
+        // The task should not complete yet because the resource doesn't exist.
+        Assert.False(moveNextTask.IsCompleted);
 
         // Now add logs for the resource - this should unblock the stream.
         AddLogs(repository, ["hello"]);
 
-        await streamTask;
+        Assert.True(await moveNextTask);
+        Assert.NotNull(enumerator.Current);
 
-        Assert.Single(receivedItems);
+        await enumerator.DisposeAsync();
     }
 
     // SpanId is serialized as lowercase hex per the OTLP/JSON spec

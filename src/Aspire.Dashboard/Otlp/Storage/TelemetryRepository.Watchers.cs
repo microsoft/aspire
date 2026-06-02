@@ -148,7 +148,7 @@ public sealed partial class TelemetryRepository
             // Get existing logs snapshot (capped to prevent OOM)
             var existingLogs = GetLogs(new GetLogsContext
             {
-                ResourceKey = request.ResourceKey,
+                ResourceKeys = request.ResourceKey is { } key ? [key] : [],
                 StartIndex = 0,
                 Count = MaxWatcherSnapshotCount,
                 Filters = request.Filters,

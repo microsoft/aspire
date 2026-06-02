@@ -38,7 +38,7 @@ public class TelemetryRepositoryTests
         AddTrace();
 
         var resourceKey = new ResourceKey("resource", "resource");
-        Assert.Empty(repository.GetLogs(new GetLogsContext { ResourceKey = resourceKey, Count = 100, Filters = [], StartIndex = 0 }).Items);
+        Assert.Empty(repository.GetLogs(new GetLogsContext { ResourceKeys = [resourceKey], Count = 100, Filters = [], StartIndex = 0 }).Items);
         Assert.Null(repository.GetResource(resourceKey));
         Assert.Empty(repository.GetTraces(new GetTracesRequest { ResourceKey = resourceKey, Count = 100, Filters = [], StartIndex = 0 }).PagedResult.Items);
 
@@ -49,7 +49,7 @@ public class TelemetryRepositoryTests
         AddLog();
         AddMetric();
         AddTrace();
-        Assert.Single(repository.GetLogs(new GetLogsContext { ResourceKey = resourceKey, Count = 100, Filters = [], StartIndex = 0 }).Items);
+        Assert.Single(repository.GetLogs(new GetLogsContext { ResourceKeys = [resourceKey], Count = 100, Filters = [], StartIndex = 0 }).Items);
         var resource = repository.GetResource(resourceKey);
         Assert.NotNull(resource);
         Assert.NotEmpty(resource.GetInstrumentsSummary());
@@ -230,7 +230,7 @@ public class TelemetryRepositoryTests
         Assert.Equal(1, errorCount2);
 
         // Assert - resource1 logs cleared, but traces and metrics remain
-        var logs = repository.GetLogs(new GetLogsContext { ResourceKey = null, StartIndex = 0, Count = 10, Filters = [] });
+        var logs = repository.GetLogs(new GetLogsContext { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Single(logs.Items);
         Assert.Equal("log-resource2-456", logs.Items[0].Message);
 
@@ -242,7 +242,7 @@ public class TelemetryRepositoryTests
 
         // Assert - resource2 data is unaffected
         var resource2Key = new ResourceKey("resource2", "456");
-        var resource2Logs = repository.GetLogs(new GetLogsContext { ResourceKey = resource2Key, StartIndex = 0, Count = 10, Filters = [] });
+        var resource2Logs = repository.GetLogs(new GetLogsContext { ResourceKeys = [resource2Key], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Single(resource2Logs.Items);
         Assert.Equal("log-resource2-456", resource2Logs.Items[0].Message);
 
@@ -271,7 +271,7 @@ public class TelemetryRepositoryTests
         repository.ClearSelectedSignals(selectedResources);
 
         // Assert - resource1 and resource3 data is unaffected
-        var logs = repository.GetLogs(new GetLogsContext { ResourceKey = null, StartIndex = 0, Count = 10, Filters = [] });
+        var logs = repository.GetLogs(new GetLogsContext { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Equal(2, logs.TotalItemCount);
         Assert.Contains(logs.Items, l => l.Message == "log-resource1-111");
         Assert.Contains(logs.Items, l => l.Message == "log-resource3-333");
@@ -315,7 +315,7 @@ public class TelemetryRepositoryTests
         Assert.Null(resourceAfter);
 
         // Assert - All telemetry data is cleared
-        var logs = repository.GetLogs(new GetLogsContext { ResourceKey = null, StartIndex = 0, Count = 10, Filters = [] });
+        var logs = repository.GetLogs(new GetLogsContext { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Empty(logs.Items);
 
         var traces = repository.GetTraces(new GetTracesRequest { ResourceKey = null, StartIndex = 0, Count = 10, Filters = [] });
@@ -346,7 +346,7 @@ public class TelemetryRepositoryTests
         Assert.NotNull(resourceAfter);
 
         // Assert - Logs and traces are cleared, but metrics remain
-        var logs = repository.GetLogs(new GetLogsContext { ResourceKey = null, StartIndex = 0, Count = 10, Filters = [] });
+        var logs = repository.GetLogs(new GetLogsContext { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Empty(logs.Items);
 
         var traces = repository.GetTraces(new GetTracesRequest { ResourceKey = null, StartIndex = 0, Count = 10, Filters = [] });
