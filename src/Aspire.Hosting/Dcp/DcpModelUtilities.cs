@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dcp;
 
@@ -20,7 +21,8 @@ internal static class DcpModelUtilities
     /// </summary>
     internal static void AddServicesProducedInfo<TDcpResource>(
         RenderedModelResource<TDcpResource> appResource,
-        IEnumerable<IAppResource> appResources)
+        IEnumerable<IAppResource> appResources,
+        ILogger? logger = null)
         where TDcpResource : CustomResource, IKubernetesStaticMetadata
     {
         var modelResource = appResource.ModelResource;
@@ -78,7 +80,7 @@ internal static class DcpModelUtilities
                 // These endpoints normally get their host port during container creation. If a
                 // reference needs the allocated endpoint while building the container configuration,
                 // commit the fallback port before waiting would deadlock resource creation.
-                ea.OnDemandAllocatedEndpointProvider = networkId => TryAllocateDynamicProxylessContainerEndpoint(appResource, sp, networkId);
+                ea.OnDemandAllocatedEndpointProvider = networkId => TryAllocateDynamicProxylessContainerEndpoint(appResource, sp, networkId, logger);
             }
         }
 
@@ -277,7 +279,8 @@ internal static class DcpModelUtilities
     private static AllocatedEndpoint? TryAllocateDynamicProxylessContainerEndpoint<TDcpResource>(
         RenderedModelResource<TDcpResource> resource,
         ServiceWithModelResource sp,
-        NetworkIdentifier networkId)
+        NetworkIdentifier networkId,
+        ILogger? logger)
         where TDcpResource : CustomResource, IKubernetesStaticMetadata
     {
         var endpoint = sp.EndpointAnnotation;
@@ -286,6 +289,12 @@ internal static class DcpModelUtilities
 
         var targetPort = endpoint.TargetPort.Value;
         endpoint.Port = targetPort;
+        logger?.LogInformation(
+            "Endpoint '{EndpointName}' on container resource '{ResourceName}' was resolved before the container was created, so Aspire is assigning public port {PublicPort} to match target port {TargetPort} for proxyless access.",
+            endpoint.Name,
+            sp.ModelResource.Name,
+            targetPort,
+            targetPort);
 
         if (TryAddLocalhostAllocatedEndpoint(sp, allowPending: false, fallbackPort: targetPort))
         {
