@@ -1,4 +1,8 @@
 export function showPicker(element) {
+    if (!element) {
+        return;
+    }
+
     try {
         element.showPicker();
     } catch {

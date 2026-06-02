@@ -678,6 +678,28 @@ public class TelemetryApiServiceTests
         Assert.Equal(2, result.ReturnedCount);
     }
 
+    [Fact]
+    public void GetSpans_WithTimestampDateOnly_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+        // Create spans on two different days: 1970-01-01 and 1970-01-02
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace1", spanId: "span1", startTime: new DateTime(1970, 1, 1, 12, 0, 0, DateTimeKind.Utc), endTime: new DateTime(1970, 1, 1, 12, 1, 0, DateTimeKind.Utc))
+        ]);
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace2", spanId: "span2", startTime: new DateTime(1970, 1, 2, 12, 0, 0, DateTimeKind.Utc), endTime: new DateTime(1970, 1, 2, 12, 1, 0, DateTimeKind.Utc))
+        ]);
+
+        var service = CreateService(repository);
+
+        // A date-only string (no time component) should be parsed as midnight UTC and filter correctly.
+        // "1970-01-02" = midnight 1970-01-02 UTC — only the span on 1970-01-02 has a start time >= that.
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: "timestamp:>=1970-01-02");
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.ReturnedCount);
+    }
+
     /// <summary>
     /// Adds spans with sequential trace/span IDs to the repository. Each span is added in a separate
     /// AddTraces call so that it gets its own trace entry.
