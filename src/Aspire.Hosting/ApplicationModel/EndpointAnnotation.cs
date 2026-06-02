@@ -394,11 +394,6 @@ public sealed class EndpointAnnotation : IResourceAnnotation
         set => Interlocked.Exchange(ref _onDemandAllocatedEndpointProvider, value);
     }
 
-    internal void ClearOnDemandAllocatedEndpointProvider()
-    {
-        Interlocked.Exchange(ref _onDemandAllocatedEndpointProvider, null);
-    }
-
     internal Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkId, CancellationToken cancellationToken = default)
     {
         if (AllAllocatedEndpoints.TryGetAllocatedEndpoint(networkId, out var endpoint))
