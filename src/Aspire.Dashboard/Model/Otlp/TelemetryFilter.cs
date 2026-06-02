@@ -61,7 +61,7 @@ public class FieldTelemetryFilter : TelemetryFilter
     /// <summary>
     /// Returns true when the field represents a timestamp that should be compared as a date.
     /// Filter values for these fields are parsed as <see cref="DateTime"/> and compared using
-    /// ticks stored in the field value from <see cref="OtlpSpan.GetFieldValue"/> / <see cref="OtlpLogEntry.GetFieldValue"/>.
+    /// milliseconds stored in the field value from <see cref="OtlpSpan.GetFieldValue"/> / <see cref="OtlpLogEntry.GetFieldValue"/>.
     /// </summary>
     public static bool IsDateField(string name) => name is KnownTraceFields.TimestampField or KnownStructuredLogFields.TimestampField;
 
@@ -157,12 +157,12 @@ public class FieldTelemetryFilter : TelemetryFilter
     }
 
     /// <summary>
-    /// Compares a field value (stored as ticks) against a filter value (a date string).
-    /// The filter value is parsed as a UTC DateTime, then compared by ticks.
+    /// Compares a field value (stored as milliseconds since DateTime.MinValue) against a filter value (a date string).
+    /// Milliseconds fit within double's exact integer range (max ~3.16×10^14 vs 2^53 ≈ 9×10^15).
     /// </summary>
-    private static bool TryMatchDate(string fieldTicksValue, string filterDateValue, FilterCondition condition)
+    private static bool TryMatchDate(string fieldMillisecondsValue, string filterDateValue, FilterCondition condition)
     {
-        if (!long.TryParse(fieldTicksValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fieldTicks))
+        if (!long.TryParse(fieldMillisecondsValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var fieldMs))
         {
             return false;
         }
@@ -177,9 +177,9 @@ public class FieldTelemetryFilter : TelemetryFilter
             return false;
         }
 
-        var filterTicks = filterDate.ToUniversalTime().Ticks;
+        var filterMs = filterDate.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond;
         var func = ConditionToFuncNumber(condition);
-        return func(fieldTicks, filterTicks);
+        return func(fieldMs, filterMs);
     }
 
     public bool HasNumericMatch(double fieldValue)

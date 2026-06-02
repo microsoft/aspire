@@ -5,6 +5,7 @@ using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -12,7 +13,7 @@ using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
-public partial class FilterDialog
+public partial class FilterDialog : IAsyncDisposable
 {
     private List<SelectViewModel<FilterCondition>> _filterConditions = null!;
     private List<SelectViewModel<FilterCondition>> _stringFilterConditions = null!;
@@ -303,6 +304,11 @@ public partial class FilterDialog
         return dateTime.Ticks % TimeSpan.TicksPerSecond == 0
             ? dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture)
             : dateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await JSInteropHelpers.SafeDisposeAsync(_jsModule);
     }
 
     private sealed class FieldValue

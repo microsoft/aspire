@@ -135,7 +135,7 @@ public class OtlpLogEntry
             KnownStructuredLogFields.CategoryField => log.Scope.Name,
             KnownStructuredLogFields.EventNameField => log.EventName,
             KnownStructuredLogFields.LevelField => log.Severity.ToString(),
-            KnownStructuredLogFields.TimestampField => log.TimeStamp.ToUniversalTime().Ticks.ToString(CultureInfo.InvariantCulture),
+            KnownStructuredLogFields.TimestampField => (log.TimeStamp.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond).ToString(CultureInfo.InvariantCulture),
             KnownResourceFields.ServiceNameField => log.ResourceView.Resource.ResourceName,
             _ => log.Attributes.GetValue(field)
         };
