@@ -108,11 +108,12 @@ internal static class ResourceSnapshotMapper
             }
         }
 
-        // Include only API-visible commands. Disabled commands are emitted only for the
-        // VS Code tree view describe stream so other structured consumers keep the
-        // pre-existing enabled-command contract. Hidden commands are never emitted.
+        // By default, include only API-visible enabled commands so existing structured
+        // consumers keep the pre-existing contract. The include-disabled stream is used
+        // by UI consumers that need full command metadata, so it also includes UI-only
+        // commands. Hidden commands are never emitted.
         var commands = snapshot.Commands
-            .Where(c => IsCommandVisibleToApi(c.Visibility) && IsCommandVisibleToConsumer(c.State, includeDisabledCommands))
+            .Where(c => IsCommandVisibleForConsumer(c.Visibility, includeDisabledCommands) && IsCommandVisibleToConsumer(c.State, includeDisabledCommands))
             .OrderBy(c => c.Name)
             .ToDistinctDictionary(
                 c => c.Name,
@@ -234,6 +235,12 @@ internal static class ResourceSnapshotMapper
     private static bool IsCommandVisibleToApi(string? visibility)
     {
         return visibility?.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.Api, StringComparison.OrdinalIgnoreCase)) is true;
+    }
+
+    private static bool IsCommandVisibleForConsumer(string? visibility, bool includeDisabledCommands)
+    {
+        return IsCommandVisibleToApi(visibility)
+            || (includeDisabledCommands && visibility?.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.UI, StringComparison.OrdinalIgnoreCase)) is true);
     }
 
     private static bool IsCommandVisibleToConsumer(string state, bool includeDisabledCommands)

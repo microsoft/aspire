@@ -152,6 +152,30 @@ public class ResourceSnapshotMapperTests
     }
 
     [Fact]
+    public void MapToResourceJson_WithIncludeDisabledCommands_IncludesUiOnlyCommands()
+    {
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand { Name = "api-only", State = KnownCommandState.Enabled, Description = "API only", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "ui-only", State = KnownCommandState.Enabled, Description = "UI only", Visibility = KnownCommandVisibility.UI },
+                new ResourceSnapshotCommand { Name = "ui-disabled", State = KnownCommandState.Disabled, Description = "UI disabled", Visibility = KnownCommandVisibility.UI }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
+
+        Assert.Equal(["api-only", "ui-disabled", "ui-only"], result.Commands!.Keys);
+        Assert.Equal(KnownCommandVisibility.UI, result.Commands["ui-only"].Visibility);
+        Assert.Equal(KnownCommandVisibility.UI, result.Commands["ui-disabled"].Visibility);
+    }
+
+    [Fact]
     public void MapToResourceJson_WithSecretCommandArgument_OmitsValue()
     {
         var snapshot = new ResourceSnapshot
