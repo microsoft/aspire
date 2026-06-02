@@ -1388,19 +1388,16 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return packageUpdates;
             });
 
-        var explicitChannelName = context.Channel.ShouldPersistChannelName() ? context.Channel.Name : null;
-        var explicitChannelChanged = explicitChannelName is not null && !string.Equals(config.Channel, explicitChannelName, StringComparisons.CliInputOrOutput);
-
-        if (updates.Count == 0 && newSdkVersion is null)
+        var channelUpdateStep = ChannelUpdateStep.Create(config.Channel, context.Channel, desiredConfigChannel =>
         {
-            if (explicitChannelChanged)
-            {
-                config.Channel = explicitChannelName;
-                SaveConfiguration(config, directory);
-            }
+            config.Channel = desiredConfigChannel;
+            return Task.CompletedTask;
+        });
 
+        if (updates.Count == 0 && newSdkVersion is null && channelUpdateStep is null)
+        {
             _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
-            return new UpdatePackagesResult { UpdatesApplied = explicitChannelChanged };
+            return new UpdatePackagesResult { UpdatesApplied = false };
         }
 
         // Display pending updates
@@ -1413,6 +1410,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             _interactionService.DisplayMessage(KnownEmojis.Package, $"[bold yellow]{packageId.EscapeMarkup()}[/] [bold green]{currentVersion.EscapeMarkup()}[/] to [bold green]{newVersion.EscapeMarkup()}[/]", allowMarkup: true);
         }
+        if (channelUpdateStep is not null)
+        {
+            _interactionService.DisplayMessage(KnownEmojis.Package, channelUpdateStep.GetFormattedDisplayText(), allowMarkup: true);
+        }
         _interactionService.DisplayEmptyLine();
 
         // Confirm with user
@@ -1421,19 +1422,26 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             return new UpdatePackagesResult { UpdatesApplied = false };
         }
 
+        if (updates.Count == 0 && newSdkVersion is null)
+        {
+            await channelUpdateStep!.Callback();
+            SaveConfiguration(config, directory);
+            _interactionService.DisplayEmptyLine();
+            _interactionService.DisplaySuccess(UpdateCommandStrings.UpdateSuccessfulMessage);
+            return new UpdatePackagesResult { UpdatesApplied = true };
+        }
+
         // Apply updates to settings.json
         if (newSdkVersion is not null)
         {
             config.SdkVersion = newSdkVersion;
         }
-        // Persist the channel when update resolved a non-stable explicit channel. That can
-        // come from --channel, per-project/global config, prompt selection, or the
-        // UpdateCommand identity-channel fallback for non-project-reference AppHosts. When
-        // the resolved channel is Implicit or stable, leave the project's existing setting
-        // untouched rather than pinning the default public-feed behavior.
-        if (explicitChannelName is not null)
+        // Keep channel and versions from the same resolved update input. Non-stable Explicit
+        // channels are pinned; stable/Implicit channels clear stale pins so regeneration restore
+        // does not use a different feed than the one selected for version resolution.
+        if (channelUpdateStep is not null)
         {
-            config.Channel = explicitChannelName;
+            await channelUpdateStep.Callback();
         }
         foreach (var (packageId, _, newVersion) in updates)
         {

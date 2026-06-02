@@ -568,7 +568,7 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
 
         var updatedConfig = await File.ReadAllTextAsync(aspireConfigFile.FullName);
         using var configDoc = JsonDocument.Parse(updatedConfig);
-        Assert.Equal("daily", configDoc.RootElement.GetProperty("channel").GetString());
+        Assert.False(configDoc.RootElement.TryGetProperty("channel", out _));
     }
 
     [Fact]
@@ -1579,13 +1579,13 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
     public void ChannelUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WithExistingChannel()
     {
         var step = new ChannelUpdateStep(
-            "Update aspire.config.json channel from 'pr-17452' to 'stable'",
+            "Update aspire.config.json channel from 'pr-17452' to 'daily'",
             () => Task.CompletedTask,
             "pr-17452",
-            "stable");
+            "daily");
 
         Assert.Equal(
-            "[bold yellow]aspire.config.json#channel[/] [bold green]pr-17452[/] to [bold green]stable[/]",
+            "[bold yellow]aspire.config.json#channel[/] [bold green]pr-17452[/] to [bold green]daily[/]",
             step.GetFormattedDisplayText());
     }
 
@@ -1596,11 +1596,27 @@ public class ProjectUpdaterTests(ITestOutputHelper outputHelper)
             "Update aspire.config.json channel from '(none)' to 'stable'",
             () => Task.CompletedTask,
             CurrentChannel: null,
-            NewChannel: "stable");
+            NewChannel: "stable",
+            CurrentChannelDisplay: PackageChannelNames.Default,
+            NewChannelDisplay: "stable");
 
-        // Markup-escaped grey placeholder for absent channel value.
         Assert.Equal(
-            "[bold yellow]aspire.config.json#channel[/] [grey](none)[/] to [bold green]stable[/]",
+            "[bold yellow]aspire.config.json#channel[/] [bold green]default[/] to [bold green]stable[/]",
+            step.GetFormattedDisplayText());
+    }
+
+    [Fact]
+    public void ChannelUpdateStep_GetFormattedDisplayText_ReturnsFormattedString_WhenNewChannelAbsent()
+    {
+        var step = new ChannelUpdateStep(
+            "Update aspire.config.json channel from 'daily' to '(none)'",
+            () => Task.CompletedTask,
+            CurrentChannel: "daily",
+            NewChannel: null,
+            NewChannelDisplay: "stable");
+
+        Assert.Equal(
+            "[bold yellow]aspire.config.json#channel[/] [bold green]daily[/] to [bold green]stable[/]",
             step.GetFormattedDisplayText());
     }
 

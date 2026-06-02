@@ -35,7 +35,9 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     public string SourceDetails { get; } = ComputeSourceDetails(mappings);
 
     public bool ShouldPersistChannelName() =>
-        Type is PackageChannelType.Explicit && !string.Equals(Name, PackageChannelNames.Stable, StringComparisons.ChannelName);
+        Type is PackageChannelType.Explicit && PackageChannelNames.ShouldPersistChannelName(Name);
+
+    public string? GetPersistedChannelName() => ShouldPersistChannelName() ? Name : null;
 
     private static string ComputeSourceDetails(PackageMapping[]? mappings)
     {

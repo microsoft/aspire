@@ -119,6 +119,8 @@ namespace Aspire.Cli.Resources {
     internal static string ApplyingUpdates => ResourceManager.GetString("ApplyingUpdates", resourceCulture);
     internal static string RestoringPackagesAfterUpdate => ResourceManager.GetString("RestoringPackagesAfterUpdate", resourceCulture);
     internal static string FailedToRestoreAfterUpdateFormat => ResourceManager.GetString("FailedToRestoreAfterUpdateFormat", resourceCulture);
+    internal static string PrDogfoodDefaultChannelMessageFormat => ResourceManager.GetString("PrDogfoodDefaultChannelMessageFormat", resourceCulture);
+    internal static string PrChannelAliasRequiresPrCli => ResourceManager.GetString("PrChannelAliasRequiresPrCli", resourceCulture);
     internal static string ExtractingNewCli => ResourceManager.GetString("ExtractingNewCli", resourceCulture);
     internal static string ExtractedNewCli => ResourceManager.GetString("ExtractedNewCli", resourceCulture);
     internal static string RegeneratingSdkCode => ResourceManager.GetString("RegeneratingSdkCode", resourceCulture);

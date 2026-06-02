@@ -33,4 +33,13 @@ internal static class PackageChannelNames
     /// (i.e., with <c>AspireCliChannel=local</c>).
     /// </summary>
     public const string Local = "local";
+
+    /// <summary>
+    /// Alias that resolves to the current PR dogfood CLI's concrete <c>pr-&lt;N&gt;</c> channel.
+    /// </summary>
+    public const string PrAlias = "pr";
+
+    public static bool ShouldPersistChannelName(string? channelName) =>
+        !string.IsNullOrEmpty(channelName) &&
+        !string.Equals(channelName, Stable, StringComparisons.ChannelName);
 }

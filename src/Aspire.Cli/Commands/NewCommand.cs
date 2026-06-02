@@ -397,9 +397,9 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                         return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
                     }
 
-                    // Only persist explicit channel names (e.g. local, daily) — implicit channels
-                    // (stable/nuget.org) should not be written so aspire add uses its default behavior.
-                    var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
+                    // Only persist non-stable explicit channel names (e.g. local, daily) — stable
+                    // and implicit channels should not be written so aspire add uses its default behavior.
+                    var channelName = selectedChannel.GetPersistedChannelName();
 
                     return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
                 }

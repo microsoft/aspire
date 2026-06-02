@@ -6,6 +6,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -778,7 +779,7 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
-    public async Task UpdatePackagesAsync_ExplicitStableChannel_DoesNotPersistStableChannelWhenProjectIsUpToDate()
+    public async Task UpdatePackagesAsync_ExplicitStableChannel_ClearsExistingChannelWhenProjectIsUpToDate()
     {
         var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(configPath, """
@@ -808,7 +809,80 @@ public class GuestAppHostProjectTests : IDisposable
             stableCache,
             features: new TestFeatures());
 
-        var project = CreateGuestAppHostProject();
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var project = CreateGuestAppHostProject(interactionService: interactionService);
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = stableChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
+
+        Assert.True(result.UpdatesApplied);
+        var prompt = Assert.Single(interactionService.BooleanPromptCalls);
+        Assert.Equal(UpdateCommandStrings.PerformUpdatesPrompt, prompt.PromptText);
+        Assert.Contains(
+            interactionService.DisplayedMessages,
+            message => message.Message == "[bold yellow]aspire.config.json#channel[/] [bold green]staging[/] to [bold green]stable[/]");
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Null(reloaded.Channel);
+        Assert.Equal("2.0.0", reloaded.SdkVersion);
+        Assert.Equal("2.0.0", reloaded.Packages?["Aspire.Hosting"]);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_ExplicitStableChannel_RegeneratesWithClearedChannel()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "channel": "daily",
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var stableCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "stable" }
+                ])
+        };
+
+        var stableChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Stable,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire.*", "stable")],
+            stableCache,
+            features: new TestFeatures());
+
+        var failingServer = new FakeFailingAppHostServerProject(_workspace.WorkspaceRoot.FullName);
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (_, _) => Task.FromResult<IAppHostServerProject>(failingServer)
+        };
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var project = CreateGuestAppHostProject(
+            interactionService: interactionService,
+            appHostServerProjectFactory: factory);
 
         var context = new UpdatePackagesContext
         {
@@ -821,9 +895,73 @@ public class GuestAppHostProjectTests : IDisposable
         var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
 
         Assert.False(result.UpdatesApplied);
+        Assert.Contains(
+            interactionService.DisplayedMessages,
+            message => message.Message == "[bold yellow]aspire.config.json#channel[/] [bold green]daily[/] to [bold green]stable[/]");
+        Assert.Null(failingServer.LastRequestedChannel);
         var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
         Assert.NotNull(reloaded);
-        Assert.Equal(PackageChannelNames.Staging, reloaded.Channel);
+        Assert.Equal(PackageChannelNames.Daily, reloaded.Channel);
+        Assert.Equal("1.0.0", reloaded.SdkVersion);
+        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"]);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_ChannelOnlyChange_WhenDeclined_DoesNotMutateConfig()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "2.0.0" },
+              "channel": "daily",
+              "packages": { "Aspire.Hosting": "2.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var stableCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "stable" }
+                ])
+        };
+
+        var stableChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Stable,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire.*", "stable")],
+            stableCache,
+            features: new TestFeatures());
+
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => false
+        };
+        var project = CreateGuestAppHostProject(interactionService: interactionService);
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = stableChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
+
+        Assert.False(result.UpdatesApplied);
+        var prompt = Assert.Single(interactionService.BooleanPromptCalls);
+        Assert.Equal(UpdateCommandStrings.PerformUpdatesPrompt, prompt.PromptText);
+        Assert.Contains(
+            interactionService.DisplayedMessages,
+            message => message.Message == "[bold yellow]aspire.config.json#channel[/] [bold green]daily[/] to [bold green]stable[/]");
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal(PackageChannelNames.Daily, reloaded.Channel);
         Assert.Equal("2.0.0", reloaded.SdkVersion);
         Assert.Equal("2.0.0", reloaded.Packages?["Aspire.Hosting"]);
     }

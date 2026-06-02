@@ -10,7 +10,6 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
-using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -528,19 +527,13 @@ internal class DotNetTemplateFactory(
             // Trust certificates (result not used since we're not launching an AppHost)
             _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
 
-            // Persist the resolved channel into the scaffolded project's aspire.config.json
-            // for Explicit channels (pr-<N>, daily, staging, local). Without this pin, `aspire
-            // update` on the new project skips the local-config step in its channel-resolution
-            // precedence and falls through to either an interactive prompt (when hives exist)
-            // or the Implicit/nuget.org channel — silently moving a project scaffolded by a
-            // PR or daily CLI onto stable/nuget.org. Implicit channels (stable/nuget.org) are
-            // not persisted so `aspire add`/`aspire restore` continue to use the ambient
-            // NuGet config without a per-project pin. Mirrors the TypeScript starter behavior
-            // in CliTemplateFactory.TypeScriptStarterTemplate.
-            if (selectedTemplateDetails.Channel.Type is PackageChannelType.Explicit)
+            // Persist non-stable explicit channels into the scaffolded project's
+            // aspire.config.json. Stable and implicit channels are represented by an absent
+            // channel so future commands use the stable/default behavior consistently.
+            if (selectedTemplateDetails.Channel.GetPersistedChannelName() is { } channelName)
             {
                 var config = AspireConfigFile.LoadOrCreate(outputPath);
-                config.Channel = selectedTemplateDetails.Channel.Name;
+                config.Channel = channelName;
                 config.Save(outputPath);
             }
 

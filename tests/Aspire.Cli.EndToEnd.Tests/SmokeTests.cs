@@ -204,7 +204,17 @@ public sealed class SmokeTests(ITestOutputHelper output)
         // AppHost path is expected to match whichever stable template was created.
         using var config = JsonDocument.Parse(File.ReadAllText(configPath));
         var root = config.RootElement;
-        AssertJsonStringProperty(root, "channel", "stable", configPath);
+
+        // The 'stable' channel matches the CLI's default and is intentionally not persisted
+        // into aspire.config.json. See PackageChannelNames.ShouldPersistChannelName /
+        // PackageChannel.GetPersistedChannelName. Stable resolution is inferred from
+        // sdk.version below (no '-' / '+'), not from a 'channel' property.
+        if (root.TryGetProperty("channel", out var channelProperty))
+        {
+            throw new InvalidOperationException(
+                $"Expected no 'channel' property in {configPath} for stable AppHost (stable is the default and should not be pinned), but found '{channelProperty}'.");
+        }
+
         var sdk = GetRequiredJsonObjectProperty(root, "sdk", configPath);
         var sdkVersion = GetRequiredJsonStringProperty(sdk, "version", configPath);
         if (sdkVersion.Contains('-', StringComparison.Ordinal) ||

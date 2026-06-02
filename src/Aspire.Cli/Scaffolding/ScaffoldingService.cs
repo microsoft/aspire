@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -95,14 +96,15 @@ internal sealed class ScaffoldingService : IScaffoldingService
         // PSM rule can satisfy. When unset, `PrebuiltAppHostServer` aggregates sources from
         // every registered channel so `aspire add` / `aspire restore` still find the right
         // packages without a per-project pin.
-        if (!string.IsNullOrEmpty(context.Channel))
+        var shouldPersistChannel = PackageChannelNames.ShouldPersistChannelName(context.Channel);
+        if (shouldPersistChannel)
         {
             config.Channel = context.Channel;
         }
 
         PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion) ||
-            !string.IsNullOrEmpty(context.Channel))
+            shouldPersistChannel)
         {
             config.Save(directory.FullName);
         }

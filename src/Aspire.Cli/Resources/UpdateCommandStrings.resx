@@ -135,10 +135,10 @@
     <value>The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</value>
   </data>
   <data name="ChannelOptionDescription" xml:space="preserve">
-    <value>Channel to update to (stable, daily)</value>
+    <value>Channel to update to (stable, daily, pr)</value>
   </data>
   <data name="ChannelOptionDescriptionWithStaging" xml:space="preserve">
-    <value>Channel to update to (stable, staging, daily)</value>
+    <value>Channel to update to (stable, staging, daily, pr)</value>
   </data>
   <data name="QualityOptionDescription" xml:space="preserve">
     <value>Quality level to update to (stable, daily)</value>
@@ -199,5 +199,12 @@
   </data>
   <data name="NoChannelFoundMatching" xml:space="preserve">
     <value>No channel found matching '{0}'. Valid options are: {1}.</value>
+  </data>
+  <data name="PrDogfoodDefaultChannelMessageFormat" xml:space="preserve">
+    <value>Using dogfood default channel '{0}' from this CLI install. Pass --channel &lt;channel&gt; to override or run `aspire config set {1} false -g` to disable this default.</value>
+    <comment>{0} = concrete PR channel name, for example pr-12345. {1} = config key used to disable the behavior.</comment>
+  </data>
+  <data name="PrChannelAliasRequiresPrCli" xml:space="preserve">
+    <value>The --channel pr alias can only be used from a PR dogfood Aspire CLI.</value>
   </data>
 </root>

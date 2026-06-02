@@ -211,11 +211,10 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             await analyzeStep.Callback();
         }
 
-        // Persist the project's channel pin into aspire.config.json when the user picked an
-        // persistable Explicit channel that differs from the currently-persisted value. Mirrors
-        // the polyglot path's behavior in `GuestAppHostProject.UpdatePackagesAsync`.
-        // Implicit channels and `stable` are intentionally NOT persisted (no pinning of the
-        // default public-feed behavior).
+        // Align the project's channel pin in aspire.config.json with the resolved update channel.
+        // Non-stable Explicit channels are persisted; stable/Implicit channels clear any existing
+        // pin so later restore/generation paths don't keep using a stale feed from project config
+        // after the update versions were resolved from a different channel.
         //
         // aspire.config.json lives next to the AppHost project file:
         //   - C# single-file init: <dir>/apphost.cs + <dir>/aspire.config.json
@@ -223,40 +222,31 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         // If no aspire.config.json is present (legacy split layouts or pre-init projects),
         // skip the rewrite — `aspire update` must not create a fresh aspire.config.json for a
         // project that never had one; that is the responsibility of `aspire init`.
-        if (channel.ShouldPersistChannelName() && projectFile.Directory is { } projectDirectory)
+        if (projectFile.Directory is { } projectDirectory)
         {
             var existingConfig = AspireConfigFile.Load(projectDirectory.FullName);
             if (existingConfig is not null)
             {
-                var existingChannel = existingConfig.Channel;
-                if (!string.Equals(existingChannel, channel.Name, StringComparisons.CliInputOrOutput))
+                var channelUpdateStep = ChannelUpdateStep.Create(existingConfig.Channel, channel, desiredConfigChannel =>
                 {
-                    var description = string.Format(
-                        CultureInfo.InvariantCulture,
-                        UpdateCommandStrings.UpdateChannelStepDescriptionFormat,
-                        existingChannel ?? UpdateCommandStrings.ChannelNonePlaceholder,
-                        channel.Name);
+                    // Re-load inside the callback so we don't race with anything else that may
+                    // have rewritten aspire.config.json between analysis and apply. The file
+                    // was confirmed present above; `Load` returning null here would only
+                    // happen if it was deleted mid-update, in which case we skip the rewrite
+                    // rather than recreate the file behind the user's back.
+                    var configToSave = AspireConfigFile.Load(projectDirectory.FullName);
+                    if (configToSave is null)
+                    {
+                        return Task.CompletedTask;
+                    }
+                    configToSave.Channel = desiredConfigChannel;
+                    configToSave.Save(projectDirectory.FullName);
+                    return Task.CompletedTask;
+                });
 
-                    context.UpdateSteps.Enqueue(new ChannelUpdateStep(
-                        description,
-                        () =>
-                        {
-                            // Re-load inside the callback so we don't race with anything else that may
-                            // have rewritten aspire.config.json between analysis and apply. The file
-                            // was confirmed present above; `Load` returning null here would only
-                            // happen if it was deleted mid-update, in which case we skip the rewrite
-                            // rather than recreate the file behind the user's back.
-                            var configToSave = AspireConfigFile.Load(projectDirectory.FullName);
-                            if (configToSave is null)
-                            {
-                                return Task.CompletedTask;
-                            }
-                            configToSave.Channel = channel.Name;
-                            configToSave.Save(projectDirectory.FullName);
-                            return Task.CompletedTask;
-                        },
-                        existingChannel,
-                        channel.Name));
+                if (channelUpdateStep is not null)
+                {
+                    context.UpdateSteps.Enqueue(channelUpdateStep);
                 }
             }
         }
@@ -1447,51 +1437,6 @@ internal sealed class UpdateContext(FileInfo appHostProjectFile, PackageChannel 
     public ConcurrentQueue<AnalyzeStep> AnalyzeSteps { get; } = new();
     public HashSet<string> VisitedProjects { get; } = new();
     public bool FallbackParsing { get; set; }
-}
-
-internal abstract record UpdateStep(string Description, Func<Task> Callback)
-{
-    /// <summary>
-    /// Gets the formatted display text using Spectre Console markup for enhanced visual presentation.
-    /// </summary>
-    public virtual string GetFormattedDisplayText() => Description;
-}
-
-/// <summary>
-/// Represents an update step for a package reference, containing package and project information.
-/// </summary>
-internal record PackageUpdateStep(
-    string Description,
-    Func<Task> Callback,
-    string PackageId,
-    string CurrentVersion,
-    string NewVersion,
-    FileInfo ProjectFile) : UpdateStep(Description, Callback)
-{
-    public override string GetFormattedDisplayText()
-    {
-        return $"[bold yellow]{PackageId.EscapeMarkup()}[/] [bold green]{CurrentVersion.EscapeMarkup()}[/] to [bold green]{NewVersion.EscapeMarkup()}[/]";
-    }
-}
-
-/// <summary>
-/// Represents an update step that rewrites <c>aspire.config.json#channel</c> when the
-/// resolved update channel differs from the project's currently-pinned channel. Mirrors
-/// the polyglot path's channel persistence in <c>GuestAppHostProject.UpdatePackagesInternalAsync</c>.
-/// </summary>
-internal record ChannelUpdateStep(
-    string Description,
-    Func<Task> Callback,
-    string? CurrentChannel,
-    string NewChannel) : UpdateStep(Description, Callback)
-{
-    public override string GetFormattedDisplayText()
-    {
-        var current = string.IsNullOrEmpty(CurrentChannel)
-            ? $"[grey]{UpdateCommandStrings.ChannelNonePlaceholder.EscapeMarkup()}[/]"
-            : $"[bold green]{CurrentChannel.EscapeMarkup()}[/]";
-        return $"[bold yellow]aspire.config.json#channel[/] {current} to [bold green]{NewChannel.EscapeMarkup()}[/]";
-    }
 }
 
 internal record AnalyzeStep(string Description, Func<Task> Callback);

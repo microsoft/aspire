@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
@@ -58,15 +59,10 @@ internal sealed partial class CliTemplateFactory
                     await CopyTemplateTreeToDiskAsync("go-starter", outputPath, ApplyAllTokens, cancellationToken);
 
                     // Persist the resolved channel into the scaffolded project's aspire.config.json
-                    // when NewCommand resolved an Explicit channel (pr-<N>, daily, staging, local).
-                    // Without this pin, `aspire update` skips the local-config step in its
-                    // channel-resolution precedence and falls through to either an interactive
-                    // prompt (when hives exist) or the Implicit/nuget.org channel — silently
-                    // moving a project scaffolded by a PR or daily CLI onto stable. Implicit
-                    // channel selections are left unwritten so `aspire add`/`aspire restore`
-                    // use the user's ambient NuGet config without a per-project pin. Mirrors
-                    // CliTemplateFactory.TypeScriptStarterTemplate and DotNetTemplateFactory.
-                    if (!string.IsNullOrEmpty(inputs.Channel))
+                    // only for non-stable explicit channels. Stable and implicit channels are
+                    // represented by an absent channel so future commands use the stable/default
+                    // behavior consistently.
+                    if (PackageChannelNames.ShouldPersistChannelName(inputs.Channel))
                     {
                         var config = AspireConfigFile.LoadOrCreate(outputPath);
                         config.Channel = inputs.Channel;

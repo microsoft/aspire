@@ -9,9 +9,10 @@ using Xunit;
 namespace Aspire.Cli.EndToEnd.Tests;
 
 /// <summary>
-/// End-to-end tests for staging channel configuration and self-update channel switching.
-/// Verifies that staging settings (overrideStagingQuality, stagingPinToCliVersion) are
-/// correctly persisted and that aspire update --self saves the channel to global settings.
+/// End-to-end tests for staging channel configuration. Verifies that staging settings
+/// (overrideStagingQuality, stagingPinToCliVersion) are correctly persisted in the global
+/// config and survive when the configured channel is switched between staging and other
+/// channels via <c>aspire config set</c>.
 /// </summary>
 public sealed class StagingChannelTests(ITestOutputHelper output)
 {
@@ -70,7 +71,7 @@ public sealed class StagingChannelTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 5: Switch channel to stable via config set (simulating what update --self does)
+        // Step 5: Switch channel to stable via aspire config set.
         await auto.TypeAsync("aspire config set channel stable -g");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);

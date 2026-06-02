@@ -165,6 +165,105 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStaging_RoutesAspireMappingToShaSpecificFeed()
+    {
+        // A CLI baked with /p:AspireCliChannel=staging is published by the official build to its
+        // own darc-pub-microsoft-aspire-<stagingCommitHash> feed. That feed contains both stable
+        // and prerelease (RC) Aspire packages, so a staging CLI should route Aspire* through the
+        // SHA-specific feed even though the default staging quality is Both. The pre-fix behavior
+        // routed Aspire* through the shared dnceng/dotnet9 daily feed and restored daily packages
+        // instead of staging RC packages.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        // Production builds carry an AssemblyInformationalVersion like "13.4.0+abcd1234ef...";
+        // inject a stand-in so the SHA-extraction path is exercised without rebuilding Aspire.Cli.
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            informationalVersionProvider: () => "13.4.0+abcd1234ef567890");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+        Assert.True(stagingChannel.ConfigureGlobalPackagesFolder);
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-abcd1234/nuget/v3/index.json",
+            aspireMapping.Source);
+        Assert.Null(packagingService.GetStagingChannelUnavailableReason());
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStaging_WithoutCommitHashInformationalVersion_OmitsStagingChannel()
+    {
+        // Defensive guard: if the staging CLI somehow ships without a "+commitHash" in its
+        // informational version we have nothing to route Aspire* against, so the staging channel
+        // must NOT be silently materialized from the shared daily feed (the pre-fix bug). The
+        // identity gating still allows synthesis, but the URL resolution returns null, which
+        // collapses the channel into "not present" rather than producing a degraded routing.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            new ConfigurationBuilder().Build(),
+            NullLogger<PackagingService>.Instance,
+            informationalVersionProvider: () => "13.4.0");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        Assert.DoesNotContain(PackageChannelNames.Staging, channels.Select(c => c.Name));
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStagingWithExplicitFeedOverride_OverrideTakesPrecedenceOverShaFeed()
+    {
+        // Regression guard: on a staging CLI, an explicit overrideStagingFeed still wins over the
+        // SHA-specific feed derived from the informational version. This is the existing escape
+        // hatch and should remain unaffected by the staging-identity carve-out for useSharedFeed.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var overrideUrl = "https://example.com/staging-override/v3/index.json";
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideStagingFeedConfigKey] = overrideUrl
+            })
+            .Build();
+
+        var packagingService = new PackagingService(
+            executionContext,
+            new FakeNuGetPackageCache(),
+            new TestFeatures(),
+            configuration,
+            NullLogger<PackagingService>.Instance,
+            informationalVersionProvider: () => "13.4.0+abcd1234ef567890");
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        var aspireMapping = Assert.Single(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*");
+        Assert.Equal(overrideUrl, aspireMapping.Source);
+    }
+
+    [Fact]
     public async Task GetChannelsAsync_WhenChannelStagingRequestedOnDailyCli_DoesNotIncludeStagingChannel()
     {
         // Direct repro of https://github.com/microsoft/aspire/issues/16652.

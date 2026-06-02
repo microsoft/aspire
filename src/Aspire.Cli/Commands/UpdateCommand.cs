@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using Aspire.Cli.Configuration;
@@ -22,6 +23,8 @@ namespace Aspire.Cli.Commands;
 
 internal sealed class UpdateCommand : BaseCommand
 {
+    internal const string PrDogfoodDefaultChannelEnabledConfigKey = "update.prDogfoodDefaultChannelEnabled";
+
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     private readonly IProjectLocator _projectLocator;
@@ -184,14 +187,13 @@ internal sealed class UpdateCommand : BaseCommand
             }
 
             var project = _projectFactory.GetProject(projectFile);
-            var isProjectReferenceMode = project.IsUsingProjectReferences(projectFile);
 
             // Resolve the channel using the documented precedence:
             //   1. explicit --channel / hidden --quality
             //   2. nearest local app config "channel" (relative to the resolved AppHost project, NOT cwd)
             //   3. global config "channel"
-            //   4. interactive channel prompt when appropriate (PR hives present)
-            //   5. implicit/default channel as the documented fallback
+            //   4. PR dogfood CLI default, when enabled
+            //   5. implicit/default channel as the stable fallback
             // The directory-scoped lookup is critical: `aspire update --apphost <elsewhere>`
             // must consult the selected project's config tree, not the user's launch cwd.
             // The process-wide IConfiguration is rooted at the launch cwd at startup, so
@@ -206,12 +208,30 @@ internal sealed class UpdateCommand : BaseCommand
             // TODO: revisit removing the step-3 fallback once telemetry confirms global
             // channel usage is negligible.
             var channelName = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
+            var channelFromDogfoodDefault = false;
+            var configLookupDirectory = projectFile.Directory ?? ExecutionContext.WorkingDirectory;
+
+            if (string.Equals(channelName, PackageChannelNames.PrAlias, StringComparisons.ChannelName))
+            {
+                channelName = GetPrIdentityChannelOrThrow();
+            }
+
             var channelFromConfig = false;
             if (string.IsNullOrWhiteSpace(channelName))
             {
-                var configLookupDirectory = projectFile.Directory ?? ExecutionContext.WorkingDirectory;
                 channelName = await _configurationService.GetConfigurationFromDirectoryAsync("channel", configLookupDirectory, cancellationToken: cancellationToken);
                 channelFromConfig = !string.IsNullOrWhiteSpace(channelName);
+            }
+
+            // Only apply the PR dogfood default after both explicit CLI input and project/global
+            // config have failed to resolve a channel. This keeps an absent config stable by
+            // default while still making PR CLI dogfooding convenient and visibly overridable.
+            if (string.IsNullOrWhiteSpace(channelName) &&
+                await IsPrDogfoodDefaultChannelEnabledAsync(configLookupDirectory, cancellationToken) &&
+                TryGetPrIdentityChannel(out var prIdentityChannel))
+            {
+                channelName = prIdentityChannel;
+                channelFromDogfoodDefault = true;
             }
 
             PackageChannel channel;
@@ -226,92 +246,62 @@ internal sealed class UpdateCommand : BaseCommand
                 var matchedChannel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparisons.ChannelName));
                 if (matchedChannel is null)
                 {
-                    // When the user explicitly asked for the 'staging' channel and the packaging
-                    // service refused to synthesize it (daily/local/pr-N CLI without an override),
-                    // surface the packaging-service reason instead of the generic "no channel
-                    // matching" message — the generic message hides the actual fix from the user.
-                    // See https://github.com/microsoft/aspire/issues/16652.
-                    if (string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName))
+                    if (channelFromDogfoodDefault)
                     {
-                        var stagingUnavailableReason = _packagingService.GetStagingChannelUnavailableReason();
-                        if (stagingUnavailableReason is not null)
-                        {
-                            throw new ChannelNotFoundException(stagingUnavailableReason);
-                        }
-                    }
-
-                    throw new ChannelNotFoundException(string.Format(
-                        CultureInfo.CurrentCulture,
-                        UpdateCommandStrings.NoChannelFoundMatching,
-                        channelName,
-                        string.Join(", ", allChannels.Select(c => c.Name))));
-                }
-
-                channel = matchedChannel;
-
-                if (channelFromConfig)
-                {
-                    _logger.LogDebug("Using channel '{ChannelName}' from configuration.", channel.Name);
-                }
-            }
-            else if (isProjectReferenceMode)
-            {
-                channel = allChannels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
-                    ?? allChannels.First();
-            }
-            else
-            {
-                // Before falling through to the hives prompt, default to the running CLI's
-                // identity channel (the value baked into the assembly via the
-                // AspireCliChannel metadata) when it matches a registered channel. Without
-                // this, a `pr-<N>` or `daily` CLI updating an AppHost that has no
-                // per-project `channel` and no global `channel` config would silently land
-                // on the Implicit ("default") channel, which resolves Aspire packages from
-                // public NuGet and effectively moves the project to daily even though the
-                // running CLI knows which channel it shipped from.
-                //
-                // `local` is intentionally skipped: a developer-built CLI must not silently
-                // pin a real project to a hive that only exists on that machine. We also
-                // require the identity to match an entry in `allChannels`, so a stale
-                // `pr-<N>` identity (e.g. the matching hive was deleted) falls through to
-                // the existing prompt/implicit logic instead of failing.
-                var identityChannel = ExecutionContext.IdentityChannel;
-                PackageChannel? identityMatch = null;
-                if (!string.IsNullOrWhiteSpace(identityChannel)
-                    && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName))
-                {
-                    identityMatch = allChannels.FirstOrDefault(c => string.Equals(c.Name, identityChannel, StringComparisons.ChannelName));
-                }
-
-                if (identityMatch is not null)
-                {
-                    _logger.LogDebug("Defaulting to identity channel '{ChannelName}'.", identityMatch.Name);
-                    channel = identityMatch;
-                }
-                else
-                {
-                    // If there are hives (PR build directories), prompt for channel selection.
-                    // Otherwise, use the implicit/default channel automatically.
-                    var hasHives = ExecutionContext.GetHiveCount() > 0;
-
-                    if (hasHives)
-                    {
-                        // Prompt for channel selection
-                        var channelBinding = PromptBinding.Create(parseResult, _channelOption);
-                        channel = await InteractionService.PromptForSelectionAsync(
-                            UpdateCommandStrings.SelectChannelPrompt,
-                            allChannels,
-                            (c) => $"{c.Name.EscapeMarkup()} ({c.SourceDetails.EscapeMarkup()})",
-                            binding: channelBinding,
-                            cancellationToken: cancellationToken);
-                    }
-                    else
-                    {
-                        // Use the default (implicit) channel
                         channel = allChannels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
                             ?? allChannels.First();
                     }
+                    else
+                    {
+                        // When the user explicitly asked for the 'staging' channel and the packaging
+                        // service refused to synthesize it (daily/local/pr-N CLI without an override),
+                        // surface the packaging-service reason instead of the generic "no channel
+                        // matching" message — the generic message hides the actual fix from the user.
+                        // See https://github.com/microsoft/aspire/issues/16652.
+                        if (string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName))
+                        {
+                            var stagingUnavailableReason = _packagingService.GetStagingChannelUnavailableReason();
+                            if (stagingUnavailableReason is not null)
+                            {
+                                throw new ChannelNotFoundException(stagingUnavailableReason);
+                            }
+                        }
+
+                        throw new ChannelNotFoundException(string.Format(
+                            CultureInfo.CurrentCulture,
+                            UpdateCommandStrings.NoChannelFoundMatching,
+                            channelName,
+                            string.Join(", ", allChannels.Select(c => c.Name))));
+                    }
                 }
+                else
+                {
+                    channel = matchedChannel;
+
+                    if (channelFromConfig)
+                    {
+                        _logger.LogDebug("Using channel '{ChannelName}' from configuration.", channel.Name);
+                    }
+
+                    if (channelFromDogfoodDefault)
+                    {
+                        InteractionService.DisplayMessage(
+                            KnownEmojis.Information,
+                            string.Format(
+                                CultureInfo.CurrentCulture,
+                                UpdateCommandStrings.PrDogfoodDefaultChannelMessageFormat,
+                                channel.Name,
+                                PrDogfoodDefaultChannelEnabledConfigKey));
+                    }
+                }
+            }
+            else
+            {
+                // Missing project/global channel config intentionally means stable/default for
+                // existing projects. PR dogfood CLIs can opt into the explicit default above, but
+                // other CLI identities must not reinterpret absence based on the install channel.
+                channel = allChannels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
+                    ?? allChannels.First();
             }
 
             // Update packages using the appropriate project handler
@@ -501,9 +491,41 @@ internal sealed class UpdateCommand : BaseCommand
             || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
     }
 
+    private bool TryGetPrIdentityChannel([NotNullWhen(true)] out string? prIdentityChannel)
+    {
+        prIdentityChannel = ExecutionContext.IdentityChannel;
+        return prIdentityChannel.StartsWith("pr-", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetPrIdentityChannelOrThrow()
+    {
+        if (TryGetPrIdentityChannel(out var prIdentityChannel))
+        {
+            return prIdentityChannel;
+        }
+
+        throw new ChannelNotFoundException(UpdateCommandStrings.PrChannelAliasRequiresPrCli);
+    }
+
+    private async Task<bool> IsPrDogfoodDefaultChannelEnabledAsync(DirectoryInfo configLookupDirectory, CancellationToken cancellationToken)
+    {
+        var configuredValue = await _configurationService.GetConfigurationFromDirectoryAsync(
+            PrDogfoodDefaultChannelEnabledConfigKey,
+            configLookupDirectory,
+            continueSearchWhenKeyMissing: true,
+            cancellationToken: cancellationToken);
+
+        return configuredValue is null || bool.TryParse(configuredValue, out var enabled) && enabled;
+    }
+
     private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
+
+        if (string.Equals(channel, PackageChannelNames.PrAlias, StringComparisons.ChannelName))
+        {
+            channel = GetPrIdentityChannelOrThrow();
+        }
 
         // If channel is not specified, prompt the user to select one. The choice
         // applies only to this self-update invocation; subsequent 'aspire new'

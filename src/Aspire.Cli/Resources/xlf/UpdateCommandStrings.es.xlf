@@ -48,13 +48,13 @@
         <note>Displayed in place of the current channel value when aspire.config.json has no channel pinned.</note>
       </trans-unit>
       <trans-unit id="ChannelOptionDescription">
-        <source>Channel to update to (stable, daily)</source>
-        <target state="translated">Canal al que actualizar (estable, diario)</target>
+        <source>Channel to update to (stable, daily, pr)</source>
+        <target state="needs-review-translation">Canal al que actualizar (estable, diario)</target>
         <note />
       </trans-unit>
       <trans-unit id="ChannelOptionDescriptionWithStaging">
-        <source>Channel to update to (stable, staging, daily)</source>
-        <target state="translated">Canal al que se va a actualizar (estable, de ensayo, diario)</target>
+        <source>Channel to update to (stable, staging, daily, pr)</source>
+        <target state="needs-review-translation">Canal al que se va a actualizar (estable, de ensayo, diario)</target>
         <note />
       </trans-unit>
       <trans-unit id="CheckingForUpdates">
@@ -201,6 +201,16 @@
         <source>Perform updates?</source>
         <target state="translated">¿Desea realizar actualizaciones?</target>
         <note />
+      </trans-unit>
+      <trans-unit id="PrChannelAliasRequiresPrCli">
+        <source>The --channel pr alias can only be used from a PR dogfood Aspire CLI.</source>
+        <target state="new">The --channel pr alias can only be used from a PR dogfood Aspire CLI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PrDogfoodDefaultChannelMessageFormat">
+        <source>Using dogfood default channel '{0}' from this CLI install. Pass --channel &lt;channel&gt; to override or run `aspire config set {1} false -g` to disable this default.</source>
+        <target state="new">Using dogfood default channel '{0}' from this CLI install. Pass --channel &lt;channel&gt; to override or run `aspire config set {1} false -g` to disable this default.</target>
+        <note>{0} = concrete PR channel name, for example pr-12345. {1} = config key used to disable the behavior.</note>
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>

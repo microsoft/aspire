@@ -122,10 +122,19 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     /// inconsistent project that <c>aspire restore</c> rejects with "Unable to find a stable
     /// package".
     /// </summary>
+    /// <remarks>
+    /// <paramref name="expectedPersistedChannel"/> is the channel value that the template
+    /// factories are expected to receive (and pin into <c>aspire.config.json#channel</c>).
+    /// It is <c>null</c> for the stable channel because per the post-#17295 model, stable
+    /// is treated as the implicit default and never persisted into project config — see
+    /// <see cref="Aspire.Cli.Packaging.PackageChannelNames.ShouldPersistChannelName(string?)"/>.
+    /// Non-stable identities (daily / staging) are persisted so subsequent commands resolve
+    /// against the matching channel.
+    /// </remarks>
     [Theory]
-    [InlineData(PackageChannelNames.Daily, "13.4.0-preview.1.99999.1")]
-    [InlineData(PackageChannelNames.Stable, "13.5.0")]
-    public async Task NewCommand_NoChannelArg_ResolvesTemplateFromIdentityChannel(string identityChannel, string identityChannelVersion)
+    [InlineData(PackageChannelNames.Daily, "13.4.0-preview.1.99999.1", PackageChannelNames.Daily)]
+    [InlineData(PackageChannelNames.Stable, "13.5.0", null)]
+    public async Task NewCommand_NoChannelArg_ResolvesTemplateFromIdentityChannel(string identityChannel, string identityChannelVersion, string? expectedPersistedChannel)
     {
         var captured = await CaptureTemplateInputsAsync(
             identityChannel: identityChannel,
@@ -133,7 +142,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             identityChannelVersion: identityChannelVersion);
 
         Assert.Equal(identityChannelVersion, captured.Version);
-        Assert.Equal(identityChannel, captured.Channel);
+        Assert.Equal(expectedPersistedChannel, captured.Channel);
     }
 
     /// <summary>

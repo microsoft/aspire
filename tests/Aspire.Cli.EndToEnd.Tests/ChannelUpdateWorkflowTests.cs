@@ -17,25 +17,27 @@ namespace Aspire.Cli.EndToEnd.Tests;
 ///   <item><description>Create a TypeScript empty AppHost on the CLI's baked channel.</description></item>
 ///   <item><description><c>aspire add</c> a package and verify the recorded version is non-stable.</description></item>
 ///   <item><description><c>aspire start</c>, assert a wired resource exists, then <c>aspire stop</c>.</description></item>
-///   <item><description><c>aspire update --channel stable</c> and verify that it previews
-///     stable package updates without enqueuing an <c>aspire.config.json#channel</c> rewrite.</description></item>
-///   <item><description>Decline the previewed updates, then verify the existing non-stable
-///     channel and package versions are preserved.</description></item>
+///   <item><description><c>aspire update --channel stable</c> and verify that the preview includes
+///     an <c>aspire.config.json#channel</c> change step (project's pinned non-stable channel to stable)
+///     alongside the stable package updates.</description></item>
+///   <item><description>Decline the previewed updates, then verify that the existing non-stable
+///     channel and package versions are preserved on disk because no changes were applied.</description></item>
 ///   <item><description><c>aspire add</c> a second package and verify it still resolves to a non-stable version
-///     because the project's configured channel was intentionally left alone.</description></item>
+///     because the project's configured channel was preserved by the decline.</description></item>
 ///   <item><description><c>aspire start</c> / <c>aspire stop</c> again to confirm the project still runs after the declined update.</description></item>
 /// </list>
 ///
-/// The remaining tests are lean regression guards for
+/// The remaining tests are lean coverage of the new channel-resolution model introduced alongside
 /// <see href="https://github.com/microsoft/aspire/issues/17295"/>: each scaffolds an AppHost via one of
 /// the four supported create paths (<c>aspire init</c> C#, <c>aspire new aspire-empty</c> C#,
 /// <c>aspire init --language typescript</c>, plus the TypeScript <c>aspire new</c> case already
-/// covered by the deep test above) and asserts that <c>aspire update --channel stable</c> does not
-/// rewrite <c>aspire.config.json#channel</c>. Package-version assertions are intentionally scoped to
-/// the polyglot deep test only: for C# projects, <c>aspire add</c> on PR/CI hives prefers the package
-/// version that matches the running CLI build (the <c>VersionHelper.TryGetCurrentCliVersionMatch</c>
-/// branch in <c>AddCommand</c>), which deliberately overrides the channel choice for build coherence
-/// and would make a stable-version assertion flaky on C#.
+/// covered by the deep test above) and asserts that an explicit <c>aspire update --channel stable</c>
+/// against a non-stable project surfaces a channel-change step in the preview. Each test then declines
+/// and verifies the project's pinned channel was left intact on disk. Package-version assertions are
+/// intentionally scoped to the polyglot deep test only: for C# projects, <c>aspire add</c> on PR/CI
+/// hives prefers the package version that matches the running CLI build (the
+/// <c>VersionHelper.TryGetCurrentCliVersionMatch</c> branch in <c>AddCommand</c>), which deliberately
+/// overrides the channel choice for build coherence and would make a stable-version assertion flaky on C#.
 /// </summary>
 public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 {
@@ -158,13 +160,18 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
         try
         {
-            // Step 8: Preview a stable-channel update. The stable channel is intentionally not
-            // persisted, so decline the package updates here: applying stable package versions while
-            // preserving the existing PR/local channel would leave the TypeScript SDK restore with
-            // package versions that are not available from the preserved channel's source mapping.
+            // Step 8: Preview a stable-channel update. With the new channel-resolution model, an
+            // explicit `--channel stable` against a project pinned to a non-stable channel produces
+            // a preview that includes a channel-change step (project channel -> stable) plus stable
+            // package updates. Decline so the rest of the test continues operating against the
+            // non-stable channel: accepting would rewrite aspire.config.json#channel to stable, and
+            // the subsequent `aspire add` call would then resolve against stable feeds instead of
+            // the LocalHive nupkgs that the test is wired to use.
             await PreviewStableUpdateAndDeclineAsync(auto, counter, expectedPackageInPlan: "Aspire.Hosting.Redis");
 
             // Step 9: Verify the existing channel and Redis package version were preserved.
+            // Declining the preview means no updates were applied, so both should match what was
+            // captured before the preview ran.
             var channelAfter = ReadAspireConfigChannel(aspireConfigPath);
             Assert.Equal(initialChannel, channelAfter);
 
@@ -172,9 +179,9 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             output.WriteLine($"Redis version after declined update: {redisVersionAfter}");
             Assert.Equal(redisVersionBefore, redisVersionAfter);
 
-            // Step 10: Add a second package after the declined update. Because the project channel is
-            // preserved, the resolved version should still come from the non-stable channel. Note the
-            // canonical capitalization: Aspire.Hosting.PostgreSQL.
+            // Step 10: Add a second package after the declined update. Because the project channel was
+            // preserved by the decline, the resolved version should still come from the non-stable
+            // channel. Note the canonical capitalization: Aspire.Hosting.PostgreSQL.
             await auto.TypeAsync("aspire add Aspire.Hosting.PostgreSQL");
             await auto.EnterAsync();
             await auto.WaitForAspireAddSuccessAsync(counter, TimeSpan.FromMinutes(2));
@@ -211,7 +218,8 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
     }
 
     // ----------------------------------------------------------------------------------
-    // Stable-channel persistence regression guards for https://github.com/microsoft/aspire/issues/17295
+    // Stable-channel resolution coverage for the new explicit-channel model introduced alongside
+    // https://github.com/microsoft/aspire/issues/17295.
     //
     // These four cells cover the create-paths × language matrix:
     //   - C# `aspire init`             (single-file apphost.cs)        -> see test below
@@ -220,9 +228,11 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
     //   - TS `aspire new aspire-ts-empty` (project-mode)               -> already covered by the
     //                                                                     deep test above.
     //
-    // Each test asserts the stable-channel invariant: `aspire update --channel stable` should not
-    // enqueue an aspire.config.json#channel rewrite, so the existing channel value is preserved.
-    // Package version assertions are intentionally not duplicated here — see the class docstring.
+    // Each test asserts the new invariant: an explicit `aspire update --channel stable` against a
+    // project pinned to a non-stable channel surfaces a channel-change step in the preview (project's
+    // pinned channel -> stable). The tests then decline the preview and verify the existing channel
+    // value is preserved on disk because no changes were applied. Package version assertions are
+    // intentionally not duplicated here — see the class docstring.
     // ----------------------------------------------------------------------------------
 
     [Fact]
@@ -376,9 +386,10 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Shared body for the channel-preservation regression tests: snapshot the initial channel,
-    /// suppress the post-update CLI self-update prompt, preview <c>aspire update --channel stable</c>,
-    /// then assert that <c>aspire.config.json#channel</c> was left unchanged.
+    /// Shared body for the explicit-channel resolution tests: snapshot the initial channel,
+    /// suppress the post-update CLI self-update prompt, preview <c>aspire update --channel stable</c>
+    /// (asserting that the preview includes a channel-change step), decline it, and then verify
+    /// that <c>aspire.config.json#channel</c> was left unchanged because no changes were applied.
     /// Assumes the automator is positioned in the project directory (containing aspire.config.json).
     /// </summary>
     private static async Task RunStableChannelUpdateAndAssertChannelPreservedAsync(
@@ -392,7 +403,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         {
             Assert.Skip(
                 $"Initial aspire.config.json#channel was '{initialChannel ?? "<null>"}'. " +
-                "This test requires a non-stable initial channel so 'aspire update --channel stable' can preview stable-channel updates.");
+                "This test requires a non-stable initial channel so 'aspire update --channel stable' surfaces a channel-change step.");
         }
 
         // Suppress the post-update CLI self-update prompt so it doesn't block waiting on
@@ -403,6 +414,8 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
 
         await PreviewStableUpdateAndDeclineAsync(auto, counter);
 
+        // Declining the preview means no changes are applied, so the on-disk channel value
+        // should still match what was captured before the preview ran.
         var channelAfter = ReadAspireConfigChannel(aspireConfigPath);
         Assert.Equal(initialChannel, channelAfter);
     }
@@ -437,7 +450,9 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
             return sawUpdatePrompt || upToDateMessage.Search(snapshot).Count > 0;
         }, TimeSpan.FromMinutes(3), description: "waiting for stable update preview");
 
-        Assert.False(sawChannelUpdateLine, "Stable channel updates should not enqueue an aspire.config.json#channel rewrite.");
+        Assert.True(
+            sawChannelUpdateLine,
+            "Expected the explicit '--channel stable' preview to include an aspire.config.json#channel change step because the project was pinned to a non-stable channel.");
         Assert.True(sawExpectedPackageLine, $"Expected the stable update preview to include '{expectedPackageInPlan}'.");
 
         if (sawUpdatePrompt)

@@ -163,10 +163,10 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
 
     /// <summary>
     /// Explicit <c>--channel</c> overrides identity at the resolution layer and propagates
-    /// through to the persisted pin for every channel-pinning template — covered at the
-    /// resolution layer by <c>NewCommand_ExplicitChannelArg_OverridesIdentityChannel</c>
-    /// and asserted here at the persistence layer so a future drift between the two is
-    /// caught.
+    /// through to the persisted pin for every channel-pinning template when the selected
+    /// channel is non-stable — covered at the resolution layer by
+    /// <c>NewCommand_ExplicitChannelArg_OverridesIdentityChannel</c> and asserted here at
+    /// the persistence layer so a future drift between the two is caught.
     /// </summary>
     [Theory]
     [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.mts")]
@@ -176,7 +176,26 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.PythonStarter, "apphost.mts")]
     [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
-    public async Task ChannelPinningTemplate_ExplicitChannelArg_OverridesIdentityAndPersists(string templateId, string _)
+    public async Task ChannelPinningTemplate_ExplicitDailyChannelArg_PersistsChannel(string templateId, string _)
+    {
+        var persisted = await ScaffoldAndReadPersistedChannelAsync(
+            templateId: templateId,
+            identityChannel: PackageChannelNames.Daily,
+            registerIdentityChannel: true,
+            explicitChannelArg: PackageChannelNames.Daily);
+
+        Assert.Equal(PackageChannelNames.Daily, persisted);
+    }
+
+    [Theory]
+    [InlineData(KnownTemplateId.TypeScriptEmptyAppHost, "apphost.mts")]
+    [InlineData(KnownTemplateId.PythonEmptyAppHost, "apphost.py")]
+    [InlineData(KnownTemplateId.GoEmptyAppHost, "apphost.go")]
+    [InlineData(KnownTemplateId.JavaEmptyAppHost, "AppHost.java")]
+    [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.mts")]
+    [InlineData(KnownTemplateId.PythonStarter, "apphost.mts")]
+    [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
+    public async Task ChannelPinningTemplate_ExplicitStableChannelArg_DoesNotPinChannel(string templateId, string _)
     {
         var persisted = await ScaffoldAndReadPersistedChannelAsync(
             templateId: templateId,
@@ -184,7 +203,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             registerIdentityChannel: true,
             explicitChannelArg: PackageChannelNames.Stable);
 
-        Assert.Equal(PackageChannelNames.Stable, persisted);
+        Assert.Null(persisted);
     }
 
     /// <summary>

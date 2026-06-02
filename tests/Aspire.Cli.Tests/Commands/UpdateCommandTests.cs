@@ -1369,20 +1369,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Create a hive directory so the channel prompt is shown
-        var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
-        hivesDir.CreateSubdirectory("pr-12345");
-
         var cancellationMessageDisplayed = false;
         
-        var wrappedService = new CancellationTrackingInteractionService(new TestInteractionService()
-        {
-            PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
-            {
-                // Simulate user pressing Ctrl+C during selection prompt
-                throw new OperationCanceledException();
-            }
-        });
+        var wrappedService = new CancellationTrackingInteractionService(new TestInteractionService());
         wrappedService.OnCancellationMessageDisplayed = () => cancellationMessageDisplayed = true;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -1406,6 +1395,11 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                     var stableChannel = new PackageChannel("stable", PackageChannelQuality.Stable, null, null!, null!);
                     return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
                 }
+            };
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (_, _) => throw new OperationCanceledException()
             };
         });
 
@@ -1853,16 +1847,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task UpdateCommand_WithHives_PromptOffersChannelsInPackagingServiceOrder()
+    public async Task UpdateCommand_WithHives_UsesDefaultWithoutPrompting()
     {
-        // Establishes the prompt-content contract: the channels passed to
-        // `PromptForSelectionAsync` are exactly the sequence returned by
-        // `PackagingService.GetChannelsAsync`, in the same order, with the
-        // user-facing label following the documented "Name (SourceDetails)"
-        // format. Without this assertion, a regression that reorders channels
-        // or relabels them (e.g. drops the SourceDetails suffix) is silently
-        // green — every other prompt test on this code path checks only that
-        // the callback was invoked.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
@@ -1870,6 +1856,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         List<PackageChannel>? capturedChoices = null;
         Func<object, string>? capturedFormatter = null;
+        var updatedWithChannel = string.Empty;
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -1897,6 +1884,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             {
                 UpdateProjectAsyncCallback = (context, cancellationToken) =>
                 {
+                    updatedWithChannel = context.Channel.Name;
                     return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
                 }
             };
@@ -1922,23 +1910,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.NotNull(capturedChoices);
-        Assert.NotNull(capturedFormatter);
-
-        // Channels must be presented in the order PackagingService returns them.
-        // The implicit channel's display name is "default" (see PackageChannelNames).
-        Assert.Equal(
-            new[] { "default", "stable", "daily", "pr-12345" },
-            capturedChoices!.Select(c => c.Name).ToArray());
-
-        // Each prompt row must include both the channel name and its source details
-        // (the documented "Name (SourceDetails)" format from UpdateCommand.cs).
-        foreach (var channel in capturedChoices)
-        {
-            var rendered = capturedFormatter!(channel);
-            Assert.Contains(channel.Name, rendered);
-            Assert.Contains(channel.SourceDetails, rendered);
-        }
+        Assert.Null(capturedChoices);
+        Assert.Null(capturedFormatter);
+        Assert.Equal(PackageChannelNames.Default, updatedWithChannel);
     }
 
     // ------------------------------------------------------------------
@@ -2001,28 +1975,13 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     // ------------------------------------------------------------------
-    // Identity-channel fallback contract: when no channel is supplied on
-    // the command line and neither the per-project nor the global
-    // "channel" config pins one, `aspire update` falls back to the
-    // running CLI's identity channel (the value baked into the assembly
-    // via AssemblyMetadata("AspireCliChannel", ...)) before reaching the
-    // implicit/default channel. Without that fallback, a `pr-<N>` or
-    // `daily` CLI updating an AppHost that has nothing pinning the
-    // channel silently lands on the Implicit ("default") channel, which
-    // resolves Aspire packages from public NuGet and effectively moves
-    // the AppHost to daily even though the running CLI knows which
-    // channel it shipped from.
-    //
-    // The tests below pin down the matrix: identity-channel match wins
-    // for `daily` and `pr-<N>`; `local` is intentionally skipped so a
-    // developer-built CLI cannot pin a real project to a hive that only
-    // exists on that machine; an identity that does not match a
-    // registered channel falls through to the existing prompt/implicit
-    // logic; explicit `--channel` and per-project config still override
-    // identity.
+    // Channel fallback contract: when no channel is supplied on the command line and neither
+    // per-project nor global config pins one, absence means the stable/default channel. The only
+    // CLI-identity-based exception is an enabled PR dogfood CLI default, which is intentionally
+    // surfaced to the user before update planning continues.
     // ------------------------------------------------------------------
     [Fact]
-    public async Task UpdateCommand_WhenStagingIdentityRegistersChannel_UsesStagingForUnpinnedProject()
+    public async Task UpdateCommand_WhenStagingIdentityRegistersChannel_UsesDefaultForUnpinnedProject()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -2071,8 +2030,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.False(promptForSelectionInvoked, "Staging identity should resolve through the registered staging channel without prompting.");
-        Assert.Equal(PackageChannelNames.Staging, updatedWithChannel);
+        Assert.False(promptForSelectionInvoked, "Staging identity should not reinterpret an absent project channel.");
+        Assert.Equal(PackageChannelNames.Default, updatedWithChannel);
     }
 
     [Fact]
@@ -2129,16 +2088,15 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
-    [InlineData("pr-12345", "pr-12345")]
-    [InlineData("daily", "daily")]
-    [InlineData("DAILY", "daily")] // case-insensitive match against allChannels
-    public async Task UpdateCommand_WhenIdentityChannelMatchesRegisteredChannel_UsesItWithoutPrompting(string identityChannel, string expectedChannelName)
+    [InlineData(PackageChannelNames.Daily)]
+    [InlineData("DAILY")]
+    [InlineData(PackageChannelNames.Staging)]
+    public async Task UpdateCommand_WhenNonPrIdentityChannelMatchesRegisteredChannel_UsesDefaultForUnpinnedProject(string identityChannel)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Create a hive so pr-* identities have a registered channel to match and so
-        // the identity fallback proves it bypasses the prompt when a prompt would
-        // otherwise be available.
+        // Create a hive so this verifies hives no longer cause an interactive channel prompt
+        // for existing projects with no configured channel.
         var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
         hivesDir.CreateSubdirectory("pr-12345");
 
@@ -2148,50 +2106,122 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             identityChannel: identityChannel);
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.False(promptInvoked, "Identity-channel match should bypass the channel prompt.");
-        Assert.Equal(expectedChannelName, updatedWithChannel);
+        Assert.False(promptInvoked, "Absent project channel should use the stable/default fallback without prompting.");
+        Assert.Equal(PackageChannelNames.Default, updatedWithChannel);
     }
 
     [Fact]
-    public async Task UpdateCommand_WhenIdentityChannelIsLocal_StillPromptsWhenHivesExist()
+    public async Task UpdateCommand_WhenPrDogfoodIdentityHasMatchingChannel_UsesPrDefaultAndDisplaysNotice()
     {
-        // A developer-built CLI must NOT silently pin a real project to a
-        // hive that only exists on that machine. Even though "local" is
-        // technically a registered channel name, identity-match deliberately
-        // skips it and lets the prompt run.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
         hivesDir.CreateSubdirectory("pr-12345");
 
-        var (exitCode, _, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked, displayedMessages) = await RunUpdateAndCaptureChannelDetailsAsync(
+            workspace,
+            updateArgs: "update",
+            identityChannel: "pr-12345");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(promptInvoked, "PR dogfood default should bypass the old hive prompt.");
+        Assert.Equal("pr-12345", updatedWithChannel);
+        Assert.Contains(displayedMessages, message =>
+            message.Message.Contains("Using dogfood default channel 'pr-12345' from this CLI install.", StringComparison.Ordinal) &&
+            message.Message.Contains(UpdateCommand.PrDogfoodDefaultChannelEnabledConfigKey, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WhenPrDogfoodDefaultDisabled_UsesDefaultForUnpinnedProject()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        var globalDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        Directory.CreateDirectory(globalDir);
+        File.WriteAllText(
+            Path.Combine(globalDir, "settings.global.json"),
+            """{ "update": { "prDogfoodDefaultChannelEnabled": "false" } }""");
+
+        var (exitCode, updatedWithChannel, promptInvoked, displayedMessages) = await RunUpdateAndCaptureChannelDetailsAsync(
+            workspace,
+            updateArgs: "update",
+            identityChannel: "pr-12345");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(promptInvoked);
+        Assert.Equal(PackageChannelNames.Default, updatedWithChannel);
+        Assert.DoesNotContain(displayedMessages, message => message.Message.Contains("Using dogfood default channel", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_ChannelPrAliasResolvesCurrentPrIdentity()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+            workspace,
+            updateArgs: "update --channel pr",
+            identityChannel: "pr-12345");
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(promptInvoked);
+        Assert.Equal("pr-12345", updatedWithChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_ChannelPrAliasFailsOutsidePrIdentity()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+            workspace,
+            updateArgs: "update --channel pr",
+            identityChannel: PackageChannelNames.Daily);
+
+        Assert.Equal(CliExitCodes.FailedToUpgradeProject, exitCode);
+        Assert.False(promptInvoked);
+        Assert.Equal(string.Empty, updatedWithChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_WhenIdentityChannelIsLocal_UsesDefaultWhenHivesExist()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
+        hivesDir.CreateSubdirectory("pr-12345");
+
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update",
             identityChannel: PackageChannelNames.Local,
             includeLocalInChannels: true);
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.True(promptInvoked, "Local-identity CLI must still prompt for channel selection when hives exist.");
+        Assert.False(promptInvoked);
+        Assert.Equal(PackageChannelNames.Default, updatedWithChannel);
     }
 
     [Fact]
-    public async Task UpdateCommand_WhenIdentityChannelHasNoMatchingChannel_FallsThroughToPrompt()
+    public async Task UpdateCommand_WhenPrIdentityHasNoMatchingChannel_UsesDefault()
     {
-        // A stale PR identity (e.g. the matching hive was removed) must not
-        // crash — it falls through to the prompt/implicit logic the user
-        // already gets when no identity-match exists.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
         hivesDir.CreateSubdirectory("pr-12345");
 
-        var (exitCode, _, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
             workspace,
             updateArgs: "update",
             identityChannel: "pr-99999");
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.True(promptInvoked, "Unregistered identity channel must fall through to the existing prompt.");
+        Assert.False(promptInvoked);
+        Assert.Equal(PackageChannelNames.Default, updatedWithChannel);
     }
 
     [Fact]
@@ -2267,8 +2297,46 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         string identityChannel = "local",
         bool includeLocalInChannels = false)
     {
+        var (exitCode, updatedWithChannel, promptInvoked, _) = await RunUpdateAndCaptureChannelDetailsAsync(
+            workspace,
+            updateArgs,
+            projectDirectory,
+            identityChannel,
+            includeLocalInChannels);
+        return (exitCode, updatedWithChannel, promptInvoked);
+    }
+
+    private Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked, List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages)> RunUpdateAndCaptureChannelDetailsAsync(
+        TemporaryWorkspace workspace,
+        string updateArgs,
+        string identityChannel,
+        bool includeLocalInChannels = false)
+    {
+        return RunUpdateAndCaptureChannelDetailsAsync(
+            workspace,
+            updateArgs,
+            projectDirectory: workspace.WorkspaceRoot,
+            identityChannel: identityChannel,
+            includeLocalInChannels: includeLocalInChannels);
+    }
+
+    private async Task<(int ExitCode, string UpdatedWithChannel, bool PromptInvoked, List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages)> RunUpdateAndCaptureChannelDetailsAsync(
+        TemporaryWorkspace workspace,
+        string updateArgs,
+        DirectoryInfo projectDirectory,
+        string identityChannel = "local",
+        bool includeLocalInChannels = false)
+    {
         var promptForSelectionInvoked = false;
         var updatedWithChannel = string.Empty;
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
+            {
+                promptForSelectionInvoked = true;
+                return choices.Cast<object>().First();
+            }
+        };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -2282,14 +2350,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
                 }
             };
 
-            options.InteractionServiceFactory = _ => new TestInteractionService()
-            {
-                PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
-                {
-                    promptForSelectionInvoked = true;
-                    return choices.Cast<object>().First();
-                }
-            };
+            options.InteractionServiceFactory = _ => interactionService;
 
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
 
@@ -2343,7 +2404,8 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse(updateArgs);
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        return (exitCode, updatedWithChannel, promptForSelectionInvoked);
+
+        return (exitCode, updatedWithChannel, promptForSelectionInvoked, interactionService.DisplayedMessages);
     }
 
     [Fact]
@@ -2518,6 +2580,54 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(PackageChannelNames.Staging, channelList);
         Assert.Contains(PackageChannelNames.Stable, channelList);
         Assert.Contains(PackageChannelNames.Daily, channelList);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_WhenIdentityChannelIsPr_PromptsForChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        IEnumerable? capturedChoices = null;
+        string? capturedDownloadChannel = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: "pr-12345");
+
+            options.InteractionServiceFactory = _ => new TestInteractionService()
+            {
+                PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
+                {
+                    capturedChoices = choices;
+                    return PackageChannelNames.Stable;
+                }
+            };
+
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (channel, ct) =>
+                {
+                    capturedDownloadChannel = channel;
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.NotNull(capturedChoices);
+        var channelList = capturedChoices.Cast<string>().ToList();
+        Assert.Contains(PackageChannelNames.Stable, channelList);
+        Assert.Contains(PackageChannelNames.Daily, channelList);
+        Assert.DoesNotContain("pr-12345", channelList);
+        Assert.Equal(PackageChannelNames.Stable, capturedDownloadChannel);
     }
 
     [Fact]

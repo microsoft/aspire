@@ -50,6 +50,7 @@ internal class PackagingService : IPackagingService
     private readonly IConfiguration _configuration;
     private readonly ILogger<PackagingService> _logger;
     private readonly Func<string?> _processPathProvider;
+    private readonly Func<string?> _informationalVersionProvider;
 
     // Cached result of the staging-channel availability check. The inputs (CLI identity,
     // overrideStagingFeed, StagingChannelEnabled feature) are effectively static for the
@@ -64,7 +65,8 @@ internal class PackagingService : IPackagingService
         IFeatures features,
         IConfiguration configuration,
         ILogger<PackagingService> logger,
-        Func<string?>? processPathProvider = null)
+        Func<string?>? processPathProvider = null,
+        Func<string?>? informationalVersionProvider = null)
     {
         _executionContext = executionContext;
         _nuGetPackageCache = nuGetPackageCache;
@@ -72,7 +74,20 @@ internal class PackagingService : IPackagingService
         _configuration = configuration;
         _logger = logger;
         _processPathProvider = processPathProvider ?? (() => Environment.ProcessPath);
+        // Indirected through a provider so tests can supply an informational version with a
+        // "+commitHash" suffix without having to rebuild Aspire.Cli with stamped metadata.
+        // Production callers fall back to the running CLI assembly, which is the asset that
+        // CI bakes the staging commit hash into.
+        _informationalVersionProvider = informationalVersionProvider ?? GetExecutingAssemblyInformationalVersion;
         _stagingUnavailableReasonCache = new Lazy<string?>(ComputeStagingChannelUnavailableReason);
+    }
+
+    private static string? GetExecutingAssemblyInformationalVersion()
+    {
+        return Assembly.GetExecutingAssembly()
+            .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
+            .OfType<AssemblyInformationalVersionAttribute>()
+            .FirstOrDefault()?.InformationalVersion;
     }
 
     // One-shot guards so the refusal warning / successful-resolution info line are emitted
@@ -237,12 +252,21 @@ internal class PackagingService : IPackagingService
         var stagingQuality = GetStagingQuality(defaultQuality);
         var hasExplicitFeedOverride = !string.IsNullOrEmpty(_configuration[OverrideStagingFeedConfigKey]);
 
-        // When quality is Prerelease or Both and no explicit feed override is set,
-        // use the shared daily feed instead of the SHA-specific feed. SHA-specific
-        // darc-pub-* feeds are only created for stable-quality builds, so a non-Stable
-        // quality without an explicit feed override can only work with the shared feed.
+        // When quality is Prerelease or Both and no explicit feed override is set, fall back to
+        // the shared dnceng/dotnet9 daily feed because the CLI's own commit hash doesn't point
+        // at a per-SHA darc-pub-microsoft-aspire-<hash> feed.
+        //
+        // Exception: a CLI whose baked identity IS staging is itself produced by the official
+        // build that publishes to its own darc-pub-microsoft-aspire-<stagingCommitHash> feed.
+        // That feed contains both stable and prerelease (RC) Aspire packages — exactly what
+        // staging quality=Both is meant to expose — so we should route Aspire* through the
+        // SHA-specific feed regardless of quality. Without this carve-out a staging CLI silently
+        // routed Aspire* through the shared daily feed and restored daily packages instead of
+        // the staging RC build the user actually opted into.
+        var stagingIdentity = string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
         var useSharedFeed = !hasExplicitFeedOverride &&
-                            stagingQuality is not PackageChannelQuality.Stable;
+                            stagingQuality is not PackageChannelQuality.Stable &&
+                            !stagingIdentity;
 
         var stagingFeedUrl = GetStagingFeedUrl(useSharedFeed);
         if (stagingFeedUrl is null)
@@ -340,11 +364,7 @@ internal class PackagingService : IPackagingService
 
         // Extract commit hash from assembly version to build staging feed URL
         // Staging feed URL template: https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{commitHash}/nuget/v3/index.json
-        var assembly = Assembly.GetExecutingAssembly();
-        var informationalVersion = assembly
-            .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
-            .OfType<AssemblyInformationalVersionAttribute>()
-            .FirstOrDefault()?.InformationalVersion;
+        var informationalVersion = _informationalVersionProvider();
 
         if (informationalVersion is null)
         {
