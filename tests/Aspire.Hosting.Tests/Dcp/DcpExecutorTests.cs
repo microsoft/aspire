@@ -2586,11 +2586,11 @@ public class DcpExecutorTests
     }
 
     [Fact]
-    public async Task ExplicitStartPlainExecutable_IsCreatedWithStartFalse()
+    public async Task ExplicitStartPlainExecutable_IsNotCreatedUntilManualStart()
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        builder.AddExecutable("CoolProgram", "cool", Environment.CurrentDirectory, "--alpha", "--bravo")
+        var resource = builder.AddExecutable("CoolProgram", "cool", Environment.CurrentDirectory, "--alpha", "--bravo")
             .WithExplicitStart();
 
         var kubernetesService = new TestKubernetesService();
@@ -2600,8 +2600,13 @@ public class DcpExecutorTests
 
         await appExecutor.RunApplicationAsync();
 
-        var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "CoolProgram");
-        Assert.False(exe.Spec.Start.GetValueOrDefault(true));
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "CoolProgram"));
+
+        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        await appExecutor.StartResourceAsync(reference, CancellationToken.None);
+
+        var exe = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "CoolProgram"));
+        Assert.True(exe.Spec.Start);
     }
 
     [Fact]
@@ -3806,6 +3811,202 @@ public class DcpExecutorTests
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
         Assert.True(container.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
         AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, container.Spec.Args);
+    }
+
+    [Fact]
+    public async Task ExecutionConfigurationCallbacksDeferredForExplicitStartExecutableUntilManualStart()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var argsCallCount = 0;
+        var envCallCount = 0;
+        var resource = builder.AddExecutable("anExecutable", "command", "")
+            .WithExplicitStart()
+            .WithArgs(c =>
+            {
+                Interlocked.Increment(ref argsCallCount);
+                c.Args.Add("--deferred");
+            })
+            .WithEnvironment(c =>
+            {
+                Interlocked.Increment(ref envCallCount);
+                c.EnvironmentVariables["DEFERRED_ENV"] = "true";
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Equal(0, argsCallCount);
+        Assert.Equal(0, envCallCount);
+        Assert.Empty(GetCreatedExecutablesForResource(kubernetesService, "anExecutable"));
+
+        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        await appExecutor.StartResourceAsync(reference, CancellationToken.None);
+
+        Assert.Equal(1, argsCallCount);
+        Assert.Equal(1, envCallCount);
+
+        var startedExecutable = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "anExecutable"), e => e.Spec.Start == true);
+        Assert.Contains("--deferred", startedExecutable.Spec.Args!);
+        Assert.Contains(startedExecutable.Spec.Env!, e => e is { Name: "DEFERRED_ENV", Value: "true" });
+        Assert.True(startedExecutable.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
+        Assert.Single(argAnnotations, a => a.Argument == "--deferred");
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, startedExecutable.Spec.Args);
+    }
+
+    [Fact]
+    public async Task ExecutionConfigurationCallbacksDeferredForExplicitStartContainerUntilManualStart()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var argsCallCount = 0;
+        var envCallCount = 0;
+        var resource = builder.AddContainer("aContainer", "image")
+            .WithExplicitStart()
+            .WithArgs(c =>
+            {
+                Interlocked.Increment(ref argsCallCount);
+                c.Args.Add("--deferred");
+            })
+            .WithEnvironment(c =>
+            {
+                Interlocked.Increment(ref envCallCount);
+                c.EnvironmentVariables["DEFERRED_ENV"] = "true";
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Equal(0, argsCallCount);
+        Assert.Equal(0, envCallCount);
+        Assert.DoesNotContain(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
+
+        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        await appExecutor.StartResourceAsync(reference, CancellationToken.None);
+
+        Assert.Equal(1, argsCallCount);
+        Assert.Equal(1, envCallCount);
+
+        var startedContainer = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer" && c.Spec.Start == true);
+        Assert.Contains("--deferred", startedContainer.Spec.Args!);
+        Assert.Contains(startedContainer.Spec.Env!, e => e is { Name: "DEFERRED_ENV", Value: "true" });
+        Assert.True(startedContainer.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations));
+        Assert.Single(argAnnotations, a => a.Argument == "--deferred");
+        AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations, startedContainer.Spec.Args);
+    }
+
+    [Fact]
+    public async Task ExecutionConfigurationCallbacksNotReevaluatedWhenStartingCreatedExplicitStartPersistentExecutable()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var argsCallCount = 0;
+        var envCallCount = 0;
+        var resource = builder.AddExecutable("anExecutable", "command", "")
+            .WithPersistentLifetime()
+            .WithExplicitStart()
+            .WithArgs(c =>
+            {
+                Interlocked.Increment(ref argsCallCount);
+                c.Args.Add("--persistent");
+            })
+            .WithEnvironment(c =>
+            {
+                Interlocked.Increment(ref envCallCount);
+                c.EnvironmentVariables["PERSISTENT_ENV"] = "true";
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var configDict = new Dictionary<string, string?>
+        {
+            ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Equal(1, argsCallCount);
+        Assert.Equal(1, envCallCount);
+
+        var executable = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "anExecutable"));
+        Assert.False(executable.Spec.Start);
+        Assert.True(executable.Spec.Persistent);
+        Assert.Contains("--persistent", executable.Spec.Args!);
+        Assert.Contains(executable.Spec.Env!, e => e is { Name: "PERSISTENT_ENV", Value: "true" });
+
+        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        await appExecutor.StartResourceAsync(reference, CancellationToken.None);
+
+        Assert.Equal(1, argsCallCount);
+        Assert.Equal(1, envCallCount);
+        Assert.Empty(kubernetesService.DeletedResources);
+        Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "anExecutable"));
+        Assert.True(executable.Spec.Start);
+    }
+
+    [Fact]
+    public async Task ExecutionConfigurationCallbacksNotDeferredForExplicitStartPersistentContainer()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var argsCallCount = 0;
+        var envCallCount = 0;
+        var resource = builder.AddContainer("aContainer", "image")
+            .WithPersistentLifetime()
+            .WithExplicitStart()
+            .WithArgs(c =>
+            {
+                Interlocked.Increment(ref argsCallCount);
+                c.Args.Add("--persistent");
+            })
+            .WithEnvironment(c =>
+            {
+                Interlocked.Increment(ref envCallCount);
+                c.EnvironmentVariables["PERSISTENT_ENV"] = "true";
+            });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var configDict = new Dictionary<string, string?>
+        {
+            ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+        };
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, configuration: configuration);
+        await appExecutor.RunApplicationAsync();
+
+        Assert.Equal(1, argsCallCount);
+        Assert.Equal(1, envCallCount);
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
+        Assert.False(container.Spec.Start);
+        Assert.True(container.Spec.Persistent);
+        Assert.Contains("--persistent", container.Spec.Args!);
+        Assert.Contains(container.Spec.Env!, e => e is { Name: "PERSISTENT_ENV", Value: "true" });
+
+        var reference = appExecutor.GetResource(DcpExecutor.GetDcpInstance(resource.Resource, instanceIndex: 0).Name);
+        await appExecutor.StartResourceAsync(reference, CancellationToken.None);
+
+        Assert.Equal(1, argsCallCount);
+        Assert.Equal(1, envCallCount);
+        Assert.Empty(kubernetesService.DeletedResources);
+        Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
+        Assert.True(container.Spec.Start);
     }
 
     // Ensures that command-line argument callbacks are invoked after the OnResourceStarting event is raised for the resource,

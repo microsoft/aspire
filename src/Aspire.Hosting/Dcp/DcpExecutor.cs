@@ -592,6 +592,10 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         => CreateDcpObjectsAsync(objects, cancellationToken);
 
     async Task<T> IDcpObjectFactory.PatchDcpObjectAsync<T>(T obj, Action<T> change, CancellationToken cancellationToken)
+        => await PatchDcpObjectAsync(obj, change, cancellationToken).ConfigureAwait(false);
+
+    private async Task<T> PatchDcpObjectAsync<T>(T obj, Action<T> change, CancellationToken cancellationToken)
+        where T : CustomResource, IKubernetesStaticMetadata
     {
         var patch = CreatePatch(obj, change);
         var result = await _kubernetesService.PatchAsync(obj, patch, cancellationToken).ConfigureAwait(false);
@@ -1067,6 +1071,11 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             await appResource.Initialized.WaitAsync(cancellationToken).ConfigureAwait(false);
             using var _ = await ConcurrencyUtils.AcquireAllAsync([appResource.SerializedOpSemaphore], cancellationToken).ConfigureAwait(false);
 
+            if (await TryStartCreatedDelayedStartResourceAsync(resourceReference, resourceType, cancellationToken).ConfigureAwait(false))
+            {
+                return;
+            }
+
             // Reset cached callback results so they are re-evaluated on restart.
             ForgetCachedCallbackResults(resourceReference.ModelResource);
 
@@ -1113,6 +1122,29 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             _logger.LogError(ex, "Failed to start resource {ResourceName}", resourceReference.ModelResource.Name);
             await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
             throw;
+        }
+    }
+
+    private async Task<bool> TryStartCreatedDelayedStartResourceAsync(IResourceReference resourceReference, string resourceType, CancellationToken cancellationToken)
+    {
+        switch (resourceReference)
+        {
+            case RenderedModelResource<Container> { DcpResource.Spec.Start: false } cr
+                when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(cr.ModelResource, cr.DcpResource.Spec.Start):
+                await PublishConnectionStringAvailableEventAsync(cr.ModelResource, cancellationToken).ConfigureAwait(false);
+                await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, cr.ModelResource, cr.DcpResourceName)).ConfigureAwait(false);
+                await PatchDcpObjectAsync(cr.DcpResource, static c => c.Spec.Start = true, cancellationToken).ConfigureAwait(false);
+                return true;
+
+            case RenderedModelResource<Executable> { DcpResource.Spec.Start: false } er
+                when !DcpModelUtilities.ShouldDeferCreateForExplicitStart(er.ModelResource, er.DcpResource.Spec.Start):
+                await PublishConnectionStringAvailableEventAsync(er.ModelResource, cancellationToken).ConfigureAwait(false);
+                await _executorEvents.PublishAsync(new OnResourceStartingContext(cancellationToken, resourceType, er.ModelResource, er.DcpResourceName)).ConfigureAwait(false);
+                await PatchDcpObjectAsync(er.DcpResource, static e => e.Spec.Start = true, cancellationToken).ConfigureAwait(false);
+                return true;
+
+            default:
+                return false;
         }
     }
 
