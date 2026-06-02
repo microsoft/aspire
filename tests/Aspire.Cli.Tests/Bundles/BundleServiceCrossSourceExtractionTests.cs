@@ -8,14 +8,14 @@ namespace Aspire.Cli.Tests.Bundles;
 
 /// <summary>
 /// Verifies <see cref="BundleService.ComputeDefaultExtractDir(string)"/> against
-/// every (source × prefix shape) combination the supported install routes produce.
+/// every (source × prefix shape) combination the supported install sources produce.
 /// The matrix locks in the contract: the reader walks the sidecar's
 /// <c>source</c> field — and nothing else — to decide between
-/// <c>binaryDir</c> (winget / brew / dotnet-tool) and the parent of
+/// <c>binaryDir</c> (winget / homebrew / dotnet-tool) and the parent of
 /// <c>binaryDir</c> (script / pr / localhive). Missing, invalid, or unknown sidecars fall
 /// through to the default Aspire home.
 /// </summary>
-public class BundleServiceCrossRouteExtractionTests
+public class BundleServiceCrossSourceExtractionTests
 {
     private const string DefaultAspireHome = "<default-aspire-home>";
 
@@ -26,7 +26,7 @@ public class BundleServiceCrossRouteExtractionTests
     // 1) winget canonical: WinGet places the portable binary in a per-package
     //    versioned directory; the bundle payload lives in that same directory.
     [InlineData("winget", "WinGet/Packages/Microsoft.Aspire_Microsoft.Winget.Source_8wekyb3d8bbwe/aspire.exe", "WinGet/Packages/Microsoft.Aspire_Microsoft.Winget.Source_8wekyb3d8bbwe")]
-    // 2) brew canonical: Homebrew cellar with versioned cask directory.
+    // 2) homebrew canonical: Homebrew cellar with versioned cask directory.
     [InlineData("brew", "Caskroom/aspire/13.2.0/aspire", "Caskroom/aspire/13.2.0")]
     // 3) dotnet-tool canonical: dotnet's global-tools shim at ~/.dotnet/tools/aspire
     //    delegates (apphost launch on Windows; symlink follow on Unix) to the
@@ -40,7 +40,7 @@ public class BundleServiceCrossRouteExtractionTests
     [InlineData("pr", ".aspire/dogfood/pr-16817/bin/aspire", ".aspire/dogfood/pr-16817")]
     // 6) localhive canonical: local dev hive with the same bin layout as script.
     [InlineData("localhive", ".aspire/local/bin/aspire", ".aspire/local")]
-    // 7) Cross-route smuggle case: a brew-source sidecar dropped into a
+    // 7) Cross-source smuggle case: a homebrew-source sidecar dropped into a
     //    script-layout prefix MUST resolve to binaryDir per the switch — the
     //    reader is honest about whatever the producer put on disk. When the
     //    producer side correctly suppresses the smuggled sidecar, this row's
@@ -58,7 +58,7 @@ public class BundleServiceCrossRouteExtractionTests
     // 11) Sidecar with an unknown source value: switch default arm, same as
     //     missing sidecar — default Aspire home.
     [InlineData("github-actions", ".aspire/bin/aspire", DefaultAspireHome)]
-    public void ComputeDefaultExtractDir_RouteAndPrefixCombinations_ProduceExpectedExtractDir(
+    public void ComputeDefaultExtractDir_SourceAndPrefixCombinations_ProduceExpectedExtractDir(
         string? sourceField,
         string relativeProcessPath,
         string relativeExpectedExtractDir)

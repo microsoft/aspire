@@ -4,7 +4,7 @@
 namespace Aspire.Cli.Acquisition;
 
 /// <summary>
-/// Discovers Aspire CLI installations on this machine for <c>aspire doctor</c>.
+/// Discovers Aspire CLI installations on this machine for <c>aspire --info</c>.
 /// </summary>
 /// <remarks>
 /// Two modes:
@@ -12,13 +12,13 @@ namespace Aspire.Cli.Acquisition;
 ///   <item>
 ///     <description><see cref="DescribeSelf"/> — cheap path that describes
 ///     only the currently running CLI. No process spawning, no filesystem
-///     walks. Used by the hidden <c>aspire doctor --self</c> peer-probe path.</description>
+///     walks. Used by the hidden <c>aspire --info --self</c> peer-probe path.</description>
 ///   </item>
 ///   <item>
 ///     <description><see cref="DiscoverAllAsync"/> — walks <c>$PATH</c> plus
 ///     well-known install prefixes and asks each peer with required install
-///     metadata to self-describe via a child <c>aspire doctor --self --format json</c>
-///     call. Used by the default <c>aspire doctor</c> path.</description>
+///     metadata to self-describe via a child <c>aspire --info --self --format json</c>
+///     call. Used by <c>aspire --info</c>.</description>
 ///   </item>
 /// </list>
 /// </remarks>
@@ -27,7 +27,7 @@ internal interface IInstallationDiscovery
     /// <summary>
     /// Describes the currently running CLI. The result always has
     /// <see cref="InstallationInfo.Status"/> = <c>ok</c> with version /
-    /// channel / route populated from in-process readers.
+    /// channel / source populated from in-process readers.
     /// </summary>
     InstallationInfo DescribeSelf();
 

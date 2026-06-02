@@ -57,9 +57,9 @@ internal sealed class SetupCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, "Could not determine the CLI executable path.");
         }
 
-        // `aspire setup` uses a route-independent default (parent of the binary's dir).
-        // Do not switch to `_bundleService.GetDefaultExtractDir` — that path is route-aware
-        // and reserved for auto-extract, where managed-route layouts must stay package-owned.
+        // `aspire setup` uses a source-independent default (parent of the binary's dir).
+        // Do not switch to `_bundleService.GetDefaultExtractDir` — that path is source-aware
+        // and reserved for auto-extract, where managed-source layouts must stay package-owned.
         if (string.IsNullOrEmpty(installPath))
         {
             installPath = GetDefaultInstallPath(processPath);
@@ -103,7 +103,7 @@ internal sealed class SetupCommand : BaseCommand
 
     /// <summary>
     /// Returns the parent of <paramref name="processPath"/>'s directory, or <c>null</c> if
-    /// none. Route-independent counterpart to the route-aware <see cref="IBundleService.GetDefaultExtractDir"/>.
+    /// none. Source-independent counterpart to the source-aware <see cref="IBundleService.GetDefaultExtractDir"/>.
     /// </summary>
     internal static string? GetDefaultInstallPath(string? processPath)
     {

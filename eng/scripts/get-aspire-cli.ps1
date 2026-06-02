@@ -1220,16 +1220,16 @@ function Install-AspireCli {
             Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
         }
 
-        # Write the script-route install-source sidecar next to the binary.
+        # Write the script-source install-source sidecar next to the binary.
         # Under -WhatIf, print the target path and skip the write.
-        # Authorship contract: docs/specs/install-routes.md.
+        # Authorship contract: docs/specs/install-sources.md.
         $sidecarPath = Join-Path $InstallPath '.aspire-install.json'
-        if ($PSCmdlet.ShouldProcess($sidecarPath, "Write route sidecar")) {
+        if ($PSCmdlet.ShouldProcess($sidecarPath, "Write source sidecar")) {
             [System.IO.Directory]::CreateDirectory($InstallPath) | Out-Null
             [System.IO.File]::WriteAllText($sidecarPath, "{""source"":""script""}`n")
         }
         else {
-            Write-Host "What if: Route sidecar would be written to: $sidecarPath"
+            Write-Host "What if: Source sidecar would be written to: $sidecarPath"
         }
 
         # Download and install VS Code extension if requested

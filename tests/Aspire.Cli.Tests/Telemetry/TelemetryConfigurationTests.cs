@@ -34,14 +34,14 @@ public class TelemetryConfigurationTests
         return result;
     }
 
-    private static async Task<IHost> BuildHostAsync(Dictionary<string, string?>? config = null)
+    private static async Task<IHost> BuildHostAsync(Dictionary<string, string?>? config = null, string[]? args = null)
     {
         var loggingOptions = Program.ParseLoggingOptions([]);
         var errorWriter = new TestStartupErrorWriter();
         var logBufferContext = new ConsoleLogBufferContext();
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
         var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName));
-        return await Program.BuildApplicationAsync([], startupContext, config);
+        return await Program.BuildApplicationAsync(args ?? [], startupContext, config);
     }
 
     [Fact]
@@ -201,6 +201,63 @@ public class TelemetryConfigurationTests
         var configuration = new ConfigurationBuilder().Build();
 
         var manager = new TelemetryManager(configuration, [flag]);
+
+        Assert.False(manager.HasAzureMonitor);
+    }
+
+    [Fact]
+    public async Task AzureMonitor_Disabled_WhenInfoFlagProvided()
+    {
+        // No args other than --info: the informational gate opts out, so no
+        // Azure Monitor TracerProvider is built and no ActivityListener is
+        // registered — safe to construct directly even without a host.
+        var configuration = new ConfigurationBuilder().Build();
+
+        var manager = new TelemetryManager(configuration, ["--info"]);
+
+        Assert.False(manager.HasAzureMonitor);
+    }
+
+    [Theory]
+    [InlineData("run", "--info")]
+    [InlineData("new", "--info")]
+    [InlineData("publish", "--info", "--format", "json")]
+    public async Task AzureMonitor_Enabled_WhenInfoFlagOnSubcommand(params string[] args)
+    {
+        // --info is intentionally root-only / non-recursive (see InfoOptionTests'
+        // Info_OnSubcommand_DoesNotFireInfoAction). A subcommand invocation that
+        // carries --info is a real subcommand invocation, so reported telemetry
+        // must not be silently opted out for it.
+        //
+        // This branch actually builds an Azure Monitor TracerProvider, which
+        // registers a process-wide ActivityListener on `Aspire.Cli.Reported`.
+        // Routing through BuildHostAsync(+ WithTelemetryOptIn to undo the
+        // process-wide test opt-out from TestTelemetryDefaults) ensures the
+        // TelemetryManager goes through DI disposal when the host is disposed,
+        // matching the lifecycle of AzureMonitor_Enabled_ByDefault. Direct
+        // construction with `new TelemetryManager(...)` would not be disposed
+        // by `using` either — TelemetryManager.Dispose only Shutdown(0)s the
+        // providers — but accumulating bare instances across parallel test
+        // classes can surface microsoft/aspire#17450's sample_rate race.
+        using var host = await BuildHostAsync(WithTelemetryOptIn(), args);
+
+        var telemetryManager = host.Services.GetRequiredService<TelemetryManager>();
+        Assert.True(telemetryManager.HasAzureMonitor);
+    }
+
+    [Theory]
+    [InlineData("run", "--help")]
+    [InlineData("run", "--version")]
+    [InlineData("publish", "manifest", "--help")]
+    public void AzureMonitor_Disabled_WhenRecursiveInformationalFlagOnSubcommand(params string[] args)
+    {
+        // --help / --version are recursive in System.CommandLine, so e.g.
+        // `aspire run --help` is genuinely a help invocation. The gate must
+        // keep opting out of telemetry for them at any depth. Opted out =>
+        // no TracerProvider built, so direct construction is safe here too.
+        var configuration = new ConfigurationBuilder().Build();
+
+        var manager = new TelemetryManager(configuration, args);
 
         Assert.False(manager.HasAzureMonitor);
     }

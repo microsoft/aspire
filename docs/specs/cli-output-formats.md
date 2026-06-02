@@ -451,6 +451,74 @@ The JSON form includes secret values. Do not redirect it to logs or files unless
 
 `status` is one of `pass`, `warning`, or `fail`. Individual checks can include `details`, `fix`, `link`, or command-specific `metadata`.
 
+### `aspire --info`
+
+`aspire --info --format json` emits a JSON object combining the running CLI's version, its identity channel, and the list of Aspire CLI installs and orphan package hives that the running CLI can discover:
+
+```json
+{
+  "version": "13.2.0",
+  "channel": "stable",
+  "installs": [
+    {
+      "id": "script",
+      "kind": "script",
+      "path": "/home/user/.aspire/bin/aspire",
+      "canonicalPath": "/home/user/.aspire/bin/aspire",
+      "version": "13.2.0",
+      "channel": "stable",
+      "source": "script",
+      "hive": "/home/user/.aspire/hives/stable",
+      "pathStatus": "active",
+      "status": "ok"
+    },
+    {
+      "id": "pr-17400",
+      "kind": "orphan-hive",
+      "channel": "pr-17400",
+      "hive": "/home/user/.aspire/hives/pr-17400",
+      "pathStatus": "notOnPath",
+      "status": "no install found",
+      "statusReason": "No discovered install reports this hive's channel."
+    },
+    {
+      "id": "stable-2",
+      "kind": "homebrew",
+      "path": "/opt/homebrew/Caskroom/aspire/13.2.0/aspire",
+      "canonicalPath": "/opt/homebrew/Caskroom/aspire/13.2.0/aspire",
+      "version": "13.2.0",
+      "channel": "stable",
+      "source": "brew",
+      "pathStatus": "shadowed",
+      "status": "ok",
+      "managedBy": "homebrew"
+    },
+    {
+      "id": "pr-17500",
+      "kind": "pr",
+      "path": "/home/user/.aspire/dogfood/pr-17500/bin/aspire",
+      "canonicalPath": "/home/user/.aspire/dogfood/pr-17500/bin/aspire",
+      "channel": "pr-17500",
+      "source": "pr",
+      "pathStatus": "notOnPath",
+      "status": "failed",
+      "statusReason": "Peer probe exited with code 137 (SIGKILL)."
+    }
+  ]
+}
+```
+
+Each entry in `installs[*]` is an `InstallationInfo` row — the same record shape used by `aspire --info --self --format json` (described below). The two status axes are orthogonal:
+
+- `status` is the lifecycle: `ok` (usable), `failed` (probe attempted but did not return usable data), `notProbed` (listed but not executed because required install metadata was missing or invalid), or `no install found` (orphan-hive directories with no matching binary).
+- `pathStatus` is the PATH-axis: `active` (first `aspire` resolved from `$PATH`), `shadowed` (on `$PATH` but masked by an earlier entry), or `notOnPath` (not discovered via `$PATH`).
+
+Programmatic consumers should `switch` on each axis independently. The `statusReason` field carries a human-readable explanation for non-`ok` rows; the `status` value itself stays enum-shaped. Nullable fields are omitted from JSON when absent (e.g., orphan-hive rows omit `path`, `canonicalPath`, `version`, `source`, `managedBy`).
+
+The top-level `channel` is the running CLI's identity (`local`, `stable`, `staging`, `daily`, or `pr-<N>`). It is omitted from the JSON output when the running binary has missing or invalid `AspireCliChannel` assembly metadata; the command still exits 0 so users can use `aspire --info` to diagnose a broken binary. The `installs` array is always present, possibly empty.
+
+`aspire --info --self --format json` is a hidden modifier used by the install-discovery peer-probe path so a newer CLI can ask a peer CLI to describe itself. Its output is a single-element bare array whose element is an `InstallationInfo` row — the same record shape as `installs[*]` above. The `--self` row populates per-binary fields (`path`, `canonicalPath`, `version`, `channel`, `source`, `pathStatus`, `status`) for the running binary; the aggregate-only fields (`id`, `kind`, `hive`, `managedBy`) are omitted from a `--self` response because they are properties of the enumeration, not of the binary. This is the internal cross-version contract between Aspire CLI builds and is not a stable surface for external tooling; it may change without notice.
+
 ### `aspire config info`
 
 `aspire config info --json` is a hidden tooling command that emits configuration paths, feature metadata, settings schemas, and advertised CLI capabilities:

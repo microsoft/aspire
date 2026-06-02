@@ -156,6 +156,33 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Print the running CLI's version, channel, and the list of Aspire CLI installs discovered on this machine.
+        /// </summary>
+        public static string InfoArgumentDescription {
+            get {
+                return ResourceManager.GetString("InfoArgumentDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Output format for `--info`.
+        /// </summary>
+        public static string InfoFormatArgumentDescription {
+            get {
+                return ResourceManager.GetString("InfoFormatArgumentDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Option `{0}` is only valid when `--info` is also specified..
+        /// </summary>
+        public static string InfoOptionRequiresInfo {
+            get {
+                return ResourceManager.GetString("InfoOptionRequiresInfo", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Wait for a debugger to attach before executing the command..
         /// </summary>
         public static string WaitForDebuggerArgumentDescription {

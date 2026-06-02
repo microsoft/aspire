@@ -1,48 +1,32 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Serialization;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
-using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
 
+/// <summary>
+/// Shared helpers consumed by <see cref="InfoOptionAction"/>:
+/// <list type="bullet">
+///   <item><see cref="DescribeSelfSafely"/> — wraps <see cref="IInstallationDiscovery.DescribeSelf"/>
+///   with the failure-tolerant shape consumed by the peer-probe contract.</item>
+///   <item><see cref="BuildRowsAsync"/> and friends — classify a discovery walk into
+///   the <see cref="InstallationInfo"/> rows surfaced by <c>aspire --info</c>.</item>
+/// </list>
+/// </summary>
+/// <remarks>
+/// Behavior of the row-builder and the JSON shape it produces is the
+/// cross-version peer-probe contract consumed by
+/// <see cref="Aspire.Cli.Acquisition.PeerInstallProbe"/> (and by external
+/// tooling reading <c>aspire --info --format json</c>); changes here must
+/// stay backwards-compatible with the parser in
+/// <c>PeerInstallProbe.TryParseRichProbeResult</c>.
+/// </remarks>
 internal static class InstallationInfoOutput
 {
-    public static async Task<IReadOnlyList<InstallationInfo>> DiscoverAllSafelyAsync(
-        IInstallationDiscovery discovery,
-        WingetFirstRunProbe wingetFirstRunProbe,
-        ILogger logger,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            RunWingetFirstRunProbe(wingetFirstRunProbe);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Could not run the winget first-run install sidecar probe before doctor installation discovery.");
-        }
-
-        try
-        {
-            logger.LogDebug("Discovering Aspire CLI installations for doctor output.");
-            var installations = await discovery.DiscoverAllAsync(cancellationToken).ConfigureAwait(false);
-            logger.LogDebug("Discovered {InstallationCount} Aspire CLI installation(s) for doctor output.", installations.Count);
-            return installations;
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Could not discover Aspire CLI installations for doctor output.");
-            return CreateFailedDiscoveryRow();
-        }
-    }
-
     public static IReadOnlyList<InstallationInfo> DescribeSelfSafely(IInstallationDiscovery discovery, ILogger logger)
     {
         try
@@ -51,111 +35,254 @@ internal static class InstallationInfoOutput
         }
         catch (OperationCanceledException)
         {
-            // Symmetric with DiscoverAllSafelyAsync: cancellation must propagate
-            // so the caller can honor the cancellation token even if DescribeSelf
-            // ever becomes cancellable.
+            // Cancellation must propagate so the caller can honor the cancellation token
+            // even if DescribeSelf ever becomes cancellable.
             throw;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Could not describe the running Aspire CLI installation for doctor self-probe output.");
+            logger.LogWarning(ex, "Could not describe the running Aspire CLI installation for `aspire --info --self` output.");
             return CreateFailedDiscoveryRow();
         }
     }
 
-    public static void RunWingetFirstRunProbe(WingetFirstRunProbe wingetFirstRunProbe)
+    public static async Task<List<InstallationInfo>> BuildRowsSafelyAsync(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, ILogger logger, CancellationToken cancellationToken)
     {
-        // Give a never-run winget install a chance to stamp its sidecar before
-        // we read it. The probe writes nothing on non-Windows hosts or when the
-        // running binary isn't a winget portable install, so this is a cheap
-        // no-op in the common case.
-        var processPath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(processPath))
+        try
         {
-            return;
+            return await BuildRowsAsync(hiveEnumerator, installationDiscovery, logger, cancellationToken).ConfigureAwait(false);
         }
-
-        var binaryDir = Path.GetDirectoryName(processPath);
-        if (!string.IsNullOrEmpty(binaryDir))
+        catch (OperationCanceledException)
         {
-            wingetFirstRunProbe.Run(binaryDir);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Match the tolerant posture of the channel-read and self-version paths:
+            // a broken discovery walk (filesystem ACL, IO hiccup on
+            // ~/.aspire/hives, ...) shouldn't take the diagnostic command down
+            // with it. Surface a single failure row so the user sees that
+            // discovery ran but didn't produce data, plus the underlying reason.
+            logger.LogWarning(ex, "Install discovery walk failed for `aspire --info`.");
+            return
+            [
+                new InstallationInfo
+                {
+                    Id = "discovery",
+                    Kind = "discovery-failed",
+                    Path = null,
+                    PathStatus = InstallationPathStatus.NotOnPath,
+                    Status = InstallationInfoStatus.Failed,
+                    StatusReason = ex.Message,
+                }
+            ];
         }
     }
 
-    public static void OutputTable(IAnsiConsole ansiConsole, IReadOnlyList<InstallationInfo> installs)
+    public static async Task<List<InstallationInfo>> BuildRowsAsync(HiveEnumerator hiveEnumerator, IInstallationDiscovery installationDiscovery, ILogger logger, CancellationToken cancellationToken)
     {
-        ansiConsole.WriteLine();
-        ansiConsole.MarkupLine($"[bold]{DoctorCommandStrings.HeaderInstallations.EscapeMarkup()}[/]");
-        ansiConsole.WriteLine(new string('=', DoctorCommandStrings.HeaderInstallations.Length));
-        ansiConsole.WriteLine();
+        var discoveredInstalls = (await installationDiscovery.DiscoverAllAsync(cancellationToken))
+            .Where(i => IsDisplayableInstall(i, logger))
+            .ToList();
+        var installChannels = discoveredInstalls
+            .Select(i => i.Channel)
+            .Where(c => !string.IsNullOrEmpty(c))
+            .ToHashSet(StringComparer.Ordinal);
+        var ids = new Dictionary<string, int>(StringComparer.Ordinal);
+        var rows = new List<InstallationInfo>();
 
-        var table = new Table()
-            .Border(TableBorder.Rounded)
-            .AddColumn(DoctorCommandStrings.ColumnPath)
-            .AddColumn(DoctorCommandStrings.ColumnVersion)
-            .AddColumn(DoctorCommandStrings.ColumnChannel)
-            .AddColumn(DoctorCommandStrings.ColumnRoute)
-            .AddColumn(DoctorCommandStrings.ColumnPathStatus);
-
-        // The first row is, by contract, the running CLI (enforced by
-        // InstallationDiscovery, not by ordering here). Tag installs[0]
-        // directly rather than re-resolving Environment.ProcessPath and
-        // matching CanonicalPath: that re-derivation can disagree with
-        // the discovery layer's notion of self (e.g. when ProcessPath is
-        // unresolvable at render time but was resolvable when DescribeSelf
-        // ran, or when a peer happens to share a canonical path with the
-        // running CLI).
-        for (var i = 0; i < installs.Count; i++)
+        foreach (var install in discoveredInstalls)
         {
-            var install = installs[i];
-            var isSelf = i == 0;
-            var pathDisplay = string.IsNullOrEmpty(install.Path)
-                ? DoctorCommandStrings.ValueUnknown
-                : install.Path;
-            pathDisplay = pathDisplay.EscapeMarkup();
-            if (isSelf)
+            var baseId = GetInstallId(install);
+            var id = GetUniqueId(baseId, ids, logger);
+            var kind = GetInstallKind(install);
+            var hive = install.Channel is { Length: > 0 } && hiveEnumerator.HasHive(install.Channel)
+                ? hiveEnumerator.GetHivePath(install.Channel)
+                : null;
+            var managedBy = GetManagedBy(install);
+            logger.LogDebug(
+                "Classified install path '{Path}' as id '{Id}', kind '{Kind}', channel '{Channel}', status '{Status}', pathStatus '{PathStatus}', hive '{Hive}', managedBy '{ManagedBy}'. Source='{Source}', reason='{Reason}'.",
+                install.Path,
+                id,
+                kind,
+                install.Channel ?? "(none)",
+                install.Status,
+                install.PathStatus,
+                hive ?? "(none)",
+                managedBy ?? "(none)",
+                install.Source ?? "(none)",
+                install.StatusReason ?? "(none)");
+            // The aggregate row carries the same field set as InstallationInfo;
+            // we keep `Status` and `PathStatus` orthogonal so consumers can
+            // switch on each axis independently. Display-side collapsing
+            // happens in the text renderer (see InfoOptionAction.WriteFullInfoAsync).
+            rows.Add(install with
             {
-                pathDisplay = $"{pathDisplay} [grey]{DoctorCommandStrings.ValueCurrentMarker.EscapeMarkup()}[/]";
-            }
-
-            table.AddRow(
-                pathDisplay,
-                ValueOrPlaceholder(install.Version, install.Status),
-                ValueOrPlaceholder(install.Channel, install.Status),
-                ValueOrPlaceholder(install.Route, install.Status),
-                PathStatusDisplay(install.PathStatus));
+                Id = id,
+                Kind = kind,
+                Hive = hive,
+                ManagedBy = managedBy,
+            });
         }
 
-        ansiConsole.Write(table);
+        foreach (var hive in hiveEnumerator.GetHives().Where(h => !installChannels.Contains(h.Name)))
+        {
+            var id = GetUniqueId(hive.Name, ids, logger);
+            logger.LogDebug(
+                "Classified hive '{Hive}' as orphan install row id '{Id}' because no discovered install reports channel '{Channel}'.",
+                hive.Path,
+                id,
+                hive.Name);
+            // Orphan-hive rows have no installation binary, so `Path` and most
+            // per-binary fields are null. The hive directory itself is in `Hive`.
+            rows.Add(new InstallationInfo
+            {
+                Id = id,
+                Kind = "orphan-hive",
+                Path = null,
+                Channel = hive.Name,
+                Hive = hive.Path,
+                PathStatus = InstallationPathStatus.NotOnPath,
+                Status = InstallationInfoStatus.NoInstallFound,
+                StatusReason = "No discovered install reports this hive's channel.",
+            });
+        }
+
+        return rows
+            .OrderBy(GetSortRank)
+            .ThenBy(row => row.Id, StringComparer.Ordinal)
+            .ToList();
     }
 
-    private static string PathStatusDisplay(string pathStatus)
+    // Sort order: active installs first, then shadowed, then not-on-PATH ok,
+    // then failed / notProbed, then orphan-hives last. Status and PathStatus
+    // are orthogonal on the wire, so the rank function combines both axes.
+    private static int GetSortRank(InstallationInfo row)
     {
-        return pathStatus switch
+        if (row.Status is InstallationInfoStatus.NoInstallFound)
         {
-            InstallationPathStatus.Active => DoctorCommandStrings.ValuePathActive,
-            InstallationPathStatus.Shadowed => DoctorCommandStrings.ValuePathShadowed,
-            InstallationPathStatus.NotOnPath => DoctorCommandStrings.ValuePathNotOnPath,
-            _ => pathStatus.EscapeMarkup(),
+            return 4;
+        }
+
+        if (row.Status is not InstallationInfoStatus.Ok)
+        {
+            // failed / notProbed / unknown
+            return 3;
+        }
+
+        return row.PathStatus switch
+        {
+            InstallationPathStatus.Active => 0,
+            InstallationPathStatus.Shadowed => 1,
+            InstallationPathStatus.NotOnPath => 2,
+            _ => 3,
         };
     }
 
-    private static string ValueOrPlaceholder(string? value, string status)
+    private static string GetInstallId(InstallationInfo install)
     {
-        if (!string.IsNullOrEmpty(value))
+        if (install.Source is "script")
         {
-            return value.EscapeMarkup();
+            return "script";
         }
 
-        // Missing fields mean different things for skipped rows, failed
-        // probes, and rows that responded but did not populate this value.
-        return status switch
+        if (!string.IsNullOrEmpty(install.Channel))
         {
-            InstallationInfoStatus.NotProbed => DoctorCommandStrings.ValueNotProbed,
-            InstallationInfoStatus.Failed => DoctorCommandStrings.ValueProbeFailed,
-            _ => DoctorCommandStrings.ValueUnknown,
-        };
+            return install.Channel;
+        }
+
+        return install.Source ?? install.Path ?? "unknown";
     }
+
+    private static bool IsDisplayableInstall(InstallationInfo install, ILogger logger)
+    {
+        if (!string.IsNullOrEmpty(install.Source))
+        {
+            logger.LogDebug("Including install path '{Path}' because it has source '{Source}'.", install.Path, install.Source);
+            return true;
+        }
+
+        var fileName = Path.GetFileName(install.CanonicalPath ?? install.Path ?? string.Empty);
+        // Windows command lookup is case-insensitive and PathLookupHelper preserves
+        // whatever spelling the filesystem records (e.g. `Aspire.exe`, `ASPIRE.EXE`).
+        // Using a case-sensitive match here would silently hide sidecar-less Windows
+        // installs whose on-disk filename is not lowercase. POSIX paths stay
+        // case-sensitive so a deliberately-named `Aspire` script on Linux is still
+        // excluded.
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        var isAspireBinary =
+            string.Equals(fileName, "aspire", comparison) ||
+            string.Equals(fileName, "aspire.exe", comparison);
+        if (!isAspireBinary)
+        {
+            logger.LogDebug("Ignoring discovery row path '{Path}' because it has no install source and the resolved filename '{FileName}' is not an Aspire CLI binary.", install.Path, fileName);
+        }
+
+        return isAspireBinary;
+    }
+
+    private static string GetUniqueId(string id, Dictionary<string, int> ids, ILogger logger)
+    {
+        var originalId = id;
+        var uniqueId = GetUniqueIdCore(id, ids);
+        if (!string.Equals(originalId, uniqueId, StringComparison.Ordinal))
+        {
+            logger.LogDebug("Disambiguated duplicate install id '{OriginalId}' as '{UniqueId}'.", originalId, uniqueId);
+        }
+
+        return uniqueId;
+    }
+
+    private static string GetUniqueIdCore(string id, Dictionary<string, int> ids)
+    {
+        if (!ids.TryGetValue(id, out var count))
+        {
+            ids[id] = 1;
+            return id;
+        }
+
+        // Increment the per-base counter and verify the suffixed candidate is
+        // not itself already taken. Without this loop, two rows can collide
+        // when one row's natural base id happens to match another row's
+        // disambiguation suffix — e.g. two installs reporting channel "stable"
+        // produce ids "stable" and "stable-2", and an orphan-hive directory
+        // literally named "stable-2" (hive names are arbitrary user-controlled
+        // directory names under ~/.aspire/hives/) would otherwise mint a
+        // second "stable-2" because the suffix was never recorded in `ids`.
+        // We record both the bumped per-base counter and the candidate itself
+        // so future bases can't recreate the suffix.
+        string candidate;
+        do
+        {
+            count++;
+            candidate = $"{id}-{count}";
+        }
+        while (ids.ContainsKey(candidate));
+
+        ids[id] = count;
+        ids[candidate] = 1;
+        return candidate;
+    }
+
+    private static string GetInstallKind(InstallationInfo install)
+        => install.Source switch
+        {
+            // The sidecar wire string is "brew" but everywhere we surface this to
+            // a human (or tool reading our JSON output) we use the friendlier
+            // "homebrew" label so the displayed `kind` and `managedBy` agree.
+            "brew" => "homebrew",
+            null => "unknown",
+            _ => install.Source,
+        };
+
+    private static string? GetManagedBy(InstallationInfo install)
+        => install.Source switch
+        {
+            "dotnet-tool" => "dotnet-tool",
+            "winget" => "winget",
+            "brew" => "homebrew",
+            _ => null
+        };
 
     private static IReadOnlyList<InstallationInfo> CreateFailedDiscoveryRow()
     {
@@ -171,4 +298,23 @@ internal static class InstallationInfoOutput
             }
         ];
     }
+}
+
+/// <summary>
+/// Combined object emitted by <c>aspire --info --format json</c>. The
+/// per-install rows are produced by <see cref="InstallationInfoOutput.BuildRowsAsync"/>.
+/// </summary>
+internal sealed record InfoOutput(
+    [property: JsonPropertyName("version")] string? Version,
+    [property: JsonPropertyName("channel")] string? Channel,
+    [property: JsonPropertyName("installs")] IReadOnlyList<InstallationInfo> Installs);
+
+/// <summary>
+/// Output format for <c>aspire --info</c>. <c>List</c> is the default text
+/// rendering; <c>Json</c> is the machine-readable shape.
+/// </summary>
+internal enum InfoOutputFormat
+{
+    List,
+    Json,
 }

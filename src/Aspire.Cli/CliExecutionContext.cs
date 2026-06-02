@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using Aspire.Cli.Acquisition;
 
 namespace Aspire.Cli;
 
@@ -35,8 +36,28 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// CI bakes <c>pr-&lt;PR_NUMBER&gt;</c> directly for PR builds, so no
     /// runtime "<c>pr</c> + parsed PrNumber" join is required.
     /// </para>
+    /// <para>
+    /// When <see cref="IdentityChannelLazy"/> is set (the production path), the
+    /// underlying <see cref="IIdentityChannelReader.ReadChannel"/> call is
+    /// deferred to first access of this property. That keeps the
+    /// <see cref="CliExecutionContext"/> DI factory resilient: a CLI binary
+    /// with missing/invalid <c>AspireCliChannel</c> assembly metadata can still
+    /// resolve the context (so diagnostic paths like <c>aspire --info</c> can
+    /// render), and only consumers that actually need the channel pay the
+    /// throw cost. Direct callers that pass the constructor-supplied
+    /// identity-channel string keep the eager string semantics.
+    /// </para>
     /// </remarks>
-    public string IdentityChannel { get; } = identityChannel;
+    public string IdentityChannel => IdentityChannelLazy is { } lazy ? lazy.Value : identityChannel;
+
+    /// <summary>
+    /// Optional lazy source for <see cref="IdentityChannel"/>. When non-null,
+    /// the <see cref="IdentityChannel"/> getter forwards to <c>lazy.Value</c>
+    /// instead of returning the constructor-supplied identity-channel string.
+    /// Set by the production DI factory in <c>Program.cs</c> to defer
+    /// <see cref="IIdentityChannelReader.ReadChannel"/> until first use.
+    /// </summary>
+    internal Lazy<string>? IdentityChannelLazy { get; init; }
 
     /// <summary>
     /// Gets the directory where restored NuGet packages are cached for apphost server sessions.
@@ -63,17 +84,17 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     public DirectoryInfo HomeDirectory { get; } = homeDirectory ?? new DirectoryInfo(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
     /// <summary>
-    /// Gets the Aspire state root used for route-specific install layouts.
+    /// Gets the Aspire state root used for source-specific install layouts.
     /// </summary>
     /// <remarks>
-    /// Production wires this explicitly via <see cref="Program.BuildCliExecutionContext"/>
+    /// Production wires this explicitly via <see cref="Program.BuildCliExecutionContext(bool, string, string, string, string?)"/>
     /// using <see cref="Utils.CliPathHelper.GetAspireHomeDirectory(string?, Microsoft.Extensions.Logging.ILogger?)"/>
-    /// so the install-route sidecar lookup runs. When neither <c>aspireHomeDirectory</c>
+    /// so the install-source sidecar lookup runs. When neither <c>aspireHomeDirectory</c>
     /// nor <c>homeDirectory</c> are supplied (direct construction in tests), the same
-    /// install-route lookup is performed here so route-aware code paths see a
+    /// install-source lookup is performed here so source-aware code paths see a
     /// consistent value. When <c>homeDirectory</c> is supplied without
     /// <c>aspireHomeDirectory</c>, the home stays contained within the test directory
-    /// at <c>&lt;homeDirectory&gt;/.aspire</c> — the install-route lookup is
+    /// at <c>&lt;homeDirectory&gt;/.aspire</c> — the install-source lookup is
     /// intentionally skipped because tests passing an explicit <c>homeDirectory</c>
     /// are declaring their own filesystem sandbox.
     /// </remarks>

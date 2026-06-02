@@ -497,8 +497,27 @@ internal sealed class UpdateCommand : BaseCommand
 
     private bool IsStagingChannelAvailable()
     {
-        return KnownFeatures.IsStagingChannelEnabled(_features, _configuration)
-            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
+        if (KnownFeatures.IsStagingChannelEnabled(_features, _configuration))
+        {
+            return true;
+        }
+
+        // Read ExecutionContext.IdentityChannel defensively: a binary with broken
+        // AspireCliChannel metadata throws here, and UpdateCommand is constructed
+        // as part of the RootCommand DI graph on every invocation — including the
+        // diagnostic surfaces (`aspire --info`, `aspire --help`) where we must
+        // not crash. The runtime call site at the bottom of ExecuteSelfUpdateAsync
+        // also tolerates the false fallback: staging-channel offering is dropped
+        // from the channel prompt but the rest of update still works.
+        try
+        {
+            return string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Could not read identity channel for staging-channel detection; falling back to non-staging behavior.");
+            return false;
+        }
     }
 
     private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
