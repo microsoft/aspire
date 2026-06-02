@@ -20,6 +20,10 @@ internal sealed class TelemetryCommand : ParentCommand
         TelemetryLogsCommand logsCommand,
         TelemetrySpansCommand spansCommand,
         TelemetryTracesCommand tracesCommand,
+        TelemetrySummaryCommand summaryCommand,
+        TelemetrySlowTracesCommand slowTracesCommand,
+        TelemetryWallTimeCommand wallTimeCommand,
+        TelemetrySpanStatsCommand spanStatsCommand,
         IInteractionService interactionService,
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
@@ -30,9 +34,17 @@ internal sealed class TelemetryCommand : ParentCommand
         ArgumentNullException.ThrowIfNull(logsCommand);
         ArgumentNullException.ThrowIfNull(spansCommand);
         ArgumentNullException.ThrowIfNull(tracesCommand);
+        ArgumentNullException.ThrowIfNull(summaryCommand);
+        ArgumentNullException.ThrowIfNull(slowTracesCommand);
+        ArgumentNullException.ThrowIfNull(wallTimeCommand);
+        ArgumentNullException.ThrowIfNull(spanStatsCommand);
 
         Subcommands.Add(logsCommand);
         Subcommands.Add(spansCommand);
         Subcommands.Add(tracesCommand);
+        Subcommands.Add(summaryCommand);
+        Subcommands.Add(slowTracesCommand);
+        Subcommands.Add(wallTimeCommand);
+        Subcommands.Add(spanStatsCommand);
     }
 }

@@ -107,6 +107,16 @@
         <target state="translated">無法擷取遙測: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="FailedToReadTelemetryArchive">
+        <source>Failed to read telemetry archive '{0}': {1}</source>
+        <target state="new">Failed to read telemetry archive '{0}': {1}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FileAndLiveOptionsExclusive">
+        <source>The --file option cannot be used with --dashboard-url, --api-key, or --apphost. Specify either an archive file or a live dashboard source.</source>
+        <target state="new">The --file option cannot be used with --dashboard-url, --api-key, or --apphost. Specify either an archive file or a live dashboard source.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FollowOptionDescription">
         <source>Stream telemetry in real-time as it arrives</source>
         <target state="needs-review-translation">在遙測抵達時即時串流遙測。</target>
@@ -117,9 +127,29 @@
         <target state="needs-review-translation">輸出格式 (資料表或 Json)。</target>
         <note />
       </trans-unit>
+      <trans-unit id="GroupByOptionDescription">
+        <source>Group span statistics by Name or Resource</source>
+        <target state="new">Group span statistics by Name or Resource</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HasErrorOptionDescription">
         <source>Filter by error status (true to show only errors, false to exclude errors)</source>
         <target state="needs-review-translation">依錯誤狀態篩選 (true 以僅顯示錯誤，false 以排除錯誤)。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderAverage">
+        <source>Avg</source>
+        <target state="new">Avg</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderCount">
+        <source>Count</source>
+        <target state="new">Count</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderCovered">
+        <source>Covered</source>
+        <target state="new">Covered</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderDuration">
@@ -127,9 +157,59 @@
         <target state="translated">期間</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderErrors">
+        <source>Errors</source>
+        <target state="new">Errors</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderGap">
+        <source>Gap</source>
+        <target state="new">Gap</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderGroup">
+        <source>Group</source>
+        <target state="new">Group</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderMax">
+        <source>Max</source>
+        <target state="new">Max</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderMetric">
+        <source>Metric</source>
+        <target state="new">Metric</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HeaderName">
         <source>Name</source>
         <target state="translated">名稱</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderOverlap">
+        <source>Overlap</source>
+        <target state="new">Overlap</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderP95">
+        <source>P95</source>
+        <target state="new">P95</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderRatio">
+        <source>Ratio</source>
+        <target state="new">Ratio</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderResource">
+        <source>Resource</source>
+        <target state="new">Resource</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSpanSum">
+        <source>Span sum</source>
+        <target state="new">Span sum</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderSpans">
@@ -147,6 +227,26 @@
         <target state="translated">時間戳記</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderTotal">
+        <source>Total</source>
+        <target state="new">Total</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderTraceId">
+        <source>Trace ID</source>
+        <target state="new">Trace ID</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderValue">
+        <source>Value</source>
+        <target state="new">Value</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderWallClock">
+        <source>Wall</source>
+        <target state="new">Wall</target>
+        <note />
+      </trans-unit>
       <trans-unit id="LimitMustBePositive">
         <source>The --limit value must be a positive number.</source>
         <target state="translated">--limit 值必須是正數。</target>
@@ -162,9 +262,64 @@
         <target state="needs-review-translation">從儀表板遙測 API 檢視結構化記錄。</target>
         <note />
       </trans-unit>
+      <trans-unit id="MetricAverageDuration">
+        <source>Average duration</source>
+        <target state="new">Average duration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricErrorSpans">
+        <source>Error spans</source>
+        <target state="new">Error spans</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricErrorTraces">
+        <source>Error traces</source>
+        <target state="new">Error traces</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricMaxDuration">
+        <source>Max duration</source>
+        <target state="new">Max duration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricP50Duration">
+        <source>P50 duration</source>
+        <target state="new">P50 duration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricP95Duration">
+        <source>P95 duration</source>
+        <target state="new">P95 duration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricP99Duration">
+        <source>P99 duration</source>
+        <target state="new">P99 duration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricResources">
+        <source>Resources</source>
+        <target state="new">Resources</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricSpans">
+        <source>Spans</source>
+        <target state="new">Spans</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="MetricTraces">
+        <source>Traces</source>
+        <target state="new">Traces</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceArgumentDescription">
         <source>Filter by resource name</source>
         <target state="needs-review-translation">依資源名稱篩選。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceNotFound">
+        <source>Resource '{0}' not found.</source>
+        <target state="new">Resource '{0}' not found.</target>
         <note />
       </trans-unit>
       <trans-unit id="SearchOptionDescription">
@@ -182,9 +337,44 @@
         <target state="needs-review-translation">依最低嚴重性篩選記錄 (追蹤、偵錯、資訊、警告、錯誤、重大)。</target>
         <note />
       </trans-unit>
+      <trans-unit id="SlowTracesDescription">
+        <source>Show top traces by wall-clock duration</source>
+        <target state="new">Show top traces by wall-clock duration</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SpanStatsDescription">
+        <source>Aggregate span duration statistics</source>
+        <target state="new">Aggregate span duration statistics</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SpansDescription">
         <source>View spans from the Dashboard telemetry API</source>
         <target state="needs-review-translation">從儀表板遙測 API 檢視範圍。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SummaryDescription">
+        <source>Summarize trace latency, span counts, and errors</source>
+        <target state="new">Summarize trace latency, span counts, and errors</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryArchiveNotFound">
+        <source>Telemetry archive file '{0}' was not found.</source>
+        <target state="new">Telemetry archive file '{0}' was not found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TelemetryArchiveOptionDescription">
+        <source>Read telemetry from an Aspire export or profile archive instead of a running dashboard</source>
+        <target state="new">Read telemetry from an Aspire export or profile archive instead of a running dashboard</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TopMustBePositive">
+        <source>The --top value must be a positive number.</source>
+        <target state="new">The --top value must be a positive number.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TopOptionDescription">
+        <source>Maximum number of rows to display</source>
+        <target state="new">Maximum number of rows to display</target>
         <note />
       </trans-unit>
       <trans-unit id="TraceIdArgumentDescription">
@@ -210,6 +400,11 @@
       <trans-unit id="UnexpectedContentType">
         <source>Dashboard API returned unexpected content type '{0}'. Expected JSON response.</source>
         <target state="new">Dashboard API returned unexpected content type '{0}'. Expected JSON response.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WallTimeDescription">
+        <source>Analyze trace wall-clock time, span coverage, gaps, and overlap</source>
+        <target state="new">Analyze trace wall-clock time, span coverage, gaps, and overlap</target>
         <note />
       </trans-unit>
     </body>
