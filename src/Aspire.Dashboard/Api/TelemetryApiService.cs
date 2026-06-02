@@ -523,6 +523,7 @@ internal sealed class TelemetryApiService(
         "trace-id" or "traceid" => KnownStructuredLogFields.TraceIdField,
         "span-id" or "spanid" => KnownStructuredLogFields.SpanIdField,
         "event" => KnownStructuredLogFields.EventNameField,
+        "timestamp" => KnownStructuredLogFields.TimestampField,
         _ => null
     };
 
@@ -540,6 +541,7 @@ internal sealed class TelemetryApiService(
         "trace-id" or "traceid" => KnownTraceFields.TraceIdField,
         "span-id" or "spanid" => KnownTraceFields.SpanIdField,
         "duration" => KnownTraceFields.DurationField,
+        "timestamp" => KnownTraceFields.TimestampField,
         _ => null
     };
 

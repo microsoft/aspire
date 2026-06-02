@@ -540,6 +540,144 @@ public class TelemetryApiServiceTests
         Assert.Equal(1, result.ReturnedCount);
     }
 
+    [Fact]
+    public void GetSpans_WithTimestampGreaterThan_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // Filter for spans after s_testTime+1.5min (should return spans at +2min and +3min)
+        var cutoff = s_testTime.AddMinutes(1).AddSeconds(30).ToString("O");
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: $"timestamp:>{cutoff}");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampLessThan_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // Filter for spans before s_testTime+2.5min (should return spans at +1min and +2min)
+        var cutoff = s_testTime.AddMinutes(2).AddSeconds(30).ToString("O");
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: $"timestamp:<{cutoff}");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampGreaterThanOrEqual_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // Filter for spans at or after exactly s_testTime+2min (should return spans at +2min and +3min)
+        var cutoff = s_testTime.AddMinutes(2).ToString("O");
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: $"timestamp:>={cutoff}");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetLogs_WithTimestampGreaterThan_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+        // Logs at s_testTime, +1min, +2min
+        AddLogs(repository, ["log1", "log2", "log3"]);
+
+        var service = CreateService(repository);
+
+        // Filter for logs after s_testTime+0.5min (should return logs at +1min and +2min)
+        var cutoff = s_testTime.AddSeconds(30).ToString("O");
+        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: null, search: $"timestamp:>{cutoff}");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampInvalidDate_ReturnsNoResults()
+    {
+        var repository = CreateRepository();
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // Invalid date string should not match anything
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: "timestamp:>not-a-date");
+
+        Assert.NotNull(result);
+        Assert.Equal(0, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampUtcSuffix_TreatedAsUtc()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min (s_testTime is 1970-01-01T00:00:00Z)
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // A timestamp ending in Z is UTC and should not be adjusted.
+        // s_testTime+1.5min = 1970-01-01T00:01:30Z — should match spans at +2min and +3min
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: "timestamp:>1970-01-01T00:01:30Z");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampNoTimezone_TreatedAsLocalTime()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min (s_testTime is 1970-01-01T00:00:00Z)
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // A timestamp without Z or offset is treated as local time and converted to UTC.
+        // Compute what local time corresponds to s_testTime+1.5min UTC so the filter matches the same spans.
+        var utcCutoff = s_testTime.AddMinutes(1).AddSeconds(30);
+        var localCutoff = utcCutoff.ToLocalTime();
+        var localString = localCutoff.ToString("yyyy-MM-dd'T'HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: $"timestamp:>{localString}");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithTimestampOffset_AdjustedToUtc()
+    {
+        var repository = CreateRepository();
+        // Spans at s_testTime+1min, +2min, +3min (s_testTime is 1970-01-01T00:00:00Z)
+        AddSpans(repository, count: 3);
+
+        var service = CreateService(repository);
+
+        // A timestamp with an explicit offset is adjusted to UTC.
+        // 1970-01-01T01:01:30+01:00 = 1970-01-01T00:01:30Z — should match spans at +2min and +3min
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: "timestamp:>1970-01-01T01:01:30+01:00");
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.ReturnedCount);
+    }
+
     /// <summary>
     /// Adds spans with sequential trace/span IDs to the repository. Each span is added in a separate
     /// AddTraces call so that it gets its own trace entry.

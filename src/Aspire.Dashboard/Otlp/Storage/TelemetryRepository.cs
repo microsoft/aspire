@@ -1132,6 +1132,7 @@ public sealed partial class TelemetryRepository : IDisposable
         {
             if (filter is FieldTelemetryFilter fieldFilter &&
                 !FieldTelemetryFilter.IsNumericField(fieldFilter.Field) &&
+                !FieldTelemetryFilter.IsDateField(fieldFilter.Field) &&
                 IsSupportedCondition(fieldFilter.Condition))
             {
                 stringFilter = new StringFilter(fieldFilter.Field, fieldFilter.Condition, fieldFilter.Value);
