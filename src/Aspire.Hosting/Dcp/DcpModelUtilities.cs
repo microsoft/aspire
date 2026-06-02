@@ -93,7 +93,7 @@ internal static class DcpModelUtilities
                 // These endpoints normally get their host port during container creation. If a
                 // reference needs the allocated endpoint while building the container configuration,
                 // commit the fallback port before waiting would deadlock resource creation.
-                ea.OnDemandAllocatedEndpointProvider = networkId => TryAllocateDynamicProxylessContainerEndpoint(appResource, sp, networkId, logger);
+                ea._onDemandAllocatedEndpointProvider = networkId => TryAllocateDynamicProxylessContainerEndpoint(appResource, sp, networkId, logger);
             }
         }
 
