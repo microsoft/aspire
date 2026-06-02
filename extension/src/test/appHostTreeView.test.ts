@@ -347,7 +347,7 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(stoppingItem.contextValue, 'workspaceResources:stopping');
         assert.strictEqual(stoppingItem.description, 'Stopping...');
         assert.strictEqual((stoppingItem.iconPath as vscode.ThemeIcon).id, 'loading~spin');
-        assert.deepStrictEqual(commands, [`stop --apphost "${appHostPath}"`]);
+        assert.deepStrictEqual(commands, [`stop --apphost ${quoteShellArg(appHostPath)}`]);
         provider.dispose();
     });
 
@@ -382,7 +382,7 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(stoppingItem.contextValue, 'workspaceAppHostStopping');
         assert.strictEqual(stoppingItem.description, 'Stopping...');
         assert.strictEqual((stoppingItem.iconPath as vscode.ThemeIcon).id, 'loading~spin');
-        assert.deepStrictEqual(commands, [`stop --apphost "${appHostPath}"`]);
+        assert.deepStrictEqual(commands, [`stop --apphost ${quoteShellArg(appHostPath)}`]);
         provider.dispose();
     });
 
