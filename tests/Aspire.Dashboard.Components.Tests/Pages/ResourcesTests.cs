@@ -422,7 +422,7 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public void ViewOptionsMenuIsVisibleWhenHiddenResourcesExist()
+    public void ViewOptionsMenu_WiresFocusRestorationWhenHiddenResourcesExist()
     {
         // Arrange
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -443,9 +443,8 @@ public partial class ResourcesTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
-        // Assert - the menu button should be present (it contains the "Show hidden resources" option)
         var menuButton = cut.FindComponent<AspireMenuButton>();
-        Assert.NotNull(menuButton);
+        Assert.True(menuButton.Instance.RestoreFocusOnItemClick);
     }
 
     [Fact]
