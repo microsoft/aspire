@@ -990,7 +990,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 ContainerPort = ea.TargetPort,
             };
 
-            onDemandEndpointAllocationAnnotation?.Clear(ea);
+            onDemandEndpointAllocationAnnotation?.StopAllocating(ea);
 
             if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
             {
