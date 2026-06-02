@@ -306,11 +306,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         var spec = dcpContainer.Spec;
 
-        if (cr.ServicesProduced.Count > 0)
-        {
-            spec.Ports = BuildContainerPorts(cr);
-        }
-
         spec.VolumeMounts = BuildContainerMounts(cr.ModelResource);
 
         var (runArgs, failedToApplyRunArgs) = await BuildRunArgsAsync(logger, cr.ModelResource, cToken).ConfigureAwait(false);
@@ -324,6 +319,13 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         if (configuration.Exception is not null)
         {
             throw new FailedToApplyEnvironmentException($"Failed to apply configuration to container {cr.ModelResource.Name}", configuration.Exception);
+        }
+
+        // Environment callbacks can resolve proxyless endpoint ports and commit a fallback host port,
+        // so build ports afterward and stop allowing on-demand allocation once container ports are fixed.
+        if (cr.ServicesProduced.Count > 0)
+        {
+            spec.Ports = BuildContainerPorts(cr);
         }
 
         var args = configuration.Arguments.ToList();
@@ -985,12 +987,18 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 ContainerPort = ea.TargetPort,
             };
 
-            if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
+            lock (ea)
             {
-                portSpec.HostPort = hostPort;
+                if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
+                {
+                    sp.Service.Spec.Port ??= hostPort;
+                    portSpec.HostPort = hostPort;
+                }
+
+                ea.OnDemandAllocatedEndpointProvider = null;
             }
 
-            switch (sp.EndpointAnnotation.Protocol)
+            switch (ea.Protocol)
             {
                 case ProtocolType.Tcp:
                     portSpec.Protocol = PortProtocol.TCP;
@@ -1000,9 +1008,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                     break;
             }
 
-            if (sp.EndpointAnnotation.TargetHost != KnownHostNames.Localhost)
+            if (ea.TargetHost != KnownHostNames.Localhost)
             {
-                portSpec.HostIP = sp.EndpointAnnotation.TargetHost;
+                portSpec.HostIP = ea.TargetHost;
             }
 
             ports.Add(portSpec);
