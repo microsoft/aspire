@@ -5,7 +5,7 @@
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting blazor webassembly gateway</PackageTags>
     <Description>Blazor WebAssembly hosting support for Aspire.</Description>
-    <NoWarn>$(NoWarn);ASPIREBLAZOR001</NoWarn>
+    <NoWarn>$(NoWarn);ASPIREBLAZOR001;CS0436</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -32,6 +32,9 @@
   <ItemGroup>
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
     <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Utils\KnownRelationshipTypes.cs" />
+    <!-- Source-share browser debugger types with Aspire.Hosting.JavaScript -->
+    <Compile Include="..\Aspire.Hosting.JavaScript\BrowserDebuggerResource.cs" Link="BrowserDebuggerResource.cs" />
+    <Compile Include="..\Aspire.Hosting.JavaScript\BrowserLaunchConfiguration.cs" Link="BrowserLaunchConfiguration.cs" />
   </ItemGroup>
 
   <ItemGroup>

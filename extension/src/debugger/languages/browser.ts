@@ -1,11 +1,15 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+import * as os from 'os';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isBrowserLaunchConfiguration } from "../../dcp/types";
 import { browserDisplayName, browserLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
+import { tryStartWasmDebugging } from "./wasmDebug";
 
 export const browserDebuggerExtension: ResourceDebuggerExtension = {
     resourceType: 'browser',
-    debugAdapter: 'pwa-msedge',
+    debugAdapter: 'msedge',
     extensionId: null, // built-in to VS Code via js-debug
     getDisplayName: (launchConfiguration: ExecutableLaunchConfiguration) => {
         if (isBrowserLaunchConfiguration(launchConfiguration) && launchConfiguration.url) {
@@ -15,27 +19,85 @@ export const browserDebuggerExtension: ResourceDebuggerExtension = {
     },
     getSupportedFileTypes: () => [],
     getProjectFile: () => '',
-    createDebugSessionConfigurationCallback: async (launchConfig, _args, _env, _launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
+    createDebugSessionConfigurationCallback: async (launchConfig, _args, _env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
         if (!isBrowserLaunchConfiguration(launchConfig)) {
             extensionLogOutputChannel.info(`The resource type was not browser for ${JSON.stringify(launchConfig)}`);
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         }
 
-        // Map browser name to VS Code js-debug adapter type (pwa- prefix required)
+        // Map browser name to VS Code js-debug adapter type.
+        // js-debug registers both 'msedge'/'chrome' and 'pwa-msedge'/'pwa-chrome'.
         const browser = launchConfig.browser || 'msedge';
-        debugConfiguration.type = `pwa-${browser}`;
+        debugConfiguration.type = browser;
         debugConfiguration.request = 'launch';
         debugConfiguration.url = launchConfig.url;
-        debugConfiguration.webRoot = launchConfig.web_root;
+
+        // webRoot must be a directory for source map resolution.
+        // When web_root is a .csproj path (Blazor WASM), use the containing directory.
+        const webRoot = launchConfig.web_root?.endsWith('.csproj')
+            ? path.dirname(launchConfig.web_root)
+            : launchConfig.web_root;
+        debugConfiguration.webRoot = webRoot;
+
         debugConfiguration.sourceMaps = true;
         debugConfiguration.resolveSourceMapLocations = ['**', '!**/node_modules/**'];
-        // Use an auto-managed temp user data directory so multiple browser debuggers
-        // can run concurrently without conflicting
-        debugConfiguration.userDataDir = true;
+        // Use a stable user data directory dedicated to Aspire debugging.
+        // This avoids the managed-profile sign-in prompt that appears with a fresh
+        // temp dir (userDataDir: true) on corp machines, and avoids conflicts with
+        // the user's existing browser profile (userDataDir: false).
+        debugConfiguration.userDataDir = path.join(os.tmpdir(), 'aspire-browser-debug');
+
+        // Suppress Edge/Chrome first-run wizards and profile selection prompts
+        // that appear on managed machines with enterprise policies.
+        debugConfiguration.runtimeArgs = [
+            '--no-first-run',
+            '--no-default-browser-check',
+            '--hide-crash-restore-bubble',
+            '--disable-features=EdgeProfileOnStartup,msEdgeFirstRunExperience,EdgeBackgroundMode',
+            '--disable-background-mode',
+        ];
 
         // Remove program/args/cwd since browser debugging doesn't use them
         delete debugConfiguration.program;
         delete debugConfiguration.args;
         delete debugConfiguration.cwd;
+
+        // If web_root points to a .csproj, this is a Blazor WASM project —
+        // wire up managed debugging via the C# extension's VSWebAssemblyBridge.
+        if (launchConfig.web_root?.endsWith('.csproj') && launchConfig.url) {
+            extensionLogOutputChannel.info(`[WASM] Detected Blazor WASM project: ${launchConfig.web_root}`);
+            const wasmStarted = await tryStartWasmDebugging(launchConfig.url, launchConfig.web_root, debugConfiguration, launchOptions.debugSession);
+            extensionLogOutputChannel.info(`[WASM] tryStartWasmDebugging result: ${wasmStarted}`);
+            if (wasmStarted) {
+                // The browser session must have debugging enabled so js-debug connects
+                // to the DevTools protocol through the bridge's port/inspectUri.
+                // Without this, noDebug:true causes js-debug to skip attaching entirely.
+                debugConfiguration.noDebug = false;
+            }
+        }
+        extensionLogOutputChannel.info(`[Browser] Final debug config: type=${debugConfiguration.type}, url=${debugConfiguration.url}, webRoot=${debugConfiguration.webRoot}, noDebug=${debugConfiguration.noDebug}`);
+
+        // Listen for the browser debug session to terminate (e.g., user closes the browser window).
+        // When it does, notify DCP so the resource transitions to a terminal state and
+        // the dashboard UI can reset.
+        // We match by session name only because js-debug child sessions do not carry
+        // custom configuration properties (runId) from the parent launch config.
+        const runId = debugConfiguration.runId;
+        const debugSessionId = debugConfiguration.debugSessionId;
+        const aspireSession = launchOptions.debugSession;
+        const browserSessionName = debugConfiguration.name;
+
+        extensionLogOutputChannel.info(`[Browser] Registering terminate listener for session name="${browserSessionName}", runId=${runId}, debugSessionId=${debugSessionId}`);
+
+        if (runId && debugSessionId) {
+            const disposable = vscode.debug.onDidTerminateDebugSession((session) => {
+                extensionLogOutputChannel.info(`[Browser] onDidTerminateDebugSession fired: name="${session.name}", configRunId=${session.configuration?.runId}, expected="${browserSessionName}"`);
+                if (session.name === browserSessionName) {
+                    disposable.dispose();
+                    extensionLogOutputChannel.info(`[Browser] Browser debug session terminated — notifying DCP (runId: ${runId}, debugSessionId: ${debugSessionId})`);
+                    aspireSession.sendSessionTerminated(runId, debugSessionId, 0);
+                }
+            });
+        }
     }
 };

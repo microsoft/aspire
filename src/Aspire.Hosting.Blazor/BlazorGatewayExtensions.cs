@@ -171,6 +171,18 @@ public static class BlazorGatewayExtensions
 
         gateway.WithBlazorApp(wasmApp, pathPrefix, services, apiPrefix, otlpPrefix, proxyTelemetry);
 
+        // Register browser debugging support: create a hidden child debugger resource
+        // parented to the gateway, and a "Debug in Browser" command on the WASM app resource.
+        if (!gateway.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            BrowserDebuggerHelper.AddBrowserDebuggerResource(
+                gateway.ApplicationBuilder,
+                gateway.Resource,
+                wasmApp,
+                wasmApp.Resource.ProjectPath,
+                relativePath: pathPrefix);
+        }
+
         return gateway;
     }
 
