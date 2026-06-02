@@ -39,9 +39,9 @@ env:
   PRODUCT: "Aspire"
   REPO: "microsoft/aspire"
   DOCS_REPO: "microsoft/aspire.dev"
-  MILESTONE_START: "2026-05-08"
-  MILESTONE: "13.4"
-  PREVIOUS_MILESTONE: "13.3"
+  MILESTONE_START: "2026-06-02"
+  MILESTONE: "13.5"
+  PREVIOUS_MILESTONE: "13.4"
   RELEASE_NOTES_URL: "https://aka.ms/aspire/update-latest"
   BATCH_SIZE: "20"
 
