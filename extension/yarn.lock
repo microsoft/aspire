@@ -452,9 +452,9 @@
     "@nevware21/ts-utils" ">= 0.12.2 < 2.x"
 
 "@nevware21/ts-utils@>= 0.10.4 < 2.x", "@nevware21/ts-utils@>= 0.11.8 < 2.x", "@nevware21/ts-utils@>= 0.12.2 < 2.x", "@nevware21/ts-utils@>= 0.9.4 < 2.x":
-  version "0.14.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@nevware21/ts-utils/-/ts-utils-0.14.0.tgz#9e6074ce28f0b1bab7bfdacd1a7760b2ba73688d"
-  integrity sha1-nmB0zijwsbq3v9rNGndgsrpzaI0=
+  version "0.15.0"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/@nevware21/ts-utils/-/ts-utils-0.15.0.tgz#1899df05d7521b6afcae1dd53f35cc04c66348f4"
+  integrity sha1-GJnfBddSG2r8rh3VPzXMBMZjSPQ=
 
 "@nodelib/fs.scandir@2.1.5":
   version "2.1.5"
@@ -6007,10 +6007,10 @@ wrappy@1:
   resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/wrappy/-/wrappy-1.0.2.tgz"
   integrity sha1-tSQ9jz7BqjXxNkYFvA0QNuMKtp8=
 
-ws@8.20.0:
-  version "8.20.0"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/ws/-/ws-8.20.0.tgz"
-  integrity sha1-TNlTI1jrpgvIY6rRYj37BFpNSvg=
+ws@8.20.1:
+  version "8.20.1"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/ws/-/ws-8.20.1.tgz#91a9ae2b312ccf98e0a85ec499b48cef45ab0ddb"
+  integrity sha1-kamuKzEsz5jgqF7EmbSM70WrDds=
 
 wsl-utils@^0.1.0:
   version "0.1.0"
