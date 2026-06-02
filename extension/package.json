@@ -655,7 +655,7 @@
         },
         {
           "command": "aspire-vscode.openAppHostSource",
-          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost(:stopping)?|workspaceResources(:hasAppHost|:stopping)?|workspaceAppHost(Launching)?)$/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost(:stopping)?|workspaceResources(:hasAppHost|:stopping)?|workspaceAppHost(Launching|Stopping)?)$/",
           "group": "1_open@1"
         },
         {
@@ -675,7 +675,7 @@
         },
         {
           "command": "aspire-vscode.copyAppHostPath",
-          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost(:stopping)?|workspaceResources(:hasAppHost|:stopping)?|workspaceAppHost(Launching)?)$/",
+          "when": "view == aspire-vscode.appHosts && viewItem =~ /^(appHost(:stopping)?|workspaceResources(:hasAppHost|:stopping)?|workspaceAppHost(Launching|Stopping)?)$/",
           "group": "3_clipboard@1"
         },
         {

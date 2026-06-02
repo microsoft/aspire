@@ -82,7 +82,14 @@ export async function waitForTreeItemDescription(section: TreeSection, label: st
     try {
         return await VSBrowser.instance.driver.wait(async () => {
             try {
-                const item = await section.findItem(label, 4);
+                let item = await section.findItem(label, 4);
+                if (!item) {
+                    const sections = await new SideBarView().getContent().getSections();
+                    const sectionTitles = await Promise.all(sections.map(section => section.getTitle()));
+                    const currentSection = sections.find((_, index) => sectionTitles[index] === aspireAppHostsSectionTitle);
+                    item = currentSection ? await currentSection.findItem(label, 4) : undefined;
+                }
+
                 if (!item) {
                     lastDescription = undefined;
                     return false;

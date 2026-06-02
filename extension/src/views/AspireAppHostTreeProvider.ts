@@ -178,12 +178,17 @@ class WorkspaceAppHostItem extends vscode.TreeItem {
         public readonly appHostPath: string,
         appHostName?: string,
         appHostDescription?: string,
-        public readonly launching?: boolean
+        public readonly launching?: boolean,
+        stopping = false
     ) {
         super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.Collapsed);
         this.id = `workspace-apphost:${getComparisonKey(path.resolve(appHostPath))}`;
 
-        if (launching) {
+        if (stopping) {
+            this.iconPath = new vscode.ThemeIcon('loading~spin');
+            this.description = appHostStoppingDescription;
+            this.contextValue = 'workspaceAppHostStopping';
+        } else if (launching) {
             this.iconPath = new vscode.ThemeIcon('loading~spin');
             this.description = appHostStartingDescription;
             this.contextValue = 'workspaceAppHostLaunching';
@@ -933,7 +938,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                     const launching = this._launchService.isLaunching(candidatePath);
 
                     if (!runningAppHost) {
-                        workspaceItems.push(new WorkspaceAppHostItem(candidatePath, labels[i], vscode.workspace.asRelativePath(candidatePath), launching));
+                        workspaceItems.push(new WorkspaceAppHostItem(candidatePath, labels[i], vscode.workspace.asRelativePath(candidatePath), launching, this._isStoppingAppHost(candidatePath)));
                         continue;
                     }
 
@@ -1224,7 +1229,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
-    stopAppHost(element: AppHostItem | WorkspaceResourcesItem): void {
+    stopAppHost(element: AppHostItem | WorkspaceResourcesItem | WorkspaceAppHostItem): void {
         const appHostPath = element instanceof AppHostItem ? element.appHost.appHostPath : element.appHostPath;
         if (!appHostPath) {
             vscode.window.showWarningMessage(appHostSourceNotFound);
