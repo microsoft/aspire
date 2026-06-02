@@ -105,7 +105,8 @@ public partial class AspireMenu : FluentComponentBase
         {
             await onClick();
         }
-        Open = false;
+
+        await OnOpenChanged(false);
     }
 
     private Task OnOpenChanged(bool open)

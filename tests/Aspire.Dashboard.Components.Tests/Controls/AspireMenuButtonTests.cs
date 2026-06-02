@@ -18,16 +18,21 @@ public class AspireMenuButtonTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentButton(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
 
-        var cut = RenderComponent<AspireMenuButton>(builder =>
+        var cut = Render(builder =>
         {
-            builder.Add(p => p.MenuButtonId, "view-options-button");
-            builder.Add(p => p.Text, "View options");
-            builder.Add(p => p.Items, [
+            builder.OpenComponent<Microsoft.FluentUI.AspNetCore.Components.FluentMenuProvider>(0);
+            builder.CloseComponent();
+            builder.OpenComponent<AspireMenuButton>(1);
+            builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), "view-options-button");
+            builder.AddAttribute(3, nameof(AspireMenuButton.Text), "View options");
+            builder.AddAttribute(4, nameof(AspireMenuButton.Items), new List<MenuButtonItem>
+            {
                 new MenuButtonItem
                 {
                     Text = "Show hidden resources"
                 }
-            ]);
+            });
+            builder.CloseComponent();
         });
 
         var button = cut.Find("#view-options-button");
@@ -38,6 +43,15 @@ public class AspireMenuButtonTests : DashboardTestContext
         cut.WaitForAssertion(() =>
         {
             Assert.Equal("true", cut.Find("#view-options-button").GetAttribute("aria-expanded"));
+        });
+
+        cut.FindComponent<Microsoft.FluentUI.AspNetCore.Components.FluentMenuItem>()
+            .Find("fluent-menu-item")
+            .Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Equal("false", cut.Find("#view-options-button").GetAttribute("aria-expanded"));
         });
     }
 }
