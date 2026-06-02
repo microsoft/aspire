@@ -20,7 +20,6 @@ internal class ConsoleInteractionService : IInteractionService
     private static readonly Style s_infoMessageStyle = new Style(foreground: Color.Green, background: null, decoration: Decoration.None);
     private static readonly Style s_waitingMessageStyle = new Style(foreground: Color.Yellow, background: null, decoration: Decoration.None);
     private static readonly Style s_errorMessageStyle = new Style(foreground: Color.Red, background: null, decoration: Decoration.Bold);
-    private static readonly Style s_searchHighlightStyle = new Style(foreground: Color.Black, background: Color.Cyan1, decoration: Decoration.None);
 
     internal const string AllChoice = "all";
     internal const string NoneChoice = "none";
@@ -325,16 +324,16 @@ internal class ConsoleInteractionService : IInteractionService
 
         MessageLogger.LogInformation("Selection prompt: {PromptText}", promptText);
 
-        var prompt = new SelectionPrompt<T>()
-            .Title(promptText)
-            .UseConverter(choiceFormatter)
-            .AddChoices(choicesList)
-            .PageSize(10)
-            .EnableSearch();
-
-        prompt.SearchHighlightStyle = s_searchHighlightStyle;
-
-        var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
+        // Spike: route the interactive selection through the Hex1b-backed prompt
+        // instead of Spectre.Console's SelectionPrompt<T>. Hex1b actually filters
+        // (not just highlights) the visible items as the user types, which is the
+        // limitation we wanted to lift on the `aspire add` integration picker.
+        // Non-interactive paths above and the post-prompt echo below are unchanged.
+        var result = await Hex1bSelectionPrompt.RunAsync(
+            promptText,
+            choicesList,
+            choiceFormatter,
+            cancellationToken).ConfigureAwait(false);
         MessageLogger.LogInformation("Selection result: {Result}", choiceFormatter(result));
 
         // The SelectionPrompt clears its display after the user selects.
