@@ -3,6 +3,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
@@ -266,18 +267,9 @@ internal sealed class TelemetryApiService(
         string? search,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        // Resolve resource keys
-        var resources = telemetryRepository.GetResources();
-        var resourceKeys = ResolveResourceKeys(resources, resourceNames);
-
-        // For streaming, if resources were specified but can't be resolved, filter everything out
-        var hasResourceFilter = resourceNames is { Length: > 0 };
-        var invalidResourceFilter = hasResourceFilter && resourceKeys is null;
-
-        if (invalidResourceFilter)
-        {
-            yield break;
-        }
+        // Resolve resource keys, waiting for the resource to appear if it doesn't exist yet.
+        // Throws OperationCanceledException if the client disconnects before the resource appears.
+        var resourceKeys = await WaitForResourceKeysAsync(resourceNames, cancellationToken).ConfigureAwait(false);
 
         // Convert structured search qualifiers into TelemetryFilter objects for per-span filtering
         List<TelemetryFilter> spanFilters = [];
@@ -320,18 +312,9 @@ internal sealed class TelemetryApiService(
         string? search,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // Resolve resource keys
-        var resources = telemetryRepository.GetResources();
-        var resourceKeys = ResolveResourceKeys(resources, resourceNames);
-
-        // For streaming, if resources were specified but can't be resolved, filter everything out
-        var hasResourceFilter = resourceNames is { Length: > 0 };
-        var invalidResourceFilter = hasResourceFilter && resourceKeys is null;
-
-        if (invalidResourceFilter)
-        {
-            yield break;
-        }
+        // Resolve resource keys, waiting for the resource to appear if it doesn't exist yet.
+        // Throws OperationCanceledException if the client disconnects before the resource appears.
+        var resourceKeys = await WaitForResourceKeysAsync(resourceNames, cancellationToken).ConfigureAwait(false);
 
         // Build filters
         var filters = new List<TelemetryFilter>();
@@ -561,6 +544,35 @@ internal sealed class TelemetryApiService(
         (ComparisonOperator.LessThanOrEqual, true) => FilterCondition.GreaterThan,
         _ => FilterCondition.Contains
     };
+
+    /// <summary>
+    /// Resolves resource names to ResourceKeys, waiting for the resources to appear if they
+    /// don't exist yet. This enables streaming subscriptions started before telemetry arrives
+    /// to pick up data once the resource is first seen.
+    /// Throws OperationCanceledException if cancellation is triggered before the resources appear.
+    /// </summary>
+    private async Task<List<ResourceKey?>> WaitForResourceKeysAsync(string[]? resourceNames, CancellationToken cancellationToken)
+    {
+        // Subscribe before the first check so no notification can be missed between
+        // GetResources() and the subscription registration.
+        var signal = Channel.CreateBounded<bool>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest });
+        using var subscription = telemetryRepository.OnNewResources(() =>
+        {
+            signal.Writer.TryWrite(true);
+            return Task.CompletedTask;
+        });
+
+        while (true)
+        {
+            var resources = telemetryRepository.GetResources();
+            if (ResolveResourceKeys(resources, resourceNames) is { } result)
+            {
+                return result;
+            }
+
+            await signal.Reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
 
     /// <summary>
     /// Resolves resource names to ResourceKeys.

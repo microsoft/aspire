@@ -645,6 +645,72 @@ public class TelemetryApiServiceTests
             .ToList() ?? [];
     }
 
+    [Fact]
+    public async Task FollowSpansAsync_WaitsForResourceToAppear_ThenStreams()
+    {
+        var repository = CreateRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
+        var service = CreateService(repository);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var receivedItems = new List<string>();
+
+        // Start streaming for a resource that doesn't exist yet.
+        var streamTask = Task.Run(async () =>
+        {
+            await foreach (var item in service.FollowSpansAsync(["service1"], null, null, null, cancellationToken: cts.Token))
+            {
+                receivedItems.Add(item);
+                if (receivedItems.Count >= 1)
+                {
+                    break;
+                }
+            }
+        }, cts.Token);
+
+        // Give the streaming task time to start waiting for the resource.
+        await Task.Delay(100, cts.Token);
+
+        // Now add spans for the resource - this should unblock the stream.
+        AddSpans(repository, count: 1);
+
+        await streamTask;
+
+        Assert.Single(receivedItems);
+    }
+
+    [Fact]
+    public async Task FollowLogsAsync_WaitsForResourceToAppear_ThenStreams()
+    {
+        var repository = CreateRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
+        var service = CreateService(repository);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        var receivedItems = new List<string>();
+
+        // Start streaming for a resource that doesn't exist yet.
+        var streamTask = Task.Run(async () =>
+        {
+            await foreach (var item in service.FollowLogsAsync(["service1"], null, null, null, cts.Token))
+            {
+                receivedItems.Add(item);
+                if (receivedItems.Count >= 1)
+                {
+                    break;
+                }
+            }
+        }, cts.Token);
+
+        // Give the streaming task time to start waiting for the resource.
+        await Task.Delay(100, cts.Token);
+
+        // Now add logs for the resource - this should unblock the stream.
+        AddLogs(repository, ["hello"]);
+
+        await streamTask;
+
+        Assert.Single(receivedItems);
+    }
+
     // SpanId is serialized as lowercase hex per the OTLP/JSON spec
     // (see https://opentelemetry.io/docs/specs/otlp/#json-protobuf-encoding), and our
     // CreateSpan test helper stores the friendly identifier as the raw UTF-8 bytes of
