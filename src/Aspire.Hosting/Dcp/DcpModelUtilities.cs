@@ -16,12 +16,12 @@ namespace Aspire.Hosting.Dcp;
 internal static class DcpModelUtilities
 {
     /// <summary>
-    /// Determines whether DCP registration should be deferred until an explicit manual start.
+    /// Determines whether DCP object creation should be deferred until an explicit manual start.
     /// </summary>
     internal static bool ShouldDeferCreateForExplicitStart(IResource modelResource, bool? start)
     {
         // Explicit-start, non-persistent resources use manual snapshots for dashboard visibility.
-        // Do not register them with DCP until the manual start path flips Spec.Start=true; creation
+        // Do not create corresponding DCP objects until the manual start path flips Spec.Start=true; creation
         // evaluates callbacks that can prompt for input or depend on start-time state.
         return start == false &&
             modelResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _) &&

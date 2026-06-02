@@ -2586,7 +2586,7 @@ public class DcpExecutorTests
     }
 
     [Fact]
-    public async Task ExplicitStartPlainExecutable_IsNotCreatedUntilManualStart()
+    public async Task SessionScopedExplicitStartPlainExecutable_DefersDcpObjectCreationUntilManualStart()
     {
         var builder = DistributedApplication.CreateBuilder();
 
