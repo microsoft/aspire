@@ -199,7 +199,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             }
 
             var containerAppResource = new RenderedModelResource<Container>(container, ctr);
-            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get());
+            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get(), _logger);
             _appResources.Add(containerAppResource);
             result.Add(containerAppResource);
         }

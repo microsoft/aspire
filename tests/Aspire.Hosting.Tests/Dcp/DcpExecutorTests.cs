@@ -25,7 +25,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Polly;
 using Polly.Retry;
@@ -1714,9 +1716,11 @@ public class DcpExecutorTests
         database.WithEnvironment("PUBLIC_PORT_AGAIN", database.GetEndpoint("NoPortTargetPortSet").Property(EndpointProperty.Port));
 
         var kubernetesService = new TestKubernetesService();
+        var testSink = new TestSink();
+        var containerCreatorLogger = new TestLogger<ContainerCreator>(new TestLoggerFactory(testSink, enabled: true));
         using var app = builder.Build();
         var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, containerCreatorLogger: containerCreatorLogger);
         await appExecutor.RunApplicationAsync();
 
         var dcpCtr = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
@@ -1732,6 +1736,10 @@ public class DcpExecutorTests
         var secondEnvVarVal = dcpCtr.Spec.Env?.Single(v => v.Name == "PUBLIC_PORT_AGAIN").Value;
         Assert.False(string.IsNullOrWhiteSpace(secondEnvVarVal));
         Assert.Equal(desiredTargetPort, int.Parse(secondEnvVarVal, CultureInfo.InvariantCulture));
+
+        Assert.Contains(testSink.Writes, log =>
+            log.LogLevel == LogLevel.Information &&
+            log.Message == $"Endpoint 'NoPortTargetPortSet' on container resource 'database' was resolved before the container was created, so Aspire is assigning public port {desiredTargetPort} to match target port {desiredTargetPort} for proxyless access.");
     }
 
     [Fact]
@@ -4574,7 +4582,8 @@ public class DcpExecutorTests
         DcpOptions? dcpOptions = null,
         ResourceLoggerService? resourceLoggerService = null,
         DcpExecutorEvents? events = null,
-        Hosting.Eventing.IDistributedApplicationEventing? distributedApplicationEventing = null)
+        Hosting.Eventing.IDistributedApplicationEventing? distributedApplicationEventing = null,
+        ILogger<ContainerCreator>? containerCreatorLogger = null)
     {
         if (configuration == null)
         {
@@ -4639,7 +4648,7 @@ public class DcpExecutorTests
             resourceLoggerService,
             dcpDependencyCheckService,
             hostEnv,
-            NullLogger<ContainerCreator>.Instance,
+            containerCreatorLogger ?? NullLogger<ContainerCreator>.Instance,
             appResources);
 
         return new DcpExecutor(
