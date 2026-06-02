@@ -5,7 +5,7 @@ using System.CommandLine;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local", DirectoryInfo? aspireHomeDirectory = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local", DirectoryInfo? aspireHomeDirectory = null, string? identityVersion = null, string? identityCommit = null, string? nugetServiceIndexOverride = null)
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
@@ -39,6 +39,35 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     public string IdentityChannel { get; } = identityChannel;
 
     /// <summary>
+    /// Gets the running CLI's informational version string (for example
+    /// <c>13.4.0-preview.1.25366.3</c>), as resolved by
+    /// <see cref="Acquisition.IIdentityResolver"/>. Falls back to the assembly's
+    /// <see cref="System.Reflection.AssemblyInformationalVersionAttribute"/>
+    /// when neither <c>ASPIRE_CLI_VERSION</c> nor the <c>version</c> field of
+    /// <c>.aspire-install.json</c> is set. May be <see langword="null"/> in
+    /// tests that construct the context directly without populating identity.
+    /// </summary>
+    public string? IdentityVersion { get; } = identityVersion;
+
+    /// <summary>
+    /// Gets the running CLI's source-revision commit (the <c>+&lt;sha&gt;</c>
+    /// suffix of <see cref="System.Reflection.AssemblyInformationalVersionAttribute"/>
+    /// when no override is in effect). Empty when neither an override nor the
+    /// assembly informational version carries a commit suffix.
+    /// </summary>
+    public string? IdentityCommit { get; } = identityCommit;
+
+    /// <summary>
+    /// Optional replacement for the canonical
+    /// <c>https://api.nuget.org/v3/index.json</c> URL when the CLI emits
+    /// <em>new</em> <c>NuGet.config</c> files. <see langword="null"/> means
+    /// use the canonical URL. This is a test-bench affordance; it never
+    /// rewrites URLs the CLI reads from existing user configs. See
+    /// <c>docs/specs/cli-identity-sidecar.md</c>.
+    /// </summary>
+    public string? NuGetServiceIndexOverride { get; } = nugetServiceIndexOverride;
+
+    /// <summary>
     /// Gets the directory where restored NuGet packages are cached for apphost server sessions.
     /// </summary>
     public DirectoryInfo? PackagesDirectory { get; } = packagesDirectory;
@@ -66,7 +95,7 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// Gets the Aspire state root used for route-specific install layouts.
     /// </summary>
     /// <remarks>
-    /// Production wires this explicitly via <see cref="Program.BuildCliExecutionContext"/>
+    /// Production wires this explicitly via <c>Program.BuildCliExecutionContext</c>
     /// using <see cref="Utils.CliPathHelper.GetAspireHomeDirectory(string?, Microsoft.Extensions.Logging.ILogger?)"/>
     /// so the install-route sidecar lookup runs. When neither <c>aspireHomeDirectory</c>
     /// nor <c>homeDirectory</c> are supplied (direct construction in tests), the same

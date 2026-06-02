@@ -168,7 +168,7 @@ internal sealed class TemplateNuGetConfigService(
                 string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
         }
 
-        return await CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, matchingChannel, outputPath, cancellationToken);
+        return await CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, matchingChannel, outputPath, cancellationToken, executionContext.NuGetServiceIndexOverride);
     }
 
     /// <summary>
@@ -178,14 +178,15 @@ internal sealed class TemplateNuGetConfigService(
         string? sourceOverride,
         PackageChannel? channel,
         string outputPath,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? nugetServiceIndexOverride = null)
     {
         if (string.IsNullOrWhiteSpace(sourceOverride))
         {
             return false;
         }
 
-        var mappings = PackageSourceOverrideMappings.Create(sourceOverride, channel);
+        var mappings = PackageSourceOverrideMappings.Create(sourceOverride, channel, nugetServiceIndexOverride);
         await NuGetConfigMerger.CreateOrUpdateAsync(
             new DirectoryInfo(outputPath),
             mappings,

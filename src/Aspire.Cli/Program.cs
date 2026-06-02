@@ -344,7 +344,28 @@ public class Program
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
+        // Main's `IdentityChannelReader` is constructed in CliStartupContext so
+        // the channel can be logged at startup before DI is fully wired. This PR
+        // adds a richer `IIdentityResolver` that also handles sidecar/env
+        // overrides for version/commit/nuget service index. Both coexist:
+        // `IdentityChannelReader` continues to power the early startup log,
+        // while `IIdentityResolver` powers `CliExecutionContext` construction.
         builder.Services.AddSingleton<IIdentityChannelReader>(startupContext.IdentityChannelReader);
+        builder.Services.AddSingleton<IIdentityResolver>(sp =>
+        {
+            // Binary dir is the directory containing the running executable.
+            // We pass it explicitly because the sidecar reader resolves the
+            // sidecar path relative to it, and Environment.ProcessPath can be
+            // null in some test hosts — in that case the resolver simply skips
+            // the sidecar layer (env → assembly → terminal default still apply).
+            var binaryDir = Environment.ProcessPath is { Length: > 0 } p
+                ? Path.GetDirectoryName(p)
+                : null;
+            return new IdentityResolver(
+                sp.GetRequiredService<IInstallSidecarReader>(),
+                typeof(Program).Assembly,
+                binaryDir);
+        });
         if (OperatingSystem.IsWindows())
         {
             builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
@@ -356,12 +377,16 @@ public class Program
         builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton(sp =>
         {
-            var channelReader = sp.GetRequiredService<IIdentityChannelReader>();
-            if (!channelReader.TryReadChannel(out var channel, out var error))
-            {
-                throw new InvalidOperationException(error);
-            }
-            return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath, channel);
+            // Use the resolver overload so env/sidecar overrides apply to
+            // version, commit, and the nuget service-index URL — not just
+            // the channel. The IdentityChannelReader registered above
+            // continues to serve callers that only need the channel string.
+            var resolver = sp.GetRequiredService<IIdentityResolver>();
+            return BuildCliExecutionContext(
+                startupContext.LoggingOptions.DebugMode,
+                startupContext.LoggingOptions.LogsDirectory,
+                startupContext.LoggingOptions.LogFilePath,
+                resolver);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
             BuildAnsiConsole(s, Console.Out),
@@ -623,6 +648,38 @@ public class Program
         var packagesDirectory = GetPackagesDirectory(processPath);
         var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
         return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel, aspireHomeDirectory: aspireHomeDirectory);
+    }
+
+    internal static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, IIdentityResolver identityResolver, string? processPath = null)
+    {
+        ArgumentNullException.ThrowIfNull(identityResolver);
+
+        var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
+        var hivesDirectory = GetHivesDirectory(processPath);
+        var cacheDirectory = GetCacheDirectory(processPath);
+        var sdksDirectory = GetSdksDirectory(processPath);
+        var packagesDirectory = GetPackagesDirectory(processPath);
+        var aspireHomeDirectory = new DirectoryInfo(GetUsersAspirePath(processPath));
+
+        var channel = identityResolver.ResolveChannel().Value;
+        var version = identityResolver.ResolveVersion().Value;
+        var commit = identityResolver.ResolveCommit().Value;
+        var nugetOverride = identityResolver.ResolveNuGetServiceIndexOverride().Value;
+
+        return new CliExecutionContext(
+            workingDirectory,
+            hivesDirectory,
+            cacheDirectory,
+            sdksDirectory,
+            new DirectoryInfo(logsDirectory),
+            logFilePath,
+            debugMode,
+            packagesDirectory: packagesDirectory,
+            identityChannel: channel,
+            aspireHomeDirectory: aspireHomeDirectory,
+            identityVersion: version,
+            identityCommit: commit,
+            nugetServiceIndexOverride: nugetOverride);
     }
 
     private static DirectoryInfo GetCacheDirectory(string? processPath = null)

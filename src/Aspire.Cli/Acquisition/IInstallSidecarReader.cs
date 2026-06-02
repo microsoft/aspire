@@ -20,7 +20,41 @@ namespace Aspire.Cli.Acquisition;
 /// understood by this build). Empty when the sidecar JSON is valid but the
 /// <c>source</c> field is missing or empty.
 /// </param>
-internal sealed record InstallSidecarInfo(string SidecarPath, InstallSource Source, string RawSource);
+/// <param name="Channel">
+/// Optional channel identity override written by the installer (e.g.
+/// <c>stable</c>, <c>staging</c>, <c>daily</c>, <c>pr-&lt;N&gt;</c>). Consumed
+/// by <c>IIdentityResolver</c>. Null when the sidecar does not carry channel
+/// information, in which case identity resolution falls back to the
+/// assembly-baked <c>AspireCliChannel</c> metadata. See
+/// <c>docs/specs/cli-identity-sidecar.md</c>.
+/// </param>
+/// <param name="Version">
+/// Optional informational version override (e.g. <c>13.4.0</c>). Null when
+/// absent. Resolved value is observed by call sites via
+/// <c>CliExecutionContext.IdentityVersion</c>.
+/// </param>
+/// <param name="Commit">
+/// Optional source-revision (commit SHA) override. Null when absent.
+/// Resolved value is observed by call sites via
+/// <c>CliExecutionContext.IdentityCommit</c>.
+/// </param>
+/// <param name="NuGetServiceIndexOverride">
+/// Optional replacement for the <c>https://api.nuget.org/v3/index.json</c>
+/// URL the CLI writes into <em>newly-generated</em> <c>NuGet.config</c> files.
+/// Never used to rewrite URLs the CLI <em>reads</em> from existing user
+/// configs — that asymmetry is intentional, see
+/// <c>docs/specs/cli-identity-sidecar.md</c>. Null when no override is in
+/// effect, in which case callers use the canonical URL from
+/// <c>PackageSources.NuGetOrg</c>.
+/// </param>
+internal sealed record InstallSidecarInfo(
+    string SidecarPath,
+    InstallSource Source,
+    string RawSource,
+    string? Channel = null,
+    string? Version = null,
+    string? Commit = null,
+    string? NuGetServiceIndexOverride = null);
 
 /// <summary>
 /// Result of attempting to read an install-route sidecar.
