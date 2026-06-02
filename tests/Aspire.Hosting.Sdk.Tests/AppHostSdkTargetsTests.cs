@@ -130,18 +130,20 @@ public class AppHostSdkTargetsTests
     }
 
     [Theory]
-    [InlineData(SuppressCliRunHookEnvironmentVariable)]
-    [InlineData("_AspireSuppressCliRunHook")]
-    public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenHookIsSuppressed(string suppressionPropertyName)
+    [InlineData(SuppressCliRunHookEnvironmentVariable, "true")]
+    [InlineData(SuppressCliRunHookEnvironmentVariable, "1")]
+    [InlineData("_AspireSuppressCliRunHook", "true")]
+    [InlineData("_AspireSuppressCliRunHook", "1")]
+    public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenHookIsSuppressed(string suppressionPropertyName, string suppressionValue)
     {
         using var tempDirectory = new TestTempDirectory();
         var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
 
         Dictionary<string, string>? environment = suppressionPropertyName == SuppressCliRunHookEnvironmentVariable
-            ? new Dictionary<string, string> { [SuppressCliRunHookEnvironmentVariable] = "true" }
+            ? new Dictionary<string, string> { [SuppressCliRunHookEnvironmentVariable] = suppressionValue }
             : null;
         var extraArguments = suppressionPropertyName == "_AspireSuppressCliRunHook"
-            ? new[] { "-p:_AspireSuppressCliRunHook=true" }
+            ? new[] { $"-p:_AspireSuppressCliRunHook={suppressionValue}" }
             : [];
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(project, extraArguments, environment);

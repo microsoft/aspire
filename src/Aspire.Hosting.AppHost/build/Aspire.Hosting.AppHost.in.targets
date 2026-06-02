@@ -210,9 +210,14 @@ namespace Projects%3B
            Text="$(_AspireCliBundleNotFoundError)" />
   </Target>
 
+  <PropertyGroup>
+    <_AspireCliRunHookSuppressed Condition="'$(_AspireSuppressCliRunHook)' == 'true' or '$(_AspireSuppressCliRunHook)' == '1'">true</_AspireCliRunHookSuppressed>
+    <_AspireCliRunHookSuppressed Condition="'$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == 'true' or '$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' == '1'">true</_AspireCliRunHookSuppressed>
+  </PropertyGroup>
+
   <Target Name="_AspireComputeRunArguments"
           BeforeTargets="ComputeRunArguments"
-          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireSuppressCliRunHook)' != 'true' and '$(ASPIRE_SUPPRESS_CLI_RUN_HOOK)' != 'true'">
+          Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
     <ItemGroup Condition="'$(FileBasedProgram)' == 'true'">
       <_AspireFileBasedAppHostPath Include="%(RuntimeHostConfigurationOption.Value)"
                                    Condition="'%(RuntimeHostConfigurationOption.Identity)' == 'EntryPointFilePath'" />
