@@ -3,7 +3,7 @@ import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostRe
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
-import { AspireAppHostTreeProvider, isEnabledCommand } from '../views/AspireAppHostTreeProvider';
+import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, HealthStatus, StateStyle, ResourceType } from './resourceConstants';
@@ -311,7 +311,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         // Custom commands (non-standard ones like "Reset Database")
         const standardCommands = new Set(['restart', 'resource-restart', 'stop', 'resource-stop', 'start', 'resource-start']);
         for (const [cmdName, cmd] of Object.entries(commands) as [string, ResourceCommandJson][]) {
-            if (!standardCommands.has(cmdName) && isEnabledCommand(cmd)) {
+            if (!standardCommands.has(cmdName) && isEnabledCommand(cmd) && isCommandVisibleToUi(cmd)) {
                 const displayName = getNormalizedCommandText(cmd.displayName);
                 const description = getNormalizedCommandText(cmd.description);
                 const label = codeLensCommand(displayName ?? cmdName);
@@ -334,7 +334,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 function getEnabledCommand(commands: Record<string, ResourceCommandJson>, ...commandNames: string[]): ResourceCommandJson | undefined {
     return commandNames
         .map(commandName => commands[commandName])
-        .find(isEnabledCommand);
+        .find(command => isEnabledCommand(command) && isCommandVisibleToUi(command));
 }
 
 export function getCodeLensStateLabel(state: string, stateStyle: string, exitCode?: number | null): string {

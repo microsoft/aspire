@@ -94,7 +94,7 @@ export function isEnabledCommand(command: ResourceCommandJson | null | undefined
         && (command.state === undefined || command.state === null || command.state === 'Enabled');
 }
 
-function isCommandVisibleToUi(command: ResourceCommandJson | null | undefined): boolean {
+export function isCommandVisibleToUi(command: ResourceCommandJson | null | undefined): boolean {
     const visibility = command?.visibility;
     if (visibility === undefined || visibility === null || visibility.trim().length === 0) {
         return true;

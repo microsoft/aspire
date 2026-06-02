@@ -870,6 +870,7 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
                     restart: {
                         displayName: 'Restart',
                         description: null,
+                        visibility: 'Api',
                     },
                     stop: {
                         displayName: 'Stop',
@@ -885,6 +886,13 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
                         displayName: 'Reset Database',
                         description: null,
                         state: 'Enabled',
+                        visibility: 'Api',
+                    },
+                    'ui-custom': {
+                        displayName: 'UI Custom',
+                        description: null,
+                        state: 'Enabled',
+                        visibility: 'Api, Ui',
                     },
                     'disabled-custom': {
                         displayName: 'Disabled Custom',
@@ -911,9 +919,9 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
             .map(l => l.command!.arguments![1])
             .sort();
 
-        assert.deepStrictEqual(actionNames, ['legacy-custom', 'reset-db', 'restart']);
+        assert.deepStrictEqual(actionNames, ['legacy-custom', 'ui-custom']);
         const restartLens = lenses.find(l => l.command?.arguments?.[1] === 'restart');
-        assert.strictEqual(restartLens?.command?.arguments?.[3].displayName, 'Restart');
+        assert.strictEqual(restartLens, undefined);
         harness.dispose();
     });
 
