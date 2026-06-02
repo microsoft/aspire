@@ -16,6 +16,7 @@
 - Modify `extension/src/test-e2e/helpers/fixtures.ts`: add helpers that write temporary Aspire CLI wrappers used to simulate older CLIs that either do not advertise `describe-include-disabled-commands.v1` or do not support `config info --json` at all.
 - Modify `extension/src/test-e2e/helpers/vscode.ts`: add a helper for reading active quick-pick labels so the E2E can assert picker filtering before selecting a command.
 - Modify `extension/src/test-e2e/treeActions.e2e.test.ts`: assert the real VS Code tree renders `Commands`, an enabled command item, and a disabled command item; assert hidden/API-only/unknown-state commands and empty command groups are absent; assert enabled command-item context-menu execution works; assert the legacy resource-command picker excludes disabled/hidden/API-only/unknown commands; keep the existing argument/secret-redaction execution assertions.
+- Modify `extension/src/test-e2e/zeroToRunning.e2e.test.ts`: make the zero-to-running scenario start from a workspace with no AppHost/configured AppHost and create the AppHost with `aspire new` during the test, instead of relying on the default pre-created E2E AppHost workspace.
 - Modify `extension/src/test-e2e/packageSurface.e2e.test.ts`: add `aspire-vscode.executeResourceCommandItem` to the expected `view/item/context` command list.
 - Resolve conflicts in `extension/src/extension.ts`: preserve #17772's `registerInstrumentedCommand` registrations and `AppHostsViewTelemetry`, while adding `executeResourceCommandItem` and the disabled CodeLens guard from #17698.
 - Resolve conflicts in `extension/src/views/AppHostDataRepository.ts`: preserve #17772's multi-AppHost/resource routing fixes and add #17698's disabled-command capability probe plus fallback retry without `--include-disabled-commands`.
@@ -661,7 +662,123 @@ Expected: PASS.
 
 ---
 
-### Task 6: Update package-surface E2E expectations
+### Task 6: Make zero-to-running actually start from zero
+
+**Files:**
+- Modify: `extension/src/test-e2e/zeroToRunning.e2e.test.ts`
+- Modify if needed: `extension/src/test-e2e/helpers/fixtures.ts`
+
+- [ ] **Step 1: Add a helper that removes the default pre-created AppHost from the workspace for this test**
+
+If #17772 still launches all E2E specs with the standard `AspireE2E.AppHost` fixture, add this helper to `extension/src/test-e2e/helpers/fixtures.ts`:
+
+```ts
+export function removePrimaryAppHostFixture(): void {
+    removePath(path.join(getWorkspaceRoot(), 'AspireE2E.AppHost'), { recursive: true, force: true });
+    removePath(path.join(getWorkspaceRoot(), 'AspireE2E.Worker'), { recursive: true, force: true });
+    removeWorkspaceAppHostConfig();
+}
+```
+
+Expected: a test can temporarily turn the normal E2E workspace into a no-AppHost workspace while preserving the workspace root and VS Code window.
+
+- [ ] **Step 2: Update imports in `zeroToRunning.e2e.test.ts`**
+
+Change the fixture import to include `removePrimaryAppHostFixture` and `removeWorkspaceAppHostConfig` if those helpers are not already imported:
+
+```ts
+import { addIntegrationPackageToAppHost, clearBreakpoints, createEmptyAppHostProject, executeE2eControlCommand, getGeneratedAppHostPath, removeGeneratedProject, removePrimaryAppHostFixture, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
+```
+
+Expected: the test can remove the pre-created fixture before asserting zero-to-running behavior.
+
+- [ ] **Step 3: Start the test by proving there is no selected workspace AppHost**
+
+At the beginning of `test('creates a new AppHost, adds a package, and debugs to the dashboard', ...)`, replace the current initial repository-idle block:
+
+```ts
+let section = await openAspireView();
+await waitForRepositoryIdle();
+```
+
+with:
+
+```ts
+removePrimaryAppHostFixture();
+let section = await openAspireView();
+await waitForRepositoryIdle();
+```
+
+Then add an assertion that the extension has no selected workspace AppHost before `aspire new` runs:
+
+```ts
+await waitForExtensionState(
+    file => file.state.workspaceAppHostPath === undefined && file.state.workspaceAppHostCandidatePaths.length === 0,
+    'no workspace AppHost before zero-to-running project creation',
+    60000);
+```
+
+Expected: the test fails if it is still just opening the default fixture workspace with an already-created AppHost.
+
+- [ ] **Step 4: Make `aspire new` create the project used by the rest of the test**
+
+Keep the existing command-palette routing assertion:
+
+```ts
+await setTerminalCommandExecutionSuppressedForE2E(true);
+const beforeRoutedNewInvocation = getCommandInvocationCount('aspire-vscode.new');
+const beforeRoutedNewCommand = getTerminalCommandCount();
+await executeE2eControlCommand({ name: 'executeAspireCommand', commandId: 'aspire-vscode.new' });
+await waitForCommandOutcome('aspire-vscode.new', 'success', 60000, beforeRoutedNewInvocation);
+await waitForTerminalCommand(
+    event => event.executionSuppressed && event.subcommand === 'new',
+    'suppressed Aspire: New Project terminal routing',
+    60000,
+    beforeRoutedNewCommand);
+```
+
+Then ensure the actual project creation still happens through `aspire new`, not by copying/opening a checked-in AppHost:
+
+```ts
+const projectRoot = await createEmptyAppHostProject(projectName);
+assert.ok(fs.existsSync(projectRoot));
+assert.ok(fs.existsSync(appHostPath));
+```
+
+Expected: the test starts with no AppHost, uses `aspire new` to create `ExtensionZeroToRunningApp`, and only then configures the workspace to point at the generated `apphost.cs`.
+
+- [ ] **Step 5: Refresh and assert the generated AppHost is the first selected AppHost**
+
+Keep:
+
+```ts
+writeWorkspaceAppHostConfigForPath(appHostPath);
+const beforeRefresh = getCommandInvocationCount('aspire-vscode.refreshAppHosts');
+await executeE2eControlCommand({ name: 'refreshAppHosts' });
+await waitForCommandOutcome('aspire-vscode.refreshAppHosts', 'success', 60000, beforeRefresh);
+const selected = await waitForSelectedWorkspaceAppHost(appHostPath);
+```
+
+Expected: the selected AppHost is the one just created by `aspire new`, not the removed default `AspireE2E.AppHost` fixture.
+
+- [ ] **Step 6: Keep the package add/debug/dashboard assertions**
+
+Keep the existing `Aspire.Hosting.Redis` add, source-open, debug-session startup, dashboard HTTP probe, integrated browser assertion, and cleanup. These prove the newly-created AppHost can go from creation to debug/dashboard, which is the intended "zero-to-running" flow.
+
+- [ ] **Step 7: Compile E2E tests**
+
+Run:
+
+```bash
+cd extension
+corepack yarn compile-e2e
+```
+
+Expected: PASS.
+
+---
+
+### Task 7: Update package-surface E2E expectations
 
 **Files:**
 - Modify: `extension/src/test-e2e/packageSurface.e2e.test.ts`
@@ -710,12 +827,13 @@ Expected: PASS.
 
 ---
 
-### Task 7: Run targeted validations
+### Task 8: Run targeted validations
 
 **Files:**
 - Validate: `extension/src/extension.ts`
 - Validate: `extension/src/test-e2e/treeActions.e2e.test.ts`
 - Validate: `extension/src/test-e2e/packageSurface.e2e.test.ts`
+- Validate: `extension/src/test-e2e/zeroToRunning.e2e.test.ts`
 - Validate: `extension/scripts/run-e2e.js`
 
 - [ ] **Step 1: Run extension compile and lint**
@@ -775,7 +893,7 @@ Expected: a normal implementation commit on top of the merge-from-main commit.
 
 ---
 
-### Task 8: Update the PR and run multi-model code review
+### Task 9: Update the PR and run multi-model code review
 
 **Files:**
 - Review: full branch diff for PR #17698 after all implementation commits are pushed
@@ -862,6 +980,6 @@ Expected: every accepted review finding is fixed, validated, committed, and push
 
 ## Self-Review
 
-- Spec coverage: The plan covers the requested E2E test, the expected #17772 conflict areas, and explicitly avoids merging/rebasing #17772 directly into #17698. It also covers the PR-comment edge cases: no-command resources, hidden commands, API-only commands, unknown command states, disabled command non-execution, enabled command-item context-menu execution, quick-pick filtering, package contribution coverage, and old CLI compatibility both when `describe-include-disabled-commands.v1` is not advertised and when `config info --json` is unsupported. It includes the requested final code-review pass using the repository `code-review` skill plus GPT-5.5, Claude Opus 4.7, and Claude Opus 4.8 code-review agents after the PR branch is updated.
+- Spec coverage: The plan covers the requested E2E test, the expected #17772 conflict areas, and explicitly avoids merging/rebasing #17772 directly into #17698. It also covers the PR-comment edge cases: no-command resources, hidden commands, API-only commands, unknown command states, disabled command non-execution, enabled command-item context-menu execution, quick-pick filtering, package contribution coverage, and old CLI compatibility both when `describe-include-disabled-commands.v1` is not advertised and when `config info --json` is unsupported. It adds the requested zero-to-running correction so that test starts with no AppHost and uses `aspire new` to create the project before selecting/debugging it. It includes the requested final code-review pass using the repository `code-review` skill plus GPT-5.5, Claude Opus 4.7, and Claude Opus 4.8 code-review agents after the PR branch is updated.
 - Placeholder scan: No `TBD`, `TODO`, or undefined helper names remain. The code snippets use existing #17772 helpers and #17698 command names.
 - Type consistency: The plan uses existing ExTester helper types (`TreeItem.getDescription()`, `TreeItem.getChildren()`, `getActionButton()`), existing Aspire command APIs (`CommandOptions.UpdateState`, `ResourceCommandState.Disabled`, `ResourceCommandState.Hidden`, `ResourceCommandVisibility.Api`), and existing extension command IDs.
