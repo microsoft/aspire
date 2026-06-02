@@ -258,7 +258,7 @@ while the context is being created — for example the Azure Npgsql integration
 (`EnrichAzureNpgsqlDbContext`) — fail at design time because no real connection
 string is available, producing an error such as:
 
-```
+```text
 Unable to create a 'DbContext' of type 'AppDbContext'. The exception 'Format of the
 initialization string does not conform to specification starting at index 0.' was
 thrown while attempting to create an instance.
