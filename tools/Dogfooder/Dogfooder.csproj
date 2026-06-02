@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Aspire.Dogfooder</RootNamespace>
+    <!--
+      Suppress CA2007 (ConfigureAwait on awaited Task) — Dogfooder is a console
+      executable with no SynchronizationContext so the rule does not apply.
+      Suppress CA1822 — many static-friendly methods are kept instance-level
+      because they're DI-resolved per command pattern.
+    -->
+    <NoWarn>$(NoWarn);CA2007;CA1822</NoWarn>
+    <!--
+      PublishAot intentionally disabled: Hex1b uses reflection / dynamic widget
+      composition heavily and is not AOT-clean. Dogfooder is a developer tool,
+      not a shipping artifact, so the JIT cost is acceptable.
+    -->
+    <IsPackable>false</IsPackable>
+    <IsShippingPackage>false</IsShippingPackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Hex1b" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Linked from src/Shared so Dogfooder can author ASPIRE_CLI_* identity
+      override env vars using the same constants the CLI reads. We deliberately
+      avoid a ProjectReference on Aspire.Cli: it's an AOT-published executable
+      project and pulling it in here would drag the entire CLI dependency tree
+      (and its AOT trimming constraints) into a tool that doesn't need it.
+    -->
+    <Compile Include="$(SharedDir)AspireCliIdentityEnvVars.cs" Link="Acquisition\AspireCliIdentityEnvVars.cs" />
+  </ItemGroup>
+
+</Project>

@@ -28,23 +28,14 @@ namespace Aspire.Cli.Acquisition;
 /// </remarks>
 internal sealed class IdentityResolver : IIdentityResolver
 {
-    // Env var names — must stay in sync with docs/specs/cli-identity-sidecar.md.
-    internal const string ChannelEnvVar = "ASPIRE_CLI_CHANNEL";
-    internal const string VersionEnvVar = "ASPIRE_CLI_VERSION";
-    internal const string CommitEnvVar = "ASPIRE_CLI_COMMIT";
-    internal const string NuGetServiceIndexEnvVar = "ASPIRE_CLI_NUGET_SERVICE_INDEX";
-
-    // The set of env vars the CLI strips when launching child Aspire processes
-    // (see PeerInstallProbe). Centralised here so the strip-list and the
-    // resolver's read-list stay in lockstep — if you add a new ASPIRE_CLI_*
-    // identity override above, add it to this array too.
-    private static readonly string[] s_identityEnvVarNames =
-    [
-        ChannelEnvVar,
-        VersionEnvVar,
-        CommitEnvVar,
-        NuGetServiceIndexEnvVar,
-    ];
+    // Env var name constants live in the shared file so external tooling
+    // (tools/Dogfooder) can author the same vars without taking a project
+    // reference on the CLI. The aliases below preserve the resolver's
+    // previous public surface so existing callers and tests compile unchanged.
+    internal const string ChannelEnvVar = AspireCliIdentityEnvVars.Channel;
+    internal const string VersionEnvVar = AspireCliIdentityEnvVars.Version;
+    internal const string CommitEnvVar = AspireCliIdentityEnvVars.Commit;
+    internal const string NuGetServiceIndexEnvVar = AspireCliIdentityEnvVars.NuGetServiceIndex;
 
     /// <summary>
     /// The full set of <c>ASPIRE_CLI_*</c> identity-override environment
@@ -53,7 +44,7 @@ internal sealed class IdentityResolver : IIdentityResolver
     /// lockstep with the resolver's read-list — if you add a new override
     /// constant above, it shows up here automatically.
     /// </summary>
-    internal static IReadOnlyList<string> IdentityEnvVarNames => s_identityEnvVarNames;
+    internal static IReadOnlyList<string> IdentityEnvVarNames => AspireCliIdentityEnvVars.IdentityEnvVarNames;
 
     // The set of channel strings the assembly-baked fallback may legally
     // produce. We intentionally do NOT validate env / sidecar channel values
