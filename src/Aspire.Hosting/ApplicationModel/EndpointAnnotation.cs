@@ -385,27 +385,6 @@ public sealed class EndpointAnnotation : IResourceAnnotation
     /// Gets the list of all AllocatedEndpoints associated with this Endpoint.
     /// </summary>
     public NetworkEndpointSnapshotList AllAllocatedEndpoints { get; } = new();
-
-    internal Func<NetworkIdentifier, AllocatedEndpoint?>? _onDemandAllocatedEndpointProvider;
-
-    internal Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkId, CancellationToken cancellationToken = default)
-    {
-        if (AllAllocatedEndpoints.TryGetAllocatedEndpoint(networkId, out var endpoint))
-        {
-            return Task.FromResult(endpoint);
-        }
-
-        if (_onDemandAllocatedEndpointProvider is { } allocatedEndpointProvider)
-        {
-            endpoint = allocatedEndpointProvider(networkId);
-            if (endpoint is not null)
-            {
-                return Task.FromResult(endpoint);
-            }
-        }
-
-        return AllAllocatedEndpoints.GetAllocatedEndpointAsync(networkId, cancellationToken);
-    }
 }
 
 /// <summary>
