@@ -825,6 +825,113 @@ public class TelemetryRepositoryTests
     }
 
     [Fact]
+    public void GetTraces_MultipleResourceKeys_ReturnsMatchingTracesOnly()
+    {
+        var repository = CreateRepository();
+
+        AddTestData(repository, "resource1", "inst1");
+        AddTestData(repository, "resource2", "inst2");
+        AddTestData(repository, "resource3", "inst3");
+
+        var key1 = new ResourceKey("resource1", "inst1");
+        var key2 = new ResourceKey("resource2", "inst2");
+
+        // Act - query with two resource keys
+        var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [key1, key2], StartIndex = 0, Count = 10, Filters = [] });
+
+        // Assert - should return traces from both resource1 and resource2, but not resource3
+        Assert.Collection(traces.PagedResult.Items,
+            t => AssertId("resource2-inst2", t.TraceId),
+            t => AssertId("resource1-inst1", t.TraceId));
+    }
+
+    [Fact]
+    public void GetSpans_MultipleResourceKeys_ReturnsMatchingSpansOnly()
+    {
+        var repository = CreateRepository();
+
+        AddTestData(repository, "service1", "inst1");
+        AddTestData(repository, "service2", "inst2");
+        AddTestData(repository, "service3", "inst3");
+
+        // Act - query spans for service1 and service2 only
+        var result = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKeys = [new ResourceKey("service1", "inst1"), new ResourceKey("service2", "inst2")],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        });
+
+        // Assert - should return spans from service1 and service2, not service3
+        Assert.Collection(result.PagedResult.Items,
+            s => Assert.Equal("Test span. Id: service2-inst2-1", s.Name),
+            s => Assert.Equal("Test span. Id: service1-inst1-1", s.Name));
+    }
+
+    [Fact]
+    public async Task WatchSpansAsync_MultipleResourceKeys_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+
+        AddTestData(repository, "service1", "inst1");
+        AddTestData(repository, "service2", "inst2");
+        AddTestData(repository, "service3", "inst3");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var receivedSpans = new List<OtlpSpan>();
+
+        // Act - Watch service1 and service2 (not service3)
+        try
+        {
+            await foreach (var span in repository.WatchSpansAsync(new WatchSpansRequest { ResourceKeys = [new ResourceKey("service1", "inst1"), new ResourceKey("service2", "inst2")], Filters = [] }, cts.Token))
+            {
+                receivedSpans.Add(span);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected
+        }
+
+        // Assert - should receive spans from service1 and service2, not service3
+        Assert.Collection(receivedSpans,
+            s => Assert.Equal("Test span. Id: service2-inst2-1", s.Name),
+            s => Assert.Equal("Test span. Id: service1-inst1-1", s.Name));
+    }
+
+    [Fact]
+    public async Task WatchLogsAsync_MultipleResourceKeys_FiltersCorrectly()
+    {
+        var repository = CreateRepository();
+
+        AddTestData(repository, "service1", "inst1");
+        AddTestData(repository, "service2", "inst2");
+        AddTestData(repository, "service3", "inst3");
+
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        var receivedLogs = new List<OtlpLogEntry>();
+
+        // Act - Watch service1 and service2 (not service3)
+        try
+        {
+            await foreach (var log in repository.WatchLogsAsync(new WatchLogsRequest { ResourceKeys = [new ResourceKey("service1", "inst1"), new ResourceKey("service2", "inst2")], Filters = [] }, cts.Token))
+            {
+                receivedLogs.Add(log);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected
+        }
+
+        // Assert - should receive logs from service1 and service2, not service3
+        Assert.Collection(receivedLogs,
+            l => Assert.Equal("log-service2-inst2", l.Message),
+            l => Assert.Equal("log-service1-inst1", l.Message));
+    }
+
+    [Fact]
     public async Task WatchLogsAsync_FiltersAppliedWhenPushing()
     {
         // Arrange
