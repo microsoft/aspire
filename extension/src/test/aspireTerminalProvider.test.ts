@@ -121,6 +121,37 @@ suite('AspireTerminalProvider tests', () => {
             }
         });
 
+        test('quotes Windows CLI path with PowerShell escaping', async () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            const cliPath = 'C:\\Tools\\$(bad)\\`bin\\aspire.exe';
+            resolveCliPathStub.resolves({ cliPath, available: true, source: 'configured' });
+            let executedCommand: string | undefined;
+            const terminal = {
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                sendText: () => { },
+                show: () => { }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('logs');
+
+                assert.strictEqual(executedCommand, `& ${quoteShellArg(cliPath, 'win32')} logs`);
+            }
+            finally {
+                platformStub.restore();
+                getAspireTerminalStub.restore();
+            }
+        });
+
         test('sends Ctrl+C before command when shell integration is unavailable', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
             const sentTexts: { text: string; shouldExecute?: boolean }[] = [];

@@ -112,8 +112,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         // On Unix, just use the path directly
         let command: string;
         if (process.platform === 'win32') {
-            // Use & call operator with quoted path for Windows
-            command = `& "${cliPath}" ${subcommand}`;
+            command = `& ${quoteShellArg(cliPath)} ${subcommand}`;
         } else {
             // For Unix-like systems, quote only if needed
             const quotedPath = /[\s"'`$!*?()&|<>;]/.test(cliPath) ? `'${cliPath.replace(/'/g, `'\"'\"'`)}'` : cliPath;
