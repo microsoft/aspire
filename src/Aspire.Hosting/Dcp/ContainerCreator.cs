@@ -979,6 +979,9 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     private static List<ContainerPortSpec> BuildContainerPorts(RenderedModelResource<Container> cr)
     {
         var ports = new List<ContainerPortSpec>();
+        var onDemandEndpointAllocationAnnotation = cr.ModelResource.Annotations
+            .OfType<OnDemandEndpointAllocationAnnotation>()
+            .SingleOrDefault();
 
         foreach (var sp in cr.ServicesProduced)
         {
@@ -989,7 +992,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 ContainerPort = ea.TargetPort,
             };
 
-            Interlocked.Exchange(ref ea._onDemandAllocatedEndpointProvider, null);
+            onDemandEndpointAllocationAnnotation?.Clear(ea);
 
             if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
             {
