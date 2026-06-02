@@ -275,6 +275,11 @@ public class TextVisualizerViewModel
         {
             ChangeFormattedText(newFormat, Text);
         }
+        else if (newFormat == DashboardUIHelpers.SqlFormat)
+        {
+            // SQL isn't reformatted, it is displayed as-is and syntax highlighted by highlight.js.
+            ChangeFormattedText(newFormat, Text);
+        }
         else
         {
             ChangeFormattedText(DashboardUIHelpers.PlaintextFormat, Text);

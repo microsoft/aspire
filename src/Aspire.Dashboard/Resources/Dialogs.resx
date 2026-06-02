@@ -266,6 +266,9 @@
   <data name="TextVisualizerDialogMarkdownFormat" xml:space="preserve">
     <value>Markdown</value>
   </data>
+  <data name="TextVisualizerDialogSqlFormat" xml:space="preserve">
+    <value>SQL</value>
+  </data>
   <data name="TextVisualizerSelectFormatType" xml:space="preserve">
     <value>Select format</value>
   </data>

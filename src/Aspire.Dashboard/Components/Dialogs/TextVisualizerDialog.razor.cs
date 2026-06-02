@@ -60,12 +60,14 @@ public partial class TextVisualizerDialog : ComponentBase
         EnabledOptions.Clear();
         EnabledOptions.Add(DashboardUIHelpers.PlaintextFormat);
         EnabledOptions.Add(DashboardUIHelpers.MarkdownFormat);
+        EnabledOptions.Add(DashboardUIHelpers.SqlFormat);
 
         _options = [
             new SelectViewModel<string> { Id = DashboardUIHelpers.PlaintextFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogPlaintextFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.MarkdownFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogMarkdownFormat)] },
             new SelectViewModel<string> { Id = DashboardUIHelpers.JsonFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogJsonFormat)] },
-            new SelectViewModel<string> { Id = DashboardUIHelpers.XmlFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogXmlFormat)] }
+            new SelectViewModel<string> { Id = DashboardUIHelpers.XmlFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogXmlFormat)] },
+            new SelectViewModel<string> { Id = DashboardUIHelpers.SqlFormat, Name = Loc[nameof(Resources.Dialogs.TextVisualizerDialogSqlFormat)] }
         ];
 
         // If a fixed format is specified, use it directly without auto-detection.

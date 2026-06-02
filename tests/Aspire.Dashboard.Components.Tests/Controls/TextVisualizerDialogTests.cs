@@ -48,7 +48,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(expectedJson, instance.TextVisualizerViewModel.FormattedText);
         Assert.Equal(DashboardUIHelpers.JsonFormat, instance.TextVisualizerViewModel.FormatKind);
-        Assert.Equal([DashboardUIHelpers.JsonFormat, DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.JsonFormat, DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.SqlFormat], instance.EnabledOptions.ToImmutableSortedSet());
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(DashboardUIHelpers.XmlFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(expectedXml, instance.TextVisualizerViewModel.FormattedText);
-        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.SqlFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
 
         // changing format works
         instance.ChangeFormat(DashboardUIHelpers.PlaintextFormat, rawXml);
@@ -97,7 +97,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(DashboardUIHelpers.XmlFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(expectedXml, instance.TextVisualizerViewModel.FormattedText);
-        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.SqlFormat, DashboardUIHelpers.XmlFormat], instance.EnabledOptions.ToImmutableSortedSet());
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         Assert.Equal(DashboardUIHelpers.PlaintextFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.Equal(rawText, instance.TextVisualizerViewModel.FormattedText);
-        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat], instance.EnabledOptions.ToImmutableSortedSet());
+        Assert.Equal([DashboardUIHelpers.MarkdownFormat, DashboardUIHelpers.PlaintextFormat, DashboardUIHelpers.SqlFormat], instance.EnabledOptions.ToImmutableSortedSet());
     }
 
     [Fact]
@@ -239,6 +239,27 @@ public class TextVisualizerDialogTests : DashboardTestContext
         // Verify the fixed format is used
         Assert.Equal(DashboardUIHelpers.JsonFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.True(instance.HasFixedFormat);
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_CanChangeToSqlFormatAsync()
+    {
+        const string rawSql = """SELECT o."Author", o."Body" FROM "Quotes" o LIMIT 5""";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawSql, string.Empty, false), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var instance = cut.FindComponent<TextVisualizerDialog>().Instance;
+
+        // SQL is always available as a format option because it can't be reliably auto-detected.
+        Assert.Contains(DashboardUIHelpers.SqlFormat, instance.EnabledOptions);
+
+        // Changing to SQL format displays the text as-is and marks it for SQL highlighting.
+        instance.ChangeFormat(DashboardUIHelpers.SqlFormat, rawSql);
+
+        Assert.Equal(DashboardUIHelpers.SqlFormat, instance.TextVisualizerViewModel.FormatKind);
+        Assert.Equal(rawSql, instance.TextVisualizerViewModel.FormattedText);
     }
 
     private IRenderedFragment SetUpDialog(out IDialogService dialogService, ThemeManager? themeManager = null, TestLocalStorage? localStorage = null)
