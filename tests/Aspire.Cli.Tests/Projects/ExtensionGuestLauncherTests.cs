@@ -138,6 +138,8 @@ public class ExtensionGuestLauncherTests
 
         public IExtensionBackchannel Backchannel => throw new NotImplementedException();
 
+        public Task FlushAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+
         public Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug)
         {
             _onLaunch(projectFile, arguments, environment, debug);

@@ -6,6 +6,8 @@ import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { appHostDescribeMayNotBeSupported, aspireCliDescribeNotSupported, aspireDescribeMinimumVersion, errorFetchingAppHosts, workspaceViewSelectedMultipleAppHosts, workspaceViewSelectedSingleAppHost } from '../loc/strings';
 import { AppHostCandidate, AppHostDiscoveryService, formatAppHostLanguage, getWorkspaceAppHostProjectSearchResult, isBuildableAppHostCandidate } from '../utils/appHostDiscovery';
+import { ConfigInfoProvider } from '../utils/configInfoProvider';
+import { describeIncludeDisabledCommandsCapability } from '../types/configInfo';
 
 export interface ResourceUrlJson {
     name: string | null;
@@ -18,6 +20,7 @@ export interface ResourceCommandJson {
     displayName?: string | null;
     description: string | null;
     visibility?: string | null;
+    state?: string | null;
     argumentInputs?: ResourceCommandArgumentInputJson[] | null;
 }
 
@@ -122,6 +125,8 @@ interface GlobalDescribeStream {
     appHostPath: string;
     process: ChildProcessWithoutNullStreams | undefined;
     resources: Map<string, ResourceJson>;
+    nonJsonLines: string[];
+    stderr: string;
     restartTimer: ReturnType<typeof setTimeout> | undefined;
     restartDelay: number;
     version: number;
@@ -162,6 +167,13 @@ export class AppHostDataRepository {
     private _describeReceivedData = false;
     private _describeStartPending = false;
     private _describeStartVersion = 0;
+    // Whether `aspire describe` accepts the hidden `--include-disabled-commands` flag. Resolved
+    // lazily from the CLI's advertised capabilities (`aspire config info --json`) so we don't pass
+    // the flag to an older CLI that would reject it and emit no resource data. Starts optimistic so
+    // that, if capability resolution fails (e.g. a CLI too old to support `config info`), we still
+    // attempt the flag and rely on the locale-independent no-data fallback below.
+    private _includeDisabledCommandsSupported = true;
+    private readonly _configInfoProvider: ConfigInfoProvider;
 
     // ── Running AppHost state (ps polling) ──
     private _appHosts: AppHostDisplayInfo[] = [];
@@ -195,7 +207,9 @@ export class AppHostDataRepository {
     private _workspaceAppHostDescription: string | undefined;
     private _workspaceAppHostDiscoveryComplete = false;
     private _workspaceAppHostDiscoveryUsesWorkspaceRoot = false;
+    private _workspaceAppHostDiscoveryVersion = 0;
     private readonly _appHostDiscoveryChangeDisposable: vscode.Disposable;
+    private readonly _workspaceFoldersChangeDisposable: vscode.Disposable;
     private readonly _appHostDiscoveryService: AppHostDiscoveryService;
     private readonly _ownsAppHostDiscoveryService: boolean;
 
@@ -214,11 +228,23 @@ export class AppHostDataRepository {
     constructor(private readonly _terminalProvider: AspireTerminalProvider, appHostDiscoveryService?: AppHostDiscoveryService) {
         this._appHostDiscoveryService = appHostDiscoveryService ?? new AppHostDiscoveryService(_terminalProvider);
         this._ownsAppHostDiscoveryService = appHostDiscoveryService === undefined;
+        this._configInfoProvider = new ConfigInfoProvider(_terminalProvider);
         this._appHostDiscoveryChangeDisposable = this._appHostDiscoveryService.onDidChangeCandidates(workspaceFolder => {
             const rootFolder = vscode.workspace.workspaceFolders?.[0];
             if (rootFolder?.uri.toString() === workspaceFolder.uri.toString()) {
                 this._fetchWorkspaceAppHost();
             }
+        });
+        this._workspaceFoldersChangeDisposable = vscode.workspace.onDidChangeWorkspaceFolders(() => {
+            this._stopDescribeWatch({ clearWorkspaceResources: true });
+            this._stopAllGlobalDescribes();
+            this._stopPolling();
+            this._workspaceAppHostDiscoveryComplete = false;
+            this._clearWorkspaceAppHostDiscovery();
+            this._clearWorkspaceAppHostData();
+            this._clearErrors();
+            this._updateWorkspaceContext();
+            this._fetchWorkspaceAppHost({ forceRefresh: true });
         });
         this._fetchWorkspaceAppHost();
         this._configChangeDisposable = vscode.workspace.onDidChangeConfiguration(e => {
@@ -226,6 +252,12 @@ export class AppHostDataRepository {
                 this._startPsPolling();
             }
         });
+        // Kick off the CLI capability probe eagerly (fire-and-forget) so the cached describe gate is
+        // ready by the time a describe stream starts. We must NOT await capabilities on the describe
+        // start path: an await there would reorder the describe spawn after other streams (e.g. ps)
+        // and change observable process ordering. Until the probe resolves we use the optimistic
+        // default and the per-stream no-data fallback corrects a stale CLI.
+        void this._resolveDescribeCapability();
     }
 
     // ── Public accessors ──
@@ -260,6 +292,15 @@ export class AppHostDataRepository {
 
     get workspaceAppHostDescription(): string | undefined {
         return this._workspaceAppHostDescription;
+    }
+
+    get isLoading(): boolean {
+        const isLoading = this._viewMode === 'workspace' ? this._loadingWorkspace : this._loadingGlobal;
+        return this._dataActive && isLoading;
+    }
+
+    get isWorkspaceAppHostDiscoveryComplete(): boolean {
+        return this._workspaceAppHostDiscoveryComplete;
     }
 
     get errorMessage(): string | undefined {
@@ -312,8 +353,13 @@ export class AppHostDataRepository {
         this._stopAllGlobalDescribes();
         this._workspaceResources.clear();
         this._clearErrors();
+        // A user-triggered refresh should observe AppHost/config files written by tools
+        // even when the file watcher has not delivered an invalidation event yet.
+        this._workspaceAppHostDiscoveryComplete = false;
+        this._clearWorkspaceAppHostDiscovery();
         this._updateWorkspaceContext();
         this._describeRestartDelay = 5000;
+        this._fetchWorkspaceAppHost({ forceRefresh: true });
         if (this._shouldWatchWorkspace) {
             this._startDescribeWatch();
         }
@@ -345,6 +391,7 @@ export class AppHostDataRepository {
         this._stopOneShotProcesses();
         this._configChangeDisposable.dispose();
         this._appHostDiscoveryChangeDisposable.dispose();
+        this._workspaceFoldersChangeDisposable.dispose();
         this._onDidChangeData.dispose();
         if (this._ownsAppHostDiscoveryService) {
             this._appHostDiscoveryService.dispose();
@@ -406,7 +453,8 @@ export class AppHostDataRepository {
 
     // ── Workspace app host (from aspire ls) ──
 
-    private _fetchWorkspaceAppHost(): void {
+    private _fetchWorkspaceAppHost(options?: { forceRefresh?: boolean }): void {
+        const discoveryVersion = ++this._workspaceAppHostDiscoveryVersion;
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0) {
             this._workspaceAppHostDiscoveryComplete = true;
@@ -422,8 +470,8 @@ export class AppHostDataRepository {
 
         extensionLogOutputChannel.info('Fetching workspace apphost via shared AppHost discovery');
 
-        this._appHostDiscoveryService.discover(rootFolder).then(appHosts => {
-            if (this._disposed) {
+        this._appHostDiscoveryService.discover(rootFolder, options?.forceRefresh).then(appHosts => {
+            if (!this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
                 return;
             }
 
@@ -431,6 +479,10 @@ export class AppHostDataRepository {
             this._workspaceAppHostDiscoveryComplete = true;
             this._handleWorkspaceAppHostCandidates(result.app_host_candidates, result.selected_project_file);
         }).catch(error => {
+            if (!this._isCurrentWorkspaceDiscovery(discoveryVersion, rootFolder)) {
+                return;
+            }
+
             this._workspaceAppHostDiscoveryComplete = true;
             extensionLogOutputChannel.warn(`Failed to fetch workspace apphost: ${error}`);
             this._clearWorkspaceAppHostDiscovery();
@@ -464,8 +516,10 @@ export class AppHostDataRepository {
                 this._clearWorkspaceAppHostSelection();
             }
             this._workspaceAppHostDescription = workspaceViewSelectedMultipleAppHosts(buildableAppHostCandidates.length);
-            extensionLogOutputChannel.info(`Workspace contains ${buildableAppHostCandidates.length} buildable AppHosts; keeping workspace view`);
-            this.setViewMode('workspace');
+            extensionLogOutputChannel.info(`Workspace contains ${buildableAppHostCandidates.length} buildable AppHosts`);
+            if (this._viewMode === 'workspace') {
+                this.setViewMode('workspace');
+            }
             this._syncPolling();
             this._onDidChangeData.fire();
             return;
@@ -481,7 +535,19 @@ export class AppHostDataRepository {
             extensionLogOutputChannel.info(`Workspace apphost resolved: ${selectedAppHostCandidate.path} (${selectedAppHostCandidate.language}, ${selectedAppHostCandidate.status})`);
             this._syncPolling();
             this._onDidChangeData.fire();
+            return;
         }
+
+        this._clearWorkspaceAppHostDiscovery();
+        this._syncPolling();
+        this._updateWorkspaceContext({ clearLoading: true });
+    }
+
+    private _isCurrentWorkspaceDiscovery(discoveryVersion: number, workspaceFolder: vscode.WorkspaceFolder): boolean {
+        const rootFolder = vscode.workspace.workspaceFolders?.[0];
+        return !this._disposed
+            && discoveryVersion === this._workspaceAppHostDiscoveryVersion
+            && rootFolder?.uri.toString() === workspaceFolder.uri.toString();
     }
 
     private _setWorkspaceAppHostPath(appHostPath: string, appHostCandidates: readonly AppHostCandidate[]): void {
@@ -517,13 +583,30 @@ export class AppHostDataRepository {
     private _clearWorkspaceAppHostData(): void {
         this._workspaceResources.clear();
         this._workspaceAppHost = undefined;
-        this._appHosts = [];
-        this._appHostsSnapshot = '[]';
+        if (this._viewMode === 'workspace') {
+            this._appHosts = [];
+            this._appHostsSnapshot = '[]';
+        }
     }
 
     // ── Workspace mode: describe --follow ──
 
-    private _startDescribeWatch(): void {
+    /**
+     * Reads the CLI's advertised capabilities and maps the describe `--include-disabled-commands`
+     * capability onto {@link _includeDisabledCommandsSupported}. Best-effort: on a missing/older CLI
+     * the optimistic default and per-stream no-data fallback still cover us.
+     */
+    private async _resolveDescribeCapability(): Promise<void> {
+        const configInfo = await this._configInfoProvider.getConfigInfo({ suppressErrors: true });
+        if (this._disposed || !configInfo) {
+            return;
+        }
+
+        this._includeDisabledCommandsSupported = configInfo.capabilities?.includes(describeIncludeDisabledCommandsCapability) ?? false;
+        extensionLogOutputChannel.info(`CLI capability '${describeIncludeDisabledCommandsCapability}' ${this._includeDisabledCommandsSupported ? 'advertised' : 'not advertised'}; describe --include-disabled-commands ${this._includeDisabledCommandsSupported ? 'enabled' : 'disabled'}.`);
+    }
+
+    private _startDescribeWatch(forceIncludeDisabledCommands?: boolean): void {
         if (this._describeProcess || this._describeStartPending || this._disposed) {
             return;
         }
@@ -538,7 +621,12 @@ export class AppHostDataRepository {
                 return;
             }
 
+            // Read the cached capability synchronously — see constructor for why we don't await here.
+            const includeDisabledCommands = forceIncludeDisabledCommands ?? this._includeDisabledCommandsSupported;
             const args = ['describe', '--follow', '--format', 'json'];
+            if (includeDisabledCommands) {
+                args.push('--include-disabled-commands');
+            }
             if (this._workspaceAppHostPath) {
                 args.push('--apphost', this._workspaceAppHostPath);
             }
@@ -584,6 +672,12 @@ export class AppHostDataRepository {
                     // loop forever. The panel will refresh when the user explicitly
                     // retries or when activity resumes.
                     if (!this._describeReceivedData) {
+                        if (includeDisabledCommands && isIncludeDisabledCommandsUnsupportedOutput(describeNonJsonLines, describeStderr)) {
+                            this._includeDisabledCommandsSupported = false;
+                            this._startDescribeWatch(false);
+                            return;
+                        }
+
                         extensionLogOutputChannel.warn(`aspire describe --follow exited (code ${code}) without producing data; not auto-restarting.`);
                         this._workspaceResources.clear();
                         this._setDescribeError(this._getDescribeNoDataError(code, describeNonJsonLines, describeStderr));
@@ -759,6 +853,8 @@ export class AppHostDataRepository {
             appHostPath,
             process: undefined,
             resources: new Map(),
+            nonJsonLines: [],
+            stderr: '',
             restartTimer: undefined,
             restartDelay: 5000,
             version: 0,
@@ -772,7 +868,13 @@ export class AppHostDataRepository {
                 return;
             }
 
-            const args = ['describe', '--follow', '--format', 'json', '--apphost', appHostPath];
+            // Read the cached capability synchronously — see constructor for why we don't await here.
+            const includeDisabledCommands = this._includeDisabledCommandsSupported;
+            const args = ['describe', '--follow', '--format', 'json'];
+            if (includeDisabledCommands) {
+                args.push('--include-disabled-commands');
+            }
+            args.push('--apphost', appHostPath);
             extensionLogOutputChannel.info(`Starting aspire describe --follow for AppHost ${appHostPath}`);
 
             const childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
@@ -781,13 +883,18 @@ export class AppHostDataRepository {
                     if (this._globalDescribeStreams.get(appHostPath) !== stream || stream.process !== childProcess) {
                         return;
                     }
-                    this._handleGlobalDescribeLine(stream, line);
+                    if (!this._handleGlobalDescribeLine(stream, line) && stream.nonJsonLines.length < 20) {
+                        stream.nonJsonLines.push(line);
+                    }
                 },
                 stderrCallback: (data) => {
                     // Per-AppHost describe errors should not pollute the global error banner,
                     // but they MUST be logged so users can diagnose missing resources for
                     // non-selected AppHosts (e.g., CLI too old to support `describe --apphost`).
                     extensionLogOutputChannel.warn(`aspire describe --follow stderr for ${appHostPath}: ${data}`);
+                    if (stream.stderr.length < 4000) {
+                        stream.stderr += data;
+                    }
                 },
                 exitCallback: (code) => {
                     if (this._globalDescribeStreams.get(appHostPath) !== stream || stream.process !== childProcess) {
@@ -796,6 +903,13 @@ export class AppHostDataRepository {
                     extensionLogOutputChannel.info(`aspire describe --follow for ${appHostPath} exited with code ${code}`);
                     stream.process = undefined;
                     if (this._disposed) {
+                        return;
+                    }
+
+                    if (includeDisabledCommands && stream.resources.size === 0 && isIncludeDisabledCommandsUnsupportedOutput(stream.nonJsonLines, stream.stderr)) {
+                        this._includeDisabledCommandsSupported = false;
+                        this._globalDescribeStreams.delete(appHostPath);
+                        this._startGlobalDescribe(appHostPath);
                         return;
                     }
 
@@ -858,10 +972,10 @@ export class AppHostDataRepository {
         });
     }
 
-    private _handleGlobalDescribeLine(stream: GlobalDescribeStream, line: string): void {
+    private _handleGlobalDescribeLine(stream: GlobalDescribeStream, line: string): boolean {
         const trimmed = line.trim();
         if (!trimmed) {
-            return;
+            return true;
         }
 
         try {
@@ -871,10 +985,13 @@ export class AppHostDataRepository {
                 stream.restartDelay = 5000;
                 this._attachGlobalResourcesToAppHosts();
                 this._onDidChangeData.fire();
+                return true;
             }
         } catch (e) {
             extensionLogOutputChannel.warn(`Failed to parse describe NDJSON line for ${stream.appHostPath}: ${e}`);
         }
+
+        return false;
     }
 
     private async _runCliJson<T>(command: string, args: string[]): Promise<T> {
@@ -1284,7 +1401,7 @@ export class AppHostDataRepository {
     private _updateErrorMessage(): void {
         const message = this._viewMode === 'workspace'
             ? this._describeErrorMessage ?? this._psErrorMessage
-            : this._psErrorMessage ?? this._describeErrorMessage;
+            : this._psErrorMessage;
         const hasError = message !== undefined;
         if (this._errorMessage !== message) {
             this._errorMessage = message;
@@ -1676,6 +1793,21 @@ function isDescribeUnsupportedOutput(nonJsonLines: readonly string[], stderr: st
         || output.includes('is not a recognized command');
 }
 
+function isIncludeDisabledCommandsUnsupportedOutput(nonJsonLines: readonly string[], stderr: string): boolean {
+    // This is only consulted after a describe attempt produced no resource data, so any
+    // non-JSON/stderr output here is diagnostic text rather than successful output. When the
+    // CLI accepts `--include-disabled-commands` it streams JSON resources and never echoes the
+    // flag name back, so the literal flag token only appears when the CLI is reporting that it
+    // does not recognize the option, e.g.:
+    //   English:  Unrecognized command or argument '--include-disabled-commands'.
+    //   Spanish:  No se encuentra el recurso '--include-disabled-commands'.
+    // The flag token itself is never localized, so detecting on its presence keeps this fallback
+    // locale-independent — matching on translated phrases like "unrecognized option" would miss
+    // non-English CLI output (e.g. via ASPIRE_LOCALE_OVERRIDE or the system locale).
+    const output = [...nonJsonLines, stderr].join('\n');
+    return output.includes('--include-disabled-commands');
+}
+
 export function isMatchingAppHostPath(left: string | undefined, right: string | undefined): boolean {
     if (!left || !right) {
         return false;
@@ -1688,9 +1820,24 @@ export function isMatchingAppHostPath(left: string | undefined, right: string | 
     }
 
     // `aspire extension get-apphosts` resolves a project file while `aspire ps`
-    // can report the AppHost source file. Match by directory as a fallback to
-    // mirror the CodeLens AppHost resolution strategy.
-    return getComparisonKey(path.dirname(normalizedLeft)) === getComparisonKey(path.dirname(normalizedRight));
+    // can report the AppHost source file. Match by directory only for that
+    // project/source-file shape so sibling AppHost projects don't collapse into
+    // the same workspace AppHost.
+    return getComparisonKey(path.dirname(normalizedLeft)) === getComparisonKey(path.dirname(normalizedRight))
+        && isProjectFileToSourceFileMatch(normalizedLeft, normalizedRight);
+}
+
+function isProjectFileToSourceFileMatch(left: string, right: string): boolean {
+    return (isProjectFile(left) && isAppHostSourceFile(right)) || (isAppHostSourceFile(left) && isProjectFile(right));
+}
+
+function isProjectFile(value: string): boolean {
+    return path.extname(value).toLowerCase() === '.csproj';
+}
+
+function isAppHostSourceFile(value: string): boolean {
+    const fileName = path.basename(value).toLowerCase();
+    return fileName === 'apphost.cs' || fileName === 'program.cs';
 }
 
 function isSameAppHostPath(left: string | undefined, right: string | undefined): boolean {

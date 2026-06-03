@@ -1,6 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
+using System.Reflection;
+using System.Security;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
@@ -10,9 +13,6 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
-using System.Globalization;
-using System.Reflection;
-using System.Security;
 
 namespace Aspire.Cli.Packaging;
 
@@ -131,7 +131,7 @@ internal class PackagingService : IPackagingService
         WarnIfStagingDiagnosticOverridesActive();
 
         var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _features, _logger);
-        
+
         var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
         {
             new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)
@@ -606,7 +606,7 @@ internal class PackagingService : IPackagingService
 
         var commitHash = informationalVersion[(plusIndex + 1)..];
         var truncatedHash = commitHash.Length >= 8 ? commitHash[..8] : commitHash;
-        
+
         return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
     }
 

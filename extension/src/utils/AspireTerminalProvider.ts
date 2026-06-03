@@ -4,7 +4,7 @@ import { extensionLogOutputChannel } from './logging';
 import { RpcServerConnectionInfo } from '../server/AspireRpcServer';
 import { DcpServerConnectionInfo } from '../dcp/types';
 import { getRunSessionInfo, getSupportedCapabilities } from '../capabilities';
-import { EnvironmentVariables } from './environment';
+import { EnvironmentVariables, getEnvironmentWithoutE2EBridgeVariables } from './environment';
 import { resolveCliPath } from './cliPath';
 import path from 'path';
 
@@ -21,6 +21,16 @@ export interface AspireTerminal {
 
 export interface SendAspireCommandOptions {
     redactAdditionalArgs?: boolean;
+}
+
+export interface AspireTerminalCommandEvent {
+    subcommand: string;
+    commandLine: string;
+    showTerminal: boolean;
+    additionalArgs?: readonly string[];
+    containsRedactedArgs: boolean;
+    executionSuppressed: boolean;
+    executionMode: 'suppressed' | 'shellIntegration' | 'sendText';
 }
 
 /**
@@ -57,6 +67,9 @@ export class AspireTerminalProvider implements vscode.Disposable {
     private _terminalByDebugSessionId: Map<string | null, AspireTerminal> = new Map();
     private _rpcServerConnectionInfo?: RpcServerConnectionInfo;
     private _dcpServerConnectionInfo?: DcpServerConnectionInfo;
+
+    private readonly _onDidSendAspireCommand = new vscode.EventEmitter<AspireTerminalCommandEvent>();
+    readonly onDidSendAspireCommand = this._onDidSendAspireCommand.event;
 
     constructor(subscriptions: vscode.Disposable[]) {
         subscriptions.push(vscode.window.onDidCloseTerminal(closedTerminal => {
@@ -100,8 +113,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         // On Unix, just use the path directly
         let command: string;
         if (process.platform === 'win32') {
-            // Use & call operator with quoted path for Windows
-            command = `& "${cliPath}" ${subcommand}`;
+            command = `& ${quoteShellArg(cliPath)} ${subcommand}`;
         } else {
             // For Unix-like systems, quote only if needed
             const quotedPath = /[\s"'`$!*?()&|<>;]/.test(cliPath) ? `'${cliPath.replace(/'/g, `'\"'\"'`)}'` : cliPath;
@@ -134,13 +146,32 @@ export class AspireTerminalProvider implements vscode.Disposable {
             logArgs.push('[redacted command arguments]');
             logCommand = `${baseCommand} ${logArgs.join(' ')}`;
         }
+        const executionSuppressed = isE2eTerminalCommandExecutionSuppressed();
+        const executionMode = executionSuppressed
+            ? 'suppressed'
+            : aspireTerminal.terminal.shellIntegration
+                ? 'shellIntegration'
+                : 'sendText';
+        this._onDidSendAspireCommand.fire({
+            subcommand,
+            commandLine: logCommand,
+            showTerminal,
+            additionalArgs: options?.redactAdditionalArgs ? undefined : cliArgs,
+            containsRedactedArgs: options?.redactAdditionalArgs === true && additionalArgs !== undefined && additionalArgs.length > 0,
+            executionSuppressed,
+            executionMode,
+        });
         extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${logCommand}`);
 
         if (showTerminal) {
             aspireTerminal.terminal.show();
         }
 
-        if (aspireTerminal.terminal.shellIntegration) {
+        if (executionSuppressed) {
+            return;
+        }
+
+        if (executionMode === 'shellIntegration' && aspireTerminal.terminal.shellIntegration) {
             aspireTerminal.terminal.shellIntegration.executeCommand(command);
         }
         else {
@@ -186,11 +217,11 @@ export class AspireTerminalProvider implements vscode.Disposable {
 
     createEnvironment(debugSessionId?: string, noDebug?: boolean, noExtensionVariables?: boolean): any {
         if (noExtensionVariables) {
-            return process.env;
+            return getEnvironmentWithoutE2EBridgeVariables();
         }
 
         const env: any = {
-            ...process.env,
+            ...getEnvironmentWithoutE2EBridgeVariables(),
 
             // Extension connection information
             ASPIRE_EXTENSION_ENDPOINT: this.rpcServerConnectionInfo.address,
@@ -214,6 +245,11 @@ export class AspireTerminalProvider implements vscode.Disposable {
             env.ASPIRE_EXTENSION_DEBUG_RUN_MODE = noDebug === false ? "Debug" : "NoDebug";
             env.DEBUG_SESSION_INFO = JSON.stringify(getRunSessionInfo());
             env.ASPIRE_EXTENSION_CAPABILITIES = getSupportedCapabilities().join(',');
+            // Extension-managed debug/run sessions stream CLI output into VS Code's
+            // debug console, which is not an interactive terminal. Keep prompts routed
+            // through the extension backchannel while disabling Spectre live output
+            // such as the first-run banner and spinners.
+            env.ASPIRE_NON_INTERACTIVE = 'true';
 
             // if DCP debug logging is enabled, set DCP-specific logging environment variables
             const dcpDebugLoggingEnabled = vscode.workspace.getConfiguration('aspire').get<boolean>('enableAspireDcpDebugLogging', false);
@@ -261,6 +297,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         for (const terminal of this._terminalByDebugSessionId.values()) {
             terminal.dispose();
         }
+        this._onDidSendAspireCommand.dispose();
     }
 
 
@@ -276,4 +313,11 @@ export class AspireTerminalProvider implements vscode.Disposable {
     isDebugConfigEnvironmentLoggingEnabled(): boolean {
         return vscode.workspace.getConfiguration('aspire').get<boolean>('enableDebugConfigEnvironmentLogging', false);
     }
+}
+
+function isE2eTerminalCommandExecutionSuppressed(): boolean {
+    return process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE === 'true' &&
+        !!process.env.ASPIRE_EXTENSION_E2E_STATE_FILE &&
+        !!process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE &&
+        process.env.ASPIRE_EXTENSION_E2E_SUPPRESS_TERMINAL_COMMAND_EXECUTION === 'true';
 }

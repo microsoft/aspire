@@ -42,37 +42,37 @@ internal static class KnownFeatures
             ShowDeprecatedPackages,
             "Show or hide deprecated packages in 'aspire add' search results",
             DefaultValue: false),
-        
+
         [StagingChannelEnabled] = new(
             StagingChannelEnabled,
             "Enable or disable access to the staging channel for early access to preview features and packages",
             DefaultValue: false),
-        
+
         [DefaultWatchEnabled] = new(
             DefaultWatchEnabled,
             "Enable or disable watch mode by default when running Aspire applications for automatic restarts on file changes",
             DefaultValue: false),
-        
+
         [ShowAllTemplates] = new(
             ShowAllTemplates,
             "Show all available templates including experimental ones in 'aspire new' and 'aspire init' commands",
             DefaultValue: false),
-        
+
         [ExperimentalPolyglotRust] = new(
             ExperimentalPolyglotRust,
             "Enable or disable experimental Rust language support for polyglot Aspire applications",
             DefaultValue: false),
-        
+
         [ExperimentalPolyglotJava] = new(
             ExperimentalPolyglotJava,
             "Enable or disable experimental Java language support for polyglot Aspire applications",
             DefaultValue: false),
-        
+
         [ExperimentalPolyglotGo] = new(
             ExperimentalPolyglotGo,
             "Enable or disable experimental Go language support for polyglot Aspire applications",
             DefaultValue: false),
-        
+
         [ExperimentalPolyglotPython] = new(
             ExperimentalPolyglotPython,
             "Enable or disable experimental Python language support for polyglot Aspire applications",

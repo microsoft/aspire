@@ -1,4 +1,5 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from '../debugger/languages/cli';
@@ -128,7 +129,22 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }
             catch (fallbackError) {
                 this._throwIfDisposed();
-                throw new Error(`aspire ls discovery failed: ${formatErrorMessage(error)}\naspire extension get-apphosts fallback failed: ${formatErrorMessage(fallbackError)}`);
+                let fileFallbackError: unknown;
+                try {
+                    const appHosts = await discoverCSharpAppHostProjectsFromWorkspaceFiles(workspaceFolder);
+                    if (appHosts.length > 0) {
+                        extensionLogOutputChannel.warn(`CLI AppHost discovery failed; using ${appHosts.length} C# AppHost project candidate(s) found in the workspace.`);
+                        return appHosts;
+                    }
+                }
+                catch (error) {
+                    fileFallbackError = error;
+                }
+
+                const fileFallbackMessage = fileFallbackError
+                    ? `\nworkspace file fallback failed: ${formatErrorMessage(fileFallbackError)}`
+                    : '';
+                throw new Error(`aspire ls discovery failed: ${formatErrorMessage(error)}\naspire extension get-apphosts fallback failed: ${formatErrorMessage(fallbackError)}${fileFallbackMessage}`);
             }
         }
     }
@@ -523,6 +539,35 @@ function parseCandidateOutput(output: string, commandName: string): CandidateApp
     }
 
     throw new Error(`${commandName} returned an unexpected output shape.`);
+}
+
+async function discoverCSharpAppHostProjectsFromWorkspaceFiles(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
+    const projectUris = await vscode.workspace.findFiles(new vscode.RelativePattern(workspaceFolder, '**/*.csproj'), discoveryExcludePattern);
+    const candidates: CandidateAppHostDisplayInfo[] = [];
+    for (const uri of projectUris.sort((left, right) => left.fsPath.localeCompare(right.fsPath))) {
+        let projectContents: string;
+        try {
+            projectContents = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+        }
+        catch (error) {
+            extensionLogOutputChannel.warn(`Failed to read possible AppHost project ${uri.fsPath}: ${formatErrorMessage(error)}`);
+            continue;
+        }
+
+        if (isCSharpAppHostProject(projectContents)) {
+            candidates.push({
+                path: uri.fsPath,
+                language: 'csharp',
+                status: 'buildable',
+            });
+        }
+    }
+
+    return candidates;
+}
+
+function isCSharpAppHostProject(projectContents: string): boolean {
+    return /<Project\b[^>]*\bSdk\s*=\s*["']Aspire\.AppHost\.Sdk(?:\/[^"']*)?["']/i.test(projectContents);
 }
 
 function parseLegacyGetAppHostsOutput(output: string): LegacyAppHostProjectSearchResult {

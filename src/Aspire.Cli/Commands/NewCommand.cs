@@ -5,13 +5,11 @@ using System.CommandLine;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text.RegularExpressions;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
@@ -29,7 +27,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     private readonly INewCommandPrompter _prompter;
     private readonly ITemplateProvider _templateProvider;
     private readonly ITemplate[] _templates;
-    private readonly IFeatures _features;
     private readonly IPackagingService _packagingService;
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
@@ -76,21 +73,16 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
     public NewCommand(
         INewCommandPrompter prompter,
-        IInteractionService interactionService,
         ITemplateProvider templateProvider,
-        AspireCliTelemetry telemetry,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
         IPackagingService packagingService,
         AgentInitCommand agentInitCommand,
         ICliHostEnvironment hostEnvironment,
-        IConfiguration configuration)
-        : base("new", NewCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        IConfiguration configuration,
+        CommonCommandServices services)
+        : base("new", NewCommandStrings.Description, services)
     {
         _prompter = prompter;
         _templateProvider = templateProvider;
-        _features = features;
         _packagingService = packagingService;
         _agentInitCommand = agentInitCommand;
         _hostEnvironment = hostEnvironment;
@@ -102,7 +94,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_suppressAgentInitOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration)
+        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
             || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
         _channelOption = new Option<string?>("--channel")
         {
@@ -128,7 +120,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         foreach (var template in _templates)
         {
-            var templateCommand = new TemplateCommand(template, ExecuteAsync, features, updateNotifier, executionContext, InteractionService, Telemetry);
+            var templateCommand = new TemplateCommand(template, ExecuteAsync, services);
             Subcommands.Add(templateCommand);
         }
     }
