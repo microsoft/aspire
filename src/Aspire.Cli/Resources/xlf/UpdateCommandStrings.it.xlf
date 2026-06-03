@@ -37,6 +37,11 @@
         <target state="translated">Applicazione degli aggiornamenti in corso...</target>
         <note />
       </trans-unit>
+      <trans-unit id="BrewSelfUpdateMessage">
+        <source>To update the Aspire CLI when installed from Homebrew, run:</source>
+        <target state="new">To update the Aspire CLI when installed from Homebrew, run:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CentralPackageManagementNotSupported">
         <source>Central package management is currently not supported by 'aspire update'.</source>
         <target state="translated">La gestione centralizzata dei pacchetti non è attualmente supportata da "aspire update".</target>

@@ -110,6 +110,11 @@ internal sealed class UpdateCommand : BaseCommand
         return NpmInstallDetection.GetNpmUpdateCommand();
     }
 
+    private static string? GetBrewUpdateCommand()
+    {
+        return BrewInstallDetection.GetBrewUpdateCommand();
+    }
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var isSelfUpdate = parseResult.GetValue(s_selfOption);
@@ -134,6 +139,19 @@ internal sealed class UpdateCommand : BaseCommand
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NpmSelfUpdateMessage);
                 InteractionService.DisplayPlainText($"  {npmUpdateCommand}");
+                return CommandResult.Success();
+            }
+
+            // When installed via Homebrew, defer to brew so we don't mutate a binary
+            // owned by the package manager. Detected via the {"source":"brew"} sidecar
+            // the formula writes next to the CLI binary in the Cellar
+            // (eng/homebrew-core/aspire.rb.template). Homebrew-core policy forbids
+            // formulas from self-updating by downloading replacement binaries.
+            var brewUpdateCommand = GetBrewUpdateCommand();
+            if (brewUpdateCommand is not null)
+            {
+                InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.BrewSelfUpdateMessage);
+                InteractionService.DisplayPlainText($"  {brewUpdateCommand}");
                 return CommandResult.Success();
             }
 
@@ -359,6 +377,14 @@ internal sealed class UpdateCommand : BaseCommand
                         return CommandResult.Success();
                     }
 
+                    var brewUpdateCommand = GetBrewUpdateCommand();
+                    if (brewUpdateCommand is not null)
+                    {
+                        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.BrewSelfUpdateMessage);
+                        InteractionService.DisplayPlainText($"  {brewUpdateCommand}");
+                        return CommandResult.Success();
+                    }
+
                     // Use the same channel that was selected for the project update
                     return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
                 }
@@ -382,10 +408,11 @@ internal sealed class UpdateCommand : BaseCommand
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
                 // Only prompt for self-update when we can actually perform it: not as a
-                // dotnet tool, not from an npm install, and the GitHub-binary downloader
-                // is wired up. Otherwise the downloader would overwrite package-manager-owned
-                // files instead of letting the package manager handle the update.
-                if (GetDotNetToolUpdateCommand() is null && GetNpmUpdateCommand() is null && _cliDownloader is not null)
+                // dotnet tool, not from an npm install, not from a brew install, and the
+                // GitHub-binary downloader is wired up. Otherwise the downloader would
+                // overwrite package-manager-owned files instead of letting the package
+                // manager handle the update.
+                if (GetDotNetToolUpdateCommand() is null && GetNpmUpdateCommand() is null && GetBrewUpdateCommand() is null && _cliDownloader is not null)
                 {
                     var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                         UpdateCommandStrings.NoAppHostFoundUpdateCliPrompt,
@@ -457,6 +484,15 @@ internal sealed class UpdateCommand : BaseCommand
         {
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NpmSelfUpdateMessage);
             InteractionService.DisplayPlainText($"  {npmUpdateCommand}");
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+            return CommandResult.Success();
+        }
+
+        var brewUpdateCommand = GetBrewUpdateCommand();
+        if (brewUpdateCommand is not null)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.BrewSelfUpdateMessage);
+            InteractionService.DisplayPlainText($"  {brewUpdateCommand}");
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
             return CommandResult.Success();
         }
