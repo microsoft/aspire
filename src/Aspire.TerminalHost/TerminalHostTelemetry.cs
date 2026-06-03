@@ -43,22 +43,23 @@ internal static class TerminalHostTelemetry
     public static readonly Meter Meter = new(SourceName);
 
     /// <summary>
-    /// Incremented every time a <c>TerminalReplica</c> finishes building its three listeners and is
-    /// ready to accept connections. Useful for catching repeated-recycle loops (the host process is
-    /// per-replica today, so this should fire exactly once per process — anything else means the
-    /// AppHost is restarting us, which is itself a signal).
-    /// </summary>
-    public static readonly Counter<long> ReplicasStarted = Meter.CreateCounter<long>(
-        name: "aspire.terminalhost.replicas.started",
-        unit: "{replica}",
-        description: "Number of terminal replicas that completed startup in this host process.");
-
-    /// <summary>
     /// Incremented when the upstream producer connection drops and the replica recycles its
-    /// <c>DcpUpstreamAdapter</c>. Diagnoses DCP restart / crash loops.
+    /// <c>DcpUpstreamAdapter</c>. Diagnoses DCP restart / crash loops — a steadily growing value
+    /// on a single host process means DCP keeps reconnecting, which usually means DCP itself
+    /// is being restarted by its supervisor.
     /// </summary>
     public static readonly Counter<long> UpstreamRecycles = Meter.CreateCounter<long>(
         name: "aspire.terminalhost.upstream.recycles",
         unit: "{recycle}",
         description: "Number of times the upstream (DCP) connection dropped and was re-listened for.");
+
+    /// <summary>
+    /// Incremented every time a downstream viewer (dashboard tab, CLI <c>aspire terminal attach</c>)
+    /// successfully accepts on the consumer UDS. Diagnoses "I attached but see nothing" by letting
+    /// you confirm the accept actually happened on the host side.
+    /// </summary>
+    public static readonly Counter<long> ConsumerConnections = Meter.CreateCounter<long>(
+        name: "aspire.terminalhost.consumer.connections",
+        unit: "{connection}",
+        description: "Number of downstream consumer (dashboard/CLI viewer) connections accepted.");
 }
