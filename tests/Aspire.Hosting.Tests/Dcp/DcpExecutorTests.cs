@@ -464,6 +464,16 @@ public class DcpExecutorTests
         var dcpOptions = new DcpOptions { DashboardPath = "./dashboard", ResourceNameSuffix = "suffix" };
 
         var events = new DcpExecutorEvents();
+        var connectionStringAvailableCount = 0;
+        events.Subscribe<OnConnectionStringAvailableContext>(context =>
+        {
+            if (ReferenceEquals(context.Resource, resource))
+            {
+                Interlocked.Increment(ref connectionStringAvailableCount);
+            }
+
+            return Task.CompletedTask;
+        });
         var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
 
         var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, events: events);
@@ -480,6 +490,7 @@ public class DcpExecutorTests
         Assert.True(exe1.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations1));
         Assert.Single(argAnnotations1, a => a.Argument == "--test");
         AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations1, exe1.Spec.Args);
+        Assert.Equal(1, connectionStringAvailableCount);
 
         var reference = appExecutor.GetResource(exe1.Metadata.Name);
 
@@ -499,6 +510,7 @@ public class DcpExecutorTests
         Assert.True(exe2.TryGetAnnotationAsObjectList<AppLaunchArgumentAnnotation>(CustomResource.ResourceAppArgsAnnotation, out var argAnnotations2));
         Assert.Single(argAnnotations2, a => a.Argument == "--test");
         AssertEffectiveArgumentIndexesMatchSpecArgs(argAnnotations2, exe2.Spec.Args);
+        Assert.Equal(2, connectionStringAvailableCount);
     }
 
     [Fact]

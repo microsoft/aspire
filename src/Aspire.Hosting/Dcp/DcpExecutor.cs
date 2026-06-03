@@ -1154,6 +1154,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
         // Reset cached callback results so they are re-evaluated on restart.
         ForgetCachedCallbackResults(resource.ModelResource);
+        ForgetConnectionStringAvailableEvent(resource.ModelResource);
 
         var result = await DeleteResourceRetryPipeline.ExecuteAsync(async (resourceName, attemptCancellationToken) =>
         {
@@ -1224,6 +1225,14 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             {
                 ((ICallbackResourceAnnotation<CommandLineArgsCallbackContext, IList<object>>)callback).ForgetCachedResult();
             }
+        }
+    }
+
+    private void ForgetConnectionStringAvailableEvent(IResource resource)
+    {
+        lock (_connectionStringsAdvertised)
+        {
+            _connectionStringsAdvertised.Remove(resource.Name);
         }
     }
 
