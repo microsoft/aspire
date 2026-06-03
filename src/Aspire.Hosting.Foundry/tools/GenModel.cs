@@ -703,6 +703,7 @@ public class ModelClient : IDisposable
     private const int MaxRequestAttempts = 6;
     private const int PageSize = 200;
     private const int ResponseSnippetLength = 2000;
+    private static readonly TimeSpan MaxRetryDelay = TimeSpan.FromSeconds(30);
 
     private readonly HttpClient _httpClient;
     private readonly HttpClientHandler _handler;
@@ -742,6 +743,8 @@ public class ModelClient : IDisposable
                 throw new InvalidOperationException($"The Microsoft Foundry model catalog response did not contain an indexEntitiesResponse.value array. Response: {GetResponseSnippet(pageResponse)}");
             }
 
+            ValidateSuccessfulCatalogResponse(apiResponse, pageResponse);
+
             foreach (var model in pageModels)
             {
                 allModels.Add(model);
@@ -760,8 +763,7 @@ public class ModelClient : IDisposable
                 // Check for infinite loop (same token repeated)
                 if (continuationToken == previousToken)
                 {
-                    Console.WriteLine("WARNING: Same continuation token received twice. Breaking to prevent infinite loop.");
-                    continuationToken = null;
+                    throw new InvalidOperationException($"The Microsoft Foundry model catalog returned the same continuation token twice. Refusing to overwrite the generated model descriptors with a partial catalog. Response: {GetResponseSnippet(pageResponse)}");
                 }
             }
 
@@ -971,12 +973,22 @@ public class ModelClient : IDisposable
             return AddRetryBuffer(bodyDelay, attempt);
         }
 
-        return TimeSpan.FromSeconds(Math.Min(30, Math.Pow(2, attempt)));
+        return ClampRetryDelay(TimeSpan.FromSeconds(Math.Pow(2, attempt)));
     }
 
     private static TimeSpan AddRetryBuffer(TimeSpan delay, int attempt)
     {
-        return delay + TimeSpan.FromSeconds(Math.Min(attempt, 5));
+        if (delay >= MaxRetryDelay)
+        {
+            return MaxRetryDelay;
+        }
+
+        return ClampRetryDelay(delay + TimeSpan.FromSeconds(Math.Min(attempt, 5)));
+    }
+
+    private static TimeSpan ClampRetryDelay(TimeSpan delay)
+    {
+        return delay <= MaxRetryDelay ? delay : MaxRetryDelay;
     }
 
     private static TimeSpan? TryGetRetryAfterFromBody(string content)
@@ -1007,6 +1019,51 @@ public class ModelClient : IDisposable
         return sanitized.Length <= ResponseSnippetLength
             ? sanitized
             : sanitized[..ResponseSnippetLength] + "...";
+    }
+
+    private static void ValidateSuccessfulCatalogResponse(ApiResponse apiResponse, string pageResponse)
+    {
+        var partialFailureFields = new List<string>();
+
+        AddPopulatedJsonField(partialFailureFields, "regionalErrors", apiResponse.RegionalErrors);
+        AddPopulatedJsonField(partialFailureFields, "resourceSkipReasons", apiResponse.ResourceSkipReasons);
+        AddPopulatedJsonField(partialFailureFields, "shardErrors", apiResponse.ShardErrors);
+
+        if (apiResponse.NumberOfResourcesNotIncludedInSearch > 0)
+        {
+            partialFailureFields.Add("numberOfResourcesNotIncludedInSearch");
+        }
+
+        if (partialFailureFields.Count > 0)
+        {
+            throw new InvalidOperationException($"The Microsoft Foundry model catalog response included partial failure data in {string.Join(", ", partialFailureFields)}. Refusing to overwrite the generated model descriptors with a partial catalog. Response: {GetResponseSnippet(pageResponse)}");
+        }
+    }
+
+    private static void AddPopulatedJsonField(List<string> partialFailureFields, string fieldName, object? value)
+    {
+        if (value is JsonElement element && IsPopulatedJsonElement(element))
+        {
+            partialFailureFields.Add(fieldName);
+        }
+        else if (value is not null)
+        {
+            partialFailureFields.Add(fieldName);
+        }
+    }
+
+    private static bool IsPopulatedJsonElement(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Object => element.EnumerateObject().Any(),
+            JsonValueKind.Array => element.EnumerateArray().Any(),
+            JsonValueKind.String => !string.IsNullOrEmpty(element.GetString()),
+            JsonValueKind.Number => true,
+            JsonValueKind.True => true,
+            JsonValueKind.False => true,
+            _ => false
+        };
     }
 }
 
