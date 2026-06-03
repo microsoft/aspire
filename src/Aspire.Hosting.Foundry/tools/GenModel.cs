@@ -21,11 +21,16 @@ var isFoundryLocal = args.Contains("--local");
 
 using var mc = new ModelClient(isFoundryLocal);
 var allModelsResponse = await mc.GetAllModelsAsync().ConfigureAwait(false);
+var models = allModelsResponse.Entities ?? [];
+if (models.Count == 0)
+{
+    throw new InvalidOperationException("The Microsoft Foundry model catalog returned no models. Refusing to overwrite the generated model descriptors with an empty catalog.");
+}
 
 // Generate C# extension methods for the models
 var generatedCode = isFoundryLocal
-    ? GenerateLocalCode("Aspire.Hosting.Foundry", allModelsResponse.Entities ?? [])
-    : GenerateHostedCode("Aspire.Hosting.Foundry", allModelsResponse.Entities ?? []);
+    ? GenerateLocalCode("Aspire.Hosting.Foundry", models)
+    : GenerateHostedCode("Aspire.Hosting.Foundry", models);
 
 // Write the generated code to a file
 var filename = isFoundryLocal
@@ -695,6 +700,10 @@ public partial class ModelClassGenerator
 
 public class ModelClient : IDisposable
 {
+    private const int MaxRequestAttempts = 6;
+    private const int PageSize = 200;
+    private const int ResponseSnippetLength = 2000;
+
     private readonly HttpClient _httpClient;
     private readonly HttpClientHandler _handler;
     private readonly bool _isFoundryLocal;
@@ -726,22 +735,19 @@ public class ModelClient : IDisposable
 
             var pageResponse = await GetModelsAsync(continuationToken).ConfigureAwait(false);
 
-            // Deserialize the response using our models
             var apiResponse = JsonSerializer.Deserialize<ApiResponse>(pageResponse);
 
-            if (apiResponse?.IndexEntitiesResponse?.Value != null)
+            if (apiResponse?.IndexEntitiesResponse?.Value is not { } pageModels)
             {
-                foreach (var model in apiResponse.IndexEntitiesResponse.Value)
-                {
-                    allModels.Add(model);
-                }
+                throw new InvalidOperationException($"The Microsoft Foundry model catalog response did not contain an indexEntitiesResponse.value array. Response: {GetResponseSnippet(pageResponse)}");
+            }
 
-                Console.WriteLine($"Fetched page with {apiResponse.IndexEntitiesResponse.Value.Count} models. Total so far: {allModels.Count}");
-            }
-            else
+            foreach (var model in pageModels)
             {
-                Console.WriteLine("No models found in this page response.");
+                allModels.Add(model);
             }
+
+            Console.WriteLine($"Fetched page with {pageModels.Count} models. Total so far: {allModels.Count}");
 
             // Check if there's a continuation token for the next page
             previousToken = continuationToken;
@@ -780,12 +786,7 @@ public class ModelClient : IDisposable
     {
         var url = "https://ai.azure.com/api/eastus/ux/v1.0/entities/crossRegion";
 
-        var request = new HttpRequestMessage(HttpMethod.Post, url);
-
-        request.Headers.Add("User-Agent", "AzureAiStudio");
-
-        // Build the JSON payload with optional continuation token
-        var basePayload = """
+        var basePayload = $$"""
         {
             "resourceIds": [
                 {"resourceId": "azure-openai", "entityContainerType": "Registry"},
@@ -835,7 +836,7 @@ public class ModelClient : IDisposable
                 ],
                 "freeTextSearch": "",
                 "order": [{"field": "properties/name", "direction": "Asc"}],
-                "pageSize": 30,
+                "pageSize": {{PageSize}},
                 "facets": [ ],
                 "includeTotalResultCount": true,
                 "searchBuilder": "AppendPrefix"
@@ -861,7 +862,7 @@ public class ModelClient : IDisposable
                         ],
                         "freeTextSearch": "",
                         "order": [{"field": "properties/name", "direction": "Asc"}],
-                        "pageSize": 30,
+                        "pageSize": {{PageSize}},
                         "facets": [ ],
                         "includeTotalResultCount": true,
                         "searchBuilder": "AppendPrefix"
@@ -885,13 +886,31 @@ public class ModelClient : IDisposable
             jsonContent = basePayload;
         }
 
-        request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
+        for (var attempt = 1; attempt <= MaxRequestAttempts; attempt++)
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Post, url);
+            request.Headers.Add("User-Agent", "AzureAiStudio");
+            request.Content = new StringContent(jsonContent, Encoding.UTF8, "application/json");
 
-        var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
+            using var response = await _httpClient.SendAsync(request).ConfigureAwait(false);
+            var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+            if (response.IsSuccessStatusCode)
+            {
+                return content;
+            }
 
-        // Handle decompression automatically
-        var content = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-        return content;
+            if (IsTransientStatusCode(response.StatusCode) && attempt < MaxRequestAttempts)
+            {
+                var delay = GetRetryDelay(response, content, attempt);
+                Console.WriteLine($"Microsoft Foundry model catalog request failed with HTTP {(int)response.StatusCode} ({response.StatusCode}). Retrying in {delay.TotalSeconds:N0}s (attempt {attempt + 1}/{MaxRequestAttempts}).");
+                await Task.Delay(delay).ConfigureAwait(false);
+                continue;
+            }
+
+            throw new HttpRequestException($"Microsoft Foundry model catalog request failed with HTTP {(int)response.StatusCode} ({response.StatusCode}). Response: {GetResponseSnippet(content)}", inner: null, response.StatusCode);
+        }
+
+        throw new InvalidOperationException("The Microsoft Foundry model catalog request loop completed without returning or throwing.");
     }
 
     public void Dispose()
@@ -924,6 +943,70 @@ public class ModelClient : IDisposable
                 }
             }
         }
+    }
+
+    private static bool IsTransientStatusCode(HttpStatusCode statusCode)
+    {
+        return statusCode == HttpStatusCode.TooManyRequests || (int)statusCode >= 500;
+    }
+
+    private static TimeSpan GetRetryDelay(HttpResponseMessage response, string content, int attempt)
+    {
+        if (response.Headers.RetryAfter?.Delta is { } delta && delta > TimeSpan.Zero)
+        {
+            return AddRetryBuffer(delta, attempt);
+        }
+
+        if (response.Headers.RetryAfter?.Date is { } date)
+        {
+            var dateDelta = date - DateTimeOffset.UtcNow;
+            if (dateDelta > TimeSpan.Zero)
+            {
+                return AddRetryBuffer(dateDelta, attempt);
+            }
+        }
+
+        if (TryGetRetryAfterFromBody(content) is { } bodyDelay)
+        {
+            return AddRetryBuffer(bodyDelay, attempt);
+        }
+
+        return TimeSpan.FromSeconds(Math.Min(30, Math.Pow(2, attempt)));
+    }
+
+    private static TimeSpan AddRetryBuffer(TimeSpan delay, int attempt)
+    {
+        return delay + TimeSpan.FromSeconds(Math.Min(attempt, 5));
+    }
+
+    private static TimeSpan? TryGetRetryAfterFromBody(string content)
+    {
+        try
+        {
+            var retryAfterValue = JsonNode.Parse(content)?["error"]?["messageParameters"]?["retryAfter"]?.ToString();
+            if (int.TryParse(retryAfterValue, CultureInfo.InvariantCulture, out var retryAfterSeconds) && retryAfterSeconds > 0)
+            {
+                return TimeSpan.FromSeconds(retryAfterSeconds);
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return null;
+    }
+
+    private static string GetResponseSnippet(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return "<empty>";
+        }
+
+        var sanitized = content.ReplaceLineEndings(" ").Trim();
+        return sanitized.Length <= ResponseSnippetLength
+            ? sanitized
+            : sanitized[..ResponseSnippetLength] + "...";
     }
 }
 
