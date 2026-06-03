@@ -43,7 +43,14 @@ public static class PersistentContainerTestHelpers
             var userSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
             if (Path.GetDirectoryName(userSecretsPath) is { } userSecretsDirectory && Directory.Exists(userSecretsDirectory))
             {
-                Directory.Delete(userSecretsDirectory, recursive: true);
+                try
+                {
+                    Directory.Delete(userSecretsDirectory, recursive: true);
+                }
+                catch (IOException)
+                {
+                    // Best-effort cleanup only. A locked secrets file should not fail an otherwise successful test.
+                }
             }
         }
 
