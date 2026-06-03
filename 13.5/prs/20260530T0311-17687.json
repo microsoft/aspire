@@ -1,0 +1,9 @@
+{
+  "author": "tommasodotNET",
+  "comment": "Fix: Foundry publish-mode agents now attach project reference to correct deployment target, grouped with #17545",
+  "mergedAt": "2026-05-30T03:11:28Z",
+  "number": 17687,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Reference Foundry project from hosted agent target"
+}

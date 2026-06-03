@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Matched to Updated --search option help text entry (#17544)",
+  "mergedAt": "2026-06-01T15:33:11Z",
+  "number": 1121,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Add search and filter telemetry sub-section to CLI overview"
+}

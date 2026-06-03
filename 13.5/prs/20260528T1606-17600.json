@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "TypeScript/polyglot support GA - removes ASPIREATS001 experimental diagnostic",
+  "mergedAt": "2026-05-28T16:06:26Z",
+  "number": 17600,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Remove ATS experimental markers"
+}

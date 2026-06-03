@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "References aspire#17688 which is not in the current batch; no matching entry",
+  "mergedAt": "2026-06-01T16:23:46Z",
+  "number": 1134,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "excluded",
+  "title": "[docs] Add aspire ls command reference documentation"
+}

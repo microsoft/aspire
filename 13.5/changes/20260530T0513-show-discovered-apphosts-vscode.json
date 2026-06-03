@@ -1,0 +1,21 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@ellahathaway"
+  ],
+  "description": "The VS Code Aspire pane now displays idle (non-running) AppHosts discovered via aspire ls, with right-click context menu actions to Run, Debug, Open Source, or Copy Path.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\uddc2\ufe0f",
+  "firstMergedAt": "2026-05-30T05:13:48Z",
+  "lastMergedAt": "2026-05-30T05:13:48Z",
+  "name": "Show discovered AppHosts in VS Code Aspire pane",
+  "owner": "adamint",
+  "prs": [
+    17506
+  ]
+}

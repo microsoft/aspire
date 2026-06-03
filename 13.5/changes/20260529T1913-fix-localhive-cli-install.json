@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed localhive.sh CLI installation failing when the publish output contains subdirectories such as culture-specific resource folders. The script now uses cp -r to correctly copy all files and directories.",
+  "docsPrs": [
+    1128
+  ],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd27",
+  "firstMergedAt": "2026-05-29T19:13:47Z",
+  "lastMergedAt": "2026-05-29T19:13:47Z",
+  "name": "Fix localhive.sh CLI install with subdirectories",
+  "owner": "sebastienros",
+  "prs": [
+    17670
+  ]
+}

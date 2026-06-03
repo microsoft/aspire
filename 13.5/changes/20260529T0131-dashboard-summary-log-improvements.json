@@ -1,0 +1,20 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Dashboard startup log output now uses indented bullet formatting for URLs and emits the container access warning as a separate log entry. The legacy login URL line is also restored so dotnet watch can detect AppHost readiness and auto-launch the browser.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udccb",
+  "firstMergedAt": "2026-05-29T01:31:47Z",
+  "lastMergedAt": "2026-05-29T07:21:39Z",
+  "name": "Dashboard startup log formatting improvements",
+  "owner": "JamesNK",
+  "prs": [
+    17595,
+    17610
+  ]
+}

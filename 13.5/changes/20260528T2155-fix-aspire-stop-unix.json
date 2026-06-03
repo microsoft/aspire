@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where aspire stop falsely reported failure on Unix because the AppHost process was orphaned during the shutdown cascade instead of being properly reaped.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc1b",
+  "firstMergedAt": "2026-05-28T21:55:42Z",
+  "lastMergedAt": "2026-05-28T21:55:42Z",
+  "name": "Fix aspire stop false failure on Unix",
+  "owner": "danegsta",
+  "prs": [
+    17612
+  ]
+}

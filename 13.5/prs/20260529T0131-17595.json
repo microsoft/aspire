@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard summary log formatting improvement, grouped with #17610",
+  "mergedAt": "2026-05-29T01:31:47Z",
+  "number": 17595,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Improve dashboard summary log formatting"
+}

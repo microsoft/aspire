@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "aspire agent init now loads skill catalog dynamically from bundle manifest",
+  "mergedAt": "2026-05-29T19:02:09Z",
+  "number": 17553,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "13.4: Load Aspire skills catalog from bundle manifest"
+}

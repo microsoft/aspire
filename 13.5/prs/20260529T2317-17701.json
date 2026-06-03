@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test refactor using TerminalRun pattern, not user-facing",
+  "mergedAt": "2026-05-29T23:17:04Z",
+  "number": 17701,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "excluded",
+  "title": "Fix TypeScript deadlock repro E2E test"
+}

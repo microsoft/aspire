@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Restores dotnet watch browser auto-launch by emitting legacy login URL log line, grouped with #17595",
+  "mergedAt": "2026-05-29T07:21:39Z",
+  "number": 17610,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Restore dotnet watch dashboard auto-launch signal"
+}

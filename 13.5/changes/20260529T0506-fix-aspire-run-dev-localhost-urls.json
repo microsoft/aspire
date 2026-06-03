@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed aspire run failing for polyglot AppHosts that use *.dev.localhost URLs. The resource service endpoint validation now accepts localhost subdomains in addition to loopback IPs.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83c\udf10",
+  "firstMergedAt": "2026-05-29T05:06:02Z",
+  "lastMergedAt": "2026-05-29T05:06:02Z",
+  "name": "Fix aspire run with .dev.localhost resource service URLs",
+  "owner": "danegsta",
+  "prs": [
+    17639
+  ]
+}

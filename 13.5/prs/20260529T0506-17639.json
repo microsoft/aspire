@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Bug fix: aspire run failed with *.dev.localhost resource service URLs",
+  "mergedAt": "2026-05-29T05:06:02Z",
+  "number": 17639,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Accept dev localhost resource service URLs"
+}

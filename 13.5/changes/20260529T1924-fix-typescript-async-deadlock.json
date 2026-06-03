@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a deadlock in TypeScript AppHosts where async callbacks stored in IOptions.Configure were invoked on the StreamJsonRpc non-concurrent dispatcher during BeforeStartEvent, causing the AppHost to hang.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd13",
+  "firstMergedAt": "2026-05-29T19:24:28Z",
+  "lastMergedAt": "2026-05-29T19:24:28Z",
+  "name": "Fix TypeScript AppHost async callback deadlock",
+  "owner": "IEvangelist",
+  "prs": [
+    17575
+  ]
+}

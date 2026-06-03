@@ -7,7 +7,8 @@
   "communityContributors": [],
   "description": "Aspire now validates that Helm v4.2.0 or later is installed before running Kubernetes deployments. Previously, missing or outdated Helm produced cryptic low-level errors; users now see a clear, actionable message.",
   "docsPrs": [
-    1090
+    1090,
+    1097
   ],
   "docsRequired": true,
   "emoji": "\u2693",

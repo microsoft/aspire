@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test infrastructure change for CLI E2E test framework, not user-facing",
+  "mergedAt": "2026-05-28T12:23:03Z",
+  "number": 17576,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "excluded",
+  "title": "Add TerminalRun IAsyncDisposable for consistent CLI E2E diagnostics capture"
+}

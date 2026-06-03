@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Bug fix: TypeScript AppHost deadlock with async IOptions callbacks during BeforeStartEvent",
+  "mergedAt": "2026-05-29T19:24:28Z",
+  "number": 17575,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Fix TypeScript AppHost async callback deadlock"
+}

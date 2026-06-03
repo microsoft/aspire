@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Security fix: path traversal vulnerability in tmp npm package (GHSA-ph9p-34f9-6g65)",
+  "mergedAt": "2026-05-29T16:30:26Z",
+  "number": 17594,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Bump tmp to 0.2.6 to resolve the two open tmp Dependabot alerts"
+}

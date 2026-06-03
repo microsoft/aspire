@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Matched to enriched AppHost codegen diagnostics entry (#17262)",
+  "mergedAt": "2026-06-01T16:17:19Z",
+  "number": 1101,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "[docs] TypeScript AppHost codegen diagnostics and CLI/SDK version mismatch"
+}

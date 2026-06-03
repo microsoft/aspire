@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "New feature: VS Code Aspire pane shows idle AppHosts from aspire ls (community contribution)",
+  "mergedAt": "2026-05-30T05:13:48Z",
+  "number": 17506,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Show discovered AppHosts in Aspire pane"
+}

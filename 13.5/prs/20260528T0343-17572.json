@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CI workflow change for test recording infrastructure, not user-facing",
+  "mergedAt": "2026-05-28T03:43:51Z",
+  "number": 17572,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "excluded",
+  "title": "Add job and artifacts links to CLI E2E recording comment table"
+}

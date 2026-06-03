@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed two CLI shutdown issues: Ctrl+C during AppHost startup is now responsive instead of waiting the full 5-second timeout, and a double-signal bug that caused immediate force-kill instead of graceful shutdown has been resolved.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\uded1",
+  "firstMergedAt": "2026-05-29T01:29:00Z",
+  "lastMergedAt": "2026-05-29T01:29:00Z",
+  "name": "Fix CLI Ctrl+C/SIGTERM shutdown responsiveness",
+  "owner": "JamesNK",
+  "prs": [
+    17588
+  ]
+}

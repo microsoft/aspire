@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "CI workflow configuration update, not user-facing",
+  "mergedAt": "2026-05-29T21:48:34Z",
+  "number": 17696,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "excluded",
+  "title": "Update generate-api-diffs workflow to target release/13.4"
+}

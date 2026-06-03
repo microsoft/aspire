@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Fixes 5 aspire ls bugs in settings/discovery pipeline",
+  "mergedAt": "2026-05-29T20:54:47Z",
+  "number": 17631,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Fix five aspire ls bugs from #17620 (L1-L5)"
+}

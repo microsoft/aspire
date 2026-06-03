@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "TypeScript/polyglot AppHost support is now generally available. The ASPIREATS001 experimental diagnostic has been removed, so projects no longer need to suppress it.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83c\udf89",
+  "firstMergedAt": "2026-05-28T16:06:26Z",
+  "lastMergedAt": "2026-05-28T16:06:26Z",
+  "name": "TypeScript/polyglot AppHost support is GA",
+  "owner": "sebastienros",
+  "prs": [
+    17600
+  ]
+}

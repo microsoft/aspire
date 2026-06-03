@@ -1,0 +1,22 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire.Hosting.Foundry hosted-agent builder APIs have been updated with a cleaner project-first API (AsHostedAgent). Publish-mode agents now attach the Foundry project reference to the correct deployment target resource, and Azure Container Registry is only added for publish/deploy scenarios.",
+  "docsPrs": [
+    1130
+  ],
+  "docsRequired": true,
+  "emoji": "\ud83e\udd16",
+  "firstMergedAt": "2026-05-29T16:09:54Z",
+  "lastMergedAt": "2026-05-30T03:11:28Z",
+  "name": "Updated Foundry hosted agent builder APIs",
+  "owner": "tommasodotNET",
+  "prs": [
+    17545,
+    17687
+  ]
+}

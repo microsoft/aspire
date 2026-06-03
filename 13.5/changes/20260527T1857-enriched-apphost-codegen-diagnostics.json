@@ -6,8 +6,11 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "When AppHost code generation fails due to a TypeLoadException (typically caused by a version mismatch between the CLI and the user project), the CLI now provides enriched diagnostic output to help identify the cause.",
-  "docsPrs": [],
-  "docsRequired": false,
+  "docsPrs": [
+    1101,
+    1103
+  ],
+  "docsRequired": true,
   "emoji": "\ud83d\udd0d",
   "firstMergedAt": "2026-05-27T18:57:35Z",
   "lastMergedAt": "2026-05-27T18:57:35Z",

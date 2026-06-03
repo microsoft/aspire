@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Bug fix: localhive.sh failed when publish output contained subdirectories",
+  "mergedAt": "2026-05-29T19:13:47Z",
+  "number": 17670,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Fix localhive CLI publish copy"
+}

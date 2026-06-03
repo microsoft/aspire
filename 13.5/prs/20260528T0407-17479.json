@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Breaking change: removes --resources and --include-hidden flags from aspire ps",
+  "mergedAt": "2026-05-28T04:07:28Z",
+  "number": 17479,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Remove resource data from aspire ps; use aspire describe for resource streaming"
+}

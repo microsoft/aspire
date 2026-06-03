@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The --resources flag (and --include-hidden) has been removed from aspire ps, which now focuses on AppHost-level summaries. Use aspire describe to stream detailed resource data.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\uddd1\ufe0f",
+  "firstMergedAt": "2026-05-28T04:07:28Z",
+  "lastMergedAt": "2026-05-28T04:07:28Z",
+  "name": "aspire ps --resources flag removed",
+  "owner": "mitchdenny",
+  "prs": [
+    17479
+  ]
+}

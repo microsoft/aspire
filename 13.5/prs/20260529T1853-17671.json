@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Internal ATS baseline update for Foundry, not user-facing",
+  "mergedAt": "2026-05-29T18:53:08Z",
+  "number": 17671,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "excluded",
+  "title": "Fix Foundry ATS baseline"
+}

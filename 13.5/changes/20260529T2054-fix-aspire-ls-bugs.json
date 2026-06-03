@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed five bugs in aspire ls related to the settings discovery pipeline: settings.json compatibility, aspire.config.json handling, parallel discovery races, macOS symlink resolution, and discovery path normalization.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udccb",
+  "firstMergedAt": "2026-05-29T20:54:47Z",
+  "lastMergedAt": "2026-05-29T20:54:47Z",
+  "name": "Fix aspire ls discovery and settings bugs",
+  "owner": "adamint",
+  "prs": [
+    17631
+  ]
+}

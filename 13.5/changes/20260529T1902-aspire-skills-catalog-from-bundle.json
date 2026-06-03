@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The aspire agent init skill catalog is now loaded dynamically from the bundle manifest instead of being hardcoded to three skills. All skills published in the microsoft/aspire-skills bundle are now discoverable by the CLI.",
+  "docsPrs": [
+    1077
+  ],
+  "docsRequired": true,
+  "emoji": "\ud83d\udcda",
+  "firstMergedAt": "2026-05-29T19:02:09Z",
+  "lastMergedAt": "2026-05-29T19:02:09Z",
+  "name": "Aspire skills catalog loaded from bundle manifest",
+  "owner": "IEvangelist",
+  "prs": [
+    17553
+  ]
+}

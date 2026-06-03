@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: unresponsive Ctrl+C and double-signal force-kill during shutdown",
+  "mergedAt": "2026-05-29T01:29:00Z",
+  "number": 17588,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Fix CLI Ctrl+C/SIGTERM shutdown: responsive cancellation and double-signal bug"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Bug fix: aspire stop falsely reported failure on Unix due to orphaned AppHost process",
+  "mergedAt": "2026-05-28T21:55:42Z",
+  "number": 17612,
+  "runDate": "2026-06-03T13:31:20Z",
+  "status": "included",
+  "title": "Fix aspire stop falsely reporting failure on Unix"
+}

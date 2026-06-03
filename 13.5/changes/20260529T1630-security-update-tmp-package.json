@@ -1,0 +1,21 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Updated the tmp npm package to 0.2.6 in the VS Code extension to resolve a path traversal vulnerability (GHSA-ph9p-34f9-6g65).",
+  "docsPrs": [
+    1123
+  ],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd12",
+  "firstMergedAt": "2026-05-29T16:30:26Z",
+  "lastMergedAt": "2026-05-29T16:30:26Z",
+  "name": "Security update: tmp package path traversal fix",
+  "owner": "IEvangelist",
+  "prs": [
+    17594
+  ]
+}
