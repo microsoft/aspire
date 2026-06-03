@@ -407,10 +407,7 @@ public static class JavaScriptHostingExtensions
                 }
                 else
                 {
-                    // Emit the absolute script path so that it matches the resolved script_path in
-                    // the debug launch config. This prevents the extension-side deduplication logic
-                    // from failing to recognize a relative arg as a duplicate of the absolute path.
-                    c.Args.Add(Path.GetFullPath(scriptPath, appDirectory));
+                    c.Args.Add(scriptPath);
                 }
             })
             .WithIconName("CodeJsRectangle")
