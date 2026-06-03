@@ -1224,6 +1224,52 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
+    async openDashboardToSide(element?: TreeElement): Promise<void> {
+        let url: string | null = null;
+
+        if (element instanceof AppHostItem) {
+            url = element.appHost.dashboardUrl;
+        }
+
+        if (element instanceof WorkspaceResourcesItem) {
+            url = getBaseDashboardUrl(element.dashboardUrl);
+        }
+
+        if (!url) {
+            if (this._repository.viewMode === 'workspace') {
+                const resources = [...this._repository.workspaceResources];
+                const resourceUrl = this._repository.workspaceAppHost?.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
+                url = getBaseDashboardUrl(resourceUrl);
+            } else {
+                const appHosts = this._repository.appHosts.filter(a => a.dashboardUrl);
+                if (appHosts.length === 1) {
+                    url = appHosts[0].dashboardUrl;
+                } else if (appHosts.length > 1) {
+                    const labels = shortenPaths(appHosts.map(a => a.appHostPath));
+                    const items = appHosts.map((a, index) => ({
+                        label: labels[index],
+                        description: pidDescription(a.appHostPid),
+                        dashboardUrl: a.dashboardUrl!,
+                    }));
+                    const selected = await vscode.window.showQuickPick(items, {
+                        placeHolder: selectDashboardPlaceholder,
+                    });
+                    if (!selected) {
+                        return;
+                    }
+                    url = selected.dashboardUrl;
+                }
+            }
+        }
+
+        if (url) {
+            await vscode.commands.executeCommand('simpleBrowser.api.open', vscode.Uri.parse(url), {
+                viewColumn: vscode.ViewColumn.Beside,
+                preserveFocus: true,
+            });
+        }
+    }
+
     async runAppHost(element: WorkspaceAppHostItem | undefined, noDebug: boolean): Promise<void> {
         const appHostPath = element?.appHostPath;
         if (!appHostPath) {
