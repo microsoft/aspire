@@ -1,4 +1,4 @@
-﻿// ===== AddContainerOptions.java =====
+// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1340,6 +1340,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference", (h, c) -> new ContainerImageReference(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference", (h, c) -> new ContainerPortReference(h, c));
         AspireClient.registerHandleWrapper("System.ComponentModel/System.IServiceProvider", (h, c) -> new IServiceProvider(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IInteractionService", (h, c) -> new IInteractionService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceNotificationService", (h, c) -> new ResourceNotificationService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", (h, c) -> new ResourceLoggerService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", (h, c) -> new ResourceCommandService(h, c));
@@ -1595,6 +1596,42 @@ public class BeforeStartEvent extends HandleWrapperBase {
 
 }
 
+// ===== BooleanInteractionResult.java =====
+// BooleanInteractionResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** BooleanInteractionResult DTO. */
+public class BooleanInteractionResult implements JsonSerializable {
+    private Boolean data;
+    private boolean canceled;
+
+    public Boolean getData() { return data; }
+    public void setData(Boolean value) { this.data = value; }
+    public boolean getCanceled() { return canceled; }
+    public void setCanceled(boolean value) { this.canceled = value; }
+
+    @SuppressWarnings("unchecked")
+    public static BooleanInteractionResult fromMap(Map<String, Object> map) {
+        var value = new BooleanInteractionResult();
+        var dataValue = map.get("Data");
+        value.setData(dataValue == null ? null : (Boolean) dataValue);
+        var canceledValue = map.get("Canceled");
+        value.setCanceled((Boolean) canceledValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Data", AspireClient.serializeValue(data));
+        map.put("Canceled", AspireClient.serializeValue(canceled));
+        return map;
+    }
+}
+
 // ===== BuildOptions.java =====
 // BuildOptions.java - GENERATED CODE - DO NOT EDIT
 
@@ -1650,9 +1687,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public CSharpAppResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public CSharpAppResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -1675,9 +1712,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public CSharpAppResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public CSharpAppResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -1930,10 +1967,10 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a reference to another resource */
-    public CSharpAppResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public CSharpAppResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -1984,9 +2021,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public CSharpAppResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public CSharpAppResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -2017,9 +2054,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public CSharpAppResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public CSharpAppResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -2050,15 +2087,15 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a network endpoint */
-    public CSharpAppResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public CSharpAppResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -2108,12 +2145,12 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTP endpoint */
-    public CSharpAppResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public CSharpAppResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -2145,12 +2182,12 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTPS endpoint */
-    public CSharpAppResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public CSharpAppResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -2375,10 +2412,10 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public CSharpAppResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public CSharpAppResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -2590,14 +2627,14 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public CSharpAppResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public CSharpAppResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -2652,9 +2689,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public CSharpAppResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public CSharpAppResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -2711,11 +2748,11 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public CSharpAppResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public CSharpAppResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -2865,9 +2902,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Adds an optional string parameter */
-    public CSharpAppResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public CSharpAppResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -3116,9 +3153,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Configures resource logging */
-    public CSharpAppResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public CSharpAppResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -3142,9 +3179,9 @@ public class CSharpAppResource extends ProjectResource {
     }
 
     /** Configures resource logging with file path */
-    public CSharpAppResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public CSharpAppResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -4078,9 +4115,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ContainerRegistryResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ContainerRegistryResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -4370,9 +4407,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ContainerRegistryResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ContainerRegistryResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -4395,11 +4432,11 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ContainerRegistryResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ContainerRegistryResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -4533,9 +4570,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Adds an optional string parameter */
-    public ContainerRegistryResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ContainerRegistryResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -4759,9 +4796,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ContainerRegistryResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ContainerRegistryResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -4785,9 +4822,9 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ContainerRegistryResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ContainerRegistryResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -4970,9 +5007,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Causes Aspire to build the specified container image from a Dockerfile. */
-    public ContainerResource withDockerfile(String contextPath, WithDockerfileOptions options) {
-        var dockerfilePath = options == null ? null : options.getDockerfilePath();
-        var stage = options == null ? null : options.getStage();
+    public ContainerResource withDockerfile(String contextPath, WithDockerfileOptions optionsBag) {
+        var dockerfilePath = optionsBag == null ? null : optionsBag.getDockerfilePath();
+        var stage = optionsBag == null ? null : optionsBag.getStage();
         return withDockerfileImpl(contextPath, dockerfilePath, stage);
     }
 
@@ -5056,10 +5093,10 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds container certificate path overrides used for certificate trust at run time. */
-    public ContainerResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
-        var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
-        var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
-        var defaultCertificateDirectoryPaths = options == null ? null : options.getDefaultCertificateDirectoryPaths();
+    public ContainerResource withContainerCertificatePaths(WithContainerCertificatePathsOptions optionsBag) {
+        var customCertificatesDestination = optionsBag == null ? null : optionsBag.getCustomCertificatesDestination();
+        var defaultCertificateBundlePaths = optionsBag == null ? null : optionsBag.getDefaultCertificateBundlePaths();
+        var defaultCertificateDirectoryPaths = optionsBag == null ? null : optionsBag.getDefaultCertificateDirectoryPaths();
         return withContainerCertificatePathsImpl(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths);
     }
 
@@ -5109,9 +5146,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ContainerResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ContainerResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -5143,9 +5180,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public ContainerResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ContainerResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -5369,10 +5406,10 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a reference to another resource */
-    public ContainerResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public ContainerResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -5423,9 +5460,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public ContainerResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ContainerResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -5456,9 +5493,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public ContainerResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ContainerResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -5489,15 +5526,15 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    public ContainerResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public ContainerResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -5547,12 +5584,12 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    public ContainerResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ContainerResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -5584,12 +5621,12 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    public ContainerResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ContainerResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -5800,10 +5837,10 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public ContainerResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ContainerResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -6015,14 +6052,14 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public ContainerResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ContainerResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -6077,9 +6114,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ContainerResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ContainerResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -6136,11 +6173,11 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ContainerResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ContainerResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -6194,9 +6231,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds a volume to a container resource. */
-    public ContainerResource withVolume(String target, WithVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public ContainerResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withVolumeImpl(target, name, isReadOnly);
     }
 
@@ -6316,9 +6353,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Adds an optional string parameter */
-    public ContainerResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ContainerResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -6567,9 +6604,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ContainerResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ContainerResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -6593,9 +6630,9 @@ public class ContainerResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ContainerResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ContainerResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -7313,9 +7350,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public DotnetToolResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public DotnetToolResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -7423,9 +7460,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public DotnetToolResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public DotnetToolResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -7641,10 +7678,10 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a reference to another resource */
-    public DotnetToolResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public DotnetToolResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -7695,9 +7732,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public DotnetToolResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public DotnetToolResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -7728,9 +7765,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public DotnetToolResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public DotnetToolResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -7761,15 +7798,15 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a network endpoint */
-    public DotnetToolResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public DotnetToolResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -7819,12 +7856,12 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTP endpoint */
-    public DotnetToolResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public DotnetToolResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -7856,12 +7893,12 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTPS endpoint */
-    public DotnetToolResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public DotnetToolResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -8072,10 +8109,10 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public DotnetToolResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public DotnetToolResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -8287,14 +8324,14 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public DotnetToolResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public DotnetToolResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -8349,9 +8386,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public DotnetToolResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public DotnetToolResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -8408,11 +8445,11 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public DotnetToolResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public DotnetToolResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -8562,9 +8599,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Adds an optional string parameter */
-    public DotnetToolResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public DotnetToolResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -8813,9 +8850,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Configures resource logging */
-    public DotnetToolResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public DotnetToolResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -8839,9 +8876,9 @@ public class DotnetToolResource extends ExecutableResource {
     }
 
     /** Configures resource logging with file path */
-    public DotnetToolResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public DotnetToolResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -9560,9 +9597,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ExecutableResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ExecutableResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -9619,9 +9656,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public ExecutableResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ExecutableResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -9837,10 +9874,10 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a reference to another resource */
-    public ExecutableResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public ExecutableResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -9891,9 +9928,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public ExecutableResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ExecutableResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -9924,9 +9961,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public ExecutableResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ExecutableResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -9957,15 +9994,15 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    public ExecutableResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public ExecutableResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -10015,12 +10052,12 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    public ExecutableResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ExecutableResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -10052,12 +10089,12 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    public ExecutableResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ExecutableResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -10268,10 +10305,10 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public ExecutableResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ExecutableResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -10483,14 +10520,14 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public ExecutableResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ExecutableResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -10545,9 +10582,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ExecutableResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ExecutableResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -10604,11 +10641,11 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ExecutableResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ExecutableResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -10758,9 +10795,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Adds an optional string parameter */
-    public ExecutableResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ExecutableResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -11009,9 +11046,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ExecutableResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ExecutableResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -11035,9 +11072,9 @@ public class ExecutableResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ExecutableResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ExecutableResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -11245,9 +11282,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ExternalServiceResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ExternalServiceResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -11270,10 +11307,10 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health check to the external service for polyglot app hosts. */
-    public ExternalServiceResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ExternalServiceResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -11566,9 +11603,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ExternalServiceResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ExternalServiceResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -11591,11 +11628,11 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ExternalServiceResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ExternalServiceResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -11729,9 +11766,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Adds an optional string parameter */
-    public ExternalServiceResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ExternalServiceResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -11955,9 +11992,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ExternalServiceResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ExternalServiceResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -11981,9 +12018,9 @@ public class ExternalServiceResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ExternalServiceResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ExternalServiceResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -12727,9 +12764,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a Dockerfile to the application model that can be treated like a container resource. */
-    public ContainerResource addDockerfile(String name, String contextPath, AddDockerfileOptions options) {
-        var dockerfilePath = options == null ? null : options.getDockerfilePath();
-        var stage = options == null ? null : options.getStage();
+    public ContainerResource addDockerfile(String name, String contextPath, AddDockerfileOptions optionsBag) {
+        var dockerfilePath = optionsBag == null ? null : optionsBag.getDockerfilePath();
+        var stage = optionsBag == null ? null : optionsBag.getStage();
         return addDockerfileImpl(name, contextPath, dockerfilePath, stage);
     }
 
@@ -12899,10 +12936,10 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a parameter resource */
-    public ParameterResource addParameter(String name, AddParameterOptions options) {
-        var value = options == null ? null : options.getValue();
-        var publishValueAsDefault = options == null ? null : options.getPublishValueAsDefault();
-        var secret = options == null ? null : options.getSecret();
+    public ParameterResource addParameter(String name, AddParameterOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var publishValueAsDefault = optionsBag == null ? null : optionsBag.getPublishValueAsDefault();
+        var secret = optionsBag == null ? null : optionsBag.getSecret();
         return addParameterImpl(name, value, publishValueAsDefault, secret);
     }
 
@@ -12946,9 +12983,9 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
     }
 
     /** Adds a parameter with a generated default value */
-    public ParameterResource addParameterWithGeneratedValue(String name, GenerateParameterDefault value, AddParameterWithGeneratedValueOptions options) {
-        var secret = options == null ? null : options.getSecret();
-        var persist = options == null ? null : options.getPersist();
+    public ParameterResource addParameterWithGeneratedValue(String name, GenerateParameterDefault value, AddParameterWithGeneratedValueOptions optionsBag) {
+        var secret = optionsBag == null ? null : optionsBag.getSecret();
+        var persist = optionsBag == null ? null : optionsBag.getPersist();
         return addParameterWithGeneratedValueImpl(name, value, secret, persist);
     }
 
@@ -13230,9 +13267,9 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
     }
 
     /** Adds an application-level pipeline step in a TypeScript-friendly shape. */
-    public void addStep(String stepName, AspireAction1<PipelineStepContext> callback, AddStepOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
+    public void addStep(String stepName, AspireAction1<PipelineStepContext> callback, AddStepOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
         addStepImpl(stepName, callback, dependsOn, requiredBy);
     }
 
@@ -13310,9 +13347,9 @@ public class IExecutionConfigurationBuilder extends HandleWrapperBase {
     }
 
     /** Builds the execution configuration for the specified builder. */
-    public IExecutionConfigurationResult build(DistributedApplicationExecutionContext executionContext, BuildOptions options) {
-        var resourceLogger = options == null ? null : options.getResourceLogger();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public IExecutionConfigurationResult build(DistributedApplicationExecutionContext executionContext, BuildOptions optionsBag) {
+        var resourceLogger = optionsBag == null ? null : optionsBag.getResourceLogger();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         return buildImpl(executionContext, resourceLogger, cancellationToken);
     }
 
@@ -13531,6 +13568,196 @@ public class IHostEnvironment extends HandleWrapperBase {
 
 }
 
+// ===== IInteractionService.java =====
+// IInteractionService.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.IInteractionService. */
+public class IInteractionService extends HandleWrapperBase {
+    IInteractionService(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets a value indicating whether the interaction service is available. */
+    public boolean isAvailable() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/interactionServiceIsAvailable", reqArgs);
+        return (Boolean) result;
+    }
+
+    /** Prompts the user for confirmation with a dialog. */
+    public BooleanInteractionResult promptConfirmationAsync(String title, String message, PromptConfirmationAsyncOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptConfirmationAsyncImpl(title, message, options, cancellationToken);
+    }
+
+    public BooleanInteractionResult promptConfirmationAsync(String title, String message) {
+        return promptConfirmationAsync(title, message, null);
+    }
+
+    /** Prompts the user for confirmation with a dialog. */
+    private BooleanInteractionResult promptConfirmationAsyncImpl(String title, String message, MessageBoxInteractionOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptConfirmationAsync", reqArgs);
+        return BooleanInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+    /** Prompts the user with a message box dialog. */
+    public BooleanInteractionResult promptMessageBoxAsync(String title, String message, PromptMessageBoxAsyncOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptMessageBoxAsyncImpl(title, message, options, cancellationToken);
+    }
+
+    public BooleanInteractionResult promptMessageBoxAsync(String title, String message) {
+        return promptMessageBoxAsync(title, message, null);
+    }
+
+    /** Prompts the user with a message box dialog. */
+    private BooleanInteractionResult promptMessageBoxAsyncImpl(String title, String message, MessageBoxInteractionOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptMessageBoxAsync", reqArgs);
+        return BooleanInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+    /** Prompts the user for a single text input. */
+    public InputInteractionResult promptInputAsync(String title, String message, String inputLabel, String placeHolder, PromptInputAsyncOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptInputAsyncImpl(title, message, inputLabel, placeHolder, options, cancellationToken);
+    }
+
+    public InputInteractionResult promptInputAsync(String title, String message, String inputLabel, String placeHolder) {
+        return promptInputAsync(title, message, inputLabel, placeHolder, null);
+    }
+
+    /** Prompts the user for a single text input. */
+    private InputInteractionResult promptInputAsyncImpl(String title, String message, String inputLabel, String placeHolder, InputsDialogInteractionOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        reqArgs.put("inputLabel", AspireClient.serializeValue(inputLabel));
+        reqArgs.put("placeHolder", AspireClient.serializeValue(placeHolder));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptInputAsync", reqArgs);
+        return InputInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+    /** Prompts the user for a single input using a specified `InteractionInput`. */
+    public InputInteractionResult promptInputWithInputAsync(String title, String message, InteractionInput input, PromptInputWithInputAsyncOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptInputWithInputAsyncImpl(title, message, input, options, cancellationToken);
+    }
+
+    public InputInteractionResult promptInputWithInputAsync(String title, String message, InteractionInput input) {
+        return promptInputWithInputAsync(title, message, input, null);
+    }
+
+    /** Prompts the user for a single input using a specified `InteractionInput`. */
+    private InputInteractionResult promptInputWithInputAsyncImpl(String title, String message, InteractionInput input, InputsDialogInteractionOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        reqArgs.put("input", AspireClient.serializeValue(input));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptInputWithInput", reqArgs);
+        return InputInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+    /** Prompts the user for multiple inputs. */
+    public InputsInteractionResult promptInputsAsync(String title, String message, InteractionInput[] inputs, PromptInputsAsyncOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptInputsAsyncImpl(title, message, inputs, options, cancellationToken);
+    }
+
+    public InputsInteractionResult promptInputsAsync(String title, String message, InteractionInput[] inputs) {
+        return promptInputsAsync(title, message, inputs, null);
+    }
+
+    /** Prompts the user for multiple inputs. */
+    private InputsInteractionResult promptInputsAsyncImpl(String title, String message, InteractionInput[] inputs, InputsDialogInteractionOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        reqArgs.put("inputs", AspireClient.serializeValue(inputs));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptInputsAsync", reqArgs);
+        return InputsInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+    /** Prompts the user with a notification. */
+    public BooleanInteractionResult promptNotificationAsync(String title, String message, PromptNotificationAsyncOptions optionsBag) {
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptNotificationAsyncImpl(title, message, options, cancellationToken);
+    }
+
+    public BooleanInteractionResult promptNotificationAsync(String title, String message) {
+        return promptNotificationAsync(title, message, null);
+    }
+
+    /** Prompts the user with a notification. */
+    private BooleanInteractionResult promptNotificationAsyncImpl(String title, String message, NotificationInteractionOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("title", AspireClient.serializeValue(title));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptNotificationAsync", reqArgs);
+        return BooleanInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
+}
+
 // ===== ILogger.java =====
 // ILogger.java - GENERATED CODE - DO NOT EDIT
 
@@ -13678,9 +13905,9 @@ public class IReportingStep extends HandleWrapperBase {
     }
 
     /** Completes the reporting step with plain-text completion text. */
-    public void completeStep(String completionText, CompleteStepOptions options) {
-        var completionState = options == null ? null : options.getCompletionState();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public void completeStep(String completionText, CompleteStepOptions optionsBag) {
+        var completionState = optionsBag == null ? null : optionsBag.getCompletionState();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         completeStepImpl(completionText, completionState, cancellationToken);
     }
 
@@ -13703,9 +13930,9 @@ public class IReportingStep extends HandleWrapperBase {
     }
 
     /** Completes the reporting step with Markdown-formatted completion text. */
-    public void completeStepMarkdown(String markdownString, CompleteStepMarkdownOptions options) {
-        var completionState = options == null ? null : options.getCompletionState();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public void completeStepMarkdown(String markdownString, CompleteStepMarkdownOptions optionsBag) {
+        var completionState = optionsBag == null ? null : optionsBag.getCompletionState();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         completeStepMarkdownImpl(markdownString, completionState, cancellationToken);
     }
 
@@ -13774,10 +14001,10 @@ public class IReportingTask extends HandleWrapperBase {
     }
 
     /** Completes the reporting task with plain-text completion text. */
-    public void completeTask(CompleteTaskOptions options) {
-        var completionMessage = options == null ? null : options.getCompletionMessage();
-        var completionState = options == null ? null : options.getCompletionState();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public void completeTask(CompleteTaskOptions optionsBag) {
+        var completionMessage = optionsBag == null ? null : optionsBag.getCompletionMessage();
+        var completionState = optionsBag == null ? null : optionsBag.getCompletionState();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         completeTaskImpl(completionMessage, completionState, cancellationToken);
     }
 
@@ -13802,9 +14029,9 @@ public class IReportingTask extends HandleWrapperBase {
     }
 
     /** Completes the reporting task with Markdown-formatted completion text. */
-    public void completeTaskMarkdown(String markdownString, CompleteTaskMarkdownOptions options) {
-        var completionState = options == null ? null : options.getCompletionState();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public void completeTaskMarkdown(String markdownString, CompleteTaskMarkdownOptions optionsBag) {
+        var completionState = optionsBag == null ? null : optionsBag.getCompletionState();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         completeTaskMarkdownImpl(markdownString, completionState, cancellationToken);
     }
 
@@ -13993,6 +14220,14 @@ public class IServiceProvider extends HandleWrapperBase {
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/getEventing", reqArgs);
         return (IDistributedApplicationEventing) result;
+    }
+
+    /** Gets the interaction service from the service provider. */
+    public IInteractionService getInteractionService() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/getInteractionService", reqArgs);
+        return (IInteractionService) result;
     }
 
     /** Gets the logger factory from the service provider. */
@@ -14265,6 +14500,42 @@ public class InitializeResourceEvent extends HandleWrapperBase {
 
 }
 
+// ===== InputInteractionResult.java =====
+// InputInteractionResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** InputInteractionResult DTO. */
+public class InputInteractionResult implements JsonSerializable {
+    private InteractionInput data;
+    private boolean canceled;
+
+    public InteractionInput getData() { return data; }
+    public void setData(InteractionInput value) { this.data = value; }
+    public boolean getCanceled() { return canceled; }
+    public void setCanceled(boolean value) { this.canceled = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InputInteractionResult fromMap(Map<String, Object> map) {
+        var value = new InputInteractionResult();
+        var dataValue = map.get("Data");
+        value.setData(dataValue == null ? null : InteractionInput.fromMap((Map<String, Object>) dataValue));
+        var canceledValue = map.get("Canceled");
+        value.setCanceled((Boolean) canceledValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Data", AspireClient.serializeValue(data));
+        map.put("Canceled", AspireClient.serializeValue(canceled));
+        return map;
+    }
+}
+
 // ===== InputType.java =====
 // InputType.java - GENERATED CODE - DO NOT EDIT
 
@@ -14294,6 +14565,60 @@ public enum InputType implements WireValueEnum {
             if (e.value.equals(value)) return e;
         }
         throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== InputsDialogInteractionOptions.java =====
+// InputsDialogInteractionOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** InputsDialogInteractionOptions DTO. */
+public class InputsDialogInteractionOptions implements JsonSerializable {
+    private String primaryButtonText;
+    private String secondaryButtonText;
+    private Boolean showSecondaryButton;
+    private Boolean showDismiss;
+    private Boolean enableMessageMarkdown;
+
+    public String getPrimaryButtonText() { return primaryButtonText; }
+    public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
+    public String getSecondaryButtonText() { return secondaryButtonText; }
+    public void setSecondaryButtonText(String value) { this.secondaryButtonText = value; }
+    public Boolean getShowSecondaryButton() { return showSecondaryButton; }
+    public void setShowSecondaryButton(Boolean value) { this.showSecondaryButton = value; }
+    public Boolean getShowDismiss() { return showDismiss; }
+    public void setShowDismiss(Boolean value) { this.showDismiss = value; }
+    public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
+    public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InputsDialogInteractionOptions fromMap(Map<String, Object> map) {
+        var value = new InputsDialogInteractionOptions();
+        var primaryButtonTextValue = map.get("PrimaryButtonText");
+        value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
+        var secondaryButtonTextValue = map.get("SecondaryButtonText");
+        value.setSecondaryButtonText(secondaryButtonTextValue == null ? null : (String) secondaryButtonTextValue);
+        var showSecondaryButtonValue = map.get("ShowSecondaryButton");
+        value.setShowSecondaryButton(showSecondaryButtonValue == null ? null : (Boolean) showSecondaryButtonValue);
+        var showDismissValue = map.get("ShowDismiss");
+        value.setShowDismiss(showDismissValue == null ? null : (Boolean) showDismissValue);
+        var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
+        value.setEnableMessageMarkdown(enableMessageMarkdownValue == null ? null : (Boolean) enableMessageMarkdownValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
+        map.put("SecondaryButtonText", AspireClient.serializeValue(secondaryButtonText));
+        map.put("ShowSecondaryButton", AspireClient.serializeValue(showSecondaryButton));
+        map.put("ShowDismiss", AspireClient.serializeValue(showDismiss));
+        map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        return map;
     }
 }
 
@@ -14336,6 +14661,42 @@ public class InputsDialogValidationContext extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/InputsDialogValidationContext.addValidationError", reqArgs);
     }
 
+}
+
+// ===== InputsInteractionResult.java =====
+// InputsInteractionResult.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** InputsInteractionResult DTO. */
+public class InputsInteractionResult implements JsonSerializable {
+    private InteractionInputCollection data;
+    private boolean canceled;
+
+    public InteractionInputCollection getData() { return data; }
+    public void setData(InteractionInputCollection value) { this.data = value; }
+    public boolean getCanceled() { return canceled; }
+    public void setCanceled(boolean value) { this.canceled = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InputsInteractionResult fromMap(Map<String, Object> map) {
+        var value = new InputsInteractionResult();
+        var dataValue = map.get("Data");
+        value.setData((InteractionInputCollection) dataValue);
+        var canceledValue = map.get("Canceled");
+        value.setCanceled((Boolean) canceledValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Data", AspireClient.serializeValue(data));
+        map.put("Canceled", AspireClient.serializeValue(canceled));
+        return map;
+    }
 }
 
 // ===== InteractionInput.java =====
@@ -14464,6 +14825,60 @@ public class InteractionInputCollection extends HandleWrapperBase {
 
 }
 
+// ===== InteractionOptions.java =====
+// InteractionOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** InteractionOptions DTO. */
+public class InteractionOptions implements JsonSerializable {
+    private String primaryButtonText;
+    private String secondaryButtonText;
+    private Boolean showSecondaryButton;
+    private Boolean showDismiss;
+    private Boolean enableMessageMarkdown;
+
+    public String getPrimaryButtonText() { return primaryButtonText; }
+    public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
+    public String getSecondaryButtonText() { return secondaryButtonText; }
+    public void setSecondaryButtonText(String value) { this.secondaryButtonText = value; }
+    public Boolean getShowSecondaryButton() { return showSecondaryButton; }
+    public void setShowSecondaryButton(Boolean value) { this.showSecondaryButton = value; }
+    public Boolean getShowDismiss() { return showDismiss; }
+    public void setShowDismiss(Boolean value) { this.showDismiss = value; }
+    public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
+    public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InteractionOptions fromMap(Map<String, Object> map) {
+        var value = new InteractionOptions();
+        var primaryButtonTextValue = map.get("PrimaryButtonText");
+        value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
+        var secondaryButtonTextValue = map.get("SecondaryButtonText");
+        value.setSecondaryButtonText(secondaryButtonTextValue == null ? null : (String) secondaryButtonTextValue);
+        var showSecondaryButtonValue = map.get("ShowSecondaryButton");
+        value.setShowSecondaryButton(showSecondaryButtonValue == null ? null : (Boolean) showSecondaryButtonValue);
+        var showDismissValue = map.get("ShowDismiss");
+        value.setShowDismiss(showDismissValue == null ? null : (Boolean) showDismissValue);
+        var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
+        value.setEnableMessageMarkdown(enableMessageMarkdownValue == null ? null : (Boolean) enableMessageMarkdownValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
+        map.put("SecondaryButtonText", AspireClient.serializeValue(secondaryButtonText));
+        map.put("ShowSecondaryButton", AspireClient.serializeValue(showSecondaryButton));
+        map.put("ShowDismiss", AspireClient.serializeValue(showDismiss));
+        map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        return map;
+    }
+}
+
 // ===== JsonSerializable.java =====
 // JsonSerializable.java - GENERATED CODE - DO NOT EDIT
 
@@ -14527,6 +14942,171 @@ public class LogFacade extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.ApplicationModel/debug", reqArgs);
     }
 
+}
+
+// ===== MessageBoxInteractionOptions.java =====
+// MessageBoxInteractionOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** MessageBoxInteractionOptions DTO. */
+public class MessageBoxInteractionOptions implements JsonSerializable {
+    private MessageIntent intent;
+    private String primaryButtonText;
+    private String secondaryButtonText;
+    private Boolean showSecondaryButton;
+    private Boolean showDismiss;
+    private Boolean enableMessageMarkdown;
+
+    public MessageIntent getIntent() { return intent; }
+    public void setIntent(MessageIntent value) { this.intent = value; }
+    public String getPrimaryButtonText() { return primaryButtonText; }
+    public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
+    public String getSecondaryButtonText() { return secondaryButtonText; }
+    public void setSecondaryButtonText(String value) { this.secondaryButtonText = value; }
+    public Boolean getShowSecondaryButton() { return showSecondaryButton; }
+    public void setShowSecondaryButton(Boolean value) { this.showSecondaryButton = value; }
+    public Boolean getShowDismiss() { return showDismiss; }
+    public void setShowDismiss(Boolean value) { this.showDismiss = value; }
+    public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
+    public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+
+    @SuppressWarnings("unchecked")
+    public static MessageBoxInteractionOptions fromMap(Map<String, Object> map) {
+        var value = new MessageBoxInteractionOptions();
+        var intentValue = map.get("Intent");
+        value.setIntent(intentValue == null ? null : MessageIntent.fromValue((String) intentValue));
+        var primaryButtonTextValue = map.get("PrimaryButtonText");
+        value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
+        var secondaryButtonTextValue = map.get("SecondaryButtonText");
+        value.setSecondaryButtonText(secondaryButtonTextValue == null ? null : (String) secondaryButtonTextValue);
+        var showSecondaryButtonValue = map.get("ShowSecondaryButton");
+        value.setShowSecondaryButton(showSecondaryButtonValue == null ? null : (Boolean) showSecondaryButtonValue);
+        var showDismissValue = map.get("ShowDismiss");
+        value.setShowDismiss(showDismissValue == null ? null : (Boolean) showDismissValue);
+        var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
+        value.setEnableMessageMarkdown(enableMessageMarkdownValue == null ? null : (Boolean) enableMessageMarkdownValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Intent", AspireClient.serializeValue(intent));
+        map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
+        map.put("SecondaryButtonText", AspireClient.serializeValue(secondaryButtonText));
+        map.put("ShowSecondaryButton", AspireClient.serializeValue(showSecondaryButton));
+        map.put("ShowDismiss", AspireClient.serializeValue(showDismiss));
+        map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        return map;
+    }
+}
+
+// ===== MessageIntent.java =====
+// MessageIntent.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** MessageIntent enum. */
+public enum MessageIntent implements WireValueEnum {
+    NONE("None"),
+    SUCCESS("Success"),
+    WARNING("Warning"),
+    ERROR("Error"),
+    INFORMATION("Information"),
+    CONFIRMATION("Confirmation");
+
+    private final String value;
+
+    MessageIntent(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static MessageIntent fromValue(String value) {
+        for (MessageIntent e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
+// ===== NotificationInteractionOptions.java =====
+// NotificationInteractionOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** NotificationInteractionOptions DTO. */
+public class NotificationInteractionOptions implements JsonSerializable {
+    private MessageIntent intent;
+    private String linkText;
+    private String linkUrl;
+    private String primaryButtonText;
+    private String secondaryButtonText;
+    private Boolean showSecondaryButton;
+    private Boolean showDismiss;
+    private Boolean enableMessageMarkdown;
+
+    public MessageIntent getIntent() { return intent; }
+    public void setIntent(MessageIntent value) { this.intent = value; }
+    public String getLinkText() { return linkText; }
+    public void setLinkText(String value) { this.linkText = value; }
+    public String getLinkUrl() { return linkUrl; }
+    public void setLinkUrl(String value) { this.linkUrl = value; }
+    public String getPrimaryButtonText() { return primaryButtonText; }
+    public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
+    public String getSecondaryButtonText() { return secondaryButtonText; }
+    public void setSecondaryButtonText(String value) { this.secondaryButtonText = value; }
+    public Boolean getShowSecondaryButton() { return showSecondaryButton; }
+    public void setShowSecondaryButton(Boolean value) { this.showSecondaryButton = value; }
+    public Boolean getShowDismiss() { return showDismiss; }
+    public void setShowDismiss(Boolean value) { this.showDismiss = value; }
+    public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
+    public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+
+    @SuppressWarnings("unchecked")
+    public static NotificationInteractionOptions fromMap(Map<String, Object> map) {
+        var value = new NotificationInteractionOptions();
+        var intentValue = map.get("Intent");
+        value.setIntent(intentValue == null ? null : MessageIntent.fromValue((String) intentValue));
+        var linkTextValue = map.get("LinkText");
+        value.setLinkText(linkTextValue == null ? null : (String) linkTextValue);
+        var linkUrlValue = map.get("LinkUrl");
+        value.setLinkUrl(linkUrlValue == null ? null : (String) linkUrlValue);
+        var primaryButtonTextValue = map.get("PrimaryButtonText");
+        value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
+        var secondaryButtonTextValue = map.get("SecondaryButtonText");
+        value.setSecondaryButtonText(secondaryButtonTextValue == null ? null : (String) secondaryButtonTextValue);
+        var showSecondaryButtonValue = map.get("ShowSecondaryButton");
+        value.setShowSecondaryButton(showSecondaryButtonValue == null ? null : (Boolean) showSecondaryButtonValue);
+        var showDismissValue = map.get("ShowDismiss");
+        value.setShowDismiss(showDismissValue == null ? null : (Boolean) showDismissValue);
+        var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
+        value.setEnableMessageMarkdown(enableMessageMarkdownValue == null ? null : (Boolean) enableMessageMarkdownValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Intent", AspireClient.serializeValue(intent));
+        map.put("LinkText", AspireClient.serializeValue(linkText));
+        map.put("LinkUrl", AspireClient.serializeValue(linkUrl));
+        map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
+        map.put("SecondaryButtonText", AspireClient.serializeValue(secondaryButtonText));
+        map.put("ShowSecondaryButton", AspireClient.serializeValue(showSecondaryButton));
+        map.put("ShowDismiss", AspireClient.serializeValue(showDismiss));
+        map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        return map;
+    }
 }
 
 // ===== OtlpProtocol.java =====
@@ -14671,9 +15251,9 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ParameterResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ParameterResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -14988,9 +15568,9 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ParameterResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ParameterResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -15013,11 +15593,11 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ParameterResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ParameterResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -15151,9 +15731,9 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Adds an optional string parameter */
-    public ParameterResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ParameterResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -15377,9 +15957,9 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ParameterResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ParameterResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -15403,9 +15983,9 @@ public class ParameterResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ParameterResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ParameterResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -16096,9 +16676,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public ProjectResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public ProjectResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -16121,9 +16701,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public ProjectResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ProjectResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -16376,10 +16956,10 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a reference to another resource */
-    public ProjectResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public ProjectResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -16430,9 +17010,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public ProjectResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ProjectResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -16463,9 +17043,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public ProjectResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public ProjectResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -16496,15 +17076,15 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a network endpoint */
-    public ProjectResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public ProjectResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -16554,12 +17134,12 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP endpoint */
-    public ProjectResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ProjectResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -16591,12 +17171,12 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTPS endpoint */
-    public ProjectResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public ProjectResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -16821,10 +17401,10 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public ProjectResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ProjectResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -17036,14 +17616,14 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public ProjectResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public ProjectResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -17098,9 +17678,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public ProjectResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public ProjectResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -17157,11 +17737,11 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public ProjectResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public ProjectResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -17311,9 +17891,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Adds an optional string parameter */
-    public ProjectResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public ProjectResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -17562,9 +18142,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging */
-    public ProjectResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ProjectResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -17588,9 +18168,9 @@ public class ProjectResource extends ResourceBuilderBase {
     }
 
     /** Configures resource logging with file path */
-    public ProjectResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public ProjectResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -17704,6 +18284,168 @@ public class ProjectResourceOptions extends HandleWrapperBase {
         reqArgs.put("value", AspireClient.serializeValue(value));
         var result = getClient().invokeCapability("Aspire.Hosting/ProjectResourceOptions.setExcludeKestrelEndpoints", reqArgs);
         return (ProjectResourceOptions) result;
+    }
+
+}
+
+// ===== PromptConfirmationAsyncOptions.java =====
+// PromptConfirmationAsyncOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for PromptConfirmationAsync. */
+public final class PromptConfirmationAsyncOptions {
+    private MessageBoxInteractionOptions options;
+    private CancellationToken cancellationToken;
+
+    public MessageBoxInteractionOptions getOptions() { return options; }
+    public PromptConfirmationAsyncOptions options(MessageBoxInteractionOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptConfirmationAsyncOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== PromptInputAsyncOptions.java =====
+// PromptInputAsyncOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for PromptInputAsync. */
+public final class PromptInputAsyncOptions {
+    private InputsDialogInteractionOptions options;
+    private CancellationToken cancellationToken;
+
+    public InputsDialogInteractionOptions getOptions() { return options; }
+    public PromptInputAsyncOptions options(InputsDialogInteractionOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptInputAsyncOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== PromptInputWithInputAsyncOptions.java =====
+// PromptInputWithInputAsyncOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for PromptInputWithInputAsync. */
+public final class PromptInputWithInputAsyncOptions {
+    private InputsDialogInteractionOptions options;
+    private CancellationToken cancellationToken;
+
+    public InputsDialogInteractionOptions getOptions() { return options; }
+    public PromptInputWithInputAsyncOptions options(InputsDialogInteractionOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptInputWithInputAsyncOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== PromptInputsAsyncOptions.java =====
+// PromptInputsAsyncOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for PromptInputsAsync. */
+public final class PromptInputsAsyncOptions {
+    private InputsDialogInteractionOptions options;
+    private CancellationToken cancellationToken;
+
+    public InputsDialogInteractionOptions getOptions() { return options; }
+    public PromptInputsAsyncOptions options(InputsDialogInteractionOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptInputsAsyncOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== PromptMessageBoxAsyncOptions.java =====
+// PromptMessageBoxAsyncOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for PromptMessageBoxAsync. */
+public final class PromptMessageBoxAsyncOptions {
+    private MessageBoxInteractionOptions options;
+    private CancellationToken cancellationToken;
+
+    public MessageBoxInteractionOptions getOptions() { return options; }
+    public PromptMessageBoxAsyncOptions options(MessageBoxInteractionOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptMessageBoxAsyncOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== PromptNotificationAsyncOptions.java =====
+// PromptNotificationAsyncOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for PromptNotificationAsync. */
+public final class PromptNotificationAsyncOptions {
+    private NotificationInteractionOptions options;
+    private CancellationToken cancellationToken;
+
+    public NotificationInteractionOptions getOptions() { return options; }
+    public PromptNotificationAsyncOptions options(NotificationInteractionOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptNotificationAsyncOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
     }
 
 }
@@ -18084,9 +18826,9 @@ public class ResourceCommandService extends HandleWrapperBase {
     }
 
     /** Executes a command for the specified resource. */
-    public ExecuteCommandResult executeCommandAsync(AspireUnion resource, String commandName, ExecuteCommandAsyncOptions options) {
-        var arguments = options == null ? null : options.getArguments();
-        var cancellationToken = options == null ? null : options.getCancellationToken();
+    public ExecuteCommandResult executeCommandAsync(AspireUnion resource, String commandName, ExecuteCommandAsyncOptions optionsBag) {
+        var arguments = optionsBag == null ? null : optionsBag.getArguments();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
         return executeCommandAsyncImpl(resource, commandName, arguments, cancellationToken);
     }
 
@@ -18370,9 +19112,9 @@ public class ResourceNotificationService extends HandleWrapperBase {
     }
 
     /** Publishes an update for a resource's state. */
-    public void publishResourceUpdate(IResource resource, PublishResourceUpdateOptions options) {
-        var state = options == null ? null : options.getState();
-        var stateStyle = options == null ? null : options.getStateStyle();
+    public void publishResourceUpdate(IResource resource, PublishResourceUpdateOptions optionsBag) {
+        var state = optionsBag == null ? null : optionsBag.getState();
+        var stateStyle = optionsBag == null ? null : optionsBag.getStateStyle();
         publishResourceUpdateImpl(resource, state, stateStyle);
     }
 
@@ -18953,9 +19695,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Causes Aspire to build the specified container image from a Dockerfile. */
-    public TestDatabaseResource withDockerfile(String contextPath, WithDockerfileOptions options) {
-        var dockerfilePath = options == null ? null : options.getDockerfilePath();
-        var stage = options == null ? null : options.getStage();
+    public TestDatabaseResource withDockerfile(String contextPath, WithDockerfileOptions optionsBag) {
+        var dockerfilePath = optionsBag == null ? null : optionsBag.getDockerfilePath();
+        var stage = optionsBag == null ? null : optionsBag.getStage();
         return withDockerfileImpl(contextPath, dockerfilePath, stage);
     }
 
@@ -19039,10 +19781,10 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds container certificate path overrides used for certificate trust at run time. */
-    public TestDatabaseResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
-        var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
-        var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
-        var defaultCertificateDirectoryPaths = options == null ? null : options.getDefaultCertificateDirectoryPaths();
+    public TestDatabaseResource withContainerCertificatePaths(WithContainerCertificatePathsOptions optionsBag) {
+        var customCertificatesDestination = optionsBag == null ? null : optionsBag.getCustomCertificatesDestination();
+        var defaultCertificateBundlePaths = optionsBag == null ? null : optionsBag.getDefaultCertificateBundlePaths();
+        var defaultCertificateDirectoryPaths = optionsBag == null ? null : optionsBag.getDefaultCertificateDirectoryPaths();
         return withContainerCertificatePathsImpl(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths);
     }
 
@@ -19092,9 +19834,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public TestDatabaseResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public TestDatabaseResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -19126,9 +19868,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public TestDatabaseResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestDatabaseResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -19352,10 +20094,10 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a reference to another resource */
-    public TestDatabaseResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public TestDatabaseResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -19406,9 +20148,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public TestDatabaseResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestDatabaseResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -19439,9 +20181,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public TestDatabaseResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestDatabaseResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -19472,15 +20214,15 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    public TestDatabaseResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public TestDatabaseResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -19530,12 +20272,12 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    public TestDatabaseResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestDatabaseResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -19567,12 +20309,12 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    public TestDatabaseResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestDatabaseResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -19783,10 +20525,10 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public TestDatabaseResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestDatabaseResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -19998,14 +20740,14 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public TestDatabaseResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestDatabaseResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -20060,9 +20802,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public TestDatabaseResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public TestDatabaseResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -20119,11 +20861,11 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public TestDatabaseResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public TestDatabaseResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -20177,9 +20919,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds a volume to a container resource. */
-    public TestDatabaseResource withVolume(String target, WithVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public TestDatabaseResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withVolumeImpl(target, name, isReadOnly);
     }
 
@@ -20299,9 +21041,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Adds an optional string parameter */
-    public TestDatabaseResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public TestDatabaseResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -20550,9 +21292,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    public TestDatabaseResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestDatabaseResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -20576,9 +21318,9 @@ public class TestDatabaseResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -20994,9 +21736,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Causes Aspire to build the specified container image from a Dockerfile. */
-    public TestRedisResource withDockerfile(String contextPath, WithDockerfileOptions options) {
-        var dockerfilePath = options == null ? null : options.getDockerfilePath();
-        var stage = options == null ? null : options.getStage();
+    public TestRedisResource withDockerfile(String contextPath, WithDockerfileOptions optionsBag) {
+        var dockerfilePath = optionsBag == null ? null : optionsBag.getDockerfilePath();
+        var stage = optionsBag == null ? null : optionsBag.getStage();
         return withDockerfileImpl(contextPath, dockerfilePath, stage);
     }
 
@@ -21080,10 +21822,10 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds container certificate path overrides used for certificate trust at run time. */
-    public TestRedisResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
-        var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
-        var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
-        var defaultCertificateDirectoryPaths = options == null ? null : options.getDefaultCertificateDirectoryPaths();
+    public TestRedisResource withContainerCertificatePaths(WithContainerCertificatePathsOptions optionsBag) {
+        var customCertificatesDestination = optionsBag == null ? null : optionsBag.getCustomCertificatesDestination();
+        var defaultCertificateBundlePaths = optionsBag == null ? null : optionsBag.getDefaultCertificateBundlePaths();
+        var defaultCertificateDirectoryPaths = optionsBag == null ? null : optionsBag.getDefaultCertificateDirectoryPaths();
         return withContainerCertificatePathsImpl(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths);
     }
 
@@ -21133,9 +21875,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public TestRedisResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public TestRedisResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -21167,9 +21909,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public TestRedisResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestRedisResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -21411,10 +22153,10 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a reference to another resource */
-    public TestRedisResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public TestRedisResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -21474,9 +22216,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public TestRedisResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestRedisResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -21507,9 +22249,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public TestRedisResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestRedisResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -21540,15 +22282,15 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    public TestRedisResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public TestRedisResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -21598,12 +22340,12 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    public TestRedisResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestRedisResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -21635,12 +22377,12 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    public TestRedisResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestRedisResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -21851,10 +22593,10 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public TestRedisResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestRedisResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -22066,14 +22808,14 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public TestRedisResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestRedisResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -22128,9 +22870,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public TestRedisResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public TestRedisResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -22187,11 +22929,11 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public TestRedisResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public TestRedisResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -22245,9 +22987,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a volume to a container resource. */
-    public TestRedisResource withVolume(String target, WithVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public TestRedisResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withVolumeImpl(target, name, isReadOnly);
     }
 
@@ -22414,9 +23156,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds an optional string parameter */
-    public TestRedisResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public TestRedisResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -22726,9 +23468,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Adds a data volume with persistence */
-    public TestRedisResource withDataVolume(WithDataVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public TestRedisResource withDataVolume(WithDataVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withDataVolumeImpl(name, isReadOnly);
     }
 
@@ -22791,9 +23533,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    public TestRedisResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestRedisResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -22817,9 +23559,9 @@ public class TestRedisResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    public TestRedisResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestRedisResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -23107,9 +23849,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Causes Aspire to build the specified container image from a Dockerfile. */
-    public TestVaultResource withDockerfile(String contextPath, WithDockerfileOptions options) {
-        var dockerfilePath = options == null ? null : options.getDockerfilePath();
-        var stage = options == null ? null : options.getStage();
+    public TestVaultResource withDockerfile(String contextPath, WithDockerfileOptions optionsBag) {
+        var dockerfilePath = optionsBag == null ? null : optionsBag.getDockerfilePath();
+        var stage = optionsBag == null ? null : optionsBag.getStage();
         return withDockerfileImpl(contextPath, dockerfilePath, stage);
     }
 
@@ -23193,10 +23935,10 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds container certificate path overrides used for certificate trust at run time. */
-    public TestVaultResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
-        var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
-        var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
-        var defaultCertificateDirectoryPaths = options == null ? null : options.getDefaultCertificateDirectoryPaths();
+    public TestVaultResource withContainerCertificatePaths(WithContainerCertificatePathsOptions optionsBag) {
+        var customCertificatesDestination = optionsBag == null ? null : optionsBag.getCustomCertificatesDestination();
+        var defaultCertificateBundlePaths = optionsBag == null ? null : optionsBag.getDefaultCertificateBundlePaths();
+        var defaultCertificateDirectoryPaths = optionsBag == null ? null : optionsBag.getDefaultCertificateDirectoryPaths();
         return withContainerCertificatePathsImpl(customCertificatesDestination, defaultCertificateBundlePaths, defaultCertificateDirectoryPaths);
     }
 
@@ -23246,9 +23988,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Configures custom base images for generated Dockerfiles. */
-    public TestVaultResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
-        var buildImage = options == null ? null : options.getBuildImage();
-        var runtimeImage = options == null ? null : options.getRuntimeImage();
+    public TestVaultResource withDockerfileBaseImage(WithDockerfileBaseImageOptions optionsBag) {
+        var buildImage = optionsBag == null ? null : optionsBag.getBuildImage();
+        var runtimeImage = optionsBag == null ? null : optionsBag.getRuntimeImage();
         return withDockerfileBaseImageImpl(buildImage, runtimeImage);
     }
 
@@ -23280,9 +24022,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
-    public TestVaultResource withMcpServer(WithMcpServerOptions options) {
-        var path = options == null ? null : options.getPath();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestVaultResource withMcpServer(WithMcpServerOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withMcpServerImpl(path, endpointName);
     }
 
@@ -23506,10 +24248,10 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a reference to another resource */
-    public TestVaultResource withReference(AspireUnion source, WithReferenceOptions options) {
-        var connectionName = options == null ? null : options.getConnectionName();
-        var optional = options == null ? null : options.getOptional();
-        var name = options == null ? null : options.getName();
+    public TestVaultResource withReference(AspireUnion source, WithReferenceOptions optionsBag) {
+        var connectionName = optionsBag == null ? null : optionsBag.getConnectionName();
+        var optional = optionsBag == null ? null : optionsBag.getOptional();
+        var name = optionsBag == null ? null : optionsBag.getName();
         return withReferenceImpl(source, connectionName, optional, name);
     }
 
@@ -23560,9 +24302,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Updates an HTTP endpoint via callback */
-    public TestVaultResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestVaultResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -23593,9 +24335,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Updates an HTTPS endpoint via callback */
-    public TestVaultResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
-        var name = options == null ? null : options.getName();
-        var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
+    public TestVaultResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var createIfNotExists = optionsBag == null ? null : optionsBag.getCreateIfNotExists();
         return withHttpsEndpointCallbackImpl(callback, name, createIfNotExists);
     }
 
@@ -23626,15 +24368,15 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a network endpoint */
-    public TestVaultResource withEndpoint(WithEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var scheme = options == null ? null : options.getScheme();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
-        var isExternal = options == null ? null : options.isExternal();
-        var protocol = options == null ? null : options.getProtocol();
+    public TestVaultResource withEndpoint(WithEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var scheme = optionsBag == null ? null : optionsBag.getScheme();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
+        var isExternal = optionsBag == null ? null : optionsBag.isExternal();
+        var protocol = optionsBag == null ? null : optionsBag.getProtocol();
         return withEndpointImpl(port, targetPort, scheme, name, env, isProxied, isExternal, protocol);
     }
 
@@ -23684,12 +24426,12 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTP endpoint */
-    public TestVaultResource withHttpEndpoint(WithHttpEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestVaultResource withHttpEndpoint(WithHttpEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -23721,12 +24463,12 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTPS endpoint */
-    public TestVaultResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
-        var port = options == null ? null : options.getPort();
-        var targetPort = options == null ? null : options.getTargetPort();
-        var name = options == null ? null : options.getName();
-        var env = options == null ? null : options.getEnv();
-        var isProxied = options == null ? null : options.isProxied();
+    public TestVaultResource withHttpsEndpoint(WithHttpsEndpointOptions optionsBag) {
+        var port = optionsBag == null ? null : optionsBag.getPort();
+        var targetPort = optionsBag == null ? null : optionsBag.getTargetPort();
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var env = optionsBag == null ? null : optionsBag.getEnv();
+        var isProxied = optionsBag == null ? null : optionsBag.isProxied();
         return withHttpsEndpointImpl(port, targetPort, name, env, isProxied);
     }
 
@@ -23937,10 +24679,10 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a health check to the resource which is mapped to a specific endpoint. */
-    public TestVaultResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
-        var path = options == null ? null : options.getPath();
-        var statusCode = options == null ? null : options.getStatusCode();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestVaultResource withHttpHealthCheck(WithHttpHealthCheckOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var statusCode = optionsBag == null ? null : optionsBag.getStatusCode();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpHealthCheckImpl(path, statusCode, endpointName);
     }
 
@@ -24152,14 +24894,14 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an HTTP health probe to the resource */
-    public TestVaultResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
-        var path = options == null ? null : options.getPath();
-        var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
-        var periodSeconds = options == null ? null : options.getPeriodSeconds();
-        var timeoutSeconds = options == null ? null : options.getTimeoutSeconds();
-        var failureThreshold = options == null ? null : options.getFailureThreshold();
-        var successThreshold = options == null ? null : options.getSuccessThreshold();
-        var endpointName = options == null ? null : options.getEndpointName();
+    public TestVaultResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions optionsBag) {
+        var path = optionsBag == null ? null : optionsBag.getPath();
+        var initialDelaySeconds = optionsBag == null ? null : optionsBag.getInitialDelaySeconds();
+        var periodSeconds = optionsBag == null ? null : optionsBag.getPeriodSeconds();
+        var timeoutSeconds = optionsBag == null ? null : optionsBag.getTimeoutSeconds();
+        var failureThreshold = optionsBag == null ? null : optionsBag.getFailureThreshold();
+        var successThreshold = optionsBag == null ? null : optionsBag.getSuccessThreshold();
+        var endpointName = optionsBag == null ? null : optionsBag.getEndpointName();
         return withHttpProbeImpl(probeType, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold, endpointName);
     }
 
@@ -24214,9 +24956,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Hides the resource from default resource lists after successful completion */
-    public TestVaultResource withHiddenOnCompletion(WithHiddenOnCompletionOptions options) {
-        var exitCode = options == null ? null : options.getExitCode();
-        var exitCodes = options == null ? null : options.getExitCodes();
+    public TestVaultResource withHiddenOnCompletion(WithHiddenOnCompletionOptions optionsBag) {
+        var exitCode = optionsBag == null ? null : optionsBag.getExitCode();
+        var exitCodes = optionsBag == null ? null : optionsBag.getExitCodes();
         return withHiddenOnCompletionImpl(exitCode, exitCodes);
     }
 
@@ -24273,11 +25015,11 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a pipeline step to the resource that will be executed during deployment. */
-    public TestVaultResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
-        var dependsOn = options == null ? null : options.getDependsOn();
-        var requiredBy = options == null ? null : options.getRequiredBy();
-        var tags = options == null ? null : options.getTags();
-        var description = options == null ? null : options.getDescription();
+    public TestVaultResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions optionsBag) {
+        var dependsOn = optionsBag == null ? null : optionsBag.getDependsOn();
+        var requiredBy = optionsBag == null ? null : optionsBag.getRequiredBy();
+        var tags = optionsBag == null ? null : optionsBag.getTags();
+        var description = optionsBag == null ? null : optionsBag.getDescription();
         return withPipelineStepFactoryImpl(stepName, callback, dependsOn, requiredBy, tags, description);
     }
 
@@ -24331,9 +25073,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds a volume to a container resource. */
-    public TestVaultResource withVolume(String target, WithVolumeOptions options) {
-        var name = options == null ? null : options.getName();
-        var isReadOnly = options == null ? null : options.isReadOnly();
+    public TestVaultResource withVolume(String target, WithVolumeOptions optionsBag) {
+        var name = optionsBag == null ? null : optionsBag.getName();
+        var isReadOnly = optionsBag == null ? null : optionsBag.isReadOnly();
         return withVolumeImpl(target, name, isReadOnly);
     }
 
@@ -24453,9 +25195,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Adds an optional string parameter */
-    public TestVaultResource withOptionalString(WithOptionalStringOptions options) {
-        var value = options == null ? null : options.getValue();
-        var enabled = options == null ? null : options.getEnabled();
+    public TestVaultResource withOptionalString(WithOptionalStringOptions optionsBag) {
+        var value = optionsBag == null ? null : optionsBag.getValue();
+        var enabled = optionsBag == null ? null : optionsBag.getEnabled();
         return withOptionalStringImpl(value, enabled);
     }
 
@@ -24713,9 +25455,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Configures resource logging */
-    public TestVaultResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestVaultResource withMergeLogging(String logLevel, WithMergeLoggingOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingImpl(logLevel, enableConsole, maxFiles);
     }
 
@@ -24739,9 +25481,9 @@ public class TestVaultResource extends ContainerResource {
     }
 
     /** Configures resource logging with file path */
-    public TestVaultResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
-        var enableConsole = options == null ? null : options.getEnableConsole();
-        var maxFiles = options == null ? null : options.getMaxFiles();
+    public TestVaultResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions optionsBag) {
+        var enableConsole = optionsBag == null ? null : optionsBag.getEnableConsole();
+        var maxFiles = optionsBag == null ? null : optionsBag.getMaxFiles();
         return withMergeLoggingPathImpl(logLevel, logPath, enableConsole, maxFiles);
     }
 
@@ -25720,6 +26462,7 @@ public final class WithVolumeOptions {
 .aspire/modules/BeforePublishEvent.java
 .aspire/modules/BeforeResourceStartedEvent.java
 .aspire/modules/BeforeStartEvent.java
+.aspire/modules/BooleanInteractionResult.java
 .aspire/modules/BuildOptions.java
 .aspire/modules/CSharpAppResource.java
 .aspire/modules/CancellationToken.java
@@ -25795,6 +26538,7 @@ public final class WithVolumeOptions {
 .aspire/modules/IExecutionConfigurationResult.java
 .aspire/modules/IExpressionValue.java
 .aspire/modules/IHostEnvironment.java
+.aspire/modules/IInteractionService.java
 .aspire/modules/ILogger.java
 .aspire/modules/ILoggerFactory.java
 .aspire/modules/IReportingStep.java
@@ -25813,12 +26557,19 @@ public final class WithVolumeOptions {
 .aspire/modules/IconVariant.java
 .aspire/modules/ImagePullPolicy.java
 .aspire/modules/InitializeResourceEvent.java
+.aspire/modules/InputInteractionResult.java
 .aspire/modules/InputType.java
+.aspire/modules/InputsDialogInteractionOptions.java
 .aspire/modules/InputsDialogValidationContext.java
+.aspire/modules/InputsInteractionResult.java
 .aspire/modules/InteractionInput.java
 .aspire/modules/InteractionInputCollection.java
+.aspire/modules/InteractionOptions.java
 .aspire/modules/JsonSerializable.java
 .aspire/modules/LogFacade.java
+.aspire/modules/MessageBoxInteractionOptions.java
+.aspire/modules/MessageIntent.java
+.aspire/modules/NotificationInteractionOptions.java
 .aspire/modules/OtlpProtocol.java
 .aspire/modules/ParameterCustomInputOptions.java
 .aspire/modules/ParameterResource.java
@@ -25835,6 +26586,12 @@ public final class WithVolumeOptions {
 .aspire/modules/ProcessCommandSpecExportData.java
 .aspire/modules/ProjectResource.java
 .aspire/modules/ProjectResourceOptions.java
+.aspire/modules/PromptConfirmationAsyncOptions.java
+.aspire/modules/PromptInputAsyncOptions.java
+.aspire/modules/PromptInputWithInputAsyncOptions.java
+.aspire/modules/PromptInputsAsyncOptions.java
+.aspire/modules/PromptMessageBoxAsyncOptions.java
+.aspire/modules/PromptNotificationAsyncOptions.java
 .aspire/modules/ProtocolType.java
 .aspire/modules/PublishResourceUpdateOptions.java
 .aspire/modules/ReferenceEnvironmentInjectionOptions.java

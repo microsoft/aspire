@@ -1526,6 +1526,8 @@ ImagePullPolicy = typing.Literal["Default", "Always", "Missing", "Never"]
 
 InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number"]
 
+MessageIntent = typing.Literal["None", "Success", "Warning", "Error", "Information", "Confirmation"]
+
 OtlpProtocol = typing.Literal["Grpc", "HttpProtobuf", "HttpJson"]
 
 ProbeType = typing.Literal["Startup", "Readiness", "Liveness"]
@@ -1737,6 +1739,10 @@ class AddContainerOptions(typing.TypedDict, total=False):
     Image: str
     Tag: str | None
 
+class BooleanInteractionResult(typing.TypedDict, total=False):
+    Data: bool | None
+    Canceled: bool
+
 class CertificateTrustExecutionConfigurationContext(typing.TypedDict, total=False):
     CertificateBundlePath: ReferenceExpression
     CertificateDirectoriesPath: ReferenceExpression
@@ -1823,6 +1829,21 @@ class HttpsCertificateInfo(typing.TypedDict, total=False):
     Issuer: str
     Thumbprint: str | None
 
+class InputInteractionResult(typing.TypedDict, total=False):
+    Data: InteractionInput
+    Canceled: bool
+
+class InputsDialogInteractionOptions(typing.TypedDict, total=False):
+    PrimaryButtonText: str | None
+    SecondaryButtonText: str | None
+    ShowSecondaryButton: bool | None
+    ShowDismiss: bool | None
+    EnableMessageMarkdown: bool | None
+
+class InputsInteractionResult(typing.TypedDict, total=False):
+    Data: InteractionInputCollection
+    Canceled: bool
+
 class InteractionInput(typing.TypedDict, total=False):
     Name: str
     Label: str | None
@@ -1837,6 +1858,31 @@ class InteractionInput(typing.TypedDict, total=False):
     AllowCustomChoice: bool
     Disabled: bool
     MaxLength: int | None
+
+class InteractionOptions(typing.TypedDict, total=False):
+    PrimaryButtonText: str | None
+    SecondaryButtonText: str | None
+    ShowSecondaryButton: bool | None
+    ShowDismiss: bool | None
+    EnableMessageMarkdown: bool | None
+
+class MessageBoxInteractionOptions(typing.TypedDict, total=False):
+    Intent: MessageIntent | None
+    PrimaryButtonText: str | None
+    SecondaryButtonText: str | None
+    ShowSecondaryButton: bool | None
+    ShowDismiss: bool | None
+    EnableMessageMarkdown: bool | None
+
+class NotificationInteractionOptions(typing.TypedDict, total=False):
+    Intent: MessageIntent | None
+    LinkText: str | None
+    LinkUrl: str | None
+    PrimaryButtonText: str | None
+    SecondaryButtonText: str | None
+    ShowSecondaryButton: bool | None
+    ShowDismiss: bool | None
+    EnableMessageMarkdown: bool | None
 
 class ParameterCustomInputOptions(typing.TypedDict, total=False):
     InputType: InputType | None
@@ -2817,6 +2863,125 @@ class AbstractHostEnvironment:
         return result
 
 
+class AbstractInteractionService:
+    """Type class for AbstractInteractionService."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AbstractInteractionService(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def is_available(self) -> bool:
+        """Gets a value indicating whether the interaction service is available."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/interactionServiceIsAvailable',
+            rpc_args,
+        )
+        return result
+
+    def prompt_confirmation(self, title: str, message: str, *, options: MessageBoxInteractionOptions | None = None, timeout: int | None = None) -> BooleanInteractionResult:
+        """Prompts the user for confirmation with a dialog."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptConfirmationAsync',
+            rpc_args,
+        )
+        return typing.cast(BooleanInteractionResult, result)
+
+    def prompt_message_box(self, title: str, message: str, *, options: MessageBoxInteractionOptions | None = None, timeout: int | None = None) -> BooleanInteractionResult:
+        """Prompts the user with a message box dialog."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptMessageBoxAsync',
+            rpc_args,
+        )
+        return typing.cast(BooleanInteractionResult, result)
+
+    def prompt_input(self, title: str, message: str, input_label: str, place_holder: str, *, options: InputsDialogInteractionOptions | None = None, timeout: int | None = None) -> InputInteractionResult:
+        """Prompts the user for a single text input."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        rpc_args['inputLabel'] = input_label
+        rpc_args['placeHolder'] = place_holder
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptInputAsync',
+            rpc_args,
+        )
+        return typing.cast(InputInteractionResult, result)
+
+    def prompt_input_with_input(self, title: str, message: str, input: InteractionInput, *, options: InputsDialogInteractionOptions | None = None, timeout: int | None = None) -> InputInteractionResult:
+        """Prompts the user for a single input using a specified `InteractionInput`."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        rpc_args['input'] = input
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptInputWithInput',
+            rpc_args,
+        )
+        return typing.cast(InputInteractionResult, result)
+
+    def prompt_inputs(self, title: str, message: str, inputs: typing.Iterable[InteractionInput], *, options: InputsDialogInteractionOptions | None = None, timeout: int | None = None) -> InputsInteractionResult:
+        """Prompts the user for multiple inputs."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        rpc_args['inputs'] = inputs
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptInputsAsync',
+            rpc_args,
+        )
+        return typing.cast(InputsInteractionResult, result)
+
+    def prompt_notification(self, title: str, message: str, *, options: NotificationInteractionOptions | None = None, timeout: int | None = None) -> BooleanInteractionResult:
+        """Prompts the user with a notification."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['title'] = title
+        rpc_args['message'] = message
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptNotificationAsync',
+            rpc_args,
+        )
+        return typing.cast(BooleanInteractionResult, result)
+
+
 class AbstractLogger:
     """Type class for AbstractLogger."""
 
@@ -3091,6 +3256,15 @@ class AbstractServiceProvider:
             rpc_args,
         )
         return typing.cast(AbstractDistributedApplicationEventing, result)
+
+    def get_interaction_service(self) -> AbstractInteractionService:
+        """Gets the interaction service from the service provider."""
+        rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getInteractionService',
+            rpc_args,
+        )
+        return typing.cast(AbstractInteractionService, result)
 
     def get_logger_factory(self) -> AbstractLoggerFactory:
         """Gets the logger factory from the service provider."""
@@ -11460,6 +11634,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedAp
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder", AbstractExecutionConfigurationBuilder)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult", AbstractExecutionConfigurationResult)
 _register_handle_wrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", AbstractHostEnvironment)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.IInteractionService", AbstractInteractionService)
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger", AbstractLogger)
 _register_handle_wrapper("Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory", AbstractLoggerFactory)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep", AbstractReportingStep)

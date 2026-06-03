@@ -362,6 +362,37 @@ impl std::fmt::Display for InputType {
     }
 }
 
+/// MessageIntent
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MessageIntent {
+    #[default]
+    #[serde(rename = "None")]
+    None,
+    #[serde(rename = "Success")]
+    Success,
+    #[serde(rename = "Warning")]
+    Warning,
+    #[serde(rename = "Error")]
+    Error,
+    #[serde(rename = "Information")]
+    Information,
+    #[serde(rename = "Confirmation")]
+    Confirmation,
+}
+
+impl std::fmt::Display for MessageIntent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, "None"),
+            Self::Success => write!(f, "Success"),
+            Self::Warning => write!(f, "Warning"),
+            Self::Error => write!(f, "Error"),
+            Self::Information => write!(f, "Information"),
+            Self::Confirmation => write!(f, "Confirmation"),
+        }
+    }
+}
+
 /// ResourceCommandVisibility
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ResourceCommandVisibility {
@@ -745,6 +776,234 @@ impl HttpsCertificateExecutionConfigurationExportData {
         if let Some(ref v) = self.password {
             map.insert("Password".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
+        map
+    }
+}
+
+/// InteractionOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InteractionOptions {
+    #[serde(rename = "PrimaryButtonText", skip_serializing_if = "Option::is_none")]
+    pub primary_button_text: Option<String>,
+    #[serde(rename = "SecondaryButtonText", skip_serializing_if = "Option::is_none")]
+    pub secondary_button_text: Option<String>,
+    #[serde(rename = "ShowSecondaryButton", skip_serializing_if = "Option::is_none")]
+    pub show_secondary_button: Option<bool>,
+    #[serde(rename = "ShowDismiss", skip_serializing_if = "Option::is_none")]
+    pub show_dismiss: Option<bool>,
+    #[serde(rename = "EnableMessageMarkdown", skip_serializing_if = "Option::is_none")]
+    pub enable_message_markdown: Option<bool>,
+}
+
+impl InteractionOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.primary_button_text {
+            map.insert("PrimaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.secondary_button_text {
+            map.insert("SecondaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.show_secondary_button {
+            map.insert("ShowSecondaryButton".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.show_dismiss {
+            map.insert("ShowDismiss".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.enable_message_markdown {
+            map.insert("EnableMessageMarkdown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
+/// MessageBoxInteractionOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct MessageBoxInteractionOptions {
+    #[serde(rename = "Intent", skip_serializing_if = "Option::is_none")]
+    pub intent: Option<MessageIntent>,
+    #[serde(rename = "PrimaryButtonText", skip_serializing_if = "Option::is_none")]
+    pub primary_button_text: Option<String>,
+    #[serde(rename = "SecondaryButtonText", skip_serializing_if = "Option::is_none")]
+    pub secondary_button_text: Option<String>,
+    #[serde(rename = "ShowSecondaryButton", skip_serializing_if = "Option::is_none")]
+    pub show_secondary_button: Option<bool>,
+    #[serde(rename = "ShowDismiss", skip_serializing_if = "Option::is_none")]
+    pub show_dismiss: Option<bool>,
+    #[serde(rename = "EnableMessageMarkdown", skip_serializing_if = "Option::is_none")]
+    pub enable_message_markdown: Option<bool>,
+}
+
+impl MessageBoxInteractionOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.intent {
+            map.insert("Intent".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.primary_button_text {
+            map.insert("PrimaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.secondary_button_text {
+            map.insert("SecondaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.show_secondary_button {
+            map.insert("ShowSecondaryButton".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.show_dismiss {
+            map.insert("ShowDismiss".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.enable_message_markdown {
+            map.insert("EnableMessageMarkdown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
+/// InputsDialogInteractionOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InputsDialogInteractionOptions {
+    #[serde(rename = "PrimaryButtonText", skip_serializing_if = "Option::is_none")]
+    pub primary_button_text: Option<String>,
+    #[serde(rename = "SecondaryButtonText", skip_serializing_if = "Option::is_none")]
+    pub secondary_button_text: Option<String>,
+    #[serde(rename = "ShowSecondaryButton", skip_serializing_if = "Option::is_none")]
+    pub show_secondary_button: Option<bool>,
+    #[serde(rename = "ShowDismiss", skip_serializing_if = "Option::is_none")]
+    pub show_dismiss: Option<bool>,
+    #[serde(rename = "EnableMessageMarkdown", skip_serializing_if = "Option::is_none")]
+    pub enable_message_markdown: Option<bool>,
+}
+
+impl InputsDialogInteractionOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.primary_button_text {
+            map.insert("PrimaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.secondary_button_text {
+            map.insert("SecondaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.show_secondary_button {
+            map.insert("ShowSecondaryButton".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.show_dismiss {
+            map.insert("ShowDismiss".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.enable_message_markdown {
+            map.insert("EnableMessageMarkdown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
+/// NotificationInteractionOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct NotificationInteractionOptions {
+    #[serde(rename = "Intent", skip_serializing_if = "Option::is_none")]
+    pub intent: Option<MessageIntent>,
+    #[serde(rename = "LinkText", skip_serializing_if = "Option::is_none")]
+    pub link_text: Option<String>,
+    #[serde(rename = "LinkUrl", skip_serializing_if = "Option::is_none")]
+    pub link_url: Option<String>,
+    #[serde(rename = "PrimaryButtonText", skip_serializing_if = "Option::is_none")]
+    pub primary_button_text: Option<String>,
+    #[serde(rename = "SecondaryButtonText", skip_serializing_if = "Option::is_none")]
+    pub secondary_button_text: Option<String>,
+    #[serde(rename = "ShowSecondaryButton", skip_serializing_if = "Option::is_none")]
+    pub show_secondary_button: Option<bool>,
+    #[serde(rename = "ShowDismiss", skip_serializing_if = "Option::is_none")]
+    pub show_dismiss: Option<bool>,
+    #[serde(rename = "EnableMessageMarkdown", skip_serializing_if = "Option::is_none")]
+    pub enable_message_markdown: Option<bool>,
+}
+
+impl NotificationInteractionOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.intent {
+            map.insert("Intent".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.link_text {
+            map.insert("LinkText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.link_url {
+            map.insert("LinkUrl".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.primary_button_text {
+            map.insert("PrimaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.secondary_button_text {
+            map.insert("SecondaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.show_secondary_button {
+            map.insert("ShowSecondaryButton".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.show_dismiss {
+            map.insert("ShowDismiss".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.enable_message_markdown {
+            map.insert("EnableMessageMarkdown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
+/// BooleanInteractionResult
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct BooleanInteractionResult {
+    #[serde(rename = "Data", skip_serializing_if = "Option::is_none")]
+    pub data: Option<bool>,
+    #[serde(rename = "Canceled")]
+    pub canceled: bool,
+}
+
+impl BooleanInteractionResult {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.data {
+            map.insert("Data".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map.insert("Canceled".to_string(), serde_json::to_value(&self.canceled).unwrap_or(Value::Null));
+        map
+    }
+}
+
+/// InputInteractionResult
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InputInteractionResult {
+    #[serde(rename = "Data", skip_serializing_if = "Option::is_none")]
+    pub data: Option<InteractionInput>,
+    #[serde(rename = "Canceled")]
+    pub canceled: bool,
+}
+
+impl InputInteractionResult {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.data {
+            map.insert("Data".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map.insert("Canceled".to_string(), serde_json::to_value(&self.canceled).unwrap_or(Value::Null));
+        map
+    }
+}
+
+/// InputsInteractionResult
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InputsInteractionResult {
+    #[serde(rename = "Data", skip_serializing_if = "Option::is_none")]
+    pub data: Option<Handle>,
+    #[serde(rename = "Canceled")]
+    pub canceled: bool,
+}
+
+impl InputsInteractionResult {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.data {
+            map.insert("Data".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map.insert("Canceled".to_string(), serde_json::to_value(&self.canceled).unwrap_or(Value::Null));
         map
     }
 }
@@ -10579,6 +10838,146 @@ impl IHostEnvironment {
     }
 }
 
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.IInteractionService
+pub struct IInteractionService {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for IInteractionService {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl IInteractionService {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets a value indicating whether the interaction service is available.
+    pub fn is_available(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("interactionService".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/interactionServiceIsAvailable", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Prompts the user for confirmation with a dialog.
+    pub fn prompt_confirmation_async(&self, title: &str, message: &str, options: Option<MessageBoxInteractionOptions>, cancellation_token: Option<&CancellationToken>) -> Result<BooleanInteractionResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("interactionService".to_string(), self.handle.to_json());
+        args.insert("title".to_string(), serde_json::to_value(&title).unwrap_or(Value::Null));
+        args.insert("message".to_string(), serde_json::to_value(&message).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/promptConfirmationAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Prompts the user with a message box dialog.
+    pub fn prompt_message_box_async(&self, title: &str, message: &str, options: Option<MessageBoxInteractionOptions>, cancellation_token: Option<&CancellationToken>) -> Result<BooleanInteractionResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("interactionService".to_string(), self.handle.to_json());
+        args.insert("title".to_string(), serde_json::to_value(&title).unwrap_or(Value::Null));
+        args.insert("message".to_string(), serde_json::to_value(&message).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/promptMessageBoxAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Prompts the user for a single text input.
+    pub fn prompt_input_async(&self, title: &str, message: &str, input_label: &str, place_holder: &str, options: Option<InputsDialogInteractionOptions>, cancellation_token: Option<&CancellationToken>) -> Result<InputInteractionResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("interactionService".to_string(), self.handle.to_json());
+        args.insert("title".to_string(), serde_json::to_value(&title).unwrap_or(Value::Null));
+        args.insert("message".to_string(), serde_json::to_value(&message).unwrap_or(Value::Null));
+        args.insert("inputLabel".to_string(), serde_json::to_value(&input_label).unwrap_or(Value::Null));
+        args.insert("placeHolder".to_string(), serde_json::to_value(&place_holder).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/promptInputAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Prompts the user for a single input using a specified `InteractionInput`.
+    pub fn prompt_input_with_input_async(&self, title: &str, message: &str, input: InteractionInput, options: Option<InputsDialogInteractionOptions>, cancellation_token: Option<&CancellationToken>) -> Result<InputInteractionResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("interactionService".to_string(), self.handle.to_json());
+        args.insert("title".to_string(), serde_json::to_value(&title).unwrap_or(Value::Null));
+        args.insert("message".to_string(), serde_json::to_value(&message).unwrap_or(Value::Null));
+        args.insert("input".to_string(), serde_json::to_value(&input).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/promptInputWithInput", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Prompts the user for multiple inputs.
+    pub fn prompt_inputs_async(&self, title: &str, message: &str, inputs: Vec<InteractionInput>, options: Option<InputsDialogInteractionOptions>, cancellation_token: Option<&CancellationToken>) -> Result<InputsInteractionResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("interactionService".to_string(), self.handle.to_json());
+        args.insert("title".to_string(), serde_json::to_value(&title).unwrap_or(Value::Null));
+        args.insert("message".to_string(), serde_json::to_value(&message).unwrap_or(Value::Null));
+        args.insert("inputs".to_string(), serde_json::to_value(&inputs).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/promptInputsAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Prompts the user with a notification.
+    pub fn prompt_notification_async(&self, title: &str, message: &str, options: Option<NotificationInteractionOptions>, cancellation_token: Option<&CancellationToken>) -> Result<BooleanInteractionResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("interactionService".to_string(), self.handle.to_json());
+        args.insert("title".to_string(), serde_json::to_value(&title).unwrap_or(Value::Null));
+        args.insert("message".to_string(), serde_json::to_value(&message).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/promptNotificationAsync", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+}
+
 /// Wrapper for Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger
 pub struct ILogger {
     handle: Handle,
@@ -11138,6 +11537,15 @@ impl IServiceProvider {
         let result = self.client.invoke_capability("Aspire.Hosting/getEventing", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IDistributedApplicationEventing::new(handle, self.client.clone()))
+    }
+
+    /// Gets the interaction service from the service provider.
+    pub fn get_interaction_service(&self) -> Result<IInteractionService, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("serviceProvider".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/getInteractionService", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IInteractionService::new(handle, self.client.clone()))
     }
 
     /// Gets the logger factory from the service provider.

@@ -142,6 +142,58 @@ void main() throws Exception {
         var executionContextServiceProvider = builderExecutionContext.serviceProvider();
         var _distributedApplicationModelFromExecutionContext = executionContextServiceProvider.getDistributedApplicationModel();
         var resourceCommandService = executionContextServiceProvider.getResourceCommandService();
+        var interactionService = executionContextServiceProvider.getInteractionService();
+        var _interactionServiceAvailable = interactionService.isAvailable();
+        var interactionInput = new InteractionInput();
+        interactionInput.setName("validation");
+        interactionInput.setInputType(InputType.TEXT);
+        interactionInput.setValue("default");
+        interactionInput.setDisabled(false);
+        var confirmationOptions = new MessageBoxInteractionOptions();
+        confirmationOptions.setIntent(MessageIntent.CONFIRMATION);
+        confirmationOptions.setPrimaryButtonText("Continue");
+        interactionService.promptConfirmationAsync(
+            "Confirm",
+            "Continue?",
+            new PromptConfirmationAsyncOptions().options(confirmationOptions));
+        var messageBoxOptions = new MessageBoxInteractionOptions();
+        messageBoxOptions.setIntent(MessageIntent.INFORMATION);
+        messageBoxOptions.setEnableMessageMarkdown(true);
+        interactionService.promptMessageBoxAsync(
+            "Message",
+            "Message body",
+            new PromptMessageBoxAsyncOptions().options(messageBoxOptions));
+        var inputOptions = new InputsDialogInteractionOptions();
+        inputOptions.setPrimaryButtonText("Submit");
+        interactionService.promptInputAsync(
+            "Input",
+            "Input body",
+            "Name",
+            "Placeholder",
+            new PromptInputAsyncOptions().options(inputOptions));
+        var inputWithInputOptions = new InputsDialogInteractionOptions();
+        inputWithInputOptions.setShowDismiss(true);
+        interactionService.promptInputWithInputAsync(
+            "Input",
+            "Input body",
+            interactionInput,
+            new PromptInputWithInputAsyncOptions().options(inputWithInputOptions));
+        var inputsOptions = new InputsDialogInteractionOptions();
+        inputsOptions.setShowSecondaryButton(true);
+        inputsOptions.setSecondaryButtonText("Skip");
+        interactionService.promptInputsAsync(
+            "Inputs",
+            "Inputs body",
+            new InteractionInput[] { interactionInput },
+            new PromptInputsAsyncOptions().options(inputsOptions));
+        var notificationOptions = new NotificationInteractionOptions();
+        notificationOptions.setIntent(MessageIntent.INFORMATION);
+        notificationOptions.setLinkText("Docs");
+        notificationOptions.setLinkUrl("https://aspire.dev");
+        interactionService.promptNotificationAsync(
+            "Notification",
+            "Notification body",
+            new PromptNotificationAsyncOptions().options(notificationOptions));
         builder.addEventingSubscriber((registrationContext) -> {
             var subscriberExecutionContext = registrationContext.executionContext();
             var _subscriberIsRunMode = subscriberExecutionContext.isRunMode();

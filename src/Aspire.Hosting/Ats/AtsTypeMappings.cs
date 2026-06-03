@@ -1,3 +1,4 @@
+#pragma warning disable ASPIREINTERACTION001
 #pragma warning disable ASPIREPIPELINES001
 
 // Licensed to the .NET Foundation under one or more agreements.
@@ -53,6 +54,7 @@ using Microsoft.Extensions.Logging;
 
 // Service types
 [assembly: AspireExport(typeof(IServiceProvider))]
+[assembly: AspireExport(typeof(IInteractionService))]
 [assembly: AspireExport(typeof(ResourceNotificationService))]
 [assembly: AspireExport(typeof(ResourceLoggerService))]
 [assembly: AspireExport(typeof(ResourceCommandService))]

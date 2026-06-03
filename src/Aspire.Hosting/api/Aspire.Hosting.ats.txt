@@ -67,6 +67,7 @@ Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing [interfac
 Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationResourceEvent [interface]
 Aspire.Hosting/Aspire.Hosting.ExternalServiceResource
 Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder [interface]
+Aspire.Hosting/Aspire.Hosting.IInteractionService [interface]
 Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
 Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles [interface]
@@ -182,6 +183,9 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateResourceSnapsho
 Aspire.Hosting/Aspire.Hosting.Ats.AddContainerOptions # Options for configuring a container image in polyglot apphosts.
   Image: string # The container image name.
   Tag?: string # The container image tag.
+Aspire.Hosting/Aspire.Hosting.Ats.BooleanInteractionResult # The result of a boolean interaction prompt.
+  Canceled: boolean # A flag indicating whether the interaction was canceled by the user.
+  Data?: boolean # The data returned from the interaction. The value is `null` when the interaction was canceled.
 Aspire.Hosting/Aspire.Hosting.Ats.CertificateTrustExecutionConfigurationExportData # ATS-friendly certificate trust data returned from an execution-configuration result.
   CertificateSubjects: string[] # The certificate subjects included in the trust configuration.
   CustomBundlePaths: string[] # The relative custom bundle paths.
@@ -207,6 +211,40 @@ Aspire.Hosting/Aspire.Hosting.Ats.HttpsCertificateInfo # ATS-friendly certificat
   Issuer: string # The certificate issuer.
   Subject: string # The certificate subject.
   Thumbprint?: string # The certificate thumbprint.
+Aspire.Hosting/Aspire.Hosting.Ats.InputInteractionResult # The result of a single input interaction prompt.
+  Canceled: boolean # A flag indicating whether the interaction was canceled by the user.
+  Data?: Aspire.Hosting/Aspire.Hosting.InteractionInput # The data returned from the interaction. The value is `null` when the interaction was canceled.
+Aspire.Hosting/Aspire.Hosting.Ats.InputsDialogInteractionOptions # Polyglot options for inputs dialog interactions.
+  EnableMessageMarkdown?: boolean # Gets a value indicating whether Markdown in the message is rendered.
+  PrimaryButtonText?: string # Optional primary button text to override the default text.
+  SecondaryButtonText?: string # Optional secondary button text to override the default text.
+  ShowDismiss?: boolean # Gets a value indicating whether to show the dismiss button.
+  ShowSecondaryButton?: boolean # Gets a value indicating whether to show the secondary button.
+Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult # The result of a multi-input interaction prompt.
+  Canceled: boolean # A flag indicating whether the interaction was canceled by the user.
+  Data?: Aspire.Hosting/Aspire.Hosting.InteractionInputCollection # The data returned from the interaction. The value is `null` when the interaction was canceled.
+Aspire.Hosting/Aspire.Hosting.Ats.InteractionOptions # Shared polyglot options for interaction prompts.
+  EnableMessageMarkdown?: boolean # Gets a value indicating whether Markdown in the message is rendered.
+  PrimaryButtonText?: string # Optional primary button text to override the default text.
+  SecondaryButtonText?: string # Optional secondary button text to override the default text.
+  ShowDismiss?: boolean # Gets a value indicating whether to show the dismiss button.
+  ShowSecondaryButton?: boolean # Gets a value indicating whether to show the secondary button.
+Aspire.Hosting/Aspire.Hosting.Ats.MessageBoxInteractionOptions # Polyglot options for message box interactions.
+  EnableMessageMarkdown?: boolean # Gets a value indicating whether Markdown in the message is rendered.
+  Intent?: enum:Aspire.Hosting.MessageIntent # Gets the intent of the message box.
+  PrimaryButtonText?: string # Optional primary button text to override the default text.
+  SecondaryButtonText?: string # Optional secondary button text to override the default text.
+  ShowDismiss?: boolean # Gets a value indicating whether to show the dismiss button.
+  ShowSecondaryButton?: boolean # Gets a value indicating whether to show the secondary button.
+Aspire.Hosting/Aspire.Hosting.Ats.NotificationInteractionOptions # Polyglot options for notification interactions.
+  EnableMessageMarkdown?: boolean # Gets a value indicating whether Markdown in the message is rendered.
+  Intent?: enum:Aspire.Hosting.MessageIntent # Gets the intent of the notification.
+  LinkText?: string # Gets the text for a link in the notification.
+  LinkUrl?: string # Gets the URL for the link in the notification.
+  PrimaryButtonText?: string # Optional primary button text to override the default text.
+  SecondaryButtonText?: string # Optional secondary button text to override the default text.
+  ShowDismiss?: boolean # Gets a value indicating whether to show the dismiss button.
+  ShowSecondaryButton?: boolean # Gets a value indicating whether to show the secondary button.
 Aspire.Hosting/Aspire.Hosting.Ats.ParameterCustomInputOptions # Options for customizing parameter inputs from polyglot app hosts.
   AllowCustomChoice?: boolean # Gets or sets whether custom choices are allowed.
   Description: string # Gets or sets the description for the input.
@@ -261,6 +299,7 @@ enum:Aspire.Hosting.ApplicationModel.UrlDisplayLocation = SummaryAndDetails | De
 enum:Aspire.Hosting.ApplicationModel.WaitBehavior = WaitOnResourceUnavailable | StopOnResourceUnavailable
 enum:Aspire.Hosting.DistributedApplicationOperation = Run | Publish
 enum:Aspire.Hosting.InputType = Text | SecretText | Choice | Boolean | Number
+enum:Aspire.Hosting.MessageIntent = None | Success | Warning | Error | Information | Confirmation
 enum:Aspire.Hosting.OtlpProtocol = Grpc | HttpProtobuf | HttpJson
 enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus = Unhealthy | Degraded | Healthy
 enum:System.Net.Sockets.ProtocolType = IP | IPv6HopByHopOptions | Unspecified | Icmp | Igmp | Ggp | IPv4 | Tcp | Pup | Udp | Idp | IPv6 | IPv6RoutingHeader | IPv6FragmentHeader | IPSecEncapsulatingSecurityPayload | IPSecAuthenticationHeader | IcmpV6 | IPv6NoNextHeader | IPv6DestinationOptions | ND | Raw | Ipx | Spx | SpxII | Unknown
@@ -525,6 +564,7 @@ Aspire.Hosting/getEndpoint(name: string) -> Aspire.Hosting/Aspire.Hosting.Applic
 Aspire.Hosting/getEventing() -> Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing
 Aspire.Hosting/getFileNameWithContent(filenameTemplate: string, sourceFilename: string) -> string
 Aspire.Hosting/getHttpsCertificateData() -> Aspire.Hosting/Aspire.Hosting.Ats.HttpsCertificateExecutionConfigurationExportData
+Aspire.Hosting/getInteractionService() -> Aspire.Hosting/Aspire.Hosting.IInteractionService
 Aspire.Hosting/getLoggerFactory() -> Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory
 Aspire.Hosting/getOrSetSecret(resourceBuilder: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource, name: string, value: string) -> void
 Aspire.Hosting/getResourceCommandService() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService
@@ -544,6 +584,7 @@ Aspire.Hosting/InputsDialogValidationContext.addValidationError(context: Aspire.
 Aspire.Hosting/InputsDialogValidationContext.cancellationToken(context: Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext) -> cancellationToken
 Aspire.Hosting/InputsDialogValidationContext.inputs(context: Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext) -> Aspire.Hosting/Aspire.Hosting.InteractionInputCollection
 Aspire.Hosting/InteractionInputCollection.toArray(context: Aspire.Hosting/Aspire.Hosting.InteractionInputCollection) -> Aspire.Hosting/Aspire.Hosting.InteractionInput[]
+Aspire.Hosting/interactionServiceIsAvailable() -> boolean
 Aspire.Hosting/isDevelopment() -> boolean
 Aspire.Hosting/isEnvironment(environmentName: string) -> boolean
 Aspire.Hosting/isProduction() -> boolean
@@ -580,6 +621,12 @@ Aspire.Hosting/ProjectResourceOptions.launchProfileName(context: Aspire.Hosting/
 Aspire.Hosting/ProjectResourceOptions.setExcludeKestrelEndpoints(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions, value: boolean) -> Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions
 Aspire.Hosting/ProjectResourceOptions.setExcludeLaunchProfile(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions, value: boolean) -> Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions
 Aspire.Hosting/ProjectResourceOptions.setLaunchProfileName(context: Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions, value: string) -> Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions
+Aspire.Hosting/promptConfirmationAsync(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.MessageBoxInteractionOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BooleanInteractionResult
+Aspire.Hosting/promptInputAsync(title: string, message: string, inputLabel: string, placeHolder: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.InputsDialogInteractionOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputInteractionResult
+Aspire.Hosting/promptInputsAsync(title: string, message: string, inputs: Aspire.Hosting/Aspire.Hosting.InteractionInput[], options?: Aspire.Hosting/Aspire.Hosting.Ats.InputsDialogInteractionOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputsInteractionResult
+Aspire.Hosting/promptInputWithInput(title: string, message: string, input: Aspire.Hosting/Aspire.Hosting.InteractionInput, options?: Aspire.Hosting/Aspire.Hosting.Ats.InputsDialogInteractionOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.InputInteractionResult
+Aspire.Hosting/promptMessageBoxAsync(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.MessageBoxInteractionOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BooleanInteractionResult
+Aspire.Hosting/promptNotificationAsync(title: string, message: string, options?: Aspire.Hosting/Aspire.Hosting.Ats.NotificationInteractionOptions, cancellationToken?: cancellationToken) -> Aspire.Hosting/Aspire.Hosting.Ats.BooleanInteractionResult
 Aspire.Hosting/publishAsConnectionString() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/publishAsContainer() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/publishAsDockerFile(configure: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource

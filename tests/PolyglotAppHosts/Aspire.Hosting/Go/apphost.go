@@ -385,6 +385,9 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	executionContextServiceProvider := builderExecutionContext.ServiceProvider()
 	_ = executionContextServiceProvider.GetDistributedApplicationModel()
 	resourceCommandService := executionContextServiceProvider.GetResourceCommandService()
+	interactionService := executionContextServiceProvider.GetInteractionService()
+	_, _ = interactionService.IsAvailable()
+	validateInteractionServicePromptApis(interactionService)
 
 	// Subscriptions (typed callbacks)
 	beforeStartSub := builder.SubscribeBeforeStart(func(e aspire.BeforeStartEvent) {
@@ -585,4 +588,51 @@ ENTRYPOINT ["dotnet", "App.dll"]
 	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
+}
+
+func validateInteractionServicePromptApis(interactionService aspire.InteractionService) {
+	confirmationIntent := aspire.MessageIntentConfirmation
+	informationIntent := aspire.MessageIntentInformation
+	interactionInput := &aspire.InteractionInput{
+		Name:      "validation",
+		InputType: aspire.InputTypeText,
+		Value:     "default",
+		Disabled:  false,
+	}
+
+	_, _ = interactionService.PromptConfirmationAsync("Confirm", "Continue?", &aspire.PromptConfirmationAsyncOptions{
+		Options: &aspire.MessageBoxInteractionOptions{
+			Intent:            &confirmationIntent,
+			PrimaryButtonText: aspire.StringPtr("Continue"),
+		},
+	})
+	_, _ = interactionService.PromptMessageBoxAsync("Message", "Message body", &aspire.PromptMessageBoxAsyncOptions{
+		Options: &aspire.MessageBoxInteractionOptions{
+			Intent:                &informationIntent,
+			EnableMessageMarkdown: aspire.BoolPtr(true),
+		},
+	})
+	_, _ = interactionService.PromptInputAsync("Input", "Input body", "Name", "Placeholder", &aspire.PromptInputAsyncOptions{
+		Options: &aspire.InputsDialogInteractionOptions{
+			PrimaryButtonText: aspire.StringPtr("Submit"),
+		},
+	})
+	_, _ = interactionService.PromptInputWithInputAsync("Input", "Input body", interactionInput, &aspire.PromptInputWithInputAsyncOptions{
+		Options: &aspire.InputsDialogInteractionOptions{
+			ShowDismiss: aspire.BoolPtr(true),
+		},
+	})
+	_, _ = interactionService.PromptInputsAsync("Inputs", "Inputs body", []*aspire.InteractionInput{interactionInput}, &aspire.PromptInputsAsyncOptions{
+		Options: &aspire.InputsDialogInteractionOptions{
+			ShowSecondaryButton: aspire.BoolPtr(true),
+			SecondaryButtonText: aspire.StringPtr("Skip"),
+		},
+	})
+	_, _ = interactionService.PromptNotificationAsync("Notification", "Notification body", &aspire.PromptNotificationAsyncOptions{
+		Options: &aspire.NotificationInteractionOptions{
+			Intent:   &informationIntent,
+			LinkText: aspire.StringPtr("Docs"),
+			LinkUrl:  aspire.StringPtr("https://aspire.dev"),
+		},
+	})
 }

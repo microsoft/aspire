@@ -1442,8 +1442,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
     {
         var requiredParameterList = string.Join(", ", requiredParameters.Select(parameter => $"{MapParameterToJava(parameter)} {ToCamelCase(parameter.Name)}"));
         var publicParameterList = string.IsNullOrEmpty(requiredParameterList)
-            ? $"{optionsClassName} options"
-            : $"{requiredParameterList}, {optionsClassName} options";
+            ? $"{optionsClassName} optionsBag"
+            : $"{requiredParameterList}, {optionsClassName} optionsBag";
 
         if (!string.IsNullOrEmpty(capability.Description))
         {
@@ -1454,7 +1454,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         foreach (var parameter in optionalParameters)
         {
             var paramName = ToCamelCase(parameter.Name);
-            WriteLine($"        var {paramName} = options == null ? null : options.{GetOptionGetterName(parameter)}();");
+            WriteLine($"        var {paramName} = optionsBag == null ? null : optionsBag.{GetOptionGetterName(parameter)}();");
         }
 
         var implementationArguments = requiredParameters

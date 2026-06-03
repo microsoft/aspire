@@ -327,6 +327,9 @@ type ExternalServiceResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Exter
 /** A builder for creating instances of {@link DistributedApplication}. */
 type IDistributedApplicationBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder'>;
 
+/** A service to interact with the current development environment. */
+type IInteractionServiceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.IInteractionService'>;
+
 /** Represents the context for validating inputs in an inputs dialog interaction. */
 type InputsDialogValidationContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext'>;
 
@@ -530,6 +533,22 @@ export enum ImagePullPolicy {
     Never = "Never",
 }
 
+/** Specifies the intent or purpose of a message in an interaction. */
+export enum MessageIntent {
+    /** No specific intent. */
+    None = "None",
+    /** Indicates a successful operation. */
+    Success = "Success",
+    /** Indicates a warning. */
+    Warning = "Warning",
+    /** Indicates an error. */
+    Error = "Error",
+    /** Provides informational content. */
+    Information = "Information",
+    /** Requests confirmation from the user. */
+    Confirmation = "Confirmation",
+}
+
 /** Protocols available for OTLP exporters. */
 export enum OtlpProtocol {
     /** A gRPC-based OTLP exporter. */
@@ -644,6 +663,14 @@ export interface AddContainerOptions {
     image?: string;
     /** The container image tag. */
     tag?: string | null;
+}
+
+/** The result of a boolean interaction prompt. */
+export interface BooleanInteractionResult {
+    /** The data returned from the interaction. The value is `null` when the interaction was canceled. */
+    data?: boolean | null;
+    /** A flag indicating whether the interaction was canceled by the user. */
+    canceled?: boolean;
 }
 
 /** Context for configuring certificate trust configuration properties. */
@@ -863,6 +890,86 @@ export interface HttpsCertificateInfo {
     issuer?: string;
     /** The certificate thumbprint. */
     thumbprint?: string | null;
+}
+
+/** The result of a single input interaction prompt. */
+export interface InputInteractionResult {
+    /** The data returned from the interaction. The value is `null` when the interaction was canceled. */
+    data?: InteractionInput;
+    /** A flag indicating whether the interaction was canceled by the user. */
+    canceled?: boolean;
+}
+
+/** Polyglot options for inputs dialog interactions. */
+export interface InputsDialogInteractionOptions {
+    /** Optional primary button text to override the default text. */
+    primaryButtonText?: string | null;
+    /** Optional secondary button text to override the default text. */
+    secondaryButtonText?: string | null;
+    /** Gets a value indicating whether to show the secondary button. */
+    showSecondaryButton?: boolean | null;
+    /** Gets a value indicating whether to show the dismiss button. */
+    showDismiss?: boolean | null;
+    /** Gets a value indicating whether Markdown in the message is rendered. */
+    enableMessageMarkdown?: boolean | null;
+}
+
+/** The result of a multi-input interaction prompt. */
+export interface InputsInteractionResult {
+    /** The data returned from the interaction. The value is `null` when the interaction was canceled. */
+    data?: InteractionInputCollection;
+    /** A flag indicating whether the interaction was canceled by the user. */
+    canceled?: boolean;
+}
+
+/** Shared polyglot options for interaction prompts. */
+export interface InteractionOptions {
+    /** Optional primary button text to override the default text. */
+    primaryButtonText?: string | null;
+    /** Optional secondary button text to override the default text. */
+    secondaryButtonText?: string | null;
+    /** Gets a value indicating whether to show the secondary button. */
+    showSecondaryButton?: boolean | null;
+    /** Gets a value indicating whether to show the dismiss button. */
+    showDismiss?: boolean | null;
+    /** Gets a value indicating whether Markdown in the message is rendered. */
+    enableMessageMarkdown?: boolean | null;
+}
+
+/** Polyglot options for message box interactions. */
+export interface MessageBoxInteractionOptions {
+    /** Gets the intent of the message box. */
+    intent?: MessageIntent | null;
+    /** Optional primary button text to override the default text. */
+    primaryButtonText?: string | null;
+    /** Optional secondary button text to override the default text. */
+    secondaryButtonText?: string | null;
+    /** Gets a value indicating whether to show the secondary button. */
+    showSecondaryButton?: boolean | null;
+    /** Gets a value indicating whether to show the dismiss button. */
+    showDismiss?: boolean | null;
+    /** Gets a value indicating whether Markdown in the message is rendered. */
+    enableMessageMarkdown?: boolean | null;
+}
+
+/** Polyglot options for notification interactions. */
+export interface NotificationInteractionOptions {
+    /** Gets the intent of the notification. */
+    intent?: MessageIntent | null;
+    /** Gets the text for a link in the notification. */
+    linkText?: string | null;
+    /** Gets the URL for the link in the notification. */
+    linkUrl?: string | null;
+    /** Optional primary button text to override the default text. */
+    primaryButtonText?: string | null;
+    /** Optional secondary button text to override the default text. */
+    secondaryButtonText?: string | null;
+    /** Gets a value indicating whether to show the secondary button. */
+    showSecondaryButton?: boolean | null;
+    /** Gets a value indicating whether to show the dismiss button. */
+    showDismiss?: boolean | null;
+    /** Gets a value indicating whether Markdown in the message is rendered. */
+    enableMessageMarkdown?: boolean | null;
 }
 
 /** Options for customizing parameter inputs from polyglot app hosts. */
@@ -1270,6 +1377,48 @@ export interface GetStatusAsyncOptions {
 
 export interface GetValueAsyncOptions {
     /** The cancellation token. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface PromptConfirmationAsyncOptions {
+    /** Optional configuration for the message box interaction. */
+    options?: MessageBoxInteractionOptions;
+    /** A token to cancel the operation. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface PromptInputAsyncOptions {
+    /** Optional configuration for the input dialog interaction. */
+    options?: InputsDialogInteractionOptions;
+    /** A token to cancel the operation. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface PromptInputsAsyncOptions {
+    /** Optional configuration for the input dialog interaction. */
+    options?: InputsDialogInteractionOptions;
+    /** A token to cancel the operation. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface PromptInputWithInputAsyncOptions {
+    /** Optional configuration for the input dialog interaction. */
+    options?: InputsDialogInteractionOptions;
+    /** A token to cancel the operation. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface PromptMessageBoxAsyncOptions {
+    /** Optional configuration for the message box interaction. */
+    options?: MessageBoxInteractionOptions;
+    /** A token to cancel the operation. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface PromptNotificationAsyncOptions {
+    /** Optional configuration for the notification interaction. */
+    options?: NotificationInteractionOptions;
+    /** A token to cancel the operation. */
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
@@ -10523,6 +10672,320 @@ class HostEnvironmentPromiseImpl implements HostEnvironmentPromise {
 }
 
 // ============================================================================
+// InteractionService
+// ============================================================================
+
+/** A service to interact with the current development environment. */
+export interface InteractionService {
+    toJSON(): MarshalledHandle;
+    /**
+     * Gets a value indicating whether the interaction service is available.
+     * @returns `true` when the interaction service can interact with the user; otherwise, `false`.
+     */
+    isAvailable(): Promise<boolean>;
+    /**
+     * Prompts the user for confirmation with a dialog.
+     * @param title The title of the dialog.
+     * @param message The message to display in the dialog.
+     * @param options Additional options.
+     * @returns The confirmation interaction result.
+     */
+    promptConfirmationAsync(title: string, message: string, options?: PromptConfirmationAsyncOptions): Promise<BooleanInteractionResult>;
+    /**
+     * Prompts the user with a message box dialog.
+     * @param title The title of the message box.
+     * @param message The message to display in the message box.
+     * @param options Additional options.
+     * @returns The message box interaction result.
+     */
+    promptMessageBoxAsync(title: string, message: string, options?: PromptMessageBoxAsyncOptions): Promise<BooleanInteractionResult>;
+    /**
+     * Prompts the user for a single text input.
+     * @param title The title of the input dialog.
+     * @param message The message to display in the dialog.
+     * @param inputLabel The label for the input field.
+     * @param placeHolder The placeholder text for the input field.
+     * @param options Additional options.
+     * @returns The input interaction result.
+     */
+    promptInputAsync(title: string, message: string, inputLabel: string, placeHolder: string, options?: PromptInputAsyncOptions): Promise<InputInteractionResult>;
+    /**
+     * Prompts the user for a single input using a specified `InteractionInput`.
+     * @param title The title of the input dialog.
+     * @param message The message to display in the dialog.
+     * @param input The input configuration.
+     * @param options Additional options.
+     * @returns The input interaction result.
+     */
+    promptInputWithInputAsync(title: string, message: string, input: InteractionInput, options?: PromptInputWithInputAsyncOptions): Promise<InputInteractionResult>;
+    /**
+     * Prompts the user for multiple inputs.
+     * @param title The title of the input dialog.
+     * @param message The message to display in the dialog.
+     * @param inputs The input configurations.
+     * @param options Additional options.
+     * @returns The inputs interaction result.
+     */
+    promptInputsAsync(title: string, message: string, inputs: InteractionInput[], options?: PromptInputsAsyncOptions): Promise<InputsInteractionResult>;
+    /**
+     * Prompts the user with a notification.
+     * @param title The title of the notification.
+     * @param message The message to display in the notification.
+     * @param options Additional options.
+     * @returns The notification interaction result.
+     */
+    promptNotificationAsync(title: string, message: string, options?: PromptNotificationAsyncOptions): Promise<BooleanInteractionResult>;
+}
+
+export interface InteractionServicePromise extends PromiseLike<InteractionService> {
+    /**
+     * Gets a value indicating whether the interaction service is available.
+     * @returns `true` when the interaction service can interact with the user; otherwise, `false`.
+     */
+    isAvailable(): Promise<boolean>;
+    /**
+     * Prompts the user for confirmation with a dialog.
+     * @param title The title of the dialog.
+     * @param message The message to display in the dialog.
+     * @param options Additional options.
+     * @returns The confirmation interaction result.
+     */
+    promptConfirmationAsync(title: string, message: string, options?: PromptConfirmationAsyncOptions): Promise<BooleanInteractionResult>;
+    /**
+     * Prompts the user with a message box dialog.
+     * @param title The title of the message box.
+     * @param message The message to display in the message box.
+     * @param options Additional options.
+     * @returns The message box interaction result.
+     */
+    promptMessageBoxAsync(title: string, message: string, options?: PromptMessageBoxAsyncOptions): Promise<BooleanInteractionResult>;
+    /**
+     * Prompts the user for a single text input.
+     * @param title The title of the input dialog.
+     * @param message The message to display in the dialog.
+     * @param inputLabel The label for the input field.
+     * @param placeHolder The placeholder text for the input field.
+     * @param options Additional options.
+     * @returns The input interaction result.
+     */
+    promptInputAsync(title: string, message: string, inputLabel: string, placeHolder: string, options?: PromptInputAsyncOptions): Promise<InputInteractionResult>;
+    /**
+     * Prompts the user for a single input using a specified `InteractionInput`.
+     * @param title The title of the input dialog.
+     * @param message The message to display in the dialog.
+     * @param input The input configuration.
+     * @param options Additional options.
+     * @returns The input interaction result.
+     */
+    promptInputWithInputAsync(title: string, message: string, input: InteractionInput, options?: PromptInputWithInputAsyncOptions): Promise<InputInteractionResult>;
+    /**
+     * Prompts the user for multiple inputs.
+     * @param title The title of the input dialog.
+     * @param message The message to display in the dialog.
+     * @param inputs The input configurations.
+     * @param options Additional options.
+     * @returns The inputs interaction result.
+     */
+    promptInputsAsync(title: string, message: string, inputs: InteractionInput[], options?: PromptInputsAsyncOptions): Promise<InputsInteractionResult>;
+    /**
+     * Prompts the user with a notification.
+     * @param title The title of the notification.
+     * @param message The message to display in the notification.
+     * @param options Additional options.
+     * @returns The notification interaction result.
+     */
+    promptNotificationAsync(title: string, message: string, options?: PromptNotificationAsyncOptions): Promise<BooleanInteractionResult>;
+}
+
+// ============================================================================
+// InteractionServiceImpl
+// ============================================================================
+
+/** A service to interact with the current development environment. */
+class InteractionServiceImpl implements InteractionService {
+    constructor(private _handle: IInteractionServiceHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /**
+     * Gets a value indicating whether the interaction service is available.
+     * @returns `true` when the interaction service can interact with the user; otherwise, `false`.
+     */
+    async isAvailable(): Promise<boolean> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle };
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting/interactionServiceIsAvailable',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Prompts the user for confirmation with a dialog.
+     * @param title The title of the dialog.
+     * @param message The message to display in the dialog.
+     * @param optionsBag Additional options.
+     * @returns The confirmation interaction result.
+     */
+    async promptConfirmationAsync(title: string, message: string, optionsBag?: PromptConfirmationAsyncOptions): Promise<BooleanInteractionResult> {
+        const options = optionsBag?.options;
+        const cancellationToken = optionsBag?.cancellationToken;
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message };
+        if (options !== undefined) rpcArgs.options = options;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<BooleanInteractionResult>(
+            'Aspire.Hosting/promptConfirmationAsync',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Prompts the user with a message box dialog.
+     * @param title The title of the message box.
+     * @param message The message to display in the message box.
+     * @param optionsBag Additional options.
+     * @returns The message box interaction result.
+     */
+    async promptMessageBoxAsync(title: string, message: string, optionsBag?: PromptMessageBoxAsyncOptions): Promise<BooleanInteractionResult> {
+        const options = optionsBag?.options;
+        const cancellationToken = optionsBag?.cancellationToken;
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message };
+        if (options !== undefined) rpcArgs.options = options;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<BooleanInteractionResult>(
+            'Aspire.Hosting/promptMessageBoxAsync',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Prompts the user for a single text input.
+     * @param title The title of the input dialog.
+     * @param message The message to display in the dialog.
+     * @param inputLabel The label for the input field.
+     * @param placeHolder The placeholder text for the input field.
+     * @param optionsBag Additional options.
+     * @returns The input interaction result.
+     */
+    async promptInputAsync(title: string, message: string, inputLabel: string, placeHolder: string, optionsBag?: PromptInputAsyncOptions): Promise<InputInteractionResult> {
+        const options = optionsBag?.options;
+        const cancellationToken = optionsBag?.cancellationToken;
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message, inputLabel, placeHolder };
+        if (options !== undefined) rpcArgs.options = options;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<InputInteractionResult>(
+            'Aspire.Hosting/promptInputAsync',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Prompts the user for a single input using a specified `InteractionInput`.
+     * @param title The title of the input dialog.
+     * @param message The message to display in the dialog.
+     * @param input The input configuration.
+     * @param optionsBag Additional options.
+     * @returns The input interaction result.
+     */
+    async promptInputWithInputAsync(title: string, message: string, input: InteractionInput, optionsBag?: PromptInputWithInputAsyncOptions): Promise<InputInteractionResult> {
+        const options = optionsBag?.options;
+        const cancellationToken = optionsBag?.cancellationToken;
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message, input };
+        if (options !== undefined) rpcArgs.options = options;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<InputInteractionResult>(
+            'Aspire.Hosting/promptInputWithInput',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Prompts the user for multiple inputs.
+     * @param title The title of the input dialog.
+     * @param message The message to display in the dialog.
+     * @param inputs The input configurations.
+     * @param optionsBag Additional options.
+     * @returns The inputs interaction result.
+     */
+    async promptInputsAsync(title: string, message: string, inputs: InteractionInput[], optionsBag?: PromptInputsAsyncOptions): Promise<InputsInteractionResult> {
+        const options = optionsBag?.options;
+        const cancellationToken = optionsBag?.cancellationToken;
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message, inputs };
+        if (options !== undefined) rpcArgs.options = options;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<InputsInteractionResult>(
+            'Aspire.Hosting/promptInputsAsync',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Prompts the user with a notification.
+     * @param title The title of the notification.
+     * @param message The message to display in the notification.
+     * @param optionsBag Additional options.
+     * @returns The notification interaction result.
+     */
+    async promptNotificationAsync(title: string, message: string, optionsBag?: PromptNotificationAsyncOptions): Promise<BooleanInteractionResult> {
+        const options = optionsBag?.options;
+        const cancellationToken = optionsBag?.cancellationToken;
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, title, message };
+        if (options !== undefined) rpcArgs.options = options;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<BooleanInteractionResult>(
+            'Aspire.Hosting/promptNotificationAsync',
+            rpcArgs
+        );
+    }
+
+}
+
+/**
+ * Thenable wrapper for InteractionService that enables fluent chaining.
+ */
+class InteractionServicePromiseImpl implements InteractionServicePromise {
+    constructor(private _promise: Promise<InteractionService>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = InteractionService, TResult2 = never>(
+        onfulfilled?: ((value: InteractionService) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    isAvailable(): Promise<boolean> {
+        return this._promise.then(obj => obj.isAvailable());
+    }
+
+    promptConfirmationAsync(title: string, message: string, options?: PromptConfirmationAsyncOptions): Promise<BooleanInteractionResult> {
+        return this._promise.then(obj => obj.promptConfirmationAsync(title, message, options));
+    }
+
+    promptMessageBoxAsync(title: string, message: string, options?: PromptMessageBoxAsyncOptions): Promise<BooleanInteractionResult> {
+        return this._promise.then(obj => obj.promptMessageBoxAsync(title, message, options));
+    }
+
+    promptInputAsync(title: string, message: string, inputLabel: string, placeHolder: string, options?: PromptInputAsyncOptions): Promise<InputInteractionResult> {
+        return this._promise.then(obj => obj.promptInputAsync(title, message, inputLabel, placeHolder, options));
+    }
+
+    promptInputWithInputAsync(title: string, message: string, input: InteractionInput, options?: PromptInputWithInputAsyncOptions): Promise<InputInteractionResult> {
+        return this._promise.then(obj => obj.promptInputWithInputAsync(title, message, input, options));
+    }
+
+    promptInputsAsync(title: string, message: string, inputs: InteractionInput[], options?: PromptInputsAsyncOptions): Promise<InputsInteractionResult> {
+        return this._promise.then(obj => obj.promptInputsAsync(title, message, inputs, options));
+    }
+
+    promptNotificationAsync(title: string, message: string, options?: PromptNotificationAsyncOptions): Promise<BooleanInteractionResult> {
+        return this._promise.then(obj => obj.promptNotificationAsync(title, message, options));
+    }
+
+}
+
+// ============================================================================
 // Logger
 // ============================================================================
 
@@ -11178,6 +11641,11 @@ export interface ServiceProvider {
      */
     getEventing(): DistributedApplicationEventingPromise;
     /**
+     * Gets the interaction service from the service provider.
+     * @returns An interaction service handle.
+     */
+    getInteractionService(): InteractionServicePromise;
+    /**
      * Gets the logger factory from the service provider.
      * @returns A logger factory handle.
      */
@@ -11220,6 +11688,11 @@ export interface ServiceProviderPromise extends PromiseLike<ServiceProvider> {
      * @returns The distributed application eventing handle.
      */
     getEventing(): DistributedApplicationEventingPromise;
+    /**
+     * Gets the interaction service from the service provider.
+     * @returns An interaction service handle.
+     */
+    getInteractionService(): InteractionServicePromise;
     /**
      * Gets the logger factory from the service provider.
      * @returns A logger factory handle.
@@ -11284,6 +11757,24 @@ class ServiceProviderImpl implements ServiceProvider {
      */
     getEventing(): DistributedApplicationEventingPromise {
         return new DistributedApplicationEventingPromiseImpl(this._getEventingInternal(), this._client);
+    }
+
+    /** @internal */
+    async _getInteractionServiceInternal(): Promise<InteractionService> {
+        const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
+        const result = await this._client.invokeCapability<IInteractionServiceHandle>(
+            'Aspire.Hosting/getInteractionService',
+            rpcArgs
+        );
+        return new InteractionServiceImpl(result, this._client);
+    }
+
+    /**
+     * Gets the interaction service from the service provider.
+     * @returns An interaction service handle.
+     */
+    getInteractionService(): InteractionServicePromise {
+        return new InteractionServicePromiseImpl(this._getInteractionServiceInternal(), this._client);
     }
 
     /** @internal */
@@ -11431,6 +11922,10 @@ class ServiceProviderPromiseImpl implements ServiceProviderPromise {
 
     getEventing(): DistributedApplicationEventingPromise {
         return new DistributedApplicationEventingPromiseImpl(this._promise.then(obj => obj.getEventing()), this._client);
+    }
+
+    getInteractionService(): InteractionServicePromise {
+        return new InteractionServicePromiseImpl(this._promise.then(obj => obj.getInteractionService()), this._client);
     }
 
     getLoggerFactory(): LoggerFactoryPromise {
@@ -53561,6 +54056,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedAppli
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder', (handle, client) => new ExecutionConfigurationBuilderImpl(handle as IExecutionConfigurationBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult', (handle, client) => new ExecutionConfigurationResultImpl(handle as IExecutionConfigurationResultHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment', (handle, client) => new HostEnvironmentImpl(handle as IHostEnvironmentHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IInteractionService', (handle, client) => new InteractionServiceImpl(handle as IInteractionServiceHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILogger', (handle, client) => new LoggerImpl(handle as ILoggerHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Logging.Abstractions/Microsoft.Extensions.Logging.ILoggerFactory', (handle, client) => new LoggerFactoryImpl(handle as ILoggerFactoryHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.IReportingStep', (handle, client) => new ReportingStepImpl(handle as IReportingStepHandle, client));
