@@ -113,13 +113,6 @@ variables:
     - name: _Sign
       value: true
 
-  # Packages are published only on internal, non-PR builds on publishing branches.
-  # Feature branches and PR builds don't have Maestro default channels so archive
-  # URLs won't be valid. The branch set lives in common-variables.yml as
-  # _IsProductionBranch.
-  - name: _PackagesPublished
-    value: ${{ and(ne(variables['_RunAsPublic'], 'true'), ne(variables['Build.Reason'], 'PullRequest'), eq(variables['_IsProductionBranch'], 'true')) }}
-
 resources:
   repositories:
   - repository: 1ESPipelineTemplates
@@ -523,7 +516,6 @@ extends:
                 artifactVersion: $(aspireArtifactVersion)
                 channel: $(installerChannel)
                 archiveRoot: $(Pipeline.Workspace)/native-archives
-                skipUrlValidation: ${{ ne(variables['_PackagesPublished'], 'true') }}
 
           - job: Homebrew
             displayName: Homebrew Cask

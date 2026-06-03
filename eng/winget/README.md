@@ -56,6 +56,37 @@ Where arch is `x64` or `arm64`.
 
 Publishing submits a PR to `microsoft/winget-pkgs` using `wingetcreate submit`.
 
+## Validation model
+
+Aspire CI does **not** run `winget validate` or a local install/uninstall test
+on the build agent. Manifest validation is delegated to the upstream
+[`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs)
+validation pipeline, which runs on every submitted PR (see the
+[validation failure guide](https://github.com/microsoft/winget-pkgs/blob/master/doc/ValidationFailureGuide.md))
+and checks:
+
+- **Schema validation** (what `winget validate --manifest` does) — missing
+  required fields, type errors, deprecated schema versions, directory
+  layout, regex constraints like `InstallerUrl ^https?://`.
+- **Binary scanning** of the actual installer through multiple antivirus
+  engines.
+- **URL accessibility + Microsoft Defender SmartScreen reputation** for every
+  `InstallerUrl`.
+- **SHA256 hash verification** — downloads the installer and compares it
+  to the manifest `InstallerSha256`.
+- **Install/uninstall round-trip** in a clean VM, including verification of
+  `AppsAndFeaturesEntries`.
+
+This matches the pattern other Microsoft repos publishing to WinGet use
+(`microsoft/PowerToys`, `microsoft/terminal`, `microsoft/winget-create`):
+none run `winget validate` in their submission pipeline; all rely on
+upstream CI. On Aspire's 1ES `1es-windows-2022` agent, `winget.exe` is not
+pre-installed and the agent cannot reach `cdn.winget.microsoft.com` to
+install it (see `eng/pipelines/templates/prepare-winget-manifest.yml`), so
+the upstream-CI-only pattern is also the only practical option.
+
+## Local dogfood
+
 To dogfood a GitHub Actions artifact locally, download the `winget-manifests-prerelease`
 artifact and the `cli-native-archives-win-*` artifacts into the same parent directory, then run:
 
