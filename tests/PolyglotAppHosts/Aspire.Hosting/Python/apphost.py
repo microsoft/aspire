@@ -107,7 +107,7 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     exe = builder.add_executable("resource", "echo", ".", [])
     # addProject (pre-existing)
     project = builder.add_project("resource", ".", launch_profile_or_options="default")
-    project.with_endpoints_in_environment(["https"])
+    project.with_endpoints_in_env(["https"])
 
     def custom_health_check():
         return {"Status": "Healthy", "Description": "custom health check"}
