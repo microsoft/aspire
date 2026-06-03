@@ -49,7 +49,9 @@ suite('End-to-end RPC server auth tests', () => {
 		await waitForExpect(() => {
 			assert.ok(extension.exports.acquireTestRunSession);
 			assert.ok(extension.exports.releaseTestRunSession);
-			assert.strictEqual('dcpServerInfo' in extension.exports, false);
+			// dcpServerInfo exposes only the address — sensitive fields (token, certificate) must not leak
+			assert.strictEqual('token' in (extension.exports.dcpServerInfo ?? {}), false);
+			assert.strictEqual('certificate' in (extension.exports.dcpServerInfo ?? {}), false);
 		}, 2000, 50);
 
 		const api = extension.exports as AspireExtensionApi;

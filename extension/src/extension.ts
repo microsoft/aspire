@@ -343,10 +343,11 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(e2eStateFileBridge);
   
     // Return exported API for tests or other extensions
-  const api = createAspireExtensionApi(dataRepository, terminalProvider, dcpServer);
+  const e2eApi = createExtensionApi(context, rpcServer, dcpServer, dataRepository, appHostLaunchService, appHostTreeProvider, onDidChangeStateEmitter.event);
+  const publicApi = createAspireExtensionApi(dataRepository, terminalProvider, dcpServer);
   return {
-    rpcServerInfo: rpcServer.connectionInfo,
-    ...api,
+    ...e2eApi,
+    ...publicApi,
   };
 }
 
