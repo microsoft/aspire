@@ -1,0 +1,9 @@
+{
+  "author": "kola-tm",
+  "comment": "New Region property in DevTunnelOptions for controlling dev tunnel region",
+  "mergedAt": "2026-06-01T22:14:59Z",
+  "number": 14112,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "included",
+  "title": "Add Region to DevTunnelOptions to ensure setting region devtunnel is created in"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "New npm distribution channel for Aspire CLI",
+  "mergedAt": "2026-05-31T21:07:47Z",
+  "number": 17297,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "included",
+  "title": "Add Aspire CLI npm package release integration"
+}

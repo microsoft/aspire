@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Fix for duplicate profiles block in empty AppHost template",
+  "mergedAt": "2026-06-02T03:55:20Z",
+  "number": 17781,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "included",
+  "title": "Remove duplicated profiles block from empty C# AppHost aspire.config.json"
+}

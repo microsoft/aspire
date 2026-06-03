@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "TypeScript snippet fix for Helm chart docs; no matching changelog entry in this milestone batch",
+  "mergedAt": "2026-06-02T04:30:48Z",
+  "number": 1172,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "excluded",
+  "title": "Use Twoslash for Helm chart AppHost samples"
+}

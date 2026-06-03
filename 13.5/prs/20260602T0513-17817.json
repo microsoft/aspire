@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Release merge PR - no unique user-facing product changes",
+  "mergedAt": "2026-06-02T05:13:49Z",
+  "number": 17817,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "excluded",
+  "title": "Merge release/13.4 to main after v13.4.0 release"
+}

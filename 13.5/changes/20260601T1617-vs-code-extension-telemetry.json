@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The VS Code extension now collects telemetry signals including extension activation, debug session start/stop, and dashboard interactions to help improve the product. Data collection follows Microsoft privacy policies.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udce1",
+  "firstMergedAt": "2026-06-01T16:17:32Z",
+  "lastMergedAt": "2026-06-01T16:17:32Z",
+  "name": "VS Code extension telemetry",
+  "owner": "adamint",
+  "prs": [
+    17723
+  ]
+}

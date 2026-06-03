@@ -1,0 +1,21 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@neoGeneva"
+  ],
+  "description": "The VS Code extension now respects the launchUrl property in launchSettings.json, using it as the serverReadyAction URI format when launching the debugger.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd17",
+  "firstMergedAt": "2026-05-30T21:08:50Z",
+  "lastMergedAt": "2026-05-30T21:08:50Z",
+  "name": "Support launchUrl in launchSettings.json",
+  "owner": "adamint",
+  "prs": [
+    17634
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@ellahathaway"
+  ],
+  "description": "The telemetry filter dialog now includes == and != operators for numeric fields, making it easier to filter for exact values in logs and traces.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd22",
+  "firstMergedAt": "2026-06-02T03:13:35Z",
+  "lastMergedAt": "2026-06-02T03:13:35Z",
+  "name": "Equality operators in numeric telemetry filter",
+  "owner": "JamesNK",
+  "prs": [
+    17708
+  ]
+}

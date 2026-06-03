@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Release engineering/agentic workflow fix - no user-facing product impact",
+  "mergedAt": "2026-05-31T22:51:32Z",
+  "number": 17765,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "excluded",
+  "title": "Fix extension-changelog 422: skip branch-protection pre-flight to drop administration:read"
+}

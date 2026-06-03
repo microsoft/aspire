@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Backported to release/13.4 - already shipped in previous milestone",
+  "mergedAt": "2026-05-31T02:24:26Z",
+  "number": 17729,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "excluded",
+  "title": "Fix DistributedApplicationTestingBuilder dashboard with dynamic ports"
+}

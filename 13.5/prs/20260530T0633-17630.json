@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Build infrastructure change - pinning Corepack for extension build",
+  "mergedAt": "2026-05-30T06:33:15Z",
+  "number": 17630,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "excluded",
+  "title": "Pin Corepack explicitly for the VS Code extension build"
+}

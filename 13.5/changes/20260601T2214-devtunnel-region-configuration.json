@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@kola-tm"
+  ],
+  "description": "Added a Region property to DevTunnelOptions, allowing you to specify the region where the dev tunnel is created. The fully qualified tunnel ID now includes the region.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83c\udf0d",
+  "firstMergedAt": "2026-06-01T22:14:59Z",
+  "lastMergedAt": "2026-06-01T22:14:59Z",
+  "name": "DevTunnel region configuration",
+  "owner": "DamianEdwards",
+  "prs": [
+    14112
+  ]
+}

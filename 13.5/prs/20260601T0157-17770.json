@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Release engineering build fix - no user-facing product impact",
+  "mergedAt": "2026-06-01T01:57:57Z",
+  "number": 17770,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "excluded",
+  "title": "Fix Aspire CLI npm signing scope"
+}

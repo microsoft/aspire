@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "New timestamp filter qualifier for telemetry logs and traces",
+  "mergedAt": "2026-06-02T08:22:45Z",
+  "number": 17816,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "included",
+  "title": "Add timestamp search qualifier for telemetry filtering"
+}

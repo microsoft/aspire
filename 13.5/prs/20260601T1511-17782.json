@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Release engineering pipeline fix - no user-facing product impact",
+  "mergedAt": "2026-06-01T15:11:48Z",
+  "number": 17782,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "excluded",
+  "title": "Skip MicroBuild auth for VS Code release job"
+}

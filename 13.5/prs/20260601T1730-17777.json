@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Release engineering configuration - no user-facing product impact",
+  "mergedAt": "2026-06-01T17:30:30Z",
+  "number": 17777,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "excluded",
+  "title": "Default release npm contacts"
+}

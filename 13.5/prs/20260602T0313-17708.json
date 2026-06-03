@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Equality operators added to numeric telemetry filter dropdown",
+  "mergedAt": "2026-06-02T03:13:35Z",
+  "number": 17708,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "included",
+  "title": "Add == and != operators to numeric filter dropdown"
+}

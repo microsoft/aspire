@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code extension telemetry signals for product improvement",
+  "mergedAt": "2026-06-01T16:17:32Z",
+  "number": 17723,
+  "runDate": "2026-06-03T15:21:37Z",
+  "status": "included",
+  "title": "Extension: implement VS Code telemetry signals (#17721)"
+}
