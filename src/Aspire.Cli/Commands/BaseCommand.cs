@@ -126,7 +126,7 @@ internal abstract class BaseCommand : Command
             if (result.ShouldDisplayHelp)
             {
                 new HelpAction().Invoke(parseResult);
-                await FlushExtensionInteractionServiceAsync(interactionService).ConfigureAwait(false);
+                await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
 
                 return result.ExitCode;
             }
@@ -171,7 +171,7 @@ internal abstract class BaseCommand : Command
                 }
             }
 
-            await FlushExtensionInteractionServiceAsync(interactionService).ConfigureAwait(false);
+            await FlushExtensionInteractionServiceAsync(InteractionService).ConfigureAwait(false);
 
             return result.ExitCode;
         }));
