@@ -292,7 +292,8 @@ public class AzureStorageEmulatorFunctionalTests(ITestOutputHelper testOutputHel
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
             testOutputHelper,
             builder => builder.AddAzureStorage("storage").RunAsEmulator(container => container.WithPersistentLifetime()),
-            "storage");
+            "storage",
+            useTestContainerRegistry: false);
     }
 
 }

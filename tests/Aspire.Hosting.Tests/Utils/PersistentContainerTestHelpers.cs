@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Testing;
+using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Utils;
@@ -9,33 +10,51 @@ namespace Aspire.Hosting.Utils;
 public static class PersistentContainerTestHelpers
 {
     /// <summary>
-    /// Verifies that a resource configured with a persistent lifetime reuses the same container across AppHost runs.
+    /// Verifies that a resource configured with a persistent lifetime uses a stable container identity across AppHost runs.
     /// </summary>
     /// <param name="testOutputHelper">The xUnit output helper used for test and resource logging.</param>
     /// <param name="configureResource">Configures the persistent resource on each AppHost run.</param>
-    /// <param name="resourceName">The resource name whose container ID should be compared.</param>
+    /// <param name="resourceName">The resource name whose persistent container identity should be compared.</param>
     /// <param name="timeout">The timeout for starting, stopping, and observing the resource. Defaults to 10 minutes because some container integrations have slow cold starts.</param>
+    /// <param name="useTestContainerRegistry">Uses the CI mirror for container images. Set to <see langword="false"/> for images that are not available in the mirror.</param>
     public static async Task AssertResourceReusesContainerAsync(
         ITestOutputHelper testOutputHelper,
         Action<IDistributedApplicationTestingBuilder> configureResource,
         string resourceName,
-        TimeSpan? timeout = null)
+        TimeSpan? timeout = null,
+        bool useTestContainerRegistry = true)
     {
         using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(10));
         using var aspireStore = new TestTempDirectory();
+        var userSecretsId = Guid.NewGuid().ToString("N");
 
-        var before = await RunContainerAsync();
-        var after = await RunContainerAsync();
+        try
+        {
+            var before = await RunContainerAsync();
+            var after = await RunContainerAsync();
 
-        Assert.NotNull(before);
-        Assert.NotNull(after);
-        Assert.Equal(before, after);
+            Assert.NotNull(before);
+            Assert.NotNull(after);
+            Assert.Equal(before, after);
+        }
+        finally
+        {
+            var userSecretsPath = UserSecretsPathHelper.GetSecretsPathFromSecretsId(userSecretsId);
+            if (Path.GetDirectoryName(userSecretsPath) is { } userSecretsDirectory && Directory.Exists(userSecretsDirectory))
+            {
+                Directory.Delete(userSecretsDirectory, recursive: true);
+            }
+        }
 
         async Task<string?> RunContainerAsync()
         {
-            using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper)
+            using var builder = (useTestContainerRegistry
+                    ? TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper, $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}")
+                    : TestDistributedApplicationBuilder.Create(testOutputHelper, $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"))
                 .WithTempAspireStore(aspireStore.Path)
                 .WithResourceCleanUp(false);
+
+            Assert.True(builder.UserSecretsManager.IsAvailable);
 
             configureResource(builder);
 
@@ -43,25 +62,25 @@ public static class PersistentContainerTestHelpers
             await app.StartAsync(cts.Token);
 
             var resourceNotificationService = app.Services.GetRequiredService<ResourceNotificationService>();
-            var containerId = await GetContainerIdAsync(resourceNotificationService, resourceName, cts.Token);
+            var containerIdentity = await GetContainerIdentityAsync(resourceNotificationService, resourceName, cts.Token);
 
             await app.StopAsync(cts.Token).WaitAsync(cts.Token);
 
-            return containerId;
+            return containerIdentity;
         }
     }
 
     /// <summary>
-    /// Gets the container ID for a resource after it becomes healthy.
+    /// Gets the stable container identity for a resource after it becomes healthy.
     /// </summary>
-    private static async Task<string?> GetContainerIdAsync(ResourceNotificationService resourceNotificationService, string resourceName, CancellationToken cancellationToken)
+    private static async Task<string?> GetContainerIdentityAsync(ResourceNotificationService resourceNotificationService, string resourceName, CancellationToken cancellationToken)
     {
         await resourceNotificationService.WaitForResourceHealthyAsync(resourceName, cancellationToken);
         var resourceEvent = await resourceNotificationService.WaitForResourceAsync(resourceName, evt =>
         {
-            return evt.Snapshot.Properties.FirstOrDefault(x => x.Name == "container.id")?.Value != null;
+            return evt.Snapshot.Properties.FirstOrDefault(x => x.Name == "container.lifetime")?.Value is ContainerLifetime.Persistent;
         }, cancellationToken);
 
-        return resourceEvent.Snapshot.Properties.FirstOrDefault(x => x.Name == "container.id")?.Value?.ToString();
+        return resourceEvent.ResourceId;
     }
 }
