@@ -726,6 +726,52 @@ public class EFMigrationPipelineTests
         Assert.Contains(WellKnownPipelineSteps.Publish, generateStep.RequiredBySteps);
     }
 
+    [Fact]
+    public void FilterEnvironmentVariablesForExecutionDropsManifestExpressionsInPublishMode()
+    {
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish);
+        var connectionStringRef = new ConnectionStringReference(new TestDatabaseResource("mydb"), optional: false);
+
+        var environmentVariables = new[]
+        {
+            // A deploy-time reference: in publish mode this resolves to the manifest placeholder
+            // expression and must NOT be forwarded to `dotnet ef` (it would break design-time DbContext creation).
+            new KeyValuePair<string, (object Unprocessed, string Processed)>(
+                "ConnectionStrings__mydb", (connectionStringRef, "{mydb.connectionString}")),
+            // A plain literal env var: always forwarded.
+            new KeyValuePair<string, (object Unprocessed, string Processed)>(
+                "ASPNETCORE_ENVIRONMENT", ("Development", "Development")),
+        };
+
+        var result = EFResourceBuilderExtensions
+            .FilterEnvironmentVariablesForExecution(environmentVariables, executionContext)
+            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+        Assert.False(result.ContainsKey("ConnectionStrings__mydb"));
+        Assert.Equal("Development", result["ASPNETCORE_ENVIRONMENT"]);
+    }
+
+    [Fact]
+    public void FilterEnvironmentVariablesForExecutionKeepsManifestExpressionsInRunMode()
+    {
+        var executionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run);
+        var connectionStringRef = new ConnectionStringReference(new TestDatabaseResource("mydb"), optional: false);
+
+        var environmentVariables = new[]
+        {
+            // In run mode the reference resolves to a real connection string, which run-mode dashboard
+            // commands like Update Database need, so it must be forwarded to `dotnet ef`.
+            new KeyValuePair<string, (object Unprocessed, string Processed)>(
+                "ConnectionStrings__mydb", (connectionStringRef, "Host=localhost;Database=mydb")),
+        };
+
+        var result = EFResourceBuilderExtensions
+            .FilterEnvironmentVariablesForExecution(environmentVariables, executionContext)
+            .ToDictionary(kvp => kvp.Key, kvp => kvp.Value);
+
+        Assert.Equal("Host=localhost;Database=mydb", result["ConnectionStrings__mydb"]);
+    }
+
     private static async Task<List<PipelineStep>> CreateStepsAsync(
         IDistributedApplicationTestingBuilder builder,
         EFMigrationResource migrationResource)

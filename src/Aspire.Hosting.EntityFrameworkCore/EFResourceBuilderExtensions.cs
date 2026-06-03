@@ -406,6 +406,33 @@ public static class EFResourceBuilderExtensions
         return migrationResource.Name + (isWindowsBundle ? ".exe" : string.Empty);
     }
 
+    // Selects which gathered environment variables should be applied to the `dotnet ef` process.
+    //
+    // During `aspire publish`, environment values backed by a deploy-time reference
+    // (IManifestExpressionProvider, e.g. a referenced/waited-on resource's connection string) resolve
+    // to their manifest placeholder expression like "{db.connectionString}" rather than a real value,
+    // because the target resource isn't provisioned yet. Passing such a placeholder to `dotnet ef` as
+    // ConnectionStrings__<name> breaks design-time DbContext creation: the provider tries to parse the
+    // placeholder as a real connection string and fails. Migration script/bundle generation only builds
+    // the model and never connects, so these unresolved deploy-time values are skipped in publish mode.
+    // The generated bundle still receives the real connection string via
+    // `--connection "$ConnectionStrings__<name>"` at deploy time, and run-mode dashboard commands
+    // (e.g. Update Database) keep the real resolved value because they never take this publish-only branch.
+    internal static IEnumerable<KeyValuePair<string, string>> FilterEnvironmentVariablesForExecution(
+        IEnumerable<KeyValuePair<string, (object Unprocessed, string Processed)>> environmentVariables,
+        DistributedApplicationExecutionContext executionContext)
+    {
+        foreach (var kvp in environmentVariables)
+        {
+            if (executionContext.IsPublishMode && kvp.Value.Unprocessed is IManifestExpressionProvider)
+            {
+                continue;
+            }
+
+            yield return new KeyValuePair<string, string>(kvp.Key, kvp.Value.Processed);
+        }
+    }
+
     private static async Task<ExecuteCommandResult> StartEfToolResourceAsync(ExecuteCommandContext context, DotnetToolResource toolResource)
     {
         var notificationService = context.ServiceProvider.GetRequiredService<ResourceNotificationService>();
@@ -481,9 +508,9 @@ public static class EFResourceBuilderExtensions
                 }
             }
 
-            foreach (var kvp in executionConfiguration.EnvironmentVariables)
+            foreach (var (key, value) in FilterEnvironmentVariablesForExecution(executionConfiguration.EnvironmentVariablesWithUnprocessed, executionContext))
             {
-                startInfo.Environment[kvp.Key] = kvp.Value;
+                startInfo.Environment[key] = value;
             }
 
             await notificationService.PublishUpdateAsync(toolResource, s => s with
