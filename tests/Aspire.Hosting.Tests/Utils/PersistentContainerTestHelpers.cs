@@ -19,12 +19,14 @@ public static class PersistentContainerTestHelpers
     /// <param name="configureResource">Configures the persistent resource on each AppHost run.</param>
     /// <param name="resourceName">The resource name whose persistent Docker container identity should be compared.</param>
     /// <param name="useTestContainerRegistry">Whether to apply the test container registry override for integrations that require CI-mirrored images.</param>
+    /// <param name="randomizePorts">Whether to force DCP to randomize ports for the AppHost runs.</param>
     /// <param name="timeout">The timeout for starting, stopping, and observing the resource. Defaults to 10 minutes because some container integrations have slow cold starts.</param>
     public static async Task AssertResourceReusesContainerAsync(
         ITestOutputHelper testOutputHelper,
         Action<IDistributedApplicationTestingBuilder> configureResource,
         string resourceName,
         bool useTestContainerRegistry = false,
+        bool randomizePorts = false,
         TimeSpan? timeout = null)
     {
         using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(10));
@@ -59,7 +61,11 @@ public static class PersistentContainerTestHelpers
             var args = new[]
             {
                 "--environment=Development",
-                $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"
+                $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}",
+                // Persistent-container reuse tests default to normal run behavior. Individual
+                // tests opt into randomization when the integration doesn't publish the public
+                // proxy port into container configuration that participates in the lifecycle key.
+                $"DcpPublisher:RandomizePorts={(randomizePorts ? "true" : "false")}"
             };
 
             using var builder = (useTestContainerRegistry
