@@ -70,7 +70,7 @@ internal static class FoundryLocalService
             return false;
         }
 
-        var result = await RunFoundryCommandAsync(["service", "list"], onOutput: null, cancellationToken).ConfigureAwait(false);
+        var result = await RunFoundryCommandAsync(["service", "ps"], onOutput: null, cancellationToken).ConfigureAwait(false);
 
         return result.Contains(modelId, StringComparison.OrdinalIgnoreCase);
     }
