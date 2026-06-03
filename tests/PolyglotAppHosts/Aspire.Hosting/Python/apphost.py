@@ -131,7 +131,15 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     # withDockerfileBaseImage
     container.with_dockerfile_base_image()
     # withContainerFiles
-    container.with_container_files("/usr/lib/aspire/container-files", ".", default_owner=1000, default_group=1000, umask=0o022)
+    container.with_container_files(
+        "/usr/lib/aspire/container-files",
+        ".",
+        options={
+            "DefaultOwner": 1000,
+            "DefaultGroup": 1000,
+            "Umask": 0o022,
+        },
+    )
     # withImageRegistry
     container.with_image_registry("docker.io")
     # ===================================================================

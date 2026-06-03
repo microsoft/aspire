@@ -1565,27 +1565,43 @@ public static class ContainerResourceBuilderExtensions
             return builder.WithContainerFiles(destinationPath, sourcePath);
         }
 
-        var defaultOwner = options.DefaultOwner;
-        if (defaultOwner is { } owner)
-        {
-            ArgumentOutOfRangeException.ThrowIfNegative(owner, nameof(ContainerFilesOptions.DefaultOwner));
-        }
-
-        var defaultGroup = options.DefaultGroup;
-        if (defaultGroup is { } group)
-        {
-            ArgumentOutOfRangeException.ThrowIfNegative(group, nameof(ContainerFilesOptions.DefaultGroup));
-        }
-
-        UnixFileMode? umask = null;
-        if (options.Umask is { } umaskValue)
-        {
-            ArgumentOutOfRangeException.ThrowIfNegative(umaskValue, nameof(ContainerFilesOptions.Umask));
-            ArgumentOutOfRangeException.ThrowIfGreaterThan(umaskValue, 0xFFF, nameof(ContainerFilesOptions.Umask));
-            umask = (UnixFileMode)umaskValue;
-        }
+        var defaultOwner = GetIntegralContainerFilesOption(
+            options.DefaultOwner,
+            nameof(ContainerFilesOptions.DefaultOwner),
+            minValue: 0,
+            maxValue: int.MaxValue);
+        var defaultGroup = GetIntegralContainerFilesOption(
+            options.DefaultGroup,
+            nameof(ContainerFilesOptions.DefaultGroup),
+            minValue: 0,
+            maxValue: int.MaxValue);
+        var umaskValue = GetIntegralContainerFilesOption(
+            options.Umask,
+            nameof(ContainerFilesOptions.Umask),
+            minValue: 0,
+            maxValue: 0xFFF);
+        var umask = umaskValue is { } value ? (UnixFileMode)value : (UnixFileMode?)null;
 
         return builder.WithContainerFiles(destinationPath, sourcePath, defaultOwner, defaultGroup, umask);
+    }
+
+    private static int? GetIntegralContainerFilesOption(double? value, string paramName, int minValue, int maxValue)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        var numericValue = value.Value;
+        if (!double.IsFinite(numericValue) ||
+            Math.Truncate(numericValue) != numericValue ||
+            numericValue < minValue ||
+            numericValue > maxValue)
+        {
+            throw new ArgumentOutOfRangeException(paramName, numericValue, $"Value must be a finite integral number between {minValue} and {maxValue}.");
+        }
+
+        return (int)numericValue;
     }
 
     /// <summary>
