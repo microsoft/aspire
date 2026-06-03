@@ -242,6 +242,8 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
             }
         }
 
+        // Waiting here preserves late allocation for cases that don't need the on-demand fallback,
+        // such as proxyless container endpoints whose actual port is reported by DCP after startup.
         return await endpointAnnotation.AllAllocatedEndpoints.GetAllocatedEndpointAsync(networkId, cancellationToken).ConfigureAwait(false);
     }
 
