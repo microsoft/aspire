@@ -9,12 +9,15 @@ namespace Aspire.Hosting.Utils;
 
 public static class PersistentContainerTestHelpers
 {
+    private const string ContainerIdPropertyName = "container.id";
+    private const string ContainerLifetimePropertyName = "container.lifetime";
+
     /// <summary>
-    /// Verifies that a resource configured with a persistent lifetime uses a stable container identity across AppHost runs.
+    /// Verifies that a resource configured with a persistent lifetime uses the same Docker container across AppHost runs.
     /// </summary>
     /// <param name="testOutputHelper">The xUnit output helper used for test and resource logging.</param>
     /// <param name="configureResource">Configures the persistent resource on each AppHost run.</param>
-    /// <param name="resourceName">The resource name whose persistent container identity should be compared.</param>
+    /// <param name="resourceName">The resource name whose persistent Docker container identity should be compared.</param>
     /// <param name="timeout">The timeout for starting, stopping, and observing the resource. Defaults to 10 minutes because some container integrations have slow cold starts.</param>
     public static async Task AssertResourceReusesContainerAsync(
         ITestOutputHelper testOutputHelper,
@@ -31,8 +34,6 @@ public static class PersistentContainerTestHelpers
             var before = await RunContainerAsync();
             var after = await RunContainerAsync();
 
-            Assert.NotNull(before);
-            Assert.NotNull(after);
             Assert.Equal(before, after);
         }
         finally
@@ -44,7 +45,7 @@ public static class PersistentContainerTestHelpers
             }
         }
 
-        async Task<string?> RunContainerAsync()
+        async Task<string> RunContainerAsync()
         {
             using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper, $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}")
                 .WithTempAspireStore(aspireStore.Path)
@@ -67,16 +68,26 @@ public static class PersistentContainerTestHelpers
     }
 
     /// <summary>
-    /// Gets the stable container identity for a resource after it becomes healthy.
+    /// Gets the Docker container identity for a persistent resource after it becomes healthy.
     /// </summary>
-    private static async Task<string?> GetContainerIdentityAsync(ResourceNotificationService resourceNotificationService, string resourceName, CancellationToken cancellationToken)
+    private static async Task<string> GetContainerIdentityAsync(ResourceNotificationService resourceNotificationService, string resourceName, CancellationToken cancellationToken)
     {
         await resourceNotificationService.WaitForResourceHealthyAsync(resourceName, cancellationToken);
         var resourceEvent = await resourceNotificationService.WaitForResourceAsync(resourceName, evt =>
         {
-            return evt.Snapshot.Properties.FirstOrDefault(x => x.Name == "container.lifetime")?.Value is ContainerLifetime.Persistent;
+            return GetPropertyValue(evt, ContainerLifetimePropertyName) is ContainerLifetime.Persistent &&
+                GetPropertyValue(evt, ContainerIdPropertyName) is string { Length: > 0 };
         }, cancellationToken);
 
-        return resourceEvent.ResourceId;
+        var containerLifetime = GetPropertyValue(resourceEvent, ContainerLifetimePropertyName);
+        Assert.Equal(ContainerLifetime.Persistent, containerLifetime);
+
+        var containerId = Assert.IsType<string>(GetPropertyValue(resourceEvent, ContainerIdPropertyName));
+        Assert.NotEmpty(containerId);
+
+        return containerId;
     }
+
+    private static object? GetPropertyValue(ResourceEvent resourceEvent, string propertyName) =>
+        resourceEvent.Snapshot.Properties.FirstOrDefault(x => x.Name == propertyName)?.Value;
 }
