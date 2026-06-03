@@ -246,4 +246,16 @@ public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
             useTestContainerRegistry: true);
     }
 
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task RabbitMQ_WithPersistentLifetimeAndRandomizedPorts_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddRabbitMQ("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true,
+            randomizePorts: true);
+    }
+
 }

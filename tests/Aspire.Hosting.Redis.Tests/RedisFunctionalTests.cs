@@ -656,4 +656,16 @@ public class RedisFunctionalTests(ITestOutputHelper testOutputHelper)
             useTestContainerRegistry: true);
     }
 
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task Redis_WithPersistentLifetimeAndRandomizedPorts_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddRedis("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true,
+            randomizePorts: true);
+    }
+
 }
