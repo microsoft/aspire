@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
-using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Hex1b.Automation;
 using Xunit;
@@ -81,11 +80,9 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
                 await using (var connection = await postgres.OpenConnectionAsync())
                 await using (var command = connection.CreateCommand())
                 {
-                    command.CommandText = """
-                        CREATE TABLE IF NOT EXISTS persistence_check (id integer PRIMARY KEY, value text NOT NULL);
-                        INSERT INTO persistence_check (id, value) VALUES (1, 'persistent-container-value')
-                        ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value;
-                        """;
+                    command.CommandText = "CREATE TABLE IF NOT EXISTS persistence_check (id integer PRIMARY KEY, value text NOT NULL);" +
+                        "INSERT INTO persistence_check (id, value) VALUES (1, 'persistent-container-value') " +
+                        "ON CONFLICT (id) DO UPDATE SET value = EXCLUDED.value;";
                     await command.ExecuteNonQueryAsync();
                 }
 
