@@ -2,7 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Shared.TerminalHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -138,58 +141,113 @@ public static class TerminalResourceBuilderExtensions
             replicaCount = 1;
         }
 
-        // One temp base dir per parent: per-replica hosts get sub-directories beneath it
-        // (`{base}/{i}/...`) so the AppHost can clean up every host's sockets with a single
-        // recursive delete when the run ends.
-        var baseDir = Directory.CreateTempSubdirectory("aspire-term-").FullName;
-
-        // Register a best-effort cleanup callback on ApplicationStopped so the temp tree
-        // (3 UDS sockets × replicaCount + the per-replica sub-directories) doesn't
-        // accumulate across AppHost runs. Without this, every run leaves behind
-        // aspire-term-XXXXXXXX/ in $TMPDIR and the stale .sock files inside can also
-        // start pressing on the sockaddr_un sun_path limit on macOS over time.
-        //
-        // Why ApplicationStopped (not ApplicationStopping): the terminal-host child
-        // processes also unlink their own UDS endpoints on graceful shutdown via DCP
-        // teardown. Deleting after the children have fully exited avoids a race where
-        // we recursively delete paths while the children are still draining.
-        var lifetime = @event.Services.GetService<IHostApplicationLifetime>();
-        var loggerFactory = @event.Services.GetService<ILoggerFactory>();
-        if (lifetime is not null)
+        // All per-replica terminal-host files live flat under ~/.aspire/trmnl/, with
+        // a per-replica id derived from (normalized AppHost path, parent resource name,
+        // replica index). This:
+        //  - matches the repo's convention for per-user runtime state (cf. ~/.aspire/cli/bch,
+        //    ~/.aspire/dev-certs, ~/.aspire/deployments)
+        //  - avoids dropping UDS sockets in the global /tmp on Linux where different distros
+        //    treat /tmp permissions differently
+        //  - keeps absolute paths short enough to fit sun_path (104 bytes on macOS)
+        //  - is stable across AppHost restarts so external tools can enumerate by listing
+        //    {trmnlDir}/{id}.metadata.json. The listener side MUST pre-delete stale .sock
+        //    files at the same path before binding.
+        var configuration = @event.Services.GetRequiredService<IConfiguration>();
+        var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
+        if (string.IsNullOrEmpty(appHostPath))
         {
-            var capturedBaseDir = baseDir;
-            var cleanupLogger = loggerFactory?.CreateLogger("Aspire.Hosting.WithTerminal");
-            lifetime.ApplicationStopped.Register(() =>
+            throw new InvalidOperationException(
+                "Cannot materialize terminal hosts: AppHost:FilePath / AppHost:Path is not set in configuration.");
+        }
+
+        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var trmnlDirectory = TerminalHostPaths.GetTrmnlDirectory(homeDirectory);
+
+        // 0700 on Unix so other local users cannot enumerate which terminals exist on
+        // this machine. On Windows the user-profile ACLs (per-user by default) make this
+        // a no-op; CreateDirectory is idempotent.
+        Directory.CreateDirectory(trmnlDirectory);
+        if (!OperatingSystem.IsWindows())
+        {
+            try
             {
-                try
-                {
-                    if (Directory.Exists(capturedBaseDir))
-                    {
-                        Directory.Delete(capturedBaseDir, recursive: true);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Best-effort: deletion can race with DCP draining its own UDS
-                    // handles, or fail on Windows if a child process still holds a
-                    // file handle. Leaking one temp tree is preferable to throwing
-                    // during shutdown (which is already happening).
-                    cleanupLogger?.LogDebug(ex, "Failed to clean up terminal host temp directory '{BaseDir}'.", capturedBaseDir);
-                }
-            });
+                File.SetUnixFileMode(
+                    trmnlDirectory,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+            {
+                // Best-effort: directory may already have stricter perms or be on a filesystem
+                // that does not support chmod (e.g. some FAT-formatted home dirs). Per-socket
+                // 0600 in TerminalHostControlListener still protects each endpoint.
+            }
         }
 
         var terminalHosts = new TerminalHostResource[replicaCount];
+        var replicaIds = new string[replicaCount];
+        var metadataLogger = @event.Services.GetService<ILoggerFactory>()?.CreateLogger("Aspire.Hosting.WithTerminal");
+        var appHostPid = Environment.ProcessId;
+        var createdAtUtc = DateTime.UtcNow;
         for (var i = 0; i < replicaCount; i++)
         {
-            var layout = CreateTerminalHostLayout(baseDir, i);
+            var replicaId = TerminalHostPaths.ComputeReplicaId(appHostPath, parent.Name, i);
+            var layout = CreateTerminalHostLayout(homeDirectory, replicaId, i);
             var terminalHostName = $"{parent.Name}-terminalhost-{i.ToString(CultureInfo.InvariantCulture)}";
             var terminalHost = new TerminalHostResource(terminalHostName, parent, layout);
 
             ConfigureTerminalHostAnnotations(terminalHost, options);
             @event.Model.Resources.Add(terminalHost);
 
+            // Write the sidecar BEFORE the host process starts so external discovery tools
+            // (CLI `aspire terminal ps`, dashboard) can see the terminal as soon as DCP
+            // begins spawning hosts — without waiting for the host to come up and bind its
+            // control socket. The host process never reads its own sidecar; the AppHost is
+            // the sole writer.
+            WriteMetadataSidecar(
+                layout.MetadataPath,
+                new TerminalHostMetadata
+                {
+                    ReplicaId = replicaId,
+                    ResourceName = parent.Name,
+                    ReplicaIndex = i,
+                    AppHostPath = appHostPath,
+                    AppHostPid = appHostPid,
+                    CreatedAtUtc = createdAtUtc,
+                    Columns = options.Columns,
+                    Rows = options.Rows,
+                    ControlSocketPath = layout.ControlUdsPath,
+                    ConsumerSocketPath = layout.ConsumerUdsPath,
+                },
+                metadataLogger);
+
             terminalHosts[i] = terminalHost;
+            replicaIds[i] = replicaId;
+        }
+
+        // Best-effort cleanup callback on ApplicationStopped so stale files for this run
+        // are removed even if the host children crash mid-run.
+        //
+        // Why ApplicationStopped (not ApplicationStopping): the terminal-host child
+        // processes also unlink their own UDS endpoints on graceful shutdown. Deleting
+        // after the children have fully exited avoids racing the children mid-drain.
+        //
+        // Why we delete by replica-id prefix instead of `rm -r trmnlDirectory`: the
+        // directory is now shared across every AppHost on the machine. We only own files
+        // whose name starts with one of OUR replica ids.
+        var lifetime = @event.Services.GetService<IHostApplicationLifetime>();
+        var loggerFactory = @event.Services.GetService<ILoggerFactory>();
+        if (lifetime is not null)
+        {
+            var capturedReplicaIds = replicaIds;
+            var capturedTrmnlDir = trmnlDirectory;
+            var cleanupLogger = loggerFactory?.CreateLogger("Aspire.Hosting.WithTerminal");
+            lifetime.ApplicationStopped.Register(() =>
+            {
+                foreach (var replicaId in capturedReplicaIds)
+                {
+                    DeleteReplicaFiles(capturedTrmnlDir, replicaId, cleanupLogger);
+                }
+            });
         }
 
         // The target waits until each host has started so its viewer-facing UDS listener
@@ -203,7 +261,87 @@ public static class TerminalResourceBuilderExtensions
             }
         }
 
-        annotation.Initialize(baseDir, terminalHosts);
+        annotation.Initialize(terminalHosts);
+    }
+
+    private static void WriteMetadataSidecar(string metadataPath, TerminalHostMetadata metadata, ILogger? logger)
+    {
+        try
+        {
+            // Indented for human inspection: the file is small (<1 KiB) and is expected to
+            // be `cat`-ed by users debugging terminal-host issues. Performance is irrelevant.
+            var json = JsonSerializer.Serialize(metadata, s_metadataSerializerOptions);
+
+            // Two-step write: create the file (so we have a path to chmod) THEN apply
+            // perms BEFORE writing the actual bytes. This shrinks the window where another
+            // local user could see file existence (though the parent dir is already 0700
+            // so the contents are not readable). On Windows the user-profile ACL handles
+            // this and File.SetUnixFileMode is a no-op.
+            using (var fs = new FileStream(
+                metadataPath,
+                FileMode.Create,
+                FileAccess.Write,
+                FileShare.None))
+            {
+                if (!OperatingSystem.IsWindows())
+                {
+                    try
+                    {
+                        File.SetUnixFileMode(metadataPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                    }
+                    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+                    {
+                        // Filesystem may not support chmod (e.g. FAT). The parent dir is 0700
+                        // so the file is still unreachable by other users.
+                        logger?.LogDebug(ex, "Failed to chmod terminal host metadata file '{Path}'.", metadataPath);
+                    }
+                }
+
+                var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+                fs.Write(bytes, 0, bytes.Length);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Sidecar is best-effort: a missing one only degrades external discovery, it
+            // doesn't break the terminal session itself (the AppHost still passes the UDS
+            // paths to the host process via --producer-uds/--consumer-uds/--control-uds).
+            logger?.LogDebug(ex, "Failed to write terminal host metadata sidecar '{Path}'.", metadataPath);
+        }
+    }
+
+    private static readonly JsonSerializerOptions s_metadataSerializerOptions = new()
+    {
+        WriteIndented = true,
+    };
+
+    private static void DeleteReplicaFiles(string trmnlDirectory, string replicaId, ILogger? logger)
+    {
+        // All four per-replica files share the same `{replicaId}.` filename prefix
+        // (e.g. `{id}.dcp.sock`, `{id}.host.sock`, `{id}.control.sock`, `{id}.metadata.json`).
+        try
+        {
+            if (!Directory.Exists(trmnlDirectory))
+            {
+                return;
+            }
+
+            foreach (var path in Directory.EnumerateFiles(trmnlDirectory, replicaId + ".*"))
+            {
+                try
+                {
+                    File.Delete(path);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    logger?.LogDebug(ex, "Failed to delete terminal host file '{Path}'.", path);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger?.LogDebug(ex, "Failed to enumerate terminal host files for '{ReplicaId}'.", replicaId);
+        }
     }
 
     private static void ConfigureTerminalHostAnnotations(TerminalHostResource host, TerminalOptions options)
@@ -251,23 +389,21 @@ public static class TerminalResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Builds the per-replica UDS triple for a single terminal host. Sockets live under a
-    /// per-replica sub-directory (<c>{baseDir}/{replicaIndex}/</c>) so per-replica hosts of
-    /// the same parent get unique paths while still sharing the parent's <paramref name="baseDir"/>
-    /// (which makes cleanup a single recursive delete).
+    /// Builds the per-replica UDS triple + metadata path for a single terminal host. All
+    /// four files live flat under <c>~/.aspire/trmnl/</c> and share the same
+    /// <paramref name="replicaId"/> filename prefix so cleanup is a directory glob.
     /// </summary>
-    private static TerminalHostLayout CreateTerminalHostLayout(string baseDir, int replicaIndex)
+    private static TerminalHostLayout CreateTerminalHostLayout(string homeDirectory, string replicaId, int replicaIndex)
     {
-        ArgumentException.ThrowIfNullOrEmpty(baseDir);
+        ArgumentException.ThrowIfNullOrEmpty(homeDirectory);
+        ArgumentException.ThrowIfNullOrEmpty(replicaId);
         ArgumentOutOfRangeException.ThrowIfNegative(replicaIndex);
 
-        var replicaDir = Path.Combine(baseDir, replicaIndex.ToString(CultureInfo.InvariantCulture));
-        Directory.CreateDirectory(replicaDir);
+        var producerPath = TerminalHostPaths.GetSocketPath(homeDirectory, replicaId, TerminalHostPaths.ProducerSockPurpose);
+        var consumerPath = TerminalHostPaths.GetSocketPath(homeDirectory, replicaId, TerminalHostPaths.ConsumerSockPurpose);
+        var controlPath = TerminalHostPaths.GetSocketPath(homeDirectory, replicaId, TerminalHostPaths.ControlSockPurpose);
+        var metadataPath = TerminalHostPaths.GetMetadataPath(homeDirectory, replicaId);
 
-        var producerPath = Path.Combine(replicaDir, "dcp.sock");
-        var consumerPath = Path.Combine(replicaDir, "host.sock");
-        var controlPath = Path.Combine(replicaDir, "control.sock");
-
-        return new TerminalHostLayout(baseDir, replicaIndex, producerPath, consumerPath, controlPath);
+        return new TerminalHostLayout(replicaId, replicaIndex, producerPath, consumerPath, controlPath, metadataPath);
     }
 }

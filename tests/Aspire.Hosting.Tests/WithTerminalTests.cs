@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -153,13 +154,13 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public async Task WithTerminalCleansUpTempDirectoryOnApplicationStopped()
+    public async Task WithTerminalCleansUpPerReplicaFilesOnApplicationStopped()
     {
         // Regression: prior to wiring an ApplicationStopped callback, every AppHost run
-        // leaked one `aspire-term-XXXXXXXX/` directory under $TMPDIR (plus 3×N stale UDS
-        // sockets). The XML docs on TerminalAnnotation explicitly promised cleanup but
-        // nothing actually did the recursive delete. Now: after the host's lifetime
-        // ApplicationStopped fires, the per-run temp tree is gone.
+        // left stale UDS sockets and metadata sidecars behind in ~/.aspire/trmnl/.
+        // Now: MaterializeTerminalHosts writes a metadata sidecar at BeforeStartEvent
+        // time, and the ApplicationStopped callback deletes every file whose name starts
+        // with one of OUR replica ids.
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
         resource.WithTerminal();
@@ -172,15 +173,74 @@ public class WithTerminalTests
 
             var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single();
             Assert.True(annotation.IsInitialized);
-            Assert.NotNull(annotation.BaseDirectory);
-            Assert.True(Directory.Exists(annotation.BaseDirectory), $"Expected '{annotation.BaseDirectory}' to exist after BeforeStartEvent.");
+            Assert.NotEmpty(annotation.TerminalHosts);
 
-            // Capture before StopAsync nulls anything.
-            var baseDir = annotation.BaseDirectory!;
+            // BeforeStartEvent should have written the production metadata sidecar.
+            var metadataPaths = annotation.TerminalHosts.Select(h => h.Layout.MetadataPath).ToArray();
+            foreach (var path in metadataPaths)
+            {
+                Assert.True(File.Exists(path), $"Metadata sidecar '{path}' should exist after BeforeStartEvent.");
+            }
 
             await app.StopAsync(CancellationToken.None);
 
-            Assert.False(Directory.Exists(baseDir), $"Expected '{baseDir}' to be deleted after ApplicationStopped.");
+            foreach (var path in metadataPaths)
+            {
+                Assert.False(File.Exists(path), $"Expected '{path}' to be deleted after ApplicationStopped.");
+            }
+        }
+        finally
+        {
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task WithTerminalWritesMetadataSidecarWithExpectedShape()
+    {
+        // The sidecar lets external tools (CLI `aspire terminal ps`, dashboard) discover
+        // live terminals by listing ~/.aspire/trmnl/*.metadata.json. The on-disk schema
+        // must match TerminalHostMetadata exactly — older readers refuse unknown schemas.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".")
+            .WithTerminal(options =>
+            {
+                options.Columns = 137;
+                options.Rows = 41;
+            });
+
+        var app = builder.Build();
+        try
+        {
+            var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+            await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+            var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single();
+            var host = Assert.Single(annotation.TerminalHosts);
+
+            Assert.True(File.Exists(host.Layout.MetadataPath));
+
+            using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(host.Layout.MetadataPath));
+            var root = doc.RootElement;
+
+            Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
+            Assert.Equal(host.Layout.ReplicaId, root.GetProperty("replicaId").GetString());
+            Assert.Equal("myapp", root.GetProperty("resourceName").GetString());
+            Assert.Equal(0, root.GetProperty("replicaIndex").GetInt32());
+            Assert.Equal(Environment.ProcessId, root.GetProperty("appHostPid").GetInt32());
+            Assert.Equal(137, root.GetProperty("columns").GetInt32());
+            Assert.Equal(41, root.GetProperty("rows").GetInt32());
+            Assert.Equal(host.Layout.ControlUdsPath, root.GetProperty("controlSocketPath").GetString());
+            Assert.Equal(host.Layout.ConsumerUdsPath, root.GetProperty("consumerSocketPath").GetString());
+            Assert.False(string.IsNullOrEmpty(root.GetProperty("appHostPath").GetString()));
+            Assert.NotEqual(default, root.GetProperty("createdAtUtc").GetDateTime());
+
+            if (!OperatingSystem.IsWindows())
+            {
+                // 0600 — defense-in-depth; parent dir is already 0700.
+                var mode = File.GetUnixFileMode(host.Layout.MetadataPath);
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode);
+            }
         }
         finally
         {
@@ -242,11 +302,12 @@ public class WithTerminalTests
         for (var i = 0; i < 3; i++)
         {
             Assert.Equal(i, hosts[i].ParentReplicaIndex);
-            // The parent replica index is encoded into the per-replica directory of
-            // the layout — DCP and viewers don't need to know that, but path uniqueness
-            // is what keeps the per-replica hosts from colliding on the same UDS.
-            Assert.Contains($"{Path.DirectorySeparatorChar}{i}{Path.DirectorySeparatorChar}", hosts[i].Layout.ProducerUdsPath);
-            Assert.Contains($"{Path.DirectorySeparatorChar}{i}{Path.DirectorySeparatorChar}", hosts[i].Layout.ConsumerUdsPath);
+            // The parent replica index is folded into the per-replica id, so the four
+            // files for replica i share a distinct `{id}.` prefix and never collide with
+            // replica j's files in the shared ~/.aspire/trmnl/ directory.
+            Assert.NotEmpty(hosts[i].Layout.ReplicaId);
+            Assert.StartsWith(hosts[i].Layout.ReplicaId + ".", Path.GetFileName(hosts[i].Layout.ProducerUdsPath));
+            Assert.StartsWith(hosts[i].Layout.ReplicaId + ".", Path.GetFileName(hosts[i].Layout.ConsumerUdsPath));
             Assert.Equal($"myapp-terminalhost-{i}", hosts[i].Name);
         }
     }
@@ -277,7 +338,7 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public async Task TerminalHostLayoutPathsAreUnderTheSameTempBaseDirectory()
+    public async Task TerminalHostLayoutPathsAreUnderTheSameTrmnlDirectoryWithDistinctReplicaIds()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".")
@@ -288,16 +349,25 @@ public class WithTerminalTests
         await PublishBeforeStartAsync(builder);
 
         var hosts = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single().TerminalHosts;
-        var sharedBase = hosts[0].Layout.BaseDirectory;
+        var expectedDirectory = Aspire.Shared.TerminalHost.TerminalHostPaths.GetTrmnlDirectory(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
+        var seenReplicaIds = new HashSet<string>(StringComparer.Ordinal);
         foreach (var host in hosts)
         {
-            // All per-replica hosts share the same per-target base directory so a
-            // single recursive delete cleans up every replica's sockets.
-            Assert.Equal(sharedBase, host.Layout.BaseDirectory);
-            Assert.StartsWith(sharedBase, host.Layout.ProducerUdsPath);
-            Assert.StartsWith(sharedBase, host.Layout.ConsumerUdsPath);
-            Assert.StartsWith(sharedBase, host.Layout.ControlUdsPath);
+            Assert.Equal(expectedDirectory, Path.GetDirectoryName(host.Layout.ProducerUdsPath));
+            Assert.Equal(expectedDirectory, Path.GetDirectoryName(host.Layout.ConsumerUdsPath));
+            Assert.Equal(expectedDirectory, Path.GetDirectoryName(host.Layout.ControlUdsPath));
+            Assert.Equal(expectedDirectory, Path.GetDirectoryName(host.Layout.MetadataPath));
+
+            Assert.StartsWith(host.Layout.ReplicaId + ".", Path.GetFileName(host.Layout.ProducerUdsPath));
+            Assert.StartsWith(host.Layout.ReplicaId + ".", Path.GetFileName(host.Layout.ConsumerUdsPath));
+            Assert.StartsWith(host.Layout.ReplicaId + ".", Path.GetFileName(host.Layout.ControlUdsPath));
+            Assert.StartsWith(host.Layout.ReplicaId + ".", Path.GetFileName(host.Layout.MetadataPath));
+
+            // Distinct replica ids across the parent's replicas (so per-replica file
+            // groups don't collide).
+            Assert.True(seenReplicaIds.Add(host.Layout.ReplicaId), $"Duplicate replica id '{host.Layout.ReplicaId}'.");
         }
     }
 

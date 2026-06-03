@@ -356,6 +356,16 @@ internal sealed class TerminalReplica : IAsyncDisposable
         TryDeleteUdsFile(ProducerUdsPath);
         TryDeleteUdsFile(ConsumerUdsPath);
 
+        // Hex1b binds the producer and consumer sockets lazily inside RunAsync, so we
+        // cannot chmod them synchronously here. Kick off a background task that polls
+        // for file existence and applies 0600 the moment each socket appears. The poll
+        // window is tiny (microseconds in practice) — the parent ~/.aspire/trmnl/ dir
+        // is already 0700 so even during the window the sockets are unreachable by
+        // other local users. This per-file chmod is defense-in-depth, mirroring the
+        // explicit 0600 that TerminalHostControlListener applies to the control socket.
+        _ = ApplyRestrictiveSocketPermissionsAsync(ProducerUdsPath, _stopCts.Token);
+        _ = ApplyRestrictiveSocketPermissionsAsync(ConsumerUdsPath, _stopCts.Token);
+
         // Build the upstream workload adapter ourselves so we can plumb downstream
         // resize events (from the consumer-side multi-head server below) into
         // unconditional FrameResize writes upstream to DCP. See DcpUpstreamAdapter
@@ -493,6 +503,53 @@ internal sealed class TerminalReplica : IAsyncDisposable
         TryDeleteUdsFile(ConsumerUdsPath);
 
         _stopCts.Dispose();
+    }
+
+    private async Task ApplyRestrictiveSocketPermissionsAsync(string path, CancellationToken ct)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            // Unix file mode is a no-op on Windows; user-profile ACLs handle isolation.
+            return;
+        }
+
+        // Poll for up to ~2s for the file to appear, then chmod 0600. We can't race-free
+        // chmod between bind() and listen() from outside Hex1b, but the parent directory
+        // is 0700 so the window is harmless.
+        var deadline = Environment.TickCount64 + 2_000;
+        try
+        {
+            while (Environment.TickCount64 < deadline && !ct.IsCancellationRequested)
+            {
+                if (File.Exists(path))
+                {
+                    try
+                    {
+                        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                        return;
+                    }
+                    catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+                    {
+                        _logger.LogDebug(ex, "Failed to chmod terminal socket '{Path}'.", path);
+                        return;
+                    }
+                }
+
+                try
+                {
+                    await Task.Delay(10, ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Never let a perms-tightening helper crash the recycle loop.
+            _logger.LogDebug(ex, "Unexpected error while applying restrictive permissions to '{Path}'.", path);
+        }
     }
 
     private void TryDeleteUdsFile(string path)

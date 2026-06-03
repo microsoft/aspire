@@ -196,30 +196,34 @@ public class GetTerminalInfoAsyncTests : IAsyncDisposable
         var hosts = new TerminalHostResource[replicaCount];
         for (var i = 0; i < replicaCount; i++)
         {
-            var perReplicaDir = Path.Combine(baseDir, i.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            Directory.CreateDirectory(perReplicaDir);
+            // The test only needs four distinct, writable paths per replica; the production
+            // ~/.aspire/trmnl/<id>.* layout is unnecessary here. We synthesise a stable
+            // pseudo-id so paths look similar to production logs.
+            var pseudoId = $"test{i.ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(7, '0')}";
 
-            var producer = Path.Combine(perReplicaDir, "dcp.sock");
-            var consumer = Path.Combine(perReplicaDir, "host.sock");
+            var producer = Path.Combine(baseDir, $"{pseudoId}.dcp.sock");
+            var consumer = Path.Combine(baseDir, $"{pseudoId}.host.sock");
             // If a fake host is supplied at this index, use its real listening path so
             // the AppHost-side fan-out actually reaches it. Otherwise leave it pointing
             // at a path that does not exist.
             var control = controlListeners is not null && i < controlListeners.Count && controlListeners[i] is { } listener
                 ? listener.SocketPath
-                : Path.Combine(perReplicaDir, "control.sock");
+                : Path.Combine(baseDir, $"{pseudoId}.control.sock");
+            var metadata = Path.Combine(baseDir, $"{pseudoId}.metadata.json");
 
             var layout = new TerminalHostLayout(
-                baseDirectory: baseDir,
+                replicaId: pseudoId,
                 parentReplicaIndex: i,
                 producerUdsPath: producer,
                 consumerUdsPath: consumer,
-                controlUdsPath: control);
+                controlUdsPath: control,
+                metadataPath: metadata);
 
             hosts[i] = new TerminalHostResource($"myapp-terminalhost-{i}", target, layout);
         }
 
         var annotation = new TerminalAnnotation(new TerminalOptions { Columns = 132, Rows = 40 });
-        annotation.Initialize(baseDir, hosts);
+        annotation.Initialize(hosts);
         target.Annotations.Add(annotation);
 
         var resources = new ResourceCollection { target };

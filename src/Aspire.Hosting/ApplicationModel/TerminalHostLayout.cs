@@ -13,30 +13,36 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each <see cref="TerminalHostResource"/> serves exactly one parent replica and owns three
-/// stable socket paths under a per-replica directory beneath a per-target temporary base:
+/// Each <see cref="TerminalHostResource"/> serves exactly one parent replica and owns four
+/// stable paths flat under <c>~/.aspire/trmnl/</c>, all sharing a per-replica
+/// <see cref="ReplicaId"/> prefix:
 /// </para>
 /// <list type="bullet">
 ///   <item>
 ///     <description>
-///       <c>{base}/{i}/dcp.sock</c> (<see cref="ProducerUdsPath"/>) — the producer socket.
+///       <c>~/.aspire/trmnl/{ReplicaId}.dcp.sock</c> (<see cref="ProducerUdsPath"/>) — the producer socket.
 ///       The terminal host LISTENS on this path; DCP DIALS it to stream PTY traffic into the
-///       host. <c>{i}</c> is the parent replica index, encoded into the path so each
-///       per-replica host has its own unique paths even though the host process itself
-///       is opaque to the replica index.
+///       host.
 ///     </description>
 ///   </item>
 ///   <item>
 ///     <description>
-///       <c>{base}/{i}/host.sock</c> (<see cref="ConsumerUdsPath"/>) — the consumer socket.
+///       <c>~/.aspire/trmnl/{ReplicaId}.host.sock</c> (<see cref="ConsumerUdsPath"/>) — the consumer socket.
 ///       The terminal host LISTENS on this path; viewers (Dashboard, CLI) DIAL it to attach.
 ///     </description>
 ///   </item>
 ///   <item>
 ///     <description>
-///       <c>{base}/{i}/control.sock</c> (<see cref="ControlUdsPath"/>) — the control socket.
+///       <c>~/.aspire/trmnl/{ReplicaId}.control.sock</c> (<see cref="ControlUdsPath"/>) — the control socket.
 ///       The terminal host LISTENS on this path; the AppHost DIALS it for status/shutdown
 ///       RPC. (See <see cref="Aspire.Shared.TerminalHost.TerminalHostControlProtocol"/>.)
+///     </description>
+///   </item>
+///   <item>
+///     <description>
+///       <c>~/.aspire/trmnl/{ReplicaId}.metadata.json</c> (<see cref="MetadataPath"/>) — the descriptor sidecar
+///       written by the AppHost. Lets external tools enumerate terminals without an active
+///       backchannel.
 ///     </description>
 ///   </item>
 /// </list>
@@ -46,48 +52,60 @@ namespace Aspire.Hosting.ApplicationModel;
 /// of <c>TerminalSpec.UdsPath</c> in the DCP API.
 /// </para>
 /// <para>
-/// All per-replica hosts for a given parent share the same <see cref="BaseDirectory"/> so
-/// that when the AppHost shuts down a single recursive deletion of <see cref="BaseDirectory"/>
-/// cleans up every replica's sockets.
+/// <see cref="ReplicaId"/> is an 11-character base64url hash of
+/// <c>(normalized AppHost path, parent resource name, parent replica index)</c> computed
+/// by <c>Aspire.Shared.TerminalHost.TerminalHostPaths.ComputeReplicaId</c>. The hash
+/// excludes PID and any random suffix so paths are stable across AppHost restarts —
+/// callers MUST therefore pre-delete any stale socket at the same path before binding.
 /// </para>
 /// </remarks>
-[DebuggerDisplay("Type = {GetType().Name,nq}, ParentReplicaIndex = {ParentReplicaIndex}, BaseDirectory = {BaseDirectory}")]
+[DebuggerDisplay("Type = {GetType().Name,nq}, ParentReplicaIndex = {ParentReplicaIndex}, ReplicaId = {ReplicaId}")]
 public sealed class TerminalHostLayout
 {
     /// <summary>
     /// Initializes a new instance of the <see cref="TerminalHostLayout"/> class for a
     /// single parent-resource replica.
     /// </summary>
-    /// <param name="baseDirectory">The base directory that contains the per-replica sub-directory holding all three socket paths.</param>
+    /// <param name="replicaId">The 11-character base64url replica identifier (shared filename prefix).</param>
     /// <param name="parentReplicaIndex">The zero-based index of the parent replica this layout serves.</param>
     /// <param name="producerUdsPath">The producer (host-listens-on, DCP-dials) UDS path.</param>
     /// <param name="consumerUdsPath">The consumer (host-listens-on, viewers-dial) UDS path.</param>
     /// <param name="controlUdsPath">The control (host-listens-on, AppHost-dials) UDS path.</param>
-    public TerminalHostLayout(string baseDirectory, int parentReplicaIndex, string producerUdsPath, string consumerUdsPath, string controlUdsPath)
+    /// <param name="metadataPath">The per-replica metadata sidecar (JSON) path.</param>
+    public TerminalHostLayout(
+        string replicaId,
+        int parentReplicaIndex,
+        string producerUdsPath,
+        string consumerUdsPath,
+        string controlUdsPath,
+        string metadataPath)
     {
-        ArgumentException.ThrowIfNullOrEmpty(baseDirectory);
+        ArgumentException.ThrowIfNullOrEmpty(replicaId);
         ArgumentOutOfRangeException.ThrowIfNegative(parentReplicaIndex);
         ArgumentException.ThrowIfNullOrEmpty(producerUdsPath);
         ArgumentException.ThrowIfNullOrEmpty(consumerUdsPath);
         ArgumentException.ThrowIfNullOrEmpty(controlUdsPath);
+        ArgumentException.ThrowIfNullOrEmpty(metadataPath);
 
-        BaseDirectory = baseDirectory;
+        ReplicaId = replicaId;
         ParentReplicaIndex = parentReplicaIndex;
         ProducerUdsPath = producerUdsPath;
         ConsumerUdsPath = consumerUdsPath;
         ControlUdsPath = controlUdsPath;
+        MetadataPath = metadataPath;
     }
 
     /// <summary>
-    /// Gets the base directory that contains the per-replica sub-directory holding the
-    /// socket paths in this layout. Shared across all per-replica hosts of the same parent
-    /// so cleanup is a single recursive delete.
+    /// Gets the 11-character base64url replica identifier. All four per-replica files
+    /// share this prefix (e.g. <c>{ReplicaId}.dcp.sock</c>), so cleanup is a simple
+    /// directory glob.
     /// </summary>
-    public string BaseDirectory { get; }
+    public string ReplicaId { get; }
 
     /// <summary>
-    /// Gets the zero-based index of the parent replica this host serves. Encoded into
-    /// each socket path so per-replica hosts of the same parent get unique paths.
+    /// Gets the zero-based index of the parent replica this host serves. Folded into
+    /// <see cref="ReplicaId"/> so per-replica hosts of the same parent resource get
+    /// distinct ids.
     /// </summary>
     public int ParentReplicaIndex { get; }
 
@@ -107,6 +125,13 @@ public sealed class TerminalHostLayout
     /// DIALS it for status/shutdown RPC.
     /// </summary>
     public string ControlUdsPath { get; }
+
+    /// <summary>
+    /// Gets the path of the per-replica metadata sidecar (JSON). Written by the AppHost
+    /// after the host process starts so out-of-band tools (the <c>aspire terminal</c>
+    /// CLI, log scrapers) can discover terminals without holding a backchannel.
+    /// </summary>
+    public string MetadataPath { get; }
 
     /// <summary>
     /// Gets the parent replica index as an invariant-culture string. Convenience for

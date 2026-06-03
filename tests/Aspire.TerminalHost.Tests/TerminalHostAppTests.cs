@@ -712,6 +712,87 @@ public class TerminalHostAppTests
         }
     }
 
+    [Fact]
+    public async Task ProducerAndConsumerSocketsAreRestrictedToOwningUser()
+    {
+        // Defense-in-depth (the parent ~/.aspire/trmnl/ dir is already 0700, but per-file
+        // 0600 matches what the control socket does and protects in case the dir's perms
+        // somehow get relaxed by a future change). The chmod is applied by
+        // TerminalReplica.ApplyRestrictiveSocketPermissionsAsync after Hex1b binds.
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var (args, tmp, _) = BuildArgs();
+        using var disp = tmp;
+
+        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+        using var hostCts = new CancellationTokenSource();
+        var hostTask = app.RunAsync(hostCts.Token);
+
+        try
+        {
+            // The producer socket is bound as soon as RunAsync starts; the consumer
+            // socket is bound once Hex1bTerminal's HMP1 server initialises (also during
+            // RunAsync). The post-bind chmod helper polls for file existence and is
+            // best-effort, so we allow up to a few seconds.
+            await WaitForFileAsync(args.ProducerUdsPath, TimeSpan.FromSeconds(10));
+            await WaitForFileAsync(args.ConsumerUdsPath, TimeSpan.FromSeconds(10));
+
+            await WaitForUnixFileModeAsync(
+                args.ProducerUdsPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                TimeSpan.FromSeconds(5));
+            await WaitForUnixFileModeAsync(
+                args.ConsumerUdsPath,
+                UnixFileMode.UserRead | UnixFileMode.UserWrite,
+                TimeSpan.FromSeconds(5));
+        }
+        finally
+        {
+            app.RequestShutdown();
+            hostCts.Cancel();
+            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
+    private static async Task WaitForUnixFileModeAsync(string path, UnixFileMode expected, TimeSpan timeout)
+    {
+        // Callers MUST guard this with !OperatingSystem.IsWindows(); the early-return
+        // here is purely so the analyzer accepts File.GetUnixFileMode below.
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        // The chmod is applied from a background task in TerminalReplica after the
+        // socket binds (Hex1b binds lazily inside RunAsync), so the window between
+        // "file exists" and "file has 0600 perms" is observable from the outside.
+        // Poll briefly until we see the expected mode.
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        UnixFileMode last = default;
+        while (sw.Elapsed < timeout)
+        {
+            try
+            {
+                last = File.GetUnixFileMode(path);
+                if (last == expected)
+                {
+                    return;
+                }
+            }
+            catch (FileNotFoundException)
+            {
+                // Socket recycled mid-poll.
+            }
+            await Task.Delay(50);
+        }
+
+        throw new TimeoutException(
+            $"Expected '{path}' to have mode {expected} within {timeout.TotalSeconds:F1}s; last observed {last}.");
+    }
+
     private static async Task WaitForFileAsync(string path, TimeSpan timeout)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();

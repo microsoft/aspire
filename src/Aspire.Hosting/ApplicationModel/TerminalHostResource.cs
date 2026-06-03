@@ -43,7 +43,7 @@ public sealed class TerminalHostResource : ExecutableResource, IResourceWithPare
     /// <param name="parent">The target resource that this terminal host serves.</param>
     /// <param name="layout">The Unix domain socket layout this host will own (single producer/consumer/control triple).</param>
     public TerminalHostResource(string name, IResource parent, TerminalHostLayout layout)
-        : base(name, UnresolvedCommand, layout?.BaseDirectory ?? string.Empty)
+        : base(name, UnresolvedCommand, string.Empty)
     {
         ArgumentNullException.ThrowIfNull(parent);
         ArgumentNullException.ThrowIfNull(layout);

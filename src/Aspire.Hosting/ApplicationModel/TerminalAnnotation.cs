@@ -76,22 +76,13 @@ public sealed class TerminalAnnotation : IResourceAnnotation
     public bool IsInitialized { get; private set; }
 
     /// <summary>
-    /// Gets the per-target temporary base directory under which every per-replica host's
-    /// UDS triple lives (each at <c>{BaseDirectory}/{i}/</c>). Shared across all hosts of
-    /// the same parent so cleanup is a single recursive delete. <c>null</c> until
-    /// <see cref="Initialize"/> has been called.
-    /// </summary>
-    public string? BaseDirectory { get; private set; }
-
-    /// <summary>
-    /// Populates <see cref="TerminalHosts"/> and <see cref="BaseDirectory"/> exactly once.
-    /// Called by the <see cref="BeforeStartEvent"/> subscriber installed by
+    /// Populates <see cref="TerminalHosts"/> exactly once. Called by the
+    /// <see cref="BeforeStartEvent"/> subscriber installed by
     /// <see cref="TerminalResourceBuilderExtensions.WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>.
     /// </summary>
     /// <exception cref="InvalidOperationException">Thrown when called more than once.</exception>
-    internal void Initialize(string baseDirectory, IReadOnlyList<TerminalHostResource> terminalHosts)
+    internal void Initialize(IReadOnlyList<TerminalHostResource> terminalHosts)
     {
-        ArgumentException.ThrowIfNullOrEmpty(baseDirectory);
         ArgumentNullException.ThrowIfNull(terminalHosts);
 
         if (IsInitialized)
@@ -112,7 +103,6 @@ public sealed class TerminalAnnotation : IResourceAnnotation
             }
         }
 
-        BaseDirectory = baseDirectory;
         _terminalHosts = terminalHosts;
         IsInitialized = true;
     }
