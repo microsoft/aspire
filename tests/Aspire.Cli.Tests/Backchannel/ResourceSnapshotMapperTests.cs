@@ -170,9 +170,66 @@ public class ResourceSnapshotMapperTests
 
         var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
 
-        Assert.Equal(["api-only", "ui-disabled", "ui-only"], result.Commands!.Keys);
+        // Commands preserve snapshot (registration) order rather than an alphabetical sort.
+        Assert.Equal(["api-only", "ui-only", "ui-disabled"], result.Commands!.Keys);
         Assert.Equal(KnownCommandVisibility.UI, result.Commands["ui-only"].Visibility);
         Assert.Equal(KnownCommandVisibility.UI, result.Commands["ui-disabled"].Visibility);
+    }
+
+    [Fact]
+    public void MapToResourceJson_IncludeDisabledStream_PreservesCommandSnapshotOrder()
+    {
+        // The include-disabled (UI) stream preserves the AppHost registration order so the
+        // VS Code extension matches the dashboard, which shows set-parameter before
+        // delete-parameter. Commands are provided in a non-alphabetical order so the
+        // assertion fails if the mapper were to sort them. See
+        // https://github.com/microsoft/aspire/issues/17193.
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "parameter",
+            DisplayName = "parameter",
+            ResourceType = "Parameter",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand { Name = "set-parameter", State = KnownCommandState.Enabled, Description = "Set", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "custom-action", State = KnownCommandState.Enabled, Description = "Custom", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "delete-parameter", State = KnownCommandState.Enabled, Description = "Delete", Visibility = KnownCommandVisibility.Api }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
+
+        Assert.Equal(
+            ["set-parameter", "custom-action", "delete-parameter"],
+            result.Commands!.Keys);
+    }
+
+    [Fact]
+    public void MapToResourceJson_DefaultStream_SortsCommandsAlphabetically()
+    {
+        // The default/API stream keeps its stable alphabetical contract for structured
+        // consumers (MCP, export, etc.), independent of the registration order used by the
+        // include-disabled UI stream. See https://github.com/microsoft/aspire/issues/17193.
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "parameter",
+            DisplayName = "parameter",
+            ResourceType = "Parameter",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand { Name = "set-parameter", State = KnownCommandState.Enabled, Description = "Set", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "custom-action", State = KnownCommandState.Enabled, Description = "Custom", Visibility = KnownCommandVisibility.Api },
+                new ResourceSnapshotCommand { Name = "delete-parameter", State = KnownCommandState.Enabled, Description = "Delete", Visibility = KnownCommandVisibility.Api }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
+
+        Assert.Equal(
+            ["custom-action", "delete-parameter", "set-parameter"],
+            result.Commands!.Keys);
     }
 
     [Fact]

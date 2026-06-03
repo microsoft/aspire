@@ -112,9 +112,20 @@ internal static class ResourceSnapshotMapper
         // consumers keep the pre-existing contract. The include-disabled stream is used
         // by UI consumers that need full command metadata, so it also includes UI-only
         // commands. Hidden commands are never emitted.
-        var commands = snapshot.Commands
-            .Where(c => IsCommandVisibleForConsumer(c.Visibility, includeDisabledCommands) && IsCommandVisibleToConsumer(c.State, includeDisabledCommands))
-            .OrderBy(c => c.Name)
+        //
+        // Ordering: the default/API stream stays alphabetically sorted to preserve its
+        // stable contract, while the include-disabled (UI) stream preserves the AppHost
+        // registration order so it matches the dashboard (for example, set-parameter
+        // before delete-parameter). See https://github.com/microsoft/aspire/issues/17193.
+        var visibleCommands = snapshot.Commands
+            .Where(c => IsCommandVisibleForConsumer(c.Visibility, includeDisabledCommands) && IsCommandVisibleToConsumer(c.State, includeDisabledCommands));
+
+        if (!includeDisabledCommands)
+        {
+            visibleCommands = visibleCommands.OrderBy(c => c.Name);
+        }
+
+        var commands = visibleCommands
             .ToDistinctDictionary(
                 c => c.Name,
                 c => new ResourceCommandJson

@@ -613,6 +613,9 @@
     <trans-unit id="configuration.aspire.dashboardBrowser.openExternalBrowser">
       <source xml:lang="en">Use the system default browser (cannot auto-close).</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.parameterValueMissing">
+      <source xml:lang="en">Value missing</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandMaxLength">
       <source xml:lang="en">Value must be {0} characters or fewer.</source>
     </trans-unit>
