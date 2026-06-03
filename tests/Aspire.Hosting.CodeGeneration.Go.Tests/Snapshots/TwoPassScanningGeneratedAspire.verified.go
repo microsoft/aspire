@@ -284,6 +284,22 @@ func (d *AddContainerOptions) ToMap() map[string]any {
 	return m
 }
 
+// ContainerFilesOptions represents ContainerFilesOptions.
+type ContainerFilesOptions struct {
+	DefaultOwner *float64 `json:"DefaultOwner,omitempty"`
+	DefaultGroup *float64 `json:"DefaultGroup,omitempty"`
+	Umask *float64 `json:"Umask,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *ContainerFilesOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.DefaultOwner != nil { m["DefaultOwner"] = serializeValue(d.DefaultOwner) }
+	if d.DefaultGroup != nil { m["DefaultGroup"] = serializeValue(d.DefaultGroup) }
+	if d.Umask != nil { m["Umask"] = serializeValue(d.Umask) }
+	return m
+}
+
 // CreateBuilderOptions represents CreateBuilderOptions.
 type CreateBuilderOptions struct {
 	Args []string `json:"Args,omitempty"`
@@ -1097,6 +1113,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerName(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerNetworkAlias(alias string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerRegistry(registry Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1681,6 +1698,26 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerC
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerCertificatePaths", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerFiles creates or updates files and folders in a container by copying them from a source path on the host.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["destinationPath"] = serializeValue(destinationPath)
+	reqArgs["sourcePath"] = serializeValue(sourcePath)
+	if len(options) > 0 {
+		merged := &WithContainerFilesOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6417,6 +6454,7 @@ type ContainerResource interface {
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ContainerResource
 	WithConfig(config *TestConfigDto) ContainerResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) ContainerResource
+	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) ContainerResource
 	WithContainerName(name string) ContainerResource
 	WithContainerNetworkAlias(alias string) ContainerResource
 	WithContainerRegistry(registry Resource) ContainerResource
@@ -7000,6 +7038,26 @@ func (s *containerResource) WithContainerCertificatePaths(options ...*WithContai
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerCertificatePaths", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerFiles creates or updates files and folders in a container by copying them from a source path on the host.
+func (s *containerResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["destinationPath"] = serializeValue(destinationPath)
+	reqArgs["sourcePath"] = serializeValue(sourcePath)
+	if len(options) > 0 {
+		merged := &WithContainerFilesOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20683,6 +20741,7 @@ type TestDatabaseResource interface {
 	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestDatabaseResource
 	WithConfig(config *TestConfigDto) TestDatabaseResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestDatabaseResource
+	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) TestDatabaseResource
 	WithContainerName(name string) TestDatabaseResource
 	WithContainerNetworkAlias(alias string) TestDatabaseResource
 	WithContainerRegistry(registry Resource) TestDatabaseResource
@@ -21266,6 +21325,26 @@ func (s *testDatabaseResource) WithContainerCertificatePaths(options ...*WithCon
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerCertificatePaths", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerFiles creates or updates files and folders in a container by copying them from a source path on the host.
+func (s *testDatabaseResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["destinationPath"] = serializeValue(destinationPath)
+	reqArgs["sourcePath"] = serializeValue(sourcePath)
+	if len(options) > 0 {
+		merged := &WithContainerFilesOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -22754,6 +22833,7 @@ type TestRedisResource interface {
 	WithConnectionString(connectionString *ReferenceExpression) TestRedisResource
 	WithConnectionStringDirect(connectionString string) TestRedisResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestRedisResource
+	WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) TestRedisResource
 	WithContainerName(name string) TestRedisResource
 	WithContainerNetworkAlias(alias string) TestRedisResource
 	WithContainerRegistry(registry Resource) TestRedisResource
@@ -23542,6 +23622,26 @@ func (s *testRedisResource) WithContainerCertificatePaths(options ...*WithContai
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerCertificatePaths", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithContainerFiles creates or updates files and folders in a container by copying them from a source path on the host.
+func (s *testRedisResource) WithContainerFiles(destinationPath string, sourcePath string, options ...*WithContainerFilesOptions) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["destinationPath"] = serializeValue(destinationPath)
+	reqArgs["sourcePath"] = serializeValue(sourcePath)
+	if len(options) > 0 {
+		merged := &WithContainerFilesOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withContainerFiles", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -25283,6 +25383,18 @@ func (o *WithContainerCertificatePathsOptions) ToMap() map[string]any {
 	if o.CustomCertificatesDestination != nil { m["customCertificatesDestination"] = serializeValue(o.CustomCertificatesDestination) }
 	if o.DefaultCertificateBundlePaths != nil { m["defaultCertificateBundlePaths"] = serializeValue(o.DefaultCertificateBundlePaths) }
 	if o.DefaultCertificateDirectoryPaths != nil { m["defaultCertificateDirectoryPaths"] = serializeValue(o.DefaultCertificateDirectoryPaths) }
+	return m
+}
+
+// WithContainerFilesOptions carries optional parameters for WithContainerFiles.
+type WithContainerFilesOptions struct {
+	Options *ContainerFilesOptions `json:"options,omitempty"`
+}
+
+func (o *WithContainerFilesOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.Options != nil { m["options"] = serializeValue(o.Options) }
 	return m
 }
 

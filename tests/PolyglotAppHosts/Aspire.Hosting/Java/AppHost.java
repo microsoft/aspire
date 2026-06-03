@@ -60,6 +60,7 @@ void main() throws Exception {
         customInputOptions.setOptions(Map.of("one", "One", "two", "Two"));
         customInputParam.withCustomInput(customInputOptions);
         container.withDockerfileBaseImage(new WithDockerfileBaseImageOptions().buildImage("mcr.microsoft.com/dotnet/sdk:8.0"));
+        container.withContainerFiles("/usr/lib/aspire/container-files", ".", new ContainerFilesOptions().defaultOwner(1000.0).defaultGroup(1000.0).umask(18.0));
         container.withImageRegistry("docker.io");
         dockerContainer.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
         dockerContainer.withHttpEndpointCallback((updateContext) -> { updateContext.setPort(8080.0); updateContext.setIsProxied(false); }, new WithHttpEndpointCallbackOptions().name("http").createIfNotExists(false));

@@ -145,6 +145,11 @@ await container.withContainerCertificatePaths({
     defaultCertificateBundlePaths: ["/etc/ssl/certs/ca-certificates.crt"],
     defaultCertificateDirectoryPaths: ["/etc/ssl/certs", "/usr/local/share/ca-certificates"],
 });
+await container.withContainerFiles("/usr/lib/aspire/container-files", ".", {
+    defaultOwner: 1000,
+    defaultGroup: 1000,
+    umask: 0o022,
+});
 
 // withImageRegistry
 await container.withImageRegistry("docker.io");
