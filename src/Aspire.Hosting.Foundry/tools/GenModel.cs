@@ -27,10 +27,18 @@ if (models.Count == 0)
     throw new InvalidOperationException("The Microsoft Foundry model catalog returned no models. Refusing to overwrite the generated model descriptors with an empty catalog.");
 }
 
+var descriptorModels = isFoundryLocal
+    ? GetLocalDescriptorModels(models)
+    : GetDistinctHostedModels(models).ToList();
+if (descriptorModels.Count == 0)
+{
+    throw new InvalidOperationException("The Microsoft Foundry model catalog produced no model descriptors after filtering. Refusing to overwrite the generated model descriptors with an empty catalog.");
+}
+
 // Generate C# extension methods for the models
 var generatedCode = isFoundryLocal
-    ? GenerateLocalCode("Aspire.Hosting.Foundry", models)
-    : GenerateHostedCode("Aspire.Hosting.Foundry", models);
+    ? GenerateLocalCode("Aspire.Hosting.Foundry", descriptorModels)
+    : GenerateHostedCode("Aspire.Hosting.Foundry", descriptorModels);
 
 // Write the generated code to a file
 var filename = isFoundryLocal
@@ -64,8 +72,7 @@ string GenerateHostedCode(string csNamespace, List<ModelEntity> models)
     sb.AppendLine("public partial class FoundryModel");
     sb.AppendLine("{");
 
-    // Group models by publisher (only include models that are visible and have names & publishers)
-    var modelsByPublisher = GetDistinctHostedModels(models)
+    var modelsByPublisher = models
         .GroupBy(m => m.Annotations!.SystemCatalogData!.Publisher!)
         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
 
@@ -140,6 +147,22 @@ static bool IsAllUppercaseAscii(string value)
     return value.Any(char.IsAsciiLetter) && !value.Any(char.IsAsciiLetterLower);
 }
 
+static List<ModelEntity> GetLocalDescriptorModels(IEnumerable<ModelEntity> models)
+{
+    return models
+        .Where(m => m.Annotations?.SystemCatalogData?.Publisher != null &&
+                    m.Annotations?.Name != null &&
+                    m.Annotations?.Tags?.ContainsKey("alias") is true &&
+                    IsVisible(m.Annotations?.InvisibleUntil))
+        .GroupBy(m => m.Annotations!.SystemCatalogData!.Publisher!)
+        .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+        .SelectMany(publisherGroup => publisherGroup
+            .GroupBy(m => m.Annotations!.Tags!["alias"])
+            .Select(g => g.First())
+            .OrderBy(m => m.Annotations!.Name, StringComparer.OrdinalIgnoreCase))
+        .ToList();
+}
+
 string GenerateLocalCode(string csNamespace, List<ModelEntity> models)
 {
     var sb = new StringBuilder();
@@ -154,11 +177,7 @@ string GenerateLocalCode(string csNamespace, List<ModelEntity> models)
     sb.AppendLine("public partial class FoundryModel");
     sb.AppendLine("{");
 
-    // Group models by publisher (only include models that are visible and have names & publishers)
     var modelsByPublisher = models
-        .Where(m => m.Annotations?.SystemCatalogData?.Publisher != null &&
-                    m.Annotations?.Name != null &&
-                    IsVisible(m.Annotations?.InvisibleUntil))
         .GroupBy(m => m.Annotations!.SystemCatalogData!.Publisher!)
         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
 
@@ -171,9 +190,7 @@ string GenerateLocalCode(string csNamespace, List<ModelEntity> models)
     foreach (var publisherGroup in modelsByPublisher)
     {
         var firstMethod = true;
-        foreach (var model in publisherGroup
-            .GroupBy(m => m.Annotations!.Tags!["alias"])
-            .Select(x => x.First()).OrderBy(m => m.Annotations!.Name, StringComparer.OrdinalIgnoreCase))
+        foreach (var model in publisherGroup.OrderBy(m => m.Annotations!.Name, StringComparer.OrdinalIgnoreCase))
         {
             var modelName = model.Annotations!.Tags!["alias"];
             var descriptorName = ToPascalCase(modelName); // Reuse method name logic for descriptor property name
