@@ -49,6 +49,14 @@
     <!-- Forward VersionSuffix to Exec-invoked dotnet commands (MSBuild properties don't flow to child processes) -->
     <_VersionSuffixArg Condition="'$(VersionSuffix)' != ''">/p:VersionSuffix=$(VersionSuffix)</_VersionSuffixArg>
 
+    <!-- Same problem as VersionSuffix above: AspireCliChannel is baked into the
+         CLI binary as assembly metadata (Aspire.Cli.csproj reads it at compile
+         time) and identifies the install route's channel. Without this forward,
+         the inner `dotnet publish` would not see it and would fall back to the
+         csproj's "local" default, which is wrong for any release-channel build
+         (homebrew formula, dotnet-tool, winget, script). -->
+    <_AspireCliChannelArg Condition="'$(AspireCliChannel)' != ''">/p:AspireCliChannel=$(AspireCliChannel)</_AspireCliChannelArg>
+
     <!-- Binlog arguments for dotnet commands -->
     <_BinlogArg Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)</_BinlogArg>
   </PropertyGroup>
@@ -91,7 +99,7 @@
       <_BundleArchivePath>$(ArtifactsDir)bundle\aspire-$(BundleVersion)-$(TargetRid).tar.gz</_BundleArchivePath>
     </PropertyGroup>
     <Message Importance="high" Text="Publishing native AOT CLI with embedded bundle: $(_BundleArchivePath)" />
-    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_VersionSuffixArg) $(_CliBinlog)" />
+    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_VersionSuffixArg) $(_AspireCliChannelArg) $(_CliBinlog)" />
   </Target>
 
   <Target Name="_PublishManagedProjects" Condition="'$(SkipManagedBuild)' != 'true'">
