@@ -1,3 +1,4 @@
+import * as path from 'path';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
 import { bunDisplayName, bunLabel, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
@@ -48,9 +49,14 @@ export const bunDebuggerExtension: ResourceDebuggerExtension = {
             //   ["--flag", "value"]     -> args[0] is NOT the script path; keep all args
             // DCP often repeats the resolved script path as args[0]; only drop it when it actually
             // matches the script path / program so a genuine first user argument is not lost.
+            // Compare both the raw value and the resolved absolute path to handle cases where the
+            // hosting side emits a relative path that DCP did not normalize.
             const scriptPath = getJavaScriptRuntimeTargetPath(config);
             const firstArg = subcommand[0];
-            if (firstArg !== undefined && (firstArg === scriptPath || firstArg === debugConfiguration.program)) {
+            const resolvedFirstArg = firstArg !== undefined && config.working_directory
+                ? path.resolve(config.working_directory, firstArg)
+                : undefined;
+            if (firstArg !== undefined && (firstArg === scriptPath || firstArg === debugConfiguration.program || resolvedFirstArg === scriptPath)) {
                 debugConfiguration.args = subcommand.slice(1);
             }
             else {
