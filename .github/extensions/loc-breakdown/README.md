@@ -40,7 +40,7 @@ action the agent can invoke to recompute the report.
 
 Optional inputs when opening the canvas:
 
-- `cwd` — working directory inside a git repo (defaults to the agent's cwd)
+- `cwd` — working directory inside a git repo (defaults to the active session's working directory, falling back to the extension process cwd)
 - `base` — base ref to diff against (defaults to `origin/HEAD`)
 - `head` — head ref (defaults to `HEAD`)
 

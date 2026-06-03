@@ -483,7 +483,7 @@ await joinSession({
             inputSchema: {
                 type: "object",
                 properties: {
-                    cwd: { type: "string", description: "Working directory inside the target git repo. Defaults to the canvas process cwd." },
+                    cwd: { type: "string", description: "Working directory inside the target git repo. Defaults to the active session's working directory (the user's worktree/repo); falls back to the extension process cwd only if the runtime did not supply one." },
                     base: { type: "string", description: "Base ref to diff against. Defaults to origin/HEAD." },
                     head: { type: "string", description: "Head ref. Defaults to HEAD." },
                 },
@@ -517,8 +517,9 @@ await joinSession({
                 const input = ctx.input || {};
                 // Prefer the explicit input.cwd, then the session's working directory supplied by
                 // the runtime (CanvasSessionContext.workingDirectory). process.cwd() is a last resort
-                // because forked extension processes inherit ~/.copilot, which is not a git repo and
-                // causes every git command in buildReport to fail with HTTP 500 on /data.
+                // because the extension process cwd is not necessarily the target session's repo —
+                // for forked extensions it's typically ~/.copilot, which is the wrong repo for this
+                // report even on the rare setups where it happens to be a git repo itself.
                 const opts = {
                     cwd: input.cwd || ctx.session?.workingDirectory || process.cwd(),
                     base: input.base,
