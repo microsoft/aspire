@@ -131,4 +131,22 @@ public sealed class TerminalOptions
     /// For containers, this is typically <c>/bin/sh</c>. For executables, the process itself serves as the terminal program.
     /// </remarks>
     public string? Shell { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the per-replica terminal host resources
+    /// (named <c>{parent}-terminalhost-{index}</c>) should appear in the resource list.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to <c>false</c>: terminal host resources are hidden from the dashboard
+    /// and CLI resource list because they are an implementation detail of the
+    /// <see cref="TerminalResourceBuilderExtensions.WithTerminal{T}(IResourceBuilder{T}, Action{TerminalOptions}?)"/>
+    /// feature, not something the user explicitly added to their app model.
+    /// <para>
+    /// Set to <c>true</c> when diagnosing terminal-host startup / connectivity issues so
+    /// the host's state, exit code, logs, and (eventually) telemetry are visible alongside
+    /// the parent resource. This is useful when investigating cases like "DCP never dialed
+    /// the producer UDS" or "the host crashed during recycle".
+    /// </para>
+    /// </remarks>
+    public bool ShowTerminalHosts { get; set; }
 }

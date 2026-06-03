@@ -159,6 +159,50 @@ public class WithTerminalTests
     }
 
     [Fact]
+    public async Task TerminalHostsAreHiddenByDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".")
+            .WithAnnotation(new ReplicaAnnotation(2));
+        resource.WithTerminal();
+
+        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
+
+        foreach (var host in model.Resources.OfType<TerminalHostResource>())
+        {
+            var snapshot = host.Annotations.OfType<ResourceSnapshotAnnotation>().Single();
+            Assert.True(snapshot.InitialSnapshot.IsHidden,
+                $"'{host.Name}' should be hidden by default.");
+        }
+    }
+
+    [Fact]
+    public async Task ShowTerminalHostsOptionMakesTerminalHostsVisible()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".")
+            .WithAnnotation(new ReplicaAnnotation(2));
+        resource.WithTerminal(options => options.ShowTerminalHosts = true);
+
+        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
+
+        var hosts = model.Resources.OfType<TerminalHostResource>().ToList();
+        Assert.Equal(2, hosts.Count);
+        foreach (var host in hosts)
+        {
+            var snapshot = host.Annotations.OfType<ResourceSnapshotAnnotation>().Single();
+            Assert.False(snapshot.InitialSnapshot.IsHidden,
+                $"'{host.Name}' should be visible when ShowTerminalHosts=true.");
+
+            // Visibility is the only thing that should change — exclusion from the
+            // manifest is unconditional (terminal hosts are never user-deployable).
+            Assert.Same(
+                ManifestPublishingCallbackAnnotation.Ignore,
+                host.Annotations.OfType<ManifestPublishingCallbackAnnotation>().Single());
+        }
+    }
+
+    [Fact]
     public async Task WithTerminalCleansUpPerReplicaFilesOnApplicationStopped()
     {
         // Regression: prior to wiring an ApplicationStopped callback, every AppHost run
