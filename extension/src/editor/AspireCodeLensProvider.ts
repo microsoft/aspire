@@ -3,7 +3,7 @@ import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostRe
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
-import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand } from '../views/AspireAppHostTreeProvider';
+import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand, getParameterValueDescription } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, HealthStatus, StateStyle, ResourceType } from './resourceConstants';
@@ -28,6 +28,7 @@ import {
     codeLensCommand,
     codeLensOpenDashboard,
     codeLensViewAppHostLogs,
+    codeLensResourceValueMissing,
 } from '../loc/strings';
 
 export class AspireCodeLensProvider implements vscode.CodeLensProvider {
@@ -267,6 +268,18 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             arguments: [resource.displayName ?? resource.name, appHost.appHostPath],
         }));
 
+        // Parameter value lens (secrets masked, long values truncated) so the value is
+        // visible inline next to the state, matching the dashboard and tree view.
+        const parameterValue = getParameterValueDescription(resource);
+        if (parameterValue !== undefined) {
+            lenses.push(new vscode.CodeLens(range, {
+                title: parameterValue,
+                command: 'aspire-vscode.codeLensRevealResource',
+                tooltip: parameterValue,
+                arguments: [resource.displayName ?? resource.name, appHost.appHostPath],
+            }));
+        }
+
         // Action lenses based on available commands
         const restartCommand = getEnabledCommand(commands, 'restart', 'resource-restart');
         if (restartCommand) {
@@ -367,6 +380,8 @@ export function getCodeLensStateLabel(state: string, stateStyle: string, exitCod
                 return exitCode != null && exitCode !== 0 ? codeLensResourceStoppedErrorWithExitCode(exitCode) : codeLensResourceStoppedError;
             }
             return exitCode != null && exitCode !== 0 ? codeLensResourceStoppedWithExitCode(exitCode) : codeLensResourceStopped;
+        case ResourceState.ValueMissing:
+            return codeLensResourceValueMissing;
         default:
             return state || codeLensResourceStopped;
     }

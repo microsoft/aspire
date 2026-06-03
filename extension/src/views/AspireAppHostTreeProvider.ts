@@ -532,7 +532,7 @@ function getResourceStateDescription(state: string): string {
     return state === ResourceState.ValueMissing ? parameterValueMissing : state;
 }
 
-function getParameterValueDescription(resource: ResourceJson): string | undefined {
+export function getParameterValueDescription(resource: ResourceJson): string | undefined {
     if (resource.resourceType !== ResourceType.Parameter || resource.state === ResourceState.ValueMissing) {
         return undefined;
     }
@@ -1204,8 +1204,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (!commands) {
             return [];
         }
+        // Preserve the command order from the resource snapshot (registration order, e.g.
+        // set-parameter before delete-parameter) so the tree matches the dashboard and the
+        // command quick pick instead of an incidental alphabetical sort.
         return getVisibleCommands(commands)
-            .sort(([a], [b]) => a.localeCompare(b))
             .map(([name, cmd]) => new ResourceCommandItem(name, cmd, element.resourceItem, element.id!));
     }
 
