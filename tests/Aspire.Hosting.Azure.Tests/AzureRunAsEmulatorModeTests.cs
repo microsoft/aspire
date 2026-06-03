@@ -32,7 +32,7 @@ public class AzureRunAsEmulatorModeTests
         var resource = addResource(builder, () => callbackInvoked = true);
 
         Assert.True(callbackInvoked);
-        Assert.True(resource.IsEmulator() || resource.IsContainer(), $"{resourceType} should be configured as a local container in run mode.");
+        Assert.True(resource.IsEmulator() || resource.IsContainer(), $"{resourceType} should be configured as an emulator or local container in run mode.");
         Assert.Contains(builder.Resources, resource => resource.Annotations.OfType<ContainerImageAnnotation>().Any());
     }
 
