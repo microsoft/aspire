@@ -281,7 +281,8 @@ public class KafkaFunctionalTests(ITestOutputHelper testOutputHelper)
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
             testOutputHelper,
             builder => builder.AddKafka("resource").WithPersistentLifetime(),
-            "resource");
+            "resource",
+            useTestContainerRegistry: true);
     }
 
 }

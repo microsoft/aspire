@@ -211,7 +211,8 @@ public class MilvusFunctionalTests(ITestOutputHelper testOutputHelper)
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
             testOutputHelper,
             builder => builder.AddMilvus("resource").WithPersistentLifetime(),
-            "resource");
+            "resource",
+            useTestContainerRegistry: true);
     }
 
 }

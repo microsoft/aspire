@@ -193,7 +193,8 @@ public class SeqFunctionalTests(ITestOutputHelper testOutputHelper)
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
             testOutputHelper,
             builder => builder.AddSeq("resource").WithPersistentLifetime(),
-            "resource");
+            "resource",
+            useTestContainerRegistry: true);
     }
 
 }

@@ -18,11 +18,13 @@ public static class PersistentContainerTestHelpers
     /// <param name="testOutputHelper">The xUnit output helper used for test and resource logging.</param>
     /// <param name="configureResource">Configures the persistent resource on each AppHost run.</param>
     /// <param name="resourceName">The resource name whose persistent Docker container identity should be compared.</param>
+    /// <param name="useTestContainerRegistry">Whether to apply the test container registry override for integrations that require CI-mirrored images.</param>
     /// <param name="timeout">The timeout for starting, stopping, and observing the resource. Defaults to 10 minutes because some container integrations have slow cold starts.</param>
     public static async Task AssertResourceReusesContainerAsync(
         ITestOutputHelper testOutputHelper,
         Action<IDistributedApplicationTestingBuilder> configureResource,
         string resourceName,
+        bool useTestContainerRegistry = false,
         TimeSpan? timeout = null)
     {
         using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(10));
@@ -47,10 +49,15 @@ public static class PersistentContainerTestHelpers
 
         async Task<string> RunContainerAsync()
         {
-            using var builder = TestDistributedApplicationBuilder.Create(
-                    testOutputHelper,
-                    "--environment=Development",
-                    $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}")
+            var args = new[]
+            {
+                "--environment=Development",
+                $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"
+            };
+
+            using var builder = (useTestContainerRegistry
+                    ? TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper, args)
+                    : TestDistributedApplicationBuilder.Create(testOutputHelper, args))
                 .WithTempAspireStore(aspireStore.Path)
                 .WithResourceCleanUp(false);
 

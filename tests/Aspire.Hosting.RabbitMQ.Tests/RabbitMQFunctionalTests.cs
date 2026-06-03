@@ -242,7 +242,8 @@ public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
             testOutputHelper,
             builder => builder.AddRabbitMQ("resource").WithPersistentLifetime(),
-            "resource");
+            "resource",
+            useTestContainerRegistry: true);
     }
 
 }

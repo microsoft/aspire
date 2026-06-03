@@ -296,7 +296,8 @@ public class QdrantFunctionalTests(ITestOutputHelper testOutputHelper)
         return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
             testOutputHelper,
             builder => builder.AddQdrant("resource").WithPersistentLifetime(),
-            "resource");
+            "resource",
+            useTestContainerRegistry: true);
     }
 
 }
