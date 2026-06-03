@@ -8,7 +8,7 @@ import { StreamMessageReader, StreamMessageWriter } from 'vscode-jsonrpc/node';
 import { getAndActivateExtension } from '../common';
 import { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AcquiredTestRunSession, TestRunSessionAcquireOptions } from '../../dcp/TestRunSessionManager';
-import { AspireExtensionApi } from '../../api';
+import { AspireExtensionApi } from '../../types/extensionApi';
 
 
 interface TestOnlyExtensionExports {

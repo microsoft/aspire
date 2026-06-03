@@ -40,7 +40,7 @@ import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser'
 import { readGitCommitSha } from './utils/versionInfo';
 import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './views/ResourceCommandArgumentsLoader';
-import { createAspireExtensionApi } from './api';
+import { spawnCliProcess } from './debugger/languages/cli';
 import { AppHostDisplayInfo, ResourceCommandJson, ResourceJson, isMatchingAppHostPath } from './views/AppHostDataRepository';
 import { AppHostDiscoveryService } from './utils/appHostDiscovery';
 import { AppHostLaunchRequestedEvent, AppHostLaunchService } from './services/AppHostLaunchService';
@@ -342,13 +342,10 @@ export async function activate(context: vscode.ExtensionContext) {
   const e2eStateFileBridge = createE2eStateFileBridge(context, dataRepository, appHostLaunchService, appHostTreeProvider, terminalProvider, onDidChangeStateEmitter.event);
   context.subscriptions.push(e2eStateFileBridge);
   
-    // Return exported API for tests or other extensions
-  const e2eApi = createExtensionApi(context, rpcServer, dcpServer, dataRepository, appHostLaunchService, appHostTreeProvider, onDidChangeStateEmitter.event);
-  const publicApi = createAspireExtensionApi(dataRepository, terminalProvider, dcpServer);
-  return {
-    ...e2eApi,
-    ...publicApi,
-  };
+  // Return exported API for tests or other extensions
+  const api = createExtensionApi(context, rpcServer, dcpServer, dataRepository, terminalProvider, appHostLaunchService, appHostTreeProvider, onDidChangeStateEmitter.event);
+
+  return Object.freeze(api);
 }
 
 export function deactivate() {
@@ -396,6 +393,7 @@ function createExtensionApi(
   rpcServer: AspireRpcServer,
   dcpServer: AspireDcpServer,
   dataRepository: AppHostDataRepository,
+  terminalProvider: AspireTerminalProvider,
   appHostLaunchService: AppHostLaunchService,
   appHostTreeProvider: AspireAppHostTreeProvider,
   onDidChangeState: vscode.Event<AspireExtensionStateSnapshot>,
@@ -438,6 +436,18 @@ function createExtensionApi(
     waitForState,
     waitForRepositoryIdle: options => waitForState(state => !state.isRepositoryLoading && state.isWorkspaceAppHostDiscoveryComplete, options),
     getDashboardUrl: appHostPath => getDashboardUrl(dataRepository, appHostPath),
+    async getRunningAppHosts(): Promise<readonly AspireAppHostState[]> {
+      const appHosts = await dataRepository.fetchAppHostsOnce();
+      return appHosts.map(appHost => cloneAppHostState(appHost, false));
+    },
+    async stopResource(resourceName: string, appHostPath: string): Promise<void> {
+      return executePublicResourceCommand(terminalProvider, resourceName, appHostPath, 'stop');
+    },
+    async startResource(resourceName: string, appHostPath: string): Promise<void> {
+      return executePublicResourceCommand(terminalProvider, resourceName, appHostPath, 'start');
+    },
+    acquireTestRunSession: (options) => dcpServer.acquireTestRunSession(options),
+    releaseTestRunSession: (id) => dcpServer.releaseTestRunSession(id),
   };
   if (context.extensionMode === vscode.ExtensionMode.Test) {
     api.__testOnlyRpcServerInfo = rpcServer.connectionInfo;
@@ -1140,6 +1150,48 @@ function getDashboardUrl(dataRepository: AppHostDataRepository, appHostPath?: st
   return sanitizeDashboardUrl(getSensitiveDashboardUrl(dataRepository, appHostPath));
 }
 
+async function executePublicResourceCommand(terminalProvider: AspireTerminalProvider, resourceName: string, appHostPath: string, commandName: 'start' | 'stop'): Promise<void> {
+  const trimmedAppHostPath = appHostPath.trim();
+  if (!trimmedAppHostPath || !path.isAbsolute(trimmedAppHostPath)) {
+    throw new Error('appHostPath must be a non-empty absolute path');
+  }
+
+  const cliPath = await terminalProvider.getAspireCliExecutablePath();
+  const args = ['resource', resourceName, commandName, '--apphost', trimmedAppHostPath];
+  return new Promise<void>((resolve, reject) => {
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    spawnCliProcess(terminalProvider, cliPath, args, {
+      noExtensionVariables: true,
+      stdoutCallback: (data) => { stdout += data; },
+      stderrCallback: (data) => { stderr += data; },
+      exitCallback: (code) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        if (code === 0) {
+          resolve();
+        } else {
+          const output = (stderr || stdout).trim();
+          reject(new Error(`aspire resource ${commandName} exited with code ${code}${output ? `: ${output}` : ''}`));
+        }
+      },
+      errorCallback: (error) => {
+        if (settled) {
+          return;
+        }
+
+        settled = true;
+        reject(error);
+      },
+    });
+  });
+}
+
 function getSensitiveDashboardUrl(dataRepository: AppHostDataRepository, appHostPath?: string): string | undefined {
   if (appHostPath) {
     const matchingAppHost = dataRepository.appHosts.find(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath));
@@ -1165,7 +1217,7 @@ function cloneAppHostState(appHost: AppHostDisplayInfo, includeSensitiveDashboar
     appHostPath: appHost.appHostPath,
     appHostPid: appHost.appHostPid,
     dashboardUrl: appHost.dashboardUrl && includeSensitiveDashboardUrls ? stripResourceSuffix(appHost.dashboardUrl) : (sanitizeDashboardUrl(appHost.dashboardUrl) ?? null),
-    resources: appHost.resources?.map(resource => cloneResourceState(resource, includeSensitiveDashboardUrls)) ?? appHost.resources,
+    resources: appHost.resources ? appHost.resources.map(resource => cloneResourceState(resource, includeSensitiveDashboardUrls)) : appHost.resources,
   };
 }
 
@@ -1175,6 +1227,7 @@ function cloneResourceState(resource: ResourceJson, includeSensitiveDashboardUrl
     displayName: resource.displayName,
     resourceType: resource.resourceType,
     state: resource.state,
+    projectPath: resource.properties?.['project.path'] ?? null,
     dashboardUrl: resource.dashboardUrl && includeSensitiveDashboardUrls ? stripResourceSuffix(resource.dashboardUrl) : (sanitizeDashboardUrl(resource.dashboardUrl) ?? null),
     urls: resource.urls?.map(cloneResourceUrlState) ?? null,
     commands: resource.commands ? cloneResourceCommands(resource.commands) : null,
