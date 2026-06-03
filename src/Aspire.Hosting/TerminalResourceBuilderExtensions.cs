@@ -3,6 +3,9 @@
 
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
@@ -139,6 +142,42 @@ public static class TerminalResourceBuilderExtensions
         // (`{base}/{i}/...`) so the AppHost can clean up every host's sockets with a single
         // recursive delete when the run ends.
         var baseDir = Directory.CreateTempSubdirectory("aspire-term-").FullName;
+
+        // Register a best-effort cleanup callback on ApplicationStopped so the temp tree
+        // (3 UDS sockets × replicaCount + the per-replica sub-directories) doesn't
+        // accumulate across AppHost runs. Without this, every run leaves behind
+        // aspire-term-XXXXXXXX/ in $TMPDIR and the stale .sock files inside can also
+        // start pressing on the sockaddr_un sun_path limit on macOS over time.
+        //
+        // Why ApplicationStopped (not ApplicationStopping): the terminal-host child
+        // processes also unlink their own UDS endpoints on graceful shutdown via DCP
+        // teardown. Deleting after the children have fully exited avoids a race where
+        // we recursively delete paths while the children are still draining.
+        var lifetime = @event.Services.GetService<IHostApplicationLifetime>();
+        var loggerFactory = @event.Services.GetService<ILoggerFactory>();
+        if (lifetime is not null)
+        {
+            var capturedBaseDir = baseDir;
+            var cleanupLogger = loggerFactory?.CreateLogger("Aspire.Hosting.WithTerminal");
+            lifetime.ApplicationStopped.Register(() =>
+            {
+                try
+                {
+                    if (Directory.Exists(capturedBaseDir))
+                    {
+                        Directory.Delete(capturedBaseDir, recursive: true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Best-effort: deletion can race with DCP draining its own UDS
+                    // handles, or fail on Windows if a child process still holds a
+                    // file handle. Leaking one temp tree is preferable to throwing
+                    // during shutdown (which is already happening).
+                    cleanupLogger?.LogDebug(ex, "Failed to clean up terminal host temp directory '{BaseDir}'.", capturedBaseDir);
+                }
+            });
+        }
 
         var terminalHosts = new TerminalHostResource[replicaCount];
         for (var i = 0; i < replicaCount; i++)

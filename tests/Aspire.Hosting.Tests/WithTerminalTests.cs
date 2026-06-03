@@ -153,6 +153,42 @@ public class WithTerminalTests
     }
 
     [Fact]
+    public async Task WithTerminalCleansUpTempDirectoryOnApplicationStopped()
+    {
+        // Regression: prior to wiring an ApplicationStopped callback, every AppHost run
+        // leaked one `aspire-term-XXXXXXXX/` directory under $TMPDIR (plus 3×N stale UDS
+        // sockets). The XML docs on TerminalAnnotation explicitly promised cleanup but
+        // nothing actually did the recursive delete. Now: after the host's lifetime
+        // ApplicationStopped fires, the per-run temp tree is gone.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var resource = builder.AddExecutable("myapp", "myapp", ".");
+        resource.WithTerminal();
+
+        var app = builder.Build();
+        try
+        {
+            var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+            await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
+
+            var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single();
+            Assert.True(annotation.IsInitialized);
+            Assert.NotNull(annotation.BaseDirectory);
+            Assert.True(Directory.Exists(annotation.BaseDirectory), $"Expected '{annotation.BaseDirectory}' to exist after BeforeStartEvent.");
+
+            // Capture before StopAsync nulls anything.
+            var baseDir = annotation.BaseDirectory!;
+
+            await app.StopAsync(CancellationToken.None);
+
+            Assert.False(Directory.Exists(baseDir), $"Expected '{baseDir}' to be deleted after ApplicationStopped.");
+        }
+        finally
+        {
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public void WithTerminalThrowsForNullBuilder()
     {
         IResourceBuilder<ExecutableResource> builder = null!;
