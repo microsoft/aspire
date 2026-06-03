@@ -47,7 +47,10 @@ public static class PersistentContainerTestHelpers
 
         async Task<string> RunContainerAsync()
         {
-            using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper, $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}")
+            using var builder = TestDistributedApplicationBuilder.Create(
+                    testOutputHelper,
+                    "--environment=Development",
+                    $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}")
                 .WithTempAspireStore(aspireStore.Path)
                 .WithResourceCleanUp(false);
 
