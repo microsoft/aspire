@@ -1021,7 +1021,7 @@
     "serialize-javascript": "7.0.5",
     "flatted": "3.4.2",
     "lodash": "4.18.1",
-    "undici": "7.21.0",
+    "undici": "7.27.0",
     "path-to-regexp": "8.4.2",
     "@sinonjs/fake-timers": "13.0.5",
     "picomatch": "2.3.2",
