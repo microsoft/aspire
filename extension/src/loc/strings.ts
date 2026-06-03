@@ -104,10 +104,10 @@ export const errorGettingConfigInfo = (error: any) => vscode.l10n.t('Error getti
 export const invalidLaunchConfiguration = (projectPath: string) => vscode.l10n.t('Invalid launch configuration for {0}.', projectPath);
 export const browserDisplayName = (url: string) => vscode.l10n.t('Browser: {0}', url);
 export const browserLabel = vscode.l10n.t('Browser');
-export const goDisplayName = (program: string) => vscode.l10n.t('Go: {0}', program);
-export const goLabel = vscode.l10n.t('Go');
-export const bunDisplayName = (script: string) => vscode.l10n.t('Bun: {0}', script);
-export const bunLabel = vscode.l10n.t('Bun');
+export const goDisplayName = (program: string) => `Go: ${program}`;
+export const goLabel = 'Go';
+export const bunDisplayName = (script: string) => `Bun: ${script}`;
+export const bunLabel = 'Bun';
 export const nodeDisplayName = (script: string) => vscode.l10n.t('Node.js: {0}', script);
 export const nodeLabel = vscode.l10n.t('Node.js');
 export const dontShowAgainLabel = vscode.l10n.t("Don't Show Again");
