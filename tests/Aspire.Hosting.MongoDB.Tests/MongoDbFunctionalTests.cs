@@ -459,6 +459,16 @@ public class MongoDbFunctionalTests(ITestOutputHelper testOutputHelper)
                         item => Assert.Contains("Schindler's List", item.Name)
                         );
     }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task MongoDB_WithPersistentLifetime_ReusesContainer()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddMongoDB("resource").WithPersistentLifetime(),
+            "resource");
+    }
 }
 
 public class Movie
@@ -469,14 +479,4 @@ public class Movie
 
     [BsonElement("name")]
     public string? Name { get; set; }
-    [Fact]
-    [RequiresFeature(TestFeature.Docker)]
-    public Task MongoDB_WithPersistentLifetime_ReusesContainer()
-    {
-        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
-            testOutputHelper,
-            builder => builder.AddMongoDB("resource").WithPersistentLifetime(),
-            "resource");
-    }
-
 }
