@@ -84,6 +84,16 @@ suite('extension/package.json', () => {
         assertContains(debugAppHost?.when, 'viewItem == workspaceAppHost');
     });
 
+    test('resource command context action targets apphosts view', () => {
+        const manifest = readManifest();
+        const contextMenus = manifest.contributes.menus?.['view/item/context'] ?? [];
+
+        const executeResourceCommandItem = contextMenus.find(item => item.command === 'aspire-vscode.executeResourceCommandItem');
+
+        assertContains(executeResourceCommandItem?.when, 'view == aspire-vscode.appHosts');
+        assertContains(executeResourceCommandItem?.when, 'viewItem == resourceCommand:enabled');
+    });
+
     test('running apphost context actions only target running apphost contexts', () => {
         const manifest = readManifest();
         const contextMenus = manifest.contributes.menus?.['view/item/context'] ?? [];

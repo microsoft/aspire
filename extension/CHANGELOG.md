@@ -1,5 +1,11 @@
 # Aspire VS Code Extension Changelog
 
+## v1.13.0
+
+### Features
+
+- Add Aspire pane support for resource commands, including command visibility, enabled/disabled state, argument prompts, and terminal execution from resource tree items ([#17698](https://github.com/microsoft/aspire/pull/17698)).
+
 ## v1.12.0
 
 ### Features

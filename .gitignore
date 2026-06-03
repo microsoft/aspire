@@ -196,6 +196,11 @@ tools/ReleaseNotes/release-notes-*.md
 extension/dist/
 extension/.localization/
 extension/out/
+extension/.test-artifacts/
+extension/.test-extensions/
+extension/.test-results/
+extension/.test-storage/
+extension/.test-workspaces/
 extension/node_modules/
 extension/.corepack-cache/
 **/.vscode-test/

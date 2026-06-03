@@ -201,12 +201,22 @@ type (Features / Fixes / etc.), group by type. Use PR labels (`area-*`,
 `feat`, `fix`, `breaking-change`, `security`) as hints but defer to the
 existing structure.
 
+Exclude anything that is not user-facing. A change is user-facing only when
+someone using Aspire can observe it in product behavior, supported APIs, CLI
+commands, dashboard/extension UX, templates, integrations, documented
+configuration, security posture, or meaningful compatibility/performance
+behavior. Do not mention issues or PRs that only affect repository operation or
+the engineering process.
+
 Exclude noise that the existing notes also tend to exclude:
 
 - Dependabot / dependency-bump PRs unless flagged as security.
 - Branch / build / CI infrastructure changes that aren't user-facing.
 - Internal refactors with no behavior change.
 - Test-only changes.
+- Agentic workflow, automation, release-engineering, changelog-generation, and
+  repository maintenance changes unless the change has a direct user-visible
+  effect in a released Aspire product.
 
 If the change set is large (more than ~80 PRs), summarize aggressively and
 keep only user-facing entries; the notes should be scannable.

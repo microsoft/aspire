@@ -229,6 +229,49 @@ jobs:
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
 
+  extension_e2e_changes:
+    name: Detect VS Code extension E2E changes
+    runs-on: ubuntu-latest
+    outputs:
+      run_extension_e2e: ${{ steps.changed.outputs.run_extension_e2e }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Check changed paths
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base='${{ github.event.pull_request.base.sha || github.event.before }}'
+          head='${{ github.sha }}'
+
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
+            echo "No usable base SHA is available; running extension E2E tests."
+            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            git fetch --no-tags --depth=1 origin "$base" || true
+          fi
+
+          if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "Base SHA $base is not available after shallow fetch; running extension E2E tests."
+            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "$base" "$head")"
+          echo "$changed_files"
+
+          if echo "$changed_files" | grep -E -q '^(extension/|src/Aspire\.Cli/|src/Aspire/Cli/|src/Aspire\.Hosting[^/]*/|src/Aspire\.Dashboard[^/]*/|tests/Aspire\.Cli\.Tests/|tests/Aspire\.Cli\.EndToEnd\.Tests/|tests/Aspire\.Hosting\.Tests/Cli/|eng/scripts/get-aspire-cli|\.github/workflows/(tests|extension-e2e-tests|build-packages|build-cli-native-archives)\.yml$)'; then
+            echo "run_extension_e2e=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_extension_e2e=false" >> "$GITHUB_OUTPUT"
+          fi
+
   cli_starter_validation_windows:
     name: Aspire CLI Starter Validation (${{ matrix.os.name }})
     runs-on: ${{ matrix.os.runner }}
@@ -310,7 +353,7 @@ jobs:
           if-no-files-found: ignore
 
   extension_tests_win:
-    name: Run VS Code extension tests (Windows)
+    name: Run VS Code extension unit tests (Windows)
     runs-on: windows-latest
     env:
       NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/
@@ -357,9 +400,9 @@ jobs:
 
           # Seed Corepack's cache from the internal dnceng npm feed. Corepack's
           # built-in `corepack prepare --activate` would download Yarn 1.x from
-          # registry.yarnpkg.com (hardcoded in Corepack 0.34's config.json and
-          # not redirectable via COREPACK_NPM_REGISTRY), bypassing the dnceng
-          # mirror this workflow is supposed to validate. The shared
+          # its hardcoded upstream endpoint rather than the configured internal
+          # feed, bypassing the dependency source this workflow is supposed to
+          # validate. The shared
           # prepareCorepackYarn.mjs script does the equivalent via `npm pack`
           # against $NPM_REGISTRY, then drops the same on-disk layout Corepack
           # would have written.
@@ -372,8 +415,7 @@ jobs:
         # yarn.lock that carry a tarball URL — `npm:` aliases don't).
         # CONTRIBUTING.MD asks contributors to regenerate yarn.lock through the
         # internal dotnet-public-npm feed; an allowlist catches drift to any
-        # other public mirror (npmmirror.com, jsr.io, github.com tarballs, ...)
-        # rather than only npmjs.org and yarnpkg.com.
+        # other public mirror or tarball host.
         run: |
           node -e "const fs = require('fs'); const allow = 'pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm'; const bad = fs.readFileSync('yarn.lock', 'utf8').split(/\r?\n/).filter(l => /^\s*resolved\s+\x22/.test(l)).filter(l => !l.includes(allow)); if (bad.length) { throw new Error('extension/yarn.lock contains resolved entries outside the internal dotnet-public-npm feed. Regenerate it through the internal feed before restoring. First offender -> ' + bad[0]); }"
       - name: Install dependencies
@@ -445,6 +487,12 @@ jobs:
       - name: Validate seeded cache via yarn install
         run: corepack yarn install --frozen-lockfile --non-interactive
 
+  extension_e2e_tests:
+    name: Run VS Code extension E2E tests
+    if: ${{ needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' }}
+    uses: ./.github/workflows/extension-e2e-tests.yml
+    needs: [extension_e2e_changes, build_packages, build_cli_archive_linux, build_cli_archive_windows, extension_tests_win, extension_bootstrap_linux]
+
   typescript_sdk_tests:
     name: TypeScript SDK Unit Tests
     uses: ./.github/workflows/typescript-sdk-tests.yml
@@ -469,7 +517,9 @@ jobs:
       prepare_winget_installer_artifacts,
       prepare_homebrew_installer_artifacts,
       build_cli_e2e_image,
+      extension_e2e_changes,
       extension_tests_win,
+      extension_e2e_tests,
       extension_bootstrap_linux,
       cli_starter_validation_windows,
       typescript_sdk_tests,
@@ -550,6 +600,8 @@ jobs:
         #   tests, so an empty matrix and 'skipped' result are expected.
         # - cli_starter_validation_windows: this job only runs for pull requests and is expected to
         #   be skipped for other workflow events.
+        # - extension_e2e_tests: this job only runs when the PR/push changes the VS Code extension,
+        #   Aspire CLI, or the extension E2E workflow wiring.
         # - polyglot_validation: this job runs for pull requests and main branch builds; it is
         #   expected to be skipped for other workflow events.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
@@ -559,6 +611,8 @@ jobs:
                contains(needs.*.result, 'cancelled') ||
                (github.event_name == 'pull_request' &&
                 (needs.extension_tests_win.result == 'skipped' ||
+                 (needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' &&
+                  needs.extension_e2e_tests.result == 'skipped') ||
                  needs.cli_starter_validation_windows.result == 'skipped' ||
                  needs.typescript_sdk_tests.result == 'skipped' ||
                  needs.typescript_api_compat.result == 'skipped' ||
@@ -576,6 +630,8 @@ jobs:
                  needs.polyglot_validation.result == 'skipped')) ||
                (github.event_name != 'pull_request' &&
                 (needs.extension_tests_win.result == 'skipped' ||
+                 (needs.extension_e2e_changes.outputs.run_extension_e2e == 'true' &&
+                  needs.extension_e2e_tests.result == 'skipped') ||
                  needs.typescript_sdk_tests.result == 'skipped' ||
                  needs.build_cli_archive_macos_x64.result == 'skipped' ||
                  needs.prepare_winget_installer_artifacts.result == 'skipped' ||

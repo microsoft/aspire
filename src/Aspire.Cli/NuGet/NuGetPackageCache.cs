@@ -1,14 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.DotNet;
-using Aspire.Cli.Resources;
 using System.Collections.Frozen;
 using System.Globalization;
+using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Caching.Memory;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
-using Aspire.Cli.Configuration;
 
 namespace Aspire.Cli.NuGet;
 
@@ -133,7 +133,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
         // If no specific filter is specified we use the fallback filter which is useful in most circumstances
         // other that aspire update which really needs to see all the packages to work effectively.
         var showDeprecatedPackages = features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
-        var effectiveFilter = (NuGetPackage p) => 
+        var effectiveFilter = (NuGetPackage p) =>
         {
             if (filter is not null)
             {
@@ -141,7 +141,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
             }
 
             var isOfficialPackage = IsOfficialOrCommunityToolkitPackage(p.Id);
-            
+
             // Apply deprecated package filter unless the user wants to show deprecated packages
             if (isOfficialPackage && !showDeprecatedPackages)
             {
@@ -150,7 +150,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
 
             return isOfficialPackage;
         };
-        
+
         return collectedPackages.Where(effectiveFilter);
 
         static bool IsOfficialOrCommunityToolkitPackage(string packageName)
