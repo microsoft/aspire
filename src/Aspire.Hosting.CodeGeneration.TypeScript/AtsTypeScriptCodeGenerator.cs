@@ -183,22 +183,22 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // ReferenceExpression is a value type defined in base.mts, not a handle-based wrapper
         if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
         {
-            return GetReferenceExpressionInterfaceName();
+            return ApplyNullableType(typeRef, GetReferenceExpressionInterfaceName());
         }
 
         if (typeRef.TypeId == InputTypeTypeId)
         {
-            return GetInputTypeEnumName();
+            return ApplyNullableType(typeRef, GetInputTypeEnumName());
         }
 
         if (typeRef.TypeId == InteractionInputTypeId)
         {
-            return GetInteractionInputInterfaceName();
+            return ApplyNullableType(typeRef, GetInteractionInputInterfaceName());
         }
 
         if (typeRef.TypeId == InteractionInputCollectionTypeId)
         {
-            return GetInteractionInputCollectionClassName();
+            return ApplyNullableType(typeRef, GetInteractionInputCollectionClassName());
         }
 
         // Check for wrapper class first (handles custom types like resource builders)
@@ -228,7 +228,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private static string ApplyNullableType(AtsTypeRef typeRef, string mappedType)
     {
-        if (typeRef.IsNullable != true || typeRef.Category is not (AtsTypeCategory.Primitive or AtsTypeCategory.Enum))
+        if (typeRef.IsNullable != true)
         {
             return mappedType;
         }
@@ -247,9 +247,9 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
         return typeRef.Category switch
         {
-            AtsTypeCategory.Array or AtsTypeCategory.List => $"{MapDtoPropertyTypeToTypeScript(typeRef.ElementType)}[]",
-            AtsTypeCategory.Dict => $"Record<{MapDtoPropertyTypeToTypeScript(typeRef.KeyType)}, {MapDtoPropertyTypeToTypeScript(typeRef.ValueType)}>",
-            AtsTypeCategory.Union => MapDtoUnionTypeToTypeScript(typeRef),
+            AtsTypeCategory.Array or AtsTypeCategory.List => ApplyNullableType(typeRef, $"{MapDtoPropertyTypeToTypeScript(typeRef.ElementType)}[]"),
+            AtsTypeCategory.Dict => ApplyNullableType(typeRef, $"Record<{MapDtoPropertyTypeToTypeScript(typeRef.KeyType)}, {MapDtoPropertyTypeToTypeScript(typeRef.ValueType)}>"),
+            AtsTypeCategory.Union => ApplyNullableType(typeRef, MapDtoUnionTypeToTypeScript(typeRef)),
             _ => MapTypeRefToTypeScript(typeRef)
         };
     }

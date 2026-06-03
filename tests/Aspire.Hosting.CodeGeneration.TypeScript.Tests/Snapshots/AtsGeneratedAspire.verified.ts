@@ -141,7 +141,7 @@ export interface TestDeeplyNestedDto {
 /** Test DTO with complex nested types. */
 export interface TestNestedDto {
     id?: string;
-    config?: TestConfigDto;
+    config?: TestConfigDto | null;
     tags?: string[];
     counts?: Record<string, number>;
 }

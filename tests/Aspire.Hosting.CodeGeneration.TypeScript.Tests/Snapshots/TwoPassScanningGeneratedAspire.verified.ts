@@ -752,7 +752,7 @@ export interface CommandResultData {
 /** Options for creating a distributed application builder from polyglot apphosts. */
 export interface CreateBuilderOptions {
     /** The command line arguments. */
-    args?: string[];
+    args?: string[] | null;
     /** The directory containing the AppHost project file. */
     projectDirectory?: string | null;
     /** The full path to the AppHost file (e.g., apphost.ts, apphost.py). Used for consistent socket path computation across CLI and AppHost. */
@@ -782,7 +782,7 @@ export interface ExecuteCommandResult {
     /** An optional message associated with the command result. */
     message?: string | null;
     /** An optional value produced by the command. */
-    data?: CommandResultData;
+    data?: CommandResultData | null;
 }
 
 /**
@@ -895,7 +895,7 @@ export interface HttpsCertificateInfo {
 /** The result of a single input interaction prompt. */
 export interface InputInteractionResult {
     /** The data returned from the interaction. The value is `null` when the interaction was canceled. */
-    data?: InteractionInput;
+    data?: InteractionInput | null;
     /** A flag indicating whether the interaction was canceled by the user. */
     canceled?: boolean;
 }
@@ -917,7 +917,7 @@ export interface InputsDialogInteractionOptions {
 /** The result of a multi-input interaction prompt. */
 export interface InputsInteractionResult {
     /** The data returned from the interaction. The value is `null` when the interaction was canceled. */
-    data?: InteractionInputCollection;
+    data?: InteractionInputCollection | null;
     /** A flag indicating whether the interaction was canceled by the user. */
     canceled?: boolean;
 }
@@ -975,7 +975,7 @@ export interface NotificationInteractionOptions {
 /** Options for customizing parameter inputs from polyglot app hosts. */
 export interface ParameterCustomInputOptions {
     /** Gets or sets the type of the input. */
-    inputType?: InputType;
+    inputType?: InputType | null;
     /** Gets or sets the label for the input. */
     label?: string | null;
     /** Gets or sets the description for the input. */
@@ -983,7 +983,7 @@ export interface ParameterCustomInputOptions {
     /** Gets or sets whether the description should be rendered as Markdown. */
     enableDescriptionMarkdown?: boolean | null;
     /** Gets or sets the choice options keyed by submitted value. */
-    options?: Record<string, string>;
+    options?: Record<string, string> | null;
     /** Gets or sets the initial value of the input. */
     value?: string | null;
     /** Gets or sets the placeholder text for the input. */
@@ -1001,11 +1001,11 @@ export interface ProcessCommandExportOptions {
     /** The executable path or command name to start. */
     executablePath?: string | null;
     /** The command-line arguments for the process. */
-    arguments?: string[];
+    arguments?: string[] | null;
     /** The working directory for the process. */
     workingDirectory?: string | null;
     /** The environment variables to set for the process. */
-    environmentVariables?: Record<string, string>;
+    environmentVariables?: Record<string, string> | null;
     /** A value indicating whether the process should inherit the current environment variables. */
     inheritEnvironmentVariables?: boolean | null;
     /** Standard input content to write to the process after it starts. */
@@ -1013,25 +1013,25 @@ export interface ProcessCommandExportOptions {
     /** A value indicating whether the entire process tree should be killed when the process is disposed. */
     killEntireProcessTree?: boolean | null;
     /** Optional command configuration. */
-    commandOptions?: CommandOptions;
+    commandOptions?: CommandOptions | null;
     /** The maximum number of stdout and stderr output lines returned as command result data. */
     maxOutputLineCount?: number | null;
     /** A value indicating whether returned command output should be displayed immediately in the dashboard. */
     displayImmediately?: boolean | null;
     /** The exit codes that are treated as a successful command invocation. */
-    successExitCodes?: number[];
+    successExitCodes?: number[] | null;
 }
 
 /** ATS-friendly result and command configuration for resource process commands. */
 export interface ProcessCommandResultExportOptions {
     /** Optional command configuration. */
-    commandOptions?: CommandOptions;
+    commandOptions?: CommandOptions | null;
     /** The maximum number of stdout and stderr output lines returned as command result data. */
     maxOutputLineCount?: number | null;
     /** A value indicating whether returned command output should be displayed immediately in the dashboard. */
     displayImmediately?: boolean | null;
     /** The exit codes that are treated as a successful command invocation. */
-    successExitCodes?: number[];
+    successExitCodes?: number[] | null;
 }
 
 /** ATS-friendly process specification for resource process command callbacks. */
@@ -1039,11 +1039,11 @@ export interface ProcessCommandSpecExportData {
     /** The executable path or command name to start. */
     executablePath?: string | null;
     /** The command-line arguments for the process. */
-    arguments?: string[];
+    arguments?: string[] | null;
     /** The working directory for the process. */
     workingDirectory?: string | null;
     /** The environment variables to set for the process. */
-    environmentVariables?: Record<string, string>;
+    environmentVariables?: Record<string, string> | null;
     /** A value indicating whether the process should inherit the current environment variables. */
     inheritEnvironmentVariables?: boolean | null;
     /** Standard input content to write to the process after it starts. */
@@ -1115,7 +1115,7 @@ export interface TestDeeplyNestedDto {
 /** Test DTO with complex nested types. */
 export interface TestNestedDto {
     id?: string;
-    config?: TestConfigDto;
+    config?: TestConfigDto | null;
     tags?: string[];
     counts?: Record<string, number>;
 }
