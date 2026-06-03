@@ -2,7 +2,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider, quoteShellArg } from '../utils/AspireTerminalProvider';
-import { ResourceState, HealthStatus, StateStyle, ResourceType, CommandName, ParameterPropertyName } from '../editor/resourceConstants';
+import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
+import { getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import {
     pidDescription,
     dashboardLabel,
@@ -30,7 +31,6 @@ import {
     healthCheckDescription,
     resourceDescriptionHealth,
     resourceDescriptionExitCode,
-    parameterValueMissing,
     logFileLabel,
     commandsLabel,
     resourceCommandDisabledDescription,
@@ -48,18 +48,12 @@ import {
     isMatchingAppHostPath,
     shortenPaths,
     ResourceCommandJson,
-    ResourceCommandInputType,
 } from './AppHostDataRepository';
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
-
-// Trim long parameter values so a single resource row stays readable in the tree.
-const maxParameterValueDisplayLength = 80;
-// Fixed 8-bullet mask, matching the dashboard's GridValue masking (GetMaskingText(length: 8)).
-const maskedParameterValue = '●●●●●●●●';
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -525,45 +519,6 @@ export function buildResourceDescription(resource: ResourceJson): string {
         parts.push(resourceDescriptionExitCode(exitCode));
     }
     return parts.join(' · ');
-}
-
-// Humanize the runtime state for display.
-export function getResourceStateDescription(state: string): string {
-    return state === ResourceState.ValueMissing ? parameterValueMissing : state;
-}
-
-export function getParameterValueDescription(resource: ResourceJson): string | undefined {
-    if (resource.resourceType !== ResourceType.Parameter || resource.state === ResourceState.ValueMissing) {
-        return undefined;
-    }
-
-    // The backchannel redacts secret values to null. Check for the secret before the null/empty
-    // guard below so the mask isn't lost.
-    if (Object.prototype.hasOwnProperty.call(resource.properties ?? {}, ParameterPropertyName.Value) && isSecretParameter(resource)) {
-        return maskedParameterValue;
-    }
-
-    const value = resource.properties?.[ParameterPropertyName.Value];
-    if (typeof value !== 'string' || value.length === 0) {
-        return undefined;
-    }
-
-    return truncateParameterValue(value);
-}
-
-function isSecretParameter(resource: ResourceJson): boolean {
-    const setParameterCommand = resource.commands?.[CommandName.SetParameter];
-    return setParameterCommand?.argumentInputs?.some(input =>
-        input.name === ParameterPropertyName.Value &&
-        input.inputType === ResourceCommandInputType.SecretText) ?? false;
-}
-
-function truncateParameterValue(value: string): string {
-    if (value.length <= maxParameterValueDisplayLength) {
-        return value;
-    }
-
-    return `${value.slice(0, maxParameterValueDisplayLength - 1)}…`;
 }
 
 function buildResourceTooltip(resource: ResourceJson): vscode.MarkdownString {

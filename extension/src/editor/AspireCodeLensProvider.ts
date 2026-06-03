@@ -3,7 +3,8 @@ import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostRe
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
-import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand, getParameterValueDescription, getResourceStateDescription } from '../views/AspireAppHostTreeProvider';
+import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand } from '../views/AspireAppHostTreeProvider';
+import { getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, HealthStatus, StateStyle, ResourceType } from './resourceConstants';
