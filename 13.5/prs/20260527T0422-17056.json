@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Dependency version bump",
+  "mergedAt": "2026-05-27T04:22:44Z",
+  "number": 17056,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "excluded",
+  "title": "Bump remaining 3rd-party deps (deferred \u2014 pending dotnet-public mirror)"
+}

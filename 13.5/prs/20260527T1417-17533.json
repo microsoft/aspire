@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Test-only fix and documentation",
+  "mergedAt": "2026-05-27T14:17:15Z",
+  "number": 17533,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "excluded",
+  "title": "Fix Y/n input race in ChannelUpdateWorkflowTests + add CLI E2E troubleshooting doc"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Updated --search option help text",
+  "mergedAt": "2026-05-28T00:22:15Z",
+  "number": 17544,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "Update --search option description with aka.ms link and field filter details"
+}

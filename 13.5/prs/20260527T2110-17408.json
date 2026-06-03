@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Fix VS Code AppHost launch path resolution",
+  "mergedAt": "2026-05-27T21:10:34Z",
+  "number": 17408,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "Fix VS Code AppHost launch path resolution"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents Helm version requirement (PR 17491)",
+  "mergedAt": "2026-06-01T13:31:19Z",
+  "number": 1090,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "[docs] Document Helm v4.2.0+ prerequisite for Kubernetes deployment"
+}

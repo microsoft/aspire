@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The resource service endpoint URL is now resolved using KnownConfigNames (ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL) with a legacy fallback to DOTNET_RESOURCE_SERVICE_ENDPOINT_URL, improving consistency with Aspire naming conventions.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u2699\ufe0f",
+  "firstMergedAt": "2026-05-28T01:11:35Z",
+  "lastMergedAt": "2026-05-28T01:11:35Z",
+  "name": "Standardize resource service endpoint URL config name",
+  "owner": "JamesNK",
+  "prs": [
+    17385
+  ]
+}

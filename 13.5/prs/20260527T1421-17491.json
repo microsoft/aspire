@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Helm v4.2.0+ version validation for Kubernetes deploy",
+  "mergedAt": "2026-05-27T14:21:07Z",
+  "number": 17491,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "Validate Helm CLI version (>= 4.2.0) before Kubernetes deploy"
+}

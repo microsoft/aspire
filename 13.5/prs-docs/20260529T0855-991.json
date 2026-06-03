@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry in current batch",
+  "mergedAt": "2026-05-29T08:55:31Z",
+  "number": 991,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "excluded",
+  "title": "[docs] Update aspire ps and resource command docs for CLI log path"
+}

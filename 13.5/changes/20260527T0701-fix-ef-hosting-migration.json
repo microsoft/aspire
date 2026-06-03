@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "\ud83d\udd0c",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed issues in the Entity Framework hosting integration migration pipeline where migration steps were unconditionally added to the bundle-generate step. Improves reliability of EF migration orchestration in AppHost.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udc1b",
+  "firstMergedAt": "2026-05-27T07:01:35Z",
+  "lastMergedAt": "2026-05-27T07:01:35Z",
+  "name": "Fix EF Hosting migration pipeline step handling",
+  "owner": "AndriySvyryd",
+  "prs": [
+    16966
+  ]
+}

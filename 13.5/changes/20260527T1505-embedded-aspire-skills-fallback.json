@@ -1,0 +1,22 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The Aspire skills bundle is now embedded in the CLI as a reliable fallback. When GitHub release asset acquisition is unavailable, the CLI uses the embedded bundle and shows a non-fatal warning instead of failing the entire command.",
+  "docsPrs": [
+    1137
+  ],
+  "docsRequired": true,
+  "emoji": "\ud83d\udce6",
+  "firstMergedAt": "2026-05-27T15:05:14Z",
+  "lastMergedAt": "2026-05-27T16:19:27Z",
+  "name": "Embedded Aspire skills bundle fallback",
+  "owner": "IEvangelist",
+  "prs": [
+    17537,
+    17547
+  ]
+}

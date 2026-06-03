@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Enriched AppHost codegen TypeLoadException diagnostics",
+  "mergedAt": "2026-05-27T18:57:35Z",
+  "number": 17262,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "Enrich AppHost codegen TypeLoadException diagnostics"
+}

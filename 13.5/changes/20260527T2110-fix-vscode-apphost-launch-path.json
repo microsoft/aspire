@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed an issue in the VS Code extension where starting an Aspire debug session from a source file (e.g., Program.cs) would pass the source path to the CLI instead of the project file path, causing the session to fail.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udee0\ufe0f",
+  "firstMergedAt": "2026-05-27T21:10:34Z",
+  "lastMergedAt": "2026-05-27T21:10:34Z",
+  "name": "Fix VS Code AppHost launch path resolution",
+  "owner": "davidfowl",
+  "prs": [
+    17408
+  ]
+}

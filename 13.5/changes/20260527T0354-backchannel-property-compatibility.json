@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Preserves auxiliary backchannel backward compatibility while enabling rich JSON property values (numbers, booleans, arrays) for clients that advertise the new aux.v4 capability. The CLI now sends its client capabilities when using v2 resource snapshots.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd0c",
+  "firstMergedAt": "2026-05-27T03:54:04Z",
+  "lastMergedAt": "2026-05-27T03:54:04Z",
+  "name": "Backchannel property compatibility improvements",
+  "owner": "adamint",
+  "prs": [
+    17507
+  ]
+}

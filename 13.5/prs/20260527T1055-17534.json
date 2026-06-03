@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Repository maintenance, no user-facing change",
+  "mergedAt": "2026-05-27T10:55:37Z",
+  "number": 17534,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "excluded",
+  "title": "Move repository skills to .agents"
+}

@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "\ud83c\udfe0",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@javiercn"
+  ],
+  "description": "Adds Docker Compose publish support for the Blazor gateway and addresses various review feedback items including resource name attributes and improved OTLP warning placement.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "\ud83c\udf10",
+  "firstMergedAt": "2026-05-27T08:12:53Z",
+  "lastMergedAt": "2026-05-27T08:12:53Z",
+  "name": "Blazor gateway Docker Compose publish support",
+  "owner": "davidfowl",
+  "prs": [
+    17384
+  ]
+}

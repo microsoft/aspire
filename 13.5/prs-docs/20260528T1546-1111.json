@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "General docs text update, no matching product changelog entry",
+  "mergedAt": "2026-05-28T15:46:00Z",
+  "number": 1111,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "excluded",
+  "title": "fix(docs): update references from .NET Aspire to Aspire in documentation"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Standardize resource service endpoint URL config name",
+  "mergedAt": "2026-05-28T01:11:35Z",
+  "number": 17385,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "Use KnownConfigNames for resource service endpoint URL with legacy fallback"
+}

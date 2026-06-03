@@ -1,0 +1,22 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The --search option in aspire logs and telemetry commands now includes a link to aka.ms/aspire/cli-search and clarifies support for both full-text search and field filters.",
+  "docsPrs": [
+    948,
+    1081
+  ],
+  "docsRequired": false,
+  "emoji": "\ud83d\udd0e",
+  "firstMergedAt": "2026-05-28T00:22:15Z",
+  "lastMergedAt": "2026-05-28T00:22:15Z",
+  "name": "Updated --search option help text",
+  "owner": "JamesNK",
+  "prs": [
+    17544
+  ]
+}

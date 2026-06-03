@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents aspire do --list-steps fix (PR 17535)",
+  "mergedAt": "2026-06-01T13:31:41Z",
+  "number": 1091,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "[docs] Update aspire do --list-steps docs to require step argument"
+}

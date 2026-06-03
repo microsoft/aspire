@@ -1,0 +1,9 @@
+{
+  "author": "javiercn",
+  "comment": "Blazor gateway Docker Compose publish support",
+  "mergedAt": "2026-05-27T08:12:53Z",
+  "number": 17384,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "Address remaining Blazor integration PR feedback"
+}

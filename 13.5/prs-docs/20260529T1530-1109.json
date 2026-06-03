@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry in current batch",
+  "mergedAt": "2026-05-29T15:30:50Z",
+  "number": 1109,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "excluded",
+  "title": "[docs] Update aspire ps docs: clarify AppHost-only scope, link to aspire describe"
+}

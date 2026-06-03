@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Friendly error for aspire do --list-steps without a step",
+  "mergedAt": "2026-05-27T14:24:03Z",
+  "number": 17535,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "Friendly error for 'aspire do --list-steps' without a step"
+}

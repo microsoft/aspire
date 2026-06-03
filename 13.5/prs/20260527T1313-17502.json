@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Dependency version bump",
+  "mergedAt": "2026-05-27T13:13:18Z",
+  "number": 17502,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "excluded",
+  "title": "Bump JS deps to address remaining Dependabot alerts (webpack-dev-server + NodeFrontend qs)"
+}

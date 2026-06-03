@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Documentation fix, no product changelog entry",
+  "mergedAt": "2026-05-29T21:22:23Z",
+  "number": 1124,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "excluded",
+  "title": "Fix Orleans TypeScript reference samples"
+}

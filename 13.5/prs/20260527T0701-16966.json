@@ -1,0 +1,9 @@
+{
+  "author": "AndriySvyryd",
+  "comment": "Fix EF Hosting migration pipeline step handling",
+  "mergedAt": "2026-05-27T07:01:35Z",
+  "number": 16966,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "Migrate playground/SqlServerEndToEnd to EF Hosting integration and fix found issues"
+}

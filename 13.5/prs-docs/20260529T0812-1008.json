@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry in current batch",
+  "mergedAt": "2026-05-29T08:12:38Z",
+  "number": 1008,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "excluded",
+  "title": "[docs] Update notification center docs to include canceled command state"
+}

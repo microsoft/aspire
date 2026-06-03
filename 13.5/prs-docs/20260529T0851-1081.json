@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents --search option for otel commands (PR 17544)",
+  "mergedAt": "2026-05-29T08:51:20Z",
+  "number": 1081,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "included",
+  "title": "[docs] Add --search option docs to aspire otel telemetry commands"
+}

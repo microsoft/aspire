@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "No matching changelog entry in current batch",
+  "mergedAt": "2026-05-29T08:34:51Z",
+  "number": 1119,
+  "runDate": "2026-06-03T10:02:26Z",
+  "status": "excluded",
+  "title": "[docs] Document Ctrl+C shutdown behavior for aspire run"
+}

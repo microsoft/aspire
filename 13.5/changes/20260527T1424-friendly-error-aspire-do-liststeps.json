@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "\ud83d\udcbb",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Running aspire do --list-steps without specifying a step now gives a clear validation error instead of launching the AppHost and crashing with an obscure exception.",
+  "docsPrs": [
+    1091
+  ],
+  "docsRequired": true,
+  "emoji": "\ud83d\udcac",
+  "firstMergedAt": "2026-05-27T14:24:03Z",
+  "lastMergedAt": "2026-05-27T14:24:03Z",
+  "name": "Friendly error for aspire do --list-steps without a step",
+  "owner": "mitchdenny",
+  "prs": [
+    17535
+  ]
+}
