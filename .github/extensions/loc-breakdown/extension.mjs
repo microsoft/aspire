@@ -494,7 +494,9 @@ await joinSession({
                     description: "Recompute the LOC breakdown by re-running git diff and return the latest report as JSON.",
                     handler: async (ctx) => {
                         const entry = servers.get(ctx.instanceId);
-                        const opts = entry ? entry.opts : { cwd: process.cwd() };
+                        // Fall back to the session working directory (the user's worktree/repo) before
+                        // process.cwd(), which for forked extensions is typically ~/.copilot and not a git repo.
+                        const opts = entry ? entry.opts : { cwd: ctx.session?.workingDirectory || process.cwd() };
                         const report = await buildReport(opts);
                         return {
                             ok: true,
@@ -513,8 +515,12 @@ await joinSession({
             ],
             open: async (ctx) => {
                 const input = ctx.input || {};
+                // Prefer the explicit input.cwd, then the session's working directory supplied by
+                // the runtime (CanvasSessionContext.workingDirectory). process.cwd() is a last resort
+                // because forked extension processes inherit ~/.copilot, which is not a git repo and
+                // causes every git command in buildReport to fail with HTTP 500 on /data.
                 const opts = {
-                    cwd: input.cwd || process.cwd(),
+                    cwd: input.cwd || ctx.session?.workingDirectory || process.cwd(),
                     base: input.base,
                     head: input.head,
                 };
