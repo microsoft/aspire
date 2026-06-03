@@ -3,7 +3,7 @@ import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostRe
 // Import parsers to trigger self-registration
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
-import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand, getParameterValueDescription } from '../views/AspireAppHostTreeProvider';
+import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand, getParameterValueDescription, getResourceStateDescription } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, HealthStatus, StateStyle, ResourceType } from './resourceConstants';
@@ -252,7 +252,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
             }
         }
 
-        let tooltipText = `${resource.displayName ?? resource.name}: ${state}${healthStatus ? ` (${healthStatus})` : ''}`;
+        let tooltipText = `${resource.displayName ?? resource.name}: ${getResourceStateDescription(state)}${healthStatus ? ` (${healthStatus})` : ''}`;
         const reports = resource.healthReports;
         if (reports && healthStatus && healthStatus !== HealthStatus.Healthy) {
             const failing = Object.entries(reports).filter(([, r]) => r.status !== HealthStatus.Healthy);

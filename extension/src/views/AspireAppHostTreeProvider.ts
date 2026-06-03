@@ -528,7 +528,7 @@ export function buildResourceDescription(resource: ResourceJson): string {
 }
 
 // Humanize the runtime state for display.
-function getResourceStateDescription(state: string): string {
+export function getResourceStateDescription(state: string): string {
     return state === ResourceState.ValueMissing ? parameterValueMissing : state;
 }
 
