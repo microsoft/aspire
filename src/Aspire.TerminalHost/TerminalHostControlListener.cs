@@ -63,6 +63,20 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
 
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
         socket.Bind(new UnixDomainSocketEndPoint(_socketPath));
+
+        // Restrict the control socket to the owning user (0600). Without this, file
+        // permissions are governed solely by the inherited umask — on developer
+        // machines that's frequently 002/022, leaving the socket world- or
+        // group-accessible. Any local user who can traverse to the path could then
+        // dial and invoke ShutdownAsync (no auth) or GetSessionAsync (leaks peer
+        // DisplayNames). Skipped on Windows (UDS is supported but SetUnixFileMode
+        // is not, and Windows access control on the socket file follows ACLs from
+        // the temp directory, which is per-user by default).
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(_socketPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
         socket.Listen(backlog: 5);
         _socket = socket;
 

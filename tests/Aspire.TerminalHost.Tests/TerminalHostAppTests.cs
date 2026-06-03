@@ -624,6 +624,41 @@ public class TerminalHostAppTests
         return rpc;
     }
 
+    [Fact]
+    public async Task ControlSocketIsRestrictedToOwningUser()
+    {
+        // Skipped on Windows because UnixFileMode is not supported there; the
+        // listener intentionally no-ops on Windows for the same reason.
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var (args, tmp, control) = BuildArgs();
+        using var disp = tmp;
+
+        await using var app = new TerminalHostApp(args, NullLoggerFactory.Instance);
+        using var hostCts = new CancellationTokenSource();
+        var hostTask = app.RunAsync(hostCts.Token);
+
+        try
+        {
+            await WaitForFileAsync(control, TimeSpan.FromSeconds(10));
+
+            // CSWSH/local-DoS defense: the control socket must be 0600 (UserRead|
+            // UserWrite). Anything broader allows a local user to dial it and call
+            // ShutdownAsync (no auth) or GetSessionAsync (leaks peer DisplayNames).
+            var mode = File.GetUnixFileMode(control);
+            Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode);
+        }
+        finally
+        {
+            app.RequestShutdown();
+            hostCts.Cancel();
+            await hostTask.WaitAsync(TimeSpan.FromSeconds(10));
+        }
+    }
+
     private static async Task WaitForFileAsync(string path, TimeSpan timeout)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
