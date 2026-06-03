@@ -676,10 +676,6 @@ export default class AspireDcpServer {
     async releaseTestRunSession(id: string): Promise<void> {
         const lease = this.testRunSessionManager.release(id);
 
-        if (lease) {
-            this.closeLeaseNotificationConnections(lease);
-        }
-
         const startSessionPromises: Promise<void>[] = [];
         for (const [runId, leaseId] of this.testRunSessionLeaseIdByRunId) {
             if (leaseId === id) {
@@ -792,12 +788,14 @@ export default class AspireDcpServer {
 
     private async stopRunSession(runId: string): Promise<void> {
         const baseDebugSessions = this.runsBySession.get(runId);
-        for (const debugSession of baseDebugSessions || []) {
-            await debugSession.stopSession();
+        try {
+            for (const debugSession of baseDebugSessions || []) {
+                await debugSession.stopSession();
+            }
+        } finally {
+            this.runsBySession.delete(runId);
+            this.testRunSessionLeaseIdByRunId.delete(runId);
         }
-
-        this.runsBySession.delete(runId);
-        this.testRunSessionLeaseIdByRunId.delete(runId);
     }
 
     ensureDebugAdapterTracker(debugAdapter: string): void {
