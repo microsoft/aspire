@@ -5,7 +5,6 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppContainers;
 using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Utils;
-using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -94,9 +93,7 @@ public class FoundryExtensionsTests
         // Wait until it's not in Starting state anymore (started or failed whether the Foundry Local service is setup or not)
         await rns.WaitForResourceAsync(resource.Name, [KnownResourceStates.FailedToStart, KnownResourceStates.Running], cts.Token);
 
-        var foundryManager = app.Services.GetRequiredService<FoundryLocalManager>();
-
-        Assert.Equal(foundryManager.ApiKey, localResource.ApiKey);
+        Assert.Equal(FoundryLocalService.ApiKey, localResource.ApiKey);
     }
 
     [Fact]

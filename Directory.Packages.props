@@ -108,7 +108,7 @@
     <PackageVersion Include="KubernetesClient" Version="19.0.2" />
     <PackageVersion Include="JsonPatch.Net" Version="5.0.2" />
     <PackageVersion Include="Markdig" Version="1.2.0" />
-    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="0.3.0" />
+    <PackageVersion Include="Microsoft.AI.Foundry.Local" Version="1.1.0" />
     <PackageVersion Include="Microsoft.Agents.AI.OpenAI" Version="1.5.0" />
     <PackageVersion Include="Microsoft.Data.SqlClient" Version="7.0.1" />
     <PackageVersion Include="Microsoft.FluentUI.AspNetCore.Components" Version="4.14.1" />
