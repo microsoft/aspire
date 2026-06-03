@@ -367,12 +367,6 @@
     <trans-unit id="aspire-vscode.strings.appHostDescribeMayNotBeSupported">
       <source xml:lang="en">No workspace resources were returned. Workspace resources require the AppHost to reference Aspire.Hosting {0} or newer.</source>
     </trans-unit>
-    <trans-unit id="aspire-vscode.strings.nodeLabel">
-      <source xml:lang="en">Node.js</source>
-    </trans-unit>
-    <trans-unit id="aspire-vscode.strings.nodeDisplayName">
-      <source xml:lang="en">Node.js: {0}</source>
-    </trans-unit>
     <trans-unit id="extension.description">
       <source xml:lang="en">Official Aspire extension for Visual Studio Code</source>
     </trans-unit>

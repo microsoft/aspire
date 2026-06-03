@@ -108,8 +108,6 @@
   "aspire-vscode.strings.yesLabel": "Yes",
   "aspire-vscode.strings.noLabel": "No",
   "aspire-vscode.strings.invalidLaunchConfiguration": "Invalid launch configuration for {0}.",
-  "aspire-vscode.strings.nodeDisplayName": "Node.js: {0}",
-  "aspire-vscode.strings.nodeLabel": "Node.js",
   "aspire-vscode.strings.noAppHostInWorkspace": "No AppHost found in the Aspire settings file.",
   "aspire-vscode.strings.dashboard": "Dashboard",
   "aspire-vscode.strings.codespaces": "Codespaces",
