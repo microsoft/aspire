@@ -16,13 +16,11 @@ public static class PersistentContainerTestHelpers
     /// <param name="configureResource">Configures the persistent resource on each AppHost run.</param>
     /// <param name="resourceName">The resource name whose persistent container identity should be compared.</param>
     /// <param name="timeout">The timeout for starting, stopping, and observing the resource. Defaults to 10 minutes because some container integrations have slow cold starts.</param>
-    /// <param name="useTestContainerRegistry">Uses the CI mirror for container images. Set to <see langword="false"/> for images that are not available in the mirror.</param>
     public static async Task AssertResourceReusesContainerAsync(
         ITestOutputHelper testOutputHelper,
         Action<IDistributedApplicationTestingBuilder> configureResource,
         string resourceName,
-        TimeSpan? timeout = null,
-        bool useTestContainerRegistry = true)
+        TimeSpan? timeout = null)
     {
         using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(10));
         using var aspireStore = new TestTempDirectory();
@@ -48,9 +46,7 @@ public static class PersistentContainerTestHelpers
 
         async Task<string?> RunContainerAsync()
         {
-            using var builder = (useTestContainerRegistry
-                    ? TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(testOutputHelper, $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}")
-                    : TestDistributedApplicationBuilder.Create(testOutputHelper, $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}"))
+            using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper, $"{KnownConfigNames.AspireUserSecretsId}={userSecretsId}")
                 .WithTempAspireStore(aspireStore.Path)
                 .WithResourceCleanUp(false);
 
