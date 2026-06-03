@@ -100,6 +100,32 @@ internal static class TerminalWebSocketProxy
             return;
         }
 
+        // Cross-Site WebSocket Hijacking defense. Browsers do NOT apply the same-origin
+        // policy to WebSockets and ASP.NET Core's antiforgery middleware does not gate
+        // WS upgrades (they're GET ... Connection: Upgrade). Without an explicit Origin
+        // check, any page loaded in a logged-in developer's browser could
+        // `new WebSocket("wss://localhost:<port>/api/terminal?resource=...")`, ride the
+        // dashboard's auth cookie, and gain read+write of any WithTerminal() shell.
+        //
+        // The only legitimate caller of this endpoint is the dashboard's own
+        // TerminalView razor component, which is always served from the dashboard's
+        // own scheme+host (Request.Scheme + Request.Host). Behind a reverse proxy
+        // with UseForwardedHeaders, those reflect the public host so PublicUrl is
+        // handled automatically. Browsers always send Origin on WebSocket upgrades,
+        // so a missing Origin on a WS request is itself suspicious — reject.
+        //
+        // See: https://datatracker.ietf.org/doc/html/rfc6455#section-10.2
+        if (!IsAllowedOrigin(context, out var originLogValue))
+        {
+            logger.LogWarning(
+                "Rejecting terminal WebSocket upgrade {ConnectionId} with disallowed Origin '{Origin}'.",
+                connectionId,
+                originLogValue);
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsync("Origin not allowed.").ConfigureAwait(false);
+            return;
+        }
+
         var resourceName = context.Request.Query["resource"].ToString();
         var replicaText = context.Request.Query["replica"].ToString();
 
@@ -427,6 +453,60 @@ internal static class TerminalWebSocketProxy
         logger.Log(level, exception,
             "Terminal WS {Direction} pump ended for {ConnectionId}: reason={Reason} bytes={Bytes}{SlowInfo} exceptionType={ExceptionType}.",
             direction, connectionId, reason, bytes, slow, exType);
+    }
+
+    /// <summary>
+    /// Returns true if the request's <c>Origin</c> header is present and matches the
+    /// dashboard's own scheme+host (the page that legitimately opens this WebSocket).
+    /// Internal so tests can exercise it without spinning up a full WS server.
+    /// </summary>
+    /// <remarks>
+    /// Defense against Cross-Site WebSocket Hijacking. We deliberately do not consult
+    /// a configurable allow-list: the only legitimate caller is the dashboard's own
+    /// TerminalView component, so the request's scheme+host (which honors forwarded
+    /// headers when behind a reverse proxy) is always the correct match. A missing
+    /// Origin on a WS upgrade is treated as disallowed because conforming browsers
+    /// always include it.
+    /// </remarks>
+    internal static bool IsAllowedOrigin(HttpContext context, out string originLogValue)
+    {
+        var origin = context.Request.Headers.Origin.ToString();
+        originLogValue = string.IsNullOrEmpty(origin) ? "(none)" : origin;
+
+        if (string.IsNullOrEmpty(origin))
+        {
+            return false;
+        }
+
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri))
+        {
+            return false;
+        }
+
+        // Compare against the request's own scheme + host. When behind a reverse proxy
+        // with UseForwardedHeaders, these reflect the public-facing values, so the
+        // browser's Origin (= the page's public URL) lines up automatically.
+        if (!string.Equals(originUri.Scheme, context.Request.Scheme, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var expectedHost = context.Request.Host;
+        if (!expectedHost.HasValue)
+        {
+            return false;
+        }
+
+        // Uri.Authority drops a default port (e.g. :443 for https, :80 for http); use
+        // Host + ":" + Port directly and let HostString.ToString() apply the same rule.
+        // Compare both with and without explicit port to handle the default-port case.
+        var originAuthority = originUri.IsDefaultPort
+            ? originUri.Host
+            : originUri.Host + ":" + originUri.Port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        var expectedAuthority = expectedHost.ToString();
+
+        return string.Equals(originAuthority, expectedAuthority, StringComparison.OrdinalIgnoreCase);
     }
 
     private readonly struct ValueStopwatch
