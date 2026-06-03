@@ -97,6 +97,32 @@ public class FoundryExtensionsTests
     }
 
     [Fact]
+    public void FoundryLocalService_TryParseModelId_ParsesModelInfoOutput()
+    {
+        var output = """
+            Alias                          Device     Task           File Size    License      Model ID
+            phi-3.5-mini                   GPU        chat           2.16 GB      MIT          Phi-3.5-mini-instruct-generic-gpu:1
+            """;
+
+        Assert.True(FoundryLocalService.TryParseModelId(output, out var modelId));
+        Assert.Equal("Phi-3.5-mini-instruct-generic-gpu:1", modelId);
+    }
+
+    [Fact]
+    public void FoundryLocalService_TryParseModelId_IgnoresDiagnosticOutputBeforeTable()
+    {
+        var output = """
+            [15:12:56 ERR] Exception fetching models from Azure Foundry catalog
+            Model management service is running on http://127.0.0.1:54597/openai/status
+            Alias                          Device     Task           File Size    License      Model ID
+            phi-3.5-mini                   GPU        chat           2.16 GB      MIT          Phi-3.5-mini-instruct-generic-gpu:1
+            """;
+
+        Assert.True(FoundryLocalService.TryParseModelId(output, out var modelId));
+        Assert.Equal("Phi-3.5-mini-instruct-generic-gpu:1", modelId);
+    }
+
+    [Fact]
     public void RunAsFoundryLocal_DeploymentIsMarkedLocal()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -125,8 +151,8 @@ public class FoundryExtensionsTests
 
         Assert.Single(resource.Deployments);
 
-        // NB: The value of the ModelName property is updated with the downloaded model id when the resource is starting.
-        // We are only testing that the value in the ModelName property is referenced in the connection string.
+        // NB: The ModelId property is updated with the downloaded model id when the resource is starting.
+        // We are only testing that the ModelName fallback is referenced in the connection string.
 
         Assert.Equal("{myAIFoundry.connectionString};Model=gpt-4", deployment.Resource.ConnectionStringExpression.ValueExpression);
     }

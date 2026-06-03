@@ -42,12 +42,17 @@ internal static class FoundryLocalService
 
     public static async Task<string> DownloadModelAsync(string modelName, Action<float> downloadProgress, CancellationToken cancellationToken)
     {
-        await RunFoundryCommandAsync(
+        var output = await RunFoundryCommandAsync(
             ["model", "download", modelName],
             line => ReportProgress(line, downloadProgress),
             cancellationToken).ConfigureAwait(false);
 
-        return modelName;
+        if (TryParseModelId(output, out var modelId))
+        {
+            return modelId;
+        }
+
+        return await GetModelIdAsync(modelName, cancellationToken).ConfigureAwait(false);
     }
 
     public static async Task LoadModelAsync(string modelId, CancellationToken cancellationToken)
@@ -102,57 +107,70 @@ internal static class FoundryLocalService
             StartInfo = startInfo,
             EnableRaisingEvents = true
         };
+        var ownsProcess = true;
 
-        var endpointSource = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        process.OutputDataReceived += (_, e) =>
+        try
         {
-            if (e.Data is null)
-            {
-                return;
-            }
+            var endpointSource = new TaskCompletionSource<Uri>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            logger.LogInformation("{Output}", e.Data);
-
-            if (TryParseEndpoint(e.Data, out var endpoint))
+            process.OutputDataReceived += (_, e) =>
             {
-                endpointSource.TrySetResult(endpoint);
-            }
-        };
+                if (e.Data is null)
+                {
+                    return;
+                }
 
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (e.Data is not null)
-            {
                 logger.LogInformation("{Output}", e.Data);
-            }
-        };
 
-        process.Exited += (_, _) =>
-        {
-            if (process.ExitCode != 0)
+                if (TryParseEndpoint(e.Data, out var endpoint))
+                {
+                    endpointSource.TrySetResult(endpoint);
+                }
+            };
+
+            process.ErrorDataReceived += (_, e) =>
             {
-                endpointSource.TrySetException(new InvalidOperationException($"Foundry CLI service exited with code {process.ExitCode}."));
+                if (e.Data is not null)
+                {
+                    logger.LogInformation("{Output}", e.Data);
+                }
+            };
+
+            process.Exited += (_, _) =>
+            {
+                if (process.ExitCode != 0)
+                {
+                    endpointSource.TrySetException(new InvalidOperationException($"Foundry CLI service exited with code {process.ExitCode}."));
+                }
+            };
+
+            if (!process.Start())
+            {
+                throw new InvalidOperationException("Foundry CLI service process could not be started.");
             }
-        };
 
-        if (!process.Start())
-        {
-            throw new InvalidOperationException("Foundry CLI service process could not be started.");
+            using var cancellationRegistration = cancellationToken.Register(static state =>
+            {
+                var (source, foundryProcess) = ((TaskCompletionSource<Uri>, Process))state!;
+                source.TrySetCanceled();
+                KillProcess(foundryProcess);
+            }, (endpointSource, process));
+
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            Endpoint = await endpointSource.Task.ConfigureAwait(false);
+            s_serviceProcess = process;
+            ownsProcess = false;
         }
-
-        using var cancellationRegistration = cancellationToken.Register(static state =>
+        finally
         {
-            var (source, foundryProcess) = ((TaskCompletionSource<Uri>, Process))state!;
-            source.TrySetCanceled();
-            KillProcess(foundryProcess);
-        }, (endpointSource, process));
-
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-
-        Endpoint = await endpointSource.Task.ConfigureAwait(false);
-        s_serviceProcess = process;
+            if (ownsProcess)
+            {
+                KillProcess(process);
+                process.Dispose();
+            }
+        }
     }
 
     private static async Task<string> RunFoundryCommandAsync(string[] arguments, Action<string>? onOutput, CancellationToken cancellationToken)
@@ -215,6 +233,17 @@ internal static class FoundryLocalService
         return startInfo;
     }
 
+    private static async Task<string> GetModelIdAsync(string modelName, CancellationToken cancellationToken)
+    {
+        var output = await RunFoundryCommandAsync(["model", "info", modelName], onOutput: null, cancellationToken).ConfigureAwait(false);
+        if (TryParseModelId(output, out var modelId))
+        {
+            return modelId;
+        }
+
+        throw new InvalidOperationException($"Foundry CLI did not return a model ID for model '{modelName}'.");
+    }
+
     private static bool TryParseEndpoint(string output, out Uri endpoint)
     {
         // Foundry CLI emits service startup lines like:
@@ -244,6 +273,39 @@ internal static class FoundryLocalService
 
         endpoint = builder.Uri;
         return true;
+    }
+
+    internal static bool TryParseModelId(string output, out string modelId)
+    {
+        // Foundry CLI emits model info as a fixed-width table:
+        //   Alias                          Device     Task           File Size    License      Model ID
+        //   phi-3.5-mini                   GPU        chat           2.16 GB      MIT          Phi-3.5-mini-instruct-generic-gpu:1
+        using var reader = new StringReader(output);
+        string? line;
+        var modelIdStart = -1;
+        while ((line = reader.ReadLine()) is not null)
+        {
+            if (modelIdStart < 0)
+            {
+                modelIdStart = line.IndexOf("Model ID", StringComparison.Ordinal);
+                continue;
+            }
+
+            if (line.Length <= modelIdStart || line.All(c => c == '-' || char.IsWhiteSpace(c)))
+            {
+                continue;
+            }
+
+            var candidate = line[modelIdStart..].Trim();
+            if (candidate.Length > 0)
+            {
+                modelId = candidate.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)[0];
+                return true;
+            }
+        }
+
+        modelId = string.Empty;
+        return false;
     }
 
     private static void ReportProgress(string output, Action<float> downloadProgress)
