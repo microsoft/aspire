@@ -158,7 +158,7 @@ internal static class DcpModelUtilities
             executionContext,
             new ResourceDependencyDiscoveryOptions
             {
-                DiscoveryMode = ResourceDependencyDiscoveryMode.Recursive,
+                DiscoveryMode = ResourceDependencyDiscoveryMode.DirectOnly,
                 CacheAnnotationCallbackResults = true
             },
             cancellationToken).ConfigureAwait(false);
