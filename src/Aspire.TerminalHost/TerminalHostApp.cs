@@ -253,7 +253,17 @@ public sealed class TerminalHostApp : IAsyncDisposable
         // DCP captures stderr into the resource log stream and any accidental log line would
         // surface as noisy resource output. The dashboard is the only intended sink.
         var otlpEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
+        var otlpProtocol = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_PROTOCOL");
+        var serviceName = Environment.GetEnvironmentVariable("OTEL_SERVICE_NAME");
+        var resourceAttrs = Environment.GetEnvironmentVariable("OTEL_RESOURCE_ATTRIBUTES");
         var otelEnabled = !string.IsNullOrEmpty(otlpEndpoint);
+
+        // One-shot stderr diagnostic at startup so the dashboard's resource log tab for
+        // *-terminalhost-N shows whether OTLP is wired. Single line; subsequent operational
+        // logs go through the OTel pipeline (or NullLoggerFactory) per the gating below.
+        await Console.Error.WriteLineAsync(
+            $"[Aspire.TerminalHost] startup pid={Environment.ProcessId} otel={(otelEnabled ? "on" : "off")} endpoint='{otlpEndpoint}' protocol='{otlpProtocol}' service='{serviceName}' resource='{resourceAttrs}'")
+            .ConfigureAwait(false);
 
         ILoggerFactory loggerFactory;
         TracerProvider? tracerProvider = null;
