@@ -20,7 +20,9 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
+        // The AppHost runs inside the E2E container while DCP starts backing containers through the host Docker socket.
+        // Host networking lets project resources connect to the Docker-published ports that Aspire puts in connection strings.
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace, network: "host");
         var counter = new SequenceCounter();
         var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
         await using var terminalRun = CliE2ETestHelpers.StartRun(terminal, workspace, auto, counter, output, TestContext.Current.CancellationToken);
@@ -48,9 +50,9 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
                 .WithReference(redis)
                 .WithReference(postgresDatabase)
                 .WithReference(blobs)
-                .WaitForStart(redis)
-                .WaitForStart(postgresDatabase)
-                .WaitForStart(blobs)
+                .WaitFor(redis)
+                .WaitFor(postgresDatabase)
+                .WaitFor(blobs)
                 .WithExternalHttpEndpoints();
 
             builder.Build().Run();
@@ -163,7 +165,6 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
 
         await auto.TypeAsync($"SERVER_URL=$(jq -er '.resources[0].urls[0].url' server.json) && for i in $(seq 1 30); do result=$(curl -ksS \"$SERVER_URL{path}\" 2>/dev/null || true); echo \"$result\"; echo \"$result\" | grep -q '{marker}' && break; sleep 2; done && echo \"$result\" | grep -q '{marker}'");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync(marker, timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
     }
 }
