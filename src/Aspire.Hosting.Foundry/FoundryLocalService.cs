@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
@@ -13,6 +14,8 @@ internal static class FoundryLocalService
 {
     internal const string ApiKey = "unused";
 
+    private static readonly TimeSpan s_serviceStartTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan s_serviceStopTimeout = TimeSpan.FromSeconds(10);
     private static readonly SemaphoreSlim s_managerLock = new(1, 1);
     private static readonly Regex s_urlRegex = new(@"https?://\S+", RegexOptions.Compiled);
     private static readonly Regex s_progressRegex = new(@"(?<progress>\d+(?:\.\d+)?)\s*%", RegexOptions.Compiled);
@@ -74,29 +77,42 @@ internal static class FoundryLocalService
 
     public static async Task StopAsync(CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
+        Process? process;
 
-        var process = s_serviceProcess;
-        s_serviceProcess = null;
-        Endpoint = null;
+        await s_managerLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        try
+        {
+            process = s_serviceProcess;
+            s_serviceProcess = null;
+            Endpoint = null;
+        }
+        finally
+        {
+            s_managerLock.Release();
+        }
 
         if (process is null)
         {
             return;
         }
 
+        var stopTimeout = cancellationToken.IsCancellationRequested ? TimeSpan.FromSeconds(2) : s_serviceStopTimeout;
+        using var stopCancellation = new CancellationTokenSource(stopTimeout);
         try
         {
             // The Foundry CLI starts the inference agent as a service process, which can outlive
             // the foreground "foundry service start" process if we only kill the process tree.
-            await RunFoundryCommandAsync(["service", "stop"], onOutput: null, cancellationToken).ConfigureAwait(false);
+            await RunFoundryCommandAsync(["service", "stop"], onOutput: null, stopCancellation.Token).ConfigureAwait(false);
         }
-        finally
+        catch (Exception e) when (e is OperationCanceledException or InvalidOperationException or Win32Exception)
         {
-            KillProcess(process);
-
-            process.Dispose();
+            // Stopping the external Foundry service is best-effort. The tracked foreground
+            // process is still killed and disposed below even if the CLI stop command fails.
         }
+
+        KillProcess(process);
+
+        process.Dispose();
     }
 
     private static async Task StartCliServiceAsync(ILogger logger, CancellationToken cancellationToken)
@@ -138,10 +154,7 @@ internal static class FoundryLocalService
 
             process.Exited += (_, _) =>
             {
-                if (process.ExitCode != 0)
-                {
-                    endpointSource.TrySetException(new InvalidOperationException($"Foundry CLI service exited with code {process.ExitCode}."));
-                }
+                endpointSource.TrySetException(new InvalidOperationException($"Foundry CLI service exited before reporting an endpoint. Exit code: {process.ExitCode}."));
             };
 
             if (!process.Start())
@@ -149,12 +162,22 @@ internal static class FoundryLocalService
                 throw new InvalidOperationException("Foundry CLI service process could not be started.");
             }
 
-            using var cancellationRegistration = cancellationToken.Register(static state =>
+            using var startCancellation = new CancellationTokenSource(s_serviceStartTimeout);
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, startCancellation.Token);
+            using var cancellationRegistration = linkedCancellation.Token.Register(static state =>
             {
-                var (source, foundryProcess) = ((TaskCompletionSource<Uri>, Process))state!;
-                source.TrySetCanceled();
+                var (source, foundryProcess, timeoutToken) = ((TaskCompletionSource<Uri>, Process, CancellationToken))state!;
+                if (timeoutToken.IsCancellationRequested)
+                {
+                    source.TrySetException(new TimeoutException($"Timed out waiting for Foundry CLI service to report an endpoint after {s_serviceStartTimeout}."));
+                }
+                else
+                {
+                    source.TrySetCanceled();
+                }
+
                 KillProcess(foundryProcess);
-            }, (endpointSource, process));
+            }, (endpointSource, process, startCancellation.Token));
 
             process.BeginOutputReadLine();
             process.BeginErrorReadLine();
@@ -329,6 +352,10 @@ internal static class FoundryLocalService
         catch (InvalidOperationException)
         {
             // The process can exit between HasExited and Kill.
+        }
+        catch (Win32Exception)
+        {
+            // Cleanup paths can race with process teardown or OS-level process removal.
         }
     }
 
