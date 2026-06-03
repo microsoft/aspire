@@ -144,6 +144,13 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
         await auto.AspireStopAsync(counter);
     }
 
+    /// <summary>
+    /// Waits for the server resource and verifies that the endpoint returns the expected marker.
+    /// </summary>
+    /// <param name="auto">The terminal automator used to run CLI and shell commands.</param>
+    /// <param name="counter">The prompt sequence counter used to synchronize command completion.</param>
+    /// <param name="path">The server endpoint path to call.</param>
+    /// <param name="marker">The marker text expected in the endpoint response.</param>
     private static async Task VerifyEndpointAsync(Hex1bTerminalAutomator auto, SequenceCounter counter, string path, string marker)
     {
         await auto.TypeAsync("aspire wait server --status up --timeout 300");
