@@ -48,9 +48,9 @@ public sealed class PersistentContainerEndToEndTests(ITestOutputHelper output)
                 .WithReference(redis)
                 .WithReference(postgresDatabase)
                 .WithReference(blobs)
-                .WaitFor(redis)
-                .WaitFor(postgresDatabase)
-                .WaitFor(blobs)
+                .WaitForStart(redis)
+                .WaitForStart(postgresDatabase)
+                .WaitForStart(blobs)
                 .WithExternalHttpEndpoints();
 
             builder.Build().Run();
