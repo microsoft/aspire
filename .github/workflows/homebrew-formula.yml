@@ -242,16 +242,12 @@ jobs:
       # against a PR commit; we also have to inject `version "..."` since
       # the synthetic URL doesn't carry a version brew can infer.
       #
-      # Rewrite the test_do's `assert_match version.to_s` line to a
-      # permissive semver-shape match. The canonical assertion compares
-      # the formula's `version` against the binary's `--version` output;
-      # those match in a real release (formula version = tag = binary
-      # VersionPrefix), but in CI the formula version is synthetic
-      # (`0.0.0-pr<N>`) while the binary reports the in-tree dev version
-      # (e.g. `13.5.0-dev`), so the canonical assertion would always
-      # fail. Substitute a regex that asserts the binary emits a
-      # SemVer-shaped string — that is the actual smoke we want
-      # (`--version` runs and produces sensible output).
+      # The canonical test_do assertion `assert_match version.to_s,
+      # shell_output("#{bin}/aspire --version")` works as-is: the formula
+      # passes --version version.to_s to build-cli.sh, which forwards it
+      # into the binary's VersionPrefix/VersionSuffix at publish time. So
+      # the binary's --version output contains the formula version
+      # (including in CI where the formula version is synthetic).
       - name: Render formula into scratch tap
         env:
           SDK_VERSION:    ${{ needs.resolve.outputs.sdk_version }}
@@ -277,7 +273,6 @@ jobs:
             -e "s|__SHA_LINUX_X64__|${SHA_LINUX_X64}|g" \
             -e "s|__SHA_LINUX_ARM64__|${SHA_LINUX_ARM64}|g" \
             -e "s|^  url \"https://github.com/microsoft/aspire/archive/refs/tags/v${SRC_VERSION}.tar.gz\"|  url \"${SRC_URL}\"\n  version \"${SRC_VERSION}\"|" \
-            -e 's|assert_match version\.to_s, shell_output("#{bin}/aspire --version")|assert_match(/\\d+\\.\\d+\\.\\d+/, shell_output("#{bin}/aspire --version"))|' \
             -e 's|"-n", "SmokeTest"|"-n", "SmokeTest",\n           "--version", "13.4.2"|' \
             -e '/no_autobump!/d' \
             eng/homebrew-core/aspire.rb.template \

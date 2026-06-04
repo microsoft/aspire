@@ -16,6 +16,7 @@
 #       --output <dest-dir> \
 #       [--config <Release|Debug>] \
 #       [--channel <stable|dev|pr|...>] \
+#       [--version <full-semver>] \
 #       [--no-embed]
 #
 # Required:
@@ -30,6 +31,15 @@
 #               metadata. The CLI's install-route gating reads this to know
 #               which release channel produced the binary. Defaults to
 #               "stable" — set explicitly for non-stable / dogfood builds.
+#   --version   Full version string to bake into the binary's assembly
+#               (so `aspire --version` reports this string). Parsed at the
+#               first hyphen: everything before becomes VersionPrefix
+#               (X.Y.Z) and everything after becomes VersionSuffix. For a
+#               brew install block this should be the formula's `version`
+#               so the canonical `assert_match version.to_s,
+#               shell_output("#{bin}/aspire --version")` test_do
+#               assertion holds. Defaults to whatever Versions.props
+#               specifies plus a `-dev` suffix (Bundle.proj's default).
 #   --no-embed  Skip the self-extracting bundle embed. The binary is built
 #               without an embedded `bundle.tar.gz` resource; the bundle
 #               layout dirs (`managed/`, `dcp/`) are copied into <output>/
@@ -47,6 +57,7 @@ CHANNEL=stable
 RID=
 OUTPUT=
 NO_EMBED=false
+FULL_VERSION=
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -54,6 +65,7 @@ while [[ $# -gt 0 ]]; do
         --output)    OUTPUT="$2";  shift 2 ;;
         --config)    CONFIG="$2";  shift 2 ;;
         --channel)   CHANNEL="$2"; shift 2 ;;
+        --version)   FULL_VERSION="$2"; shift 2 ;;
         --no-embed)  NO_EMBED=true; shift 1 ;;
         -h|--help)
             sed -n '2,/^set -euo/p' "$0" | sed -e '$d' -e 's/^# \{0,1\}//'
@@ -65,6 +77,26 @@ done
 [[ -n "$RID"    ]] || { echo "Missing --rid"    >&2; exit 2; }
 [[ -n "$OUTPUT" ]] || { echo "Missing --output" >&2; exit 2; }
 
+# Parse --version into MSBuild's VersionPrefix/VersionSuffix shape. dotnet
+# concatenates them as `<prefix>-<suffix>` when both are set, so the round
+# trip is lossless for any version that has at most one hyphen separator.
+# Examples:
+#   --version 13.5.0              -> VersionPrefix=13.5.0 VersionSuffix=
+#   --version 13.5.0-preview.1    -> VersionPrefix=13.5.0 VersionSuffix=preview.1
+#   --version 0.0.0-pr17893       -> VersionPrefix=0.0.0  VersionSuffix=pr17893
+_VERSION_PREFIX_ARG=
+_VERSION_SUFFIX_ARG=
+if [[ -n "$FULL_VERSION" ]]; then
+    if [[ "$FULL_VERSION" == *-* ]]; then
+        _VERSION_PREFIX="${FULL_VERSION%%-*}"
+        _VERSION_SUFFIX="${FULL_VERSION#*-}"
+        _VERSION_PREFIX_ARG="/p:VersionPrefixOverride=${_VERSION_PREFIX}"
+        _VERSION_SUFFIX_ARG="/p:VersionSuffix=${_VERSION_SUFFIX}"
+    else
+        _VERSION_PREFIX_ARG="/p:VersionPrefixOverride=${FULL_VERSION}"
+    fi
+fi
+
 # Resolve repo root — this script lives at $REPO_ROOT/eng/homebrew-core/build-cli.sh
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -74,6 +106,7 @@ echo "=== aspire CLI build ==="
 echo "  rid:      $RID"
 echo "  config:   $CONFIG"
 echo "  channel:  $CHANNEL"
+echo "  version:  ${FULL_VERSION:-<default from Versions.props>}"
 echo "  output:   $OUTPUT"
 echo "  source:   $REPO_ROOT"
 echo "  embed:    $([[ "$NO_EMBED" == true ]] && echo "no (sibling layout)" || echo "yes (self-extracting)")"
@@ -95,6 +128,8 @@ dotnet msbuild eng/Bundle.proj \
     /p:TargetRid="$RID" \
     /p:Configuration="$CONFIG" \
     /p:AspireCliChannel="$CHANNEL" \
+    $_VERSION_PREFIX_ARG \
+    $_VERSION_SUFFIX_ARG \
     $_SKIP_EMBED_ARG
 
 PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli/$CONFIG/net10.0/$RID/publish"

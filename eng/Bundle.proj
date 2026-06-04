@@ -46,6 +46,15 @@
     <BundleVersion Condition="'$(BundleVersion)' == '' and '$(VersionSuffix)' != ''">$(VersionPrefix)-$(VersionSuffix)</BundleVersion>
     <BundleVersion Condition="'$(BundleVersion)' == ''">$(VersionPrefix)-dev</BundleVersion>
 
+    <!-- Forward VersionPrefix to Exec-invoked dotnet commands so callers can
+         override the in-tree X.Y.Z (e.g. brew install block needs the binary
+         to report the formula's version, not the dev tree's). MSBuild
+         properties do not flow to child processes — they must be passed
+         explicitly on each `dotnet publish` command line. Only forwarded
+         when the caller explicitly set it; otherwise the inner publish
+         picks up VersionPrefix from Versions.props as usual. -->
+    <_VersionPrefixArg Condition="'$(VersionPrefixOverride)' != ''">/p:VersionPrefix=$(VersionPrefixOverride)</_VersionPrefixArg>
+
     <!-- Forward VersionSuffix to Exec-invoked dotnet commands (MSBuild properties don't flow to child processes) -->
     <_VersionSuffixArg Condition="'$(VersionSuffix)' != ''">/p:VersionSuffix=$(VersionSuffix)</_VersionSuffixArg>
 
@@ -108,7 +117,7 @@
     </PropertyGroup>
     <Message Importance="high" Condition="'$(SkipBundleEmbed)' != 'true'" Text="Publishing native AOT CLI with embedded bundle: $(_BundleArchivePath)" />
     <Message Importance="high" Condition="'$(SkipBundleEmbed)' == 'true'" Text="Publishing native AOT CLI WITHOUT embedded bundle (SkipBundleEmbed=true)." />
-    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) $(_BundlePayloadArg) $(_VersionSuffixArg) $(_AspireCliChannelArg) $(_CliBinlog)" />
+    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) $(_BundlePayloadArg) $(_VersionPrefixArg) $(_VersionSuffixArg) $(_AspireCliChannelArg) $(_CliBinlog)" />
   </Target>
 
   <Target Name="_PublishManagedProjects" Condition="'$(SkipManagedBuild)' != 'true'">
@@ -117,7 +126,7 @@
     </PropertyGroup>
     <Message Importance="high" Text="Publishing aspire-managed (self-contained)..." />
     <!-- Publish as self-contained single-file for the target RID -->
-    <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionSuffixArg) $(_ManagedBinlog)" />
+    <Exec Command="dotnet publish &quot;$(ManagedProjectPath)&quot; -c $(Configuration) -r $(TargetRid) --self-contained /p:GenerateDocumentationFile=false /p:EnforceCodeStyleInBuild=false $(_VersionPrefixArg) $(_VersionSuffixArg) $(_ManagedBinlog)" />
   </Target>
 
   <Target Name="_RestoreDcpPackage">

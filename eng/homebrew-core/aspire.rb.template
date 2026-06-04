@@ -83,6 +83,7 @@ class AspireCli < Formula
            "--rid", rid,
            "--output", buildpath/"out",
            "--channel", "stable",
+           "--version", version.to_s,
            "--no-embed"
 
     # Layout: <prefix>/libexec/{aspire, ...runtime files..., bundle -> versions/<v>/}
