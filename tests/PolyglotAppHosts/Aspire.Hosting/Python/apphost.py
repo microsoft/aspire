@@ -110,7 +110,11 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
     project.with_endpoints_in_env(["https"])
 
     def custom_health_check():
-        return {"Status": "Healthy", "Description": "custom health check"}
+        return {
+            "Status": "Healthy",
+            "Description": "custom health check",
+            "Data": {"custom": "value"},
+        }
 
     builder.add_health_check("custom_check", custom_health_check)
     # addCSharpApp

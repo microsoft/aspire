@@ -49,8 +49,18 @@ internal sealed class HealthCheckResult
     /// </summary>
     public string? Description { get; init; }
 
+    /// <summary>
+    /// Gets optional string data for the health check result.
+    /// </summary>
+    public Dictionary<string, string>? Data { get; init; }
+
     internal ExtensionsHealthCheckResult ToExtensionsHealthCheckResult()
     {
-        return new ExtensionsHealthCheckResult(Status, Description);
+        var data = Data?.ToDictionary(
+            pair => pair.Key,
+            pair => (object)pair.Value,
+            StringComparer.Ordinal);
+
+        return new ExtensionsHealthCheckResult(Status, Description, exception: null, data: data);
     }
 }

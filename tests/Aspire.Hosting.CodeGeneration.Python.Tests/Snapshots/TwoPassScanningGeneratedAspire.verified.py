@@ -1796,6 +1796,7 @@ class GenerateParameterDefault(typing.TypedDict, total=False):
 class HealthCheckResult(typing.TypedDict, total=False):
     Status: HealthStatus
     Description: str | None
+    Data: typing.Mapping[str, str]
 
 class HttpCommandExportOptions(typing.TypedDict, total=False):
     Description: str | None
@@ -3097,6 +3098,15 @@ class AbstractServiceProvider:
         """The underlying object reference handle."""
         return self._handle
 
+    def get_aspire_store(self) -> AbstractAspireStore:
+        """Gets the Aspire store from the service provider."""
+        rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/getAspireStore',
+            rpc_args,
+        )
+        return typing.cast(AbstractAspireStore, result)
+
     def get_eventing(self) -> AbstractDistributedApplicationEventing:
         """Gets the distributed application eventing service from the service provider."""
         rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
@@ -3150,15 +3160,6 @@ class AbstractServiceProvider:
             rpc_args,
         )
         return typing.cast(ResourceCommandService, result)
-
-    def get_aspire_store(self) -> AbstractAspireStore:
-        """Gets the Aspire store from the service provider."""
-        rpc_args: dict[str, typing.Any] = {'serviceProvider': self._handle}
-        result = self._client.invoke_capability(
-            'Aspire.Hosting/getAspireStore',
-            rpc_args,
-        )
-        return typing.cast(AbstractAspireStore, result)
 
     def get_user_secrets_manager(self) -> AbstractUserSecretsManager:
         """Gets the user secrets manager from the service provider."""

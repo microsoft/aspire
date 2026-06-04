@@ -366,6 +366,22 @@ func (d *HttpsCertificateExecutionConfigurationExportData) ToMap() map[string]an
 	return m
 }
 
+// HealthCheckResult represents HealthCheckResult.
+type HealthCheckResult struct {
+	Status HealthStatus `json:"Status,omitempty"`
+	Description *string `json:"Description,omitempty"`
+	Data map[string]string `json:"Data,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *HealthCheckResult) ToMap() map[string]any {
+	m := map[string]any{}
+	m["Status"] = serializeValue(d.Status)
+	if d.Description != nil { m["Description"] = serializeValue(d.Description) }
+	if d.Data != nil { m["Data"] = serializeValue(d.Data) }
+	return m
+}
+
 // ResourceEventDto represents ResourceEventDto.
 type ResourceEventDto struct {
 	ResourceName string `json:"ResourceName,omitempty"`
@@ -433,20 +449,6 @@ func (d *ReferenceEnvironmentInjectionOptions) ToMap() map[string]any {
 	m["ConnectionProperties"] = serializeValue(d.ConnectionProperties)
 	m["ServiceDiscovery"] = serializeValue(d.ServiceDiscovery)
 	m["Endpoints"] = serializeValue(d.Endpoints)
-	return m
-}
-
-// HealthCheckResult represents HealthCheckResult.
-type HealthCheckResult struct {
-	Status HealthStatus `json:"Status,omitempty"`
-	Description *string `json:"Description,omitempty"`
-}
-
-// ToMap converts the DTO to a map for JSON serialization.
-func (d *HealthCheckResult) ToMap() map[string]any {
-	m := map[string]any{}
-	m["Status"] = serializeValue(d.Status)
-	if d.Description != nil { m["Description"] = serializeValue(d.Description) }
 	return m
 }
 

@@ -811,6 +811,8 @@ export interface HealthCheckResult {
     status?: HealthStatus;
     /** Gets an optional description for the health check result. */
     description?: string | null;
+    /** Gets optional string data for the health check result. */
+    data?: Record<string, string>;
 }
 
 /** ATS-friendly configuration for resource HTTP commands. */
@@ -11219,6 +11221,11 @@ class ReportingTaskPromiseImpl implements ReportingTaskPromise {
 export interface ServiceProvider {
     toJSON(): MarshalledHandle;
     /**
+     * Gets the Aspire store from the service provider.
+     * @returns The Aspire store.
+     */
+    getAspireStore(): AspireStorePromise;
+    /**
      * Gets the distributed application eventing service from the service provider.
      * @returns The distributed application eventing handle.
      */
@@ -11248,11 +11255,6 @@ export interface ServiceProvider {
      * @returns A resource command service handle.
      */
     getResourceCommandService(): ResourceCommandServicePromise;
-    /**
-     * Gets the Aspire store from the service provider.
-     * @returns The Aspire store.
-     */
-    getAspireStore(): AspireStorePromise;
     /**
      * Gets the user secrets manager from the service provider.
      * @returns A user secrets manager handle.
@@ -11262,6 +11264,11 @@ export interface ServiceProvider {
 
 export interface ServiceProviderPromise extends PromiseLike<ServiceProvider> {
     /**
+     * Gets the Aspire store from the service provider.
+     * @returns The Aspire store.
+     */
+    getAspireStore(): AspireStorePromise;
+    /**
      * Gets the distributed application eventing service from the service provider.
      * @returns The distributed application eventing handle.
      */
@@ -11291,11 +11298,6 @@ export interface ServiceProviderPromise extends PromiseLike<ServiceProvider> {
      * @returns A resource command service handle.
      */
     getResourceCommandService(): ResourceCommandServicePromise;
-    /**
-     * Gets the Aspire store from the service provider.
-     * @returns The Aspire store.
-     */
-    getAspireStore(): AspireStorePromise;
     /**
      * Gets the user secrets manager from the service provider.
      * @returns A user secrets manager handle.
@@ -11313,6 +11315,24 @@ class ServiceProviderImpl implements ServiceProvider {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    /** @internal */
+    async _getAspireStoreInternal(): Promise<AspireStore> {
+        const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
+        const result = await this._client.invokeCapability<IAspireStoreHandle>(
+            'Aspire.Hosting/getAspireStore',
+            rpcArgs
+        );
+        return new AspireStoreImpl(result, this._client);
+    }
+
+    /**
+     * Gets the Aspire store from the service provider.
+     * @returns The Aspire store.
+     */
+    getAspireStore(): AspireStorePromise {
+        return new AspireStorePromiseImpl(this._getAspireStoreInternal(), this._client);
+    }
 
     /** @internal */
     async _getEventingInternal(): Promise<DistributedApplicationEventing> {
@@ -11423,24 +11443,6 @@ class ServiceProviderImpl implements ServiceProvider {
     }
 
     /** @internal */
-    async _getAspireStoreInternal(): Promise<AspireStore> {
-        const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
-        const result = await this._client.invokeCapability<IAspireStoreHandle>(
-            'Aspire.Hosting/getAspireStore',
-            rpcArgs
-        );
-        return new AspireStoreImpl(result, this._client);
-    }
-
-    /**
-     * Gets the Aspire store from the service provider.
-     * @returns The Aspire store.
-     */
-    getAspireStore(): AspireStorePromise {
-        return new AspireStorePromiseImpl(this._getAspireStoreInternal(), this._client);
-    }
-
-    /** @internal */
     async _getUserSecretsManagerInternal(): Promise<UserSecretsManager> {
         const rpcArgs: Record<string, unknown> = { serviceProvider: this._handle };
         const result = await this._client.invokeCapability<IUserSecretsManagerHandle>(
@@ -11475,6 +11477,10 @@ class ServiceProviderPromiseImpl implements ServiceProviderPromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    getAspireStore(): AspireStorePromise {
+        return new AspireStorePromiseImpl(this._promise.then(obj => obj.getAspireStore()), this._client);
+    }
+
     getEventing(): DistributedApplicationEventingPromise {
         return new DistributedApplicationEventingPromiseImpl(this._promise.then(obj => obj.getEventing()), this._client);
     }
@@ -11497,10 +11503,6 @@ class ServiceProviderPromiseImpl implements ServiceProviderPromise {
 
     getResourceCommandService(): ResourceCommandServicePromise {
         return new ResourceCommandServicePromiseImpl(this._promise.then(obj => obj.getResourceCommandService()), this._client);
-    }
-
-    getAspireStore(): AspireStorePromise {
-        return new AspireStorePromiseImpl(this._promise.then(obj => obj.getAspireStore()), this._client);
     }
 
     getUserSecretsManager(): UserSecretsManagerPromise {

@@ -101,6 +101,9 @@ await project.withReferenceEnvironment(referenceEnvironmentOptions);
 const customHealthCheck = async (): Promise<HealthCheckResult> => ({
     status: HealthStatus.Healthy,
     description: "custom health check",
+    data: {
+        custom: "value",
+    },
 });
 await builder.addHealthCheck("custom_check", customHealthCheck);
 

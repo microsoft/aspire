@@ -244,6 +244,7 @@ ENTRYPOINT ["dotnet", "App.dll"]
 		return &aspire.HealthCheckResult{
 			Status:      aspire.HealthStatusHealthy,
 			Description: aspire.StringPtr("custom health check"),
+			Data:        map[string]string{"custom": "value"},
 		}
 	}); err != nil {
 		log.Fatalf(aspire.FormatError(err))

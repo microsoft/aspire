@@ -19,7 +19,11 @@ public class AtsHealthCheckExportsTests
         builder.AddHealthCheck("custom_check", () => Task.FromResult(new AtsHealthCheckResult
         {
             Status = HealthStatus.Degraded,
-            Description = "custom description"
+            Description = "custom description",
+            Data = new Dictionary<string, string>
+            {
+                ["custom key"] = "custom value"
+            }
         }));
 
         using var serviceProvider = builder.Services.BuildServiceProvider();
@@ -31,5 +35,6 @@ public class AtsHealthCheckExportsTests
         Assert.Equal("custom_check", entry.Key);
         Assert.Equal(HealthStatus.Degraded, entry.Value.Status);
         Assert.Equal("custom description", entry.Value.Description);
+        Assert.Equal("custom value", entry.Value.Data["custom key"]);
     }
 }

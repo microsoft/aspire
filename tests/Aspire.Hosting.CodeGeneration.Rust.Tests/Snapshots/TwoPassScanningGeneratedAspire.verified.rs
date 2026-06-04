@@ -749,6 +749,31 @@ impl HttpsCertificateExecutionConfigurationExportData {
     }
 }
 
+/// HealthCheckResult
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct HealthCheckResult {
+    #[serde(rename = "Status")]
+    pub status: HealthStatus,
+    #[serde(rename = "Description", skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(rename = "Data", skip_serializing_if = "Option::is_none")]
+    pub data: Option<HashMap<String, String>>,
+}
+
+impl HealthCheckResult {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("Status".to_string(), serde_json::to_value(&self.status).unwrap_or(Value::Null));
+        if let Some(ref v) = self.description {
+            map.insert("Description".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.data {
+            map.insert("Data".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
 /// ResourceEventDto
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ResourceEventDto {
@@ -859,26 +884,6 @@ impl ReferenceEnvironmentInjectionOptions {
         map.insert("ConnectionProperties".to_string(), serde_json::to_value(&self.connection_properties).unwrap_or(Value::Null));
         map.insert("ServiceDiscovery".to_string(), serde_json::to_value(&self.service_discovery).unwrap_or(Value::Null));
         map.insert("Endpoints".to_string(), serde_json::to_value(&self.endpoints).unwrap_or(Value::Null));
-        map
-    }
-}
-
-/// HealthCheckResult
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct HealthCheckResult {
-    #[serde(rename = "Status")]
-    pub status: HealthStatus,
-    #[serde(rename = "Description", skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-}
-
-impl HealthCheckResult {
-    pub fn to_map(&self) -> HashMap<String, Value> {
-        let mut map = HashMap::new();
-        map.insert("Status".to_string(), serde_json::to_value(&self.status).unwrap_or(Value::Null));
-        if let Some(ref v) = self.description {
-            map.insert("Description".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
         map
     }
 }
@@ -11172,6 +11177,15 @@ impl IServiceProvider {
         &self.client
     }
 
+    /// Gets the Aspire store from the service provider.
+    pub fn get_aspire_store(&self) -> Result<IAspireStore, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("serviceProvider".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/getAspireStore", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IAspireStore::new(handle, self.client.clone()))
+    }
+
     /// Gets the distributed application eventing service from the service provider.
     pub fn get_eventing(&self) -> Result<IDistributedApplicationEventing, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -11224,15 +11238,6 @@ impl IServiceProvider {
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceCommandService", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ResourceCommandService::new(handle, self.client.clone()))
-    }
-
-    /// Gets the Aspire store from the service provider.
-    pub fn get_aspire_store(&self) -> Result<IAspireStore, Box<dyn std::error::Error>> {
-        let mut args: HashMap<String, Value> = HashMap::new();
-        args.insert("serviceProvider".to_string(), self.handle.to_json());
-        let result = self.client.invoke_capability("Aspire.Hosting/getAspireStore", args)?;
-        let handle: Handle = serde_json::from_value(result)?;
-        Ok(IAspireStore::new(handle, self.client.clone()))
     }
 
     /// Gets the user secrets manager from the service provider.

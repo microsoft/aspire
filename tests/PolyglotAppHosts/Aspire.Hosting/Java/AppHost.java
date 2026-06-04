@@ -52,6 +52,7 @@ void main() throws Exception {
             var result = new HealthCheckResult();
             result.setStatus(HealthStatus.HEALTHY);
             result.setDescription("custom health check");
+            result.setData(Map.of("custom", "value"));
             return result;
         });
         var csharpApp = builder.addCSharpApp("csharpapp", "./src/CSharpApp");

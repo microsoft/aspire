@@ -12202,11 +12202,14 @@ import java.util.function.*;
 public class HealthCheckResult implements JsonSerializable {
     private HealthStatus status;
     private String description;
+    private Map<String, String> data;
 
     public HealthStatus getStatus() { return status; }
     public void setStatus(HealthStatus value) { this.status = value; }
     public String getDescription() { return description; }
     public void setDescription(String value) { this.description = value; }
+    public Map<String, String> getData() { return data; }
+    public void setData(Map<String, String> value) { this.data = value; }
 
     @SuppressWarnings("unchecked")
     public static HealthCheckResult fromMap(Map<String, Object> map) {
@@ -12215,6 +12218,8 @@ public class HealthCheckResult implements JsonSerializable {
         value.setStatus(HealthStatus.fromValue((String) statusValue));
         var descriptionValue = map.get("Description");
         value.setDescription(descriptionValue == null ? null : (String) descriptionValue);
+        var dataValue = map.get("Data");
+        value.setData(dataValue == null ? null : (Map<String, String>) dataValue);
         return value;
     }
 
@@ -12222,6 +12227,7 @@ public class HealthCheckResult implements JsonSerializable {
         Map<String, Object> map = new HashMap<>();
         map.put("Status", AspireClient.serializeValue(status));
         map.put("Description", AspireClient.serializeValue(description));
+        map.put("Data", AspireClient.serializeValue(data));
         return map;
     }
 }
@@ -14046,6 +14052,14 @@ public class IServiceProvider extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets the Aspire store from the service provider. */
+    public IAspireStore getAspireStore() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/getAspireStore", reqArgs);
+        return (IAspireStore) result;
+    }
+
     /** Gets the distributed application eventing service from the service provider. */
     public IDistributedApplicationEventing getEventing() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14092,14 +14106,6 @@ public class IServiceProvider extends HandleWrapperBase {
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         var result = getClient().invokeCapability("Aspire.Hosting/getResourceCommandService", reqArgs);
         return (ResourceCommandService) result;
-    }
-
-    /** Gets the Aspire store from the service provider. */
-    public IAspireStore getAspireStore() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
-        var result = getClient().invokeCapability("Aspire.Hosting/getAspireStore", reqArgs);
-        return (IAspireStore) result;
     }
 
     /** Gets the user secrets manager from the service provider. */

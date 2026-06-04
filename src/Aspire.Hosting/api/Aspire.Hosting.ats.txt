@@ -196,6 +196,7 @@ Aspire.Hosting/Aspire.Hosting.Ats.CreateBuilderOptions # Options for creating a 
   EnableResourceLogging: boolean # Enables resource logging.
   ProjectDirectory: string # The directory containing the AppHost project file.
 Aspire.Hosting/Aspire.Hosting.Ats.HealthCheckResult # ATS-friendly custom health check result.
+  Data?: Aspire.Hosting/Dict<string,string> # Gets optional string data for the health check result.
   Description?: string # Gets an optional description for the health check result.
   Status: enum:Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus # Gets the health status returned by the health check.
 Aspire.Hosting/Aspire.Hosting.Ats.HttpsCertificateExecutionConfigurationExportData # ATS-friendly HTTPS certificate data returned from an execution-configuration result.
