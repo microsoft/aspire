@@ -279,20 +279,29 @@ jobs:
           cat "$TAP_REPO/Formula/aspire-cli.rb"
           echo "--- end rendered formula ---"
 
-      # Snapshot ~/.aspire BEFORE install so the post-install diff can prove
-      # the brew install did not touch the user's aspire home. The formula's
-      # contract is that the bundle layout lives in libexec/ (under the brew
-      # prefix), not under ~/.aspire — so the install must NOT create any
-      # versions/<id>/ directories, must NOT populate bundles/, and must
-      # NOT touch bin/.
-      - name: Snapshot ~/.aspire before install
+      # Snapshot the directories whose creation/population would indicate
+      # the brew install or any subsequent command leaked bundle layout into
+      # ~/.aspire. The brew route's contract (BundleService.ComputeDefault
+      # ExtractDir's BrewWire arm) is that extraction lives under the
+      # formula's libexec/, NOT under the user's aspire home. So:
+      #   * ~/.aspire/versions/  — must not exist or contain anything new
+      #   * ~/.aspire/bundles/   — must not exist or contain anything new
+      #   * ~/.aspire/bin/       — must not exist or contain anything new
+      # `aspire doctor` is allowed to write its own logs to ~/.aspire/logs/
+      # and telemetry-storage to ~/.aspire/cli/, so those subdirs are NOT
+      # part of the snapshot.
+      - name: Snapshot bundle-layout dirs under ~/.aspire (baseline)
         run: |
           mkdir -p "$HOME/.aspire"
-          (cd "$HOME/.aspire" && find . -mindepth 1 -maxdepth 4 -printf '%y %p %s\n' 2>/dev/null || \
-            find "$HOME/.aspire" -mindepth 1 -maxdepth 4 -exec stat -f '%HT %N %z' {} \; 2>/dev/null) \
-            | sort > "$RUNNER_TEMP/aspire-home-before.txt" || true
-          echo "--- ~/.aspire before install ---"
-          cat "$RUNNER_TEMP/aspire-home-before.txt"
+          {
+            for dir in versions bundles bin; do
+              if [ -d "$HOME/.aspire/$dir" ]; then
+                find "$HOME/.aspire/$dir" -mindepth 1 -maxdepth 4 -print 2>/dev/null | sort
+              fi
+            done
+          } > "$RUNNER_TEMP/aspire-home-bundle-before.txt"
+          echo "--- baseline (must stay empty across install/doctor/test) ---"
+          cat "$RUNNER_TEMP/aspire-home-bundle-before.txt"
 
       - name: brew install --build-from-source
         run: |
@@ -322,28 +331,39 @@ jobs:
         run: |
           set -euo pipefail
           PREFIX="$(brew --prefix aspire-e2e/scratch/aspire-cli)"
-          "$PREFIX/bin/aspire" doctor 2>&1 | tee "$RUNNER_TEMP/aspire-doctor.txt"
-          # The doctor output should identify the install route as brew
-          # for the running CLI; fail if it doesn't.
-          grep -qi 'brew' "$RUNNER_TEMP/aspire-doctor.txt" || {
-            echo "::error::aspire doctor did not mention the brew install route"
+          # `aspire doctor` exits non-zero when any host check fails (e.g.
+          # macOS hosted runners have no Docker). We don't gate the
+          # workflow on host completeness — only on the install-route
+          # line being correct. Capture-then-grep avoids pipefail biting
+          # on a non-zero doctor exit.
+          DOCTOR_OUT="$RUNNER_TEMP/aspire-doctor.txt"
+          set +e
+          "$PREFIX/bin/aspire" doctor > "$DOCTOR_OUT" 2>&1
+          doctor_rc=$?
+          set -e
+          echo "--- aspire doctor output (rc=$doctor_rc) ---"
+          cat "$DOCTOR_OUT"
+          # The Installations table row for the running CLI must report
+          # Route=brew. A plain `grep brew` is fragile (matches the word
+          # in the Cellar path even on a misconfigured install); pin the
+          # row by joining `(current)` (only the running CLI is marked
+          # current) and `brew` on the same line.
+          if ! grep -E '\(current\).*\bbrew\b' "$DOCTOR_OUT" > /dev/null; then
+            echo "::error::aspire doctor did not report Route=brew for the running CLI."
             exit 1
-          }
+          fi
 
-      # The brew install must not touch ~/.aspire. The bundle layout is
-      # extracted at install time into libexec/ (route-aware default from
-      # BundleService.ComputeDefaultExtractDir's BrewWire arm). Diff the
-      # snapshot to enforce this.
-      - name: Snapshot ~/.aspire after install + doctor
+      - name: Verify bundle-layout dirs unchanged after install + doctor
         run: |
-          (cd "$HOME/.aspire" && find . -mindepth 1 -maxdepth 4 -printf '%y %p %s\n' 2>/dev/null || \
-            find "$HOME/.aspire" -mindepth 1 -maxdepth 4 -exec stat -f '%HT %N %z' {} \; 2>/dev/null) \
-            | sort > "$RUNNER_TEMP/aspire-home-after.txt" || true
-          echo "--- ~/.aspire after ---"
-          cat "$RUNNER_TEMP/aspire-home-after.txt"
-          echo "--- diff ---"
-          if ! diff -u "$RUNNER_TEMP/aspire-home-before.txt" "$RUNNER_TEMP/aspire-home-after.txt"; then
-            echo "::error::~/.aspire was mutated by `brew install` / `aspire doctor`. The brew route extracts into libexec/, not ~/.aspire."
+          {
+            for dir in versions bundles bin; do
+              if [ -d "$HOME/.aspire/$dir" ]; then
+                find "$HOME/.aspire/$dir" -mindepth 1 -maxdepth 4 -print 2>/dev/null | sort
+              fi
+            done
+          } > "$RUNNER_TEMP/aspire-home-bundle-after.txt"
+          if ! diff -u "$RUNNER_TEMP/aspire-home-bundle-before.txt" "$RUNNER_TEMP/aspire-home-bundle-after.txt"; then
+            echo "::error::~/.aspire/{versions,bundles,bin} was mutated by brew install or aspire doctor. The brew route extracts into libexec/, not ~/.aspire."
             exit 1
           fi
 
@@ -384,13 +404,17 @@ jobs:
       - name: brew test
         run: brew test --verbose aspire-e2e/scratch/aspire-cli
 
-      - name: Snapshot ~/.aspire after brew test
+      - name: Verify bundle-layout dirs unchanged after brew test
         run: |
-          (cd "$HOME/.aspire" && find . -mindepth 1 -maxdepth 4 -printf '%y %p %s\n' 2>/dev/null || \
-            find "$HOME/.aspire" -mindepth 1 -maxdepth 4 -exec stat -f '%HT %N %z' {} \; 2>/dev/null) \
-            | sort > "$RUNNER_TEMP/aspire-home-after-test.txt" || true
-          if ! diff -u "$RUNNER_TEMP/aspire-home-before.txt" "$RUNNER_TEMP/aspire-home-after-test.txt"; then
-            echo "::error::~/.aspire was mutated by `brew test` (formula's test_do block). The test block runs from a sandboxed testpath and must not touch the user's aspire home."
+          {
+            for dir in versions bundles bin; do
+              if [ -d "$HOME/.aspire/$dir" ]; then
+                find "$HOME/.aspire/$dir" -mindepth 1 -maxdepth 4 -print 2>/dev/null | sort
+              fi
+            done
+          } > "$RUNNER_TEMP/aspire-home-bundle-after-test.txt"
+          if ! diff -u "$RUNNER_TEMP/aspire-home-bundle-before.txt" "$RUNNER_TEMP/aspire-home-bundle-after-test.txt"; then
+            echo "::error::~/.aspire/{versions,bundles,bin} was mutated by brew test. The formula test block runs from a sandboxed testpath and must not touch the user's bundle layout."
             exit 1
           fi
 
@@ -404,6 +428,6 @@ jobs:
           name: homebrew-formula-diagnostics-${{ matrix.target.rid }}
           path: |
             ${{ runner.temp }}/aspire-doctor.txt
-            ${{ runner.temp }}/aspire-home-*.txt
+            ${{ runner.temp }}/aspire-home-bundle-*.txt
           if-no-files-found: ignore
           retention-days: 7
