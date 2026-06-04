@@ -1168,6 +1168,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithTerminal() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrl(url any, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -2827,6 +2828,17 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(sta
 	return s
 }
 
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithTerminal() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
@@ -3229,6 +3241,7 @@ type CSharpAppResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) CSharpAppResource
 	WithSessionLifetime() CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
+	WithTerminal() CSharpAppResource
 	WithUnionDependency(dependency any) CSharpAppResource
 	WithUrl(url any, options ...*WithUrlOptions) CSharpAppResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) CSharpAppResource
@@ -4656,6 +4669,17 @@ func (s *cSharpAppResource) WithStatus(status TestResourceStatus) CSharpAppResou
 	return s
 }
 
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *cSharpAppResource) WithTerminal() CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *cSharpAppResource) WithUnionDependency(dependency any) CSharpAppResource {
@@ -5512,6 +5536,7 @@ type ContainerRegistryResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerRegistryResource
 	WithSessionLifetime() ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
+	WithTerminal() ContainerRegistryResource
 	WithUnionDependency(dependency any) ContainerRegistryResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerRegistryResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerRegistryResource
@@ -6279,6 +6304,17 @@ func (s *containerRegistryResource) WithStatus(status TestResourceStatus) Contai
 	return s
 }
 
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *containerRegistryResource) WithTerminal() ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *containerRegistryResource) WithUnionDependency(dependency any) ContainerRegistryResource {
@@ -6488,6 +6524,7 @@ type ContainerResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerResource
 	WithSessionLifetime() ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
+	WithTerminal() ContainerResource
 	WithUnionDependency(dependency any) ContainerResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ContainerResource
@@ -8143,6 +8180,17 @@ func (s *containerResource) WithStatus(status TestResourceStatus) ContainerResou
 	}
 	reqArgs["status"] = serializeValue(status)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *containerResource) WithTerminal() ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -9934,6 +9982,7 @@ type DotnetToolResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) DotnetToolResource
 	WithSessionLifetime() DotnetToolResource
 	WithStatus(status TestResourceStatus) DotnetToolResource
+	WithTerminal() DotnetToolResource
 	WithToolIgnoreExistingFeeds() DotnetToolResource
 	WithToolIgnoreFailedSources() DotnetToolResource
 	WithToolPackage(packageId string) DotnetToolResource
@@ -11336,6 +11385,17 @@ func (s *dotnetToolResource) WithStatus(status TestResourceStatus) DotnetToolRes
 	return s
 }
 
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *dotnetToolResource) WithTerminal() DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithToolIgnoreExistingFeeds configures the tool to use only the specified package sources, ignoring existing NuGet configuration.
 func (s *dotnetToolResource) WithToolIgnoreExistingFeeds() DotnetToolResource {
 	if s.err != nil { return s }
@@ -12635,6 +12695,7 @@ type ExecutableResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExecutableResource
 	WithSessionLifetime() ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
+	WithTerminal() ExecutableResource
 	WithUnionDependency(dependency any) ExecutableResource
 	WithUrl(url any, options ...*WithUrlOptions) ExecutableResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExecutableResource
@@ -14031,6 +14092,17 @@ func (s *executableResource) WithStatus(status TestResourceStatus) ExecutableRes
 	return s
 }
 
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *executableResource) WithTerminal() ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *executableResource) WithUnionDependency(dependency any) ExecutableResource {
@@ -14460,6 +14532,7 @@ type ExternalServiceResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExternalServiceResource
 	WithSessionLifetime() ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
+	WithTerminal() ExternalServiceResource
 	WithUnionDependency(dependency any) ExternalServiceResource
 	WithUrl(url any, options ...*WithUrlOptions) ExternalServiceResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ExternalServiceResource
@@ -15245,6 +15318,17 @@ func (s *externalServiceResource) WithStatus(status TestResourceStatus) External
 	return s
 }
 
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *externalServiceResource) WithTerminal() ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *externalServiceResource) WithUnionDependency(dependency any) ExternalServiceResource {
@@ -16002,6 +16086,7 @@ type ParameterResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource
 	WithSessionLifetime() ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
+	WithTerminal() ParameterResource
 	WithUnionDependency(dependency any) ParameterResource
 	WithUrl(url any, options ...*WithUrlOptions) ParameterResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ParameterResource
@@ -16797,6 +16882,17 @@ func (s *parameterResource) WithStatus(status TestResourceStatus) ParameterResou
 	}
 	reqArgs["status"] = serializeValue(status)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *parameterResource) WithTerminal() ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -17660,6 +17756,7 @@ type ProjectResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ProjectResource
 	WithSessionLifetime() ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
+	WithTerminal() ProjectResource
 	WithUnionDependency(dependency any) ProjectResource
 	WithUrl(url any, options ...*WithUrlOptions) ProjectResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) ProjectResource
@@ -19084,6 +19181,17 @@ func (s *projectResource) WithStatus(status TestResourceStatus) ProjectResource 
 	}
 	reqArgs["status"] = serializeValue(status)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *projectResource) WithTerminal() ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20754,6 +20862,7 @@ type TestDatabaseResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestDatabaseResource
 	WithSessionLifetime() TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
+	WithTerminal() TestDatabaseResource
 	WithUnionDependency(dependency any) TestDatabaseResource
 	WithUrl(url any, options ...*WithUrlOptions) TestDatabaseResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestDatabaseResource
@@ -22412,6 +22521,17 @@ func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabas
 	return s
 }
 
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *testDatabaseResource) WithTerminal() TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseResource {
@@ -22829,6 +22949,7 @@ type TestRedisResource interface {
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestRedisResource
 	WithSessionLifetime() TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
+	WithTerminal() TestRedisResource
 	WithUnionDependency(dependency any) TestRedisResource
 	WithUrl(url any, options ...*WithUrlOptions) TestRedisResource
 	WithUrlForEndpoint(endpointName string, callback func(obj *ResourceUrlAnnotation)) TestRedisResource
@@ -24752,6 +24873,17 @@ func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResou
 	}
 	reqArgs["status"] = serializeValue(status)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withStatus", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithTerminal adds an interactive terminal session to a resource using the default terminal options.
+func (s *testRedisResource) WithTerminal() TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withTerminal", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

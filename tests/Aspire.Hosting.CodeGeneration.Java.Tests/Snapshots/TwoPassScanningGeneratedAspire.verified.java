@@ -2710,6 +2710,14 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public CSharpAppResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public CSharpAppResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
@@ -4391,6 +4399,14 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ContainerRegistryResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
 
@@ -6132,6 +6148,14 @@ public class ContainerResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ContainerResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
 
@@ -8407,6 +8431,14 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public DotnetToolResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public DotnetToolResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
@@ -10603,6 +10635,14 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ExecutableResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ExecutableResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
@@ -11587,6 +11627,14 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("exitCodes", AspireClient.serializeValue(exitCodes));
         }
         getClient().invokeCapability("Aspire.Hosting/withHiddenOnCompletion", reqArgs);
+        return this;
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ExternalServiceResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
 
@@ -15012,6 +15060,14 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ParameterResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ParameterResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
@@ -17153,6 +17209,14 @@ public class ProjectResource extends ResourceBuilderBase {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public ProjectResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
 
@@ -20118,6 +20182,14 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public TestDatabaseResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
+        return this;
+    }
+
     /** Adds a pipeline step to the resource that will be executed during deployment. */
     public TestDatabaseResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
@@ -22183,6 +22255,14 @@ public class TestRedisResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public TestRedisResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
 
@@ -24269,6 +24349,14 @@ public class TestVaultResource extends ContainerResource {
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         reqArgs.put("remoteImageTag", AspireClient.serializeValue(remoteImageTag));
         getClient().invokeCapability("Aspire.Hosting/withRemoteImageTag", reqArgs);
+        return this;
+    }
+
+    /** Adds an interactive terminal session to a resource using the default terminal options. */
+    public TestVaultResource withTerminal() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withTerminal", reqArgs);
         return this;
     }
 

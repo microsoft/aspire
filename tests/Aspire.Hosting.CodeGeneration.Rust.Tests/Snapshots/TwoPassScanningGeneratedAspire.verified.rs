@@ -2475,6 +2475,15 @@ impl CSharpAppResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -3538,6 +3547,15 @@ impl ContainerRegistryResource {
             args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -4847,6 +4865,15 @@ impl ContainerResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withRemoteImageTag", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds a pipeline step to the resource that will be executed during deployment.
@@ -6654,6 +6681,15 @@ impl DotnetToolResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -8433,6 +8469,15 @@ impl ExecutableResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -9175,6 +9220,15 @@ impl ExternalServiceResource {
             args.insert("exitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/withHiddenOnCompletion", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -11845,6 +11899,15 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -13434,6 +13497,15 @@ impl ProjectResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withRemoteImageTag", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds a pipeline step to the resource that will be executed during deployment.
@@ -15491,6 +15563,15 @@ impl TestDatabaseResource {
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
 
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -17000,6 +17081,15 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withRemoteImageTag", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds a pipeline step to the resource that will be executed during deployment.
@@ -18577,6 +18667,15 @@ impl TestVaultResource {
         let result = self.client.invoke_capability("Aspire.Hosting/withRemoteImageTag", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds an interactive terminal session to a resource using the default terminal options.
+    pub fn with_terminal(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/withTerminal", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
     }
 
     /// Adds a pipeline step to the resource that will be executed during deployment.
