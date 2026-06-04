@@ -42,6 +42,7 @@ internal static class SessionTerminalContent
         var builder = Hex1bTerminal.CreateBuilder()
             .WithTerminalWidget(out var handle)
             .WithMouse()
+            .WithScrollback(5000)
             .WithDimensions(80, 24)
             .WithPtyProcess(opts =>
             {
