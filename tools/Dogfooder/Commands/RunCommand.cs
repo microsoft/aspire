@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dogfooder.Screens;
+using Aspire.Dogfooder.Screens.Workspace;
 using Aspire.Dogfooder.Services;
 using Aspire.Dogfooder.State;
 using Hex1b;
@@ -21,21 +22,20 @@ internal sealed class RunCommand
         AppState state,
         IGitHubAuthProbe ghProbe,
         IDogfoodSessionPreparer preparer,
-        IPrCatalog prCatalog,
         ILocalAspireCliLocator cliLocator)
     {
         _state = state;
         _ghProbe = ghProbe;
         _preparer = preparer;
-        _prCatalog = prCatalog;
         _cliLocator = cliLocator;
+        _workspace = new WorkspaceScreen(state, preparer);
     }
 
     private readonly AppState _state;
     private readonly IGitHubAuthProbe _ghProbe;
     private readonly IDogfoodSessionPreparer _preparer;
-    private readonly IPrCatalog _prCatalog;
     private readonly ILocalAspireCliLocator _cliLocator;
+    private readonly WorkspaceScreen _workspace;
 
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
@@ -84,7 +84,7 @@ internal sealed class RunCommand
         _state.Phase switch
         {
             AppPhase.Validation => EnvironmentValidationScreen.Build(ctx, _state),
-            AppPhase.Main => MainScreen.Build(ctx, _state, _preparer, _prCatalog),
+            AppPhase.Main => _workspace.Build(ctx),
             _ => ctx.Text("Unknown phase."),
         };
 

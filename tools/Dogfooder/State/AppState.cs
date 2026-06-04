@@ -13,22 +13,17 @@ internal enum AppPhase
 }
 
 /// <summary>
-/// Right-pane mode in the main screen — depends on whether the user is
-/// configuring a new session or interacting with a running one.
-/// </summary>
-internal enum DetailMode
-{
-    None,
-    Config,
-    Terminal,
-}
-
-/// <summary>
 /// Top-level app state. Everything the UI needs to render is reachable from
 /// here. Hex1b stays out of this type and its dependencies so the future
 /// <c>self-test</c> command (which runs the same state machine without a TTY)
 /// can drive it directly.
 /// </summary>
+/// <remarks>
+/// Window-local concerns (which window is focused, which session is being
+/// edited in a window) deliberately do NOT live here. With the multi-window
+/// workspace layout each session window owns its own draft and lifecycle;
+/// AppState's job is just the phase machine and the bag of sub-states.
+/// </remarks>
 internal sealed class AppState
 {
     public AppState(
@@ -51,22 +46,11 @@ internal sealed class AppState
     public DogfoodSessionStore Sessions { get; }
 
     /// <summary>
-    /// Currently selected session in the left pane, or null when the list is
-    /// empty / nothing has been picked yet.
+    /// Free-form status string surfaced in the workspace footer. Mutating
+    /// callers must follow up with <c>Notifier.Notify()</c> to push the
+    /// update through to the render loop.
     /// </summary>
-    public DogfoodSession? ActiveSession { get; private set; }
-
-    public DetailMode DetailMode { get; private set; } = DetailMode.None;
-
-    /// <summary>
-    /// The draft config the user is editing in the right pane when
-    /// <see cref="DetailMode"/> is <see cref="DetailMode.Config"/>. Lives on
-    /// app state (not in the form widget) so the form stays a pure render of
-    /// state and the future self-test can assert/mutate it.
-    /// </summary>
-    public DogfoodSessionConfig DraftConfig { get; private set; } = DogfoodSessionConfig.Empty;
-
-    public string DraftSessionName { get; private set; } = "untitled";
+    public string StatusMessage { get; set; } = "Ready";
 
     public void EnterMainScreen()
     {
@@ -74,47 +58,9 @@ internal sealed class AppState
         _notifier.Notify();
     }
 
-    public void BeginNewSession()
+    public void SetStatus(string message)
     {
-        ActiveSession = null;
-        DetailMode = DetailMode.Config;
-        DraftConfig = DogfoodSessionConfig.Empty;
-        DraftSessionName = $"session-{Sessions.Sessions.Count + 1}";
-        _notifier.Notify();
-    }
-
-    public void SelectSession(DogfoodSession session)
-    {
-        ActiveSession = session;
-        // If the session has ever been prepared (i.e. an embedded terminal
-        // was launched at least once for it), prefer the terminal view —
-        // even if the child shell has since exited, its scrollback is still
-        // useful. Only fall back to the config form when the session was
-        // created but never launched.
-        DetailMode = session.Plan is null
-            ? DetailMode.Config
-            : DetailMode.Terminal;
-        DraftConfig = session.Config;
-        DraftSessionName = session.Name;
-        _notifier.Notify();
-    }
-
-    public void UpdateDraftConfig(DogfoodSessionConfig config)
-    {
-        DraftConfig = config;
-        _notifier.Notify();
-    }
-
-    public void UpdateDraftName(string name)
-    {
-        DraftSessionName = name;
-        _notifier.Notify();
-    }
-
-    public void SwitchToTerminal(DogfoodSession session)
-    {
-        ActiveSession = session;
-        DetailMode = DetailMode.Terminal;
+        StatusMessage = message;
         _notifier.Notify();
     }
 }
