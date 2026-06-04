@@ -29,6 +29,15 @@ const FrameType = Object.freeze({
 
 const HEADER_SIZE = 5;
 
+// Hard cap on a single HMP frame payload. The wire format uses a 4-byte LE
+// signed length, so the spec maximum is ~2GiB - in practice nothing legit
+// emits more than a few hundred KB at a time (Output frames are flushed
+// frequently, JSON control frames are small). Anything wildly larger is
+// either corruption, version skew, or a malicious upstream trying to OOM
+// the browser. Refuse and let the caller close the WS so the reconnect
+// path takes over.
+const MAX_FRAME_PAYLOAD = 16 * 1024 * 1024;
+
 // FrameBuffer accumulates incoming WS payloads and yields complete HMP1
 // frames. WebSocket message boundaries do NOT align with HMP1 frame
 // boundaries (especially when the server batches Output frames, which
@@ -63,6 +72,13 @@ class FrameBuffer {
     const dv = new DataView(header.buffer, header.byteOffset, HEADER_SIZE);
     const type = dv.getUint8(0);
     const length = dv.getInt32(1, true);
+    // Reject negative lengths (would desync the buffer because
+    // `total < HEADER_SIZE`) and absurdly large lengths (would attempt to
+    // allocate a multi-GiB Uint8Array which either throws inside the
+    // `message` handler - silently wedging the client - or OOMs the tab).
+    if (length < 0 || length > MAX_FRAME_PAYLOAD) {
+      throw new Error(`HMP1 protocol error: invalid frame length ${length} (type=${type}).`);
+    }
     const total = HEADER_SIZE + length;
     if (this._totalLength < total) {
       return null;
@@ -218,8 +234,18 @@ export class Hmp1Client {
 
     ws.addEventListener("message", (ev) => {
       this._buffer.push(ev.data);
-      for (const frame of this._buffer.drain()) {
-        this._dispatch(frame);
+      try {
+        for (const frame of this._buffer.drain()) {
+          this._dispatch(frame);
+        }
+      } catch (err) {
+        // A protocol-level fault (invalid length prefix, malformed JSON in a
+        // control frame) leaves the buffer permanently desynced. Closing the
+        // WS triggers the dashboard's reconnect path, which resets state.
+        // Use code 1002 (protocol error) so server-side logs can distinguish
+        // this from a clean client-initiated close.
+        if (this.onError) { try { this.onError(err); } catch { /* ignore */ } }
+        try { ws.close(1002, "HMP1 protocol error"); } catch { /* ignore */ }
       }
     });
 

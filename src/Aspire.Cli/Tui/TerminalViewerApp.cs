@@ -97,6 +97,15 @@ internal sealed class TerminalViewerApp
     // message instead of leaving the exception unobserved.
     private Exception? _embeddedFault;
 
+    // Flipped to 1 the moment the user invokes Detach (Ctrl+B D ->
+    // _app.RequestStop()) so the post-finally rethrow can suppress
+    // teardown-induced faults that aren't the *cause* of shutdown. On
+    // a clean detach the embedded RunAsync typically completes with a
+    // torn-transport SocketException/IOException as the consumer UDS
+    // is closed, which would otherwise surface to the user as a
+    // misleading "Could not connect to terminal session" error.
+    private int _userDetachRequested;
+
     // Locally-tracked inner terminal dimensions. Hex1bTerminal doesn't
     // expose its current grid size, so we track it here. Updated
     // whenever we resize the inner terminal in response to RoleChanged
@@ -289,7 +298,14 @@ internal sealed class TerminalViewerApp
         // screen has been restored. SocketException, IOException, and
         // OperationCanceledException are the typical shapes; the
         // top-level TerminalAttachCommand catches each.
-        if (_embeddedFault is not null)
+        //
+        // Skip the rethrow when the user invoked Detach (Ctrl+B D) -
+        // tearing down the embedded transport from the outer-app
+        // shutdown commonly faults the embedded RunAsync with a
+        // SocketException/IOException, which is *not* what the user
+        // saw and would surface as a misleading "Could not connect"
+        // error.
+        if (_embeddedFault is not null && Volatile.Read(ref _userDetachRequested) == 0)
         {
             throw _embeddedFault;
         }
@@ -366,9 +382,24 @@ internal sealed class TerminalViewerApp
         // Available widget space ~= host TTY minus the InfoBar (1 row).
         // Console.WindowWidth / WindowHeight reflect the live host TTY
         // size including SIGWINCH; the outer Hex1bTerminal is bound to
-        // those dims when running interactively.
-        var availW = Math.Max(1, Console.WindowWidth);
-        var availH = Math.Max(1, Console.WindowHeight - 1);
+        // those dims when running interactively. Hex1b doesn't expose
+        // the terminal size on RootContext, so we read it from the
+        // BCL - guarded against IOException because Console raises it
+        // when there is no controlling TTY (redirected stdout, CI,
+        // detached process). Fall back to the producer's default 80x24
+        // in that case; the user won't see this branch interactively.
+        int availW;
+        int availH;
+        try
+        {
+            availW = Math.Max(1, Console.WindowWidth);
+            availH = Math.Max(1, Console.WindowHeight - 1);
+        }
+        catch (IOException)
+        {
+            availW = 80;
+            availH = 23;
+        }
 
         var producerW = connection.RemoteWidth;
         var producerH = connection.RemoteHeight;
@@ -407,7 +438,15 @@ internal sealed class TerminalViewerApp
             // Detach: works in any mode.
             bindings.Ctrl().Key(Hex1bKey.B).Then().Key(Hex1bKey.D)
                 .OverridesCapture()
-                .Action(_ => _app?.RequestStop(), "Detach");
+                .Action(_ =>
+                {
+                    // Mark this as user-initiated *before* requesting stop so the
+                    // post-finally fault rethrow can distinguish a clean detach
+                    // from a real handshake/transport failure. See _embeddedFault
+                    // handling in RunAsync.
+                    Interlocked.Exchange(ref _userDetachRequested, 1);
+                    _app?.RequestStop();
+                }, "Detach");
 
             // Take control: only when we're not already primary.
             if (!isPrimary)

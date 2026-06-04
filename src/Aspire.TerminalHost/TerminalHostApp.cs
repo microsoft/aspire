@@ -140,7 +140,32 @@ public sealed class TerminalHostApp : IAsyncDisposable
 
             _logger.LogInformation("Terminal host ready.");
 
-            await WaitForShutdownAsync(token).ConfigureAwait(false);
+            // Observe the replica's recycle loop alongside cancellation. If the loop
+            // exits unexpectedly (e.g. permission error binding the consumer UDS,
+            // EADDRINUSE on a stale .sock, parent dir missing) the host would
+            // otherwise stay "ready" with no producer ever serving traffic; the
+            // AppHost could only detect the stall via getSession.RestartCount.
+            // Surface the failure as a non-zero exit so DCP can either restart the
+            // host or propagate the failure to the user.
+            var replicaRun = replica.RunTask;
+            await WaitForShutdownAsync(replicaRun, token).ConfigureAwait(false);
+
+            if (replicaRun.IsCompleted && !token.IsCancellationRequested)
+            {
+                if (replicaRun.IsFaulted)
+                {
+                    var fault = replicaRun.Exception?.GetBaseException();
+                    _logger.LogError(fault, "Replica recycle loop terminated with a fault; exiting non-zero.");
+                    return 1;
+                }
+
+                // RanToCompletion without cancellation means the recycle loop hit a
+                // permanent condition it considered fatal but didn't throw. Treat as
+                // an abnormal exit so DCP doesn't quietly keep a wedged process.
+                _logger.LogError("Replica recycle loop completed unexpectedly without cancellation; exiting non-zero.");
+                return 1;
+            }
+
             return 0;
         }
         catch (OperationCanceledException)
@@ -158,16 +183,18 @@ public sealed class TerminalHostApp : IAsyncDisposable
         }
     }
 
-    private static async Task WaitForShutdownAsync(CancellationToken cancellationToken)
+    private static async Task WaitForShutdownAsync(Task replicaRunTask, CancellationToken cancellationToken)
     {
-        // Wait for external cancellation or an explicit shutdown request via the
-        // control protocol. We do not auto-exit when the replica's producer disconnects:
-        // that is recoverable in normal operation (DCP may relaunch the upstream PTY),
-        // and DCP is responsible for tearing down the host when the resource is fully
-        // stopped.
+        // Wait for external cancellation, an explicit shutdown request via the control
+        // protocol, OR the replica recycle loop completing (clean or faulted). The
+        // recycle loop is expected to run for the lifetime of the host - early
+        // completion almost always signals a fatal misconfiguration (bad UDS path,
+        // permission denied, etc.) and the caller surfaces that as a non-zero exit
+        // code so DCP can react rather than letting the process wedge silently.
+        var cancellation = Task.Delay(Timeout.Infinite, cancellationToken);
         try
         {
-            await Task.Delay(Timeout.Infinite, cancellationToken).ConfigureAwait(false);
+            await Task.WhenAny(cancellation, replicaRunTask).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {

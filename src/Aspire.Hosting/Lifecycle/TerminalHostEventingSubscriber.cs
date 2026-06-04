@@ -113,13 +113,108 @@ internal sealed class TerminalHostEventingSubscriber(
         return Task.CompletedTask;
     }
 
-    private static string[] ParseInvocationArgs(string? raw)
+    /// <summary>
+    /// Tokenises a raw command-line string from configuration into argv.
+    /// Supports POSIX-ish single (<c>'...'</c>) and double (<c>"..."</c>) quoted
+    /// tokens so callers can pass arguments that contain spaces or paths with
+    /// embedded whitespace, e.g.
+    /// <c>ASPIRE_TERMINAL_HOST_INVOCATION_ARGS="--profile 'My Profile' --foo bar"</c>.
+    /// Inside double quotes, a backslash escapes <c>"</c> and <c>\</c>; inside
+    /// single quotes everything is literal (no escape processing). Outside
+    /// quotes, whitespace separates tokens.
+    /// </summary>
+    /// <remarks>
+    /// We don't reach for <c>System.CommandLine.CommandLineStringSplitter</c>
+    /// because it is not exposed publicly in System.CommandLine 2.0.x; this
+    /// reimplements the common subset we need.
+    /// </remarks>
+    internal static string[] ParseInvocationArgs(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw))
         {
             return [];
         }
 
-        return raw.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var result = new List<string>();
+        var current = new System.Text.StringBuilder();
+        var inDouble = false;
+        var inSingle = false;
+        var hasContent = false;
+
+        for (var i = 0; i < raw.Length; i++)
+        {
+            var c = raw[i];
+
+            if (inDouble)
+            {
+                if (c == '\\' && i + 1 < raw.Length && (raw[i + 1] == '"' || raw[i + 1] == '\\'))
+                {
+                    current.Append(raw[++i]);
+                    hasContent = true;
+                }
+                else if (c == '"')
+                {
+                    inDouble = false;
+                }
+                else
+                {
+                    current.Append(c);
+                    hasContent = true;
+                }
+                continue;
+            }
+
+            if (inSingle)
+            {
+                if (c == '\'')
+                {
+                    inSingle = false;
+                }
+                else
+                {
+                    current.Append(c);
+                    hasContent = true;
+                }
+                continue;
+            }
+
+            switch (c)
+            {
+                case '"':
+                    inDouble = true;
+                    hasContent = true;
+                    break;
+                case '\'':
+                    inSingle = true;
+                    hasContent = true;
+                    break;
+                case ' ':
+                case '\t':
+                    if (hasContent)
+                    {
+                        result.Add(current.ToString());
+                        current.Clear();
+                        hasContent = false;
+                    }
+                    break;
+                default:
+                    current.Append(c);
+                    hasContent = true;
+                    break;
+            }
+        }
+
+        if (inDouble || inSingle)
+        {
+            throw new InvalidOperationException(
+                $"ASPIRE_TERMINAL_HOST_INVOCATION_ARGS has unterminated {(inDouble ? "double" : "single")} quote.");
+        }
+
+        if (hasContent)
+        {
+            result.Add(current.ToString());
+        }
+
+        return [.. result];
     }
 }

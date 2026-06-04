@@ -62,22 +62,37 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
         }
 
         var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
-        socket.Bind(new UnixDomainSocketEndPoint(_socketPath));
-
-        // Restrict the control socket to the owning user (0600). Without this, file
-        // permissions are governed solely by the inherited umask — on developer
-        // machines that's frequently 002/022, leaving the socket world- or
-        // group-accessible. Any local user who can traverse to the path could then
-        // dial and invoke ShutdownAsync (no auth) or GetSessionAsync (leaks peer
-        // DisplayNames). Skipped on Windows (UDS is supported but SetUnixFileMode
-        // is not, and Windows access control on the socket file follows ACLs from
-        // the temp directory, which is per-user by default).
-        if (!OperatingSystem.IsWindows())
+        try
         {
-            File.SetUnixFileMode(_socketPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-        }
+            socket.Bind(new UnixDomainSocketEndPoint(_socketPath));
 
-        socket.Listen(backlog: 5);
+            // Restrict the control socket to the owning user (0600). Without this, file
+            // permissions are governed solely by the inherited umask — on developer
+            // machines that's frequently 002/022, leaving the socket world- or
+            // group-accessible. Any local user who can traverse to the path could then
+            // dial and invoke ShutdownAsync (no auth) or GetSessionAsync (leaks peer
+            // DisplayNames). Skipped on Windows (UDS is supported but SetUnixFileMode
+            // is not, and Windows access control on the socket file follows ACLs from
+            // the temp directory, which is per-user by default).
+            if (!OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(_socketPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            }
+
+            socket.Listen(backlog: 5);
+        }
+        catch
+        {
+            // If Bind/SetUnixFileMode/Listen fail (perm denied, EADDRINUSE that
+            // survived the pre-delete, broken parent dir), the raw Socket would
+            // otherwise leak as a kernel handle until GC. Also delete any
+            // partially-bound socket file so a retry isn't fighting our own
+            // residue. Best-effort - swallow secondary failures so the original
+            // exception is the one the caller sees.
+            try { socket.Dispose(); } catch { }
+            try { File.Delete(_socketPath); } catch { }
+            throw;
+        }
         _socket = socket;
 
         _logger.LogInformation("Control listener bound to '{Path}'.", _socketPath);
@@ -112,6 +127,25 @@ internal sealed class TerminalHostControlListener : IAsyncDisposable
             {
                 _logger.LogDebug(ex, "Control listener accept failed; stopping.");
                 return;
+            }
+
+            // The control protocol is documented as a single AppHost client (lifecycle,
+            // shutdown, stats). If we already have an active session, the new socket is
+            // either an accidental retry from the same AppHost or a hostile second
+            // dialer; in either case it is safer to refuse it than to fan out unbounded
+            // concurrent JsonRpc instances (each allocates a NetworkStream + a header-
+            // delimited message handler and adds three RPC registrations). The 0600 perm
+            // on the UDS already restricts to the owning user, but defence in depth.
+            lock (_gate)
+            {
+                if (_activeRpcs.Count >= 1)
+                {
+                    _logger.LogWarning(
+                        "Refusing additional control connection - {Count} session(s) already active.",
+                        _activeRpcs.Count);
+                    try { client.Dispose(); } catch { }
+                    continue;
+                }
             }
 
             _ = Task.Run(() => ServeClientAsync(client, cancellationToken), cancellationToken);
