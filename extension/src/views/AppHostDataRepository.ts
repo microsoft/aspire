@@ -21,9 +21,6 @@ export interface ResourceCommandJson {
     description: string | null;
     visibility?: string | null;
     state?: string | null;
-    // Registration order from the AppHost, used to sort commands so the UI matches the dashboard.
-    // Defaults to 0 when absent (e.g. an older CLI that doesn't emit it). See
-    // src/Shared/Model/Serialization/ResourceJson.cs (ResourceCommandJson.RegistrationOrder).
     registrationOrder?: number | null;
     argumentInputs?: ResourceCommandArgumentInputJson[] | null;
 }
