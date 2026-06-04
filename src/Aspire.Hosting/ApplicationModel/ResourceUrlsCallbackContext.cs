@@ -41,11 +41,11 @@ public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext 
     /// If <see cref="Resource"/> does not implement <see cref="IResourceWithEndpoints"/> then returns <c>null</c>.
     /// </summary>
     /// <param name="name">The name of the endpoint.</param>
-    /// <param name="contextNetworkID">The identifier of the network that serves as the context for the endpoint reference.</param>
-    public EndpointReference? GetEndpoint(string name, NetworkIdentifier contextNetworkID) =>
+    /// <param name="contextNetworkId">The identifier of the network that serves as the context for the endpoint reference.</param>
+    public EndpointReference? GetEndpoint(string name, NetworkIdentifier contextNetworkId) =>
         Resource switch
         {
-            IResourceWithEndpoints resourceWithEndpoints => resourceWithEndpoints.GetEndpoint(name, contextNetworkID),
+            IResourceWithEndpoints resourceWithEndpoints => resourceWithEndpoints.GetEndpoint(name, contextNetworkId),
             _ => null
         };
 

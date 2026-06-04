@@ -632,6 +632,82 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_WhenProjectUpdatedSuccessfullyAndRunningFromNpm_DisplaysNpmUpdateCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.aspire/bin/aspire");
+        using var npmScope = NpmInstallDetection.UseEnvironmentForTesting(CreateNpmInstallEnvironment());
+        var interactionService = new TestInteractionService()
+        {
+            ConfirmCallback = (_, _) => true
+        };
+        var downloaderInvoked = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            options.InteractionServiceFactory = _ => interactionService;
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
+                {
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = true });
+                }
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService()
+            {
+                GetChannelsAsyncCallback = (cancellationToken) =>
+                {
+                    var stableChannel = PackageChannel.CreateExplicitChannel(
+                        "stable",
+                        PackageChannelQuality.Stable,
+                        new[] { new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json") },
+                        null!,
+                        features: new TestFeatures(),
+                        configureGlobalPackagesFolder: false,
+                        cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily");
+                    return Task.FromResult<IEnumerable<PackageChannel>>(new[] { stableChannel });
+                }
+            };
+
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier()
+            {
+                IsUpdateAvailableCallback = () => true
+            };
+
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloaderInvoked = true;
+                    return Task.FromResult(string.Empty);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost AppHost.csproj");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(downloaderInvoked, "Archive self-update should not be used for npm installs.");
+        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("npm install -g @microsoft/aspire-cli@latest", StringComparison.Ordinal));
+        Assert.DoesNotContain(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task UpdateCommand_WithoutAutoConfirmOption_UsesFalseConfirmationDefault()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -809,6 +885,40 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update -g Aspire.Cli", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_WhenRunningFromNpm_DisplaysNpmUpdateCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.aspire/bin/aspire");
+        using var npmScope = NpmInstallDetection.UseEnvironmentForTesting(CreateNpmInstallEnvironment());
+        var interactionService = new TestInteractionService();
+        var downloaderInvoked = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloaderInvoked = true;
+                    return Task.FromResult(string.Empty);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(downloaderInvoked, "Archive self-update should not be used for npm installs.");
+        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("npm install -g @microsoft/aspire-cli@latest", StringComparison.Ordinal));
+        Assert.DoesNotContain(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -1923,6 +2033,17 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         {
             options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Staging);
 
+            // A real staging build always bakes the build's commit hash into its
+            // AssemblyInformationalVersion (e.g. "13.4.0-preview.1.26280.6+<sha>"), and the staging
+            // identity now routes to that build's SHA-specific darc-pub-microsoft-aspire-<sha> feed
+            // regardless of version shape. The test host assembly has no +<commit> metadata, so the
+            // feed could not be derived and the staging channel would never be synthesized. Provide a
+            // stamped informational version override so the derivation matches a real staging build.
+            options.ConfigurationCallback += config =>
+            {
+                config[PackagingService.OverrideCliInformationalVersionConfigKey] = "13.4.0-preview.1.26280.6+2574ef57e97fc393aff67592fd442afca6a6d02f";
+            };
+
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
@@ -2539,6 +2660,16 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         return OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
     }
 
+    private static IReadOnlyDictionary<string, string?> CreateNpmInstallEnvironment()
+    {
+        return new Dictionary<string, string?>
+        {
+            [NpmInstallDetection.PackageEnvironmentVariableName] = NpmInstallDetection.ExpectedPackageName,
+            [NpmInstallDetection.PackageVersionEnvironmentVariableName] = "9.4.0",
+            [NpmInstallDetection.PackageRidEnvironmentVariableName] = "linux-x64"
+        };
+    }
+
     // `aspire update --self` no longer mutates the global identity channel via
     // IConfigurationService. The freshly extracted binary already carries its own channel
     // via [AssemblyMetadata("AspireCliChannel")], so the global write is dead weight and
@@ -2647,8 +2778,8 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
         => _innerService.PromptConfirmAsync(promptText, binding, cancellationToken);
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull 
         => _innerService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, echoSelected, cancellationToken);
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull 
-        => _innerService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, echoSelected, cancellationToken);
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, IEnumerable<T>? bindingChoices = null, CancellationToken cancellationToken = default) where T : notnull 
+        => _innerService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, echoSelected, bindingChoices, cancellationToken);
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) 
         => _innerService.DisplayIncompatibleVersionError(ex, appHostHostingVersion);
     public void DisplayError(string errorMessage, bool allowMarkup = false) => _innerService.DisplayError(errorMessage, allowMarkup);

@@ -123,7 +123,7 @@ server.listen(port, '127.0.0.1');
 """
         ])
 
-    hosted_agent.with_compute_environment(project=project)
+    hosted_agent.as_hosted_agent(project=project)
 
     api = builder.add_container("api", "nginx")
     foundry.with_container_registry_role_assignments(registry)

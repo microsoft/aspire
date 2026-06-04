@@ -59,7 +59,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
     private readonly PosixSignalRegistration? _sigQuitRegistration;
     private readonly CancellationToken _token;
     private ILogger _logger;
-    private Task<int>? _startedHandler;
+    private Task? _startedHandler;
     // Number of termination signals (Ctrl+C, SIGINT, SIGTERM, SIGQUIT, ProcessExit) received.
     // Drives the three-stage ladder: 1 = start graceful watcher; 2 = collapse graceful;
     // 3+ = force-exit. Internal teardown paths (guest failures, normal completion) do NOT
@@ -81,7 +81,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
     /// Sets the handler task that represents the currently executing command. When a termination
     /// signal arrives, the manager will wait for this task to complete within the configured budgets.
     /// </summary>
-    internal void SetStartedHandler(Task<int> handler) => Volatile.Write(ref _startedHandler, handler);
+    internal void SetStartedHandler(Task handler) => Volatile.Write(ref _startedHandler, handler);
 
     /// <summary>
     /// Sets the logger instance used for diagnostic messages during signal handling.

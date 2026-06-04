@@ -32,7 +32,7 @@ internal static class StringComparers
     public static StringComparer CommandName => StringComparer.Ordinal;
     public static StringComparer CliInputOrOutput => StringComparer.Ordinal;
     public static StringComparer InteractionInputName => StringComparer.OrdinalIgnoreCase;
-    public static StringComparer NetworkID => StringComparer.Ordinal;
+    public static StringComparer NetworkId => StringComparer.Ordinal;
     public static StringComparer NuGetPackageId => StringComparer.OrdinalIgnoreCase;
     public static StringComparer FullTextSearch => StringComparer.OrdinalIgnoreCase;
     public static StringComparer ChannelName => StringComparer.OrdinalIgnoreCase;
@@ -65,7 +65,7 @@ internal static class StringComparisons
     public static StringComparison CommandName => StringComparison.Ordinal;
     public static StringComparison CliInputOrOutput => StringComparison.Ordinal;
     public static StringComparison InteractionInputName => StringComparison.OrdinalIgnoreCase;
-    public static StringComparison NetworkID => StringComparison.Ordinal;
+    public static StringComparison NetworkId => StringComparison.Ordinal;
     public static StringComparison NuGetPackageId => StringComparison.OrdinalIgnoreCase;
     public static StringComparison FullTextSearch => StringComparison.OrdinalIgnoreCase;
     public static StringComparison ChannelName => StringComparison.OrdinalIgnoreCase;

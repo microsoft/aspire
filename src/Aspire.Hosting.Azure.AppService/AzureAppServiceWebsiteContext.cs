@@ -167,6 +167,15 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         if (value is EndpointReference ep)
         {
+            // The referenced endpoint may belong to a resource deployed to a different compute
+            // environment (for example a Foundry hosted agent). In that case delegate to the owning
+            // compute environment instead of looking it up in this environment's local endpoint map.
+            if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                ep, [environmentContext.Environment], out var crossExpr))
+            {
+                return ProcessValue(crossExpr, secretType, parent, isSlot);
+            }
+
             var context = environmentContext.GetAppServiceContext(ep.Resource);
             return isSlot ?
                 (GetEndpointValue(context._slotEndpointMapping[ep.EndpointName], EndpointProperty.Url), secretType) :
@@ -206,6 +215,12 @@ internal sealed class AzureAppServiceWebsiteContext(
 
         if (value is EndpointReferenceExpression epExpr)
         {
+            if (ComputeEnvironmentEndpointResolver.TryGetCrossEnvironmentEndpointExpression(
+                epExpr, [environmentContext.Environment], out var crossExpr))
+            {
+                return ProcessValue(crossExpr, secretType, parent, isSlot);
+            }
+
             var context = environmentContext.GetAppServiceContext(epExpr.Endpoint.Resource);
             var mapping = isSlot ? context._slotEndpointMapping[epExpr.Endpoint.EndpointName] : context._endpointMapping[epExpr.Endpoint.EndpointName];
             var val = GetEndpointValue(mapping, epExpr.Property);

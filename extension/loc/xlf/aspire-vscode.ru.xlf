@@ -23,8 +23,8 @@
         <target state="translated">Версия SDK для размещения в Hosting: {0}.</target>
       </trans-unit>
       <trans-unit id="extension.title">
-        <source xml:lang="en">Aspire VSCode</source>
-        <target state="translated">Aspire VSCode</target>
+        <source xml:lang="en">Aspire</source>
+        <target state="translated">Aspire</target>
       </trans-unit>
       <trans-unit id="aspire-vscode.strings.aspireConfigExists">
         <source xml:lang="en">Aspire launch configuration already exists in launch.json.</source>

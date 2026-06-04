@@ -6,6 +6,7 @@
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
@@ -223,6 +224,59 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var appServiceEnv = builder.AddAzureAppServiceEnvironment("env");
+
+        var project = builder.AddFoundry("foundry")
+            .AddProject("project");
+
+        // The agent app is deployed to the Foundry project compute environment via AsHostedAgent.
+        var agent = builder.AddProject<Project>("agent", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+        agent.AsHostedAgent(project);
+
+        // The web app is deployed to App Service and references the Foundry hosted agent. The App
+        // Service publisher must delegate endpoint resolution to the Foundry compute environment
+        // rather than looking the agent up in its own (App Service) endpoint map. See issue #17749.
+        // WithReference(agent) exercises the bare EndpointReference branch; the explicit
+        // Property(Url) environment variable exercises the EndpointReferenceExpression branch.
+        var web = builder.AddProject<Project>("web", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .WithComputeEnvironment(appServiceEnv)
+            .WithReference(agent)
+            .WithEnvironment("AGENT_URL", agent.GetEndpoint("http").Property(EndpointProperty.Url));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        SetFoundryProjectOutputs(project.Resource);
+
+        web.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+              .AppendContentAsFile(bicep, "bicep");
+    }
+
+    private static void SetFoundryProjectOutputs(AzureCognitiveServicesProjectResource project)
+    {
+        project.Outputs["endpoint"] = "https://account.services.ai.azure.com/api/projects/my-project";
+        project.Outputs["APPLICATION_INSIGHTS_CONNECTION_STRING"] = "";
+        project.ProvisioningTaskCompletionSource?.TrySetResult();
     }
 
     [Fact]

@@ -60,7 +60,6 @@ internal sealed class RunCommand : BaseCommand
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
     private readonly IDotNetCliRunner _runner;
-    private readonly IInteractionService _interactionService;
     private readonly ICertificateService _certificateService;
     private readonly IProjectLocator _projectLocator;
     private readonly IConfiguration _configuration;
@@ -102,15 +101,10 @@ internal sealed class RunCommand : BaseCommand
 
     public RunCommand(
         IDotNetCliRunner runner,
-        IInteractionService interactionService,
         ICertificateService certificateService,
         IProjectLocator projectLocator,
-        AspireCliTelemetry telemetry,
         IConfiguration configuration,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
         IServiceProvider serviceProvider,
-        CliExecutionContext executionContext,
         ILogger<RunCommand> logger,
         IAppHostProjectFactory projectFactory,
         AppHostLauncher appHostLauncher,
@@ -118,16 +112,15 @@ internal sealed class RunCommand : BaseCommand
         ICliHostEnvironment hostEnvironment,
         ProfilingTelemetry profilingTelemetry,
         TimeProvider timeProvider,
-        ConsoleCancellationManager cancellationManager)
-        : base("run", RunCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("run", RunCommandStrings.Description, services)
     {
         _runner = runner;
-        _interactionService = interactionService;
         _certificateService = certificateService;
         _projectLocator = projectLocator;
         _configuration = configuration;
         _serviceProvider = serviceProvider;
-        _features = features;
+        _features = services.Features;
         _logger = logger;
         _projectFactory = projectFactory;
         _appHostLauncher = appHostLauncher;
@@ -135,7 +128,7 @@ internal sealed class RunCommand : BaseCommand
         _hostEnvironment = hostEnvironment;
         _profilingTelemetry = profilingTelemetry;
         _timeProvider = timeProvider;
-        _cancellationManager = cancellationManager;
+        _cancellationManager = services.CancellationManager;
 
         Options.Add(s_detachOption);
         Options.Add(s_noBuildOption);
@@ -421,7 +414,7 @@ internal sealed class RunCommand : BaseCommand
                     // It is used to show discovered endpoints as they come in over the backchannel.
                     var discoveredEndpoints = new List<(string Resource, string Endpoint)>();
                     var endpointsLocalizedString = RunCommandStrings.Endpoints;
-                    var showCtrlC = !ExtensionHelper.IsExtensionHost(_interactionService, out _, out _);
+                    var showCtrlC = !ExtensionHelper.IsExtensionHost(InteractionService, out _, out _);
 
                     IRenderable BuildLiveRenderable()
                     {
@@ -442,7 +435,7 @@ internal sealed class RunCommand : BaseCommand
                                     i == 0
                                         ? new Align(new Markup($"[bold green]{endpointsLocalizedString}[/]:"), HorizontalAlignment.Right)
                                         : Text.Empty,
-                                    new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(_interactionService, endpoint)}")
+                                    new Markup($"[bold]{resource.EscapeMarkup()}[/] [grey]has endpoint[/] {MarkupHelpers.SafeLink(InteractionService, endpoint)}")
                                 );
                             }
 
@@ -805,7 +798,7 @@ internal sealed class RunCommand : BaseCommand
         // Start log capture early so any output produced while we wait for dashboard URLs is
         // routed into the unified CLI log file. The task is returned to the caller so the run
         // command can await/cancel it during teardown.
-        var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, logCaptureCancellationSource.Token);
+        var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, InteractionService, logCaptureCancellationSource.Token);
         // Observe faults in case the caller never gets to await it - e.g., if a subsequent
         // step in this method throws, the local task goes out of scope without being returned
         // through AppHostStartupResult. CaptureAppHostLogsAsync already handles OCE and
@@ -869,7 +862,7 @@ internal sealed class RunCommand : BaseCommand
 
     private void AppendCtrlCMessage(int longestLocalizedLengthWithColon)
     {
-        if (ExtensionHelper.IsExtensionHost(_interactionService, out _, out _))
+        if (ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
         {
             return;
         }

@@ -7,7 +7,6 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils;
 
@@ -24,7 +23,7 @@ internal static class ConfigurationHelper
         AllowTrailingCommas = true
     };
 
-    internal static void RegisterSettingsFiles(IConfigurationBuilder configuration, DirectoryInfo workingDirectory, FileInfo globalSettingsFile, ILogger logger)
+    internal static void RegisterSettingsFiles(IConfigurationBuilder configuration, DirectoryInfo workingDirectory, FileInfo globalSettingsFile)
     {
         var currentDirectory = workingDirectory;
 
@@ -43,46 +42,27 @@ internal static class ConfigurationHelper
 
             // TODO: Remove legacy .aspire/settings.json fallback once confident most users have migrated.
             // Tracked by https://github.com/microsoft/aspire/issues/15239
-            // Fall back to .aspire/settings.json (legacy format)
+            // Fall back to .aspire/settings.json (legacy format).
+            //
+            // Startup is shared by every command — including read-only ones (aspire ls, ps,
+            // doctor, describe, --version). Earlier versions eagerly migrated the legacy file
+            // to aspire.config.json here so the workspace would move forward on the user's
+            // first run of a newer CLI (https://github.com/microsoft/aspire/issues/15488),
+            // but that broke the "read commands don't mutate the working tree" contract:
+            // running aspire ls in a workspace that only had .aspire/settings.json was
+            // silently writing aspire.config.json, polluting git status and tripping CI
+            // dirty-tree checks (https://github.com/microsoft/aspire/issues/17615).
+            //
+            // Migration is now deferred to commands that already mutate the workspace
+            // (aspire run/add/init/update/etc. via ProjectLocator.CreateSettingsFileAsync ->
+            // AspireConfigFile.LoadOrCreate). Read commands continue to work against the
+            // legacy file directly: AppHostPathConfigurationPolicy.TryFindAppHostPathKey
+            // accepts both the legacy flat "appHostPath" key and the modern "appHost:path"
+            // hierarchical key, and ProjectLocator's settings-file reader has its own legacy
+            // fallback that does not write.
             var legacySettingsPath = BuildPathToSettingsJsonFile(currentDirectory.FullName);
             if (File.Exists(legacySettingsPath))
             {
-                // Eagerly migrate the legacy layout to aspire.config.json on startup so that
-                // even read-only commands (aspire doctor, aspire ls, aspire --version, etc.)
-                // move the workspace forward on the user's first run of a newer CLI. Without
-                // this, migration only happens when a command actively writes settings
-                // (aspire run/add/update/pipeline), leaving workspaces stuck on the legacy
-                // layout indefinitely for users who never invoke those commands.
-                // See https://github.com/microsoft/aspire/issues/15488.
-                if (LegacySettingsFileHasMigratableData(legacySettingsPath))
-                {
-                    try
-                    {
-                        _ = AspireConfigFile.LoadOrCreate(currentDirectory.FullName);
-                        var migratedPath = Path.Combine(currentDirectory.FullName, AspireConfigFile.FileName);
-                        if (File.Exists(migratedPath))
-                        {
-                            logger.LogInformation(
-                                "Migrated legacy {LegacyPath} to {MigratedPath} on CLI startup.",
-                                legacySettingsPath,
-                                migratedPath);
-                            localSettingsFile = new FileInfo(migratedPath);
-                            break;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Migration is best-effort during startup. If it fails (read-only
-                        // directory, IO error, malformed legacy JSON), fall back to using the
-                        // legacy file directly so the CLI still works. The next command that
-                        // writes settings will retry the migration through its normal path.
-                        logger.LogWarning(
-                            ex,
-                            "Failed to migrate legacy {LegacyPath} to aspire.config.json on startup. Falling back to the legacy file.",
-                            legacySettingsPath);
-                    }
-                }
-
                 localSettingsFile = new FileInfo(legacySettingsPath);
                 break;
             }
@@ -106,47 +86,6 @@ internal static class ConfigurationHelper
     internal static string BuildPathToSettingsJsonFile(string workingDirectory)
     {
         return Path.Combine(workingDirectory, ".aspire", "settings.json");
-    }
-
-    /// <summary>
-    /// Returns <c>true</c> when a legacy <c>.aspire/settings.json</c> file contains an
-    /// <c>appHostPath</c> entry — the signal that this is a real AppHost workspace worth
-    /// migrating to <c>aspire.config.json</c>. Files that exist purely as directory-walking
-    /// stop markers (empty JSON object, whitespace, comment-only, or files that only carry
-    /// flat colon-keys awaiting in-place normalization) are not migrated because doing so
-    /// would needlessly materialize an <c>aspire.config.json</c> alongside them with no
-    /// meaningful content.
-    /// </summary>
-    private static bool LegacySettingsFileHasMigratableData(string legacySettingsPath)
-    {
-        try
-        {
-            var content = File.ReadAllText(legacySettingsPath);
-            if (string.IsNullOrWhiteSpace(content))
-            {
-                return false;
-            }
-
-            // Read appHostPath directly with JsonDocument to avoid coupling this check to the
-            // strict-typed AspireJsonConfiguration deserializer, which would fail for files
-            // that contain loosely-typed values (e.g. string "false" in a bool dictionary).
-            using var doc = JsonDocument.Parse(content, ParseOptions);
-            if (doc.RootElement.ValueKind != JsonValueKind.Object)
-            {
-                return false;
-            }
-
-            return doc.RootElement.TryGetProperty("appHostPath", out var appHostPathElement)
-                && appHostPathElement.ValueKind == JsonValueKind.String
-                && !string.IsNullOrEmpty(appHostPathElement.GetString());
-        }
-        catch
-        {
-            // Treat unreadable or malformed legacy files as not-migratable so startup does
-            // not throw. The user will see the same JSON parse error from the regular
-            // configuration registration path below if the file is genuinely broken.
-            return false;
-        }
     }
 
     internal static DirectoryInfo? GetLegacySettingsRootDirectory(FileInfo settingsFile)

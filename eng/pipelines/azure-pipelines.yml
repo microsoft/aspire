@@ -1,13 +1,26 @@
-# Runtime parameters for VS Code extension publishing (shown in "Run pipeline" UI)
 parameters:
-  - name: publishVSCodeExtension
-    displayName: 'Publish VS Code Extension to Marketplace'
+  - name: packageVSCodeExtensionAsPreRelease
+    displayName: 'Package VS Code Extension as Pre-Release'
     type: boolean
     default: false
-  - name: vscePublishPreRelease
-    displayName: 'Publish as Pre-Release'
-    type: boolean
-    default: false
+  # Operator-controlled override for the AspireCliChannel baked into native CLI
+  # binaries by build_sign_native.yml. The default 'auto' lets the pipeline pick
+  # stable / staging / daily / pr-<N> from Build.Reason and Build.SourceBranch
+  # (where release/* and internal/release/* branches always resolve to 'staging'
+  # so stabilizing dogfood builds aren't mis-baked as 'stable' — see
+  # https://github.com/microsoft/aspire/issues/17527). Set this to 'stable' when
+  # kicking off the official GA ship build from a release/* branch so the
+  # distributed binary identifies as stable and `aspire init` writes a
+  # nuget.org-only nuget.config matching the promoted package set.
+  - name: aspireCliChannelOverride
+    displayName: 'Aspire CLI channel override (auto = derive from branch; set to stable for the GA ship build)'
+    type: string
+    default: 'auto'
+    values:
+      - auto
+      - stable
+      - staging
+      - daily
 
 trigger:
   batch: true
@@ -50,10 +63,6 @@ pr:
 variables:
   - template: /eng/pipelines/common-variables.yml@self
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
-
-  # Variable group containing VscePublishToken for VS Code Marketplace publishing
-  - ${{ if eq(parameters.publishVSCodeExtension, true) }}:
-    - group: Aspire-Release-Secrets
 
   - name: _BuildConfig
     value: Release
@@ -167,6 +176,7 @@ extends:
             - osx-x64
           codeSign: true
           teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
             $(_SignArgs)
@@ -182,6 +192,7 @@ extends:
           # no need to sign ELF binaries on linux
           codeSign: false
           teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
             $(_OfficialBuildIdArgs)
@@ -194,6 +205,7 @@ extends:
             - win-arm64
           codeSign: true
           teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
             $(_SignArgs)
@@ -262,18 +274,20 @@ extends:
                   targetPath: '$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)'
 
               - task: DownloadPipelineArtifact@2
-                displayName: 🟣Download Native CLI Tool Packages
+                displayName: 🟣Download Native CLI Packages
                 inputs:
                   itemPattern: |
                     **/Aspire.Cli*.nupkg
+                    **/microsoft-aspire-cli*.tgz
                   targetPath: '$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)'
 
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
                   & "$(Build.SourcesDirectory)/eng/scripts/stage-native-cli-tool-packages.ps1" `
                     -DownloadRoot "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)" `
-                    -ShippingDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
-                displayName: 🟣Stage Native CLI Tool Packages
+                    -ShippingDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping" `
+                    -RequireNpmPackages
+                displayName: 🟣Stage Native CLI Packages
 
               - task: PowerShell@2
                 displayName: 🟣List artifacts packages contents
@@ -285,7 +299,7 @@ extends:
               - task: UseNode@1
                 displayName: 🟣Install node.js
                 inputs:
-                  version: '20.x'
+                  version: '22.x'
 
               - task: npmAuthenticate@0
                 displayName: 🟣NPM authenticate
@@ -298,14 +312,9 @@ extends:
                   targetType: 'inline'
                   script: Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$(Build.SourcesDirectory)\.npmrc"
 
-              - task: PowerShell@2
-                displayName: 🟣Install yarn
-                inputs:
-                  targetType: 'inline'
-                  script: |
-                    npm install -g yarn@1.22.22
-                    yarn --version
-                  workingDirectory: '$(Build.SourcesDirectory)'
+              - template: /eng/pipelines/templates/install-corepack.yml
+                parameters:
+                  displayPrefix: '🟣'
 
               - task: PowerShell@2
                 displayName: 🟣Install vsce
@@ -325,9 +334,7 @@ extends:
                   repoLogPath: $(Build.Arcade.LogsPath)
                   repoTestResultsPath: $(Build.Arcade.TestResultsPath)
                   isWindows: true
-                  publishVSCodeExtension: ${{ parameters.publishVSCodeExtension }}
-                  vscePublishToken: $(VscePublishToken)
-                  vscePublishPreRelease: ${{ parameters.vscePublishPreRelease }}
+                  packageVSCodeExtensionAsPreRelease: ${{ parameters.packageVSCodeExtensionAsPreRelease }}
 
               # Extract the Aspire version from a generated nupkg filename so downstream
               # stages can use it. Aspire.Hosting.AppHost has no RID in its filename and
@@ -433,7 +440,7 @@ extends:
       #       MirrorBranch: main
 
     # ----------------------------------------------------------------
-    # Generate and test installer packages (WinGet + Homebrew).
+    # Generate installer packages (WinGet + Homebrew) and validate npm install.
     # Artifacts are consumed by release-publish-nuget.yml for stable
     # publishing. No publishing happens from this pipeline.
     # ----------------------------------------------------------------
@@ -527,3 +534,54 @@ extends:
                 version: $(aspireVersion)
                 channel: $(installerChannel)
                 archiveRoot: $(Pipeline.Workspace)/native-archives
+
+          - job: NpmInstall_Windows_x64
+            displayName: npm install validation (win-x64)
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: 1es-windows-2022
+              os: windows
+            steps:
+              - template: /eng/pipelines/templates/npm-cli-install-validation-steps.yml@self
+                parameters:
+                  rid: win-x64
+                  validationSummaryArtifactName: $(NPM_VALIDATION_SUMMARY_WIN_X64_ARTIFACT)
+
+          - job: NpmInstall_Linux_x64
+            displayName: npm install validation (linux-x64)
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: 1es-ubuntu-2204
+              os: linux
+            steps:
+              - template: /eng/pipelines/templates/npm-cli-install-validation-steps.yml@self
+                parameters:
+                  rid: linux-x64
+                  validationSummaryArtifactName: $(NPM_VALIDATION_SUMMARY_LINUX_X64_ARTIFACT)
+
+          - job: NpmInstall_macOS
+            displayName: npm install validation (macOS native RID)
+            timeoutInMinutes: 30
+            pool:
+              name: Azure Pipelines
+              vmImage: macOS-latest-internal
+              os: macOS
+            steps:
+              - template: /eng/pipelines/templates/npm-cli-install-validation-steps.yml@self
+                parameters:
+                  rid: $(NpmValidationRid)
+                  validationSummaryArtifactName: $(NPM_VALIDATION_SUMMARY_OSX_ARTIFACT)
+                  preSteps:
+                    - pwsh: |
+                        $ErrorActionPreference = 'Stop'
+                        $rid = switch ('$(Agent.OSArchitecture)') {
+                          'ARM64' { 'osx-arm64' }
+                          'X64' { 'osx-x64' }
+                          default { throw "Unsupported macOS agent architecture '$(Agent.OSArchitecture)'." }
+                        }
+
+                        Write-Host "Resolved macOS npm validation RID: $rid"
+                        Write-Host "##vso[task.setvariable variable=NpmValidationRid]$rid"
+                      displayName: 🟣Resolve native macOS RID

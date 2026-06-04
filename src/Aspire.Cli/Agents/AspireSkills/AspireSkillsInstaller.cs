@@ -8,9 +8,11 @@ using System.IO.Compression;
 using System.Net;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -26,6 +28,7 @@ internal sealed class AspireSkillsInstaller(
     IInteractionService interactionService,
     CliExecutionContext executionContext,
     IConfiguration configuration,
+    IFeatures features,
     AspireCliTelemetry telemetry,
     ILogger<AspireSkillsInstaller> logger) : IAspireSkillsInstaller
 {
@@ -72,16 +75,33 @@ internal sealed class AspireSkillsInstaller(
 
         var validationDisabled = string.Equals(configuration[DisablePackageValidationKey], "true", StringComparison.OrdinalIgnoreCase);
 
-        var githubResult = await InstallFromGitHubAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
-        if (githubResult.Status == AcquisitionStatus.Installed)
-        {
-            CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
-            return AspireSkillsInstallResult.Installed(githubResult.Bundle!);
-        }
+        // The remote fetch path is opt-in. Ship 13.4 with this disabled so users only
+        // get the embedded snapshot (no unattended network call out to GitHub on every
+        // `aspire agent init`). Toggle the feature on to opt in to the GitHub release path,
+        // which still falls back to the embedded snapshot if the network call fails.
+        var remoteFetchEnabled = features.IsFeatureEnabled(
+            KnownFeatures.AspireSkillsRemoteFetchEnabled,
+            KnownFeatures.GetFeatureMetadata(KnownFeatures.AspireSkillsRemoteFetchEnabled)!.DefaultValue);
+        activity?.SetTag("aspire.skills.remote_fetch_enabled", remoteFetchEnabled);
 
-        if (githubResult.Status == AcquisitionStatus.Failed)
+        AcquisitionResult? githubResult = null;
+        if (remoteFetchEnabled)
         {
-            logger.LogDebug("Aspire skills GitHub acquisition failed for version {Version}; falling back to embedded snapshot. Failure: {Failure}", effectiveVersion, githubResult.Message);
+            githubResult = await InstallFromGitHubAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
+            if (githubResult.Status == AcquisitionStatus.Installed)
+            {
+                CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
+                return AspireSkillsInstallResult.Installed(githubResult.Bundle!);
+            }
+
+            if (githubResult.Status == AcquisitionStatus.Failed)
+            {
+                logger.LogDebug("Aspire skills GitHub acquisition failed for version {Version}; falling back to embedded snapshot. Failure: {Failure}", effectiveVersion, githubResult.Message);
+            }
+        }
+        else
+        {
+            logger.LogDebug("Aspire skills remote fetch feature '{Feature}' is disabled; using the embedded snapshot.", KnownFeatures.AspireSkillsRemoteFetchEnabled);
         }
 
         var embeddedResult = await InstallFromEmbeddedAsync(cacheRoot, effectiveVersion, activity, cancellationToken).ConfigureAwait(false);
@@ -93,8 +113,8 @@ internal sealed class AspireSkillsInstaller(
 
         var failureMessage = embeddedResult.Status == AcquisitionStatus.Failed
             ? embeddedResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable
-            : githubResult.Status == AcquisitionStatus.Failed
-                ? githubResult.Message ?? AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable
+            : githubResult is { Status: AcquisitionStatus.Failed, Message: { } githubMessage }
+                ? githubMessage
                 : AgentCommandStrings.AspireSkillsInstaller_GitHubUnavailable;
 
         activity?.SetStatus(ActivityStatusCode.Error, failureMessage);
@@ -158,14 +178,15 @@ internal sealed class AspireSkillsInstaller(
 
             try
             {
-                var bundle = await CacheArchiveAsync(cacheRoot, archivePath, version, cancellationToken).ConfigureAwait(false);
+                var bundle = await CacheArchiveAsync(cacheRoot, archivePath, version, skipCompatibilityCheck: false, cancellationToken).ConfigureAwait(false);
                 activity?.SetTag("aspire.skills.source", "github");
                 activity?.SetTag("aspire.skills.cache_hit", false);
                 return AcquisitionResult.Installed(bundle);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
             {
-                logger.LogWarning(ex, "Downloaded Aspire skills GitHub release asset {AssetName} is invalid.", asset.Name);
+                // Includes version-mismatch failures from ValidateCompatibility, which fall back to the embedded snapshot.
+                logger.LogDebug(ex, "Downloaded Aspire skills GitHub release asset {AssetName} is invalid.", asset.Name);
                 return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
             }
         }
@@ -233,14 +254,20 @@ internal sealed class AspireSkillsInstaller(
 
             try
             {
-                var bundle = await CacheArchiveAsync(cacheRoot, archivePath, version, cancellationToken).ConfigureAwait(false);
+                // The embedded snapshot ships inside the CLI binary as the trusted last-resort
+                // fallback. Its `supports` range is stamped at the time the snapshot was built,
+                // which can lag the actual CLI version (especially for prerelease/dogfood builds)
+                // and would otherwise reject a perfectly usable local copy. Skip the bundle's
+                // CLI/SDK compatibility check here so the embedded skills are always offered when
+                // the network path is unavailable.
+                var bundle = await CacheArchiveAsync(cacheRoot, archivePath, version, skipCompatibilityCheck: true, cancellationToken).ConfigureAwait(false);
                 activity?.SetTag("aspire.skills.source", "embedded");
                 activity?.SetTag("aspire.skills.cache_hit", false);
                 return AcquisitionResult.Installed(bundle);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or InvalidOperationException)
             {
-                logger.LogWarning(ex, "Embedded Aspire skills bundle {AssetName} is invalid.", metadata.AssetName);
+                logger.LogDebug(ex, "Embedded Aspire skills bundle {AssetName} is invalid.", metadata.AssetName);
                 return AcquisitionResult.Failed(string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.AspireSkillsInstaller_InvalidBundle, ex.Message));
             }
         }
@@ -441,7 +468,12 @@ internal sealed class AspireSkillsInstaller(
 
         try
         {
-            var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(cacheDirectory), cancellationToken).ConfigureAwait(false);
+            // Cached bundles are written by this installer (from GitHub or embedded sources).
+            // The cache directory is keyed by bundle version, which is the right invalidation
+            // signal, so skip the `supports` range check here — a previously-embedded snapshot
+            // whose range no longer covers the current CLI is still the local artifact we
+            // chose to use and should not be re-evicted on every invocation.
+            var bundle = await LoadCachedBundleAsync(cacheDirectory, cancellationToken).ConfigureAwait(false);
             ValidateBundleVersion(bundle, version);
             TouchLastUsed(cacheDirectory);
             activity?.SetTag("aspire.skills.cache_hit", true);
@@ -455,10 +487,21 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
+    private static Task<AspireSkillsBundle> LoadCachedBundleAsync(string cacheDirectory, CancellationToken cancellationToken)
+    {
+        return AspireSkillsBundle.LoadAsync(
+            new DirectoryInfo(cacheDirectory),
+            VersionHelper.GetDefaultSdkVersion(),
+            VersionHelper.GetDefaultSdkVersion(),
+            skipCompatibilityCheck: true,
+            cancellationToken);
+    }
+
     private async Task<AspireSkillsBundle> CacheArchiveAsync(
         string cacheRoot,
         string archivePath,
         string version,
+        bool skipCompatibilityCheck,
         CancellationToken cancellationToken)
     {
         var extractDir = Path.Combine(cacheRoot, $".extract-{Guid.NewGuid():N}");
@@ -472,7 +515,7 @@ internal sealed class AspireSkillsInstaller(
             var bundleRoot = FindBundleRoot(extractDir);
             CopyDirectory(bundleRoot.FullName, stageDir);
 
-            var stagedBundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(stageDir), cancellationToken).ConfigureAwait(false);
+            var stagedBundle = await LoadStagedBundleAsync(stageDir, skipCompatibilityCheck, cancellationToken).ConfigureAwait(false);
             ValidateBundleVersion(stagedBundle, version);
 
             await using var cacheLock = await AcquireCacheLockAsync(cacheRoot, version, cancellationToken).ConfigureAwait(false);
@@ -481,7 +524,7 @@ internal sealed class AspireSkillsInstaller(
             {
                 try
                 {
-                    var existingBundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(targetDir), cancellationToken).ConfigureAwait(false);
+                    var existingBundle = await LoadCachedBundleAsync(targetDir, cancellationToken).ConfigureAwait(false);
                     ValidateBundleVersion(existingBundle, version);
                     TouchLastUsed(targetDir);
                     return existingBundle;
@@ -500,7 +543,7 @@ internal sealed class AspireSkillsInstaller(
             Directory.Move(stageDir, targetDir);
             TouchLastUsed(targetDir);
 
-            var installedBundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(targetDir), cancellationToken).ConfigureAwait(false);
+            var installedBundle = await LoadCachedBundleAsync(targetDir, cancellationToken).ConfigureAwait(false);
             ValidateBundleVersion(installedBundle, version);
 
             return installedBundle;
@@ -510,6 +553,16 @@ internal sealed class AspireSkillsInstaller(
             TryDeleteDirectory(extractDir);
             TryDeleteDirectory(stageDir);
         }
+    }
+
+    private static Task<AspireSkillsBundle> LoadStagedBundleAsync(string stageDir, bool skipCompatibilityCheck, CancellationToken cancellationToken)
+    {
+        return AspireSkillsBundle.LoadAsync(
+            new DirectoryInfo(stageDir),
+            VersionHelper.GetDefaultSdkVersion(),
+            VersionHelper.GetDefaultSdkVersion(),
+            skipCompatibilityCheck,
+            cancellationToken);
     }
 
     private static async Task<FileStream> AcquireCacheLockAsync(string cacheRoot, string version, CancellationToken cancellationToken)

@@ -64,8 +64,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
     public bool IsReadyToCreate(RenderedModelResource<Executable> resource, EmptyCreationContext context)
     {
-        // Executables are always created. When explicit startup is used, DCP receives Spec.Start = false.
-        return true;
+        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
     }
 
     public async Task CreateObjectAsync(RenderedModelResource<Executable> er, EmptyCreationContext context, ILogger resourceLogger, IDcpObjectFactory factory, CancellationToken cancellationToken)

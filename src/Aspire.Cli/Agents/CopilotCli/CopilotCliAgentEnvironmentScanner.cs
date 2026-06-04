@@ -49,14 +49,14 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
         _logger.LogDebug("Starting GitHub Copilot CLI environment scan");
 
         var homeDirectory = _executionContext.HomeDirectory;
-        
+
         // Check if we're running in a VSCode terminal
         var isVSCode = _executionContext.GetEnvironmentVariable("TERM_PROGRAM") == "vscode";
-        
+
         if (isVSCode)
         {
             _logger.LogDebug("Detected VSCode terminal environment. Assuming GitHub Copilot CLI is available to avoid potential hangs from interactive installation prompts.");
-            
+
             // Check if the aspire server is already configured in the global config
             _logger.LogDebug("Checking if Aspire MCP server is already configured in Copilot CLI global config...");
             if (!HasAspireServerConfigured(homeDirectory))
@@ -75,7 +75,7 @@ internal sealed class CopilotCliAgentEnvironmentScanner : IAgentEnvironmentScann
             CommonAgentApplicators.AddPlaywrightCliApplicator(context, _playwrightCliInstaller, s_skillBaseDirectory);
             return;
         }
-        
+
         // Check if Copilot CLI is installed
         _logger.LogDebug("Checking for GitHub Copilot CLI installation...");
         var copilotVersion = await _copilotCliRunner.GetVersionAsync(cancellationToken).ConfigureAwait(false);

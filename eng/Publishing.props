@@ -40,6 +40,8 @@
       <_ExtensionSignatureFiles Include="$(ArtifactsPackagesDir)**\aspire-vscode-*.signature.p7s" />
       <_CliToolPackagesToPublish Include="$(ArtifactsShippingPackagesDir)**\Aspire.Cli*.nupkg"
                                   Exclude="$(ArtifactsShippingPackagesDir)**\*.symbols.nupkg" />
+      <_CliNpmPackagesToPublish Include="$(ArtifactsShippingPackagesDir)**\microsoft-aspire-cli*.tgz" />
+      <_CliNpmPackageSignaturesToPublish Include="$(ArtifactsShippingPackagesDir)**\microsoft-aspire-cli*.tgz.sig" />
     </ItemGroup>
 
     <!-- Validate VS Code extension artifacts: we expect exactly 1 VSIX and 1 manifest file.
@@ -87,11 +89,28 @@
       <_CliPointerToolPackages Include="@(_CliToolPackagesToPublish)" Exclude="@(_CliRidSpecificToolPackageFilesWithRid)" />
     </ItemGroup>
 
+    <ItemGroup Label="Validation of CLI npm packages">
+      <_CliRidSpecificNpmPackageFiles Include="@(_CliNpmPackagesToPublish)"
+                                      Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('%(_CliNpmPackagesToPublish.FileName)', '^microsoft-aspire-cli-\d'))" />
+
+      <!-- Extract the rid from filenames like microsoft-aspire-cli-linux-x64-9.0-dev and microsoft-aspire-cli-linux-arm64-9.4.0-preview.1.25358.11 -->
+      <_CliRidSpecificNpmPackageFilesWithRid Include="@(_CliRidSpecificNpmPackageFiles)">
+        <ExtractedRid>$([System.Text.RegularExpressions.Regex]::Match('%(_CliRidSpecificNpmPackageFiles.FileName)', '^microsoft-aspire-cli-(.*?)-\d+.*').Groups[1].Value)</ExtractedRid>
+      </_CliRidSpecificNpmPackageFilesWithRid>
+
+      <_MissingCliNpmPackageRids Include="@(_ExpectedCliRids)" Exclude="@(_CliRidSpecificNpmPackageFilesWithRid -> '%(ExtractedRid)')" />
+      <_UnexpectedCliNpmPackageRids Include="@(_CliRidSpecificNpmPackageFilesWithRid -> '%(ExtractedRid)')" Exclude="@(_ExpectedCliRids)" />
+      <_CliPointerNpmPackages Include="@(_CliNpmPackagesToPublish)" Exclude="@(_CliRidSpecificNpmPackageFilesWithRid)" />
+    </ItemGroup>
+
     <Warning Condition="@(_UnexpectedArchiveRids->Count()) > 0" Text="Found unexpected CLI archives for @(_UnexpectedArchiveRids, ',') . These are all the cli archives found - @(_ArchiveFiles, ', ')" />
     <Warning Condition="@(_UnexpectedCliPackageRids->Count()) > 0" Text="Found unexpected Aspire.Cli RID-specific packages for @(_UnexpectedCliPackageRids, ',') . These are all the CLI tool packages found - @(_CliToolPackagesToPublish, ', ')" />
+    <Warning Condition="@(_UnexpectedCliNpmPackageRids->Count()) > 0" Text="Found unexpected Aspire CLI npm RID-specific packages for @(_UnexpectedCliNpmPackageRids, ',') . These are all the CLI npm packages found - @(_CliNpmPackagesToPublish, ', ')" />
     <Error Condition="@(_MissingArchiveRids->Count()) > 0" Text="Missing CLI archive(s) for runtime identifiers: @(_MissingArchiveRids, ', '). These are all the cli archives found - @(_ArchiveFiles, ', ')" />
     <Error Condition="@(_MissingCliPackageRids->Count()) > 0" Text="Missing Aspire.Cli RID-specific package(s) for runtime identifiers: @(_MissingCliPackageRids, ', '). These are all the CLI tool packages found - @(_CliToolPackagesToPublish, ', ')" />
+    <Error Condition="@(_MissingCliNpmPackageRids->Count()) > 0" Text="Missing Aspire CLI npm RID-specific package(s) for runtime identifiers: @(_MissingCliNpmPackageRids, ', '). These are all the CLI npm packages found - @(_CliNpmPackagesToPublish, ', ')" />
     <Error Condition="@(_CliPointerToolPackages->Count()) != 1" Text="Expected exactly one Aspire.Cli pointer package but found @(_CliPointerToolPackages->Count()). Files: @(_CliPointerToolPackages, ', ')" />
+    <Error Condition="@(_CliPointerNpmPackages->Count()) != 1" Text="Expected exactly one Aspire CLI npm pointer package but found @(_CliPointerNpmPackages->Count()). Files: @(_CliPointerNpmPackages, ', ')" />
 
     <!-- Validate aspire-cli archive file extensions match expected format for each RID -->
     <ItemGroup>
@@ -177,6 +196,16 @@
         <IsShipping>true</IsShipping>
         <Kind>Package</Kind>
       </ItemsToPushToBlobFeed>
+      <ItemsToPushToBlobFeed Include="@(_CliNpmPackagesToPublish)">
+        <IsShipping>true</IsShipping>
+        <PublishFlatContainer>true</PublishFlatContainer>
+        <RelativeBlobPath>$(_UploadPathRoot)/$(_PackageVersion)/%(Filename)%(Extension)</RelativeBlobPath>
+      </ItemsToPushToBlobFeed>
+      <ItemsToPushToBlobFeed Include="@(_CliNpmPackageSignaturesToPublish)">
+        <IsShipping>true</IsShipping>
+        <PublishFlatContainer>true</PublishFlatContainer>
+        <RelativeBlobPath>$(_UploadPathRoot)/$(_PackageVersion)/%(Filename)%(Extension)</RelativeBlobPath>
+      </ItemsToPushToBlobFeed>
       <ItemsToPushToBlobFeed Include="@(_ExtensionFilesToPublish)">
         <IsShipping>false</IsShipping>
         <PublishFlatContainer>true</PublishFlatContainer>
@@ -211,6 +240,8 @@
     <Message Importance="High" Text="Aspire publish items to push: @(ItemsToPushToBlobFeed->Count()) total; @(_PackageItemsToPush->Count()) NuGet package(s); @(_FlatBlobItemsToPush->Count()) flat blob artifact(s)." />
     <Message Importance="High" Text="Aspire NuGet packages: @(_PackageItemsToPush->Count()) total; @(_ShippingPackageItemsToPush->Count()) shipping." Condition="@(_PackageItemsToPush->Count()) > 0" />
     <Message Importance="High" Text="Aspire CLI packages: @(_CliPointerToolPackages->Count()) pointer; @(_CliRidSpecificToolPackageFilesWithRid->Count())/@(_ExpectedCliRids->Count()) RID-specific; RIDs=@(_CliRidSpecificToolPackageFilesWithRid -> '%(ExtractedRid)', ', ')." Condition="@(_CliToolPackagesToPublish->Count()) > 0" />
+    <Message Importance="High" Text="Aspire CLI npm packages: @(_CliPointerNpmPackages->Count()) pointer; @(_CliRidSpecificNpmPackageFilesWithRid->Count())/@(_ExpectedCliRids->Count()) RID-specific; RIDs=@(_CliRidSpecificNpmPackageFilesWithRid -> '%(ExtractedRid)', ', ')." Condition="@(_CliNpmPackagesToPublish->Count()) > 0" />
+    <Message Importance="High" Text="Aspire CLI npm detached signatures: @(_CliNpmPackageSignaturesToPublish->Count()) sidecar(s)." Condition="@(_CliNpmPackageSignaturesToPublish->Count()) > 0" />
     <Message Importance="High" Text="Aspire flat blob artifacts: @(_FlatBlobItemsToPush->Count()) total; @(_ShippingFlatBlobItemsToPush->Count()) shipping; @(_NonShippingFlatBlobItemsToPush->Count()) non-shipping." Condition="@(_FlatBlobItemsToPush->Count()) > 0" />
     <Message Importance="High"
              Text="Aspire flat blob item: %(_FlatBlobItemsToPush.Filename)%(_FlatBlobItemsToPush.Extension) | IsShipping=%(_FlatBlobItemsToPush.IsShipping) | RelativeBlobPath=%(_FlatBlobItemsToPush.RelativeBlobPath)" />

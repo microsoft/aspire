@@ -693,6 +693,14 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         {
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionTokenName.EnvVarName] = sessionToken;
         }
+        if (configuration[KnownConfigNames.DcpInstanceIdPrefix] is { Length: > 0 } sessionDcpInstanceIdPrefix)
+        {
+            // DCP_INSTANCE_ID_PREFIX is a prefix, not a complete instance id. Use a
+            // stable dashboard-specific suffix so dashboard telemetry can use the
+            // same scoped DCP authorization path as other IDE endpoint requests.
+            var separator = sessionDcpInstanceIdPrefix.EndsWith('-') ? string.Empty : "-";
+            context.EnvironmentVariables[DashboardConfigNames.DebugSessionDcpInstanceIdName.EnvVarName] = sessionDcpInstanceIdPrefix + separator + "dashboard";
+        }
         if (configuration["DEBUG_SESSION_SERVER_CERTIFICATE"] is { Length: > 0 } sessionCertificate)
         {
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionServerCertificateName.EnvVarName] = sessionCertificate;

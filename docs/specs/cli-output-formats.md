@@ -44,6 +44,8 @@ Use `--format json --stream` to receive discovery results as NDJSON, with one co
 {"path":"/path/to/ts-app/apphost.ts","language":"TypeScript","status":"possibly-unbuildable"}
 ```
 
+Stream output is emitted in arrival order from parallel discovery; lines are not sorted. The non-streaming `--format json` snapshot above is sorted by `path`. If you need a deterministic order for streamed output, pipe through your own sort step (for example `jq -s 'sort_by(.path)'`).
+
 If discovery finds no AppHost candidates, the stream emits no lines. The stream does not emit `started`, `complete`, or `canceled` control records; use the command's exit code and end-of-file to detect stream completion.
 
 #### AppHost candidate fields

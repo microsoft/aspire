@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting.Azure;
@@ -19,6 +20,7 @@ namespace Aspire.Hosting.Azure;
 /// <param name="ownerResource">The Aspire resource that owns this set of role assignments, or <see langword="null"/> for global role assignments granted to the deployment principal.</param>
 /// <param name="identityResource">The user-assigned managed identity whose principal receives the role assignments, or <see langword="null"/> for global role assignments granted to the deployment principal.</param>
 /// <param name="configureInfrastructure">Callback to configure the Azure role assignment resources.</param>
+[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class AzureRoleAssignmentResource(
     string name,
     AzureProvisioningResource targetAzureResource,

@@ -10,56 +10,56 @@ namespace Aspire.Hosting
 {
     public static partial class AzureStorageExtensions
     {
-        [AspireExport(Description = "Adds an Azure Storage resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> AddAzureStorage(this IDistributedApplicationBuilder builder, string name) { throw null; }
 
         [System.Obsolete("Use AddBlobContainer on IResourceBuilder<AzureStorageResource> instead.")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureBlobStorageContainerResource> AddBlobContainer(this ApplicationModel.IResourceBuilder<Azure.AzureBlobStorageResource> builder, string name, string? blobContainerName = null) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Blob Storage container resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureBlobStorageContainerResource> AddBlobContainer(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name, string? blobContainerName = null) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Blob Storage resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureBlobStorageResource> AddBlobs(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Data Lake Storage resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureDataLakeStorageResource> AddDataLake(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Data Lake Storage file system resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureDataLakeStorageFileSystemResource> AddDataLakeFileSystem(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name, string? dataLakeFileSystemName = null) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Storage queue resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureQueueStorageQueueResource> AddQueue(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name, string? queueName = null) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Queue Storage resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureQueueStorageResource> AddQueues(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name) { throw null; }
 
-        [AspireExport(Description = "Adds an Azure Table Storage resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureTableStorageResource> AddTables(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, string name) { throw null; }
 
-        [AspireExport(Description = "Configures the Azure Storage resource to be emulated using Azurite", RunSyncOnBackgroundThread = true)]
+        [AspireExport(RunSyncOnBackgroundThread = true)]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> RunAsEmulator(this ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> builder, System.Action<ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource>>? configureContainer = null) { throw null; }
 
-        [AspireExport(Description = "Configures whether the emulator checks API version validity")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithApiVersionCheck(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, bool enable = true) { throw null; }
 
-        [AspireExport(Description = "Sets the host port for blob requests on the storage emulator")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithBlobPort(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, int port) { throw null; }
 
-        [AspireExport(Description = "Adds a bind mount for the data folder to an Azure Storage emulator resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithDataBindMount(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, string? path = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExport(Description = "Adds a named volume for the data folder to an Azure Storage emulator resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithDataVolume(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, string? name = null, bool isReadOnly = false) { throw null; }
 
-        [AspireExport(Description = "Sets the host port for queue requests on the storage emulator")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithQueuePort(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, int port) { throw null; }
 
         [AspireExportIgnore(Reason = "StorageBuiltInRole is an Azure.Provisioning type not compatible with ATS. Use the AzureStorageRole-based overload instead.")]
         public static ApplicationModel.IResourceBuilder<T> WithRoleAssignments<T>(this ApplicationModel.IResourceBuilder<T> builder, ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> target, params global::Azure.Provisioning.Storage.StorageBuiltInRole[] roles)
             where T : ApplicationModel.IResource { throw null; }
 
-        [AspireExport(Description = "Sets the host port for table requests on the storage emulator")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> WithTablePort(this ApplicationModel.IResourceBuilder<Azure.AzureStorageEmulatorResource> builder, int port) { throw null; }
     }
 }

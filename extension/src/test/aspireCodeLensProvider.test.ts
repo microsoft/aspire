@@ -12,6 +12,7 @@ import { codeLensCommand } from '../loc/strings';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
 import { AppHostDataRepository, AppHostDisplayInfo, ResourceJson } from '../views/AppHostDataRepository';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { AppHostLaunchService } from '../services/AppHostLaunchService';
 // Import parsers so they self-register before the provider consults them.
 import '../editor/parsers/csharpAppHostParser';
 import '../editor/parsers/jsTsAppHostParser';
@@ -123,7 +124,7 @@ function createHarness(opts: {
     const subs: vscode.Disposable[] = [];
     const terminalProvider = new AspireTerminalProvider(subs);
     const repository = new AppHostDataRepository(terminalProvider);
-    const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider);
+    const treeProvider = new AspireAppHostTreeProvider(repository, terminalProvider, new AppHostLaunchService());
 
     const appHostsStub = sinon.stub(repository, 'appHosts').get(() => opts.appHosts ?? []);
     const workspaceResourcesStub = sinon.stub(repository, 'workspaceResources').get(() => opts.workspaceResources ?? []);
@@ -851,6 +852,76 @@ suite('AspireCodeLensProvider resource lens anchoring', () => {
         assert.ok(customLens);
         assert.strictEqual(customLens!.command?.title, codeLensCommand('Reset Database'));
         assert.strictEqual(customLens!.command?.tooltip, 'Stop the resource, rebuild the project from source, and restart it.');
+        harness.dispose();
+    });
+
+    test('resource action lenses only execute enabled commands', async () => {
+        const docPath = p('repo', 'AppHost', 'apphost.ts');
+        const hostPath = p('repo', 'AppHost', 'apphost.ts');
+        const content = [
+            'const builder = await createBuilder();',
+            'builder.addRedis("cache");',
+        ].join('\n');
+
+        const harness = createHarness({
+            workspaceAppHostPath: hostPath,
+            workspaceResources: [makeResource('cache', {
+                commands: {
+                    restart: {
+                        displayName: 'Restart',
+                        description: null,
+                        visibility: 'Api',
+                    },
+                    stop: {
+                        displayName: 'Stop',
+                        description: null,
+                        state: 'Disabled',
+                    },
+                    start: {
+                        displayName: 'Start',
+                        description: null,
+                        state: 'Hidden',
+                    },
+                    'reset-db': {
+                        displayName: 'Reset Database',
+                        description: null,
+                        state: 'Enabled',
+                        visibility: 'Api',
+                    },
+                    'ui-custom': {
+                        displayName: 'UI Custom',
+                        description: null,
+                        state: 'Enabled',
+                        visibility: 'Api, Ui',
+                    },
+                    'disabled-custom': {
+                        displayName: 'Disabled Custom',
+                        description: null,
+                        state: 'Disabled',
+                    },
+                    'hidden-custom': {
+                        displayName: 'Hidden Custom',
+                        description: null,
+                        state: 'Hidden',
+                    },
+                    'legacy-custom': {
+                        displayName: 'Legacy Custom',
+                        description: null,
+                    },
+                },
+            })],
+        });
+
+        const doc = createMockDocument(content, docPath);
+        const lenses = await harness.provider.provideCodeLenses(doc, cancellationToken) as vscode.CodeLens[];
+        const actionNames = lenses
+            .filter(l => l.command?.command === 'aspire-vscode.codeLensResourceAction')
+            .map(l => l.command!.arguments![1])
+            .sort();
+
+        assert.deepStrictEqual(actionNames, ['legacy-custom', 'ui-custom']);
+        const restartLens = lenses.find(l => l.command?.arguments?.[1] === 'restart');
+        assert.strictEqual(restartLens, undefined);
         harness.dispose();
     });
 

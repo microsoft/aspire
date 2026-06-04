@@ -18,35 +18,35 @@ namespace Aspire.Hosting
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]
         public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath, params string[] scriptArgs) { throw null; }
 
-        [AspireExport(Description = "Adds a Python script application resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string scriptPath) { throw null; }
 
-        [AspireExport(Description = "Adds a Python executable application resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonExecutable(this IDistributedApplicationBuilder builder, string name, string appDirectory, string executableName) { throw null; }
 
-        [AspireExport(Description = "Adds a Python module application resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Python.PythonAppResource> AddPythonModule(this IDistributedApplicationBuilder builder, string name, string appDirectory, string moduleName) { throw null; }
 
-        [AspireExport(Description = "Adds a Uvicorn-based Python application resource")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<Python.UvicornAppResource> AddUvicornApp(this IDistributedApplicationBuilder builder, string name, string appDirectory, string app) { throw null; }
 
-        [AspireExport(Description = "Enables debugging support for a Python application")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithDebugging<T>(this ApplicationModel.IResourceBuilder<T> builder)
             where T : Python.PythonAppResource { throw null; }
 
-        [AspireExport(Description = "Configures the entrypoint for a Python application")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithEntrypoint<T>(this ApplicationModel.IResourceBuilder<T> builder, Python.EntrypointType entrypointType, string entrypoint)
             where T : Python.PythonAppResource { throw null; }
 
-        [AspireExport(Description = "Configures pip package installation for a Python application")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithPip<T>(this ApplicationModel.IResourceBuilder<T> builder, bool install = true, string[]? installArgs = null)
             where T : Python.PythonAppResource { throw null; }
 
-        [AspireExport(Description = "Configures uv package management for a Python application")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithUv<T>(this ApplicationModel.IResourceBuilder<T> builder, bool install = true, string[]? args = null)
             where T : Python.PythonAppResource { throw null; }
 
-        [AspireExport(Description = "Configures the virtual environment for a Python application")]
+        [AspireExport]
         public static ApplicationModel.IResourceBuilder<T> WithVirtualEnvironment<T>(this ApplicationModel.IResourceBuilder<T> builder, string virtualEnvironmentPath, bool createIfNotExists = true)
             where T : Python.PythonAppResource { throw null; }
     }

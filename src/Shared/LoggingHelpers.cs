@@ -37,6 +37,12 @@ internal static class LoggingHelpers
             ? $"{dashboardAuthority}/login?t={token}"
             : null;
 
+        if (loginUrl is not null)
+        {
+            // dotnet watch looks for this exact log message to launch the dashboard. Do not change it.
+            logger.LogInformation("Login to the dashboard at {LoginUrl}", loginUrl);
+        }
+
         var templateBuilder = new StringBuilder();
         var parameters = new List<object?>();
 

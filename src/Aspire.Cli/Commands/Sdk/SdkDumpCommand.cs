@@ -10,7 +10,6 @@ using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Shared.Json;
 using Microsoft.Extensions.Logging;
@@ -57,13 +56,9 @@ internal sealed class SdkDumpCommand : BaseCommand
 
     public SdkDumpCommand(
         IAppHostServerProjectFactory appHostServerProjectFactory,
-        IFeatures features,
-        ICliUpdateNotifier updateNotifier,
-        CliExecutionContext executionContext,
-        IInteractionService interactionService,
         ILogger<SdkDumpCommand> logger,
-        AspireCliTelemetry telemetry)
-        : base("dump", "Dump ATS capabilities from Aspire integration libraries.", features, updateNotifier, executionContext, interactionService, telemetry)
+        CommonCommandServices services)
+        : base("dump", "Dump ATS capabilities from Aspire integration libraries.", services)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _logger = logger;

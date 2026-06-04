@@ -25,21 +25,21 @@ jobs:
           test -f artifacts/bin/Aspire.Cli/Release/net10.0/aspire.dll
           test -f artifacts/bin/TypeScriptApiCompat/Release/net8.0/TypeScriptApiCompat.dll
 
-      - name: Prepare base ATS surface
+      - name: Prepare checked-in ATS surface
         shell: bash
         env:
           BASE_BRANCH: ${{ github.base_ref }}
         run: |
           set -euo pipefail
 
-          BASELINE_DIR="${RUNNER_TEMP}/ats-baseline"
+          CHECKED_IN_DIR="${RUNNER_TEMP}/ats-checked-in"
           BASE_SUPPRESSIONS_ROOT="${RUNNER_TEMP}/ats-baseline-suppressions"
           EXCLUDED_PACKAGES_FILE="${RUNNER_TEMP}/typescript-api-compat-excluded-packages.txt"
           : > "$EXCLUDED_PACKAGES_FILE"
 
           git fetch --no-tags --depth=1 origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
 
-          echo "::group::Copy checked-in ATS release baselines"
+          echo "::group::Copy checked-in ATS surfaces from PR branch"
           while IFS= read -r file; do
             [ -n "$file" ] || continue
             case "$file" in
@@ -48,10 +48,10 @@ jobs:
                 ;;
             esac
 
-            mkdir -p "$BASELINE_DIR/$(dirname "$file")"
-            git show "origin/${BASE_BRANCH}:$file" > "$BASELINE_DIR/$file"
+            mkdir -p "$CHECKED_IN_DIR/$(dirname "$file")"
+            cp "$file" "$CHECKED_IN_DIR/$file"
             echo "$file"
-          done < <(git ls-tree -r --name-only "origin/${BASE_BRANCH}" -- src | grep -E '^src/.+/api/.+\.ats\.txt$' || true)
+          done < <(git ls-files src | grep -E '^src/.+/api/.+\.ats\.txt$' || true)
           echo "::endgroup::"
 
           echo "::group::Copy base TypeScript API compatibility suppressions"
@@ -63,7 +63,7 @@ jobs:
           done < <(git ls-tree -r --name-only "origin/${BASE_BRANCH}" -- src eng/TypeScriptApiCompat | grep -E '(\.tscompat\.suppression\.txt|(^|/)global\.suppression\.txt)$' || true)
           echo "::endgroup::"
 
-          echo "BASELINE_DIR=$BASELINE_DIR" >> "$GITHUB_ENV"
+          echo "CHECKED_IN_DIR=$CHECKED_IN_DIR" >> "$GITHUB_ENV"
           echo "BASE_SUPPRESSIONS_ROOT=$BASE_SUPPRESSIONS_ROOT" >> "$GITHUB_ENV"
           echo "TYPESCRIPT_API_COMPAT_EXCLUDED_PACKAGES_FILE=$EXCLUDED_PACKAGES_FILE" >> "$GITHUB_ENV"
 
@@ -146,7 +146,7 @@ jobs:
 
           ./dotnet.sh exec \
             artifacts/bin/TypeScriptApiCompat/Release/net8.0/TypeScriptApiCompat.dll \
-            --baseline "$BASELINE_DIR" \
+            --baseline "$CHECKED_IN_DIR" \
             --current "$CURRENT_DIR" \
             --suppressions-root "${{ github.workspace }}" \
             --baseline-suppressions-root "$BASE_SUPPRESSIONS_ROOT" \

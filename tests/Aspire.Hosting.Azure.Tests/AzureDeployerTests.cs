@@ -1284,7 +1284,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         var acaEnv = builder.AddAzureContainerAppEnvironment("aca-env");
 
         builder.AddProject<Project>("agent", launchProfileName: null)
-            .WithComputeEnvironment(foundryProject);
+            .AsHostedAgent(foundryProject);
 
         builder.AddProject<Project>("api", launchProfileName: null)
             .WithExternalHttpEndpoints()

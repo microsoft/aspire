@@ -95,10 +95,10 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData("localhost:8080", 8080, "1234", "cert", true)]
-    [InlineData("localhost:8080", 8080, "1234", "cert", false)]
-    [InlineData(null, null, null, null, null)]
-    public async Task BeforeStartAsync_DashboardContainsDebugSessionInfo(string? debugSessionPort, int? expectedDebugSessionPort, string? debugSessionToken, string? debugSessionCert, bool? telemetryEnabled)
+    [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123-", "aspire-extension-run-123-dashboard", true)]
+    [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123", "aspire-extension-run-123-dashboard", false)]
+    [InlineData(null, null, null, null, null, null, null)]
+    public async Task BeforeStartAsync_DashboardContainsDebugSessionInfo(string? debugSessionPort, int? expectedDebugSessionPort, string? debugSessionToken, string? debugSessionCert, string? dcpInstanceIdPrefix, string? expectedDcpInstanceId, bool? telemetryEnabled)
     {
         // Arrange
         var resourceLoggerService = new ResourceLoggerService();
@@ -118,6 +118,11 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         if (debugSessionCert is not null)
         {
             configurationBuilder.AddInMemoryCollection([new KeyValuePair<string, string?>("DEBUG_SESSION_SERVER_CERTIFICATE", debugSessionCert)]);
+        }
+
+        if (dcpInstanceIdPrefix is not null)
+        {
+            configurationBuilder.AddInMemoryCollection([new KeyValuePair<string, string?>(KnownConfigNames.DcpInstanceIdPrefix, dcpInstanceIdPrefix)]);
         }
 
         var configuration = configurationBuilder.Build();
@@ -158,6 +163,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(expectedDebugSessionPort?.ToString(), environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionPortName.EnvVarName));
         Assert.Equal(debugSessionToken, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionTokenName.EnvVarName));
         Assert.Equal(debugSessionCert, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionServerCertificateName.EnvVarName));
+        Assert.Equal(expectedDcpInstanceId, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionDcpInstanceIdName.EnvVarName));
         Assert.Equal(telemetryEnabled, bool.TryParse(environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName), out var b) ? b : null);
     }
 
@@ -270,6 +276,12 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(expectedHost, uri.Host);
         Assert.Equal(allocatedPort, uri.Port);
         Assert.Equal(expectedScheme, uri.Scheme);
+
+        var loginLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString() == "Login to the dashboard at {LoginUrl}");
+
+        Assert.NotNull(loginLog);
+        Assert.Equal($"{expectedScheme}://{expectedHost}:{allocatedPort}/login?t=test-token", LogTestHelpers.GetValue(loginLog, "LoginUrl"));
 
         var summaryLog = testSink.Writes.FirstOrDefault(l =>
             LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);

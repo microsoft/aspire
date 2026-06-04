@@ -55,6 +55,94 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t\n")]
+    public void ComputeStagingFeedCacheKey_ReturnsNull_ForNullOrWhitespace(string? feedUrl)
+    {
+        Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey(feedUrl));
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_DefaultsToEightLowercaseHexChars()
+    {
+        var key = CliPathHelper.ComputeStagingFeedCacheKey("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json");
+
+        Assert.NotNull(key);
+        Assert.Matches("^[0-9a-f]{8}$", key);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_IsDeterministic_ForSameInput()
+    {
+        const string feedUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json";
+
+        var first = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl);
+        var second = CliPathHelper.ComputeStagingFeedCacheKey(feedUrl);
+
+        Assert.Equal(first, second);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_DifferentUrls_ProduceDifferentKeys()
+    {
+        var a = CliPathHelper.ComputeStagingFeedCacheKey("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json");
+        var b = CliPathHelper.ComputeStagingFeedCacheKey("https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-cafef00d/nuget/v3/index.json");
+
+        Assert.NotEqual(a, b);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_NormalizesWhitespaceAndCasing()
+    {
+        // Trim + lowercase normalization keeps the cache from fragmenting when the same feed
+        // shows up with stray whitespace from a config file or with a mixed-case hostname.
+        const string baseUrl = "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json";
+
+        var baseKey = CliPathHelper.ComputeStagingFeedCacheKey(baseUrl);
+        var spacedKey = CliPathHelper.ComputeStagingFeedCacheKey("  " + baseUrl + "\t\n");
+        var upperKey = CliPathHelper.ComputeStagingFeedCacheKey(baseUrl.ToUpperInvariant());
+
+        Assert.Equal(baseKey, spacedKey);
+        Assert.Equal(baseKey, upperKey);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(4)]
+    [InlineData(16)]
+    public void ComputeStagingFeedCacheKey_RespectsExplicitLength(int length)
+    {
+        var key = CliPathHelper.ComputeStagingFeedCacheKey(
+            "https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-deadbeef/nuget/v3/index.json",
+            length);
+
+        Assert.NotNull(key);
+        Assert.Equal(length, key.Length);
+        Assert.Matches($"^[0-9a-f]{{{length}}}$", key);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_LengthAboveHashWidth_ReturnsFullHash()
+    {
+        // XxHash3 is 64 bits -> 16 hex chars. Asking for more than 16 must not crash and must
+        // return all available hash chars rather than padding with garbage.
+        var key = CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: 999);
+
+        Assert.NotNull(key);
+        Assert.Equal(16, key.Length);
+        Assert.Matches("^[0-9a-f]{16}$", key);
+    }
+
+    [Fact]
+    public void ComputeStagingFeedCacheKey_NonZeroLength_RejectsZeroOrNegative()
+    {
+        Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: 0));
+        Assert.Null(CliPathHelper.ComputeStagingFeedCacheKey("https://example/index.json", length: -1));
+    }
+
+    [Theory]
     [InlineData("script")]
     [InlineData("localhive")]
     public void TryGetAspireHomeDirectoryFromInstallRoute_SharedPrefixRoute_ReturnsInstallPrefix(string source)
