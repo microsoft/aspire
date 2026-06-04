@@ -201,12 +201,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      # Linux runners don't ship Homebrew preinstalled. The official
-      # setup-homebrew action handles install + PATH wiring for both fresh
-      # Linuxbrew installs and incremental updates on macOS runners.
-      - name: Set up Homebrew
-        id: brew
-        uses: Homebrew/actions/setup-homebrew@d0dd492210067c1b5f8857ab6c5dd52c29944e44
+      # Linux runners don't ship Homebrew preinstalled. Install Linuxbrew
+      # via the official one-liner. Done inline (rather than via the
+      # Homebrew/actions/setup-homebrew action) to avoid depending on a
+      # third-party action that may not be on this org's allowed-actions
+      # policy. macOS runners already have brew preinstalled.
+      - name: Install Linuxbrew (Linux only)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          # Add brew to PATH for subsequent steps. The install script writes
+          # the right shellenv for the user's profile, but GH Actions steps
+          # don't source profiles.
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+          echo "/home/linuxbrew/.linuxbrew/sbin" >> "$GITHUB_PATH"
+          export PATH="/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:$PATH"
+          brew --version
+
+      - name: Update Homebrew and confirm tooling
+        run: |
+          brew update --quiet || true
+          brew --version
 
       # Node is needed by the bundled CLI build (PackDotnetTool depends on
       # PackNpmPackage which shells out to `npm pack`).
