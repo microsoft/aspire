@@ -68,35 +68,68 @@ class AspireCli < Formula
     ENV["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1"
     ENV["DOTNET_NOLOGO"] = "1"
 
-    # Single-shot bundled build. Wraps eng/Bundle.proj — produces a NativeAOT
-    # `aspire` binary with the managed runtime + DCP + templates embedded as a
-    # self-extracting resource, then copies the publish dir into libexec.
-    # `--channel stable` bakes the release channel into the binary's assembly
-    # metadata so install-route gating identifies brew-installed binaries
-    # correctly (defaulting to "local" would break `aspire doctor --self`).
+    # Unbundled build: produces an unbundled NativeAOT `aspire` binary plus
+    # the unwrapped bundle layout (managed/, dcp/) in buildpath/"out".
+    # We then lay these out under libexec/ in the canonical sidecar-route
+    # shape (versions/<v>/{managed,dcp} + bundle symlink) so the runtime
+    # LayoutDiscovery's "new layout" arm resolves through libexec/bundle/.
+    # Skipping the self-extracting transport saves ~100 MB of Cellar disk
+    # per install and avoids running an install-time extraction step.
+    # `--channel stable` bakes the release channel into the binary's
+    # assembly metadata so install-route gating identifies brew-installed
+    # binaries correctly (defaulting to "local" would break
+    # `aspire doctor`).
     system "eng/homebrew-core/build-cli.sh",
            "--rid", rid,
-           "--output", libexec,
-           "--channel", "stable"
+           "--output", buildpath/"out",
+           "--channel", "stable",
+           "--no-embed"
 
-    # Write the install-route sidecar before triggering setup, so BundleService
-    # finds source="brew" and BrewWire's extract-dir contract (libexec/.) is honored.
+    # Layout: <prefix>/libexec/{aspire, ...runtime files..., bundle -> versions/<v>/}
+    #         <prefix>/libexec/versions/<v>/{managed, dcp}
+    version_dir = libexec/"versions"/version.to_s
+    version_dir.install (buildpath/"out/managed")
+    version_dir.install (buildpath/"out/dcp")
+
+    # Copy the CLI binary and its sibling NativeAOT runtime files
+    # (libsodium.dylib, satellite locale folders) into libexec/. The
+    # bundle layout we just laid out under versions/<v>/ is excluded —
+    # we move it into version_dir above and don't want a duplicate copy
+    # at libexec/managed or libexec/dcp.
+    Dir[buildpath/"out/*"].each do |entry|
+      basename = File.basename(entry)
+      next if ["managed", "dcp"].include?(basename)
+
+      libexec.install entry
+    end
+
+    # The canonical sidecar-route layout anchor. LayoutDiscovery's
+    # TryInferLayout finds {libexec}/bundle/{managed,dcp}/ via this
+    # symlink. The symlink itself is what's stable across reads, even
+    # though brew reinstalls of a new version replace the entire Cellar
+    # prefix anyway — the shape match with cask/winget is the point.
+    ln_s "versions/#{version}", libexec/"bundle"
+
+    # Install-route sidecar. Two consumers in the brew route:
+    #   * BrewInstallDetection (self-update gate; prints `brew upgrade aspire`)
+    #   * BundleService.ComputeDefaultExtractDir (route-aware extract dir;
+    #     unused under --no-embed because no extraction ever runs)
     (libexec/".aspire-install.json").write(%Q({"source":"brew"}\n))
-
-    # Pre-extract the embedded bundle at install time. `aspire setup` is the
-    # install-script entry point that BundleService exposes for this scenario.
-    # Doing this eagerly means the runtime CLI never writes into the Cellar
-    # prefix (homebrew-core no-runtime-mutation expectation).
-    system libexec/"aspire", "setup", "--install-path", libexec, "--force"
 
     bin.install_symlink libexec/"aspire"
   end
 
   test do
     # Real-shape smoke. `--version` alone wouldn't catch a missing bundle
-    # payload; `aspire new aspire-empty` exercises template extraction from
-    # the bundle.
+    # layout; `aspire new aspire-empty` exercises template extraction
+    # plus the bundle being discoverable via LayoutDiscovery.
     assert_match version.to_s, shell_output("#{bin}/aspire --version")
+
+    # Sanity: the canonical sidecar-route layout anchor resolves through
+    # libexec/bundle/ → versions/<v>/{managed,dcp}. If this fails the
+    # CLI runs but every polyglot command would error at first use.
+    assert_path_exists libexec/"bundle/managed"
+    assert_path_exists libexec/"bundle/dcp"
 
     ENV["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1"
     ENV["DOTNET_NOLOGO"] = "1"

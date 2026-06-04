@@ -335,10 +335,37 @@ jobs:
           # next to the symlink in bin/. Resolve the symlink before
           # checking.
           REAL_BIN="$(readlink -f "$BIN" 2>/dev/null || python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))' "$BIN")"
-          SIDECAR="$(dirname "$REAL_BIN")/.aspire-install.json"
+          LIBEXEC="$(dirname "$REAL_BIN")"
+          SIDECAR="$LIBEXEC/.aspire-install.json"
           echo "--- sidecar at $SIDECAR ---"
           cat "$SIDECAR"
           grep -q '"source":"brew"' "$SIDECAR"
+
+          # Canonical sidecar-route layout: libexec/bundle -> versions/<v>/{managed,dcp}.
+          # LayoutDiscovery's TryInferLayout resolves through bundle/; if any
+          # link in the chain is broken the CLI runs but every polyglot
+          # command would error at first use.
+          echo "--- libexec contents ---"
+          ls -la "$LIBEXEC"
+          test -L "$LIBEXEC/bundle" || {
+            echo "::error::Expected libexec/bundle to be a symlink (sidecar-route shape)."
+            exit 1
+          }
+          test -d "$LIBEXEC/bundle/managed"
+          test -d "$LIBEXEC/bundle/dcp"
+          MANAGED_EXE="$LIBEXEC/bundle/managed/aspire-managed"
+          test -x "$MANAGED_EXE" || {
+            echo "::error::Expected $MANAGED_EXE to exist and be executable."
+            ls -la "$LIBEXEC/bundle/managed" || true
+            exit 1
+          }
+          DCP_EXE="$LIBEXEC/bundle/dcp/dcp"
+          test -x "$DCP_EXE" || {
+            echo "::error::Expected $DCP_EXE to exist and be executable."
+            ls -la "$LIBEXEC/bundle/dcp" || true
+            exit 1
+          }
+          echo "Layout shape OK: libexec/bundle resolves through versions/<v>/{managed,dcp} with executable component binaries."
 
       - name: aspire doctor
         run: |

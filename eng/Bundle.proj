@@ -97,9 +97,18 @@
       <_CliBinlog Condition="'$(ContinuousIntegrationBuild)' == 'true'">-bl:$(ArtifactsLogDir)PublishCli.binlog</_CliBinlog>
       <!-- The tar.gz archive produced by CreateLayout is embedded as a resource in the CLI binary -->
       <_BundleArchivePath>$(ArtifactsDir)bundle\aspire-$(BundleVersion)-$(TargetRid).tar.gz</_BundleArchivePath>
+      <!-- When SkipBundleEmbed=true, publish the CLI without the embedded
+           tar.gz resource. The layout directories still get produced by
+           _RunCreateLayout; callers (e.g. eng/homebrew-core/build-cli.sh)
+           lay them out alongside the CLI binary themselves. This is the
+           supported path for install routes that have a native install-time
+           hook (homebrew-core's `def install`) and therefore don't need
+           the self-extracting transport. -->
+      <_BundlePayloadArg Condition="'$(SkipBundleEmbed)' != 'true'">/p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot;</_BundlePayloadArg>
     </PropertyGroup>
-    <Message Importance="high" Text="Publishing native AOT CLI with embedded bundle: $(_BundleArchivePath)" />
-    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) /p:BundlePayloadPath=&quot;$(_BundleArchivePath)&quot; $(_VersionSuffixArg) $(_AspireCliChannelArg) $(_CliBinlog)" />
+    <Message Importance="high" Condition="'$(SkipBundleEmbed)' != 'true'" Text="Publishing native AOT CLI with embedded bundle: $(_BundleArchivePath)" />
+    <Message Importance="high" Condition="'$(SkipBundleEmbed)' == 'true'" Text="Publishing native AOT CLI WITHOUT embedded bundle (SkipBundleEmbed=true)." />
+    <Exec Command="dotnet publish &quot;$(CliProjectPath)&quot; -c $(Configuration) -r $(TargetRid) $(_BundlePayloadArg) $(_VersionSuffixArg) $(_AspireCliChannelArg) $(_CliBinlog)" />
   </Target>
 
   <Target Name="_PublishManagedProjects" Condition="'$(SkipManagedBuild)' != 'true'">
@@ -143,7 +152,14 @@
       <_BundleOutputDirArg>$(BundleOutputDir.TrimEnd('\').TrimEnd('/'))</_BundleOutputDirArg>
       <_ArtifactsDirArg>$(ArtifactsDir.TrimEnd('\').TrimEnd('/'))</_ArtifactsDirArg>
 
-      <_CreateLayoutArgs>--output "$(_BundleOutputDirArg)" --artifacts "$(_ArtifactsDirArg)" --rid $(TargetRid) --bundle-version $(BundleVersion) --verbose --archive</_CreateLayoutArgs>
+      <!-- The tar.gz exists purely to be embedded in the CLI binary for the
+           self-extracting transport. When SkipBundleEmbed=true the caller
+           will lay out the unwrapped components directly, so skip the
+           archive step too — saves ~5-10s per build and avoids producing
+           an artifact that nothing reads. -->
+      <_CreateLayoutArchiveArg Condition="'$(SkipBundleEmbed)' != 'true'">--archive</_CreateLayoutArchiveArg>
+
+      <_CreateLayoutArgs>--output "$(_BundleOutputDirArg)" --artifacts "$(_ArtifactsDirArg)" --rid $(TargetRid) --bundle-version $(BundleVersion) --verbose $(_CreateLayoutArchiveArg)</_CreateLayoutArgs>
     </PropertyGroup>
 
     <Message Importance="high" Text="Creating bundle layout..." />
