@@ -124,31 +124,6 @@ public static class AgentResourceBuilderExtensions
         }
     }
 
-    /// <summary>
-    /// Adds a reference from the destination resource to an agent resource.
-    /// </summary>
-    /// <typeparam name="TDestination">The type of the destination resource.</typeparam>
-    /// <typeparam name="TSource">The type of the agent resource.</typeparam>
-    /// <param name="builder">The destination resource builder.</param>
-    /// <param name="source">The agent resource builder to reference.</param>
-    /// <param name="name">An optional name used for the injected environment variables.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export from Aspire.Hosting.")]
-    public static IResourceBuilder<TDestination> WithReference<TDestination, TSource>(
-        this IResourceBuilder<TDestination> builder,
-        IResourceBuilder<TSource> source,
-        string? name = null)
-        where TDestination : IResourceWithEnvironment
-        where TSource : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(source);
-
-        IResourceBuilder<IResource> sourceAsResource = source;
-
-        return ResourceBuilderExtensions.WithReference(builder, sourceAsResource, name: name);
-    }
-
     internal static string GetAgentCardEnvironmentVariableName(string agentName)
     {
         return $"{EnvironmentVariableNameEncoder.Encode(agentName).ToUpperInvariant()}_AGENTCARD_URL";
