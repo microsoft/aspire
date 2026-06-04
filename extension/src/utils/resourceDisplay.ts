@@ -2,11 +2,7 @@ import { ResourceState, ResourceType, CommandName, ParameterPropertyName } from 
 import { ResourceJson, ResourceCommandInputType, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { parameterValueMissing } from '../loc/strings';
 
-/**
- * Sorts resource commands by registration order, then name as a tiebreaker, since the CLI keys
- * commands alphabetically in JSON. Approximates the dashboard order (highlighted-command floating
- * isn't carried through the CLI). See src/Aspire.Cli/Backchannel/ResourceSnapshotMapper.cs.
- */
+// Sort commands by registration order, then name, since the CLI keys them alphabetically in JSON.
 export function compareResourceCommands(
     [nameA, a]: [string, ResourceCommandJson],
     [nameB, b]: [string, ResourceCommandJson]): number {
