@@ -114,6 +114,6 @@ class AspireCli < Formula
            "--nologo",
            "-o", testpath/"smoke",
            "-n", "SmokeTest"
-    assert_predicate testpath/"smoke/apphost.cs", :exist?
+    assert_path_exists testpath/"smoke/apphost.cs"
   end
 end
