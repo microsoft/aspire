@@ -21,18 +21,21 @@ internal sealed class RunCommand
         AppState state,
         IGitHubAuthProbe ghProbe,
         IDogfoodSessionPreparer preparer,
-        IPrCatalog prCatalog)
+        IPrCatalog prCatalog,
+        ILocalAspireCliLocator cliLocator)
     {
         _state = state;
         _ghProbe = ghProbe;
         _preparer = preparer;
         _prCatalog = prCatalog;
+        _cliLocator = cliLocator;
     }
 
     private readonly AppState _state;
     private readonly IGitHubAuthProbe _ghProbe;
     private readonly IDogfoodSessionPreparer _preparer;
     private readonly IPrCatalog _prCatalog;
+    private readonly ILocalAspireCliLocator _cliLocator;
 
     public async Task<int> RunAsync(CancellationToken cancellationToken)
     {
@@ -48,6 +51,7 @@ internal sealed class RunCommand
         Hex1bApp? capturedApp = null;
 
         await using var terminal = Hex1bTerminal.CreateBuilder()
+            .WithMouse(true)
             .WithHex1bApp((app, _) =>
             {
                 capturedApp = app;
@@ -124,6 +128,21 @@ internal sealed class RunCommand
         else
         {
             v.UpdateGhToken(EnvironmentProbeResult.Failed("gh token", "Skipped — gh auth not OK."), null);
+        }
+
+        // Local CLI probe — failure here is not fatal; the embedded shell
+        // simply won't have artifacts/bin/Aspire.Cli prepended to PATH and
+        // `aspire` will resolve to the global install. Surface a clear
+        // remediation hint so the user knows to run ./build.sh.
+        if (_cliLocator.CliExecutablePath is { Length: > 0 } cliPath)
+        {
+            v.UpdateLocalCli(EnvironmentProbeResult.Ok("local cli", cliPath));
+        }
+        else
+        {
+            v.UpdateLocalCli(EnvironmentProbeResult.Failed(
+                "local cli",
+                "No artifacts/bin/Aspire.Cli/**/aspire found. Run ./build.sh first."));
         }
     }
 

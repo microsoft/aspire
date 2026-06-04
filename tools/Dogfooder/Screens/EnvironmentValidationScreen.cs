@@ -25,6 +25,7 @@ internal static class EnvironmentValidationScreen
             b.Text(FormatProbe(v.DotnetProbe)),
             b.Text(FormatProbe(v.GhAuthProbe)),
             b.Text(FormatProbe(v.GhTokenProbe)),
+            b.Text(FormatProbe(v.LocalCliProbe)),
             b.Separator(),
             v.AllProbesOk
                 ? b.Button("Continue →").OnClick(_ => state.EnterMainScreen())

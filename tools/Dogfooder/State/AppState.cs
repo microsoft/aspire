@@ -86,7 +86,12 @@ internal sealed class AppState
     public void SelectSession(DogfoodSession session)
     {
         ActiveSession = session;
-        DetailMode = session.Status == SessionStatus.Idle
+        // If the session has ever been prepared (i.e. an embedded terminal
+        // was launched at least once for it), prefer the terminal view —
+        // even if the child shell has since exited, its scrollback is still
+        // useful. Only fall back to the config form when the session was
+        // created but never launched.
+        DetailMode = session.Plan is null
             ? DetailMode.Config
             : DetailMode.Terminal;
         DraftConfig = session.Config;

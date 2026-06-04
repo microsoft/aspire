@@ -50,7 +50,7 @@ internal static class SessionConfigPanel
                 // user can still drive end-to-end by editing DraftConfig from
                 // a future automation hook.
                 var session = state.Sessions.Add(state.DraftSessionName, state.DraftConfig);
-                session.PreparedEnvironment = preparer.BuildEnvironment(session.Config);
+                session.Plan = preparer.BuildPlan(session.Config);
                 state.SwitchToTerminal(session);
             }),
         ]);

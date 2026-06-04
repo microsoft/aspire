@@ -32,6 +32,7 @@ internal static class Program
 
         // Services.
         builder.Services.AddSingleton<IGitHubAuthProbe, GitHubAuthProbe>();
+        builder.Services.AddSingleton<ILocalAspireCliLocator, LocalAspireCliLocator>();
         builder.Services.AddSingleton<IDogfoodSessionPreparer, DogfoodSessionPreparer>();
         builder.Services.AddSingleton<IPrCatalog, StubPrCatalog>();
 

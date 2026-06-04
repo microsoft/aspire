@@ -48,10 +48,10 @@ internal sealed class DogfoodSession
     public SessionStatus Status { get; set; } = SessionStatus.Idle;
 
     /// <summary>
-    /// Cached env-var dictionary produced by the preparer. Null until the
+    /// Cached environment plan produced by the preparer. Null until the
     /// session is launched at least once. Kept on the session (rather than
-    /// recomputed on every render) so the terminal panel can display the
-    /// exact set that's currently injected without re-running the preparer.
+    /// recomputed on every render) so the terminal panel can replay the
+    /// same shell commands consistently if the user re-selects the session.
     /// </summary>
-    public IReadOnlyDictionary<string, string>? PreparedEnvironment { get; set; }
+    public Services.SessionEnvironmentPlan? Plan { get; set; }
 }

@@ -7,21 +7,44 @@ using Aspire.Shared;
 namespace Aspire.Dogfooder.Services;
 
 /// <summary>
-/// Translates a <see cref="DogfoodSessionConfig"/> into the env-var
-/// dictionary that the embedded terminal's child shell should inherit. In
-/// Phase 1 this is a pure transform; Phase 2 will extend it to drive
-/// post-launch automation via <c>Hex1bTerminalAutomator</c>.
+/// Pure transform from a <see cref="DogfoodSessionConfig"/> to the set of
+/// environment-variable overrides the embedded shell should apply. The
+/// SessionTerminalPanel consumes this plan and types the
+/// equivalent shell commands into the spawned shell via <c>Hex1bTerminalAutomator</c>
+/// rather than mutating <c>Hex1bTerminalProcessOptions.Environment</c> behind
+/// the user's back — making the dogfooding setup auditable in the terminal
+/// scrollback.
 /// </summary>
 internal interface IDogfoodSessionPreparer
 {
-    IReadOnlyDictionary<string, string> BuildEnvironment(DogfoodSessionConfig config);
+    SessionEnvironmentPlan BuildPlan(DogfoodSessionConfig config);
 }
+
+/// <param name="IdentityOverrides">
+/// Ordered list of <c>(name, value)</c> pairs for the <c>ASPIRE_CLI_*</c>
+/// identity overrides. Ordered (not a dictionary) so the commands appear in
+/// a stable, predictable sequence when typed into the shell.
+/// </param>
+/// <param name="PathPrependDir">
+/// Directory to prepend to <c>PATH</c> (typically the locally-built
+/// <c>artifacts/bin/Aspire.Cli/...</c>), or null when no local CLI was found.
+/// </param>
+internal sealed record SessionEnvironmentPlan(
+    IReadOnlyList<KeyValuePair<string, string>> IdentityOverrides,
+    string? PathPrependDir);
 
 internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
 {
-    public IReadOnlyDictionary<string, string> BuildEnvironment(DogfoodSessionConfig config)
+    public DogfoodSessionPreparer(ILocalAspireCliLocator cliLocator)
     {
-        var env = new Dictionary<string, string>(StringComparer.Ordinal);
+        _cliLocator = cliLocator;
+    }
+
+    private readonly ILocalAspireCliLocator _cliLocator;
+
+    public SessionEnvironmentPlan BuildPlan(DogfoodSessionConfig config)
+    {
+        var overrides = new List<KeyValuePair<string, string>>();
 
         // Channel is a closed enum on our side but a free-form string on the
         // CLI's side (the CLI accepts anything because PRs are dynamic). Emit
@@ -39,23 +62,23 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
             ChannelKind.Pr => "pr-MISSING",
             _ => "local",
         };
-        env[AspireCliIdentityEnvVars.Channel] = channelValue;
+        overrides.Add(new(AspireCliIdentityEnvVars.Channel, channelValue));
 
         if (!string.IsNullOrWhiteSpace(config.VersionOverride))
         {
-            env[AspireCliIdentityEnvVars.Version] = config.VersionOverride;
+            overrides.Add(new(AspireCliIdentityEnvVars.Version, config.VersionOverride));
         }
 
         if (!string.IsNullOrWhiteSpace(config.CommitOverride))
         {
-            env[AspireCliIdentityEnvVars.Commit] = config.CommitOverride;
+            overrides.Add(new(AspireCliIdentityEnvVars.Commit, config.CommitOverride));
         }
 
         if (!string.IsNullOrWhiteSpace(config.NuGetServiceIndexOverride))
         {
-            env[AspireCliIdentityEnvVars.NuGetServiceIndex] = config.NuGetServiceIndexOverride;
+            overrides.Add(new(AspireCliIdentityEnvVars.NuGetServiceIndex, config.NuGetServiceIndexOverride));
         }
 
-        return env;
+        return new SessionEnvironmentPlan(overrides, _cliLocator.CliDirectory);
     }
 }

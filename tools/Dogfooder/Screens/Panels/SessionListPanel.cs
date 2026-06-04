@@ -29,18 +29,39 @@ internal static class SessionListPanel
             b.Text("Sessions"),
             b.Button("[+] Add").OnClick(_ => state.BeginNewSession()),
             b.Separator(),
-            b.List(labels).OnSelectionChanged(e =>
-            {
-                if (sessions.Count == 0)
+            b.List(labels)
+                .OnSelectionChanged(e =>
                 {
-                    return;
-                }
-                var idx = e.SelectedIndex;
-                if (idx >= 0 && idx < sessions.Count)
+                    if (sessions.Count == 0)
+                    {
+                        return;
+                    }
+                    var idx = e.SelectedIndex;
+                    if (idx >= 0 && idx < sessions.Count)
+                    {
+                        state.SelectSession(sessions[idx]);
+                    }
+                })
+                .OnItemActivated(e =>
                 {
-                    state.SelectSession(sessions[idx]);
-                }
-            }),
+                    // OnSelectionChanged only fires when the highlighted index
+                    // *changes*. After the user hits [+] Add we flip the right
+                    // pane to Config mode but the list still has the previous
+                    // item highlighted; clicking that same item should bring
+                    // the user back to its embedded terminal, but no selection
+                    // event fires. OnItemActivated runs on every Enter/Space/
+                    // click regardless of prior selection, so it's the right
+                    // hook for "show me this session again".
+                    if (sessions.Count == 0)
+                    {
+                        return;
+                    }
+                    var idx = e.ActivatedIndex;
+                    if (idx >= 0 && idx < sessions.Count)
+                    {
+                        state.SelectSession(sessions[idx]);
+                    }
+                }),
         ]);
     }
 }

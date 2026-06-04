@@ -21,6 +21,7 @@ internal sealed class EnvironmentValidationState
     public EnvironmentProbeResult DotnetProbe { get; private set; } = EnvironmentProbeResult.Pending("dotnet");
     public EnvironmentProbeResult GhAuthProbe { get; private set; } = EnvironmentProbeResult.Pending("gh auth");
     public EnvironmentProbeResult GhTokenProbe { get; private set; } = EnvironmentProbeResult.Pending("gh token");
+    public EnvironmentProbeResult LocalCliProbe { get; private set; } = EnvironmentProbeResult.Pending("local cli");
 
     /// <summary>
     /// The GitHub token captured from <c>gh auth token</c> during the GH-token
@@ -33,7 +34,8 @@ internal sealed class EnvironmentValidationState
     public bool AllProbesOk =>
         DotnetProbe.Status == EnvironmentProbeStatus.Ok &&
         GhAuthProbe.Status == EnvironmentProbeStatus.Ok &&
-        GhTokenProbe.Status == EnvironmentProbeStatus.Ok;
+        GhTokenProbe.Status == EnvironmentProbeStatus.Ok &&
+        LocalCliProbe.Status == EnvironmentProbeStatus.Ok;
 
     public void UpdateDotnet(EnvironmentProbeResult result)
     {
@@ -54,11 +56,18 @@ internal sealed class EnvironmentValidationState
         _notifier.Notify();
     }
 
+    public void UpdateLocalCli(EnvironmentProbeResult result)
+    {
+        LocalCliProbe = result;
+        _notifier.Notify();
+    }
+
     public void Reset()
     {
         DotnetProbe = EnvironmentProbeResult.Pending("dotnet");
         GhAuthProbe = EnvironmentProbeResult.Pending("gh auth");
         GhTokenProbe = EnvironmentProbeResult.Pending("gh token");
+        LocalCliProbe = EnvironmentProbeResult.Pending("local cli");
         GitHubToken = null;
         _notifier.Notify();
     }
