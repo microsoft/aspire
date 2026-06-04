@@ -156,7 +156,8 @@ jobs:
             local rid="$1"
             local url="https://builds.dotnet.microsoft.com/dotnet/Sdk/${SDK_VERSION}/dotnet-sdk-${SDK_VERSION}-${rid}.tar.gz"
             local tmp="/tmp/sdk-${rid}.tar.gz"
-            echo "Fetching SDK for ${rid}: ${url}"
+            # Diagnostic to stderr so $(fetch_sha) only captures the hash.
+            echo "Fetching SDK for ${rid}: ${url}" >&2
             curl -fsSL "${url}" -o "${tmp}"
             sha256sum "${tmp}" | awk '{print $1}'
             rm "${tmp}"
