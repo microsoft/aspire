@@ -1337,6 +1337,10 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResourceWithConnectionString> source, string? connectionName = null, bool optional = false)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
 
+        [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export.")]
+        public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ApplicationModel.IResource> source, string? connectionName = null, bool optional = false, string? name = null)
+            where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
+
         [AspireExportIgnore(Reason = "Polyglot app hosts can use the generic withReference dispatcher with an ExternalServiceResource builder.")]
         public static ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination>(this ApplicationModel.IResourceBuilder<TDestination> builder, ApplicationModel.IResourceBuilder<ExternalServiceResource> externalService)
             where TDestination : ApplicationModel.IResourceWithEnvironment { throw null; }
