@@ -1,6 +1,19 @@
 import { ResourceState, ResourceType, CommandName, ParameterPropertyName } from '../editor/resourceConstants';
-import { ResourceJson, ResourceCommandInputType } from '../views/AppHostDataRepository';
+import { ResourceJson, ResourceCommandInputType, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { parameterValueMissing } from '../loc/strings';
+
+/**
+ * Sorts resource commands by registration order, then name as a tiebreaker, since the CLI keys
+ * commands alphabetically in JSON. Approximates the dashboard order (highlighted-command floating
+ * isn't carried through the CLI). See src/Aspire.Cli/Backchannel/ResourceSnapshotMapper.cs.
+ */
+export function compareResourceCommands(
+    [nameA, a]: [string, ResourceCommandJson],
+    [nameB, b]: [string, ResourceCommandJson]): number {
+    const orderA = a.registrationOrder ?? 0;
+    const orderB = b.registrationOrder ?? 0;
+    return orderA !== orderB ? orderA - orderB : nameA.localeCompare(nameB);
+}
 
 // Trim long parameter values so a single resource row stays readable in the tree and CodeLens.
 const maxParameterValueDisplayLength = 80;

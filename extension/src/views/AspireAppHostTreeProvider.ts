@@ -3,8 +3,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider, quoteShellArg } from '../utils/AspireTerminalProvider';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
-import { getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
-import { compareResourceCommands } from '../utils/resourceCommands';
+import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import {
     pidDescription,
     dashboardLabel,
