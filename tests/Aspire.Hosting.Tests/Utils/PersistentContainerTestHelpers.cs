@@ -29,6 +29,35 @@ public static class PersistentContainerTestHelpers
         bool randomizePorts = false,
         TimeSpan? timeout = null)
     {
+        await AssertResourcesReuseContainersAsync(
+            testOutputHelper,
+            configureResource,
+            [resourceName],
+            useTestContainerRegistry,
+            randomizePorts,
+            compareUrls: false,
+            timeout);
+    }
+
+    /// <summary>
+    /// Verifies that resources configured with persistent lifetimes use the same Docker containers across AppHost runs.
+    /// </summary>
+    /// <param name="testOutputHelper">The xUnit output helper used for test and resource logging.</param>
+    /// <param name="configureResources">Configures the persistent resources on each AppHost run.</param>
+    /// <param name="resourceNames">The resource names whose persistent Docker container identities should be compared.</param>
+    /// <param name="useTestContainerRegistry">Whether to apply the test container registry override for integrations that require CI-mirrored images.</param>
+    /// <param name="randomizePorts">Whether to force DCP to randomize ports for the AppHost runs.</param>
+    /// <param name="compareUrls">Whether to compare the resource URLs across runs. This also verifies stable public ports.</param>
+    /// <param name="timeout">The timeout for starting, stopping, and observing the resources. Defaults to 10 minutes because some container integrations have slow cold starts.</param>
+    public static async Task AssertResourcesReuseContainersAsync(
+        ITestOutputHelper testOutputHelper,
+        Action<IDistributedApplicationTestingBuilder> configureResources,
+        string[] resourceNames,
+        bool useTestContainerRegistry = false,
+        bool randomizePorts = false,
+        bool compareUrls = false,
+        TimeSpan? timeout = null)
+    {
         using var cts = new CancellationTokenSource(timeout ?? TimeSpan.FromMinutes(10));
         using var aspireStore = new TestTempDirectory();
         var userSecretsId = Guid.NewGuid().ToString("N");
@@ -56,7 +85,7 @@ public static class PersistentContainerTestHelpers
             }
         }
 
-        async Task<string> RunContainerAsync()
+        async Task<ResourceRunSnapshot[]> RunContainerAsync()
         {
             var args = new[]
             {
@@ -76,30 +105,32 @@ public static class PersistentContainerTestHelpers
 
             Assert.True(builder.UserSecretsManager.IsAvailable);
 
-            configureResource(builder);
+            configureResources(builder);
 
             using var app = builder.Build();
             await app.StartAsync(cts.Token);
 
             var resourceNotificationService = app.Services.GetRequiredService<ResourceNotificationService>();
-            var containerIdentity = await GetContainerIdentityAsync(resourceNotificationService, resourceName, cts.Token);
+            var resourceSnapshots = await Task.WhenAll(
+                resourceNames.Select(resourceName => GetContainerIdentityAsync(resourceNotificationService, resourceName, compareUrls, cts.Token)));
 
             await app.StopAsync(cts.Token).WaitAsync(cts.Token);
 
-            return containerIdentity;
+            return resourceSnapshots.OrderBy(snapshot => snapshot.ResourceName, StringComparer.Ordinal).ToArray();
         }
     }
 
     /// <summary>
     /// Gets the Docker container identity for a persistent resource after it becomes healthy.
     /// </summary>
-    private static async Task<string> GetContainerIdentityAsync(ResourceNotificationService resourceNotificationService, string resourceName, CancellationToken cancellationToken)
+    private static async Task<ResourceRunSnapshot> GetContainerIdentityAsync(ResourceNotificationService resourceNotificationService, string resourceName, bool includeUrls, CancellationToken cancellationToken)
     {
         await resourceNotificationService.WaitForResourceHealthyAsync(resourceName, cancellationToken);
         var resourceEvent = await resourceNotificationService.WaitForResourceAsync(resourceName, evt =>
         {
             return GetPropertyValue(evt, ContainerLifetimePropertyName) is ContainerLifetime.Persistent &&
-                GetPropertyValue(evt, ContainerIdPropertyName) is string { Length: > 0 };
+                GetPropertyValue(evt, ContainerIdPropertyName) is string { Length: > 0 } &&
+                (!includeUrls || evt.Snapshot.Urls.Length > 0);
         }, cancellationToken);
 
         var containerLifetime = GetPropertyValue(resourceEvent, ContainerLifetimePropertyName);
@@ -108,9 +139,23 @@ public static class PersistentContainerTestHelpers
         var containerId = Assert.IsType<string>(GetPropertyValue(resourceEvent, ContainerIdPropertyName));
         Assert.NotEmpty(containerId);
 
-        return containerId;
+        var urls = includeUrls
+            ? string.Join(Environment.NewLine, resourceEvent.Snapshot.Urls
+                .OrderBy(url => url.Name, StringComparer.Ordinal)
+                .ThenBy(url => url.Url, StringComparer.Ordinal)
+                .Select(url => $"{url.Name}:{url.Url}"))
+            : string.Empty;
+
+        if (includeUrls)
+        {
+            Assert.NotEmpty(urls);
+        }
+
+        return new(resourceName, containerId, urls);
     }
 
     private static object? GetPropertyValue(ResourceEvent resourceEvent, string propertyName) =>
         resourceEvent.Snapshot.Properties.FirstOrDefault(x => x.Name == propertyName)?.Value;
+
+    private sealed record ResourceRunSnapshot(string ResourceName, string ContainerId, string Urls);
 }
