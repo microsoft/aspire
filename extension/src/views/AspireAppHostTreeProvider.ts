@@ -1263,7 +1263,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
 
         if (url) {
-            await vscode.commands.executeCommand('simpleBrowser.show', url);
+            await vscode.env.openExternal(vscode.Uri.parse(url));
         }
     }
 
