@@ -124,6 +124,44 @@ public static class AgentResourceBuilderExtensions
         }
     }
 
+    /// <summary>
+    /// Adds a reference from the destination resource to an agent container resource.
+    /// </summary>
+    /// <typeparam name="TDestination">The type of the destination resource.</typeparam>
+    /// <param name="builder">The destination resource builder.</param>
+    /// <param name="source">The agent container resource builder to reference.</param>
+    /// <param name="name">An optional name used for the injected environment variables.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export from Aspire.Hosting.")]
+    public static IResourceBuilder<TDestination> WithReference<TDestination>(
+        this IResourceBuilder<TDestination> builder,
+        IResourceBuilder<ContainerResource> source,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        return WithAgentReference(builder, source, name);
+    }
+
+    /// <summary>
+    /// Adds a reference from the destination resource to an agent executable resource.
+    /// </summary>
+    /// <typeparam name="TDestination">The type of the destination resource.</typeparam>
+    /// <param name="builder">The destination resource builder.</param>
+    /// <param name="source">The agent executable resource builder to reference.</param>
+    /// <param name="name">An optional name used for the injected environment variables.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export from Aspire.Hosting.")]
+    public static IResourceBuilder<TDestination> WithReference<TDestination>(
+        this IResourceBuilder<TDestination> builder,
+        IResourceBuilder<ExecutableResource> source,
+        string? name = null)
+        where TDestination : IResourceWithEnvironment
+    {
+        return WithAgentReference(builder, source, name);
+    }
+
     internal static string GetAgentCardEnvironmentVariableName(string agentName)
     {
         return $"{EnvironmentVariableNameEncoder.Encode(agentName).ToUpperInvariant()}_AGENTCARD_URL";
@@ -142,6 +180,34 @@ public static class AgentResourceBuilderExtensions
     internal static bool IsA2AProtocol(AgentProtocol protocol)
     {
         return protocol is AgentProtocol.A2A;
+    }
+
+    private static IResourceBuilder<TDestination> WithAgentReference<TDestination, TSource>(
+        IResourceBuilder<TDestination> builder,
+        IResourceBuilder<TSource> source,
+        string? name)
+        where TDestination : IResourceWithEnvironment
+        where TSource : IResourceWithEndpoints
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(source);
+
+        var referenceAnnotations = source.Resource.Annotations.OfType<IResourceWithReferenceAnnotation>()
+            .Where(a => a.CanApplyReference(source.Resource))
+            .ToArray();
+
+        if (referenceAnnotations.Length == 0)
+        {
+            throw new InvalidOperationException($"The resource '{source.Resource.Name}' can't be used with withReference because it doesn't provide a connection string, service discovery, or a custom withReference implementation.");
+        }
+
+        var referenceName = name ?? source.Resource.Name;
+        foreach (var referenceAnnotation in referenceAnnotations)
+        {
+            builder = referenceAnnotation.WithReference(builder, source.Resource, referenceName);
+        }
+
+        return builder;
     }
 
     private static void ConfigureA2A<T>(
