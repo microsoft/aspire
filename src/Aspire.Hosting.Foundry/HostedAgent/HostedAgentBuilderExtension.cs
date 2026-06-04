@@ -402,6 +402,16 @@ public static class HostedAgentResourceBuilderExtensions
             throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
         }
 
+        if (target is ProjectResource projectTarget)
+        {
+            // Foundry hosted agents are containerized and the platform owns the listening port contract.
+            // Keep the user's local endpoint metadata intact, but do not emit project endpoint variables
+            // such as ASPNETCORE_URLS/HTTP_PORTS because they require EndpointProperty.TargetPort, which
+            // Foundry hosted-agent deployment endpoints intentionally do not support.
+            builder.ApplicationBuilder.CreateResourceBuilder(projectTarget)
+                .WithEndpointsInEnvironment(_ => false);
+        }
+
         // The hosted agent wrapper is not the deployed workload. Apply the Foundry
         // reference to the target so its connection annotations flow into the deployment.
         builder.ApplicationBuilder.CreateResourceBuilder(target)
