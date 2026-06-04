@@ -88,8 +88,17 @@ pre-installed there and the agent cannot reach
 `cdn.winget.microsoft.com` to install it (see
 `eng/pipelines/templates/prepare-winget-manifest.yml`), so on that pool
 the script skips local validate and the upstream-CI checks are the only
-ones that run. No Aspire pipeline runs the install/uninstall round-trip
-on the build agent; that is delegated to upstream CI on every submission.
+ones that run.
+
+The same `.github/workflows/prepare-installer-artifacts.yml` job goes a
+step further on every PR: after generating the manifest it runs
+`eng/winget/dogfood.ps1 -Force` (real `winget install --manifest` from
+the freshly built archive) and a smoke test (`aspire new` + restore)
+against the installed shim. That catches manifest issues `winget
+validate` does not — installer SHA mismatches, broken `InstallerSwitches`,
+missing `Commands`. It does not exercise uninstall, so the full
+install/uninstall round-trip stays delegated to upstream CI on every
+submission.
 
 Other Microsoft repos publishing to WinGet (`microsoft/PowerToys`,
 `microsoft/terminal`, `microsoft/winget-create`) follow the same pattern
