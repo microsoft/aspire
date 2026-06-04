@@ -77,6 +77,40 @@ jobs:
           $env:PATH = "$env:LOCALAPPDATA\Microsoft\WinGet\Links;" + $env:PATH
           & "$env:GITHUB_WORKSPACE/eng/scripts/smoke-installed-cli.ps1"
 
+      - name: Verify winget install detection (route + sidecar + bundle location)
+        if: ${{ inputs.installer == 'winget' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # The smoke test alone passes even when the bundle ends up in the wrong place,
+          # because `aspire new` + `aspire restore` work from the ~/.aspire fallback layout
+          # too. This step asserts the route-detection chain itself (registry probe →
+          # sidecar → ComputeDefaultExtractDir → bundle colocation) actually fires for
+          # the shape winget ships our manifest as, so silent regressions are caught
+          # before they ship.
+          $env:PATH = "$env:LOCALAPPDATA\Microsoft\WinGet\Links;" + $env:PATH
+
+          # Parse PackageVersion from the staged installer manifest so the verify
+          # script can confirm `aspire doctor` reports the version this job built,
+          # not a leftover machine-wide install on a self-hosted runner.
+          $manifestDir = "$env:GITHUB_WORKSPACE/artifacts/installers/winget-manifests"
+          $installerManifests = @(Get-ChildItem -Path $manifestDir -File -Filter "*.installer.yaml")
+          if ($installerManifests.Count -ne 1) {
+            throw "Expected exactly one *.installer.yaml under $manifestDir, found $($installerManifests.Count)."
+          }
+          $expectedVersion = $null
+          foreach ($line in Get-Content -LiteralPath $installerManifests[0].FullName) {
+            if ($line -match '^\s*PackageVersion:\s*"?([^"]+)"?\s*$') {
+              $expectedVersion = $Matches[1]
+              break
+            }
+          }
+          if (-not $expectedVersion) {
+            throw "Could not read PackageVersion from $($installerManifests[0].FullName)."
+          }
+          Write-Host "Verifying installed CLI reports PackageVersion '$expectedVersion'."
+          & "$env:GITHUB_WORKSPACE/eng/scripts/verify-winget-install-detection.ps1" -ExpectedVersion $expectedVersion
+
       - name: Smoke test installed CLI (aspire new + restore)
         if: ${{ inputs.installer == 'homebrew' }}
         shell: bash

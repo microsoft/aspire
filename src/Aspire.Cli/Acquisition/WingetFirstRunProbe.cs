@@ -27,12 +27,35 @@ internal sealed class WingetFirstRunProbe
     }
 
     /// <summary>
-    /// Writes <c>&lt;binaryDir&gt;/.aspire-install.json</c> when the running
-    /// process is a winget portable install AND no sidecar exists yet.
-    /// Idempotent: any second call is a no-op.
+    /// Writes <c>&lt;binaryDir&gt;/.aspire-install.json</c> next to
+    /// <paramref name="realProcessPath"/> when that path identifies a winget
+    /// portable install AND no sidecar exists yet. Idempotent: any second
+    /// call is a no-op.
     /// </summary>
-    public void Run(string binaryDir)
+    /// <param name="realProcessPath">
+    /// The fully-resolved path to the running CLI binary, after symlink
+    /// resolution via
+    /// <see cref="Utils.CliPathHelper.ResolveSymlinkOrOriginalPath(string, ILogger?)"/>.
+    /// Callers must pass the resolved path, not the raw
+    /// <see cref="Environment.ProcessPath"/>: winget portable installs expose the
+    /// CLI through a command-alias symlink under
+    /// <c>%LOCALAPPDATA%\Microsoft\WinGet\Links\aspire.exe</c>, and the
+    /// registry matcher's <c>InstallLocation</c> containment check requires
+    /// the resolved path so that the link-path location does not falsely
+    /// look outside the package's install directory. Both call sites that
+    /// previously read <see cref="Environment.ProcessPath"/> directly inside
+    /// this method instead resolve once at the caller and pass the result
+    /// through, which also ensures the sidecar is stamped next to the real
+    /// binary rather than next to the link.
+    /// </param>
+    public void Run(string realProcessPath)
     {
+        if (string.IsNullOrEmpty(realProcessPath))
+        {
+            return;
+        }
+
+        var binaryDir = Path.GetDirectoryName(realProcessPath);
         if (string.IsNullOrEmpty(binaryDir))
         {
             return;
@@ -44,13 +67,7 @@ internal sealed class WingetFirstRunProbe
             return;
         }
 
-        var processPath = Environment.ProcessPath;
-        if (string.IsNullOrEmpty(processPath))
-        {
-            return;
-        }
-
-        if (!_registry.HasWingetAspireUninstallEntry(processPath))
+        if (!_registry.HasWingetAspireUninstallEntry(realProcessPath))
         {
             return;
         }

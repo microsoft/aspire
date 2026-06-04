@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -18,7 +19,7 @@ internal static class InstallationInfoOutput
     {
         try
         {
-            RunWingetFirstRunProbe(wingetFirstRunProbe);
+            RunWingetFirstRunProbe(wingetFirstRunProbe, logger);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -63,22 +64,28 @@ internal static class InstallationInfoOutput
         }
     }
 
-    public static void RunWingetFirstRunProbe(WingetFirstRunProbe wingetFirstRunProbe)
+    public static void RunWingetFirstRunProbe(WingetFirstRunProbe wingetFirstRunProbe, ILogger? logger = null)
     {
         // Give a never-run winget install a chance to stamp its sidecar before
         // we read it. The probe writes nothing on non-Windows hosts or when the
         // running binary isn't a winget portable install, so this is a cheap
         // no-op in the common case.
+        //
+        // Pass the symlink-resolved real process path: winget exposes the CLI
+        // via a command-alias symlink under %LOCALAPPDATA%\Microsoft\WinGet\Links,
+        // and the registry probe's InstallLocation containment check needs the
+        // resolved path. Resolving here also ensures the sidecar is written next
+        // to the real binary rather than in the Links directory.
         var processPath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(processPath))
         {
             return;
         }
 
-        var binaryDir = Path.GetDirectoryName(processPath);
-        if (!string.IsNullOrEmpty(binaryDir))
+        var realProcessPath = CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, logger);
+        if (!string.IsNullOrEmpty(realProcessPath))
         {
-            wingetFirstRunProbe.Run(binaryDir);
+            wingetFirstRunProbe.Run(realProcessPath);
         }
     }
 
