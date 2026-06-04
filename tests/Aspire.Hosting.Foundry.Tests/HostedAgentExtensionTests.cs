@@ -231,6 +231,26 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void AsHostedAgent_InPublishMode_AddsDefaultHttpEndpointWhenMissing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddProject<Project>("agent", launchProfileName: null)
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var endpoint = Assert.Single(hostedAgent.Target.Annotations.OfType<EndpointAnnotation>());
+
+        Assert.Equal("http", endpoint.Name);
+        Assert.Equal("http", endpoint.UriScheme);
+        Assert.Null(endpoint.TargetPort);
+    }
+
+    [Fact]
     public async Task AsHostedAgent_InPublishMode_IgnoresProjectEndpointTargetPortEnvironment()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

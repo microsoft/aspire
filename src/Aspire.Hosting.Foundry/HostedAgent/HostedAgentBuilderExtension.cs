@@ -402,6 +402,8 @@ public static class HostedAgentResourceBuilderExtensions
             throw new InvalidOperationException($"Unable to create hosted agent for resource '{resource.Name}' because it is not a container, executable, or project resource.");
         }
 
+        EnsureDefaultHostedAgentEndpoint(builder, target);
+
         if (target is ProjectResource projectTarget)
         {
             // Foundry hosted agents are containerized and the platform owns the listening port contract.
@@ -459,6 +461,19 @@ public static class HostedAgentResourceBuilderExtensions
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates.
         target.Annotations.Add(new ReferenceRoleAssignmentAnnotation(account, roles));
 #pragma warning restore ASPIREAZURE003
+    }
+
+    private static void EnsureDefaultHostedAgentEndpoint<T>(IResourceBuilder<T> builder, IResourceWithEnvironment target)
+        where T : IResourceWithEndpoints, IResourceWithEnvironment, IComputeResource
+    {
+        if (target is not IResourceWithEndpoints targetWithEndpoints ||
+            targetWithEndpoints.Annotations.OfType<EndpointAnnotation>().Any(e => string.Equals(e.Name, "http", StringComparisons.EndpointAnnotationName)))
+        {
+            return;
+        }
+
+        builder.ApplicationBuilder.CreateResourceBuilder(targetWithEndpoints)
+            .WithHttpEndpoint(name: "http", isProxied: true);
     }
 
     private sealed class HostedAgentRunProtocol
