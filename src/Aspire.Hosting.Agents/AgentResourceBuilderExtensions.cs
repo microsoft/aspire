@@ -133,7 +133,6 @@ public static class AgentResourceBuilderExtensions
     /// <param name="name">An optional name used for the injected environment variables.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "Each overload targets a concrete endpoint-only resource type that does not bind to the standard reference overloads.")]
     [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export from Aspire.Hosting.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(
         this IResourceBuilder<TDestination> builder,
@@ -153,7 +152,6 @@ public static class AgentResourceBuilderExtensions
     /// <param name="name">An optional name used for the injected environment variables.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <remarks>This overload is not available in polyglot app hosts. Use the standard <c>WithReference</c> overload instead.</remarks>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "Each overload targets a concrete endpoint-only resource type that does not bind to the standard reference overloads.")]
     [AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export from Aspire.Hosting.")]
     public static IResourceBuilder<TDestination> WithReference<TDestination>(
         this IResourceBuilder<TDestination> builder,
