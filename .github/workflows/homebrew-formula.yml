@@ -278,6 +278,7 @@ jobs:
             -e "s|__SHA_LINUX_ARM64__|${SHA_LINUX_ARM64}|g" \
             -e "s|^  url \"https://github.com/microsoft/aspire/archive/refs/tags/v${SRC_VERSION}.tar.gz\"|  url \"${SRC_URL}\"\n  version \"${SRC_VERSION}\"|" \
             -e 's|assert_match version\.to_s, shell_output("#{bin}/aspire --version")|assert_match(/\\d+\\.\\d+\\.\\d+/, shell_output("#{bin}/aspire --version"))|' \
+            -e 's|"-n", "SmokeTest"|"-n", "SmokeTest",\n           "--version", "13.4.2"|' \
             -e '/no_autobump!/d' \
             eng/homebrew-core/aspire.rb.template \
             > "$TAP_REPO/Formula/aspire-cli.rb"
