@@ -44,6 +44,8 @@ public static class AgentResourceBuilderExtensions
 
     private const string DefaultA2AHttpJsonSendMessagePath = "/message:send";
     private const string DefaultA2AHttpJsonStreamingMessagePath = "/message:stream";
+    private const string DefaultA2AHttpJsonV03SendMessagePath = "/v1/message:send";
+    private const string DefaultA2AHttpJsonV03StreamingMessagePath = "/v1/message:stream";
     private const string A2AProtocolBindingJsonRpc = "JSONRPC";
     private const string A2AProtocolBindingHttpJson = "HTTP+JSON";
 
@@ -276,23 +278,47 @@ public static class AgentResourceBuilderExtensions
         {
             // A2A JSON-RPC sends the abstract message/send operation as a JSON-RPC
             // request over HTTP. Streaming support is advertised in the agent card.
+            var isV03 = IsA2AProtocolVersionV03(invocation.ProtocolVersion);
             ctx.Request.Content = new StringContent(
                 new JsonObject
                 {
                     ["jsonrpc"] = "2.0",
                     ["id"] = Guid.NewGuid().ToString("N"),
-                    ["method"] = invocation.IsStreaming ? "SendStreamingMessage" : "SendMessage",
-                    ["params"] = CreateA2ASendMessageRequest(message)
+                    ["method"] = GetA2AJsonRpcMethod(invocation.IsStreaming, isV03),
+                    ["params"] = CreateA2ASendMessageRequest(
+                        message,
+                        role: isV03 ? "user" : "ROLE_USER",
+                        partsPropertyName: "parts")
                 }.ToString(),
                 Encoding.UTF8,
                 "application/json");
             return;
         }
 
+        var isHttpJsonV03 = IsA2AProtocolVersionV03(invocation.ProtocolVersion);
         ctx.Request.Content = new StringContent(
-            CreateA2ASendMessageRequest(message).ToString(),
+            CreateA2ASendMessageRequest(
+                message,
+                role: isHttpJsonV03 ? "user" : "ROLE_USER",
+                partsPropertyName: isHttpJsonV03 ? "content" : "parts").ToString(),
             Encoding.UTF8,
             "application/a2a+json");
+    }
+
+    private static string GetA2AJsonRpcMethod(bool isStreaming, bool isV03)
+    {
+        return (isStreaming, isV03) switch
+        {
+            (true, true) => "message/stream",
+            (false, true) => "message/send",
+            (true, false) => "SendStreamingMessage",
+            (false, false) => "SendMessage"
+        };
+    }
+
+    private static bool IsA2AProtocolVersionV03(string? protocolVersion)
+    {
+        return protocolVersion is not null && protocolVersion.StartsWith("0.", StringComparison.Ordinal);
     }
 
     private static async Task<A2AInvocation> ResolveA2AInvocationAsync(HttpCommandRequestContext ctx, Uri cardUri)
@@ -319,7 +345,14 @@ public static class AgentResourceBuilderExtensions
 
             if (agentInterface.ProtocolBinding is A2AProtocolBindingHttpJson)
             {
-                var requestUri = AppendPath(interfaceUri, streaming ? DefaultA2AHttpJsonStreamingMessagePath : DefaultA2AHttpJsonSendMessagePath);
+                var path = (streaming, IsA2AProtocolVersionV03(agentInterface.ProtocolVersion)) switch
+                {
+                    (true, true) => DefaultA2AHttpJsonV03StreamingMessagePath,
+                    (false, true) => DefaultA2AHttpJsonV03SendMessagePath,
+                    (true, false) => DefaultA2AHttpJsonStreamingMessagePath,
+                    (false, false) => DefaultA2AHttpJsonSendMessagePath
+                };
+                var requestUri = AppendPath(interfaceUri, path);
                 return new A2AInvocation(requestUri, agentInterface.ProtocolBinding, agentInterface.ProtocolVersion, streaming);
             }
         }
@@ -576,15 +609,15 @@ public static class AgentResourceBuilderExtensions
             : GetAgentCommandTextResultAsync(ctx);
     }
 
-    private static JsonObject CreateA2ASendMessageRequest(string message)
+    private static JsonObject CreateA2ASendMessageRequest(string message, string role, string partsPropertyName)
     {
         return new JsonObject
         {
             ["message"] = new JsonObject
             {
                 ["messageId"] = Guid.NewGuid().ToString("N"),
-                ["role"] = "ROLE_USER",
-                ["parts"] = new JsonArray
+                ["role"] = role,
+                [partsPropertyName] = new JsonArray
                 {
                     new JsonObject
                     {
