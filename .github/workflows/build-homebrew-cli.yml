@@ -1,0 +1,170 @@
+name: Homebrew CLI build smoke
+
+# Validates the homebrew-core formula's build path WITHOUT actually
+# submitting/installing a real formula:
+#
+#   1. Runs eng/homebrew-core/build-cli.sh on each supported RID. This is the
+#      single-shot bundled build the formula's install block invokes; any
+#      regression in Bundle.proj, eng/clipack/, CLI publish properties, or
+#      the script itself surfaces here rather than weeks later in a
+#      homebrew-core PR.
+#   2. Writes the brew install-route sidecar next to the produced binary and
+#      runs `aspire setup` to confirm bundle pre-extraction works end-to-end
+#      against the real on-disk layout the formula will install.
+#   3. Runs the same `aspire new aspire-empty` smoke the formula's `test do`
+#      block runs, with the same load-bearing flags. Catches regressions in
+#      template extraction from the bundle.
+#   4. Runs `aspire update --self` against the sidecar-stamped binary and
+#      asserts it prints `brew upgrade aspire` rather than invoking the
+#      GitHub-binary downloader. Asserts the binary's mtime is unchanged
+#      after the call. This is the runtime contract for Phase 2's
+#      self-update gate.
+#
+# Triggers narrowly on changes likely to affect the brew route — the script,
+# the bundle proj, the CLI sources, or this workflow itself. Skipping
+# windows/general changes keeps PR cycle time short.
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+    paths:
+      - 'eng/homebrew-core/**'
+      - 'eng/Bundle.proj'
+      - 'eng/clipack/**'
+      - 'src/Aspire.Cli/**'
+      - '.github/workflows/build-homebrew-cli.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Build + smoke (${{ matrix.target.rid }})
+    runs-on: ${{ matrix.target.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-13 is osx-x64 hosted runner; macos-14 / macos-latest is osx-arm64.
+        # ubuntu-24.04-arm provides linux-arm64. linux-x64 is the default ubuntu runner.
+        target:
+          - { runner: 'macos-latest',     rid: 'osx-arm64' }
+          - { runner: 'macos-13',         rid: 'osx-x64'   }
+          - { runner: 'ubuntu-latest',    rid: 'linux-x64' }
+          - { runner: 'ubuntu-24.04-arm', rid: 'linux-arm64' }
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      # The bundled CLI build needs Node for the npm-pack step (Aspire.Cli.csproj
+      # PackDotnetTool depends on PackNpmPackage). Pinning the version avoids
+      # relying on the runner image's default.
+      - name: Install Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 22.x
+
+      # clang + zlib are runtime deps for NativeAOT on Linux. macOS runners
+      # already ship the Xcode CLT linker. Spike confirmation in #17880.
+      - name: Install NativeAOT prerequisites (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Restore local SDK
+        run: ./restore.sh
+
+      # The formula's install block invokes this script directly; running it
+      # here exercises the same code path.
+      - name: Build bundled CLI
+        run: |
+          mkdir -p artifacts/homebrew-smoke
+          eng/homebrew-core/build-cli.sh \
+            --rid ${{ matrix.target.rid }} \
+            --output "${{ github.workspace }}/artifacts/homebrew-smoke" \
+            --channel daily
+
+      # The formula writes this sidecar before invoking `aspire setup` so
+      # BundleService.ComputeDefaultExtractDir routes the bundle into libexec
+      # (BrewWire => binaryDir). Mirror that ordering exactly.
+      - name: Stamp brew install-route sidecar
+        run: |
+          printf '{"source":"brew"}\n' > "${{ github.workspace }}/artifacts/homebrew-smoke/.aspire-install.json"
+
+      # `aspire setup --install-path <dir> --force` is the install-script
+      # entry point the formula uses to pre-extract the bundle so the runtime
+      # CLI never writes into the Cellar prefix.
+      - name: Run aspire setup (bundle pre-extract)
+        run: |
+          "${{ github.workspace }}/artifacts/homebrew-smoke/aspire" setup \
+            --install-path "${{ github.workspace }}/artifacts/homebrew-smoke" \
+            --force
+
+      # Mirrors the formula's `test do` block (eng/homebrew-core/aspire.rb.template).
+      # The four flags are load-bearing in non-interactive sandboxes per the
+      # Block-5 spike — without them the command aborts on prompt rendering.
+      - name: Smoke — aspire new aspire-empty
+        env:
+          DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+          DOTNET_NOLOGO: '1'
+        run: |
+          "${{ github.workspace }}/artifacts/homebrew-smoke/aspire" new aspire-empty \
+            --language csharp \
+            --non-interactive \
+            --suppress-agent-init \
+            --nologo \
+            -o "${{ github.workspace }}/artifacts/homebrew-smoke/testproj" \
+            -n SmokeTest
+          test -f "${{ github.workspace }}/artifacts/homebrew-smoke/testproj/apphost.cs"
+
+      # End-to-end verification of the Phase 2 brew self-update gate. The
+      # C# tests verify the control flow; this step verifies the in-binary
+      # string-table lookup works against a real bundled CLI on a real OS.
+      # Capture mtime before/after to assert the gate did NOT mutate the
+      # binary (the policy contract for homebrew-core).
+      - name: Verify aspire update --self gate (brew sidecar)
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN="${{ github.workspace }}/artifacts/homebrew-smoke/aspire"
+
+          # stat -c on Linux, stat -f on macOS. Use a portable Python fallback
+          # to keep this single step working on both.
+          mtime_before=$(python3 -c "import os, sys; print(os.path.getmtime(sys.argv[1]))" "$BIN")
+
+          output=$("$BIN" update --self 2>&1)
+          exit_code=$?
+
+          echo "--- aspire update --self output ---"
+          echo "$output"
+          echo "--- exit code: $exit_code ---"
+
+          if [ "$exit_code" -ne 0 ]; then
+            echo "::error::aspire update --self exited $exit_code; expected 0 (brew gate should print and succeed)."
+            exit 1
+          fi
+
+          if ! grep -q "brew upgrade aspire" <<<"$output"; then
+            echo "::error::Expected output to contain 'brew upgrade aspire', but it did not."
+            exit 1
+          fi
+
+          mtime_after=$(python3 -c "import os, sys; print(os.path.getmtime(sys.argv[1]))" "$BIN")
+          if [ "$mtime_before" != "$mtime_after" ]; then
+            echo "::error::Binary mtime changed from $mtime_before to $mtime_after — brew gate must not mutate the binary."
+            exit 1
+          fi
+
+          echo "OK — brew gate printed expected message, exited 0, and did not mutate the binary."
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: homebrew-smoke-logs-${{ matrix.target.rid }}
+          path: artifacts/log/**
+          if-no-files-found: ignore
+          retention-days: 7
