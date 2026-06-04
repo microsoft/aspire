@@ -111,10 +111,17 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // Each replica gets its own DCP UDS producer endpoint from the layout so the
         // terminal host can multiplex viewers per (resource, replica).
         //
-        // PTY allocation is implemented by DCP for Windows (ConPTY), Linux, and macOS
-        // (Unix98 /dev/ptmx). If the running DCP build does not support terminal
-        // allocation on this host the executable will fail to start with a
-        // termpty.ErrTerminalNotSupported error surfaced through the reconciler.
+        // PTY allocation is implemented by DCP across all three desktop platforms:
+        //   * Windows  - ConPTY (the Win32 pseudo-console API; per-replica named pipe
+        //                bridged into a Unix domain socket facade on the DCP side).
+        //   * Linux    - Unix98 master/slave pair via /dev/ptmx + grantpt/unlockpt.
+        //   * macOS    - Same Unix98 surface, with the Darwin posix_openpt path.
+        // Container PTYs (interactive `docker exec`-style sessions) are not yet
+        // wired through this annotation - tracked as a Phase 3 follow-up on the
+        // parent issue. If the running DCP build pre-dates terminal allocation on
+        // this host (e.g. an older bundled DCP that ships with Aspire), the
+        // executable fails to start with termpty.ErrTerminalNotSupported surfaced
+        // through the reconciler.
         if (er.ModelResource.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
         {
             var terminalAnnotation = terminalAnnotations.FirstOrDefault();

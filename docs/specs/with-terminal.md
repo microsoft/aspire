@@ -25,13 +25,13 @@ exposes the same session as `aspire terminal agent --replica 0`.
                                 │  AppHost (dotnet run)      │
                                 │  - Aspire.Hosting          │
                                 │  - DCP control plane       │
-                                │  - per-resource:           │
-                                │    Aspire.TerminalHost     │  (1 process / WithTerminal())
+                                │  - per-replica:            │
+                                │    Aspire.TerminalHost     │  (1 process per replica)
                                 └─────────────┬──────────────┘
                                               │ spawn
                                               ▼
 ┌──────────────────────┐                ┌───────────────────────┐                ┌────────────────────────┐
-│  DCP-launched        │   PTY (Win)    │  TerminalHost         │   HMP v1 UDS   │  Consumers             │
+│  DCP-launched        │   PTY          │  TerminalHost         │   HMP v1 UDS   │  Consumers             │
 │  replica process     │ ─────────────▶ │  (Hex1b HMP v1 broker) │ ─────────────▶ │  - Dashboard          │
 │  (executable, repl…) │ ◀───── stdin ─ │                       │ ◀───── input ─ │    /api/terminal proxy │
 └──────────────────────┘                └───────────────────────┘                │  - aspire CLI          │
@@ -44,7 +44,7 @@ Three actors and three socket roles:
 |----------------|---------------------|----------------------------------|----------|
 | **DCP**        | `producerUdsPath`   | DCP → host (PTY bytes + control) | Per replica |
 | **TerminalHost** | `consumerUdsPath` | host → consumers (broadcast)     | Per replica |
-| **TerminalHost** | `controlUdsPath`  | AppHost → host (lifecycle, stats)| Per resource |
+| **TerminalHost** | `controlUdsPath`  | AppHost → host (lifecycle, stats)| Per replica |
 
 The producer/consumer split lets multiple consumers (dashboard + multiple CLI
 sessions) attach simultaneously without coupling DCP to consumer counts.
@@ -127,16 +127,27 @@ for a selection; in non-interactive mode the `--replica` flag is required.
 
 ## DCP integration
 
-DCP allocates a Windows ConPTY per replica when the spec carries
-`terminal.enabled=true` and the supplied `terminal.producerUdsPath`,
-`terminal.consumerUdsPath`, and `terminal.controlUdsPath` properties. DCP
-opens the producer-side UDS and writes PTY traffic into it; the
-TerminalHost owns the consumer-side listener and broadcasts to attached
-clients.
+For each replica of a `WithTerminal()` resource, DCP allocates a pseudo-terminal
+when the executable (or container) spec carries a populated `terminal` block:
 
-Linux / macOS / container PTY support is tracked as Phase 3 follow-ups in
-the parent issue; for the 13.4 release, the playground guards
-non-Windows code paths with `OperatingSystem.IsWindows()` checks.
+```json
+{
+  "terminal": {
+    "udsPath":    "/run/user/1000/aspire/trmnl/<run-id>/<resource>-<idx>/producer.sock",
+    "socketMode": "connect",
+    "cols":       120,
+    "rows":       30
+  }
+}
+```
+
+`socketMode: "connect"` tells DCP to dial the named UDS (the TerminalHost
+process owns the listener). The dimensions are the initial PTY size; both
+sides exchange resize frames over HMP afterwards.
+
+Desktop PTY support is implemented across all three platforms (ConPTY on
+Windows; Unix98 `/dev/ptmx` on Linux and macOS). Container PTYs are tracked
+as a Phase 3 follow-up on the parent issue.
 
 ## Files of interest
 

@@ -105,7 +105,7 @@ internal sealed class ExecutableSpec
     /// <summary>
     /// Terminal configuration for interactive PTY access.
     /// When set, DCP allocates a pseudo-terminal for the process and forwards
-    /// I/O over a Unix domain socket using the Aspire Terminal Protocol.
+    /// I/O over a Unix domain socket using <see href="https://github.com/dotnet/hex1b">Hex1b</see>'s HMP v1 framing.
     /// </summary>
     [JsonPropertyName("terminal")]
     public TerminalSpec? Terminal { get; set; }

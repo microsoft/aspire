@@ -52,7 +52,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         return Task.FromResult(new GetCapabilitiesResponse
         {
-            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2, AuxiliaryBackchannelCapabilities.V3, AuxiliaryBackchannelCapabilities.Terminals_V1]
+            Capabilities = [AuxiliaryBackchannelCapabilities.V1, AuxiliaryBackchannelCapabilities.V2, AuxiliaryBackchannelCapabilities.V3, AuxiliaryBackchannelCapabilities.Terminals_V1, AuxiliaryBackchannelCapabilities.Terminals_PsV1]
         });
     }
 
@@ -416,14 +416,6 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         };
     }
 
-    /// <summary>
-    /// Gets terminal information for a resource. When the resource is configured with
-    /// <c>WithTerminal()</c>, this enumerates the per-replica consumer-side UDS endpoints by
-    /// asking the hidden terminal host process over its control UDS. Returns
-    /// <see cref="GetTerminalInfoResponse.IsAvailable"/> = false on any failure (no annotation,
-    /// host not running, control RPC timeout, etc.) so the caller can fall back to a
-    /// "terminal unavailable" UI without an exception.
-    /// </summary>
     /// <summary>
     /// Returns the discovery info needed to attach to a resource's terminal session(s). For a
     /// resource configured with <c>WithTerminal()</c>, this enumerates the per-replica

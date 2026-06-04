@@ -46,10 +46,11 @@ internal sealed class DashboardServiceData : IDisposable
                 //   * build a /api/terminal?resource=<name>&replica=<index> URL pointing
                 //     at the right replica (TryGetTerminalReplicaInfo).
                 //
-                // The actual consumer UDS path is *intentionally* not surfaced in the
-                // snapshot. The dashboard resolves it server-side via
-                // ITerminalConnectionResolver so an authenticated browser cannot coerce
-                // the dashboard into connecting to arbitrary UDS endpoints.
+                // The dashboard never *follows* this path itself - it only displays it
+                // (masked) in the resource details panel and uses it via
+                // ITerminalConnectionResolver, which resolves replica -> UDS server-side
+                // so an authenticated browser cannot coerce the dashboard into
+                // connecting to arbitrary UDS endpoints by tampering with the path.
                 var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
                 if (terminalAnnotation is not null)
                 {

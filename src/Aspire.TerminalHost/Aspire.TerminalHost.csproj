@@ -13,7 +13,10 @@
               shipped only as a tools/ payload (per-RID Aspire.TerminalHost.Sdk packages and
               the bundled aspire-managed.exe terminalhost arm); it has no public API contract.
       CS8002: Disable strong name signing because Hex1b package is not signed.
-      CA2007: Do not directly await a Task in this exe code (we control the synchronization context).
+      CA2007: This is a console executable with no SyncchronizationContext; every await
+              in this assembly explicitly uses ConfigureAwait(false), but the analyzer
+              still fires on lambdas. Suppressed project-wide so the noise doesn't drown
+              out real diagnostics.
     -->
     <NoWarn>$(NoWarn);CS1591;CS8002;CA2007</NoWarn>
   </PropertyGroup>

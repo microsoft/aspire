@@ -1022,7 +1022,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// </summary>
     public async Task<GetTerminalInfoResponse> GetTerminalInfoAsync(string resourceName, CancellationToken cancellationToken = default)
     {
-        if (!SupportsV2)
+        // Gate on the per-feature Terminals_V1 capability rather than the v2 envelope:
+        // an AppHost can speak aux.v2 without having terminal support compiled in. We
+        // must not call GetTerminalInfoAsync against such an AppHost or the RPC will
+        // surface as an unknown-method error to the caller.
+        if (!SupportsTerminalsV1)
         {
             return new GetTerminalInfoResponse { IsAvailable = false };
         }

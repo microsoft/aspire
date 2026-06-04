@@ -10,12 +10,10 @@ namespace Aspire.Dashboard.Terminal;
 /// coerce the dashboard into connecting to arbitrary local sockets.
 /// </summary>
 /// <remarks>
-/// The default registration is <see cref="NullTerminalConnectionResolver"/>, which
-/// always returns <c>null</c>. The standalone dashboard uses this default since
-/// terminal sessions are inherently a local-dev / DCP feature. The in-process
-/// dashboard composition in <c>Aspire.Hosting</c> replaces this with a real
-/// implementation that walks the resource graph and connects to the matching
-/// <c>Hex1b.Hmp1</c> server.
+/// The default registration is <see cref="DefaultTerminalConnectionResolver"/>,
+/// which walks the live resource snapshot stream from <c>IDashboardClient</c> to
+/// resolve <c>(resourceName, replicaIndex)</c> to the consumer UDS path that
+/// the AppHost stamped onto the snapshot, then opens a stream against it.
 /// </remarks>
 public interface ITerminalConnectionResolver
 {
