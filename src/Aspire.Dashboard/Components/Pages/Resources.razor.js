@@ -21,7 +21,7 @@ const interactiveSelector = [
 ].join(',');
 
 export function shouldStopResourcesGridRowKeydown(event) {
-    return event.key === 'Enter';
+    return event.key === 'Enter' && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
 }
 
 export function initializeResourcesGridKeyboardActivation(grid) {

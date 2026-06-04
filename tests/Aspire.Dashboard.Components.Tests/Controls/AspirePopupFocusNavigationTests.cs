@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Tests.Shared;
-using Bunit;
 using Xunit;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
@@ -13,7 +12,6 @@ public class AspirePopupFocusNavigationTests : DashboardTestContext
     public void OpenPopup_InitializesKeyboardNavigation()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
-        JSInterop.SetupVoid("initializeAspirePopupKeyboardNavigation", _ => true);
 
         var anchor = "resourceFilterButton";
 

@@ -14,12 +14,11 @@ public class AspireMenuTests : DashboardTestContext
     [Fact]
     public void ClickItem_RestoreFocusOnItemClickTrue_FocusesAnchor()
     {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentButton(this);
-        JSInterop.SetupVoid("initializeAspirePopupKeyboardNavigation", _ => true);
-        JSInterop.SetupVoid("disposeAspirePopupKeyboardNavigation", _ => true);
 
         var anchor = "view-options-button";
         var itemClicked = false;
@@ -195,8 +194,6 @@ public class AspireMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
-        JSInterop.SetupVoid("initializeAspirePopupKeyboardNavigation", _ => true);
-        JSInterop.SetupVoid("disposeAspirePopupKeyboardNavigation", _ => true);
 
         var items = new List<MenuButtonItem>
         {

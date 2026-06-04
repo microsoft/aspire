@@ -562,7 +562,10 @@ public partial class ResourcesTests : DashboardTestContext
             assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Tab')), false);
             assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('ArrowDown')), false);
             assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Escape')), false);
-            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter', { ctrlKey: true })), true);
+            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter', { ctrlKey: true })), false);
+            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter', { altKey: true })), false);
+            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter', { metaKey: true })), false);
+            assert.equal(resourcesModule.shouldStopResourcesGridRowKeydown(createKeydownEvent('Enter', { shiftKey: true })), false);
 
             const grid = new FakeElement('div');
             const button = new FakeElement('button');
@@ -573,7 +576,7 @@ public partial class ResourcesTests : DashboardTestContext
             const registration = resourcesModule.initializeResourcesGridKeyboardActivation(grid);
 
             assert.equal(button.dispatchKeydown('Enter'), true);
-            assert.equal(button.dispatchKeydown('Enter', { ctrlKey: true }), true);
+            assert.equal(button.dispatchKeydown('Enter', { ctrlKey: true }), false);
             assert.equal(button.dispatchKeydown(' '), false);
             assert.equal(button.dispatchKeydown('ArrowDown'), false);
             assert.equal(button.dispatchKeydown('Tab'), false);
