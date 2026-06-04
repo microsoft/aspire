@@ -44,5 +44,10 @@ namespace Aspire.Hosting.Agents
         [Aspire.Hosting.AspireExport("asAgentWithPath")]
         public static Aspire.Hosting.ApplicationModel.IResourceBuilder<T> AsAgent<T>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<T> builder, string? agentCustomPath, AgentProtocol protocol)
             where T : Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, Aspire.Hosting.ApplicationModel.IResourceWithEnvironment, Aspire.Hosting.ApplicationModel.IComputeResource { throw null; }
+
+        [Aspire.Hosting.AspireExportIgnore(Reason = "Polyglot app hosts use the generic withReference dispatcher export from Aspire.Hosting.")]
+        public static Aspire.Hosting.ApplicationModel.IResourceBuilder<TDestination> WithReference<TDestination, TSource>(this Aspire.Hosting.ApplicationModel.IResourceBuilder<TDestination> builder, Aspire.Hosting.ApplicationModel.IResourceBuilder<TSource> source, string? name = null)
+            where TDestination : Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
+            where TSource : Aspire.Hosting.ApplicationModel.IResourceWithEndpoints, Aspire.Hosting.ApplicationModel.IResourceWithEnvironment, Aspire.Hosting.ApplicationModel.IComputeResource { throw null; }
     }
 }
