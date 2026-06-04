@@ -170,20 +170,16 @@ public class ResourceSnapshotMapperTests
 
         var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
 
-        // Commands preserve snapshot (registration) order rather than an alphabetical sort.
-        Assert.Equal(["api-only", "ui-only", "ui-disabled"], result.Commands!.Keys);
+        Assert.Equal(["api-only", "ui-disabled", "ui-only"], result.Commands!.Keys);
         Assert.Equal(KnownCommandVisibility.UI, result.Commands["ui-only"].Visibility);
         Assert.Equal(KnownCommandVisibility.UI, result.Commands["ui-disabled"].Visibility);
     }
 
     [Fact]
-    public void MapToResourceJson_IncludeDisabledStream_PreservesCommandSnapshotOrder()
+    public void MapToResourceJson_IncludeDisabledStream_StampsRegistrationOrderOnCommands()
     {
-        // The include-disabled (UI) stream preserves the AppHost registration order so the
-        // VS Code extension matches the dashboard, which shows set-parameter before
-        // delete-parameter. Commands are provided in a non-alphabetical order so the
-        // assertion fails if the mapper were to sort them. See
-        // https://github.com/microsoft/aspire/issues/17193.
+        // Commands are provided in non-alphabetical order so RegistrationOrder must reflect
+        // registration (set-parameter before delete-parameter), not key order.
         var snapshot = new ResourceSnapshot
         {
             Name = "parameter",
@@ -200,17 +196,22 @@ public class ResourceSnapshotMapperTests
 
         var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot], includeDisabledCommands: true);
 
+        // Keys stay alphabetical for a stable JSON shape...
         Assert.Equal(
-            ["set-parameter", "custom-action", "delete-parameter"],
+            ["custom-action", "delete-parameter", "set-parameter"],
             result.Commands!.Keys);
+
+        // ...while RegistrationOrder reflects the registration order the dashboard uses.
+        Assert.Equal(0, result.Commands["set-parameter"].RegistrationOrder);
+        Assert.Equal(1, result.Commands["custom-action"].RegistrationOrder);
+        Assert.Equal(2, result.Commands["delete-parameter"].RegistrationOrder);
     }
 
     [Fact]
-    public void MapToResourceJson_DefaultStream_SortsCommandsAlphabetically()
+    public void MapToResourceJson_DefaultStream_SortsCommandsAlphabeticallyAndStampsRegistrationOrder()
     {
-        // The default/API stream keeps its stable alphabetical contract for structured
-        // consumers (MCP, export, etc.), independent of the registration order used by the
-        // include-disabled UI stream. See https://github.com/microsoft/aspire/issues/17193.
+        // The default/API stream keeps alphabetical keys but still stamps RegistrationOrder,
+        // exactly like the include-disabled stream.
         var snapshot = new ResourceSnapshot
         {
             Name = "parameter",
@@ -227,9 +228,15 @@ public class ResourceSnapshotMapperTests
 
         var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
 
+        // Keys stay alphabetical for a stable JSON shape...
         Assert.Equal(
             ["custom-action", "delete-parameter", "set-parameter"],
             result.Commands!.Keys);
+
+        // ...and RegistrationOrder reflects the registration order even on the default stream.
+        Assert.Equal(0, result.Commands["set-parameter"].RegistrationOrder);
+        Assert.Equal(1, result.Commands["custom-action"].RegistrationOrder);
+        Assert.Equal(2, result.Commands["delete-parameter"].RegistrationOrder);
     }
 
     [Fact]

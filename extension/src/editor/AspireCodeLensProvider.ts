@@ -4,6 +4,7 @@ import { AppHostResourceParser, getParserForDocument } from './parsers/AppHostRe
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
 import { AspireAppHostTreeProvider, isCommandVisibleToUi, isEnabledCommand } from '../views/AspireAppHostTreeProvider';
+import { compareResourceCommands } from '../utils/resourceCommands';
 import { getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import { AppHostDataRepository, ResourceJson, AppHostDisplayInfo, ResourceCommandJson } from '../views/AppHostDataRepository';
 import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
@@ -324,7 +325,10 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
         // Custom commands (non-standard ones like "Reset Database")
         const standardCommands = new Set(['restart', 'resource-restart', 'stop', 'resource-stop', 'start', 'resource-start']);
-        for (const [cmdName, cmd] of Object.entries(commands) as [string, ResourceCommandJson][]) {
+        // Sort by (order, name) so custom command lenses appear in the dashboard registration order.
+        const customCommands = (Object.entries(commands) as [string, ResourceCommandJson][])
+            .sort(compareResourceCommands);
+        for (const [cmdName, cmd] of customCommands) {
             if (!standardCommands.has(cmdName) && isEnabledCommand(cmd) && isCommandVisibleToUi(cmd)) {
                 const displayName = getNormalizedCommandText(cmd.displayName);
                 const description = getNormalizedCommandText(cmd.description);

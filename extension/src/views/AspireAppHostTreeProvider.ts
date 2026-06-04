@@ -4,6 +4,7 @@ import * as vscode from 'vscode';
 import { AspireTerminalProvider, quoteShellArg } from '../utils/AspireTerminalProvider';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 import { getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
+import { compareResourceCommands } from '../utils/resourceCommands';
 import {
     pidDescription,
     dashboardLabel,
@@ -87,7 +88,8 @@ function hasNoResources(resources: readonly ResourceJson[] | null | undefined): 
 
 function getVisibleCommands(commands: Record<string, ResourceCommandJson>): [string, ResourceCommandJson][] {
     return Object.entries(commands)
-        .filter(([, command]) => isCommandVisibleToUi(command) && (isEnabledCommand(command) || command.state === 'Disabled'));
+        .filter(([, command]) => isCommandVisibleToUi(command) && (isEnabledCommand(command) || command.state === 'Disabled'))
+        .sort(compareResourceCommands);
 }
 
 export function isEnabledCommand(command: ResourceCommandJson | null | undefined): boolean {
@@ -1332,6 +1334,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
         const items = Object.entries(commands)
             .filter(([, cmd]) => isCommandVisibleToUi(cmd) && isEnabledCommand(cmd))
+            .sort(compareResourceCommands)
             .map(([name, cmd]) => ({
                 label: name,
                 description: cmd.description ?? undefined,

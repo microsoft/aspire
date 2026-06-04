@@ -1784,13 +1784,13 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
-    test('resource command quick pick preserves command order from resource data', async () => {
+    test('resource command quick pick orders commands by registration order', async () => {
         const sandbox = sinon.createSandbox();
         const resource = makeResource({
             commands: {
-                'set-parameter': { displayName: 'Set parameter', description: null },
-                'custom-action': { displayName: 'Custom action', description: null },
-                'delete-parameter': { displayName: 'Delete parameter', description: null },
+                'set-parameter': { displayName: 'Set parameter', description: null, registrationOrder: 0 },
+                'custom-action': { displayName: 'Custom action', description: null, registrationOrder: 1 },
+                'delete-parameter': { displayName: 'Delete parameter', description: null, registrationOrder: 2 },
             },
         });
         const provider = makeTreeProvider([
