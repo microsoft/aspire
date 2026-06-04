@@ -1,7 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
+using System.CommandLine;
+using System.Text;
 
 namespace Aspire.TerminalHost;
 
@@ -48,109 +49,128 @@ internal sealed class TerminalHostArgs
     ///   <item><c>--rows N</c> (optional, default 30)</item>
     ///   <item><c>--shell NAME</c> (optional, informational)</item>
     /// </list>
-    /// Throws <see cref="TerminalHostArgsException"/> with a human-readable message on any
-    /// parse error so the host can write a friendly message to stderr.
+    /// Every option is single-valued and may only be specified once; duplicates throw
+    /// <see cref="TerminalHostArgsException"/>. We use <c>System.CommandLine</c> so the
+    /// host inherits the same parsing model as the rest of the Aspire CLI (consistent
+    /// error messages, --help output, etc.).
     /// </summary>
     public static TerminalHostArgs Parse(string[] args)
     {
         ArgumentNullException.ThrowIfNull(args);
 
-        string? producer = null;
-        string? consumer = null;
-        string? control = null;
-        int columns = 120;
-        int rows = 30;
-        string? shell = null;
+        var producerOption = SingleValueOption<string>("--producer-uds", required: true,
+            "Path the terminal host LISTENS on for the DCP-driven PTY producer stream.");
+        var consumerOption = SingleValueOption<string>("--consumer-uds", required: true,
+            "Path the terminal host LISTENS on for viewer (Dashboard / CLI) consumer connections.");
+        var controlOption = SingleValueOption<string>("--control-uds", required: true,
+            "Path the terminal host LISTENS on for the AppHost control RPC channel.");
 
-        for (var i = 0; i < args.Length; i++)
+        var columnsOption = SingleValueOption<int>("--columns", required: false,
+            "Initial PTY width in columns (default 120).", defaultValue: 120);
+        var rowsOption = SingleValueOption<int>("--rows", required: false,
+            "Initial PTY height in rows (default 30).", defaultValue: 30);
+        var shellOption = SingleValueOption<string?>("--shell", required: false,
+            "Informational shell name, logged on startup.");
+
+        // Cols / rows must be positive. System.CommandLine has no built-in range validator
+        // for ints, so attach one explicitly. Skip when the value couldn't be converted at
+        // all (e.g. --columns abc) - that error is already surfaced through
+        // ParseResult.Errors and calling GetValueOrDefault would rethrow it.
+        columnsOption.Validators.Add(r =>
         {
-            var arg = args[i];
-            switch (arg)
+            if (r.Tokens.Count > 0
+                && int.TryParse(r.Tokens[0].Value, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var value)
+                && value < 1)
             {
-                case "--producer-uds":
-                    if (producer is not null)
-                    {
-                        throw new TerminalHostArgsException(
-                            "--producer-uds may only be specified once. Each terminal host serves exactly one replica.");
-                    }
-                    producer = ParseString(args, ref i, "--producer-uds");
-                    break;
-                case "--consumer-uds":
-                    if (consumer is not null)
-                    {
-                        throw new TerminalHostArgsException(
-                            "--consumer-uds may only be specified once. Each terminal host serves exactly one replica.");
-                    }
-                    consumer = ParseString(args, ref i, "--consumer-uds");
-                    break;
-                case "--control-uds":
-                    control = ParseString(args, ref i, "--control-uds");
-                    break;
-                case "--columns":
-                    columns = ParseInt(args, ref i, "--columns");
-                    break;
-                case "--rows":
-                    rows = ParseInt(args, ref i, "--rows");
-                    break;
-                case "--shell":
-                    shell = ParseString(args, ref i, "--shell");
-                    break;
-                default:
-                    throw new TerminalHostArgsException($"Unknown argument: '{arg}'.");
+                r.AddError("--columns must be >= 1.");
             }
-        }
-
-        if (string.IsNullOrEmpty(producer))
+        });
+        rowsOption.Validators.Add(r =>
         {
-            throw new TerminalHostArgsException("Missing required argument: --producer-uds.");
-        }
+            if (r.Tokens.Count > 0
+                && int.TryParse(r.Tokens[0].Value, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out var value)
+                && value < 1)
+            {
+                r.AddError("--rows must be >= 1.");
+            }
+        });
 
-        if (string.IsNullOrEmpty(consumer))
+        // Treat this as a leaf command - no subcommands. The terminal host doesn't ship
+        // help text to end users (it is spawned by DCP, not invoked directly), but using
+        // RootCommand keeps the parsing model consistent with the rest of the CLI.
+        var command = new RootCommand("Aspire terminal host (per-replica HMP v1 broker).")
         {
-            throw new TerminalHostArgsException("Missing required argument: --consumer-uds.");
-        }
+            producerOption,
+            consumerOption,
+            controlOption,
+            columnsOption,
+            rowsOption,
+            shellOption,
+        };
+        // The terminal host argv comes from DCP only; treat unknown flags as a hard error
+        // so we don't silently accept garbage and start with the wrong configuration.
+        command.TreatUnmatchedTokensAsErrors = true;
 
-        if (string.IsNullOrEmpty(control))
+        var parseResult = command.Parse(args);
+        if (parseResult.Errors.Count > 0)
         {
-            throw new TerminalHostArgsException("Missing required argument: --control-uds.");
-        }
-
-        if (columns < 1 || rows < 1)
-        {
-            throw new TerminalHostArgsException(
-                $"--columns and --rows must be >= 1 (got {columns}x{rows}).");
+            var message = new StringBuilder();
+            foreach (var error in parseResult.Errors)
+            {
+                if (message.Length > 0)
+                {
+                    message.Append("; ");
+                }
+                message.Append(error.Message);
+            }
+            throw new TerminalHostArgsException(message.ToString());
         }
 
         return new TerminalHostArgs
         {
-            ProducerUdsPath = producer,
-            ConsumerUdsPath = consumer,
-            ControlUdsPath = control,
-            Columns = columns,
-            Rows = rows,
-            Shell = shell,
+            ProducerUdsPath = parseResult.GetValue(producerOption)!,
+            ConsumerUdsPath = parseResult.GetValue(consumerOption)!,
+            ControlUdsPath = parseResult.GetValue(controlOption)!,
+            Columns = parseResult.GetValue(columnsOption),
+            Rows = parseResult.GetValue(rowsOption),
+            Shell = parseResult.GetValue(shellOption),
         };
     }
 
-    private static string ParseString(string[] args, ref int i, string name)
+    private static Option<T> SingleValueOption<T>(
+        string name,
+        bool required,
+        string description,
+        T? defaultValue = default)
     {
-        if (i + 1 >= args.Length)
+        var option = new Option<T>(name)
         {
-            throw new TerminalHostArgsException($"Missing value for argument '{name}'.");
+            Description = description,
+            Required = required,
+            Arity = ArgumentArity.ExactlyOne,
+            AllowMultipleArgumentsPerToken = false,
+        };
+
+        if (!required && defaultValue is not null)
+        {
+            option.DefaultValueFactory = _ => defaultValue;
         }
 
-        return args[++i];
-    }
-
-    private static int ParseInt(string[] args, ref int i, string name)
-    {
-        var raw = ParseString(args, ref i, name);
-        if (!int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+        // System.CommandLine accepts repeated occurrences of single-valued options and
+        // silently keeps the last value (last-write-wins). For this host every flag
+        // identifies a per-replica resource (UDS path, dimensions, shell), so a duplicate
+        // is unambiguously a misuse by the caller - reject it uniformly across all flags.
+        option.Validators.Add(r =>
         {
-            throw new TerminalHostArgsException($"Argument '{name}' expects an integer (got '{raw}').");
-        }
+            if (r.IdentifierTokenCount > 1)
+            {
+                r.AddError($"{name} may only be specified once.");
+            }
+        });
 
-        return value;
+        return option;
     }
 }
 
@@ -158,3 +178,4 @@ internal sealed class TerminalHostArgs
 /// Thrown when the terminal host receives malformed command-line arguments.
 /// </summary>
 internal sealed class TerminalHostArgsException(string message) : Exception(message);
+
