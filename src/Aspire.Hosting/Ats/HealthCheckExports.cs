@@ -52,7 +52,7 @@ internal sealed class HealthCheckResult
     /// <summary>
     /// Gets optional string data for the health check result.
     /// </summary>
-    public Dictionary<string, string>? Data { get; init; }
+    public IReadOnlyDictionary<string, string>? Data { get; init; }
 
     internal ExtensionsHealthCheckResult ToExtensionsHealthCheckResult()
     {
