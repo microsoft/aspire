@@ -37,8 +37,13 @@ public class WithTerminalTests
     }
 
     [Fact]
-    public void WithTerminalAcceptsCustomOptions()
+    public void WithTerminalOptionsCallbackUpdatesAnnotation()
     {
+        // Scope: this test verifies only the TerminalAnnotation captured on the parent
+        // resource by the options callback. End-to-end propagation of those options into
+        // every per-replica TerminalHostResource (and onto the DCP TerminalSpec) is
+        // covered by TerminalHostHasCommandLineArgsForLayoutPaths and the spec mapping
+        // tests in TerminalHostEventingSubscriberTests.
         using var builder = TestDistributedApplicationBuilder.Create();
         var resource = builder.AddExecutable("myapp", "myapp", ".");
 
@@ -64,7 +69,7 @@ public class WithTerminalTests
 
         resource.WithTerminal();
 
-        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
+        var model = await BuildAndPublishBeforeStartAsync(builder);
 
         var hosts = model.Resources.OfType<TerminalHostResource>().ToList();
         var single = Assert.Single(hosts);
@@ -83,7 +88,7 @@ public class WithTerminalTests
 
         resource.WithTerminal();
 
-        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
+        var model = await BuildAndPublishBeforeStartAsync(builder);
 
         var annotation = resource.Resource.Annotations.OfType<TerminalAnnotation>().Single();
         var hostFromModel = model.Resources.OfType<TerminalHostResource>().Single();
@@ -129,7 +134,7 @@ public class WithTerminalTests
         var annotation = container.Resource.Annotations.OfType<TerminalAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
 
-        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
+        var model = await BuildAndPublishBeforeStartAsync(builder);
 
         var hosts = model.Resources.OfType<TerminalHostResource>().ToList();
         var single = Assert.Single(hosts);
@@ -144,7 +149,7 @@ public class WithTerminalTests
 
         resource.WithTerminal();
 
-        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
+        var model = await BuildAndPublishBeforeStartAsync(builder);
 
         foreach (var host in model.Resources.OfType<TerminalHostResource>())
         {
@@ -166,7 +171,7 @@ public class WithTerminalTests
             .WithAnnotation(new ReplicaAnnotation(2));
         resource.WithTerminal();
 
-        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
+        var model = await BuildAndPublishBeforeStartAsync(builder);
 
         foreach (var host in model.Resources.OfType<TerminalHostResource>())
         {
@@ -184,7 +189,7 @@ public class WithTerminalTests
             .WithAnnotation(new ReplicaAnnotation(2));
         resource.WithTerminal(options => options.ShowTerminalHosts = true);
 
-        var (_, model) = await BuildAndPublishBeforeStartAsync(builder);
+        var model = await BuildAndPublishBeforeStartAsync(builder);
 
         var hosts = model.Resources.OfType<TerminalHostResource>().ToList();
         Assert.Equal(2, hosts.Count);
@@ -501,11 +506,26 @@ public class WithTerminalTests
         await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
     }
 
-    private static async Task<(DistributedApplication App, DistributedApplicationModel Model)> BuildAndPublishBeforeStartAsync(IDistributedApplicationTestingBuilder builder)
+    /// <summary>
+    /// Builds the application, publishes <see cref="BeforeStartEvent"/> (the seam that
+    /// materializes per-replica terminal hosts), then disposes the
+    /// <see cref="DistributedApplication"/> before returning. The returned
+    /// <see cref="DistributedApplicationModel"/> is the same instance the eventing
+    /// handlers ran against and is safe to inspect after the app is disposed (its
+    /// Resources collection is owned by the model, not the app's host).
+    /// </summary>
+    /// <remarks>
+    /// Previously this returned (app, model) and callers discarded the app as `_`,
+    /// which leaked the DistributedApplication's background services, DCP-related
+    /// objects, and pooled handles until finalization. The sibling helper
+    /// <see cref="PublishBeforeStartAsync"/> already used `using var app`; this brings
+    /// the two helpers into alignment.
+    /// </remarks>
+    private static async Task<DistributedApplicationModel> BuildAndPublishBeforeStartAsync(IDistributedApplicationTestingBuilder builder)
     {
-        var app = builder.Build();
+        await using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         await builder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, model));
-        return (app, model);
+        return model;
     }
 }

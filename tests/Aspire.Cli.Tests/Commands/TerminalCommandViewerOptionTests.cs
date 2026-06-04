@@ -25,7 +25,20 @@ public class TerminalCommandViewerOptionTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("terminal attach --help");
 
-        var output = CaptureHelpOutput(() => result.Invoke());
+        // Route --help output through System.CommandLine's InvocationConfiguration
+        // rather than swapping Console.Out. Console.SetOut mutates process-wide
+        // state and this test project enables parallel execution across classes,
+        // so any concurrent test invoking a command that writes to Console.Out
+        // would silently steer its output into this StringWriter (or vice versa).
+        using var sw = new StringWriter();
+        var invokeConfig = new System.CommandLine.InvocationConfiguration
+        {
+            EnableDefaultExceptionHandler = false,
+            Output = sw,
+        };
+        result.Invoke(invokeConfig);
+
+        var output = sw.ToString();
         Assert.Contains("--viewer", output, StringComparison.Ordinal);
         Assert.Contains("primary", output, StringComparison.OrdinalIgnoreCase);
     }
@@ -58,21 +71,5 @@ public class TerminalCommandViewerOptionTests(ITestOutputHelper outputHelper)
         Assert.Empty(result.Errors);
         var viewerValue = result.GetValue<bool>("--viewer");
         Assert.True(viewerValue);
-    }
-
-    private static string CaptureHelpOutput(Action invoke)
-    {
-        var originalOut = Console.Out;
-        using var sw = new StringWriter();
-        Console.SetOut(sw);
-        try
-        {
-            invoke();
-        }
-        finally
-        {
-            Console.SetOut(originalOut);
-        }
-        return sw.ToString();
     }
 }
