@@ -56,6 +56,35 @@ public class AspireMenuTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task OpenContextMenu_DoesNotInitializeKeyboardNavigation()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var items = new List<MenuButtonItem>
+        {
+            new()
+            {
+                Text = "Show hidden resources",
+                OnClick = () => Task.CompletedTask
+            }
+        };
+
+        RenderComponent<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "resources-summary-layout-id");
+            builder.Add(p => p.Anchored, false);
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, items);
+        });
+        await Task.Yield();
+
+        Assert.DoesNotContain(JSInterop.Invocations, invocation => invocation.Identifier == "initializeAspirePopupKeyboardNavigation");
+    }
+
+    [Fact]
     public async Task OpenMenu_DisposesKeyboardNavigationWithRegisteredAnchorWhenAnchorChanges()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);

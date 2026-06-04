@@ -53,7 +53,7 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
             await DisposeKeyboardNavigationAsync();
         }
 
-        if (Open && _registeredAnchorId is null && !string.IsNullOrEmpty(Anchor))
+        if (Open && Anchored && _registeredAnchorId is null && !string.IsNullOrEmpty(Anchor))
         {
             var anchor = Anchor;
             _registeredAnchorId = anchor;
