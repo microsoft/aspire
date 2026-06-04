@@ -1014,7 +1014,7 @@
     "tree-sitter-c-sharp": "0.23.5",
     "vscode-jsonrpc": "8.2.1",
     "web-tree-sitter": "0.26.9",
-    "ws": "8.20.0"
+    "ws": "8.20.1"
   },
   "resolutions": {
     "braces": "3.0.3",
