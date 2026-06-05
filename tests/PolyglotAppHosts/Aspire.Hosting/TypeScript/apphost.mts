@@ -773,7 +773,31 @@ await container.withProcessCommand("node-stdin", "Node stdin", {
 
 // withHttpCommand
 await container.withHttpCommand("/health", "Health Check");
-await container.withHttpCommand("/api/reset", "Reset", { methodName: "POST", confirmationMessage: "Are you sure?" });
+await container.withHttpCommand("/api/reset", "Reset", {
+    methodName: "POST",
+    prepareRequest: async (context) => {
+        const args = await context.arguments();
+        const message = await args.requiredValue("message");
+
+        return {
+            content: JSON.stringify({ message }),
+            contentType: "application/json",
+            headers: {
+                "X-Message": message,
+            },
+        };
+    },
+    commandOptions: {
+        arguments: [
+            {
+                name: "message",
+                inputType: InputType.Text,
+                required: true,
+            },
+        ],
+    },
+    confirmationMessage: "Are you sure?",
+});
 
 const app = await builder.build();
 await app.run();
