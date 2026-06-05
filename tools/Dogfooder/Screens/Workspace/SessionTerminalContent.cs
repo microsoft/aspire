@@ -54,11 +54,19 @@ internal static class SessionTerminalContent
         // way to open it in their editor. The header is rendered every
         // frame; it's just a couple of text + button nodes so the cost is
         // negligible compared to the PTY itself.
+        //
+        // .Fill() on the VStack itself is critical: without it the stack
+        // sizes to its content (header row + the terminal's default 24
+        // rows from WithDimensions), so the PTY never resizes to the full
+        // tab area and the user sees a 24-row terminal pinned to the top
+        // with a big black band below it. .Fill() lets the VStack grab
+        // the full tab body, and the inner TerminalWidget.Fill() then
+        // grabs everything below the header.
         return ctx.VStack(v =>
         [
             BuildHeader(v, session),
             terminalWidget,
-        ]);
+        ]).Fill();
     }
 
     private static Hex1bWidget BuildHeader<TParent>(
