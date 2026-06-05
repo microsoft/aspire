@@ -31,11 +31,13 @@ type DebuggerContribution = {
 };
 
 type ExtensionManifest = {
+    activationEvents?: string[];
     contributes: {
         commands?: ManifestCommand[];
         viewsWelcome?: Array<{ view?: string; contents?: string; when?: string }>;
         menus?: {
             commandPalette?: ManifestMenuItem[];
+            'explorer/context'?: ManifestMenuItem[];
             'view/title'?: ManifestMenuItem[];
             'view/item/context'?: ManifestMenuItem[];
         };
@@ -141,6 +143,37 @@ suite('extension/package.json', () => {
 
         assert.strictEqual(openDashboard?.when, '!aspire.noRunningAppHosts');
         assert.strictEqual(openDashboardToSide?.when, '!aspire.noRunningAppHosts');
+    });
+
+    test('Node module AppHost files activate the extension', () => {
+        const manifest = readManifest();
+        const activationEvents = manifest.activationEvents ?? [];
+
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.ts'));
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.mts'));
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.cts'));
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.js'));
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.mjs'));
+        assert.ok(activationEvents.includes('workspaceContains:**/apphost.cjs'));
+    });
+
+    test('Explorer AppHost commands include Node module filenames', () => {
+        const manifest = readManifest();
+        const explorerMenus = manifest.contributes.menus?.['explorer/context'] ?? [];
+        const expectedAppHostFiles = ['apphost.ts', 'apphost.mts', 'apphost.cts', 'apphost.js', 'apphost.mjs', 'apphost.cjs'];
+
+        for (const commandName of ['aspire-vscode.runAppHostCommand', 'aspire-vscode.debugAppHostCommand']) {
+            const menuItem = explorerMenus.find(item => item.command === commandName);
+            assert.ok(menuItem?.when, `Expected ${commandName} to have a when clause`);
+
+            const match = menuItem.when.match(/resourceFilename =~ \/(.+)\/i/);
+            assert.ok(match, `Expected ${commandName} to use a resourceFilename regex`);
+
+            const regex = new RegExp(match[1], 'i');
+            for (const fileName of expectedAppHostFiles) {
+                assert.ok(regex.test(fileName), `Expected ${commandName} to match ${fileName}`);
+            }
+        }
     });
 
     test('aspire launch configuration declares an env property as a string-valued object', () => {
