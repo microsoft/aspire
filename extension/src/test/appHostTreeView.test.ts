@@ -505,6 +505,26 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(openExternalStub.getCall(0).args[0].toString(), 'http://localhost:1002/');
     });
 
+    test('workspace view shows multiple running AppHosts before workspace discovery completes', () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                appHostPid: 1,
+            }),
+            makeAppHost({
+                appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                appHostPid: 2,
+            }),
+        ], 'workspace');
+
+        const items = provider.getChildren();
+
+        assert.deepStrictEqual(items.map(item => item.label), [
+            'apps/Store/AppHost.csproj',
+            'samples/Store/AppHost.csproj',
+        ]);
+    });
+
     test('openDashboard stays silent when dashboard selection is canceled', async () => {
         const provider = makeTreeProvider([
             makeAppHost({

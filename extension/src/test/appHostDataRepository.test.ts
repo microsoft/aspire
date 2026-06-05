@@ -1122,6 +1122,7 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.appHosts.length, 1);
             assert.strictEqual(repository.appHosts[0].appHostPath, '/workspace/apps/Store/AppHost.csproj');
             assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+            assert.strictEqual(repository.isLoading, false);
 
             discovery.resolve([{
                 path: '/workspace/apps/Store/AppHost.csproj',
