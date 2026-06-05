@@ -528,6 +528,31 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(openExternalStub.callCount, 0);
     });
 
+    test('openDashboard does not fall back to another AppHost for an explicit AppHost item', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                appHostPath: '/workspace/apps/Store/AppHost.csproj',
+                appHostPid: 1,
+                dashboardUrl: null,
+            }),
+            makeAppHost({
+                appHostPath: '/workspace/samples/Store/AppHost.csproj',
+                appHostPid: 2,
+                dashboardUrl: 'http://localhost:1002',
+            }),
+        ]);
+        const [appHostItem] = provider.getChildren();
+        const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+        const showQuickPickStub = sandbox.stub(vscode.window, 'showQuickPick').resolves(undefined);
+        const openExternalStub = sandbox.stub(vscode.env, 'openExternal').resolves(true);
+
+        await provider.openDashboard(appHostItem);
+
+        assert.strictEqual(showInformationMessageStub.callCount, 1);
+        assert.strictEqual(showQuickPickStub.callCount, 0);
+        assert.strictEqual(openExternalStub.callCount, 0);
+    });
+
     test('openDashboardToSide opens the dashboard in the integrated browser side group', async () => {
         const provider = makeTreeProvider([
             makeAppHost({

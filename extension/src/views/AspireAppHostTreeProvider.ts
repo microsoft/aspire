@@ -1234,7 +1234,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             url = getBaseDashboardUrl(element.dashboardUrl);
         }
 
-        if (!url) {
+        if (!url && element === undefined) {
             if (this._repository.viewMode === 'workspace') {
                 const resources = [...this._repository.workspaceResources];
                 const resourceUrl = this._repository.workspaceAppHost?.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
