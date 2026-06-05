@@ -178,6 +178,20 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
         var props = new List<string>
         {
             $"/p:VersionSuffix={request.VersionSuffix}",
+            // NU5104 ("stable release should not have a prerelease
+            // dependency") is a publish-time gate: nuget.org would reject
+            // such a package because it would force consumers onto a
+            // prerelease at restore time. For dogfooding we are NEVER
+            // publishing — every .nupkg this build produces lives at most
+            // inside our local DogfoodingNuGetServer overlay — so this gate
+            // is just blocking us from reproducing released-style stable
+            // packages while transitive Azure.Provisioning / Milvus / etc.
+            // dependencies are still in -beta. Suppress here so dogfood
+            // packs succeed for scenarios like repro-vcurrent-local; the
+            // real release pipeline never sets VersionSuffix='' until those
+            // deps are promoted, so the upstream gate is unchanged.
+            // NU5125 (missing readme) is a separate dogfood-irrelevant gate.
+            "/p:NoWarn=NU5104;NU5125",
         };
         if (!request.IncludeNativeBuild)
         {
