@@ -113,7 +113,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         _executionContext = executionContext;
         _appResources = appResources;
 
-        _resourceWatcher = new DcpResourceWatcher(logger, kubernetesService, loggerService, executorEvents, model, _appResources, _configuration, PublishLateEndpointsAllocatedEventAsync, profilingTelemetry, _shutdownCancellation.Token);
+        _resourceWatcher = new DcpResourceWatcher(logger, kubernetesService, loggerService, executorEvents, model, _appResources, _configuration, profilingTelemetry, _shutdownCancellation.Token);
 
         DeleteResourceRetryPipeline = DcpPipelineBuilder.BuildDeleteRetryPipeline(logger);
 
@@ -195,59 +195,47 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
             var createContainerNetworks = Task.Run(() => CreateAllDcpObjectsAsync<ContainerNetwork>(ct), ct);
 
-            var createWorkloadEndpoints = Task.Run(async () =>
+            var createExecutableEndpoints = Task.Run(async () =>
             {
-                await Task.WhenAll([getProxyAddresses, createContainerNetworks]).WaitAsync(ct).ConfigureAwait(false);
+                await getProxyAddresses.ConfigureAwait(false);
 
-                List<IResource> endpointAllocatedResources = [];
                 foreach (var executable in executables)
                 {
                     if (DcpModelUtilities.TryAddWorkloadAllocatedEndpoints(
                         executable,
                         _options.Value.EnableAspireContainerTunnel,
-                        ContainerHostName,
-                        allowPendingDynamicProxylessContainerEndpoints: false))
+                        ContainerHostName))
                     {
-                        endpointAllocatedResources.Add(executable.ModelResource);
+                        await PublishEndpointsAllocatedEventAsync(executable.ModelResource, ct).ConfigureAwait(false);
                     }
                 }
+            }, ct);
+
+            var createExecutables = Task.Run(async () =>
+            {
+                await createExecutableEndpoints.ConfigureAwait(false);
+
+                await CreateRenderedResourcesAsync(_executableCreator, executables, EmptyCreationContext.s_instance, ct).ConfigureAwait(false);
+            }, ct);
+
+            // Configuring containers that use the tunnel require these host network-side endpoints for Executables to be ready.
+            var cctx = new ContainerCreationContext(createContainerNetworks, createExecutableEndpoints, ct);
+            _containerContextSource.SetResult(cctx);
+
+            var createContainers = Task.Run(async () =>
+            {
+                await Task.WhenAll([getProxyAddresses, createContainerNetworks]).WaitAsync(ct).ConfigureAwait(false);
 
                 foreach (var container in containers)
                 {
                     if (DcpModelUtilities.TryAddWorkloadAllocatedEndpoints(
                         container,
                         _options.Value.EnableAspireContainerTunnel,
-                        ContainerHostName,
-                        allowPendingDynamicProxylessContainerEndpoints: true))
+                        ContainerHostName))
                     {
-                        endpointAllocatedResources.Add(container.ModelResource);
+                        await PublishEndpointsAllocatedEventAsync(container.ModelResource, ct).ConfigureAwait(false);
                     }
                 }
-
-                // Allocate every endpoint that is known before workload creation before publishing any
-                // resource-specific endpoint events. URL callbacks can reference endpoints on other
-                // resources, so publishing per-resource while another resource is still allocating can
-                // make a valid cross-resource callback observe an unallocated endpoint.
-                foreach (var resource in endpointAllocatedResources.Distinct())
-                {
-                    await PublishEndpointsAllocatedEventAsync(resource, ct).ConfigureAwait(false);
-                }
-            }, ct);
-
-            var createExecutables = Task.Run(async () =>
-            {
-                await createWorkloadEndpoints.ConfigureAwait(false);
-
-                await CreateRenderedResourcesAsync(_executableCreator, executables, EmptyCreationContext.s_instance, ct).ConfigureAwait(false);
-            }, ct);
-
-            // Configuring containers that use the tunnel require these host network-side endpoints for Executables to be ready.
-            var cctx = new ContainerCreationContext(createContainerNetworks, createWorkloadEndpoints, ct);
-            _containerContextSource.SetResult(cctx);
-
-            var createContainers = Task.Run(async () =>
-            {
-                await createWorkloadEndpoints.ConfigureAwait(false);
 
                 await CreateRenderedResourcesAsync(_containerCreator, containers, cctx, ct).ConfigureAwait(false);
             }, ct);
@@ -670,9 +658,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 }
                 else
                 {
-                    port = sp.ModelResource.IsContainer() && !endpoint.IsProxied
-                        ? endpoint.SpecifiedPort
-                        : endpoint.Port;
+                    port = endpoint.Port;
                 }
                 svc.Spec.Port = port;
                 svc.Spec.Protocol = PortProtocol.FromProtocolType(endpoint.Protocol);
@@ -711,7 +697,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 return isProxied;
             }
 
-            return !resource.HasPersistentLifetime();
+            return !resource.HasPersistentLifetime() || resource.IsContainer();
         }
 
         var containers = _model.Resources.Where(r => r.IsContainer());
@@ -1220,16 +1206,8 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         }
 
         var ev = new ResourceEndpointsAllocatedEvent(resource, _executionContext.ServiceProvider);
-        await _distributedApplicationEventing.PublishAsync(ev, EventDispatchBehavior.BlockingSequential, ct).ConfigureAwait(false);
+        await _distributedApplicationEventing.PublishAsync(ev, EventDispatchBehavior.NonBlockingConcurrent, ct).ConfigureAwait(false);
         return true;
-    }
-
-    private async Task PublishLateEndpointsAllocatedEventAsync(IResource resource, CancellationToken ct)
-    {
-        if (await PublishEndpointsAllocatedEventAsync(resource, ct).ConfigureAwait(false))
-        {
-            await PublishConnectionStringAvailableEventAsync(resource, ct).ConfigureAwait(false);
-        }
     }
 
     private async Task PublishConnectionStringAvailableEventAsync(IResource resource, CancellationToken ct)

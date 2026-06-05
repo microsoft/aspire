@@ -199,7 +199,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
             }
 
             var containerAppResource = new RenderedModelResource<Container>(container, ctr);
-            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get(), _logger);
+            DcpModelUtilities.AddServicesProducedInfo(containerAppResource, _appResources.Get());
             _appResources.Add(containerAppResource);
             result.Add(containerAppResource);
         }
@@ -316,19 +316,13 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         spec.RunArgs = runArgs;
 
         var (configuration, pemCertificates, createFiles) = await BuildContainerConfiguration(cr, logger, cToken).ConfigureAwait(false);
-        // Configuration callbacks are the last pre-creation point where on-demand allocation can run.
-        cr.ModelResource.Annotations
-            .OfType<OnDemandEndpointAllocationAnnotation>()
-            .SingleOrDefault()
-            ?.StopAllocating();
 
         if (configuration.Exception is not null)
         {
             throw new FailedToApplyEnvironmentException($"Failed to apply configuration to container {cr.ModelResource.Name}", configuration.Exception);
         }
 
-        // Environment callbacks can resolve proxyless endpoint ports and commit a fallback host port,
-        // so build ports afterward.
+        // Configuration callbacks can update endpoint metadata, so build ports afterward.
         if (cr.ServicesProduced.Count > 0)
         {
             spec.Ports = BuildContainerPorts(cr);
@@ -993,7 +987,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 ContainerPort = ea.TargetPort,
             };
 
-            if (!ea.IsProxied && ea.SpecifiedPort is int hostPort)
+            if (!ea.IsProxied && ea.Port is int hostPort)
             {
                 sp.Service.Spec.Port ??= hostPort;
                 portSpec.HostPort = hostPort;

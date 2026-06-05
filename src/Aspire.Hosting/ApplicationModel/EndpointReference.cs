@@ -221,26 +221,6 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
         GetAllocatedEndpoint()
         ?? throw new InvalidOperationException($"The endpoint `{EndpointName}` is not allocated for the resource `{Resource.Name}`.");
 
-    internal Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkId, CancellationToken cancellationToken = default)
-    {
-        var endpointAnnotation = EndpointAnnotation;
-        if (endpointAnnotation.AllAllocatedEndpoints.TryGetAllocatedEndpoint(networkId, out var endpoint))
-        {
-            return Task.FromResult(endpoint);
-        }
-
-        foreach (var allocationAnnotation in Resource.Annotations.OfType<OnDemandEndpointAllocationAnnotation>())
-        {
-            endpoint = allocationAnnotation.TryAllocate(endpointAnnotation, networkId);
-            if (endpoint is not null)
-            {
-                return Task.FromResult(endpoint);
-            }
-        }
-
-        return endpointAnnotation.AllAllocatedEndpoints.GetAllocatedEndpointAsync(networkId, cancellationToken);
-    }
-
     private EndpointAnnotation? GetEndpointAnnotation()
     {
         if (_endpointAnnotation is not null)
@@ -391,7 +371,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
         {
-            var allocatedEndpoint = await Endpoint.GetAllocatedEndpointAsync(networkContext, cancellationToken).ConfigureAwait(false);
+            var allocatedEndpoint = await Endpoint.EndpointAnnotation.AllAllocatedEndpoints.GetAllocatedEndpointAsync(networkContext, cancellationToken).ConfigureAwait(false);
 
             return Property switch
             {

@@ -99,15 +99,10 @@ internal sealed class TestKubernetesService : IKubernetesService
 
         lock (CreatedResources)
         {
-            var modifiedResources = AllocateProxylessContainerServicePorts(res);
             CreatedResources.Enqueue(res);
             foreach (var c in _watchChannels)
             {
                 c.Writer.TryWrite((WatchEventType.Added, res));
-                foreach (var modifiedResource in modifiedResources)
-                {
-                    c.Writer.TryWrite((WatchEventType.Modified, modifiedResource));
-                }
             }
         }
 
@@ -123,34 +118,6 @@ internal sealed class TestKubernetesService : IKubernetesService
                 c.Writer.TryWrite((WatchEventType.Modified, resource));
             }
         }
-    }
-
-    private List<CustomResource> AllocateProxylessContainerServicePorts(CustomResource resource)
-    {
-        if (resource is not Container container ||
-            container.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(CustomResource.ServiceProducerAnnotation, out var servicesProduced) is not true)
-        {
-            return [];
-        }
-
-        var modifiedResources = new List<CustomResource>();
-        foreach (var serviceProduced in servicesProduced)
-        {
-            var service = CreatedResources.OfType<Service>().FirstOrDefault(s => s.Metadata.Name == serviceProduced.ServiceName);
-            if (service?.Spec.AddressAllocationMode != AddressAllocationModes.Proxyless || service.Spec.Port is not null || service.Status?.EffectivePort is not null)
-            {
-                continue;
-            }
-
-            var hostPort = container.Spec.Ports?.FirstOrDefault(port => port.ContainerPort == serviceProduced.Port)?.HostPort;
-
-            service.Status ??= new ServiceStatus();
-            service.Status.EffectiveAddress = service.Spec.Address ?? "localhost";
-            service.Status.EffectivePort = hostPort ?? Interlocked.Increment(ref _nextPort);
-            modifiedResources.Add(service);
-        }
-
-        return modifiedResources;
     }
 
     public async Task<T> DeleteAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata

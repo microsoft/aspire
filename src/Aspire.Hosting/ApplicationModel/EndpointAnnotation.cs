@@ -209,8 +209,6 @@ public sealed class EndpointAnnotation : IResourceAnnotation
         }
     }
 
-    internal int? SpecifiedPort => _port;
-
     /// <summary>
     /// This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.
     /// </summary>

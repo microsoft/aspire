@@ -7,7 +7,6 @@ using System.Globalization;
 using System.Net;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dcp;
 
@@ -34,8 +33,7 @@ internal static class DcpModelUtilities
     /// </summary>
     internal static void AddServicesProducedInfo<TDcpResource>(
         RenderedModelResource<TDcpResource> appResource,
-        IEnumerable<IAppResource> appResources,
-        ILogger? logger = null)
+        IEnumerable<IAppResource> appResources)
         where TDcpResource : CustomResource, IKubernetesStaticMetadata
     {
         var modelResource = appResource.ModelResource;
@@ -89,16 +87,6 @@ internal static class DcpModelUtilities
             appResource.ServicesProduced.Add(sp);
         }
 
-        if (appResource.ServicesProduced.Any(sp => IsDynamicProxylessContainerEndpoint(appResource, sp)) &&
-            !modelResource.Annotations.OfType<OnDemandEndpointAllocationAnnotation>().Any())
-        {
-            // These endpoints normally get their host port during container creation. If a
-            // reference needs the allocated endpoint while building the container configuration,
-            // commit the fallback port before waiting would deadlock resource creation.
-            modelResource.Annotations.Add(new OnDemandEndpointAllocationAnnotation(
-                (endpoint, networkId) => TryAllocateDynamicProxylessContainerEndpoint(appResource, endpoint, networkId, logger)));
-        }
-
         static bool HasMultipleReplicas(CustomResource resource)
         {
             if (resource is Executable exe && exe.Metadata.Annotations.TryGetValue(CustomResource.ResourceReplicaCount, out var value) && int.TryParse(value, CultureInfo.InvariantCulture, out var replicas) && replicas > 1)
@@ -117,22 +105,19 @@ internal static class DcpModelUtilities
     {
         foreach (var res in resources)
         {
-            TryAddWorkloadAllocatedEndpoints(res, enableAspireContainerTunnel, containerHostName, allowPendingDynamicProxylessContainerEndpoints: false);
+            TryAddWorkloadAllocatedEndpoints(res, enableAspireContainerTunnel, containerHostName);
         }
     }
 
     internal static bool TryAddWorkloadAllocatedEndpoints<TDcpResource>(
         RenderedModelResource<TDcpResource> resource,
         bool enableAspireContainerTunnel,
-        string containerHostName,
-        bool allowPendingDynamicProxylessContainerEndpoints)
+        string containerHostName)
         where TDcpResource : CustomResource, IKubernetesStaticMetadata
     {
         foreach (var sp in resource.ServicesProduced)
         {
-            if (TryAddLocalhostAllocatedEndpoint(
-                sp,
-                allowPending: allowPendingDynamicProxylessContainerEndpoints && IsDynamicProxylessContainerEndpoint(resource, sp)))
+            if (TryAddLocalhostAllocatedEndpoint(sp, allowPending: false))
             {
                 AddContainerNetworkAllocatedEndpoint(resource, sp);
                 AddExecutableContainerNetworkAllocatedEndpoint(resource, sp, enableAspireContainerTunnel, containerHostName);
@@ -142,25 +127,20 @@ internal static class DcpModelUtilities
         return AreResourceEndpointsAllocated(resource.ModelResource);
     }
 
-    internal static bool TryApplyServiceAddressToEndpoint(Service observedService, IEnumerable<IAppResource> appResources, [NotNullWhen(true)] out IResource? modelResource)
+    internal static void ApplyServiceAddressToEndpoint(Service observedService, IEnumerable<IAppResource> appResources)
     {
         var serviceResource = appResources.OfType<ServiceWithModelResource>()
             .FirstOrDefault(swr => string.Equals(swr.DcpResource.Metadata.Name, observedService.Metadata.Name, StringComparison.Ordinal));
 
         if (serviceResource is null)
         {
-            modelResource = null;
-            return false;
+            return;
         }
 
         serviceResource.Service.ApplyAddressInfoFrom(observedService);
-        var isDynamicProxylessContainerEndpoint = appResources.OfType<RenderedModelResource<Container>>()
-            .Any(resource => ReferenceEquals(resource.ModelResource, serviceResource.ModelResource) &&
-                IsDynamicProxylessContainerEndpoint(resource, serviceResource));
         if (!TryAddLocalhostAllocatedEndpoint(serviceResource, allowPending: true))
         {
-            modelResource = null;
-            return false;
+            return;
         }
 
         foreach (var containerResource in appResources.OfType<RenderedModelResource<Container>>()
@@ -168,15 +148,12 @@ internal static class DcpModelUtilities
         {
             AddContainerNetworkAllocatedEndpoint(containerResource, serviceResource);
         }
-
-        modelResource = serviceResource.ModelResource;
-        return isDynamicProxylessContainerEndpoint && AreResourceEndpointsAllocated(modelResource);
     }
 
-    private static bool TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, bool allowPending, int? fallbackPort = null)
+    private static bool TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, bool allowPending)
     {
         var svc = sp.DcpResource;
-        var allocatedPort = svc.AllocatedPort ?? fallbackPort;
+        var allocatedPort = svc.AllocatedPort;
 
         if (sp.EndpointAnnotation.AllocatedEndpoint is not null)
         {
@@ -281,50 +258,6 @@ internal static class DcpModelUtilities
     internal static bool AreResourceEndpointsAllocated(IResource resource)
     {
         return !resource.TryGetEndpoints(out var endpoints) || endpoints.All(e => e.AllocatedEndpoint is not null);
-    }
-
-    private static bool IsDynamicProxylessContainerEndpoint<TDcpResource>(RenderedModelResource<TDcpResource> resource, ServiceWithModelResource sp)
-        where TDcpResource : CustomResource, IKubernetesStaticMetadata
-    {
-        return resource.DcpResource is Container &&
-            !sp.EndpointAnnotation.IsProxied &&
-            sp.EndpointAnnotation.SpecifiedPort is null;
-    }
-
-    private static AllocatedEndpoint? TryAllocateDynamicProxylessContainerEndpoint<TDcpResource>(
-        RenderedModelResource<TDcpResource> resource,
-        EndpointAnnotation endpoint,
-        NetworkIdentifier networkId,
-        ILogger? logger)
-        where TDcpResource : CustomResource, IKubernetesStaticMetadata
-    {
-        var sp = resource.ServicesProduced.SingleOrDefault(sp =>
-            ReferenceEquals(sp.EndpointAnnotation, endpoint) &&
-            IsDynamicProxylessContainerEndpoint(resource, sp));
-        if (sp is null)
-        {
-            return null;
-        }
-
-        Debug.Assert(endpoint.TargetPort is not null);
-
-        var targetPort = endpoint.TargetPort.Value;
-        endpoint.Port = targetPort;
-        logger?.LogInformation(
-            "Endpoint '{EndpointName}' on container resource '{ResourceName}' was resolved before the container was created, so Aspire is assigning public port {PublicPort} to match target port {TargetPort} for proxyless access.",
-            endpoint.Name,
-            sp.ModelResource.Name,
-            targetPort,
-            targetPort);
-
-        if (TryAddLocalhostAllocatedEndpoint(sp, allowPending: false, fallbackPort: targetPort))
-        {
-            AddContainerNetworkAllocatedEndpoint(resource, sp);
-        }
-
-        return endpoint.AllAllocatedEndpoints.TryGetAllocatedEndpoint(networkId, out var allocatedEndpoint)
-            ? allocatedEndpoint
-            : null;
     }
 
     internal static void AddContainerTunnelAllocatedEndpoints(
