@@ -379,7 +379,9 @@ if ($idBinary -and $idSymbol) {
 }
 Write-Host ""
 
-# === Check B: dotnet-symbol round-trip via local file:// store ===
+# === Check B: dotnet-symbol round-trip via local symstore ===
+# Served over a loopback HttpListener, not a file:// URI — dotnet-symbol's
+# server-path parser only accepts http(s) (see HttpListener block below).
 Write-Host "--- Check B: dotnet-symbol round-trip via local symstore ---" -ForegroundColor Yellow
 
 # Ensure dotnet-symbol is installed. We attempt install when the tool is
