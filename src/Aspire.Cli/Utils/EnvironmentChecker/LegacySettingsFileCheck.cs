@@ -34,6 +34,7 @@ internal sealed class LegacySettingsFileCheck(CliExecutionContext executionConte
 
         while (searchDir is not null)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var modernConfigPath = Path.Combine(searchDir.FullName, AspireConfigFile.FileName);
             if (File.Exists(modernConfigPath))
             {

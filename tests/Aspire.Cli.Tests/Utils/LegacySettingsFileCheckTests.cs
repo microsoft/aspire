@@ -16,7 +16,12 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
         Directory.CreateDirectory(legacyDir);
         await File.WriteAllTextAsync(Path.Combine(legacyDir, "settings.json"), "{}");
 
-        var executionContext = workspace.CreateExecutionContext();
+        // Use a subdirectory as working dir so the legacy file is found via walk-up.
+        // The walk-up stops when it finds the legacy file at workspace root.
+        var subDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "src"));
+        subDir.Create();
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(subDir);
         var check = new LegacySettingsFileCheck(executionContext);
 
         var results = await check.CheckAsync();
@@ -68,7 +73,7 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CheckAsync_WithNoConfigFiles_ReturnsEmpty()
+    public async Task CheckAsync_WithModernConfigBoundary_AndNoLegacyFiles_ReturnsEmpty()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -95,11 +100,14 @@ public class LegacySettingsFileCheckTests(ITestOutputHelper outputHelper)
     public async Task CheckAsync_WithLegacyFileInParentDirectory_ReturnsWarning()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Place legacy settings at the workspace root level
         var legacyDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
         Directory.CreateDirectory(legacyDir);
         await File.WriteAllTextAsync(Path.Combine(legacyDir, "settings.json"), "{}");
 
-        // Create a subdirectory and use it as the working directory
+        // Use a nested subdirectory as working dir — the walk-up finds the legacy
+        // file at workspace root and returns a warning.
         var subDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "src", "MyProject"));
         subDir.Create();
 
