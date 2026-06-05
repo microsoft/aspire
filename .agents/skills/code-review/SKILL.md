@@ -87,7 +87,7 @@ Group files by area to guide how deeply to review each:
 | Integrations/Components | `src/Components/**` | Client configuration, DI registration, connection handling |
 | CLI | `src/Aspire.Cli/**` | Command parsing, error handling, exit codes |
 | Tests | `tests/**` | Flaky test patterns (see below), test isolation, assertions |
-| Deployment | `src/Aspire.Hosting.Azure*/**`, `src/Aspire.Hosting.Docker/**`, `src/Aspire.Hosting.Kubernetes/**`, `tests/Aspire.Hosting.*Kubernetes.Tests/**`, `tests/Aspire.Cli.EndToEnd.Tests/Kubernetes*`, `tests/Aspire.Deployment.EndToEnd.Tests/**` | Kubernetes/Helm, Docker, and Azure artifacts plus real deployment behavior, provisioning, cleanup |
+| Deployment | `src/Aspire.Hosting.Azure*/**`, `src/Aspire.Hosting.Docker/**`, `src/Aspire.Hosting.Kubernetes/**`, `tests/Aspire.Hosting.*Kubernetes.Tests/**`, `tests/Aspire.Cli.EndToEnd.Tests/**/Kubernetes*`, `tests/Aspire.Deployment.EndToEnd.Tests/**` | Kubernetes/Helm, Docker, and Azure artifacts plus real deployment behavior, provisioning, cleanup |
 | Build/Infra | `eng/**`, `*.props`, `*.targets` | Unintended side effects, breaking conditional logic |
 | API files | `src/*/api/*.cs` | Should never be manually edited — flag if modified |
 | Extension | `extension/**` | Localization, TypeScript usage |
