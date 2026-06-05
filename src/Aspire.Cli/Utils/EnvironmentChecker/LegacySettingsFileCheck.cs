@@ -9,11 +9,11 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 
 /// <summary>
 /// Checks for the presence of a legacy <c>.aspire/settings.json</c> file without a sibling
-/// <c>aspire.config.json</c>, and surfaces an informational hint to migrate.
+/// <c>aspire.config.json</c>, and surfaces a warning hint to migrate.
 /// </summary>
 /// <remarks>
-/// The legacy file continues to work — this check is purely informational. Migration is
-/// triggered automatically by any write command (aspire run/add/init/update/pipeline),
+/// The legacy file continues to work — this check emits a non-blocking warning. Migration is
+/// triggered automatically by any write command (aspire run/add/init/update),
 /// but users who only run read-only commands (aspire ls, ps, doctor) would otherwise never
 /// see a signal that a newer format exists.
 /// See: https://github.com/microsoft/aspire/issues/17632
