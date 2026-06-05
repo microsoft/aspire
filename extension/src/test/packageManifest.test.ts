@@ -132,15 +132,15 @@ suite('extension/package.json', () => {
         assert.notStrictEqual(openDashboardToSide.icon, openDashboard.icon);
     });
 
-    test('dashboard commands are discoverable from the command palette', () => {
+    test('dashboard commands use noRunningAppHosts gate in the command palette', () => {
         const manifest = readManifest();
         const commandPaletteMenus = manifest.contributes.menus?.commandPalette ?? [];
 
         const openDashboard = commandPaletteMenus.find(item => item.command === 'aspire-vscode.openDashboard');
         const openDashboardToSide = commandPaletteMenus.find(item => item.command === 'aspire-vscode.openDashboardToSide');
 
-        assert.strictEqual(openDashboard?.when, undefined);
-        assert.strictEqual(openDashboardToSide?.when, undefined);
+        assert.strictEqual(openDashboard?.when, '!aspire.noRunningAppHosts');
+        assert.strictEqual(openDashboardToSide?.when, '!aspire.noRunningAppHosts');
     });
 
     test('aspire launch configuration declares an env property as a string-valued object', () => {

@@ -1486,6 +1486,59 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('workspace describe dashboard URL shows dashboard command before ps reports the AppHost', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const executeCommandStub = sinon.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        let describeOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
+            if (args[0] === 'describe') {
+                describeOptions = options;
+            }
+            return new TestChildProcess();
+        });
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.ok(getAppHostsLineCallback);
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/apps/Store/AppHost.csproj',
+                all_project_file_candidates: ['/workspace/apps/Store/AppHost.csproj'],
+            }));
+            await waitForAppHostDiscovery();
+
+            assert.ok(describeOptions);
+            describeOptions.lineCallback(JSON.stringify({
+                name: 'api',
+                resourceType: 'Project',
+                state: 'Running',
+                dashboardUrl: 'http://localhost:18888/resource/api',
+            }));
+
+            assert.strictEqual(repository.workspaceResources.length, 1);
+
+            const noLiveAppHostsCalls = executeCommandStub.getCalls().filter(call =>
+                call.args[0] === 'setContext' && call.args[1] === 'aspire.noRunningAppHosts');
+            assert.strictEqual(noLiveAppHostsCalls.at(-1)?.args[2], false);
+        } finally {
+            repository.dispose();
+            executeCommandStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('workspace ps snapshot clears stale describe resources when selected AppHost stops', async () => {
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),

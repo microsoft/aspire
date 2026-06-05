@@ -980,11 +980,14 @@ export class AppHostDataRepository {
         const hasWorkspaceAppHost = this._workspaceAppHost !== undefined;
         const hasResources = this._workspaceResources.size > 0;
         const hasRunningAppHosts = this._appHosts.length > 0;
+        const hasDashboardUrl = Boolean(this._workspaceAppHost?.dashboardUrl)
+            || Array.from(this._workspaceResources.values()).some(resource => Boolean(resource.dashboardUrl))
+            || this._appHosts.some(appHost => Boolean(appHost.dashboardUrl));
         const hasWorkspaceCandidates = this._workspaceAppHostCandidatePaths.length > 0;
         vscode.commands.executeCommand('setContext', 'aspire.noAppHosts', !hasWorkspaceAppHost && !hasResources && !hasRunningAppHosts && !hasWorkspaceCandidates);
         // Keep this distinct from `noAppHosts`, which also considers discovered idle
-        // candidates that have no live AppHost process.
-        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasRunningAppHosts);
+        // candidates that have no live dashboard URL.
+        vscode.commands.executeCommand('setContext', 'aspire.noRunningAppHosts', !hasDashboardUrl);
         const clearLoading = options?.clearLoading ?? (hasResources || hasWorkspaceAppHost || hasRunningAppHosts || hasWorkspaceCandidates);
         if (this._loadingWorkspace && clearLoading) {
             this._loadingWorkspace = false;
