@@ -20,4 +20,15 @@
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      YamlDotNet is used to parse pnpm-workspace.yaml when emitting Dockerfiles for
+      pnpm monorepos. We take an explicit dependency rather than relying on the
+      transitive flow through Aspire.Hosting -> KubernetesClient -> YamlDotNet, so
+      that this package's behavior is not silently affected by a change in the
+      Hosting graph.
+    -->
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+
 </Project>

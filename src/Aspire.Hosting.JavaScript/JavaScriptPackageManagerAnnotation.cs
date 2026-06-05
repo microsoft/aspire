@@ -57,4 +57,9 @@ public sealed class JavaScriptPackageManagerAnnotation(string executableName, st
     /// Gets or sets a callback to resolve the default <c>PublishAsPackageScript</c> runtime image from the build image.
     /// </summary>
     internal Func<string, string>? ResolvePackageScriptRuntimeImage { get; init; }
+
+    /// <summary>
+    /// Gets or sets a callback that builds the command arguments for invoking a script on a workspace member.
+    /// </summary>
+    internal Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>>? WorkspaceCommandFactory { get; init; }
 }
