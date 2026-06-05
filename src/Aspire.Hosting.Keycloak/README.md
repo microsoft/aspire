@@ -36,6 +36,10 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
 
 **Recommendation:** For local development use a stable port for the Keycloak resource (8080 in the example above). It can be any port, but it should be stable to avoid issues with browser cookies that will persist OIDC tokens (which include the authority URL, with port) beyond the lifetime of the AppHost.
 
+## Additional documentation
+
+https://aspire.dev/integrations/gallery/?search=hosting
+
 ## Feedback & contributing
 
 https://github.com/microsoft/aspire

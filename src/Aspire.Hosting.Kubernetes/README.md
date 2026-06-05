@@ -38,6 +38,10 @@ await builder.addKubernetesEnvironment("k8s");
 aspire publish -o k8s-artifacts
 ```
 
+## Additional documentation
+
+https://aspire.dev/integrations/gallery/?search=hosting
+
 ## Feedback & contributing
 
 https://github.com/microsoft/aspire

@@ -93,3 +93,11 @@ var keyVault = builder.AddAzureKeyVault("mykeyvault", (_, construct, kv) => {
 builder.AddProject<Projects.MyApp>("myapp")
        .WithReference(keyVault);
 ```
+
+## Additional documentation
+
+https://aspire.dev/integrations/gallery/?search=hosting
+
+## Feedback & contributing
+
+https://github.com/microsoft/aspire

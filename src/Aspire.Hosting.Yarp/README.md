@@ -180,6 +180,7 @@ builder.AddYarp("gateway")
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/?search=hosting
 * [YARP documentation](https://microsoft.github.io/reverse-proxy/)
 * [Aspire documentation](https://aspire.dev/)
 * [YARP integration in Aspire](https://aspire.dev/integrations/reverse-proxies/yarp/)

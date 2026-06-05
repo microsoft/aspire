@@ -51,6 +51,7 @@ const bicepResource = await builder.addBicepTemplate("bicep", "template.bicep")
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/?search=hosting
 * https://aspire.dev/integrations/cloud/azure/overview/
 * https://learn.microsoft.com/azure/azure-resource-manager/bicep/overview
 

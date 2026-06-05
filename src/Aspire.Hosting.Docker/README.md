@@ -32,6 +32,10 @@ await builder.addDockerComposeEnvironment("compose");
 aspire publish -o docker-compose-artifacts
 ```
 
+## Additional documentation
+
+https://aspire.dev/integrations/gallery/?search=hosting
+
 ## Feedback & contributing
 
 https://github.com/microsoft/aspire

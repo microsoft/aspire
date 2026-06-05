@@ -52,6 +52,10 @@ await builder.addNodeApp("frontend", "../orleans-frontend", "server.js")
     .withReference(orleans.asClient());
 ```
 
+## Additional documentation
+
+https://aspire.dev/integrations/gallery/?search=hosting
+
 ## Feedback & contributing
 
 https://github.com/microsoft/aspire
