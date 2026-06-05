@@ -51,13 +51,20 @@ internal sealed class ReproVCurrentLocalScenario : IDogfoodScenario
         // from the latest released version (i.e. always, except briefly
         // right after a release).
         var vCurrent = _vCurrentResolver.LatestStableOrNull ?? _repoVersion.CurrentVersionString;
+        // Best-effort commit SHA lookup. Null when the GitHub probe hasn't
+        // completed yet (or failed) — in that case we deliberately do not
+        // stamp ASPIRE_CLI_COMMIT and let the CLI fall back to whatever
+        // the local build embedded. Stamping a wrong SHA would be worse
+        // than stamping no SHA because diagnostics tools (eg. crash dumps)
+        // would mis-attribute the run.
+        var commitSha = _vCurrentResolver.CommitShaOrNull(vCurrent);
         return new ScenarioPlan(
             Channel: ChannelKind.Stable,
             PrNumber: null,
             // Reproduce exactly the released stable version string so the
             // CLI surfaces report the persona we're attempting to reproduce.
             VersionOverride: vCurrent,
-            CommitOverride: null,
+            CommitOverride: commitSha,
             // Build with NO version suffix so the resulting packages are
             // exactly the stable version we're reproducing (e.g. 13.4.2).
             BuildPackagesBeforeLaunch: true,

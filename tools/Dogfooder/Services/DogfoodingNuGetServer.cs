@@ -154,6 +154,8 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
         return this;
     }
 
+    private const long PayloadCaptureLimitBytes = 32 * 1024;
+
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         if (_upstreamServiceIndex is null)
@@ -224,11 +226,15 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             ctx.Items["__dogfood_state"] = handlerState;
 
             // Count the response body bytes by inserting a CountingStream
-            // ahead of the framework's writer. We intentionally do not buffer
-            // — nupkg downloads can be hundreds of MB.
+            // ahead of the framework's writer. The same wrapper also
+            // captures the first PayloadCaptureLimitBytes of the body for
+            // the inspector — only when the handler has opted in via
+            // MarkCaptureOutgoing (binary endpoints like .nupkg skip the
+            // capture so we don't buffer hundreds of MB on every restore).
             var originalBody = ctx.Response.Body;
-            var counting = new CountingStream(originalBody);
+            var counting = new CountingStream(originalBody, PayloadCaptureLimitBytes);
             ctx.Response.Body = counting;
+            handlerState.OutgoingStream = counting;
 
             string? error = null;
             try
@@ -245,6 +251,7 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             {
                 ctx.Response.Body = originalBody;
                 sw.Stop();
+                var outgoingBytes = handlerState.CaptureOutgoing ? counting.CapturedBytes : null;
                 var resp = new DogfoodingNuGetResponse(
                     Id: id,
                     CompletedAt: DateTimeOffset.Now,
@@ -255,7 +262,18 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
                     UpstreamUrl: handlerState.UpstreamUrl,
                     LocalPackagesUsed: handlerState.LocalPackagesUsed,
                     ErrorMessage: error,
-                    SearchStats: handlerState.SearchStats);
+                    SearchStats: handlerState.SearchStats,
+                    Payloads: new DogfoodingNuGetPayloads(
+                        UpstreamMethod: handlerState.UpstreamMethod,
+                        UpstreamUrl: handlerState.UpstreamUrl,
+                        UpstreamStatus: handlerState.UpstreamStatus,
+                        UpstreamContentType: handlerState.UpstreamContentType,
+                        UpstreamBody: handlerState.UpstreamBody,
+                        UpstreamBodyTruncated: handlerState.UpstreamBodyTruncated,
+                        OutgoingContentType: ctx.Response.ContentType,
+                        OutgoingBody: outgoingBytes is null ? null : TryDecodeText(outgoingBytes),
+                        OutgoingBodyTruncated: counting.Truncated,
+                        Transformations: handlerState.Transformations.ToArray()));
                 RequestCompleted?.Invoke(resp);
                 // Fall back to an UnknownDetails envelope so the analyzer
                 // panel can render *something* for endpoints that didn't
@@ -327,16 +345,19 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
                 { "@id": "{{baseUri}}/v3/autocomplete", "@type": "SearchAutocompleteService" },
                 { "@id": "{{baseUri}}/v3/autocomplete", "@type": "SearchAutocompleteService/3.0.0-beta" },
                 { "@id": "{{baseUri}}/v3/autocomplete", "@type": "SearchAutocompleteService/3.0.0-rc" }
-              ]
+            ]
             }
             """;
             MarkSource(ctx, DogfoodingNuGetSource.Synthesised);
             MarkDetails(ctx, new ServiceIndexDetails());
+            Transform(ctx, "Synthesised service index with all resource @ids pointing back at the proxy.");
+            MarkCaptureOutgoing(ctx);
             return Results.Text(json, "application/json");
         });
 
         app.MapGet("/v3/flat/{id}/index.json", async (string id, HttpContext ctx, CancellationToken ct) =>
         {
+            MarkCaptureOutgoing(ctx);
             var lower = id.ToLowerInvariant();
             // Versions list: union upstream versions with our local override
             // versions. Local-only ids still get a valid response so the CLI
@@ -347,10 +368,11 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             {
                 using var upstreamResp = await _upstreamClient!.GetAsync(upstream, ct).ConfigureAwait(false);
                 MarkUpstream(ctx, upstream);
-                if (upstreamResp.IsSuccessStatusCode)
+                var (text, truncated) = await ReadBodyCappedAsync(upstreamResp, ct).ConfigureAwait(false);
+                MarkUpstreamResponse(ctx, (int)upstreamResp.StatusCode, upstreamResp.Content.Headers.ContentType?.ToString(), text, truncated);
+                if (upstreamResp.IsSuccessStatusCode && text is not null)
                 {
-                    var stream = await upstreamResp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                    upstreamJson = (JsonObject?)JsonNode.Parse(stream);
+                    upstreamJson = JsonNode.Parse(text) as JsonObject;
                 }
             }
             catch
@@ -376,10 +398,12 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
                 {
                     versions.Add(p.Version);
                 }
+                Transform(ctx, $"Unioned {locals.Count} local version(s) with {(upstreamJson?["versions"] as JsonArray)?.Count ?? 0} upstream version(s) for '{lower}'.");
                 MarkSource(ctx, upstreamJson is null ? DogfoodingNuGetSource.LocalOverride : DogfoodingNuGetSource.Synthesised);
             }
             else if (upstreamJson is null)
             {
+                Transform(ctx, $"Upstream {upstream} returned non-success and no local override found — replying 404.");
                 return Results.NotFound();
             }
             else
@@ -413,11 +437,14 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
                 if (filename.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase))
                 {
                     MarkDetails(ctx, new NuspecDetails(match.Id, match.Version, match.FilePath, UpstreamUrl: null));
+                    Transform(ctx, $"Served local .nuspec from {match.FilePath} (no upstream fetch).");
+                    MarkCaptureOutgoing(ctx);
                     return Results.Text(match.NuspecXml, "application/xml");
                 }
                 if (filename.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
                 {
                     MarkDetails(ctx, new NupkgDetails(match.Id, match.Version, match.FilePath, UpstreamUrl: null));
+                    Transform(ctx, $"Served local .nupkg from {match.FilePath} (binary; body capture skipped).");
                     return Results.File(match.FilePath, "application/octet-stream", enableRangeProcessing: true);
                 }
                 return Results.NotFound();
@@ -429,14 +456,18 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             if (filename.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase))
             {
                 MarkDetails(ctx, new NuspecDetails(lower, verLower, LocalFilePath: null, UpstreamUrl: upstream));
+                MarkCaptureOutgoing(ctx);
             }
             else if (filename.EndsWith(".nupkg", StringComparison.OrdinalIgnoreCase))
             {
                 MarkDetails(ctx, new NupkgDetails(lower, verLower, LocalFilePath: null, UpstreamUrl: upstream));
+                Transform(ctx, $"Streaming upstream .nupkg bytes from {upstream} (binary; body capture skipped).");
             }
             using var resp = await _upstreamClient!.GetAsync(upstream, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+            MarkUpstreamResponse(ctx, (int)resp.StatusCode, resp.Content.Headers.ContentType?.ToString(), body: null, truncated: false);
             if (!resp.IsSuccessStatusCode)
             {
+                Transform(ctx, $"Upstream returned {(int)resp.StatusCode} — forwarded status to client.");
                 return Results.StatusCode((int)resp.StatusCode);
             }
             var contentType = resp.Content.Headers.ContentType?.ToString() ?? "application/octet-stream";
@@ -446,6 +477,7 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
 
         app.MapGet("/v3/reg/{id}/index.json", async (string id, HttpContext ctx, CancellationToken ct) =>
         {
+            MarkCaptureOutgoing(ctx);
             var lower = id.ToLowerInvariant();
             var upstream = $"{_upstreamResources!.RegistrationBase}{lower}/index.json";
             MarkUpstream(ctx, upstream);
@@ -454,10 +486,11 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             try
             {
                 using var resp = await _upstreamClient!.GetAsync(upstream, ct).ConfigureAwait(false);
-                if (resp.IsSuccessStatusCode)
+                var (text, truncated) = await ReadBodyCappedAsync(resp, ct).ConfigureAwait(false);
+                MarkUpstreamResponse(ctx, (int)resp.StatusCode, resp.Content.Headers.ContentType?.ToString(), text, truncated);
+                if (resp.IsSuccessStatusCode && text is not null)
                 {
-                    var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                    upstreamJson = (JsonObject?)JsonNode.Parse(stream);
+                    upstreamJson = JsonNode.Parse(text) as JsonObject;
                 }
             }
             catch
@@ -468,6 +501,7 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             _localById.TryGetValue(lower, out var locals);
             if (upstreamJson is null && (locals is null || locals.Count == 0))
             {
+                Transform(ctx, $"Upstream registration for '{lower}' failed and no local overrides — replying 404.");
                 return Results.NotFound();
             }
 
@@ -484,6 +518,7 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             {
                 MarkSource(ctx, upstreamJson is null ? DogfoodingNuGetSource.LocalOverride : DogfoodingNuGetSource.Synthesised);
                 MarkLocalPackagesUsed(ctx, locals.Select(p => $"{p.Id}/{p.Version}").ToArray());
+                Transform(ctx, $"Spliced {locals.Count} local override(s) into registration for '{lower}'.");
             }
             // Sweep any straggling upstream URLs hiding inside the cloned
             // catalogEntry payloads (MergeRegistration only rebuilds the
@@ -492,7 +527,11 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             // CLI from following catalog links direct to nuget.org for the
             // overlapping versions.
             var regBaseUri = ctx.Request.Scheme + "://" + ctx.Request.Host.Value;
-            RewriteUpstreamUrls(merged, regBaseUri);
+            var rewriteCount = RewriteUpstreamUrls(merged, regBaseUri);
+            if (rewriteCount > 0)
+            {
+                Transform(ctx, $"Rewrote {rewriteCount} upstream URL(s) inside registration payload to point at proxy.");
+            }
             var itemCount = (merged["items"] as JsonArray)?.Sum(p => (p?["items"] as JsonArray)?.Count ?? 0) ?? 0;
             MarkDetails(ctx, new RegistrationDetails(
                 PackageId: lower,
@@ -504,6 +543,7 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
 
         app.MapGet("/v3/search", async (HttpContext ctx, CancellationToken ct) =>
         {
+            MarkCaptureOutgoing(ctx);
             var query = ctx.Request.QueryString.HasValue ? ctx.Request.QueryString.Value! : "";
             var q = ctx.Request.Query["q"].ToString();
             var prereleaseParam = ctx.Request.Query["prerelease"].ToString();
@@ -520,13 +560,15 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             {
                 using var resp = await _upstreamClient!.GetAsync(upstreamUrl, ct).ConfigureAwait(false);
                 resp.EnsureSuccessStatusCode();
-                var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                upstreamJson = (JsonObject)JsonNode.Parse(stream)!;
+                var (text, truncated) = await ReadBodyCappedAsync(resp, ct).ConfigureAwait(false);
+                MarkUpstreamResponse(ctx, (int)resp.StatusCode, resp.Content.Headers.ContentType?.ToString(), text, truncated);
+                upstreamJson = text is null ? new JsonObject { ["totalHits"] = 0, ["data"] = new JsonArray() } : (JsonObject)JsonNode.Parse(text)!;
             }
             catch
             {
                 // Upstream search is best-effort; we can still return local matches.
                 upstreamJson = new JsonObject { ["totalHits"] = 0, ["data"] = new JsonArray() };
+                Transform(ctx, $"Upstream search at {upstreamUrl} failed — falling back to local-only results.");
             }
 
             var upstreamData = upstreamJson["data"] as JsonArray ?? new JsonArray();
@@ -603,6 +645,14 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             {
                 rewrites += RewriteUpstreamUrls(n, baseUri);
             }
+            if (localMatches.Count > 0)
+            {
+                Transform(ctx, $"Merged {localMatches.Count} local override(s) with {upstreamData.Count} upstream hit(s), deduped to {mergedData.Count} result(s).");
+            }
+            if (rewrites > 0)
+            {
+                Transform(ctx, $"Rewrote {rewrites} @id / registration / packageContent URL(s) in search payload to proxy endpoints.");
+            }
 
             MarkDetails(ctx, new SearchDetails(
                 Query: q,
@@ -624,6 +674,7 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
 
         app.MapGet("/v3/autocomplete", async (HttpContext ctx, CancellationToken ct) =>
         {
+            MarkCaptureOutgoing(ctx);
             var q = ctx.Request.Query["q"].ToString();
             var take = ParseIntOrDefault(ctx.Request.Query["take"], 20);
             var prereleaseParam = ctx.Request.Query["prerelease"].ToString();
@@ -637,8 +688,9 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
             {
                 using var resp = await _upstreamClient!.GetAsync(upstreamUrl, ct).ConfigureAwait(false);
                 resp.EnsureSuccessStatusCode();
-                var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-                if (JsonNode.Parse(stream) is JsonObject obj && obj["data"] is JsonArray arr)
+                var (text, truncated) = await ReadBodyCappedAsync(resp, ct).ConfigureAwait(false);
+                MarkUpstreamResponse(ctx, (int)resp.StatusCode, resp.Content.Headers.ContentType?.ToString(), text, truncated);
+                if (text is not null && JsonNode.Parse(text) is JsonObject obj && obj["data"] is JsonArray arr)
                 {
                     foreach (var n in arr)
                     {
@@ -690,6 +742,56 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
     private static int ParseIntOrDefault(Microsoft.Extensions.Primitives.StringValues s, int def)
         => int.TryParse(s.ToString(), out var v) ? v : def;
 
+    /// <summary>
+    /// Reads at most <see cref="PayloadCaptureLimitBytes"/> bytes from the
+    /// HTTP response into a string for the inspector, returning a flag
+    /// indicating whether the body was longer than the cap. Callers still
+    /// receive a valid string when truncated — it's not a partial JSON
+    /// document on the consumer side because the consumer reads the
+    /// returned string, not the original stream. Returns (null, false) on
+    /// a non-readable body.
+    /// </summary>
+    private static async Task<(string? Body, bool Truncated)> ReadBodyCappedAsync(HttpResponseMessage resp, CancellationToken ct)
+    {
+        try
+        {
+            await using var stream = await resp.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
+            using var ms = new MemoryStream();
+            var buffer = new byte[8192];
+            var truncated = false;
+            while (true)
+            {
+                var read = await stream.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false);
+                if (read == 0)
+                {
+                    break;
+                }
+                var remaining = PayloadCaptureLimitBytes - ms.Length;
+                if (remaining <= 0)
+                {
+                    truncated = true;
+                    // Drain the rest so disposing the stream doesn't abort
+                    // an unread connection (HttpClient pools the socket).
+                    while (await stream.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false) > 0) { }
+                    break;
+                }
+                if (read > remaining)
+                {
+                    ms.Write(buffer, 0, (int)remaining);
+                    truncated = true;
+                    while (await stream.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false) > 0) { }
+                    break;
+                }
+                ms.Write(buffer, 0, read);
+            }
+            return (System.Text.Encoding.UTF8.GetString(ms.ToArray()), truncated);
+        }
+        catch
+        {
+            return (null, false);
+        }
+    }
+
     private static DogfoodingNuGetEndpointKind ClassifyEndpoint(PathString path)
     {
         var p = path.HasValue ? path.Value! : string.Empty;
@@ -723,11 +825,34 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
         var state = (HandlerState)ctx.Items["__dogfood_state"]!;
         state.Source = source;
     }
-    private static void MarkUpstream(HttpContext ctx, string url)
+    private static void MarkUpstream(HttpContext ctx, string url, string method = "GET")
     {
         var state = (HandlerState)ctx.Items["__dogfood_state"]!;
         state.UpstreamUrl = url;
+        state.UpstreamMethod = method;
         state.Source ??= DogfoodingNuGetSource.Upstream;
+    }
+    private static void MarkUpstreamResponse(HttpContext ctx, int status, string? contentType, string? body, bool truncated)
+    {
+        var state = (HandlerState)ctx.Items["__dogfood_state"]!;
+        state.UpstreamStatus = status;
+        state.UpstreamContentType = contentType;
+        state.UpstreamBody = body;
+        state.UpstreamBodyTruncated = truncated;
+    }
+    private static void MarkCaptureOutgoing(HttpContext ctx)
+    {
+        var state = (HandlerState)ctx.Items["__dogfood_state"]!;
+        state.CaptureOutgoing = true;
+        if (state.OutgoingStream is { } stream)
+        {
+            stream.EnableCapture();
+        }
+    }
+    private static void Transform(HttpContext ctx, string message)
+    {
+        var state = (HandlerState)ctx.Items["__dogfood_state"]!;
+        state.Transformations.Add(message);
     }
     private static void MarkLocalPackagesUsed(HttpContext ctx, IReadOnlyList<string> packages)
     {
@@ -1146,17 +1271,44 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
     private sealed class HandlerState
     {
         public DogfoodingNuGetSource? Source { get; set; }
+        public string? UpstreamMethod { get; set; }
         public string? UpstreamUrl { get; set; }
+        public int? UpstreamStatus { get; set; }
+        public string? UpstreamContentType { get; set; }
+        public string? UpstreamBody { get; set; }
+        public bool UpstreamBodyTruncated { get; set; }
         public IReadOnlyList<string> LocalPackagesUsed { get; set; } = Array.Empty<string>();
         public DogfoodingNuGetSearchStats? SearchStats { get; set; }
         public NuGetTrafficDetails? Details { get; set; }
+        public List<string> Transformations { get; } = new();
+        public bool CaptureOutgoing { get; set; }
+        public CountingStream? OutgoingStream { get; set; }
     }
 
     private sealed class CountingStream : Stream
     {
-        public CountingStream(Stream inner) { _inner = inner; }
+        public CountingStream(Stream inner, long captureLimitBytes)
+        {
+            _inner = inner;
+            _captureLimit = captureLimitBytes;
+        }
         private readonly Stream _inner;
+        private readonly long _captureLimit;
+        private MemoryStream? _capture;
         public long BytesWritten { get; private set; }
+        public bool Truncated { get; private set; }
+
+        public byte[]? CapturedBytes => _capture?.ToArray();
+
+        // The wrapper is always installed (BytesWritten / Source plumbing
+        // would otherwise lose data) but capture is opt-in per handler so
+        // a 200 MB nupkg stream doesn't get tee'd into memory. Handlers
+        // call this from inside their endpoint code as soon as they know
+        // the response is going to be a small text/JSON payload.
+        public void EnableCapture()
+        {
+            _capture ??= new MemoryStream();
+        }
 
         public override bool CanRead => _inner.CanRead;
         public override bool CanSeek => _inner.CanSeek;
@@ -1172,16 +1324,57 @@ internal sealed class DogfoodingNuGetServer : IAsyncDisposable
         {
             _inner.Write(buffer, offset, count);
             BytesWritten += count;
+            TeeIfCapturing(buffer.AsSpan(offset, count));
         }
         public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
         {
             BytesWritten += count;
+            TeeIfCapturing(buffer.AsSpan(offset, count));
             return _inner.WriteAsync(buffer, offset, count, cancellationToken);
         }
         public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
             BytesWritten += buffer.Length;
+            TeeIfCapturing(buffer.Span);
             return _inner.WriteAsync(buffer, cancellationToken);
+        }
+
+        private void TeeIfCapturing(ReadOnlySpan<byte> span)
+        {
+            if (_capture is null)
+            {
+                return;
+            }
+            var remaining = _captureLimit - _capture.Length;
+            if (remaining <= 0)
+            {
+                Truncated = true;
+                return;
+            }
+            if (span.Length > remaining)
+            {
+                _capture.Write(span[..(int)remaining]);
+                Truncated = true;
+            }
+            else
+            {
+                _capture.Write(span);
+            }
+        }
+    }
+
+    private static string? TryDecodeText(byte[] bytes)
+    {
+        // NuGet v3 endpoints emit UTF-8 JSON/XML; if a future endpoint
+        // returns something else we still want a best-effort hex/ascii
+        // fallback rather than a raw NRE in the renderer.
+        try
+        {
+            return System.Text.Encoding.UTF8.GetString(bytes);
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -1229,7 +1422,44 @@ internal sealed record DogfoodingNuGetResponse(
     string? UpstreamUrl,
     IReadOnlyList<string> LocalPackagesUsed,
     string? ErrorMessage,
-    DogfoodingNuGetSearchStats? SearchStats);
+    DogfoodingNuGetSearchStats? SearchStats,
+    DogfoodingNuGetPayloads Payloads);
+
+/// <summary>
+/// Captured request/response payloads for a single proxy round-trip. Drives
+/// the NuGet inspector's "show me exactly what we sent and received" view
+/// so the user can verify that (a) the CLI actually reaches the proxy
+/// (downstream request), (b) the proxy fetched the right upstream URL
+/// (upstream request/response), and (c) the proxy's outgoing response
+/// rewrote URLs to point at itself rather than leaking nuget.org links
+/// (outgoing response + transformation log).
+/// </summary>
+/// <remarks>
+/// <para>
+/// Bodies are capped at 32KB to keep memory bounded; the rest of the
+/// stream still reaches the client. <see cref="UpstreamBodyTruncated"/>
+/// and <see cref="OutgoingBodyTruncated"/> surface that fact so the
+/// renderer can show a <c>(truncated)</c> badge.
+/// </para>
+/// <para>
+/// Binary endpoints (.nupkg, .nuspec when proxied byte-for-byte) DO NOT
+/// opt into outgoing capture: their handlers call <c>MarkCaptureOutgoing</c>
+/// only for JSON responses, so <see cref="OutgoingBody"/> will be null on
+/// package downloads. The inspector renders "&lt;binary stream, N bytes&gt;"
+/// in that case.
+/// </para>
+/// </remarks>
+internal sealed record DogfoodingNuGetPayloads(
+    string? UpstreamMethod,
+    string? UpstreamUrl,
+    int? UpstreamStatus,
+    string? UpstreamContentType,
+    string? UpstreamBody,
+    bool UpstreamBodyTruncated,
+    string? OutgoingContentType,
+    string? OutgoingBody,
+    bool OutgoingBodyTruncated,
+    IReadOnlyList<string> Transformations);
 
 /// <summary>
 /// For search responses only: how many results came from each side and the

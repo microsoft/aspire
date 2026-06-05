@@ -55,9 +55,19 @@ internal static class Program
         // with the actual released version rather than the in-development
         // fallback from eng/Versions.props. Fire-and-forget is fine: the
         // resolver caches the result and the scenario falls back when the
-        // probe hasn't completed yet (or failed offline).
-        _ = host.Services.GetRequiredService<IVCurrentVersionResolver>()
-            .GetLatestStableAsync(host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping);
+        // probe hasn't completed yet (or failed offline). After the version
+        // resolves, chain the GitHub commit-SHA probe so the same scenario
+        // can stamp ASPIRE_CLI_COMMIT alongside ASPIRE_CLI_VERSION.
+        var resolver = host.Services.GetRequiredService<IVCurrentVersionResolver>();
+        var stopping = host.Services.GetRequiredService<IHostApplicationLifetime>().ApplicationStopping;
+        _ = Task.Run(async () =>
+        {
+            var v = await resolver.GetLatestStableAsync(stopping).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(v))
+            {
+                _ = await resolver.GetCommitShaAsync(v, stopping).ConfigureAwait(false);
+            }
+        }, stopping);
 
         try
         {

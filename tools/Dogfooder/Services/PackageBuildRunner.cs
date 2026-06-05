@@ -274,6 +274,26 @@ internal sealed class PackageBuildRunner : IPackageBuildRunner
             props.Add($"/p:VersionPrefix={prefix}");
         }
 
+        // When the caller wants a clean stable version (no pre-release
+        // suffix) we have to ALSO tell Arcade not to inject its default
+        // pre-release label. Passing `/p:VersionSuffix=` (empty) is not
+        // enough on its own: Arcade's GenerateProductVersion target still
+        // computes `$(PreReleaseVersionLabel).$(BuildNumber)` from
+        // eng/Versions.props (which carries e.g. `preview.1`) and stamps
+        // every produced package with `<VersionPrefix>-preview.1.<n>` —
+        // leaving the user with a `13.4.2-preview.1.25530.1` overlay when
+        // they asked for plain `13.4.2`. The documented escape hatch is
+        // `DotNetFinalVersionKind=release`: it short-circuits the entire
+        // pre-release pipeline and produces `$(VersionPrefix)` verbatim.
+        // See https://github.com/dotnet/arcade/blob/main/Documentation/CorePackages/Versioning.md
+        // (search for "DotNetFinalVersionKind"). Only opt in when the
+        // caller explicitly cleared the suffix AND set a prefix; otherwise
+        // we'd silently strip the dev suffix from regular dev builds.
+        if (request.VersionSuffix.Length == 0 && request.VersionPrefix is { Length: > 0 })
+        {
+            props.Add("/p:DotNetFinalVersionKind=release");
+        }
+
         if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
             // build.cmd uses single-dash flags (-pack, not --pack) on the

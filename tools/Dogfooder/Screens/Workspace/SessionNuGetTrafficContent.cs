@@ -140,21 +140,134 @@ internal static class SessionNuGetTrafficContent
             });
         }
 
-        var common = new List<string>
+        var lines = new List<string>
         {
-            $"  {ev.Request.Method}  {ev.Request.Path}{ev.Request.Query ?? ""}",
-            $"  → {ev.Response.StatusCode}  in {ev.Response.Duration.TotalMilliseconds:F0}ms  ·  {ev.Response.BodyBytes?.ToString("N0", CultureInfo.InvariantCulture) ?? "-"} bytes  ·  source={ev.Response.Source}",
+            "",
+            "  === DOWNSTREAM REQUEST (from CLI) ===",
+            $"    {ev.Request.Method}  {ev.Request.Path}{ev.Request.Query ?? ""}",
+            "",
+            "  === SUMMARY ===",
+            $"    → {ev.Response.StatusCode}  in {ev.Response.Duration.TotalMilliseconds:F0}ms  ·  {ev.Response.BodyBytes?.ToString("N0", CultureInfo.InvariantCulture) ?? "-"} bytes  ·  source={ev.Response.Source}",
         };
-        if (ev.Response.UpstreamUrl is { Length: > 0 } u)
-        {
-            common.Add($"  upstream: {u}");
-        }
         if (ev.Response.ErrorMessage is { Length: > 0 } err)
         {
-            common.Add($"  ERROR: {err}");
+            lines.Add($"    ERROR: {err}");
         }
 
-        var kindLines = ev.Details switch
+        var kindLines = BuildKindLines(ev);
+        if (kindLines.Length > 0)
+        {
+            lines.Add("");
+            lines.Add("  === KIND-SPECIFIC ===");
+            foreach (var l in kindLines)
+            {
+                lines.Add($"  {l}");
+            }
+        }
+
+        if (ev.Response.LocalPackagesUsed.Count > 0)
+        {
+            lines.Add("");
+            lines.Add($"  local packages used: {string.Join(", ", ev.Response.LocalPackagesUsed)}");
+        }
+
+        var p = ev.Response.Payloads;
+
+        // Upstream request/response: only render when a fetch actually
+        // happened. Synthesised endpoints (service-index) have no upstream
+        // round-trip so this whole block stays out of the way.
+        if (!string.IsNullOrEmpty(p.UpstreamUrl))
+        {
+            lines.Add("");
+            lines.Add("  === UPSTREAM REQUEST (proxy → nuget.org) ===");
+            lines.Add($"    {p.UpstreamMethod ?? "GET"}  {p.UpstreamUrl}");
+            if (p.UpstreamStatus is int us)
+            {
+                var ct = string.IsNullOrEmpty(p.UpstreamContentType) ? "" : $"  {p.UpstreamContentType}";
+                lines.Add($"  === UPSTREAM RESPONSE  → {us}{ct} ===");
+                AppendBodyLines(lines, p.UpstreamBody, p.UpstreamBodyTruncated);
+            }
+        }
+
+        lines.Add("");
+        var outCt = string.IsNullOrEmpty(p.OutgoingContentType) ? "" : $"  {p.OutgoingContentType}";
+        lines.Add($"  === OUTGOING RESPONSE (proxy → CLI){outCt} ===");
+        if (p.OutgoingBody is { Length: > 0 } ob)
+        {
+            AppendBodyLines(lines, ob, p.OutgoingBodyTruncated);
+        }
+        else
+        {
+            lines.Add($"    <binary or non-captured response: {ev.Response.BodyBytes?.ToString("N0", CultureInfo.InvariantCulture) ?? "?"} bytes>");
+        }
+
+        if (p.Transformations.Count > 0)
+        {
+            lines.Add("");
+            lines.Add("  === TRANSFORMATIONS ===");
+            foreach (var t in p.Transformations)
+            {
+                lines.Add($"    • {t}");
+            }
+        }
+
+        return ctx.VStack(v => lines.Select(l => (Hex1bWidget)v.Text(l)).ToArray());
+    }
+
+    private static void AppendBodyLines(List<string> sink, string? body, bool truncated)
+    {
+        if (string.IsNullOrEmpty(body))
+        {
+            sink.Add("    <empty body>");
+            return;
+        }
+        // Cap rendered lines: payloads are already capped at 32KB upstream,
+        // but pretty-printing JSON for the registration index of a popular
+        // package can still produce hundreds of lines. 60 lines keeps the
+        // detail pane scannable without scroll-bar context loss.
+        var pretty = TryPrettyJson(body) ?? body;
+        var split = pretty.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var maxLines = 60;
+        var rendered = split.Length > maxLines ? split.AsSpan(0, maxLines).ToArray() : split;
+        foreach (var l in rendered)
+        {
+            sink.Add($"    {l}");
+        }
+        if (split.Length > maxLines)
+        {
+            sink.Add($"    … (+{split.Length - maxLines} more lines, body cap {(truncated ? "hit during capture" : "ok")})");
+        }
+        else if (truncated)
+        {
+            sink.Add("    … (body was truncated at 32KB capture cap)");
+        }
+    }
+
+    private static string? TryPrettyJson(string body)
+    {
+        try
+        {
+            if (System.Text.Json.JsonDocument.Parse(body) is { } doc)
+            {
+                using (doc)
+                {
+                    return System.Text.Json.JsonSerializer.Serialize(doc.RootElement, new System.Text.Json.JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                    });
+                }
+            }
+        }
+        catch
+        {
+            // Not JSON or malformed — fall through to raw rendering.
+        }
+        return null;
+    }
+
+    private static string[] BuildKindLines(DogfoodingNuGetTrafficEvent ev)
+    {
+        return ev.Details switch
         {
             ServiceIndexDetails => new[]
             {
@@ -201,19 +314,8 @@ internal static class SessionNuGetTrafficContent
                 $"  raw path: {un.RawPath}",
                 "  (No typed details captured for this endpoint kind.)",
             },
-            _ => new[] { "  (No details available.)" },
+            _ => Array.Empty<string>(),
         };
-
-        var localPackages = ev.Response.LocalPackagesUsed.Count > 0
-            ? new[] { $"  local packages used: {string.Join(", ", ev.Response.LocalPackagesUsed)}" }
-            : Array.Empty<string>();
-
-        var allLines = common
-            .Concat(new[] { "" })
-            .Concat(kindLines)
-            .Concat(localPackages);
-
-        return ctx.VStack(v => allLines.Select(l => (Hex1bWidget)v.Text(l)).ToArray());
     }
 
     private static IReadOnlyList<DogfoodingNuGetTrafficEvent> ApplyFilter(IReadOnlyList<DogfoodingNuGetTrafficEvent> events, TrafficFilter filter)
