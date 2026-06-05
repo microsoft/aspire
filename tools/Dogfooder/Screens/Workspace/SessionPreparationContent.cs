@@ -40,6 +40,25 @@ internal static class SessionPreparationContent
             _ => "?",
         };
 
+        // Once the build has reached a terminal phase, hand the entire log
+        // over to a read-only Editor widget so the user can scroll back,
+        // select, and copy. While the build is still running we keep the
+        // lightweight streaming TextBlock view — the periodic invalidation
+        // loop in SessionScreen.RunPreparationAsync pushes re-renders even
+        // when there's no input.
+        var isTerminal = prep.CurrentPhase is SessionPreparationState.Phase.Complete or SessionPreparationState.Phase.Failed;
+        if (isTerminal)
+        {
+            var editor = prep.GetOrCreateLogEditor();
+            return ctx.VStack(v =>
+            [
+                v.Text(""),
+                v.Text($"  Phase: {phaseLabel}  ({prep.Log.Count} lines)"),
+                v.Text(""),
+                v.Editor(editor).LineNumbers().Fill(),
+            ]);
+        }
+
         // We render the last ~200 log lines. Hex1b's text rendering tolerates
         // any line count, but trimming keeps the layout pass cheap on long
         // builds (an Arcade --pack can emit thousands of lines).

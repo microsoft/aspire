@@ -121,6 +121,14 @@ internal sealed class SessionScreen
 
     private async Task RunPreparationAsync()
     {
+        // Pump a notify every ~150ms while the build/proxy phases are
+        // running so streaming log output renders without requiring user
+        // input. Hex1b only re-renders on its event loop ticks; without
+        // this loop the build log appears frozen until the user presses
+        // a key. Belt-and-braces: we still call Notifier.Notify() at
+        // phase transitions below.
+        using var pumpCts = new CancellationTokenSource();
+        var pumpTask = PumpInvalidationsAsync(pumpCts.Token);
         try
         {
             _session.Status = SessionStatus.Preparing;
@@ -142,6 +150,41 @@ internal sealed class SessionScreen
             _session.Preparation?.SetPhase(SessionPreparationState.Phase.Failed, ex.Message);
             _state.SetStatus($"Preparation crashed: {ex.Message}");
             _state.Notifier.Notify();
+        }
+        finally
+        {
+            pumpCts.Cancel();
+            try
+            {
+                await pumpTask.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when we cancel the pump on the way out.
+            }
+            // Final notify so the terminal-phase Editor swap renders
+            // immediately rather than on the next tick.
+            _state.Notifier.Notify();
+        }
+    }
+
+    private async Task PumpInvalidationsAsync(CancellationToken ct)
+    {
+        // 150ms is a balance between perceived smoothness for streaming
+        // build output and not flooding the renderer when nothing changed
+        // (Hex1b's Invalidate is idempotent and cheap, so this is safe).
+        var interval = TimeSpan.FromMilliseconds(150);
+        while (!ct.IsCancellationRequested)
+        {
+            _state.Notifier.Notify();
+            try
+            {
+                await Task.Delay(interval, ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return;
+            }
         }
     }
 
