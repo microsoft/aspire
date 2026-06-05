@@ -43,12 +43,13 @@ public class CliExecutionContextTests(ITestOutputHelper outputHelper)
     [InlineData("local")]
     [InlineData("pr-1")]
     [InlineData("pr-16798")]
+    [InlineData("run-16798")]
     public void Channel_Getter_ReturnsExactValuePassedToConstructor(string channel)
     {
         // CliExecutionContext is now a thin holder — the resolved hive label is baked
-        // into the AspireCliChannel assembly metadata at build time (CI emits `pr-<N>`
-        // directly for PR builds), so the context returns whatever string the caller
-        // hands it. Validation of the channel SHAPE lives in IdentityChannelReader.
+        // into the AspireCliChannel assembly metadata at build time, so the context
+        // returns whatever string the caller hands it. Validation of the channel SHAPE
+        // lives in IdentityChannelReader.
         var ctx = CreateContext(channel: channel);
 
         Assert.Equal(channel, ctx.IdentityChannel);

@@ -228,6 +228,7 @@ jobs:
     needs: [build_packages, build_cli_archive_linux]
     with:
       versionOverrideArg: ${{ inputs.versionOverrideArg }}
+      cliChannel: ${{ needs.build_cli_archive_linux.outputs.cliChannel }}
 
   extension_e2e_changes:
     name: Detect VS Code extension E2E changes

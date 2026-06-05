@@ -722,9 +722,10 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData(PackageChannelNames.Local)]
     [InlineData("pr-12345")]
+    [InlineData("run-12345")]
     public async Task GetChannelsAsync_WhenChannelStagingRequestedOnNonReleaseIdentityWithoutOverride_DoesNotIncludeStagingChannel(string identity)
     {
-        // The same gating applies to local and per-PR CLI identities. Per-PR (pr-<N>) builds
+        // The same gating applies to local, per-PR, and run-scoped CLI identities. These builds
         // have a hive label baked in by CI but no staging feed of their own.
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
@@ -1218,6 +1219,30 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.True(defaultIndex < stableIndex, "default should come before stable");
         Assert.True(stableIndex < dailyIndex, "stable should come before daily");
         Assert.True(dailyIndex < pr12345Index, "daily should come before pr-12345");
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenRunHiveExists_AddsRunHiveChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        const string runChannelName = "run-12345";
+        var runPackagesDir = new DirectoryInfo(Path.Combine(hivesDir.FullName, runChannelName, "packages"));
+        runPackagesDir.Create();
+
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            tempDir,
+            hivesDirectory: hivesDir,
+            identityChannel: runChannelName);
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var runChannel = Assert.Single(channels, c => string.Equals(c.Name, runChannelName, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(runChannel.Mappings!, mapping =>
+            mapping.PackageFilter == "Aspire*" &&
+            mapping.Source == runPackagesDir.FullName.Replace('\\', '/'));
     }
 
     [Fact]

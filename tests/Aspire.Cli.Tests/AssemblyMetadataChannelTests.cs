@@ -14,9 +14,9 @@ public class AssemblyMetadataChannelTests
     public void AspireCliChannel_AssemblyMetadata_HasValidShape()
     {
         // The baked AspireCliChannel must match the shape IdentityChannelReader.IsValidChannel
-        // accepts: one of `stable`, `staging`, `daily`, `local`, or `pr-<digits>`. This is
-        // the smoke test that protects against a CI misconfiguration emitting the legacy
-        // literal `pr` (no `-<N>` suffix) — which would build successfully and then mis-route
+        // accepts: one of `stable`, `staging`, `daily`, `local`, `pr-<digits>`, or
+        // `run-<digits>`. This is the smoke test that protects against a CI misconfiguration
+        // emitting a malformed hive label — which would build successfully and then mis-route
         // packages at runtime.
         var assembly = typeof(Aspire.Cli.Program).Assembly;
 
@@ -28,7 +28,7 @@ public class AssemblyMetadataChannelTests
         Assert.False(string.IsNullOrEmpty(metadata.Value), "AspireCliChannel must have a non-empty value.");
         Assert.True(
             IdentityChannelReader.IsValidChannel(metadata.Value),
-            $"AspireCliChannel value '{metadata.Value}' is not in the accepted set (stable|staging|daily|local|pr-<N>).");
+            $"AspireCliChannel value '{metadata.Value}' is not in the accepted set (stable|staging|daily|local|pr-<N>|run-<N>).");
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public class AssemblyMetadataChannelTests
         // Guards the csproj-level default <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">local</AspireCliChannel>.
         // Asserting the *declared* default in the project file rather than the *baked* value on the
         // currently-built assembly keeps this test correct under any /p:AspireCliChannel=... CI build
-        // (including pr-<N> builds), while still failing if the csproj default itself is reverted.
+        // (including pr-<N> or run-<N> builds), while still failing if the csproj default itself is reverted.
         var csprojPath = Path.Combine(GetRepoRoot(), "src", "Aspire.Cli", "Aspire.Cli.csproj");
         Assert.True(File.Exists(csprojPath), $"Expected csproj at {csprojPath}");
 
@@ -66,4 +66,3 @@ public class AssemblyMetadataChannelTests
         return dir.FullName;
     }
 }
-

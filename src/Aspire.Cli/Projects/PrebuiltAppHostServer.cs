@@ -547,7 +547,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
     /// <summary>
     /// Throws when the caller asked for the staging channel but the running CLI's packaging
-    /// service refuses to synthesize one (daily/local/pr-<c>N</c> identity without
+    /// service refuses to synthesize one (daily/local/pr-<c>N</c>/run-<c>N</c> identity without
     /// <c>overrideStagingFeed</c> or the <c>StagingChannelEnabled</c> feature flag). Surfaces
     /// the same actionable reason the <c>update</c> and <c>new</c> commands display so the
     /// bundled AppHost restore path doesn't silently downgrade to the daily feed.
@@ -572,7 +572,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     internal async Task<IEnumerable<string>?> GetNuGetSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
     {
         // Refuse to silently downgrade staging restores to the shared daily feed when the running
-        // CLI cannot synthesize a real staging channel (daily/local/pr-<N>). PackagingService omits
+        // CLI cannot synthesize a real staging channel (daily/local/pr-<N>/run-<N>). PackagingService omits
         // the staging channel in that case; without this check the lookup below falls through to
         // "all explicit channels" — which on a daily CLI is the shared daily feed — and restore
         // silently succeeds against the wrong feed. Surfacing the actionable

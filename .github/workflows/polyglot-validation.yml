@@ -10,9 +10,12 @@ on:
       versionOverrideArg:
         required: false
         type: string
+      cliChannel:
+        required: false
+        type: string
 
 env:
-  POLYGLOT_ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id) }}
+  POLYGLOT_ASPIRE_CLI_CHANNEL: ${{ inputs.cliChannel || (github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('run-{0}', github.run_id)) }}
 
 jobs:
   validate_python:
