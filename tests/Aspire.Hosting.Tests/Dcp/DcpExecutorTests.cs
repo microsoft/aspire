@@ -2034,11 +2034,13 @@ public class DcpExecutorTests
 
         var allocatedPortChannel = Channel.CreateUnbounded<int>();
         var connectionStringAvailableChannel = Channel.CreateUnbounded<IResource>();
+        var observedEvents = new ConcurrentQueue<string>();
         var eventing = new Hosting.Eventing.DistributedApplicationEventing();
         eventing.Subscribe<ResourceEndpointsAllocatedEvent>((@event, ct) =>
         {
             if (@event.Resource.Name == "database")
             {
+                observedEvents.Enqueue(nameof(ResourceEndpointsAllocatedEvent));
                 var endpoint = ((IResourceWithEndpoints)@event.Resource).GetEndpoint("NoPortTargetPortSet");
                 if (endpoint.AllocatedEndpoint is { } allocatedEndpoint)
                 {
@@ -2053,7 +2055,17 @@ public class DcpExecutorTests
         {
             if (context.Resource.Name == "database")
             {
+                observedEvents.Enqueue(nameof(OnConnectionStringAvailableContext));
                 connectionStringAvailableChannel.Writer.TryWrite(context.Resource);
+            }
+
+            return Task.CompletedTask;
+        });
+        events.Subscribe<OnResourceStartingContext>(context =>
+        {
+            if (context.Resource.Name == "database")
+            {
+                observedEvents.Enqueue(nameof(OnResourceStartingContext));
             }
 
             return Task.CompletedTask;
@@ -2078,6 +2090,11 @@ public class DcpExecutorTests
         Assert.NotEqual(desiredTargetPort, allocatedPort);
         Assert.InRange(allocatedPort, 10000, 32767);
         Assert.Equal(allocatedPort.ToString(CultureInfo.InvariantCulture), await database.GetEndpoint("NoPortTargetPortSet").Property(EndpointProperty.Port).GetValueAsync());
+        Assert.Collection(
+            observedEvents,
+            eventName => Assert.Equal(nameof(ResourceEndpointsAllocatedEvent), eventName),
+            eventName => Assert.Equal(nameof(OnConnectionStringAvailableContext), eventName),
+            eventName => Assert.Equal(nameof(OnResourceStartingContext), eventName));
     }
 
     [Fact]

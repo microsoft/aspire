@@ -237,7 +237,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 // make a valid cross-resource callback observe an unallocated endpoint.
                 foreach (var resource in endpointAllocatedResources.Distinct())
                 {
-                    await PublishEndpointAllocatedEventsAsync(resource, ct).ConfigureAwait(false);
+                    await PublishEndpointsAllocatedEventAsync(resource, ct).ConfigureAwait(false);
                 }
             }, ct);
 
@@ -696,7 +696,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 AllocateUndefinedProxylessEndpointPort(sp.ModelResource, endpoint);
 
                 int? port;
-                var definedPublicPort = GetDefinedPublicPort(sp.ModelResource, endpoint);
+                var definedPublicPort = GetPublicPortFromEndpointDefinition(sp.ModelResource, endpoint);
                 if (_options.Value.RandomizePorts && endpoint.IsProxied && definedPublicPort is not null)
                 {
                     port = null;
@@ -775,7 +775,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     private static int? GetEffectiveFixedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts)
     {
-        var publicPort = GetDefinedPublicPort(resource, endpoint);
+        var publicPort = GetPublicPortFromEndpointDefinition(resource, endpoint);
 
         if (randomizePorts && endpoint.IsProxied && publicPort is not null)
         {
@@ -823,15 +823,15 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
     private static bool ShouldAllocateUndefinedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
     {
-        return !endpoint.IsProxied && GetDefinedPublicPort(resource, endpoint) is null;
+        return !endpoint.IsProxied && GetPublicPortFromEndpointDefinition(resource, endpoint) is null;
     }
 
-    // Gets the public (= client-facing) port specified by the EndpointAnnotation. 
+    // Gets the public (= client-facing) port specified by the EndpointAnnotation.
     // Returns null if a public port cannot be inferred from the annotation.
     private static int? GetPublicPortFromEndpointDefinition(IResource resource, EndpointAnnotation endpoint)
     {
         // Containers differentiate between Port (client-facing, host interface port) and TargetPort
-        // (the port used by process inside the container), so we want to return 
+        // (the port used by process inside the container), so we want to return
         // what was passed to Port property setter ONLY.
         // For Executables Port and TargetPort are effectively the same, so we rely on the Port property getter
         // that unifies them.
@@ -1372,14 +1372,6 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         var ev = new ResourceEndpointsAllocatedEvent(resource, _executionContext.ServiceProvider);
         await _distributedApplicationEventing.PublishAsync(ev, EventDispatchBehavior.BlockingSequential, ct).ConfigureAwait(false);
         return true;
-    }
-
-    private async Task PublishEndpointAllocatedEventsAsync(IResource resource, CancellationToken ct)
-    {
-        if (await PublishEndpointsAllocatedEventAsync(resource, ct).ConfigureAwait(false))
-        {
-            await PublishConnectionStringAvailableEventAsync(resource, ct).ConfigureAwait(false);
-        }
     }
 
     private async Task PublishConnectionStringAvailableEventAsync(IResource resource, CancellationToken ct)
