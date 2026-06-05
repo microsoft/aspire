@@ -214,6 +214,30 @@ internal static class InteractionExports
 
         return list;
     }
+
+    // The engine returns the same InteractionInput instances that the builders own, and those still carry the
+    // dynamic-loading delegate on DynamicLoading.LoadCallback. That delegate is a .NET Func that cannot be
+    // serialized across the ATS/JSON-RPC boundary, so project result inputs onto callback-free copies before they
+    // are sent back to the polyglot caller. The caller only consumes data fields such as Name, Value and Options.
+    internal static InteractionInput ToResultInput(InteractionInput input)
+    {
+        return new InteractionInput
+        {
+            Name = input.Name,
+            Label = input.Label,
+            Description = input.Description,
+            EnableDescriptionMarkdown = input.EnableDescriptionMarkdown,
+            InputType = input.InputType,
+            Required = input.Required,
+            Options = input.Options,
+            Value = input.Value,
+            Placeholder = input.Placeholder,
+            AllowCustomChoice = input.AllowCustomChoice,
+            Disabled = input.Disabled,
+            MaxLength = input.MaxLength,
+            // DynamicLoading is intentionally omitted: it holds the non-serializable LoadCallback delegate.
+        };
+    }
 }
 
 /// <summary>
@@ -641,7 +665,7 @@ internal sealed class InputInteractionResult
         return new InputInteractionResult
         {
             Canceled = result.Canceled,
-            Input = result.Canceled ? null : result.Data,
+            Input = result.Canceled || result.Data is null ? null : InteractionExports.ToResultInput(result.Data),
         };
     }
 }
@@ -667,7 +691,9 @@ internal sealed class InputsInteractionResult
         return new InputsInteractionResult
         {
             Canceled = result.Canceled,
-            Inputs = result.Canceled || result.Data is null ? [] : result.Data.ToArray(),
+            Inputs = result.Canceled || result.Data is null
+                ? []
+                : result.Data.Select(InteractionExports.ToResultInput).ToArray(),
         };
     }
 }
