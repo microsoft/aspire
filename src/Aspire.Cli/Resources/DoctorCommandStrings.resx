@@ -235,7 +235,7 @@
     <comment>{0} is the full path to the legacy settings file.</comment>
   </data>
   <data name="LegacySettingsDetectedFix" xml:space="preserve">
-    <value>Run 'aspire init' (or any aspire run/add/update command) to migrate to aspire.config.json.
+    <value>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
 The legacy file continues to work — this is informational only.</value>
   </data>
 </root>

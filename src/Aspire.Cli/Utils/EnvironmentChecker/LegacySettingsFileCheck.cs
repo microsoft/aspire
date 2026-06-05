@@ -13,7 +13,7 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// </summary>
 /// <remarks>
 /// The legacy file continues to work — this check emits a non-blocking warning. Migration is
-/// triggered automatically by any write command (aspire run/add/init/update),
+/// triggered automatically by any write command (aspire run/add/init/update/pipeline),
 /// but users who only run read-only commands (aspire ls, ps, doctor) would otherwise never
 /// see a signal that a newer format exists.
 /// See: https://github.com/microsoft/aspire/issues/17632
