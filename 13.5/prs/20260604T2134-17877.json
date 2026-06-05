@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "New feature: TypeScript ATS AppHosts can export withContainerFiles to copy host files into container resources",
+  "mergedAt": "2026-06-04T21:34:35Z",
+  "number": 17877,
+  "runDate": "2026-06-05T00:29:30Z",
+  "status": "included",
+  "title": "Add ATS container file export"
+}

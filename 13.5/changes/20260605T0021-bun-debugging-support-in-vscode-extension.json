@@ -1,0 +1,21 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [
+    "@ellahathaway"
+  ],
+  "description": "The Aspire VS Code extension now supports debugging Bun applications via the WebKit Inspector Protocol debug adapter. Set breakpoints in your Bun code and debug it directly from VS Code when running an AppHost with a Bun resource (requires the oven.bun-vscode extension).",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-06-05T00:21:22Z",
+  "lastMergedAt": "2026-06-05T00:21:22Z",
+  "name": "Bun debugging support in VS Code extension",
+  "owner": "adamint",
+  "prs": [
+    17848
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CI/build maintenance: fixes WinGet manifest job on locked-down 1ES agents and updates manifest tags. No user-facing product impact.",
+  "mergedAt": "2026-06-04T22:39:15Z",
+  "number": 17913,
+  "runDate": "2026-06-05T00:29:30Z",
+  "status": "excluded",
+  "title": "Unblock WinGet Manifest job on locked-down 1ES agents; update manifest tags"
+}

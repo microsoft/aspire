@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "New feature: adds Bun debugging support in VS Code extension via WebKit Inspector Protocol. Community contribution by @ellahathaway, merged by @adamint.",
+  "mergedAt": "2026-06-05T00:21:22Z",
+  "number": 17848,
+  "runDate": "2026-06-05T00:29:30Z",
+  "status": "included",
+  "title": "Add Bun debugging support"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Test-only changes: adds functional test for Keycloak persistent lifetime coverage and fixes playground launch settings. No user-facing product changes.",
+  "mergedAt": "2026-06-04T23:29:24Z",
+  "number": 17914,
+  "runDate": "2026-06-05T00:29:30Z",
+  "status": "excluded",
+  "title": "Add Keycloak persistent lifetime coverage"
+}

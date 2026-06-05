@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "TypeScript (ATS) AppHosts can now export withContainerFiles to copy host files into container resources, with support for owner, group, and umask options. This brings TypeScript polyglot AppHosts to parity with C# AppHosts that use WithContainerFiles.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🐳",
+  "firstMergedAt": "2026-06-04T21:34:35Z",
+  "lastMergedAt": "2026-06-04T21:34:35Z",
+  "name": "TypeScript AppHosts support container file copying",
+  "owner": "sebastienros",
+  "prs": [
+    17877
+  ]
+}

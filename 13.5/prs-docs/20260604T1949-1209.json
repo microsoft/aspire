@@ -1,0 +1,9 @@
+{
+  "author": "thomhurst",
+  "comment": "Fixes a documentation error in Azure Service Bus docs (companion container image name). No matching changelog entry for this milestone.",
+  "mergedAt": "2026-06-04T19:49:07Z",
+  "number": 1209,
+  "runDate": "2026-06-05T00:29:30Z",
+  "status": "excluded",
+  "title": "[docs] Fix Service Bus emulator companion container image name"
+}
