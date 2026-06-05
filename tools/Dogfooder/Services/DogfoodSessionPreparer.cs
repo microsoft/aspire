@@ -179,6 +179,15 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
                 serviceIndexUrl = server.ServiceIndexUri!.ToString();
                 prep.Append($"# Listening on {serviceIndexUrl} ({server.LocalPackageIdCount} ids, {server.LocalPackageCount} versions)");
 
+                // Drop a NuGet.config at the workspace root so every
+                // dotnet/aspire command launched from the terminal picks up
+                // the proxy automatically — env vars alone aren't enough
+                // because the CLI shells out to `dotnet` which only
+                // consults NuGet.config files (and the user's machine-wide
+                // config would silently route restore back to nuget.org).
+                var nugetConfigPath = workspace.WriteNuGetConfig(serviceIndexUrl);
+                prep.Append($"# Wrote NuGet.config -> {nugetConfigPath}");
+
                 var traffic = session.NuGetTraffic ??= new NuGetTrafficState();
                 traffic.Backfill(server.RecentEvents);
                 server.TrafficObserved += traffic.Append;
