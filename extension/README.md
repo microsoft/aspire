@@ -107,14 +107,6 @@ Available configuration options for each debugger type can be found in the corre
 - [Python debugger options](https://code.visualstudio.com/docs/python/debugging#_set-configuration-options)
 - [Java debugger options](https://code.visualstudio.com/docs/java/java-debugging#_configuration-options)
 
-## Requirements
-
-- The [Aspire CLI](https://learn.microsoft.com/en-us/dotnet/aspire/cli/install) must be installed and available on the path.
-
-## Feedback and Issues
-
-Please report issues or feature requests on the Aspire [GitHub repository](https://github.com/dotnet/aspire/issues) using the label `area-extension`.
-
 ## License
 
 See [LICENSE.TXT](./LICENSE.TXT) for details.
