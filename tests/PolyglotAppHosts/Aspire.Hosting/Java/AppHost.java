@@ -47,6 +47,14 @@ void main() throws Exception {
         dockerFactoryContainer.withDockerfileFactory("./app", dockerfileFactory, "runtime");
         var exe = builder.addExecutable("myexe", "echo", ".", new String[] { "hello" });
         var project = builder.addProject("myproject", "./src/MyProject", "https");
+        project.withEndpointsInEnvironment(new String[] { "https" });
+        builder.addHealthCheck("custom_check", () -> {
+            var result = new HealthCheckResult();
+            result.setStatus(HealthStatus.HEALTHY);
+            result.setDescription("custom health check");
+            result.setData(Map.of("custom", "value"));
+            return result;
+        });
         var csharpApp = builder.addCSharpApp("csharpapp", "./src/CSharpApp");
         var cache = builder.addRedis("cache");
         var tool = builder.addDotnetTool("mytool", "dotnet-ef");
@@ -268,6 +276,7 @@ void main() throws Exception {
                     .arguments(Map.of("message", "hello"))
                     .cancellationToken(cancellationToken));
         });
+        container.withHealthCheck("custom_check");
         container.withHttpCommand("/health", "Health Check");
         var httpCmdOptions = new HttpCommandExportOptions();
         httpCmdOptions.setMethodName("POST");

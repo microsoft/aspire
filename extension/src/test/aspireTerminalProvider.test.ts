@@ -381,7 +381,7 @@ suite('AspireTerminalProvider tests', () => {
             }
         });
 
-        test('records suppressed execution mode and does not send command when E2E suppression is enabled', async () => {
+        test('records suppressed execution mode without creating a terminal when E2E suppression is enabled', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
             const originalEnableBridge = process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE;
             const originalStateFile = process.env.ASPIRE_EXTENSION_E2E_STATE_FILE;
@@ -418,6 +418,7 @@ suite('AspireTerminalProvider tests', () => {
 
                 assert.strictEqual(executedCommand, undefined);
                 assert.deepStrictEqual(sentTexts, []);
+                assert.strictEqual(getAspireTerminalStub.called, false);
                 assert.deepStrictEqual(terminalEvents.map(event => (event as { executionMode: string }).executionMode), ['suppressed']);
                 assert.deepStrictEqual(terminalEvents.map(event => (event as { executionSuppressed: boolean }).executionSuppressed), [true]);
             }

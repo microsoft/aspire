@@ -1264,6 +1264,148 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('coalesces workspace discovery change events while discovery is in flight', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const discoveryChanges = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const firstDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const secondDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().returns(firstDiscovery.promise);
+        discoverStub.onSecondCall().returns(secondDiscovery.promise);
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: discoveryChanges.event,
+            discover: discoverStub,
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            await waitForMicrotasks();
+            assert.strictEqual(discoverStub.callCount, 1);
+
+            discoveryChanges.fire(workspaceFolder);
+            discoveryChanges.fire(workspaceFolder);
+            discoveryChanges.fire(workspaceFolder);
+            await waitForMicrotasks();
+
+            assert.strictEqual(discoverStub.callCount, 1);
+
+            firstDiscovery.resolve([]);
+            await waitForCondition(() => discoverStub.callCount === 2, 'pending workspace discovery did not run');
+            secondDiscovery.resolve([]);
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(discoverStub.callCount, 2);
+        } finally {
+            repository.dispose();
+            discoveryChanges.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('queues forced workspace discovery refresh without starting overlapping discovery', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const firstDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const secondDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        let firstTokenCancelled = false;
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().callsFake((_folder: vscode.WorkspaceFolder, _forceRefresh?: boolean, cancellationToken?: vscode.CancellationToken) => {
+            cancellationToken?.onCancellationRequested(() => {
+                firstTokenCancelled = true;
+            });
+            return firstDiscovery.promise;
+        });
+        discoverStub.onSecondCall().callsFake((_folder: vscode.WorkspaceFolder, forceRefresh?: boolean) => {
+            assert.strictEqual(forceRefresh, true);
+            return secondDiscovery.promise;
+        });
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: discoverStub,
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            await waitForMicrotasks();
+            assert.strictEqual(discoverStub.callCount, 1);
+
+            repository.refresh();
+            await waitForMicrotasks();
+
+            assert.strictEqual(firstTokenCancelled, false);
+            assert.strictEqual(discoverStub.callCount, 1);
+
+            firstDiscovery.resolve([]);
+            await waitForCondition(() => discoverStub.callCount === 2, 'queued forced workspace discovery did not run');
+            secondDiscovery.resolve([]);
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(discoverStub.callCount, 2);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('does not apply stale in-flight workspace discovery after refresh is queued', async () => {
+        const workspaceFolder = {
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        };
+        const workspaceFoldersStub = stubWorkspaceFolders([workspaceFolder]);
+        const firstDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const secondDiscovery = createDeferred<CandidateAppHostDisplayInfo[]>();
+        const discoverStub = sinon.stub();
+        discoverStub.onFirstCall().returns(firstDiscovery.promise);
+        discoverStub.onSecondCall().returns(secondDiscovery.promise);
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: () => ({ dispose: () => { } }),
+            discover: discoverStub,
+            dispose: () => { },
+        };
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            await waitForMicrotasks();
+            assert.strictEqual(discoverStub.callCount, 1);
+
+            repository.refresh();
+            await waitForMicrotasks();
+            assert.strictEqual(discoverStub.callCount, 1);
+
+            firstDiscovery.resolve([{
+                path: '/workspace/stale/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }]);
+            await waitForCondition(() => discoverStub.callCount === 2, 'queued forced workspace discovery did not run');
+
+            assert.strictEqual(repository.workspaceAppHostPath, undefined);
+
+            secondDiscovery.resolve([{
+                path: '/workspace/current/AppHost.csproj',
+                language: 'csharp',
+                status: 'buildable',
+            }]);
+            await waitForCondition(() => repository.workspaceAppHostPath === '/workspace/current/AppHost.csproj', 'current workspace discovery did not apply');
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('workspace ps failure clears loading context and shows error welcome', async () => {
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),

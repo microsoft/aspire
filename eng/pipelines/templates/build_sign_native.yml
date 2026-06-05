@@ -321,6 +321,20 @@ jobs:
                 ASPIRE_CLI_TELEMETRY_OPTOUT: 'true'
                 DOTNET_CLI_TELEMETRY_OPTOUT: 'true'
 
+          # Native AOT debug symbols (aspire.pdb on Windows,
+          # Aspire.Cli.<rid>.<version>.symbols.nupkg on Linux/macOS) are
+          # produced as first-class MSBuild outputs by the per-RID clipack
+          # project (eng/clipack/Common.projitems _PackNativeAotSymbols
+          # target + eng/clipack/Aspire.Cli.NativeSymbols.proj helper).
+          # They land in $(Build.SourcesDirectory)/artifacts/native-symbols-staging/<rid>/
+          # before this step runs. See docs/ci/cli-native-symbols.md.
+          - task: 1ES.PublishBuildArtifacts@1
+            displayName: 🟣Publish native symbols (${{ targetRid }})
+            condition: always()
+            inputs:
+              PathtoPublish: '$(Build.SourcesDirectory)/artifacts/native-symbols-staging/${{ targetRid }}'
+              ArtifactName: native_symbols_${{ replace(targetRid, '-', '_') }}
+
           - task: 1ES.PublishBuildArtifacts@1
             displayName: 🟣Publish Artifacts
             condition: always()

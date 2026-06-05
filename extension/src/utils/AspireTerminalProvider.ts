@@ -162,7 +162,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
         }
         assertNoTerminalControlCharacters(command);
 
-        const aspireTerminal = this.getAspireTerminal();
         let logCommand = command;
         if (options?.redactAdditionalArgs && additionalArgs && additionalArgs.length > 0) {
             const logArgs = extensionArgs.map(arg => quoteShellArg(arg));
@@ -170,11 +169,15 @@ export class AspireTerminalProvider implements vscode.Disposable {
             logCommand = `${baseCommand} ${logArgs.join(' ')}`;
         }
         const executionSuppressed = isE2eTerminalCommandExecutionSuppressed();
-        const executionMode = executionSuppressed
-            ? 'suppressed'
-            : aspireTerminal.terminal.shellIntegration
-                ? 'shellIntegration'
-                : 'sendText';
+        let aspireTerminal: AspireTerminal | undefined;
+        let executionMode: AspireTerminalCommandEvent['executionMode'];
+        if (executionSuppressed) {
+            executionMode = 'suppressed';
+        }
+        else {
+            aspireTerminal = this.getAspireTerminal();
+            executionMode = aspireTerminal.terminal.shellIntegration ? 'shellIntegration' : 'sendText';
+        }
         this._onDidSendAspireCommand.fire({
             subcommand: subcommandLine,
             commandLine: logCommand,
@@ -186,12 +189,16 @@ export class AspireTerminalProvider implements vscode.Disposable {
         });
         extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${logCommand}`);
 
-        if (showTerminal) {
-            aspireTerminal.terminal.show();
-        }
-
         if (executionSuppressed) {
             return;
+        }
+
+        if (!aspireTerminal) {
+            throw new Error('Aspire terminal was not created for an unsuppressed command.');
+        }
+
+        if (showTerminal) {
+            aspireTerminal.terminal.show();
         }
 
         if (executionMode === 'shellIntegration' && aspireTerminal.terminal.shellIntegration) {

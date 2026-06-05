@@ -8,14 +8,14 @@ using Aspire.Hosting.Lifecycle;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "5")]
-public class AtsServiceCollectionExportsTests
+public class AtsEventingExportsTests
 {
     [Fact]
     public void TryAddEventingSubscriber_AllowsDistinctCallbacks()
     {
         var builder = DistributedApplication.CreateBuilder([]);
         var method = typeof(DistributedApplication).Assembly
-            .GetType("Aspire.Hosting.Ats.ServiceCollectionExports", throwOnError: true)!
+            .GetType("Aspire.Hosting.Ats.EventingExports", throwOnError: true)!
             .GetMethod("TryAddEventingSubscriber", BindingFlags.Public | BindingFlags.Static)!;
         var callbackSubscriberType = method.DeclaringType!.GetNestedType("CallbackEventingSubscriber", BindingFlags.NonPublic)!;
 
