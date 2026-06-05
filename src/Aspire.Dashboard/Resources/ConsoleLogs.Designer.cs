@@ -242,5 +242,17 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("TerminalToolbarConnectingTitle", resourceCulture);
             }
         }
+        
+        public static string TerminalHeader {
+            get {
+                return ResourceManager.GetString("TerminalHeader", resourceCulture);
+            }
+        }
+        
+        public static string TerminalPageTitle {
+            get {
+                return ResourceManager.GetString("TerminalPageTitle", resourceCulture);
+            }
+        }
     }
 }

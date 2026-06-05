@@ -257,6 +257,28 @@ public sealed partial class TerminalView : ComponentBase, IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Asks the JS terminal to re-push its current toolbar snapshot,
+    /// bypassing the change-detection cache. Called by the host page when
+    /// it has lost its cached snapshot (e.g. across a layout transition)
+    /// but the JS terminal is still live and the cached "last pushed JSON"
+    /// would otherwise suppress a fresh push.
+    /// </summary>
+    public async Task RefreshToolbarStateAsync()
+    {
+        if (_jsModule is null || _terminalId == 0)
+        {
+            return;
+        }
+        try
+        {
+            await _jsModule.InvokeVoidAsync("refreshToolbarState", _terminalId);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+    }
+
     private string BuildWebSocketUrl(string resource, int replica)
     {
         var baseUri = new Uri(NavigationManager.BaseUri);

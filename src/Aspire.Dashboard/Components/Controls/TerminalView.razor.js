@@ -215,13 +215,6 @@ function ensureTerminalStyles() {
   --aspire-term-warn: #f0883e;
   --aspire-term-panel: #161b22;
   --aspire-term-border: #30363d;
-  /*
-   * Aspire brand purple (matches the logo gradient terminator). Used
-   * for the terminal frame's drop-shadow halo so the focal element on
-   * the console-logs page picks up the product accent rather than the
-   * GitHub-blue we inherited from the WebMuxerDemo source styles.
-   */
-  --aspire-term-glow: rgba(81, 43, 212, 0.45);
   width: 100%;
   height: 100%;
   display: flex;
@@ -245,12 +238,11 @@ function ensureTerminalStyles() {
    */
   min-width: 0;
   /*
-   * Stage for the terminal — themed backdrop and breathing room around
-   * the .xterm frame so the uniform purple drop-shadow has space to
-   * extend on every side without being clipped (shadow blur radius
-   * ~28px; padding gives 36px clearance).
+   * Stage for the terminal — themed backdrop with a small breathing margin
+   * around the .xterm frame. No drop-shadow on the frame, so we don't need
+   * extra padding to give shadow blur space to extend.
    */
-  padding: 36px;
+  padding: 8px;
   overflow: hidden;
   display: flex;
   background: var(--neutral-layer-2);
@@ -258,23 +250,26 @@ function ensureTerminalStyles() {
 
 .aspire-terminal-host #terminal {
   /*
-   * Bare host for xterm.js. Fills the inner stage area and centres its
-   * single .xterm child on both axes so secondary peers (which lock
-   * the grid to producer dims and apply a CSS scale transform) get
-   * symmetric letterboxing on whichever axis has spare room.
+   * Bare host for xterm.js. Fills the inner stage area, centres its
+   * single .xterm child horizontally, and pins it to the top so the
+   * terminal prompt starts at the natural reading position rather than
+   * floating in the middle of the available space. Secondary peers
+   * (which lock the grid to producer dims and apply a CSS scale
+   * transform) still get horizontal letterboxing when narrower than
+   * the stage.
    */
   flex: 1;
   min-width: 0;
   min-height: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 }
 
 /*
  * Terminal "card" — non-transformed wrapper around the xterm so the
- * border and drop shadow stay at fixed CSS pixel sizes regardless of
- * any CSS scale transform applied to the .xterm in secondary mode.
+ * border stays at fixed CSS pixel sizes regardless of any CSS scale
+ * transform applied to the .xterm in secondary mode.
  */
 .aspire-terminal-host #terminal-frame {
   display: flex;
@@ -284,9 +279,6 @@ function ensureTerminalStyles() {
   border: 2px solid #3a4250;
   border-radius: 6px;
   overflow: hidden;
-  box-shadow:
-    0 0 28px var(--aspire-term-glow),
-    0 0 12px rgba(0, 0, 0, 0.6);
 }
 
 .aspire-terminal-host #terminal-titlebar {
@@ -1252,4 +1244,16 @@ export function getToolbarState(id) {
     const state = terminals.get(id);
     if (!state) return null;
     return buildToolbarSnapshot(state);
+}
+
+// Force-pushes the current toolbar snapshot to the .NET host, bypassing
+// the change-detection cache. The host calls this when its own view of
+// the toolbar state has been lost (e.g. a Blazor re-render dropped the
+// cached snapshot field) but the JS terminal is still live, so the cached
+// "last pushed JSON" wouldn't trigger a fresh push otherwise.
+export function refreshToolbarState(id) {
+    const state = terminals.get(id);
+    if (!state) return;
+    state._lastToolbarJson = null;
+    flushToolbarState(state);
 }

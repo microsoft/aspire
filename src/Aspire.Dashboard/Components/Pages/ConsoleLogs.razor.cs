@@ -411,6 +411,24 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         UpdateTelemetryProperties();
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // After a layout transition (e.g. mobile→desktop viewport flip moves
+        // the toolbar back inline from the mobile filter dialog) the toolbar
+        // RenderFragment re-evaluates against the page's current state. If
+        // _terminalToolbarState was cleared during the transition but the
+        // JS terminal is still alive in MainSection, the toolbar would not
+        // re-render until the JS side happens to push a new snapshot — and
+        // JS suppresses no-op pushes via change detection. Ask JS to re-push
+        // so the toolbar controls reappear.
+        if (_selectedResourceHasTerminal &&
+            _terminalViewRef is { } terminalView &&
+            _terminalToolbarState is null)
+        {
+            await terminalView.RefreshToolbarStateAsync();
+        }
+    }
+
     private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName)
     {
         Logger.LogDebug("Subscription change needed. IsAllSelected: {IsAllSelected}, SelectedResource: {SelectedResource}", isAllSelected, selectedResourceName);

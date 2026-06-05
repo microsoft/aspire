@@ -107,6 +107,16 @@
         <target state="translated">Estado del registro de servicio</target>
         <note />
       </trans-unit>
+      <trans-unit id="TerminalHeader">
+        <source>Terminal</source>
+        <target state="new">Terminal</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TerminalPageTitle">
+        <source>{0} terminal</source>
+        <target state="new">{0} terminal</target>
+        <note>{0} is an application name</note>
+      </trans-unit>
       <trans-unit id="TerminalToolbarConnectingLabel">
         <source>Connecting…</source>
         <target state="new">Connecting…</target>

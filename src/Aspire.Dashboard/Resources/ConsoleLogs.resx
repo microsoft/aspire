@@ -219,4 +219,11 @@
   <data name="TerminalToolbarConnectingTitle" xml:space="preserve">
     <value>Connecting to the terminal session…</value>
   </data>
+  <data name="TerminalHeader" xml:space="preserve">
+    <value>Terminal</value>
+  </data>
+  <data name="TerminalPageTitle" xml:space="preserve">
+    <value>{0} terminal</value>
+    <comment>{0} is an application name</comment>
+  </data>
 </root>
