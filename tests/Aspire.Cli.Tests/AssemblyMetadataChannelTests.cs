@@ -66,3 +66,4 @@ public class AssemblyMetadataChannelTests
         return dir.FullName;
     }
 }
+
