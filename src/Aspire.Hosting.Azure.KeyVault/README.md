@@ -96,7 +96,7 @@ builder.AddProject<Projects.MyApp>("myapp")
 
 ## Additional documentation
 
-https://aspire.dev/integrations/gallery/?search=hosting
+https://aspire.dev/integrations/
 
 ## Feedback & contributing
 

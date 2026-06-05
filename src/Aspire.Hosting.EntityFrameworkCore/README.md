@@ -248,7 +248,7 @@ Similarly you can use `PublishAsMigrationScript()` if you also want a raw SQL sc
 
 ## Additional documentation
 
-https://aspire.dev/integrations/gallery/?search=hosting
+https://aspire.dev/integrations/
 https://learn.microsoft.com/ef/core/managing-schemas/migrations/
 
 ## Feedback & contributing

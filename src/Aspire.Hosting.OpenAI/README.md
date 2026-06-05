@@ -133,7 +133,7 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
-* https://aspire.dev/integrations/gallery/?search=hosting
+* https://aspire.dev/integrations/
 * https://platform.openai.com/docs/models
 
 ## Feedback & contributing
