@@ -666,7 +666,7 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         {
             foreach (var endpoint in sp.Endpoints)
             {
-                if (GetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts) is int fixedPublicPort)
+                if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
                 {
                     _proxylessEndpointPortAllocator.ExcludePort(fixedPublicPort);
                 }
@@ -695,18 +695,11 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
 
                 AllocateUndefinedProxylessEndpointPort(sp.ModelResource, endpoint);
 
-                int? port;
-                var definedPublicPort = GetPublicPortFromEndpointDefinition(sp.ModelResource, endpoint);
-                if (_options.Value.RandomizePorts && endpoint.IsProxied && definedPublicPort is not null)
+                if (TryGetEffectiveFixedPublicPort(sp.ModelResource, endpoint, _options.Value.RandomizePorts, out var fixedPublicPort))
                 {
-                    port = null;
-                    _logger.LogDebug("Randomizing port for {ServiceName}. Original port: {OriginalPort}", serviceName, definedPublicPort);
+                    svc.Spec.Port = fixedPublicPort;
                 }
-                else
-                {
-                    port = definedPublicPort;
-                }
-                svc.Spec.Port = port;
+
                 svc.Spec.Protocol = PortProtocol.FromProtocolType(endpoint.Protocol);
                 if (string.Equals(KnownHostNames.Localhost, endpoint.TargetHost, StringComparison.OrdinalIgnoreCase))
                 {
@@ -773,21 +766,43 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         return !resource.HasPersistentLifetime();
     }
 
-    private static int? GetEffectiveFixedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts)
+    /// <summary>
+    /// Determines whether an endpoint definition has a fixed public port DCP should reserve or pre-exclude.
+    /// </summary>
+    /// <remarks>
+    /// Use this when deciding whether DCP should bind a service to a known public port. Proxied endpoints
+    /// with randomized ports deliberately do not report a fixed port so DCP can allocate the public port
+    /// instead of reserving the configured value.
+    /// Container endpoint definitions keep the public host port separate from the target container port, so
+    /// only an explicitly specified public port counts as fixed. Executable endpoint definitions use the same
+    /// port value for the process and the public endpoint, so the effective public port can come from either
+    /// the endpoint port or target port.
+    /// </remarks>
+    private static bool TryGetEffectiveFixedPublicPort(IResource resource, EndpointAnnotation endpoint, bool randomizePorts, out int publicPort)
     {
-        var publicPort = GetPublicPortFromEndpointDefinition(resource, endpoint);
+        var effectivePublicPort = resource.IsContainer() ? endpoint.SpecifiedPort : endpoint.Port;
 
-        if (randomizePorts && endpoint.IsProxied && publicPort is not null)
+        // When port randomization is enabled, proxied endpoints intentionally ignore the defined public
+        // port so DCP can allocate one dynamically instead.
+        if (randomizePorts && endpoint.IsProxied && effectivePublicPort is not null)
         {
-            return null;
+            publicPort = default;
+            return false;
         }
 
-        return publicPort;
+        if (effectivePublicPort is int fixedPublicPort)
+        {
+            publicPort = fixedPublicPort;
+            return true;
+        }
+
+        publicPort = default;
+        return false;
     }
 
     private void AllocateUndefinedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
     {
-        if (!ShouldAllocateUndefinedProxylessEndpointPort(resource, endpoint))
+        if (!NeedsPublicPort(resource, endpoint))
         {
             return;
         }
@@ -821,26 +836,14 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
         }
     }
 
-    private static bool ShouldAllocateUndefinedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
+    private static bool NeedsPublicPort(IResource resource, EndpointAnnotation endpoint)
     {
-        return !endpoint.IsProxied && GetPublicPortFromEndpointDefinition(resource, endpoint) is null;
-    }
-
-    // Gets the public (= client-facing) port specified by the EndpointAnnotation.
-    // Returns null if a public port cannot be inferred from the annotation.
-    private static int? GetPublicPortFromEndpointDefinition(IResource resource, EndpointAnnotation endpoint)
-    {
-        // Containers differentiate between Port (client-facing, host interface port) and TargetPort
-        // (the port used by process inside the container), so we want to return
-        // what was passed to Port property setter ONLY.
-        // For Executables Port and TargetPort are effectively the same, so we rely on the Port property getter
-        // that unifies them.
-        return resource.IsContainer() ? endpoint.SpecifiedPort : endpoint.Port;
+        return !endpoint.IsProxied && !TryGetEffectiveFixedPublicPort(resource, endpoint, randomizePorts: false, out _);
     }
 
     private int? TryGetPersistedProxylessEndpointPort(IResource resource, EndpointAnnotation endpoint)
     {
-        if (!resource.HasPersistentLifetime() || !ShouldAllocateUndefinedProxylessEndpointPort(resource, endpoint))
+        if (!resource.HasPersistentLifetime() || !NeedsPublicPort(resource, endpoint))
         {
             return null;
         }
