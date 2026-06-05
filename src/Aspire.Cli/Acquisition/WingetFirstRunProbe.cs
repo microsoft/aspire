@@ -62,7 +62,17 @@ internal sealed class WingetFirstRunProbe
         }
 
         var sidecarPath = Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName);
-        if (File.Exists(sidecarPath))
+        // Self-heal: skip only when the sidecar exists AND its `source` field
+        // parses cleanly. A malformed/truncated/oversized/empty sidecar (mid-write
+        // crash, manual edit, source string missing, etc.) counts as "needs
+        // overwrite" — fall through so the probe can re-stamp the canonical
+        // {"source":"winget"} payload below if the registry still claims this
+        // binary as winget. Sidecars whose `source` is a non-winget string
+        // (e.g. {"source":"script"} from a different install route) parse as
+        // non-null and are still skipped — the probe never clobbers a foreign
+        // route's sidecar, only a corrupt one.
+        var sidecarExists = File.Exists(sidecarPath);
+        if (sidecarExists && InstallSidecarReader.ReadSourceField(sidecarPath) is not null)
         {
             return;
         }
@@ -72,10 +82,14 @@ internal sealed class WingetFirstRunProbe
             return;
         }
 
-        TryWriteSidecarAtomically(binaryDir, sidecarPath);
+        // overwriteIfCorrupt: only true on the self-heal branch (the corrupt
+        // sidecar already exists). For the cold-start branch (no sidecar yet)
+        // we keep overwrite:false so two racing probes don't clobber a sidecar
+        // that just got written by a different install-route's atomic writer.
+        TryWriteSidecarAtomically(binaryDir, sidecarPath, overwriteIfCorrupt: sidecarExists);
     }
 
-    private void TryWriteSidecarAtomically(string binaryDir, string sidecarPath)
+    private void TryWriteSidecarAtomically(string binaryDir, string sidecarPath, bool overwriteIfCorrupt)
     {
         var tempPath = Path.Combine(binaryDir, $"{InstallSidecarReader.SidecarFileName}.{Guid.NewGuid():N}.tmp");
 
@@ -91,7 +105,7 @@ internal sealed class WingetFirstRunProbe
 
         try
         {
-            File.Move(tempPath, sidecarPath, overwrite: false);
+            File.Move(tempPath, sidecarPath, overwrite: overwriteIfCorrupt);
             _logger.LogDebug("Winget first-run probe wrote sidecar at {Path}.", sidecarPath);
         }
         catch (Exception ex)

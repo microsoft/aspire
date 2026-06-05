@@ -47,20 +47,78 @@ public class WingetRegistryProbeTests
         var realProcessPath = Path.Combine(workspace.Path, "aspire.exe");
         var sidecarPath = Path.Combine(workspace.Path, SidecarFileName);
         // Pre-seed with a distinctive payload no real producer would write.
-        // The probe's contract is "do not touch an existing sidecar"; if it
-        // ever rewrites unconditionally, this distinctive payload would be
-        // overwritten with the probe's canonical {"source":"winget"} content
-        // and the assertion below would fail — independent of any filesystem
+        // The probe's contract is "do not touch a parseable sidecar even if
+        // its source string is unrecognized"; if it ever rewrites
+        // unconditionally, this distinctive payload would be overwritten
+        // with the probe's canonical {"source":"winget"} content and the
+        // assertion below would fail — independent of any filesystem
         // timestamp resolution.
+        //
+        // Corrupt-sidecar self-heal is covered separately in
+        // Run_OverwritesMalformedSidecar_WhenRegistryClaimsAspire below.
         const string preSeededContent = "{\"source\":\"winget-pre-seeded\"}";
         File.WriteAllText(sidecarPath, preSeededContent);
 
-        // Even with the registry asserting winget, an existing sidecar must
-        // not be touched.
+        // Even with the registry asserting winget, a parseable existing
+        // sidecar must not be touched.
         var probe = new WingetFirstRunProbe(new FakeWindowsRegistryReader(claim: true), NullLogger<WingetFirstRunProbe>.Instance);
         probe.Run(realProcessPath);
 
         Assert.Equal(preSeededContent, File.ReadAllText(sidecarPath));
+    }
+
+    [Theory]
+    // Malformed JSON: never parses, the probe's old File.Exists guard
+    // skipped it and left the install permanently un-identified.
+    [InlineData("this is not json {{{ broken")]
+    // Empty object: parseable JSON but no `source` field. The reader's
+    // ReadSourceField returns null for this shape, so the probe treats it
+    // as "needs overwrite" too.
+    [InlineData("{}")]
+    // Truncated mid-write: representative of a crash during atomic-rename
+    // or a partial copy. JsonDocument.Parse throws JsonException.
+    [InlineData("{\"sour")]
+    public void Run_OverwritesMalformedSidecar_WhenRegistryClaimsAspire(string corruptContent)
+    {
+        // Regression: the probe used to early-return on File.Exists with no
+        // validation, so a corrupted .aspire-install.json (truncated write,
+        // crashed mid-rename, manual edit) wedged the install permanently
+        // — every subsequent `aspire` invocation saw `route` as null and
+        // BundleService fell back to the sidecar-less default. Self-heal
+        // is cheap (one JsonDocument.Parse per cold start when the sidecar
+        // exists) and bounds the worst-case corruption window to a single
+        // CLI invocation.
+        using var workspace = new TestTempDirectory();
+        var realProcessPath = Path.Combine(workspace.Path, "aspire.exe");
+        var sidecarPath = Path.Combine(workspace.Path, SidecarFileName);
+        File.WriteAllText(sidecarPath, corruptContent);
+
+        var probe = new WingetFirstRunProbe(new FakeWindowsRegistryReader(claim: true), NullLogger<WingetFirstRunProbe>.Instance);
+        probe.Run(realProcessPath);
+
+        using var doc = JsonDocument.Parse(File.ReadAllBytes(sidecarPath));
+        Assert.Equal(JsonValueKind.Object, doc.RootElement.ValueKind);
+        Assert.Equal("winget", doc.RootElement.GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public void Run_DoesNotOverwriteForeignSidecar_EvenWhenRegistryClaimsAspire()
+    {
+        // Sibling guarantee to Run_OverwritesMalformedSidecar_*: if a sidecar
+        // is parseable and its `source` field is a non-empty string (any
+        // string — "script", "brew", "pr", an unknown future route, etc.),
+        // the probe must NOT clobber it. The probe owns only the winget
+        // detection lane; other install routes write their own sidecars.
+        using var workspace = new TestTempDirectory();
+        var realProcessPath = Path.Combine(workspace.Path, "aspire.exe");
+        var sidecarPath = Path.Combine(workspace.Path, SidecarFileName);
+        const string scriptSidecar = "{\"source\":\"script\"}";
+        File.WriteAllText(sidecarPath, scriptSidecar);
+
+        var probe = new WingetFirstRunProbe(new FakeWindowsRegistryReader(claim: true), NullLogger<WingetFirstRunProbe>.Instance);
+        probe.Run(realProcessPath);
+
+        Assert.Equal(scriptSidecar, File.ReadAllText(sidecarPath));
     }
 
     [Fact]
