@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Agentic workflow change: updates code-review skill guidance for test coverage. Only modifies .agents/skills/code-review/SKILL.md which does not ship to aspire.dev and has no user-facing product impact.",
+  "mergedAt": "2026-06-05T06:59:51Z",
+  "number": 17937,
+  "runDate": "2026-06-05T07:25:41Z",
+  "status": "excluded",
+  "title": "Update code review test coverage guidance"
+}

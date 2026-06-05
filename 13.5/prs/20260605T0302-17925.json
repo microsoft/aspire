@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "VS Code extension bug fix: show compatibility error when running AppHost returns no resource data",
+  "mergedAt": "2026-06-05T03:02:51Z",
+  "number": 17925,
+  "runDate": "2026-06-05T07:25:41Z",
+  "status": "included",
+  "title": "Show extension compatibility error for empty running AppHost describe"
+}

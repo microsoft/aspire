@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The VS Code extension now shows a compatibility error when a running AppHost successfully returns no resource data from aspire describe, instead of silently displaying no resources. This surfaces a clear message when the AppHost uses an older Aspire.Hosting version (13.1.0 or earlier) that does not support the describe protocol.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔌",
+  "firstMergedAt": "2026-06-05T03:02:51Z",
+  "lastMergedAt": "2026-06-05T03:02:51Z",
+  "name": "Fix extension compatibility error for empty AppHost describe",
+  "owner": "adamint",
+  "prs": [
+    17925
+  ]
+}

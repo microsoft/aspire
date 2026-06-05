@@ -1,0 +1,21 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@ellahathaway"
+  ],
+  "description": "Parameters now display consistently in both the VS Code extension resource tree and inline AppHost CodeLens. Missing values show as \"Value missing\" with a warning icon, secret parameters show a masked value, non-secret values show inline text (truncated to 80 characters), and command order now matches the Aspire dashboard.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎛️",
+  "firstMergedAt": "2026-06-05T02:00:18Z",
+  "lastMergedAt": "2026-06-05T02:00:18Z",
+  "name": "Improved parameter display in VS Code extension",
+  "owner": "adamint",
+  "prs": [
+    17881
+  ]
+}
