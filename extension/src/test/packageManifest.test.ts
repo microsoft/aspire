@@ -5,6 +5,12 @@ import * as path from 'path';
 type ManifestMenuItem = {
     command?: string;
     when?: string;
+    group?: string;
+};
+
+type ManifestCommand = {
+    command?: string;
+    icon?: string;
 };
 
 type DebuggerProperty = {
@@ -26,6 +32,7 @@ type DebuggerContribution = {
 
 type ExtensionManifest = {
     contributes: {
+        commands?: ManifestCommand[];
         viewsWelcome?: Array<{ view?: string; contents?: string; when?: string }>;
         menus?: {
             'view/title'?: ManifestMenuItem[];
@@ -105,6 +112,23 @@ suite('extension/package.json', () => {
         assertContains(openDashboard?.when, 'workspaceResources');
         assertContains(expandAll?.when, 'workspaceResources');
         assertContains(openAppHostSource?.when, 'workspaceResources');
+    });
+
+    test('dashboard inline actions have distinct icons', () => {
+        const manifest = readManifest();
+        const commands = manifest.contributes.commands ?? [];
+        const contextMenus = manifest.contributes.menus?.['view/item/context'] ?? [];
+
+        const openDashboard = commands.find(item => item.command === 'aspire-vscode.openDashboard');
+        const openDashboardToSide = commands.find(item => item.command === 'aspire-vscode.openDashboardToSide');
+        const openDashboardMenu = contextMenus.find(item => item.command === 'aspire-vscode.openDashboard');
+        const openDashboardToSideMenu = contextMenus.find(item => item.command === 'aspire-vscode.openDashboardToSide');
+
+        assert.strictEqual(openDashboardMenu?.group, 'inline');
+        assert.strictEqual(openDashboardToSideMenu?.group, 'inline');
+        assert.ok(openDashboard?.icon);
+        assert.ok(openDashboardToSide?.icon);
+        assert.notStrictEqual(openDashboardToSide.icon, openDashboard.icon);
     });
 
     test('aspire launch configuration declares an env property as a string-valued object', () => {

@@ -295,7 +295,7 @@
         "command": "aspire-vscode.openDashboardToSide",
         "title": "%command.openDashboardToSide%",
         "category": "Aspire",
-        "icon": "$(globe)"
+        "icon": "$(split-horizontal)"
       },
       {
         "command": "aspire-vscode.openAppHostSource",

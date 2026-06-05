@@ -212,6 +212,8 @@
   "aspire-vscode.strings.resourceCommandMaxLength": "Value must be {0} characters or fewer.",
   "aspire-vscode.strings.resourceCommandDisabledDescription": "(disabled)",
   "aspire-vscode.strings.workspaceAppHostLabel": "Workspace AppHost",
+  "aspire-vscode.strings.dashboardUrlNotFound": "No Aspire Dashboard URL is available. Start an AppHost and try again.",
+  "aspire-vscode.strings.dashboardUrlUnsupported": "The Aspire Dashboard URL must use http or https.",
   "aspire-vscode.strings.workspaceAppHostsGroupLabel": "Workspace AppHosts",
   "aspire-vscode.strings.runningAppHostsGroupLabel": "Running AppHosts",
   "aspire-vscode.strings.appHostOpenSourceActionLabel": "Open AppHost source",

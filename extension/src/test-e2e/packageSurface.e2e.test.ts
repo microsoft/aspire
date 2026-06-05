@@ -446,6 +446,7 @@ const expectedCommandIds = [
     'aspire-vscode.new',
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.openDashboard',
+    'aspire-vscode.openDashboardToSide',
     'aspire-vscode.openGlobalSettings',
     'aspire-vscode.openInExternalBrowser',
     'aspire-vscode.openInIntegratedBrowser',
@@ -498,6 +499,7 @@ const expectedMenuLocations = [
 
 const expectedViewItemContextCommands = [
     'aspire-vscode.openDashboard',
+    'aspire-vscode.openDashboardToSide',
     'aspire-vscode.expandAll',
     'aspire-vscode.openAppHostSource',
     'aspire-vscode.runAppHost',

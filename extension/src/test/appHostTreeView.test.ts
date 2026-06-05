@@ -477,6 +477,75 @@ suite('AspireAppHostTreeProvider', () => {
         assert.strictEqual(openExternalStub.callCount, 1);
     });
 
+    test('openDashboardToSide opens the dashboard in the integrated browser side group', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                dashboardUrl: 'http://localhost:1001',
+            }),
+        ]);
+        sandbox.stub(vscode.commands, 'getCommands').resolves(['workbench.action.browser.open']);
+        const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
+        const openExternalStub = sandbox.stub(vscode.env, 'openExternal').resolves(true);
+
+        await provider.openDashboardToSide();
+
+        assert.strictEqual(openExternalStub.callCount, 0);
+        assert.strictEqual(executeCommandStub.callCount, 1);
+        assert.strictEqual(executeCommandStub.getCall(0).args[0], 'workbench.action.browser.open');
+        assert.deepStrictEqual(executeCommandStub.getCall(0).args[1], {
+            url: 'http://localhost:1001',
+            openToSide: true,
+        });
+    });
+
+    test('openDashboardToSide falls back to simple browser API on VS Code 1.98', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                dashboardUrl: 'http://localhost:1001',
+            }),
+        ]);
+        sandbox.stub(vscode.commands, 'getCommands').resolves([]);
+        const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
+
+        await provider.openDashboardToSide();
+
+        assert.strictEqual(executeCommandStub.callCount, 1);
+        assert.strictEqual(executeCommandStub.getCall(0).args[0], 'simpleBrowser.api.open');
+        const uri = executeCommandStub.getCall(0).args[1] as vscode.Uri;
+        assert.strictEqual(uri.scheme, 'http');
+        assert.strictEqual(uri.authority, 'localhost:1001');
+        assert.deepStrictEqual(executeCommandStub.getCall(0).args[2], {
+            viewColumn: vscode.ViewColumn.Beside,
+            preserveFocus: false,
+        });
+    });
+
+    test('openDashboardToSide warns when there is no dashboard URL to open', async () => {
+        const provider = makeTreeProvider([]);
+        const showInformationMessageStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+        const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
+
+        await provider.openDashboardToSide();
+
+        assert.strictEqual(showInformationMessageStub.callCount, 1);
+        assert.strictEqual(executeCommandStub.callCount, 0);
+    });
+
+    test('openDashboardToSide rejects non-web dashboard URLs', async () => {
+        const provider = makeTreeProvider([
+            makeAppHost({
+                dashboardUrl: 'vscode://malicious-command',
+            }),
+        ]);
+        const showWarningMessageStub = sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        const executeCommandStub = sandbox.stub(vscode.commands, 'executeCommand').resolves(undefined);
+
+        await provider.openDashboardToSide();
+
+        assert.strictEqual(showWarningMessageStub.callCount, 1);
+        assert.strictEqual(executeCommandStub.callCount, 0);
+    });
+
     test('non-http endpoints remain visible but are not clickable', () => {
         const provider = makeTreeProvider([
             makeAppHost({
