@@ -13884,8 +13884,9 @@ public class IInteractionService extends HandleWrapperBase {
     /** Prompts the user for a single input. */
     public InputInteractionResult promptInput(String title, String message, InteractionInputBuilder input, PromptInputOptions options) {
         var options = options == null ? null : options.getOptions();
+        var validationCallback = options == null ? null : options.getValidationCallback();
         var cancellationToken = options == null ? null : options.getCancellationToken();
-        return promptInputImpl(title, message, input, options, cancellationToken);
+        return promptInputImpl(title, message, input, options, validationCallback, cancellationToken);
     }
 
     public InputInteractionResult promptInput(String title, String message, HandleWrapperBase input, PromptInputOptions options) {
@@ -13901,7 +13902,7 @@ public class IInteractionService extends HandleWrapperBase {
     }
 
     /** Prompts the user for a single input. */
-    private InputInteractionResult promptInputImpl(String title, String message, InteractionInputBuilder input, InteractionInputsDialogOptions options, CancellationToken cancellationToken) {
+    private InputInteractionResult promptInputImpl(String title, String message, InteractionInputBuilder input, InteractionInputsDialogOptions options, AspireAction1<InputsDialogValidationContext> validationCallback, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
         reqArgs.put("title", AspireClient.serializeValue(title));
@@ -13909,6 +13910,14 @@ public class IInteractionService extends HandleWrapperBase {
         reqArgs.put("input", AspireClient.serializeValue(input));
         if (options != null) {
             reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var validationCallbackId = validationCallback == null ? null : getClient().registerCallback(args -> {
+            var arg = (InputsDialogValidationContext) args[0];
+            validationCallback.invoke(arg);
+            return null;
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
         }
         if (cancellationToken != null) {
             reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
@@ -13920,8 +13929,9 @@ public class IInteractionService extends HandleWrapperBase {
     /** Prompts the user for multiple inputs. */
     public InputsInteractionResult promptInputs(String title, String message, InteractionInputBuilder[] inputs, PromptInputsOptions options) {
         var options = options == null ? null : options.getOptions();
+        var validationCallback = options == null ? null : options.getValidationCallback();
         var cancellationToken = options == null ? null : options.getCancellationToken();
-        return promptInputsImpl(title, message, inputs, options, cancellationToken);
+        return promptInputsImpl(title, message, inputs, options, validationCallback, cancellationToken);
     }
 
     public InputsInteractionResult promptInputs(String title, String message, InteractionInputBuilder[] inputs) {
@@ -13929,7 +13939,7 @@ public class IInteractionService extends HandleWrapperBase {
     }
 
     /** Prompts the user for multiple inputs. */
-    private InputsInteractionResult promptInputsImpl(String title, String message, InteractionInputBuilder[] inputs, InteractionInputsDialogOptions options, CancellationToken cancellationToken) {
+    private InputsInteractionResult promptInputsImpl(String title, String message, InteractionInputBuilder[] inputs, InteractionInputsDialogOptions options, AspireAction1<InputsDialogValidationContext> validationCallback, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
         reqArgs.put("title", AspireClient.serializeValue(title));
@@ -13937,6 +13947,14 @@ public class IInteractionService extends HandleWrapperBase {
         reqArgs.put("inputs", AspireClient.serializeValue(inputs));
         if (options != null) {
             reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var validationCallbackId = validationCallback == null ? null : getClient().registerCallback(args -> {
+            var arg = (InputsDialogValidationContext) args[0];
+            validationCallback.invoke(arg);
+            return null;
+        });
+        if (validationCallbackId != null) {
+            reqArgs.put("validationCallback", validationCallbackId);
         }
         if (cancellationToken != null) {
             reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
@@ -18657,11 +18675,18 @@ import java.util.function.*;
 /** Options for PromptInput. */
 public final class PromptInputOptions {
     private InteractionInputsDialogOptions options;
+    private AspireAction1<InputsDialogValidationContext> validationCallback;
     private CancellationToken cancellationToken;
 
     public InteractionInputsDialogOptions getOptions() { return options; }
     public PromptInputOptions options(InteractionInputsDialogOptions value) {
         this.options = value;
+        return this;
+    }
+
+    public AspireAction1<InputsDialogValidationContext> getValidationCallback() { return validationCallback; }
+    public PromptInputOptions validationCallback(AspireAction1<InputsDialogValidationContext> value) {
+        this.validationCallback = value;
         return this;
     }
 
@@ -18684,11 +18709,18 @@ import java.util.function.*;
 /** Options for PromptInputs. */
 public final class PromptInputsOptions {
     private InteractionInputsDialogOptions options;
+    private AspireAction1<InputsDialogValidationContext> validationCallback;
     private CancellationToken cancellationToken;
 
     public InteractionInputsDialogOptions getOptions() { return options; }
     public PromptInputsOptions options(InteractionInputsDialogOptions value) {
         this.options = value;
+        return this;
+    }
+
+    public AspireAction1<InputsDialogValidationContext> getValidationCallback() { return validationCallback; }
+    public PromptInputsOptions validationCallback(AspireAction1<InputsDialogValidationContext> value) {
+        this.validationCallback = value;
         return this;
     }
 

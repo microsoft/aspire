@@ -857,13 +857,31 @@ await container.withCommand("interaction-showcase", "Interaction Showcase", asyn
         "Single input",
         "Enter a value.",
         interactionService.createTextInput("solo"),
-        { options: { primaryButtonText: "Save" } });
+        {
+            options: { primaryButtonText: "Save" },
+            validationCallback: async (validationContext) => {
+                const inputs = await (await validationContext.inputs()).toArray();
+                const solo = inputs.find(input => input.name === "solo");
+                if (!solo?.value) {
+                    await validationContext.addValidationError("solo", "A value is required.");
+                }
+            }
+        });
 
     const multi = await interactionService.promptInputs(
         "Multiple inputs",
         "Fill out the form.",
         [textInput, secretInput, booleanInput, numberInput, choiceInput, presetInput, sizeInput, dependentInput],
-        { options: { primaryButtonText: "Submit", enableMessageMarkdown: true } });
+        {
+            options: { primaryButtonText: "Submit", enableMessageMarkdown: true },
+            validationCallback: async (validationContext) => {
+                const inputs = await (await validationContext.inputs()).toArray();
+                const name = inputs.find(input => input.name === "name");
+                if (name?.value === "bad") {
+                    await validationContext.addValidationError("name", "Name cannot be 'bad'.");
+                }
+            }
+        });
 
     const selectedColor = multi.inputs?.find(input => input.name === "color")?.value;
     const soloValue = single.input?.value;

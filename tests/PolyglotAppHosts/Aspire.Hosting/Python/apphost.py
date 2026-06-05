@@ -545,18 +545,32 @@ ENTRYPOINT ["dotnet", "App.dll"]"""
             options={"AlwaysLoadOnStart": True, "DependsOnInputs": ["color"]}
         )
 
+        def validate_solo(validation_context):
+            inputs = list(validation_context.inputs().to_array())
+            solo = next((i for i in inputs if i.get("Name") == "solo"), None)
+            if not (solo or {}).get("Value"):
+                validation_context.add_validation_error("solo", "A value is required.")
+
         single = interaction_service.prompt_input(
             "Single input",
             "Enter a value.",
             interaction_service.create_text_input("solo"),
-            options={"PrimaryButtonText": "Save"}
+            options={"PrimaryButtonText": "Save"},
+            validation_callback=validate_solo,
         )
+
+        def validate_form(validation_context):
+            inputs = list(validation_context.inputs().to_array())
+            name = next((i for i in inputs if i.get("Name") == "name"), None)
+            if (name or {}).get("Value") == "bad":
+                validation_context.add_validation_error("name", "Name cannot be 'bad'.")
 
         multi = interaction_service.prompt_inputs(
             "Multiple inputs",
             "Fill out the form.",
             [text_input, secret_input, boolean_input, number_input, choice_input, preset_input, size_input, dependent_input],
-            options={"PrimaryButtonText": "Submit", "EnableMessageMarkdown": True}
+            options={"PrimaryButtonText": "Submit", "EnableMessageMarkdown": True},
+            validation_callback=validate_form,
         )
 
         selected_color = next((i.get("Value") for i in (multi.get("Inputs") or []) if i.get("Name") == "color"), None)

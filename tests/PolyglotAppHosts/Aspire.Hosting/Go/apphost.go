@@ -714,6 +714,14 @@ ENTRYPOINT ["dotnet", "App.dll"]
 
 		single, err := interactionService.PromptInput("Single input", "Enter a value.", interactionService.CreateTextInput("solo"), &aspire.PromptInputOptions{
 			Options: &aspire.InteractionInputsDialogOptions{PrimaryButtonText: "Save"},
+			ValidationCallback: func(validationContext aspire.InputsDialogValidationContext) {
+				inputs, _ := validationContext.Inputs().ToArray()
+				for _, input := range inputs {
+					if input.Name == "solo" && input.Value == "" {
+						_ = validationContext.AddValidationError("solo", "A value is required.")
+					}
+				}
+			},
 		})
 		if err != nil {
 			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}
@@ -723,6 +731,14 @@ ENTRYPOINT ["dotnet", "App.dll"]
 			[]aspire.InteractionInputBuilder{textInput, secretInput, booleanInput, numberInput, choiceInput, presetInput, sizeInput, dependentInput},
 			&aspire.PromptInputsOptions{
 				Options: &aspire.InteractionInputsDialogOptions{PrimaryButtonText: "Submit", EnableMessageMarkdown: aspire.BoolPtr(true)},
+				ValidationCallback: func(validationContext aspire.InputsDialogValidationContext) {
+					inputs, _ := validationContext.Inputs().ToArray()
+					for _, input := range inputs {
+						if input.Name == "name" && input.Value == "bad" {
+							_ = validationContext.AddValidationError("name", "Name cannot be 'bad'.")
+						}
+					}
+				},
 			})
 		if err != nil {
 			return &aspire.ExecuteCommandResult{Success: false, ErrorMessage: aspire.StringPtr(aspire.FormatError(err))}

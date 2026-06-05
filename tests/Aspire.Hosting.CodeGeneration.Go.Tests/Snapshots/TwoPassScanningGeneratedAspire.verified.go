@@ -16372,6 +16372,14 @@ func (s *interactionService) PromptInput(title string, message string, input Int
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.ValidationCallback != nil {
+			cb := merged.ValidationCallback
+			shim := func(args ...any) any {
+				cb(callbackArg[InputsDialogValidationContext](args, 0))
+				return nil
+			}
+			reqArgs["validationCallback"] = s.client.registerCallback(shim)
+		}
 		if merged.CancellationToken != nil {
 			ctx = merged.CancellationToken.Context()
 			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
@@ -16403,6 +16411,14 @@ func (s *interactionService) PromptInputs(title string, message string, inputs [
 			if opt != nil { merged = deepUpdate(merged, opt) }
 		}
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
+		if merged.ValidationCallback != nil {
+			cb := merged.ValidationCallback
+			shim := func(args ...any) any {
+				cb(callbackArg[InputsDialogValidationContext](args, 0))
+				return nil
+			}
+			reqArgs["validationCallback"] = s.client.registerCallback(shim)
+		}
 		if merged.CancellationToken != nil {
 			ctx = merged.CancellationToken.Context()
 			if id := s.client.registerCancellation(merged.CancellationToken); id != "" {
@@ -26706,6 +26722,7 @@ func (o *PromptNotificationOptions) ToMap() map[string]any {
 // PromptInputOptions carries optional parameters for PromptInput.
 type PromptInputOptions struct {
 	Options *InteractionInputsDialogOptions `json:"options,omitempty"`
+	ValidationCallback func(arg InputsDialogValidationContext) `json:"-"`
 	CancellationToken *CancellationToken `json:"-"`
 }
 
@@ -26719,6 +26736,7 @@ func (o *PromptInputOptions) ToMap() map[string]any {
 // PromptInputsOptions carries optional parameters for PromptInputs.
 type PromptInputsOptions struct {
 	Options *InteractionInputsDialogOptions `json:"options,omitempty"`
+	ValidationCallback func(arg InputsDialogValidationContext) `json:"-"`
 	CancellationToken *CancellationToken `json:"-"`
 }
 

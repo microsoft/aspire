@@ -10989,7 +10989,7 @@ impl IInteractionService {
     }
 
     /// Prompts the user for a single input.
-    pub fn prompt_input(&self, title: &str, message: &str, input: &InteractionInputBuilder, options: Option<InteractionInputsDialogOptions>, cancellation_token: Option<&CancellationToken>) -> Result<InputInteractionResult, Box<dyn std::error::Error>> {
+    pub fn prompt_input(&self, title: &str, message: &str, input: &InteractionInputBuilder, options: Option<InteractionInputsDialogOptions>, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, cancellation_token: Option<&CancellationToken>) -> Result<InputInteractionResult, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("interactionService".to_string(), self.handle.to_json());
         args.insert("title".to_string(), serde_json::to_value(&title).unwrap_or(Value::Null));
@@ -10998,6 +10998,8 @@ impl IInteractionService {
         if let Some(ref v) = options {
             args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
         if let Some(token) = cancellation_token {
             let token_id = register_cancellation(token, self.client.clone());
             args.insert("cancellationToken".to_string(), Value::String(token_id));
@@ -11007,7 +11009,7 @@ impl IInteractionService {
     }
 
     /// Prompts the user for multiple inputs.
-    pub fn prompt_inputs(&self, title: &str, message: &str, inputs: Vec<InteractionInputBuilder>, options: Option<InteractionInputsDialogOptions>, cancellation_token: Option<&CancellationToken>) -> Result<InputsInteractionResult, Box<dyn std::error::Error>> {
+    pub fn prompt_inputs(&self, title: &str, message: &str, inputs: Vec<InteractionInputBuilder>, options: Option<InteractionInputsDialogOptions>, validation_callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, cancellation_token: Option<&CancellationToken>) -> Result<InputsInteractionResult, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("interactionService".to_string(), self.handle.to_json());
         args.insert("title".to_string(), serde_json::to_value(&title).unwrap_or(Value::Null));
@@ -11017,6 +11019,8 @@ impl IInteractionService {
         if let Some(ref v) = options {
             args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
+        let callback_id = register_callback(validation_callback);
+        args.insert("validationCallback".to_string(), Value::String(callback_id));
         if let Some(token) = cancellation_token {
             let token_id = register_cancellation(token, self.client.clone());
             args.insert("cancellationToken".to_string(), Value::String(token_id));

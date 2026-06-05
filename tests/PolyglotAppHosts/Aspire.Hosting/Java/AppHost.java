@@ -388,14 +388,26 @@ void main() throws Exception {
             singleDialogOptions.setPrimaryButtonText("Save");
             var single = interactionService.promptInput("Single input", "Enter a value.",
                 interactionService.createTextInput("solo"),
-                new PromptInputOptions().options(singleDialogOptions));
+                new PromptInputOptions().options(singleDialogOptions).validationCallback((validationContext) -> {
+                    for (var input : validationContext.inputs().toArray()) {
+                        if ("solo".equals(input.getName()) && (input.getValue() == null || input.getValue().isEmpty())) {
+                            validationContext.addValidationError("solo", "A value is required.");
+                        }
+                    }
+                }));
 
             var multiDialogOptions = new InteractionInputsDialogOptions();
             multiDialogOptions.setPrimaryButtonText("Submit");
             multiDialogOptions.setEnableMessageMarkdown(true);
             var multi = interactionService.promptInputs("Multiple inputs", "Fill out the form.",
                 new InteractionInputBuilder[] { textInput, secretInput, booleanInput, numberInput, choiceInput, presetInput, sizeInput, dependentInput },
-                new PromptInputsOptions().options(multiDialogOptions));
+                new PromptInputsOptions().options(multiDialogOptions).validationCallback((validationContext) -> {
+                    for (var input : validationContext.inputs().toArray()) {
+                        if ("name".equals(input.getName()) && "bad".equals(input.getValue())) {
+                            validationContext.addValidationError("name", "Name cannot be 'bad'.");
+                        }
+                    }
+                }));
 
             String selectedColor = "";
             if (multi.getInputs() != null) {

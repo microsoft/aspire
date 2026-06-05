@@ -2951,7 +2951,7 @@ class AbstractInteractionService:
         )
         return typing.cast(BoolInteractionResult, result)
 
-    def prompt_input(self, title: str, message: str, input: InteractionInputBuilder, *, options: InteractionInputsDialogOptions | None = None, timeout: int | None = None) -> InputInteractionResult:
+    def prompt_input(self, title: str, message: str, input: InteractionInputBuilder, *, options: InteractionInputsDialogOptions | None = None, validation_callback: typing.Callable[[InputsDialogValidationContext], None] | None = None, timeout: int | None = None) -> InputInteractionResult:
         """Prompts the user for a single input."""
         rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
         rpc_args['title'] = title
@@ -2959,6 +2959,8 @@ class AbstractInteractionService:
         rpc_args['input'] = input
         if options is not None:
             rpc_args['options'] = options
+        if validation_callback is not None:
+            rpc_args['validationCallback'] = self._client.register_callback(validation_callback)
         if timeout is not None:
             rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
         result = self._client.invoke_capability(
@@ -2967,7 +2969,7 @@ class AbstractInteractionService:
         )
         return typing.cast(InputInteractionResult, result)
 
-    def prompt_inputs(self, title: str, message: str, inputs: typing.Iterable[InteractionInputBuilder], *, options: InteractionInputsDialogOptions | None = None, timeout: int | None = None) -> InputsInteractionResult:
+    def prompt_inputs(self, title: str, message: str, inputs: typing.Iterable[InteractionInputBuilder], *, options: InteractionInputsDialogOptions | None = None, validation_callback: typing.Callable[[InputsDialogValidationContext], None] | None = None, timeout: int | None = None) -> InputsInteractionResult:
         """Prompts the user for multiple inputs."""
         rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
         rpc_args['title'] = title
@@ -2975,6 +2977,8 @@ class AbstractInteractionService:
         rpc_args['inputs'] = inputs
         if options is not None:
             rpc_args['options'] = options
+        if validation_callback is not None:
+            rpc_args['validationCallback'] = self._client.register_callback(validation_callback)
         if timeout is not None:
             rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
         result = self._client.invoke_capability(
