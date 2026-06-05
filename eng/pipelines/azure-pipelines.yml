@@ -271,8 +271,14 @@ extends:
                 inputs:
                   itemPattern: |
                     **/Aspire.Cli*.nupkg
+                    !**/Aspire.Cli*.symbols.nupkg
                     **/microsoft-aspire-cli*.tgz
                   targetPath: '$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)'
+
+              # Pull the native AOT symbols staged by build_sign_native so arcade can
+              # route them on to MSDL/SymWeb during the `-publish` step below. See
+              # docs/ci/cli-native-symbols.md for the full architecture.
+              - template: /eng/pipelines/templates/download_native_symbols.yml@self
 
               - pwsh: |
                   $ErrorActionPreference = 'Stop'
