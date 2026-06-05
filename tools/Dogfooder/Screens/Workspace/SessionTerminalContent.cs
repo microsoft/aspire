@@ -47,7 +47,104 @@ internal static class SessionTerminalContent
         // not resizing the PTY when the window grows. TerminalNode.Arrange
         // resizes the underlying handle to match its layout bounds, so
         // .Fill() is both the visual and the PTY-size fix.
-        return new TerminalWidget(entry.Handle).Fill();
+        var terminalWidget = new TerminalWidget(entry.Handle).Fill();
+
+        // Stack a thin header row above the terminal so the user has a
+        // visible reference for which workspace they're in and a one-click
+        // way to open it in their editor. The header is rendered every
+        // frame; it's just a couple of text + button nodes so the cost is
+        // negligible compared to the PTY itself.
+        return ctx.VStack(v =>
+        [
+            BuildHeader(v, session),
+            terminalWidget,
+        ]);
+    }
+
+    private static Hex1bWidget BuildHeader<TParent>(
+        WidgetContext<TParent> ctx,
+        DogfoodSession session)
+        where TParent : Hex1bWidget
+    {
+        var workspaceRoot = session.Workspace?.Root;
+        var label = $"  cwd: {TruncateWorkspaceLabel(workspaceRoot)}  ";
+
+        return ctx.HStack(h =>
+        [
+            h.Text(label),
+            // SplitButton primary = VS Code (the common case); secondary
+            // dropdown contains VS Code Insiders. Both launch the editor
+            // with the workspace root as the open folder so the user can
+            // inspect logs, packages, and the dogfood.json manifest
+            // without leaving the terminal.
+            h.SplitButton()
+                .PrimaryAction("Open in Code", _ => TryLaunchEditor("code", workspaceRoot))
+                .SecondaryAction("Open in Code Insiders", _ => TryLaunchEditor("code-insiders", workspaceRoot)),
+        ]);
+    }
+
+    /// <summary>
+    /// Compresses the workspace path display down to the
+    /// <c>aspire-dogfood-</c> prefix plus the last 8 characters of the
+    /// random suffix CreateTempSubdirectory generates. Full paths on macOS
+    /// look like
+    /// <c>/var/folders/3c/abc1xyz4567/T/aspire-dogfood-X9aB1cD2eF3gHi/</c>
+    /// — long enough to wrap the header on a narrow terminal. The unique
+    /// suffix is the only part that disambiguates one session from another
+    /// (the prefix is constant) so 8 chars is more than enough for the
+    /// user to correlate against <c>dogfood.json</c>.
+    /// </summary>
+    private static string TruncateWorkspaceLabel(string? root)
+    {
+        if (string.IsNullOrEmpty(root))
+        {
+            return "(no workspace)";
+        }
+        var name = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (name.Length <= 8)
+        {
+            return name;
+        }
+        // Show only the trailing 8 chars (the unique randomness) with a
+        // leading ellipsis. e.g. "…X9aB1cD2".
+        return "…" + name[^8..];
+    }
+
+    private static void TryLaunchEditor(string command, string? workspaceRoot)
+    {
+        // No workspace → nothing to open. Silently no-op rather than
+        // launching the editor with no folder argument (which would open a
+        // blank window).
+        if (string.IsNullOrEmpty(workspaceRoot))
+        {
+            return;
+        }
+        try
+        {
+            // UseShellExecute=false lets Process.Start resolve `code` /
+            // `code-insiders` from PATH on every platform. The CLI helper
+            // (`code` on PATH) is the canonical install path Microsoft
+            // documents (https://code.visualstudio.com/docs/setup/mac
+            // → "Launching from the command line"). If the helper isn't
+            // installed the Win32Exception is swallowed — there's no good
+            // place to surface the failure from inside a render pass, and
+            // the user can fall back to opening the path manually from
+            // the terminal.
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = command,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            };
+            psi.ArgumentList.Add(workspaceRoot);
+            System.Diagnostics.Process.Start(psi)?.Dispose();
+        }
+        catch
+        {
+            // Editor not installed / not on PATH — swallow. The TUI has no
+            // toast surface to report this through and the user can open
+            // the directory by other means.
+        }
     }
 
     private static SessionTerminalRegistry.Entry GetOrCreateTerminal(

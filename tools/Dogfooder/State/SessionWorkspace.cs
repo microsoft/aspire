@@ -35,11 +35,12 @@ namespace Aspire.Dogfooder.State;
 /// </remarks>
 internal sealed class SessionWorkspace
 {
-    public SessionWorkspace(string root, string logsDir, string nugetCacheDir, string packagesDir, string dogfoodJsonPath)
+    public SessionWorkspace(string root, string logsDir, string nugetCacheDir, string nugetHttpCacheDir, string packagesDir, string dogfoodJsonPath)
     {
         Root = root;
         LogsDir = logsDir;
         NuGetCacheDir = nugetCacheDir;
+        NuGetHttpCacheDir = nugetHttpCacheDir;
         PackagesDir = packagesDir;
         DogfoodJsonPath = dogfoodJsonPath;
     }
@@ -47,6 +48,19 @@ internal sealed class SessionWorkspace
     public string Root { get; }
     public string LogsDir { get; }
     public string NuGetCacheDir { get; }
+
+    /// <summary>
+    /// Per-session NuGet v3 HTTP cache directory (env: <c>NUGET_HTTP_CACHE_PATH</c>).
+    /// Distinct from <see cref="NuGetCacheDir"/> (the global-packages folder
+    /// — extracted package contents) because NuGet keeps two independent
+    /// caches and setting only one leaves the other warm from previous
+    /// sessions. Without isolating the HTTP cache, <c>dotnet package search</c>
+    /// and the v3 service-index/registration lookups can silently return
+    /// nuget.org responses that were cached during a non-dogfood run,
+    /// bypassing the local proxy entirely.
+    /// See https://learn.microsoft.com/nuget/consume-packages/managing-the-global-packages-and-cache-folders
+    /// </summary>
+    public string NuGetHttpCacheDir { get; }
     public string PackagesDir { get; }
     public string DogfoodJsonPath { get; }
 
@@ -66,13 +80,15 @@ internal sealed class SessionWorkspace
         var root = Directory.CreateTempSubdirectory("aspire-dogfood-");
         var logsDir = Path.Combine(root.FullName, "logs");
         var nugetCacheDir = Path.Combine(root.FullName, "nugetcache");
+        var nugetHttpCacheDir = Path.Combine(root.FullName, "nugethttpcache");
         var packagesDir = Path.Combine(root.FullName, "packages");
         Directory.CreateDirectory(logsDir);
         Directory.CreateDirectory(nugetCacheDir);
+        Directory.CreateDirectory(nugetHttpCacheDir);
         Directory.CreateDirectory(packagesDir);
 
         var dogfoodJson = Path.Combine(root.FullName, "dogfood.json");
-        return new SessionWorkspace(root.FullName, logsDir, nugetCacheDir, packagesDir, dogfoodJson);
+        return new SessionWorkspace(root.FullName, logsDir, nugetCacheDir, nugetHttpCacheDir, packagesDir, dogfoodJson);
     }
 
     /// <summary>
@@ -119,4 +135,5 @@ internal sealed record DogfoodManifest(
     string WorkspaceRoot,
     string LogsDir,
     string NuGetCacheDir,
+    string NuGetHttpCacheDir,
     string PackagesDir);

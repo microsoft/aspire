@@ -209,6 +209,7 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
             WorkspaceRoot: workspace.Root,
             LogsDir: workspace.LogsDir,
             NuGetCacheDir: workspace.NuGetCacheDir,
+            NuGetHttpCacheDir: workspace.NuGetHttpCacheDir,
             PackagesDir: workspace.PackagesDir);
         workspace.WriteManifest(manifest);
         prep.Append($"# Wrote manifest: {workspace.DogfoodJsonPath}");
@@ -272,6 +273,18 @@ internal sealed class DogfoodSessionPreparer : IDogfoodSessionPreparer
         // of "but I built it, why isn't it being used" confusion.
         // See https://learn.microsoft.com/nuget/consume-packages/managing-the-global-packages-and-cache-folders
         overrides.Add(new("NUGET_PACKAGES", workspace.NuGetCacheDir));
+
+        // CRITICAL companion to NUGET_PACKAGES: NuGet keeps a *separate*
+        // v3 HTTP cache for service index / search / registration / flat-
+        // container responses (default ~/.local/share/NuGet/v3-cache on
+        // Unix, ~/AppData/Local/NuGet/v3-cache on Windows). Without
+        // isolating this, `dotnet package search aspire.projecttemplates`
+        // returns the cached nuget.org response from earlier non-dogfood
+        // runs and NEVER hits our proxy — the symptom is an empty NuGet
+        // analyzer tab combined with template versions that don't match
+        // what was just built. Isolating both caches is the only way to
+        // guarantee the CLI actually exercises the proxy.
+        overrides.Add(new("NUGET_HTTP_CACHE_PATH", workspace.NuGetHttpCacheDir));
 
         return new SessionEnvironmentPlan(overrides, _cliLocator.CliDirectory);
     }
