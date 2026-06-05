@@ -84,7 +84,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
             if (claudeCodeVersion is not null)
             {
                 _logger.LogDebug("Found Claude Code CLI version: {Version}", claudeCodeVersion);
-                
+
                 // Claude Code is installed - offer to create config at workspace root
                 if (!HasAspireServerConfigured(context.RepositoryRoot))
                 {

@@ -221,24 +221,59 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
         GetAllocatedEndpoint()
         ?? throw new InvalidOperationException($"The endpoint `{EndpointName}` is not allocated for the resource `{Resource.Name}`.");
 
-    internal Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkId, CancellationToken cancellationToken = default)
+    internal async Task<AllocatedEndpoint> GetAllocatedEndpointAsync(NetworkIdentifier networkId, ValueProviderContext context, CancellationToken cancellationToken = default)
     {
         var endpointAnnotation = EndpointAnnotation;
         if (endpointAnnotation.AllAllocatedEndpoints.TryGetAllocatedEndpoint(networkId, out var endpoint))
         {
-            return Task.FromResult(endpoint);
+            return endpoint;
         }
 
-        foreach (var allocationAnnotation in Resource.Annotations.OfType<OnDemandEndpointAllocationAnnotation>())
+        var allocationAnnotations = Resource.Annotations.OfType<OnDemandEndpointAllocationAnnotation>().ToArray();
+        if (allocationAnnotations.Length > 0 && await ShouldAllocateEndpointOnDemandAsync(context, cancellationToken).ConfigureAwait(false))
         {
-            endpoint = allocationAnnotation.TryAllocate(endpointAnnotation, networkId);
-            if (endpoint is not null)
+            foreach (var allocationAnnotation in allocationAnnotations)
             {
-                return Task.FromResult(endpoint);
+                endpoint = allocationAnnotation.TryAllocate(endpointAnnotation, networkId);
+                if (endpoint is not null)
+                {
+                    return endpoint;
+                }
             }
         }
 
-        return endpointAnnotation.AllAllocatedEndpoints.GetAllocatedEndpointAsync(networkId, cancellationToken);
+        // Waiting here preserves late allocation for cases that don't need the on-demand fallback,
+        // such as proxyless container endpoints whose actual port is reported by DCP after startup.
+        return await endpointAnnotation.AllAllocatedEndpoints.GetAllocatedEndpointAsync(networkId, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ShouldAllocateEndpointOnDemandAsync(ValueProviderContext context, CancellationToken cancellationToken)
+    {
+        if (context.Caller is not { } caller)
+        {
+            return true;
+        }
+
+        if (Resource == caller)
+        {
+            return true;
+        }
+
+        if (context.ExecutionContext is not { } executionContext)
+        {
+            return true;
+        }
+
+        var dependencies = await Resource.GetResourceDependenciesAsync(
+            executionContext,
+            new ResourceDependencyDiscoveryOptions
+            {
+                DiscoveryMode = ResourceDependencyDiscoveryMode.Recursive,
+                CacheAnnotationCallbackResults = true
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        return dependencies.Contains(caller);
     }
 
     private EndpointAnnotation? GetEndpointAnnotation()
@@ -391,7 +426,7 @@ public class EndpointReferenceExpression(EndpointReference endpointReference, En
 
         async ValueTask<string?> ResolveValueWithAllocatedAddress()
         {
-            var allocatedEndpoint = await Endpoint.GetAllocatedEndpointAsync(networkContext, cancellationToken).ConfigureAwait(false);
+            var allocatedEndpoint = await Endpoint.GetAllocatedEndpointAsync(networkContext, context, cancellationToken).ConfigureAwait(false);
 
             return Property switch
             {

@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 namespace Aspire.Shared.Model.Serialization;
 
@@ -241,6 +241,12 @@ internal sealed class ResourceCommandJson
     /// </summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? State { get; set; }
+
+    /// <summary>
+    /// The zero-based index at which the command was registered.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? RegistrationOrder { get; set; }
 
     /// <summary>
     /// The ordered inputs that describe the invocation arguments accepted by the command.

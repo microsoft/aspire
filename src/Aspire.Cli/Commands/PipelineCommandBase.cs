@@ -12,12 +12,11 @@ using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
 using Aspire.Hosting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using StreamJsonRpc;
 
@@ -80,8 +79,8 @@ internal abstract class PipelineCommandBase : BaseCommand
     private static bool IsCompletionStateWarning(string completionState) =>
         completionState == CompletionStates.CompletedWithWarning;
 
-    protected PipelineCommandBase(string name, string description, IDotNetCliRunner runner, IInteractionService interactionService, IProjectLocator projectLocator, AspireCliTelemetry telemetry, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger logger, IAnsiConsole ansiConsole)
-        : base(name, description, features, updateNotifier, executionContext, interactionService, telemetry)
+    protected PipelineCommandBase(string name, string description, IDotNetCliRunner runner, IProjectLocator projectLocator, IFeatures features, ICliHostEnvironment hostEnvironment, IAppHostProjectFactory projectFactory, IConfiguration configuration, ILogger logger, IAnsiConsole ansiConsole, CommonCommandServices services)
+        : base(name, description, services)
     {
         _runner = runner;
         _projectLocator = projectLocator;

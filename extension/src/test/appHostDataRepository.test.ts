@@ -1934,6 +1934,68 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('workspace describe reports compatibility error when running AppHost returns no data successfully', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        let psOptions: any;
+        const describeOptions: any[] = [];
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
+            if (args[0] === 'describe') {
+                describeOptions.push(options);
+            }
+            if (args[0] === 'ps') {
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.ok(getAppHostsLineCallback);
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/labs/ops/apphost.cs',
+                all_project_file_candidates: ['/workspace/labs/ops/apphost.cs'],
+            }));
+            await waitForAppHostDiscovery();
+
+            assert.strictEqual(describeOptions.length, 1);
+            describeOptions[0].exitCallback(0);
+            assert.strictEqual(repository.hasError, false);
+
+            assert.ok(psOptions);
+            psOptions.lineCallback(JSON.stringify([
+                {
+                    appHostPath: '/workspace/labs/ops/apphost.cs',
+                    appHostPid: 125881,
+                },
+            ]));
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+            assert.strictEqual(describeOptions.length, 2);
+
+            describeOptions[1].exitCallback(0);
+
+            assert.strictEqual(repository.hasError, true);
+            assert.ok(repository.errorMessage?.includes('Aspire.Hosting 13.2.0'), repository.errorMessage);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('late close from stopped describe watch does not orphan replacement watch', async () => {
         const firstChildProcess = new TestChildProcess();
         const secondChildProcess = new TestChildProcess();

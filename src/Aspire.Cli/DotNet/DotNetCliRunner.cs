@@ -641,13 +641,15 @@ internal sealed class DotNetCliRunner(
         for (var attempt = 0; attempt < maxRetries; attempt++)
         {
             var stdoutBuilder = new StringBuilder();
-            options.StandardOutputCallback = (line) => {
+            options.StandardOutputCallback = (line) =>
+            {
                 stdoutBuilder.AppendLine(line);
                 existingStandardOutputCallback?.Invoke(line);
             };
 
             var stderrBuilder = new StringBuilder();
-            options.StandardErrorCallback = (line) => {
+            options.StandardErrorCallback = (line) =>
+            {
                 stderrBuilder.AppendLine(line);
                 existingStandardErrorCallback?.Invoke(line);
             };
@@ -860,14 +862,16 @@ internal sealed class DotNetCliRunner(
 
         var stdoutBuilder = new StringBuilder();
         var existingStandardOutputCallback = options.StandardOutputCallback; // Preserve the existing callback if it exists.
-        options.StandardOutputCallback = (line) => {
+        options.StandardOutputCallback = (line) =>
+        {
             stdoutBuilder.AppendLine(line);
             existingStandardOutputCallback?.Invoke(line);
         };
 
         var stderrBuilder = new StringBuilder();
         var existingStandardErrorCallback = options.StandardErrorCallback; // Preserve the existing callback if it exists.
-        options.StandardErrorCallback = (line) => {
+        options.StandardErrorCallback = (line) =>
+        {
             stderrBuilder.AppendLine(line);
             existingStandardErrorCallback?.Invoke(line);
         };
@@ -1012,10 +1016,13 @@ internal sealed class DotNetCliRunner(
             return false;
         }
 
-        var templateVersion = successLine.Split(" ") switch { // Break up the success line.
-            { Length: > 2 } chunks => chunks[1].Split("@") switch { // Break up the template+version string (@ separator for .NET 10.0+)
+        var templateVersion = successLine.Split(" ") switch
+        { // Break up the success line.
+            { Length: > 2 } chunks => chunks[1].Split("@") switch
+            { // Break up the template+version string (@ separator for .NET 10.0+)
                 { Length: 2 } versionChunks => versionChunks[1], // The version in the second chunk
-                _ => chunks[1].Split("::") switch { // Fallback to :: separator for older SDK versions
+                _ => chunks[1].Split("::") switch
+                { // Fallback to :: separator for older SDK versions
                     { Length: 2 } versionChunks => versionChunks[1],
                     _ => null
                 }
@@ -1039,7 +1046,7 @@ internal sealed class DotNetCliRunner(
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
-        string[] cliArgs = ["new", templateName, "--name", name, "--output", outputPath, ..extraArgs];
+        string[] cliArgs = ["new", templateName, "--name", name, "--output", outputPath, .. extraArgs];
         return await ExecuteAsync(
             args: cliArgs,
             env: null,
@@ -1426,14 +1433,16 @@ internal sealed class DotNetCliRunner(
 
         var stdoutLines = new List<string>();
         var existingStandardOutputCallback = options.StandardOutputCallback; // Preserve the existing callback if it exists.
-        options.StandardOutputCallback = (line) => {
+        options.StandardOutputCallback = (line) =>
+        {
             stdoutLines.Add(line);
             existingStandardOutputCallback?.Invoke(line);
         };
 
         var stderrLines = new List<string>();
         var existingStandardErrorCallback = options.StandardErrorCallback; // Preserve the existing callback if it exists.
-        options.StandardErrorCallback = (line) => {
+        options.StandardErrorCallback = (line) =>
+        {
             stderrLines.Add(line);
             existingStandardErrorCallback?.Invoke(line);
         };
@@ -1466,14 +1475,16 @@ internal sealed class DotNetCliRunner(
 
         var stdoutLines = new List<string>();
         var existingStandardOutputCallback = options.StandardOutputCallback;
-        options.StandardOutputCallback = (line) => {
+        options.StandardOutputCallback = (line) =>
+        {
             stdoutLines.Add(line);
             existingStandardOutputCallback?.Invoke(line);
         };
 
         var stderrLines = new List<string>();
         var existingStandardErrorCallback = options.StandardErrorCallback;
-        options.StandardErrorCallback = (line) => {
+        options.StandardErrorCallback = (line) =>
+        {
             stderrLines.Add(line);
             existingStandardErrorCallback?.Invoke(line);
         };

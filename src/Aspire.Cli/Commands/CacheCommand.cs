@@ -3,10 +3,8 @@
 
 using System.CommandLine;
 using System.Globalization;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
-using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
@@ -15,18 +13,19 @@ internal sealed class CacheCommand : ParentCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
-    public CacheCommand(IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-        : base("cache", CacheCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
+    public CacheCommand(
+        CommonCommandServices services)
+        : base("cache", CacheCommandStrings.Description, services)
     {
-        var clearCommand = new ClearCommand(InteractionService, features, updateNotifier, executionContext, telemetry);
+        var clearCommand = new ClearCommand(services);
 
         Subcommands.Add(clearCommand);
     }
 
     internal sealed class ClearCommand : BaseCommand
     {
-        public ClearCommand(IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
-            : base("clear", CacheCommandStrings.ClearCommand_Description, features, updateNotifier, executionContext, interactionService, telemetry)
+        public ClearCommand(CommonCommandServices services)
+            : base("clear", CacheCommandStrings.ClearCommand_Description, services)
         {
         }
 

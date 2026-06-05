@@ -462,8 +462,9 @@ Generate and maintain a changelog for the **${PRODUCT} ${MILESTONE} milestone** 
 Each run appends newly merged changes to the existing content while preserving
 previous entries. A companion feedback issue collects editorial comments.
 
+<!-- Keep the hardcoded values below in sync with the env block above. -->
 > **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, `${PREVIOUS_MILESTONE}`, `${RELEASE_NOTES_URL}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-05-08`**, **`13.4`**, **`13.3`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-06-02`**, **`13.5`**, **`13.4`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
 > titles, and references below derive from those values.
 
 ## Important: available tools

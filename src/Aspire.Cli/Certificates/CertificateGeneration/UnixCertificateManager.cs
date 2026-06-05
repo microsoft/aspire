@@ -20,7 +20,7 @@ namespace Microsoft.AspNetCore.Certificates.Generation;
 /// </remarks>
 internal sealed partial class UnixCertificateManager : CertificateManager
 {
-	private const UnixFileMode DirectoryPermissions = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
+    private const UnixFileMode DirectoryPermissions = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute;
 
     /// <summary>The name of an environment variable consumed by OpenSSL to locate certificates.</summary>
     private const string OpenSslCertificateDirectoryVariableName = "SSL_CERT_DIR";
@@ -180,7 +180,8 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             store.Open(OpenFlags.ReadWrite);
             store.Add(certificate);
             store.Close();
-        };
+        }
+        ;
 
         return certificate;
     }

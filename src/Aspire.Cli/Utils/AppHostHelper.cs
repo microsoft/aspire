@@ -1,14 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using System.Globalization;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting.Backchannel;
 using Semver;
-using System.Diagnostics;
-using System.Globalization;
-using Aspire.Cli.Resources;
 
 namespace Aspire.Cli.Utils;
 

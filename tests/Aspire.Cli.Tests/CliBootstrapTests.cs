@@ -28,7 +28,7 @@ public class CliBootstrapTests(ITestOutputHelper outputHelper)
         var errorWriter = new TestStartupErrorWriter();
         var logBufferContext = new ConsoleLogBufferContext();
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter, logBufferContext);
-        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName));
+        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, logBufferContext, loggerFactory.CreateLogger(Program.RootLoggerName), new ConsoleCancellationManager(processTerminationTimeout: Timeout.InfiniteTimeSpan));
         return await Program.BuildApplicationAsync([], startupContext);
     }
 

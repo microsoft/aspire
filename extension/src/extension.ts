@@ -20,7 +20,7 @@ import { AspireExtensionContext } from './AspireExtensionContext';
 import AspireRpcServer, { RpcServerConnectionInfo } from './server/AspireRpcServer';
 import AspireDcpServer from './dcp/AspireDcpServer';
 import { configureLaunchJsonCommand } from './commands/configureLaunchJson';
-import { AspireTerminalProvider, AspireTerminalCommandEvent, quoteShellArg } from './utils/AspireTerminalProvider';
+import { AspireTerminalProvider, AspireTerminalCommandEvent, shellArg } from './utils/AspireTerminalProvider';
 import { MessageConnection } from 'vscode-jsonrpc';
 import { openTerminalCommand } from './commands/openTerminal';
 import { updateCommand, updateSelfCommand } from './commands/update';
@@ -264,18 +264,15 @@ export async function activate(context: vscode.ExtensionContext) {
       return;
     }
 
-    let command = `resource ${quoteShellArg(resourceName)} ${quoteShellArg(action)}`;
-    if (appHostPath) {
-      command += ` --apphost ${quoteShellArg(appHostPath)}`;
-    }
+    const command = appHostPath
+      ? ['resource', shellArg(resourceName), shellArg(action), '--apphost', shellArg(appHostPath)]
+      : ['resource', shellArg(resourceName), shellArg(action)];
     terminalProvider.sendAspireCommandToAspireTerminal(command, true, commandArguments.args, { redactAdditionalArgs: commandArguments.containsSecret });
   });
   const codeLensViewLogsRegistration = registerInstrumentedCommand('aspire-vscode.codeLensViewLogs', 'codelens', (resourceName: string, appHostPath: string) => {
-    let command = `logs ${quoteShellArg(resourceName)}`;
-    if (appHostPath) {
-      command += ` --apphost ${quoteShellArg(appHostPath)}`;
-    }
-    command += ' --follow';
+    const command = appHostPath
+      ? ['logs', shellArg(resourceName), '--apphost', shellArg(appHostPath), '--follow']
+      : ['logs', shellArg(resourceName), '--follow'];
     terminalProvider.sendAspireCommandToAspireTerminal(command);
   });
   const codeLensRevealResourceRegistration = registerInstrumentedCommand('aspire-vscode.codeLensRevealResource', 'codelens', (resourceName: string, appHostPath?: string) => {

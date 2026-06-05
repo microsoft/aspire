@@ -21,6 +21,7 @@ export interface ResourceCommandJson {
     description: string | null;
     visibility?: string | null;
     state?: string | null;
+    registrationOrder?: number | null;
     argumentInputs?: ResourceCommandArgumentInputJson[] | null;
 }
 
@@ -771,7 +772,10 @@ export class AppHostDataRepository {
             return aspireCliDescribeNotSupported(aspireDescribeMinimumVersion);
         }
 
-        if (exitCode !== 0 && this._workspaceAppHostPath) {
+        // A clean exit before `ps` observes the AppHost can happen while the app is still starting.
+        // Once `ps` reports the workspace AppHost as running, an empty describe stream means the
+        // AppHost cannot serve workspace resources even if the CLI process exits successfully.
+        if (this._workspaceAppHostPath && (exitCode !== 0 || this._workspaceAppHost !== undefined)) {
             return appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion);
         }
 

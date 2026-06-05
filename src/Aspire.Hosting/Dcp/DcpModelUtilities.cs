@@ -142,6 +142,38 @@ internal static class DcpModelUtilities
         return AreResourceEndpointsAllocated(resource.ModelResource);
     }
 
+    internal static async Task TryAllocateDependentDynamicProxylessContainerEndpointsAsync<TDcpResource>(
+        RenderedModelResource<TDcpResource> resource,
+        DistributedApplicationExecutionContext executionContext,
+        ILogger? logger,
+        CancellationToken cancellationToken)
+        where TDcpResource : CustomResource, IKubernetesStaticMetadata
+    {
+        if (resource.ServicesProduced.All(sp => !IsDynamicProxylessContainerEndpoint(resource, sp)))
+        {
+            return;
+        }
+
+        var dependencies = await resource.ModelResource.GetResourceDependenciesAsync(
+            executionContext,
+            new ResourceDependencyDiscoveryOptions
+            {
+                DiscoveryMode = ResourceDependencyDiscoveryMode.DirectOnly,
+                CacheAnnotationCallbackResults = true
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        if (!dependencies.Any())
+        {
+            return;
+        }
+
+        foreach (var sp in resource.ServicesProduced.Where(sp => IsDynamicProxylessContainerEndpoint(resource, sp)))
+        {
+            TryAllocateDynamicProxylessContainerEndpoint(resource, sp.EndpointAnnotation, KnownNetworkIdentifiers.LocalhostNetwork, logger);
+        }
+    }
+
     internal static bool TryApplyServiceAddressToEndpoint(Service observedService, IEnumerable<IAppResource> appResources, [NotNullWhen(true)] out IResource? modelResource)
     {
         var serviceResource = appResources.OfType<ServiceWithModelResource>()

@@ -857,4 +857,15 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(ConnectionState.Open, conn.State);
     }
+    [Fact]
+    [RequiresFeature(TestFeature.Docker)]
+    public Task MySql_WithPersistentLifetime_ReusesContainerWithDefaults()
+    {
+        return PersistentContainerTestHelpers.AssertResourceReusesContainerAsync(
+            testOutputHelper,
+            builder => builder.AddMySql("resource").WithPersistentLifetime(),
+            "resource",
+            useTestContainerRegistry: true);
+    }
+
 }
