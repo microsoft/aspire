@@ -1,26 +1,37 @@
-# Aspire.Hosting.Redis library
+# Redis hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a Redis resource.
+Use this integration to model, configure, and orchestrate a Redis resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Redis Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Redis` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Redis
+```bash
+aspire add Aspire.Hosting.Redis
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Redis resource and consume the connection using the following methods:
+In the AppHost, add a Redis resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var redis = builder.AddRedis("redis");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(redis);
+```
+
+**TypeScript**
+
+```typescript
+const redis = await builder.addRedis("redis");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(redis);
 ```
 
 ## Connection Properties

@@ -1,26 +1,37 @@
-# Aspire.Hosting.PostgreSQL library
+# PostgreSQL hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a PostgreSQL resource.
+Use this integration to model, configure, and orchestrate a PostgreSQL resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire PostgreSQL Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.PostgreSQL` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.PostgreSQL
+```bash
+aspire add Aspire.Hosting.PostgreSQL
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a PostgreSQL resource and consume the connection using the following methods:
+In the AppHost, add a PostgreSQL resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var db = builder.AddPostgres("pgsql").AddDatabase("mydb");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(db);
+```
+
+**TypeScript**
+
+```typescript
+const db = await builder.addPostgres("pgsql").addDatabase("mydb");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(db);
 ```
 
 ## Connection Properties
